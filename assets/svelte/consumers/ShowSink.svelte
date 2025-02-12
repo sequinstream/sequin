@@ -111,6 +111,7 @@
 
   let hovered_messages_processed_throughput: number | null = null;
   let hovered_messages_processed_bytes: number | null = null;
+  let hoveredXValue: number | null = null;
 
   onMount(() => {
     if (metrics.messages_processed_throughput_timeseries.length > 0) {
@@ -194,19 +195,35 @@
     };
   });
 
-  // Add reactive statement to watch metrics changes
+  // Fix the reactive statement for metrics updates
   $: if (
-    updateChart &&
+    updateChart?.update &&
     metrics.messages_processed_throughput_timeseries.length > 0
   ) {
-    updateChart(metrics.messages_processed_throughput_timeseries);
+    updateChart.update(metrics.messages_processed_throughput_timeseries);
   }
 
   $: if (
-    updateBytesChart &&
+    updateBytesChart?.update &&
     metrics.messages_processed_bytes_timeseries.length > 0
   ) {
-    updateBytesChart(metrics.messages_processed_bytes_timeseries);
+    updateBytesChart.update(metrics.messages_processed_bytes_timeseries);
+  }
+
+  // Fix the reactive statement for hover sync
+  $: if (hoveredXValue === null) {
+    hovered_messages_processed_throughput = null;
+    hovered_messages_processed_bytes = null;
+    if (updateChart?.updateHover) updateChart.updateHover(null);
+    if (updateBytesChart?.updateHover) updateBytesChart.updateHover(null);
+  } else {
+    hovered_messages_processed_throughput =
+      metrics.messages_processed_throughput_timeseries[hoveredXValue];
+    hovered_messages_processed_bytes =
+      metrics.messages_processed_bytes_timeseries[hoveredXValue];
+    if (updateChart?.updateHover) updateChart.updateHover(hoveredXValue);
+    if (updateBytesChart?.updateHover)
+      updateBytesChart.updateHover(hoveredXValue);
   }
 
   function createThroughputChart(element, data, options = {}) {
@@ -305,12 +322,14 @@
       const xValue = Math.round(x.invert(mouseX));
 
       if (xValue >= 0 && xValue < currentData.length) {
-        const yValue = currentData[xValue];
         focus
           .style("display", null)
-          .attr("transform", `translate(${x(xValue)},${y(yValue)})`);
+          .attr(
+            "transform",
+            `translate(${x(xValue)},${y(currentData[xValue])})`,
+          );
 
-        hovered_messages_processed_throughput = yValue;
+        hoveredXValue = xValue;
       }
     };
 
@@ -334,37 +353,56 @@
         focus.style("display", "none");
         defaultDot.style("display", null);
         lastMouseX = null;
-        hovered_messages_processed_throughput = null;
+        hoveredXValue = null;
       })
       .on("mousemove", handleMouseMove);
 
-    return function update(newData) {
-      currentData = newData;
-      y.domain([0, d3.max(newData) * 1.1]);
-
-      // Update default dot position
-      defaultDot.attr(
-        "transform",
-        `translate(${x(newData.length - 1)},${y(newData[newData.length - 1])})`,
-      );
-
-      chartGroup
-        .select("path[fill]")
-        .datum(newData)
-        .transition()
-        .duration(0)
-        .attr("d", area);
-
-      chartGroup
-        .select("path[stroke]")
-        .datum(newData)
-        .transition()
-        .duration(0)
-        .attr("d", line);
-
-      if (lastMouseX !== null) {
-        handleMouseMove(null);
+    // Add function to update hover state externally
+    const updateHover = (xValue: number | null) => {
+      if (xValue === null) {
+        focus.style("display", "none");
+        defaultDot.style("display", null);
+        hovered_messages_processed_throughput = null;
+      } else if (xValue >= 0 && xValue < currentData.length) {
+        const yValue = currentData[xValue];
+        focus
+          .style("display", null)
+          .attr("transform", `translate(${x(xValue)},${y(yValue)})`);
+        defaultDot.style("display", "none");
+        hovered_messages_processed_throughput = yValue;
       }
+    };
+
+    return {
+      update: function (newData) {
+        currentData = newData;
+        y.domain([0, d3.max(newData) * 1.1]);
+
+        // Update default dot position
+        defaultDot.attr(
+          "transform",
+          `translate(${x(newData.length - 1)},${y(newData[newData.length - 1])})`,
+        );
+
+        chartGroup
+          .select("path[fill]")
+          .datum(newData)
+          .transition()
+          .duration(0)
+          .attr("d", area);
+
+        chartGroup
+          .select("path[stroke]")
+          .datum(newData)
+          .transition()
+          .duration(0)
+          .attr("d", line);
+
+        if (lastMouseX !== null) {
+          handleMouseMove(null);
+        }
+      },
+      updateHover,
     };
   }
 
@@ -464,12 +502,14 @@
       const xValue = Math.round(x.invert(mouseX));
 
       if (xValue >= 0 && xValue < currentData.length) {
-        const yValue = currentData[xValue];
         focus
           .style("display", null)
-          .attr("transform", `translate(${x(xValue)},${y(yValue)})`);
+          .attr(
+            "transform",
+            `translate(${x(xValue)},${y(currentData[xValue])})`,
+          );
 
-        hovered_messages_processed_bytes = yValue;
+        hoveredXValue = xValue;
       }
     };
 
@@ -493,37 +533,56 @@
         focus.style("display", "none");
         defaultDot.style("display", null);
         lastMouseX = null;
-        hovered_messages_processed_bytes = null;
+        hoveredXValue = null;
       })
       .on("mousemove", handleMouseMove);
 
-    return function update(newData) {
-      currentData = newData;
-      y.domain([0, d3.max(newData) * 1.1]);
-
-      // Update default dot position
-      defaultDot.attr(
-        "transform",
-        `translate(${x(newData.length - 1)},${y(newData[newData.length - 1])})`,
-      );
-
-      chartGroup
-        .select("path[fill]")
-        .datum(newData)
-        .transition()
-        .duration(0)
-        .attr("d", area);
-
-      chartGroup
-        .select("path[stroke]")
-        .datum(newData)
-        .transition()
-        .duration(0)
-        .attr("d", line);
-
-      if (lastMouseX !== null) {
-        handleMouseMove(null);
+    // Add function to update hover state externally
+    const updateHover = (xValue: number | null) => {
+      if (xValue === null) {
+        focus.style("display", "none");
+        defaultDot.style("display", null);
+        hovered_messages_processed_bytes = null;
+      } else if (xValue >= 0 && xValue < currentData.length) {
+        const yValue = currentData[xValue];
+        focus
+          .style("display", null)
+          .attr("transform", `translate(${x(xValue)},${y(yValue)})`);
+        defaultDot.style("display", "none");
+        hovered_messages_processed_bytes = yValue;
       }
+    };
+
+    return {
+      update: function (newData) {
+        currentData = newData;
+        y.domain([0, d3.max(newData) * 1.1]);
+
+        // Update default dot position
+        defaultDot.attr(
+          "transform",
+          `translate(${x(newData.length - 1)},${y(newData[newData.length - 1])})`,
+        );
+
+        chartGroup
+          .select("path[fill]")
+          .datum(newData)
+          .transition()
+          .duration(0)
+          .attr("d", area);
+
+        chartGroup
+          .select("path[stroke]")
+          .datum(newData)
+          .transition()
+          .duration(0)
+          .attr("d", line);
+
+        if (lastMouseX !== null) {
+          handleMouseMove(null);
+        }
+      },
+      updateHover,
     };
   }
 

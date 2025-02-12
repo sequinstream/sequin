@@ -384,8 +384,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         reply == 1 ->
           # If we don't have a last_commit_lsn, we're still processing the first xaction
           # we received on boot. This can happen if we're processing a very large xaction.
-          # It is therefore safe to send an ack with the current_xaction_lsn
-          ack_message(state.current_xaction_lsn)
+          # It is therefore safe to send an ack with the last LSN we processed.
+          {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
+          ack_message(low_watermark.commit_lsn)
 
         true ->
           []

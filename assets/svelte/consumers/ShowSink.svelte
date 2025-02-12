@@ -109,6 +109,9 @@
   let updateBytesChart;
   let resizeBytesObserver;
 
+  let hovered_messages_processed_throughput: number | null = null;
+  let hovered_messages_processed_bytes: number | null = null;
+
   onMount(() => {
     if (metrics.messages_processed_throughput_timeseries.length > 0) {
       updateChart = createThroughputChart(
@@ -227,16 +230,42 @@
       .attr("height", config.height)
       .style("overflow", "visible");
 
+    const chartWidth = config.width - config.margin.left - config.margin.right;
+    const chartHeight =
+      config.height - config.margin.top - config.margin.bottom;
+
     const x = d3
       .scaleLinear()
       .domain([0, data.length - 1])
-      .range([config.margin.left, config.width - config.margin.right]);
+      .range([0, chartWidth]);
 
     const y = d3
       .scaleLinear()
       .domain([0, d3.max(data) * 1.1])
-      .range([config.height - config.margin.bottom, config.margin.top]);
+      .range([chartHeight, 0]);
 
+    // Create a chart group and translate it to account for margins
+    const chartGroup = svg
+      .append("g")
+      .attr(
+        "transform",
+        `translate(${config.margin.left},${config.margin.top})`,
+      );
+
+    // Add hover elements
+    const focus = chartGroup.append("g").style("display", "none");
+
+    focus.append("circle").attr("r", 4).attr("fill", config.lineColor);
+
+    // Add mouse tracking area for the entire card space
+    const mouseArea = svg
+      .append("rect")
+      .attr("width", config.width)
+      .attr("height", config.height)
+      .style("fill", "none")
+      .style("pointer-events", "all");
+
+    // Rest of the chart elements
     const line = d3
       .line()
       .x((d, i) => x(i))
@@ -245,17 +274,17 @@
     const area = d3
       .area()
       .x((d, i) => x(i))
-      .y0(config.height)
+      .y0(chartHeight)
       .y1((d) => y(d));
 
-    svg
+    chartGroup
       .append("path")
       .datum(data)
       .attr("fill", config.areaColor)
       .attr("fill-opacity", config.areaOpacity)
       .attr("d", area);
 
-    svg
+    chartGroup
       .append("path")
       .datum(data)
       .attr("fill", "none")
@@ -263,22 +292,79 @@
       .attr("stroke-width", 1.5)
       .attr("d", line);
 
+    let lastMouseX = null;
+    let currentData = data;
+
+    const handleMouseMove = function (event) {
+      const mouseX = event
+        ? d3.pointer(event, mouseArea.node())[0]
+        : lastMouseX;
+      if (mouseX === null) return;
+
+      lastMouseX = mouseX;
+      const xValue = Math.round(x.invert(mouseX));
+
+      if (xValue >= 0 && xValue < currentData.length) {
+        const yValue = currentData[xValue];
+        focus
+          .style("display", null)
+          .attr("transform", `translate(${x(xValue)},${y(yValue)})`);
+
+        hovered_messages_processed_throughput = yValue;
+      }
+    };
+
+    // Add default state dot (visible when not hovering)
+    const defaultDot = chartGroup
+      .append("circle")
+      .attr("r", 4)
+      .attr("fill", config.lineColor)
+      .attr(
+        "transform",
+        `translate(${x(data.length - 1)},${y(data[data.length - 1])})`,
+      );
+
+    // Modify mouseArea event handlers
+    mouseArea
+      .on("mouseenter", () => {
+        focus.style("display", null);
+        defaultDot.style("display", "none");
+      })
+      .on("mouseleave", () => {
+        focus.style("display", "none");
+        defaultDot.style("display", null);
+        lastMouseX = null;
+        hovered_messages_processed_throughput = null;
+      })
+      .on("mousemove", handleMouseMove);
+
     return function update(newData) {
+      currentData = newData;
       y.domain([0, d3.max(newData) * 1.1]);
 
-      svg
+      // Update default dot position
+      defaultDot.attr(
+        "transform",
+        `translate(${x(newData.length - 1)},${y(newData[newData.length - 1])})`,
+      );
+
+      chartGroup
         .select("path[fill]")
         .datum(newData)
         .transition()
         .duration(0)
         .attr("d", area);
 
-      svg
+      chartGroup
         .select("path[stroke]")
         .datum(newData)
         .transition()
         .duration(0)
         .attr("d", line);
+
+      if (lastMouseX !== null) {
+        handleMouseMove(null);
+      }
     };
   }
 
@@ -303,16 +389,42 @@
       .attr("height", config.height)
       .style("overflow", "visible");
 
+    const chartWidth = config.width - config.margin.left - config.margin.right;
+    const chartHeight =
+      config.height - config.margin.top - config.margin.bottom;
+
     const x = d3
       .scaleLinear()
       .domain([0, data.length - 1])
-      .range([config.margin.left, config.width - config.margin.right]);
+      .range([0, chartWidth]);
 
     const y = d3
       .scaleLinear()
       .domain([0, d3.max(data) * 1.1])
-      .range([config.height - config.margin.bottom, config.margin.top]);
+      .range([chartHeight, 0]);
 
+    // Create a chart group and translate it to account for margins
+    const chartGroup = svg
+      .append("g")
+      .attr(
+        "transform",
+        `translate(${config.margin.left},${config.margin.top})`,
+      );
+
+    // Add hover elements
+    const focus = chartGroup.append("g").style("display", "none");
+
+    focus.append("circle").attr("r", 4).attr("fill", config.lineColor);
+
+    // Add mouse tracking area for the entire card space
+    const mouseArea = svg
+      .append("rect")
+      .attr("width", config.width)
+      .attr("height", config.height)
+      .style("fill", "none")
+      .style("pointer-events", "all");
+
+    // Rest of the chart elements
     const line = d3
       .line()
       .x((d, i) => x(i))
@@ -321,17 +433,17 @@
     const area = d3
       .area()
       .x((d, i) => x(i))
-      .y0(config.height)
+      .y0(chartHeight)
       .y1((d) => y(d));
 
-    svg
+    chartGroup
       .append("path")
       .datum(data)
       .attr("fill", config.areaColor)
       .attr("fill-opacity", config.areaOpacity)
       .attr("d", area);
 
-    svg
+    chartGroup
       .append("path")
       .datum(data)
       .attr("fill", "none")
@@ -339,22 +451,79 @@
       .attr("stroke-width", 1.5)
       .attr("d", line);
 
+    let lastMouseX = null;
+    let currentData = data;
+
+    const handleMouseMove = function (event) {
+      const mouseX = event
+        ? d3.pointer(event, mouseArea.node())[0]
+        : lastMouseX;
+      if (mouseX === null) return;
+
+      lastMouseX = mouseX;
+      const xValue = Math.round(x.invert(mouseX));
+
+      if (xValue >= 0 && xValue < currentData.length) {
+        const yValue = currentData[xValue];
+        focus
+          .style("display", null)
+          .attr("transform", `translate(${x(xValue)},${y(yValue)})`);
+
+        hovered_messages_processed_bytes = yValue;
+      }
+    };
+
+    // Add default state dot (visible when not hovering)
+    const defaultDot = chartGroup
+      .append("circle")
+      .attr("r", 4)
+      .attr("fill", config.lineColor)
+      .attr(
+        "transform",
+        `translate(${x(data.length - 1)},${y(data[data.length - 1])})`,
+      );
+
+    // Modify mouseArea event handlers
+    mouseArea
+      .on("mouseenter", () => {
+        focus.style("display", null);
+        defaultDot.style("display", "none");
+      })
+      .on("mouseleave", () => {
+        focus.style("display", "none");
+        defaultDot.style("display", null);
+        lastMouseX = null;
+        hovered_messages_processed_bytes = null;
+      })
+      .on("mousemove", handleMouseMove);
+
     return function update(newData) {
+      currentData = newData;
       y.domain([0, d3.max(newData) * 1.1]);
 
-      svg
+      // Update default dot position
+      defaultDot.attr(
+        "transform",
+        `translate(${x(newData.length - 1)},${y(newData[newData.length - 1])})`,
+      );
+
+      chartGroup
         .select("path[fill]")
         .datum(newData)
         .transition()
         .duration(0)
         .attr("d", area);
 
-      svg
+      chartGroup
         .select("path[stroke]")
         .datum(newData)
         .transition()
         .duration(0)
         .attr("d", line);
+
+      if (lastMouseX !== null) {
+        handleMouseMove(null);
+      }
     };
   }
 
@@ -431,14 +600,20 @@
       <Card class="h-32">
         <CardContent class="p-6 relative h-full">
           <div bind:this={chartElement} class="absolute inset-0" />
-          <div class="relative z-10">
+          <div class="relative z-10 pointer-events-none">
             <div class="flex justify-between items-center mb-4">
               <span class="text-sm font-medium mb-auto text-gray-500"
                 >Message Throughput</span
               >
               <div>
                 <span class="text-2xl font-bold"
-                  >{metrics.messages_processed_throughput ?? "N/A"}</span
+                  >{(hovered_messages_processed_throughput ??
+                    metrics.messages_processed_throughput) > 0
+                    ? (
+                        hovered_messages_processed_throughput ??
+                        metrics.messages_processed_throughput
+                      ).toFixed(1)
+                    : "0"}</span
                 >
                 <span class="text-xs font-medium ml-1 text-gray-500"
                   >msgs/sec</span
@@ -451,15 +626,16 @@
       <Card class="h-32">
         <CardContent class="p-6 relative h-full">
           <div bind:this={bytesChartElement} class="absolute inset-0" />
-          <div class="relative z-10">
+          <div class="relative z-10 pointer-events-none">
             <div class="flex justify-between items-center mb-4">
               <span class="text-sm font-medium mb-auto text-gray-500"
                 >Bytes Throughput</span
               >
               <div>
-                {#if metrics.messages_processed_bytes !== null && metrics.messages_processed_bytes !== undefined}
+                {#if (hovered_messages_processed_bytes ?? metrics.messages_processed_bytes) !== null}
                   {@const formatted = formatBytes(
-                    metrics.messages_processed_bytes,
+                    hovered_messages_processed_bytes ??
+                      metrics.messages_processed_bytes,
                   )}
                   <span class="text-2xl font-bold">{formatted.value}</span>
                   <span class="text-xs font-medium ml-1 text-gray-500"

@@ -102,7 +102,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     bytes_between_limit_checks = Keyword.get(opts, :bytes_between_limit_checks, div(max_memory_bytes, 100))
 
     rep_conn_opts =
-      [auto_reconnect: true, name: via_tuple(id)]
+      [auto_reconnect: false, name: via_tuple(id)]
       |> Keyword.merge(connection)
       # Very important. If we don't add this, ReplicationConnection will block start_link (and the
       # calling process!) while it connects.

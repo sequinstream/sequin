@@ -114,7 +114,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    desired_count = demand * state.batch_size * 2
+    desired_count = demand * state.batch_size * 10
     {time, messages} = :timer.tc(fn -> produce_messages(state, desired_count) end)
     more_upstream_messages? = length(messages) == desired_count
 

@@ -8,6 +8,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
     max_attempts: 3
 
   alias Sequin.Consumers
+  alias Sequin.ConsumersRuntime.InitBackfillStatsWorker
   alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
@@ -117,6 +118,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
       "create" ->
         with {:ok, backfill} <- Consumers.get_backfill(id),
              {:ok, consumer} <- Consumers.get_consumer(backfill.sink_consumer_id) do
+          InitBackfillStatsWorker.enqueue(backfill.id)
           DatabasesRuntimeSupervisor.start_table_reader(consumer)
         end
 

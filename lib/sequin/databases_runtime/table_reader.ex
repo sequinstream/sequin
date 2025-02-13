@@ -214,7 +214,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
 
     sql = Postgres.parameterize_sql(sql)
 
-    with {:ok, %Postgrex.Result{rows: [[count]]}} <- Postgres.query(db, sql, cursor_values) do
+    with {:ok, %Postgrex.Result{rows: [[count]]}} <- Postgres.query(db, sql, cursor_values, timeout: :timer.minutes(1)) do
       {:ok, count}
     end
   end

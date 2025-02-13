@@ -159,17 +159,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     cursor = cursor || backfill.initial_min_cursor
     state = %{state | current_cursor: cursor, next_cursor: nil}
 
-    # Add initial count if not set
-    if is_nil(backfill.rows_initial_count) do
-      case TableReader.fast_count_estimate(database(state), table(state), cursor) do
-        {:ok, count} ->
-          Consumers.update_backfill(backfill, %{rows_initial_count: count}, skip_lifecycle: true)
-
-        {:error, error} ->
-          Logger.error("[TableReaderServer] Failed to get initial count: #{inspect(error)}")
-      end
-    end
-
     actions = [check_state_timeout(state.check_state_timeout)]
 
     {:next_state, :fetch_batch, state, actions}

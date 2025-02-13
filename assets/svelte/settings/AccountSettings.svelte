@@ -94,7 +94,6 @@
   $: renameDisabled = selectedAccount.name === form.name;
 
   let showTokens: { [key: string]: boolean } = {};
-  let clipboardSupported = navigator.clipboard && navigator.clipboard.writeText;
 
   function openInviteMemberDialog() {
     showInviteMember = true;
@@ -608,21 +607,21 @@
                     {#if showTokens[token.id]}
                       {token.token}
                     {:else}
-                      {token.token.slice(0, 4)}*****{token.token.slice(-4)}
+                      {"*".repeat(token.token.length - 8)}{token.token.slice(
+                        -8,
+                      )}
                     {/if}
                     <CopyIcon
                       content={token.token}
                       class="hover:text-gray-700 hover:bg-gray-100 rounded-md p-2"
                     />
-                    {#if !clipboardSupported}
-                      <button
-                        class="hover:text-gray-700 hover:bg-gray-100 rounded-md p-2"
-                        on:click={() =>
-                          (showTokens[token.id] = !showTokens[token.id])}
-                      >
-                        <Eye class="h-4 w-4" />
-                      </button>
-                    {/if}
+                    <button
+                      class="hover:text-gray-700 hover:bg-gray-100 rounded-md p-2"
+                      on:click={() =>
+                        (showTokens[token.id] = !showTokens[token.id])}
+                    >
+                      <Eye class="h-4 w-4" />
+                    </button>
                   </div>
                 </Table.Cell>
                 <Table.Cell

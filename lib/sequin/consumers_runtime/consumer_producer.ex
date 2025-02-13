@@ -114,7 +114,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    desired_count = demand * state.batch_size * 10
+    desired_count = demand * state.batch_size
     {time, messages} = :timer.tc(fn -> produce_messages(state, desired_count) end)
     more_upstream_messages? = length(messages) == desired_count
 
@@ -239,24 +239,10 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], %{state | receive_timer: nil, trim_timer: nil}}
   end
 
-  @spec ack({SinkConsumer.t(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) ::
-          :ok
+  @spec ack({SinkConsumer.id(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) :: :ok
   def ack({consumer_id, test_pid, slot_message_store_mod}, successful, failed) do
     successful_messages = Enum.flat_map(successful, & &1.data)
     failed_messages = Enum.flat_map(failed, & &1.data)
-
-    # TODO: Can we remove, this should be happening in the processor?
-    if test_pid do
-      Sandbox.allow(Sequin.Repo, test_pid, self())
-    end
-
-    # First, handle the WAL cursors for successful messages
-    wal_cursors =
-      Enum.map(successful_messages, fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
-
-    MessageLedgers.wal_cursors_reached_checkpoint(consumer_id, "consumer_producer.ack", wal_cursors)
-
-    :ok = MessageLedgers.wal_cursors_delivered(consumer_id, wal_cursors)
 
     successful_ack_ids = Enum.map(successful_messages, & &1.ack_id)
 
@@ -275,12 +261,22 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     end
 
     if test_pid do
-      successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
-      failed_ids = failed |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
-      send(test_pid, {__MODULE__, :ack_finished, successful_ids, failed_ids})
+      failed_ack_ids = Enum.map(failed_messages, & &1.ack_id)
+      send(test_pid, {__MODULE__, :ack_finished, successful_ack_ids, failed_ack_ids})
     end
 
     :ok
+  end
+
+  @spec pre_ack_delivered_messages(SinkConsumer.t(), list(Message.t())) :: :ok
+  def pre_ack_delivered_messages(consumer, broadway_messages) do
+    delivered_messages = Enum.flat_map(broadway_messages, & &1.data)
+
+    wal_cursors =
+      Enum.map(delivered_messages, fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
+
+    :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
+    :ok = MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "consumer_producer.ack", wal_cursors)
   end
 
   defp maybe_schedule_demand(%{scheduled_handle_demand: false} = state) do

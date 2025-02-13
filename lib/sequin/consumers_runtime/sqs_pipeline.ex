@@ -8,6 +8,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -33,7 +34,8 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
       processors: [
         default: [
           concurrency: consumer.max_waiting,
-          max_demand: 10
+          max_demand: 10,
+          min_demand: 5
         ]
       ],
       context: %{
@@ -57,7 +59,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
   @impl Broadway
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = message, %{
+  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{
         consumer: consumer,
         sqs_client: sqs_client,
         test_pid: test_pid
@@ -73,9 +75,11 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
 
     case SQS.send_messages(sqs_client, consumer.sink.queue_url, sqs_messages) do
       :ok ->
+        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
+
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
-        message
+        broadway_message
 
       {:error, error} ->
         reason = format_error(error)
@@ -83,17 +87,15 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
 
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: reason})
 
-        Enum.each(messages, fn msg ->
-          Sequin.Logs.log_for_consumer_message(
-            :error,
-            consumer.account_id,
-            consumer.id,
-            msg.replication_message_trace_id,
-            "Failed to push message to SQS: #{inspect(reason)}"
-          )
-        end)
+        Sequin.Logs.log_for_consumer_message(
+          :error,
+          consumer.account_id,
+          consumer.id,
+          Enum.map(messages, & &1.replication_message_trace_id),
+          "Failed to push message to SQS: #{inspect(reason)}"
+        )
 
-        Broadway.Message.failed(message, reason)
+        Broadway.Message.failed(broadway_message, reason)
     end
   end
 

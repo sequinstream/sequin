@@ -4,6 +4,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
 
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
@@ -53,7 +54,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
   @impl Broadway
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = message, %{
+  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{
         consumer: consumer,
         pubsub_client: pubsub_client,
         test_pid: test_pid
@@ -69,9 +70,11 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
 
     case PubSub.publish_messages(pubsub_client, consumer.sink.topic_id, pubsub_messages) do
       :ok ->
+        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
+
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
-        message
+        broadway_message
 
       {:error, error} ->
         Logger.warning("Failed to publish message to Pub/Sub: #{inspect(error)}")
@@ -88,7 +91,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
           )
         end)
 
-        Broadway.Message.failed(message, error)
+        Broadway.Message.failed(broadway_message, error)
     end
   end
 

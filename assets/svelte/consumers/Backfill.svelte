@@ -121,13 +121,19 @@
     const endDate = new Date(end);
     const diffMs = endDate.getTime() - startDate.getTime();
 
-    const minutes = Math.floor(diffMs / 60000);
+    const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    const hours = Math.floor(
+      (diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000),
+    );
+    const minutes = Math.floor((diffMs % (60 * 60 * 1000)) / 60000);
     const seconds = Math.floor((diffMs % 60000) / 1000);
+    const ms = diffMs % 1000;
 
-    if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    }
-    return `${seconds}s`;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    if (seconds > 0) return `${seconds}s`;
+    return `${ms}ms`;
   }
 </script>
 

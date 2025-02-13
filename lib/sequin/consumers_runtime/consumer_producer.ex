@@ -144,7 +144,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       |> Enum.map(fn batch ->
         %Message{
           data: batch,
-          acknowledger: {__MODULE__, {state.consumer, state.test_pid, state.slot_message_store_mod}, nil}
+          acknowledger: {__MODULE__, {state.consumer.id, state.test_pid, state.slot_message_store_mod}, nil}
         }
       end)
 
@@ -241,7 +241,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   @spec ack({SinkConsumer.t(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) ::
           :ok
-  def ack({consumer, test_pid, slot_message_store_mod}, successful, failed) do
+  def ack({consumer_id, test_pid, slot_message_store_mod}, successful, failed) do
     successful_messages = Enum.flat_map(successful, & &1.data)
     failed_messages = Enum.flat_map(failed, & &1.data)
 
@@ -254,15 +254,15 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     wal_cursors =
       Enum.map(successful_messages, fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
 
-    MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "consumer_producer.ack", wal_cursors)
+    MessageLedgers.wal_cursors_reached_checkpoint(consumer_id, "consumer_producer.ack", wal_cursors)
 
-    :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
+    :ok = MessageLedgers.wal_cursors_delivered(consumer_id, wal_cursors)
 
     successful_ack_ids = Enum.map(successful_messages, & &1.ack_id)
 
     # Ack all messages in SlotMessageStore to remove from buffer
     unless successful_ack_ids == [] do
-      {:ok, _count} = slot_message_store_mod.messages_succeeded(consumer.id, successful_ack_ids)
+      {:ok, _count} = slot_message_store_mod.messages_succeeded(consumer_id, successful_ack_ids)
     end
 
     failed_message_metadatas =
@@ -271,7 +271,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       |> Enum.map(&%{&1 | data: nil})
 
     unless failed_message_metadatas == [] do
-      :ok = slot_message_store_mod.messages_failed(consumer.id, failed_message_metadatas)
+      :ok = slot_message_store_mod.messages_failed(consumer_id, failed_message_metadatas)
     end
 
     if test_pid do

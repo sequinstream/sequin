@@ -134,6 +134,49 @@ defmodule Sequin.Consumers do
     |> Repo.aggregate(:count, :id)
   end
 
+  def count_non_disabled_sink_consumers do
+    :disabled
+    |> SinkConsumer.where_status_not()
+    |> Repo.aggregate(:count, :id)
+  end
+
+  @doc """
+  Calculates the maximum memory bytes allowed for a consumer.
+  """
+  @spec max_memory_bytes_for_consumer(SinkConsumer.t()) ::
+          non_neg_integer()
+  def max_memory_bytes_for_consumer(%SinkConsumer{} = consumer) do
+    round(Sequin.Size.mb(consumer.max_memory_mb) * 0.8)
+  end
+
+  @doc """
+  Calculates the maximum memory bytes allowed for a consumer when a system-wide max is in place.
+
+  Takes into account both:
+  - The consumer's configured max_memory_mb setting
+  - The system-wide memory limit divided among all non-disabled consumers
+
+  ## Returns
+    The lower of:
+    * Consumer's max_memory_mb converted to bytes * 0.8
+    * (system_max_memory_bytes / number of non-disabled consumers) * 0.8
+  """
+  @spec max_system_memory_bytes_for_consumer(SinkConsumer.t(), non_neg_integer(), non_neg_integer()) ::
+          non_neg_integer()
+  def max_system_memory_bytes_for_consumer(%SinkConsumer{} = consumer, consumer_count, system_max_memory_bytes) do
+    consumer_max_memory_bytes = max_memory_bytes_for_consumer(consumer)
+
+    # Some tests may call this with 0 consumers actually persisted
+    consumer_count = max(consumer_count, 1)
+
+    system_per_consumer_max_memory_bytes = round(div(system_max_memory_bytes, consumer_count) * 0.8)
+
+    min(
+      consumer_max_memory_bytes,
+      system_per_consumer_max_memory_bytes
+    )
+  end
+
   def earliest_sink_consumer_inserted_at_for_account(account_id) do
     account_id
     |> SinkConsumer.where_account_id()

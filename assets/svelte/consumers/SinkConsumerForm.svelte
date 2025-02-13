@@ -37,6 +37,12 @@
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
   import MessageExamples from "$lib/components/MessageExamples.svelte";
+  import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+  } from "$lib/components/ui/accordion";
 
   type Column = {
     attnum: number;
@@ -77,10 +83,12 @@
     sequence: Record<string, string>;
   };
   export let submitError;
+  export let isSelfHosted: boolean;
 
   let initialForm = {
     type: consumer.type,
     messageKind: consumer.message_kind || "event",
+    maxMemoryMb: consumer.max_memory_mb || 1024,
     postgresDatabaseId: consumer.postgres_database_id,
     tableOid: consumer.table_oid,
     sortColumnAttnum: null,
@@ -699,7 +707,7 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>Sink name</CardTitle>
+        <CardTitle>Sink settings</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -728,11 +736,43 @@
             <p class="text-destructive text-sm">{errors.consumer.name}</p>
           {/if}
         </div>
-        {#if submitError}
-          <p class="text-destructive text-sm">{submitError}</p>
-        {:else if Object.keys(errors.consumer).length > 0 || Object.keys(errors.sequence).length > 0}
-          <p class="text-destructive text-sm">Validation errors, see above</p>
+
+        {#if isSelfHosted}
+          <Accordion class="w-full">
+            <AccordionItem value="advanced">
+              <AccordionTrigger>Advanced configuration</AccordionTrigger>
+              <AccordionContent>
+                <div class="space-y-4 pt-4">
+                  <div class="space-y-2">
+                    <Label for="max-memory">Memory limit</Label>
+                    <div class="flex flex-col gap-1">
+                      <div class="flex items-center gap-2">
+                        <Input
+                          id="max-memory"
+                          type="number"
+                          min="128"
+                          bind:value={form.maxMemoryMb}
+                          class="w-32"
+                        />
+                        <span class="text-sm text-muted-foreground">MB</span>
+                      </div>
+                      <p class="text-xs font-light">
+                        The soft memory limit for this specific sink. Defaults
+                        to 1GB, which is a good starting point.
+                      </p>
+                    </div>
+                    {#if errors.consumer.max_memory_mb}
+                      <p class="text-destructive text-sm">
+                        {errors.consumer.max_memory_mb}
+                      </p>
+                    {/if}
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         {/if}
+
         <div class="flex justify-end items-center gap-2">
           {#if consumer.type !== "http_push" && consumer.type !== "sequin_stream"}
             <Popover.Root bind:open={showLocalhostWarningDialog}>

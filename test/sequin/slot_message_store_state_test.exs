@@ -7,6 +7,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Multiset
+  alias Sequin.Size
 
   setup do
     state = %State{consumer: %SinkConsumer{seq: Factory.unique_integer()}}
@@ -56,11 +57,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
 
     test "returns error when exceeding setting_max_accumulated_payload_bytes", %{state: state} do
-      state = %{state | setting_max_accumulated_payload_bytes: 150}
+      state = %{state | max_memory_bytes: Size.mb(100)}
 
-      msg1 = ConsumersFactory.consumer_message(payload_size_bytes: 100)
+      msg1 = ConsumersFactory.consumer_message(payload_size_bytes: Size.mb(100))
 
-      msg2 = ConsumersFactory.consumer_message(payload_size_bytes: 100)
+      msg2 = ConsumersFactory.consumer_message(payload_size_bytes: Size.mb(100))
 
       assert {:error, %Error.InvariantError{}} = State.put_messages(state, [msg1, msg2])
     end

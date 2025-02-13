@@ -215,7 +215,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   def handle_connect(state) do
-    Logger.info("[SlotProcessor] Handling connect (attempt #{state.connect_attempts + 1})")
+    Logger.debug("[SlotProcessor] Handling connect (attempt #{state.connect_attempts + 1})")
 
     {:ok, low_watermark_wal_cursor} = Sequin.Replication.low_watermark_wal_cursor(state.id)
 

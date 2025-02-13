@@ -19,6 +19,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Size
 
   describe "ack_messages/2" do
     setup do
@@ -2264,6 +2265,33 @@ defmodule Sequin.ConsumersTest do
 
       assert [updated_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       refute updated_msg.not_visible_until == existing_msg.not_visible_until
+    end
+  end
+
+  describe "max_system_memory_bytes_for_consumer/3" do
+    test "returns minimum between consumer's and system's per-consumer max memory" do
+      # Set up a consumer with 1000MB max memory
+      consumer = ConsumersFactory.sink_consumer(max_memory_mb: 1000)
+
+      # Mock system having 2000MB total memory
+      system_max_bytes = Size.mb(2000)
+
+      # With single consumer, returns consumer's max_bytes since it's lower
+      expected_consumer_max_bytes = round(Size.mb(1000) * 0.8)
+      assert Consumers.max_system_memory_bytes_for_consumer(consumer, 1, system_max_bytes) == expected_consumer_max_bytes
+
+      # With 5 consumers sharing system memory
+      expected_shared_max_bytes = round(system_max_bytes / 5 * 0.8)
+
+      # Each consumer (even with different memory limits) gets equal share of system memory
+      consumers =
+        for _ <- 1..4 do
+          ConsumersFactory.sink_consumer(max_memory_mb: Enum.random(1000..10_000))
+        end
+
+      Enum.each(consumers, fn consumer ->
+        assert Consumers.max_system_memory_bytes_for_consumer(consumer, 5, system_max_bytes) == expected_shared_max_bytes
+      end)
     end
   end
 end

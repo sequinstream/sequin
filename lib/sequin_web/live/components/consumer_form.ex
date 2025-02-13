@@ -59,6 +59,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> assign(:encoded_databases, Enum.map(assigns.databases, &encode_database/1))
       |> assign(:encoded_http_endpoints, Enum.map(assigns.http_endpoints, &encode_http_endpoint/1))
       |> assign(:consumer_title, consumer_title(assigns.consumer))
+      |> assign(:self_hosted, self_hosted?())
 
     ~H"""
     <div id={@id}>
@@ -73,7 +74,8 @@ defmodule SequinWeb.Components.ConsumerForm do
             submitError: @submit_error,
             parent: @id,
             databases: @encoded_databases,
-            httpEndpoints: @encoded_http_endpoints
+            httpEndpoints: @encoded_http_endpoints,
+            isSelfHosted: @self_hosted
           }
         }
         socket={@socket}
@@ -431,6 +433,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "sink" => decode_sink(socket.assigns.consumer.type, form["sink"]),
         "max_ack_pending" => form["maxAckPending"],
         "max_waiting" => form["maxWaiting"],
+        "max_memory_mb" => form["maxMemoryMb"],
         "message_kind" => form["messageKind"],
         "name" => form["name"],
         "postgres_database_id" => form["postgresDatabaseId"],
@@ -590,6 +593,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "name" => consumer.name || Name.generate(999),
       "ack_wait_ms" => consumer.ack_wait_ms,
       "batch_size" => Map.get(consumer, :batch_size),
+      "max_memory_mb" => consumer.max_memory_mb,
       "group_column_attnums" => source_table && source_table.group_column_attnums,
       "max_ack_pending" => consumer.max_ack_pending,
       "max_deliver" => consumer.max_deliver,
@@ -1024,5 +1028,10 @@ defmodule SequinWeb.Components.ConsumerForm do
       table = Sequin.Enum.find!(db.tables, &(&1.oid == table_oid))
       %{table | sort_column_attnum: sort_column_attnum}
     end
+  end
+
+  defp self_hosted? do
+    Application.get_env(:sequin, :env) != :prod or
+      Application.get_env(:sequin, :self_hosted)
   end
 end

@@ -41,7 +41,8 @@ defmodule Sequin.Consumers.SinkConsumer do
              :name,
              :updated_at,
              :status,
-             :health
+             :health,
+             :max_memory_mb
            ]}
   typed_schema "sink_consumers" do
     field :name, :string
@@ -55,6 +56,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
     field :annotations, :map, default: %{}
+    field :max_memory_mb, :integer, default: 1024
 
     field :type, Ecto.Enum,
       values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
@@ -99,7 +101,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :replication_slot_id,
       :status,
       :sequence_id,
-      :message_kind
+      :message_kind,
+      :max_memory_mb
     ])
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
@@ -125,7 +128,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_deliver,
       :backfill_completed_at,
       :status,
-      :annotations
+      :annotations,
+      :max_memory_mb
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)
@@ -133,6 +137,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
     |> validate_number(:batch_size, less_than_or_equal_to: 1_000)
+    |> validate_number(:max_memory_mb, greater_than_or_equal_to: 128)
   end
 
   def where_account_id(query \\ base_query(), account_id) do
@@ -186,6 +191,10 @@ defmodule Sequin.Consumers.SinkConsumer do
 
   def where_status(query \\ base_query(), status) do
     from([consumer: c] in query, where: c.status == ^status)
+  end
+
+  def where_status_not(query \\ base_query(), status) do
+    from([consumer: c] in query, where: c.status != ^status)
   end
 
   defp base_query(query \\ __MODULE__) do

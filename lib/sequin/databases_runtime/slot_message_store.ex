@@ -285,7 +285,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     state = %State{
       consumer: consumer,
       consumer_id: consumer_id,
-      test_pid: Keyword.get(opts, :test_pid)
+      test_pid: Keyword.get(opts, :test_pid),
+      setting_system_max_memory_bytes:
+        Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes))
     }
 
     {:ok, state, {:continue, :init}}
@@ -293,6 +295,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_continue(:init, %State{} = state) do
+    # If we're not self-hosted, there will be no system-wide max memory bytes
+    # so we don't need to recalculate max_memory_bytes on consumers changing
+    if state.setting_system_max_memory_bytes do
+      :syn.join(:consumers, :consumers_changed, self())
+    end
+
     # Allow test process to access the database connection
     if state.test_pid do
       Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
@@ -307,6 +315,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         Consumers.get_sink_consumer!(state.consumer_id)
       end
 
+    state = %{state | consumer: consumer}
+
     Logger.metadata(account_id: consumer.account_id, replication_id: consumer.replication_slot_id)
 
     :ok = State.setup_ets(consumer)
@@ -318,9 +328,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
       end)
 
-    {:ok, state} = State.put_persisted_messages(%{state | consumer: consumer}, persisted_messages)
+    {:ok, state} =
+      state
+      |> put_max_memory_bytes()
+      |> State.put_persisted_messages(persisted_messages)
 
     schedule_process_logging(0)
+    schedule_max_memory_check()
     {:noreply, state}
   end
 
@@ -629,8 +643,36 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:noreply, state}
   end
 
+  @impl GenServer
+  # :syn notification
+  def handle_info(:consumers_changed, state) do
+    state = put_max_memory_bytes(state)
+    {:noreply, state}
+  end
+
   defp schedule_process_logging(interval \\ :timer.seconds(30)) do
     Process.send_after(self(), :process_logging, interval)
+  end
+
+  # Can be very infrequent, as we use :syn to learn about changes to consumer count
+  defp schedule_max_memory_check(interval \\ :timer.minutes(5)) do
+    Process.send_after(self(), :max_memory_check, interval)
+  end
+
+  defp put_max_memory_bytes(%State{} = state) do
+    consumer = state.consumer
+
+    if state.setting_system_max_memory_bytes do
+      # Must be self-hosted/dev. Check consumer's max_memory_mb setting
+      consumer_count = Consumers.count_non_disabled_sink_consumers()
+
+      max_memory_bytes =
+        Consumers.max_system_memory_bytes_for_consumer(consumer, consumer_count, state.setting_system_max_memory_bytes)
+
+      %{state | max_memory_bytes: max_memory_bytes}
+    else
+      %{state | max_memory_bytes: Consumers.max_memory_bytes_for_consumer(consumer)}
+    end
   end
 
   defp exit_to_sequin_error({:noproc, _}) do

@@ -15,9 +15,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   @type message :: ConsumerRecord.t() | ConsumerEvent.t()
   @type cursor_tuple :: {commit_lsn :: non_neg_integer(), commit_idx :: non_neg_integer()}
 
-  # 1GB
-  @default_setting_max_accumulated_payload_bytes 1 * 1024 * 1024 * 1024
-  @default_setting_max_messages 100_000
+  @default_setting_max_messages 500_000
 
   typedstruct do
     field :consumer, SinkConsumer.t()
@@ -28,12 +26,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :produced_message_groups, Multiset.t(), default: %{}
     field :persisted_message_groups, Multiset.t(), default: %{}
     field :unpersisted_cursor_tuples_for_table_reader_batch, MapSet.t(), default: MapSet.new()
-
-    field :setting_max_accumulated_payload_bytes, non_neg_integer(),
-      default: @default_setting_max_accumulated_payload_bytes
-
     field :setting_max_messages, non_neg_integer(), default: @default_setting_max_messages
-
+    field :setting_system_max_memory_bytes, non_neg_integer() | nil
+    field :max_memory_bytes, non_neg_integer()
     field :payload_size_bytes, non_neg_integer(), default: 0
     field :slot_processor_monitor_ref, reference() | nil
     field :table_reader_batch_id, String.t() | nil
@@ -61,7 +56,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     incoming_payload_size_bytes = Enum.sum_by(messages, & &1.payload_size_bytes)
 
     bytes_exceeded? =
-      state.payload_size_bytes + incoming_payload_size_bytes > state.setting_max_accumulated_payload_bytes
+      state.payload_size_bytes + incoming_payload_size_bytes > state.max_memory_bytes
 
     messages_exceeded? = length(messages) + map_size(state.messages) > state.setting_max_messages
 

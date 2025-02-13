@@ -48,6 +48,8 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   end
 
   defp handle_consumer_event(event, id, data) do
+    :syn.publish(:consumers, :consumers_changed, :consumers_changed)
+
     case event do
       "create" ->
         with {:ok, consumer} <- Consumers.get_consumer(id) do

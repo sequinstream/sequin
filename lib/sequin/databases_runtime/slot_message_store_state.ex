@@ -27,6 +27,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :ack_ids_to_cursor_tuples, %{SinkConsumer.ack_id() => cursor_tuple()}, default: %{}
     field :produced_message_groups, Multiset.t(), default: %{}
     field :persisted_message_groups, Multiset.t(), default: %{}
+    field :unpersisted_cursor_tuples_for_table_reader_batch, MapSet.t(), default: MapSet.new()
 
     field :setting_max_accumulated_payload_bytes, non_neg_integer(),
       default: @default_setting_max_accumulated_payload_bytes
@@ -111,9 +112,19 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   def put_table_reader_batch(%State{} = state, messages, batch_id) do
     messages = Enum.map(messages, &%{&1 | table_reader_batch_id: batch_id})
 
+    cursor_tuples = Enum.map(messages, &{&1.commit_lsn, &1.commit_idx})
+
+    unpersisted_cursor_tuples_for_table_reader_batch =
+      MapSet.union(state.unpersisted_cursor_tuples_for_table_reader_batch, MapSet.new(cursor_tuples))
+
     case put_messages(state, messages) do
       {:ok, %State{} = state} ->
-        {:ok, %{state | table_reader_batch_id: batch_id}}
+        {:ok,
+         %{
+           state
+           | table_reader_batch_id: batch_id,
+             unpersisted_cursor_tuples_for_table_reader_batch: unpersisted_cursor_tuples_for_table_reader_batch
+         }}
 
       error ->
         error
@@ -142,6 +153,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         Multiset.delete(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
       end)
 
+    unpersisted_cursor_tuples_for_table_reader_batch =
+      MapSet.difference(state.unpersisted_cursor_tuples_for_table_reader_batch, MapSet.new(cursor_tuples))
+
     popped_message_ack_ids = Enum.map(popped_messages, & &1.ack_id)
 
     popped_messages_bytes = Enum.sum_by(popped_messages, & &1.payload_size_bytes)
@@ -153,7 +167,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
          ack_ids_to_cursor_tuples: Map.drop(state.ack_ids_to_cursor_tuples, popped_message_ack_ids),
          payload_size_bytes: state.payload_size_bytes - popped_messages_bytes,
          produced_message_groups: produced_message_groups,
-         persisted_message_groups: persisted_message_groups
+         persisted_message_groups: persisted_message_groups,
+         unpersisted_cursor_tuples_for_table_reader_batch: unpersisted_cursor_tuples_for_table_reader_batch
      }}
   end
 
@@ -307,44 +322,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
      }}
   end
 
-  def batch_progress(%State{} = state, batch_id) do
-    cond do
-      state.table_reader_batch_id == nil ->
-        Logger.warning("[SlotMessageStore] No batch in progress")
-        {:error, Error.invariant(message: "No batch in progress")}
-
-      state.table_reader_batch_id != batch_id ->
-        Logger.warning(
-          "[SlotMessageStore] Batch mismatch",
-          expected_batch_id: batch_id,
-          actual_batch_id: state.table_reader_batch_id
-        )
-
-        {:error, Error.invariant(message: "Batch mismatch. Expected #{batch_id} but got #{state.table_reader_batch_id}")}
-
-      has_unpersisted_batch_messages?(state, batch_id) ->
-        Logger.info(
-          "[SlotMessageStore] Batch is in progress",
-          batch_id: state.table_reader_batch_id
-        )
-
-        {:ok, :in_progress}
-
-      true ->
-        Logger.info("[SlotMessageStore] Batch is completed", batch_id: state.table_reader_batch_id)
-        {:ok, :completed}
-    end
-  end
-
-  defp has_unpersisted_batch_messages?(%State{} = state, batch_id) do
-    persisted_message_cursor_tuples = state.persisted_message_groups |> Multiset.values() |> MapSet.new()
-
-    state.messages
-    |> Stream.reject(fn {_k, msg} ->
-      MapSet.member?(persisted_message_cursor_tuples, {msg.commit_lsn, msg.commit_idx})
-    end)
-    |> Stream.map(fn {_k, v} -> v end)
-    |> Enum.any?(&(&1.table_reader_batch_id == batch_id))
+  @spec unpersisted_table_reader_messages?(State.t()) :: boolean()
+  def unpersisted_table_reader_messages?(%State{} = state) do
+    MapSet.size(state.unpersisted_cursor_tuples_for_table_reader_batch) != 0
   end
 
   defp deliverable_messages(%State{} = state, count) do

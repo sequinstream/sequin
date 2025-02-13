@@ -25,8 +25,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   @callback flush_batch(String.t() | pid(), map()) :: :ok
   @callback discard_batch(String.t() | pid(), String.t()) :: :ok
 
-  @initial_batch_progress_timeout 50
-  @max_batch_progress_timeout 1000
+  @initial_batch_progress_timeout 10
+  @max_batch_progress_timeout 100
 
   # Client API
 

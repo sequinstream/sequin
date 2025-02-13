@@ -25,8 +25,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   @callback flush_batch(String.t() | pid(), map()) :: :ok
   @callback discard_batch(String.t() | pid(), String.t()) :: :ok
 
-  @initial_batch_progress_timeout 10
-  @max_batch_progress_timeout 100
+  @initial_batch_progress_timeout :timer.seconds(10)
+  @max_batch_progress_timeout :timer.minutes(1)
 
   # Client API
 
@@ -154,6 +154,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   def handle_event(:internal, :init, :initializing, state) do
     backfill = state.backfill
+
+    :syn.join(:consumers, {:table_reader_batch_complete, state.consumer.id}, self())
 
     cursor = TableReader.cursor(backfill.id)
     cursor = cursor || backfill.initial_min_cursor
@@ -325,6 +327,24 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 
+  def handle_event(:info, {:table_reader_batch_complete, batch_id}, _state_name, state) do
+    if batch_id == state.batch_id do
+      state = complete_batch(state)
+
+      if state.count_pending_messages < state.max_pending_messages do
+        {:next_state, :fetch_batch, state}
+      else
+        {:next_state, {:paused, :max_pending_messages}, state}
+      end
+    else
+      Logger.warning(
+        "[TableReaderServer] Ignoring table_reader_batch_complete for unknown batch #{batch_id} (current batch: #{state.batch_id})"
+      )
+
+      :keep_state_and_data
+    end
+  end
+
   def handle_event(:enter, _old_state, :commit_batch, state) do
     timeout =
       Sequin.Time.exponential_backoff(
@@ -342,23 +362,12 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     case SlotMessageStore.batch_progress(state.consumer.id, state.batch_id) do
       {:ok, :completed} ->
-        Logger.info("[TableReaderServer] Batch #{state.batch_id} is committed")
-        # Batch is committed, update cursor and reset state
-        :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
-
-        next_state = %{
-          state
-          | batch_id: nil,
-            batch: nil,
-            next_cursor: nil,
-            current_cursor: state.next_cursor,
-            batch_check_count: 0
-        }
+        state = complete_batch(state)
 
         if state.count_pending_messages < state.max_pending_messages do
-          {:next_state, :fetch_batch, next_state}
+          {:next_state, :fetch_batch, state}
         else
-          {:next_state, {:paused, :max_pending_messages}, next_state}
+          {:next_state, {:paused, :max_pending_messages}, state}
         end
 
       {:ok, :in_progress} ->
@@ -625,5 +634,20 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         # We'll try fetching on the next go-around
         0
     end
+  end
+
+  defp complete_batch(%State{} = state) do
+    Logger.info("[TableReaderServer] Batch #{state.batch_id} is committed")
+    # Batch is committed, update cursor and reset state
+    :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
+
+    %{
+      state
+      | batch_id: nil,
+        batch: nil,
+        next_cursor: nil,
+        current_cursor: state.next_cursor,
+        batch_check_count: 0
+    }
   end
 end

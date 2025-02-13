@@ -427,6 +427,8 @@ defmodule Sequin.SlotMessageStoreTest do
     end
 
     test "puts batch and reports on batch progress", %{consumer: consumer} do
+      consumer_id = consumer.id
+      :syn.join(:consumers, {:table_reader_batch_complete, consumer_id}, self())
       # Create test events
       messages = [
         ConsumersFactory.consumer_message(),
@@ -434,25 +436,27 @@ defmodule Sequin.SlotMessageStoreTest do
       ]
 
       # Put messages in store
-      :ok = SlotMessageStore.put_table_reader_batch(consumer.id, messages, "test-batch-id")
+      :ok = SlotMessageStore.put_table_reader_batch(consumer_id, messages, "test-batch-id")
 
       # Retrieve messages
-      {:ok, [delivered]} = SlotMessageStore.produce(consumer.id, 1, self())
+      {:ok, [delivered]} = SlotMessageStore.produce(consumer_id, 1, self())
 
-      assert {:ok, :in_progress} == SlotMessageStore.batch_progress(consumer.id, "test-batch-id")
+      assert {:ok, :in_progress} == SlotMessageStore.batch_progress(consumer_id, "test-batch-id")
 
       # For acks
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer.id, [delivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer_id, [delivered.ack_id])
 
       # Produce messages, none should be delivered
-      {:ok, [delivered]} = SlotMessageStore.produce(consumer.id, 1, self())
+      {:ok, [delivered]} = SlotMessageStore.produce(consumer_id, 1, self())
 
       # Delivered messages don't "complete" a batch
-      assert {:ok, :in_progress} == SlotMessageStore.batch_progress(consumer.id, "test-batch-id")
+      assert {:ok, :in_progress} == SlotMessageStore.batch_progress(consumer_id, "test-batch-id")
 
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer.id, [delivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer_id, [delivered.ack_id])
 
-      assert {:ok, :completed} == SlotMessageStore.batch_progress(consumer.id, "test-batch-id")
+      assert_received {:table_reader_batch_complete, "test-batch-id"}
+
+      assert {:ok, :completed} == SlotMessageStore.batch_progress(consumer_id, "test-batch-id")
     end
   end
 

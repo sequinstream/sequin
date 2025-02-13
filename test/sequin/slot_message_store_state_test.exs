@@ -449,68 +449,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "batch_progress/2" do
-    @tag capture_log: true
-    test "returns error when no batch is in progress", %{state: state} do
-      assert {:error, %Error.InvariantError{message: "No batch in progress"}} =
-               State.batch_progress(state, "any-batch-id")
-    end
-
-    test "tracks batch progress through message lifecycle", %{state: state} do
-      batch_id = "test-batch-123"
-      msg1 = ConsumersFactory.consumer_message()
-      msg2 = ConsumersFactory.consumer_message()
-
-      # Put messages in batch and verify in_progress
-      {:ok, state} = State.put_table_reader_batch(state, [msg1, msg2], batch_id)
-      assert {:ok, :in_progress} = State.batch_progress(state, batch_id)
-
-      # Produce messages and verify still in_progress
-      assert {[produced1, produced2], state} = State.produce_messages(state, 2)
-      assert {:ok, :in_progress} = State.batch_progress(state, batch_id)
-
-      # Ack messages and verify completed
-      assert {[_msg1, _msg2], state} =
-               State.pop_messages(state, [
-                 {produced1.commit_lsn, produced1.commit_idx},
-                 {produced2.commit_lsn, produced2.commit_idx}
-               ])
-
-      assert {:ok, :completed} = State.batch_progress(state, batch_id)
-    end
-
-    test "when a message is persisted, it is not included in the batch progress", %{state: state} do
-      batch_id = "test-batch-123"
-      msg1 = ConsumersFactory.consumer_message()
-      msg2 = ConsumersFactory.consumer_message()
-
-      # Put messages in batch
-      {:ok, state} = State.put_table_reader_batch(state, [msg1, msg2], batch_id)
-      assert {:ok, :in_progress} = State.batch_progress(state, batch_id)
-
-      # Persist one message
-      {:ok, state} = State.put_persisted_messages(state, [msg1])
-
-      # Verify batch is still in progress since msg2 is not persisted
-      assert {:ok, :in_progress} = State.batch_progress(state, batch_id)
-
-      # Persist the second message
-      assert {[_msg2], state} = State.pop_messages(state, [{msg2.commit_lsn, msg2.commit_idx}])
-      {:ok, state} = State.put_persisted_messages(state, [msg2])
-
-      # Verify batch is now completed since all messages are persisted
-      assert {:ok, :completed} = State.batch_progress(state, batch_id)
-    end
-
-    @tag capture_log: true
-    test "returns error when batch_id doesn't match", %{state: state} do
-      {:ok, state} = State.put_table_reader_batch(state, [ConsumersFactory.consumer_message()], "batch-1")
-
-      assert {:error, %Error.InvariantError{message: "Batch mismatch" <> _}} =
-               State.batch_progress(state, "different-batch")
-    end
-  end
-
   describe "peek_messages/2" do
     test "returns messages in commit_lsn, commit_idx order", %{state: state} do
       messages =
@@ -689,6 +627,53 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert {[redelivered1, redelivered2], _state} = State.produce_messages(state, 2)
       assert_cursor_tuple_matches(produced1, redelivered1)
       assert_cursor_tuple_matches(produced2, redelivered2)
+    end
+  end
+
+  describe "unpersisted_table_reader_messages?/1" do
+    test "returns true when there are unpersisted messages from a table reader batch", %{state: state} do
+      batch_id = "test-batch-123"
+      msg1 = ConsumersFactory.consumer_message()
+      msg2 = ConsumersFactory.consumer_message()
+
+      # Put messages in batch
+      {:ok, state} = State.put_table_reader_batch(state, [msg1, msg2], batch_id)
+      assert State.unpersisted_table_reader_messages?(state)
+
+      # Produce two messages
+      {[msg1, msg2], state} = State.produce_messages(state, 2)
+      assert State.unpersisted_table_reader_messages?(state)
+
+      # Pop one message
+      {[_msg], state} = State.pop_messages(state, [{msg2.commit_lsn, msg2.commit_idx}])
+      assert State.unpersisted_table_reader_messages?(state)
+
+      # Pop and put persisted the other message
+      {[msg1], state} = State.pop_messages(state, [{msg1.commit_lsn, msg1.commit_idx}])
+      {:ok, state} = State.put_persisted_messages(state, [msg1])
+      refute State.unpersisted_table_reader_messages?(state)
+    end
+
+    test "returns false when there are no table reader batch messages", %{state: state} do
+      # Add regular messages (not from table reader batch)
+      msg1 = ConsumersFactory.consumer_message()
+      msg2 = ConsumersFactory.consumer_message()
+      {:ok, state} = State.put_messages(state, [msg1, msg2])
+
+      refute State.unpersisted_table_reader_messages?(state)
+    end
+
+    test "returns false after all batch messages are removed", %{state: state} do
+      batch_id = "test-batch-123"
+      msg = ConsumersFactory.consumer_message()
+
+      # Put message in batch
+      {:ok, state} = State.put_table_reader_batch(state, [msg], batch_id)
+      assert State.unpersisted_table_reader_messages?(state)
+
+      # Pop the message
+      {[_msg], state} = State.pop_messages(state, [{msg.commit_lsn, msg.commit_idx}])
+      refute State.unpersisted_table_reader_messages?(state)
     end
   end
 

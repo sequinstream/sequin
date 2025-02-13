@@ -381,10 +381,22 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   @impl GenServer
-  def handle_call({:batch_progress, batch_id}, _from, state) do
+  def handle_call({:batch_progress, batch_id}, _from, %State{table_reader_batch_id: batch_id} = state) do
     execute_timed(:batch_progress, fn ->
-      {:reply, State.batch_progress(state, batch_id), state}
+      if State.unpersisted_table_reader_messages?(state) do
+        {:reply, {:ok, :in_progress}, state}
+      else
+        {:reply, {:ok, :completed}, state}
+      end
     end)
+  end
+
+  def handle_call({:batch_progress, _batch_id}, _from, %State{table_reader_batch_id: nil} = state) do
+    {:reply, {:ok, :completed}, state}
+  end
+
+  def handle_call({:batch_progress, batch_id}, _from, %State{table_reader_batch_id: current_batch_id}) do
+    raise "Batch progress called with batch_id #{batch_id} that does not match the current batch_id: #{inspect(current_batch_id)}"
   end
 
   def handle_call({:produce, count, producer_pid}, from, %State{last_consumer_producer_pid: last_producer_pid} = state)
@@ -441,6 +453,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
+      state = maybe_finish_table_reader_batch(state)
       {:reply, {:ok, {dropped_messages, state.consumer}}, state}
     end)
   end
@@ -464,6 +477,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
+      state = maybe_finish_table_reader_batch(state)
       {:reply, {:ok, count}, state}
     end)
   end
@@ -492,6 +506,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
            # Now put the blocked messages into persisted_messages
            {:ok, state} <- State.put_persisted_messages(state, newly_blocked_messages),
            :ok <- upsert_messages(state, messages ++ newly_blocked_messages) do
+        state = maybe_finish_table_reader_batch(state)
         {:reply, :ok, state}
       else
         error ->
@@ -648,6 +663,24 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     |> Enum.each(fn chunk ->
       {:ok, _count} = Consumers.ack_messages(state.consumer, chunk)
     end)
+  end
+
+  defp maybe_finish_table_reader_batch(%State{table_reader_batch_id: nil} = state) do
+    state
+  end
+
+  defp maybe_finish_table_reader_batch(%State{} = state) do
+    if State.unpersisted_table_reader_messages?(state) do
+      state
+    else
+      :syn.publish(
+        :consumers,
+        {:table_reader_batch_complete, state.consumer.id},
+        {:table_reader_batch_complete, state.table_reader_batch_id}
+      )
+
+      %{state | table_reader_batch_id: nil}
+    end
   end
 
   defp incr_counter(name, amount) do

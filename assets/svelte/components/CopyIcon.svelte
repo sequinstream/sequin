@@ -3,6 +3,7 @@
   import { cubicOut } from "svelte/easing";
 
   export let content;
+  let isSupported = navigator.clipboard && navigator.clipboard.writeText;
   let showCheck = false;
 
   const [send, receive] = crossfade({
@@ -20,25 +21,35 @@
   };
 </script>
 
-<button
-  on:click|preventDefault={handleCopy}
-  class="relative flex items-center justify-center w-6 h-6 {$$props.class ||
-    ''}"
->
-  {#if showCheck}
-    <div class="absolute" in:send out:receive>
-      <icon
-        class="hero-check-circle cursor-pointer text-gray-500 icon-transition"
-      />
-    </div>
-  {:else}
-    <div class="absolute" in:send out:receive>
-      <icon
-        class="hero-clipboard-document cursor-pointer text-gray-500 icon-transition"
-      />
-    </div>
-  {/if}
-</button>
+{#if isSupported}
+  <button
+    on:click|preventDefault={handleCopy}
+    class="relative flex items-center justify-center w-6 h-6 {$$props.class ||
+      ''}"
+  >
+    {#if showCheck}
+      <div
+        class="absolute"
+        in:send={{ key: "check" }}
+        out:receive={{ key: "check" }}
+      >
+        <icon
+          class="hero-check-circle cursor-pointer text-gray-500 icon-transition"
+        />
+      </div>
+    {:else}
+      <div
+        class="absolute"
+        in:send={{ key: "clip" }}
+        out:receive={{ key: "clip" }}
+      >
+        <icon
+          class="hero-clipboard-document cursor-pointer text-gray-500 icon-transition"
+        />
+      </div>
+    {/if}
+  </button>
+{/if}
 
 <style>
   .icon-transition {

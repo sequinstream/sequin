@@ -12,6 +12,7 @@
     UserMinus,
     Link,
     X,
+    Eye,
   } from "lucide-svelte";
   import * as Table from "$lib/components/ui/table";
   import { formatRelativeTimestamp } from "$lib/utils";
@@ -91,6 +92,9 @@
     selectedAccount.contact_email === form.contact_email;
 
   $: renameDisabled = selectedAccount.name === form.name;
+
+  let showTokens: { [key: string]: boolean } = {};
+  let clipboardSupported = navigator.clipboard && navigator.clipboard.writeText;
 
   function openInviteMemberDialog() {
     showInviteMember = true;
@@ -601,11 +605,24 @@
                   <div
                     class="bg-gray-50 rounded-xl border border-border p-2 flex items-center gap-4 font-mono w-fit"
                   >
-                    {token.token.slice(0, 4)}*****{token.token.slice(-4)}
+                    {#if showTokens[token.id]}
+                      {token.token}
+                    {:else}
+                      {token.token.slice(0, 4)}*****{token.token.slice(-4)}
+                    {/if}
                     <CopyIcon
                       content={token.token}
                       class="hover:text-gray-700 hover:bg-gray-100 rounded-md p-2"
                     />
+                    {#if !clipboardSupported}
+                      <button
+                        class="hover:text-gray-700 hover:bg-gray-100 rounded-md p-2"
+                        on:click={() =>
+                          (showTokens[token.id] = !showTokens[token.id])}
+                      >
+                        <Eye class="h-4 w-4" />
+                      </button>
+                    {/if}
                   </div>
                 </Table.Cell>
                 <Table.Cell

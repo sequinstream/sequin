@@ -4,6 +4,7 @@ defmodule Sequin.ConsumersRuntime.AzureEventHubPipeline do
 
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
@@ -51,7 +52,7 @@ defmodule Sequin.ConsumersRuntime.AzureEventHubPipeline do
 
   @impl Broadway
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = message, %{
+  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{
         consumer: consumer,
         event_hub_client: event_hub_client,
         test_pid: test_pid
@@ -67,9 +68,10 @@ defmodule Sequin.ConsumersRuntime.AzureEventHubPipeline do
 
     case EventHub.publish_messages(event_hub_client, event_hub_messages) do
       :ok ->
+        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
-        message
+        broadway_message
 
       {:error, error} ->
         Logger.warning("Failed to publish message to Azure Event Hub: #{inspect(error)}")
@@ -85,7 +87,7 @@ defmodule Sequin.ConsumersRuntime.AzureEventHubPipeline do
           )
         end)
 
-        Broadway.Message.failed(message, error)
+        Broadway.Message.failed(broadway_message, error)
     end
   end
 

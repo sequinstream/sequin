@@ -4,6 +4,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
 
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -30,7 +31,8 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       processors: [
         default: [
           concurrency: 100,
-          max_demand: 1
+          max_demand: 10,
+          min_demand: 5
         ]
       ],
       context: %{
@@ -91,6 +93,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
 
     case Kafka.publish(consumer, partition, messages) do
       :ok ->
+        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, broadway_messages)
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
         broadway_messages

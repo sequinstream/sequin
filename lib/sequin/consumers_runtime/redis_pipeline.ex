@@ -4,6 +4,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
 
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -30,7 +31,8 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
       processors: [
         default: [
           concurrency: consumer.max_waiting,
-          max_demand: 1
+          max_demand: 10,
+          min_demand: 5
         ]
       ],
       context: %{
@@ -53,7 +55,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
   @impl Broadway
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = message, %{
+  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{
         consumer: %SinkConsumer{sink: %RedisSink{} = sink} = consumer,
         test_pid: test_pid
       }) do
@@ -72,30 +74,30 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
 
     case Redis.send_messages(sink, redis_messages) do
       :ok ->
+        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
+
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
         messages
         |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
         |> then(&MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "redis_pipeline.sent", &1))
 
-        message
+        broadway_message
 
       {:error, error} when is_exception(error) ->
         Logger.warning("Failed to push message to Redis: #{Exception.message(error)}")
 
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
 
-        Enum.each(messages, fn msg ->
-          Sequin.Logs.log_for_consumer_message(
-            :error,
-            consumer.account_id,
-            consumer.id,
-            msg.replication_message_trace_id,
-            "Failed to push message to Redis: #{Exception.message(error)}"
-          )
-        end)
+        Sequin.Logs.log_for_consumer_message(
+          :error,
+          consumer.account_id,
+          consumer.id,
+          Enum.map(messages, & &1.replication_message_trace_id),
+          "Failed to push message to Redis: #{Exception.message(error)}"
+        )
 
-        Broadway.Message.failed(message, error)
+        Broadway.Message.failed(broadway_message, error)
     end
   end
 

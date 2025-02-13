@@ -28,8 +28,6 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
           message_kind: :event
         )
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-
       {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
     end
 
@@ -177,7 +175,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
     end
   end
 
-  describe "messages flow from postgres to http end-to-end" do
+  describe "messages flow from SlotMessageStore to http end-to-end" do
     setup do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
@@ -280,7 +278,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         )
 
       # Capture the current time before the push attempt
-      # initial_time = DateTime.utc_now()
+      initial_time = DateTime.utc_now()
 
       # Define the adapter to simulate a failure
       adapter = fn %Req.Request{} = req ->
@@ -298,36 +296,30 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       # Start the pipeline with the failing adapter
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
 
-      # Send the test events
-      send_test_events(consumer, [event1])
-      send_test_events(consumer, [event2])
-
       # Assert that the ack receives the failed events
       assert_receive :sent, 1_000
       assert_receive :sent, 1_000
-      assert_receive {ConsumerProducer, :ack_finished, [], [_failed1]}, 2_000
-      assert_receive {ConsumerProducer, :ack_finished, [], [_failed2]}, 2_000
+      assert_receive {ConsumerProducer, :ack_finished, [], [_failed1, _failed2]}, 2_000
 
-      # TODO: Make this work after we support failed message path
-      # # Reload the events from the database to check not_visible_until
-      # %SlotMessageStore.State{} = state = SlotMessageStore.peek(consumer.id)
-      # updated_event1 = Map.fetch!(state.messages, event1.ack_id)
-      # updated_event2 = Map.fetch!(state.messages, event2.ack_id)
+      # Reload the events from the database to check not_visible_until
+      %SlotMessageStore.State{} = state = SlotMessageStore.peek(consumer.id)
+      updated_event1 = Map.fetch!(state.messages, {event1.commit_lsn, event1.commit_idx})
+      updated_event2 = Map.fetch!(state.messages, {event2.commit_lsn, event2.commit_idx})
 
-      # assert updated_event1.not_visible_until
-      # assert updated_event2.not_visible_until
+      assert updated_event1.not_visible_until
+      assert updated_event2.not_visible_until
 
-      # refute updated_event1.not_visible_until == event1.not_visible_until
-      # refute updated_event2.not_visible_until == event2.not_visible_until
+      refute updated_event1.not_visible_until == event1.not_visible_until
+      refute updated_event2.not_visible_until == event2.not_visible_until
 
-      # # Calculate the difference between initial_time and not_visible_until
-      # diff_ms1 = DateTime.diff(updated_event1.not_visible_until, initial_time, :millisecond)
-      # diff_ms2 = DateTime.diff(updated_event2.not_visible_until, initial_time, :millisecond)
+      # Calculate the difference between initial_time and not_visible_until
+      diff_ms1 = DateTime.diff(updated_event1.not_visible_until, initial_time, :millisecond)
+      diff_ms2 = DateTime.diff(updated_event2.not_visible_until, initial_time, :millisecond)
 
-      # refute updated_event1.not_visible_until == updated_event2.not_visible_until
+      refute updated_event1.not_visible_until == updated_event2.not_visible_until
 
-      # # Ensure the backoff is increasing
-      # assert diff_ms2 > diff_ms1
+      # Ensure the backoff is increasing
+      assert diff_ms2 > diff_ms1
     end
 
     test "commits are removed from MessageLedgers", %{consumer: consumer} do
@@ -348,16 +340,13 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: self()]})
 
-      ref = send_test_events(consumer, [event])
-
-      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}]}], []}, 1_000
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 1_000
 
       assert {:ok, 0} = MessageLedgers.count_commit_verification_set(consumer.id)
     end
   end
 
-  describe "messages flow from postgres to http end-to-end for message_kind=record" do
+  describe "messages flow from SlotMessageStore to http end-to-end for message_kind=record" do
     setup do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
@@ -449,7 +438,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 200)}
       end
 
-      consumer_event =
+      record =
         ConsumersFactory.consumer_record(
           consumer_id: consumer.id,
           data:
@@ -469,7 +458,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         )
 
       start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_event])
+      SlotMessageStore.put_messages(consumer.id, [record])
 
       # Start the pipeline with legacy_event_transform feature enabled
       start_supervised!(

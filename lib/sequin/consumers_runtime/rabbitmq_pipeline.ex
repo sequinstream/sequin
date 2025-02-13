@@ -3,6 +3,7 @@ defmodule Sequin.ConsumersRuntime.RabbitMqPipeline do
   use Broadway
 
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -23,7 +24,8 @@ defmodule Sequin.ConsumersRuntime.RabbitMqPipeline do
       processors: [
         default: [
           concurrency: consumer.max_waiting,
-          max_demand: 10
+          max_demand: 10,
+          min_demand: 5
         ]
       ],
       context: %{
@@ -43,7 +45,7 @@ defmodule Sequin.ConsumersRuntime.RabbitMqPipeline do
   end
 
   @impl Broadway
-  def handle_message(_, %Broadway.Message{data: messages} = message, %{consumer: consumer} = ctx) do
+  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{consumer: consumer} = ctx) do
     setup_allowances(ctx)
 
     Logger.metadata(
@@ -53,9 +55,11 @@ defmodule Sequin.ConsumersRuntime.RabbitMqPipeline do
 
     case RabbitMq.send_messages(consumer.sink, messages) do
       :ok ->
+        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
+
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
-        message
+        broadway_message
 
       {:error, error} ->
         reason =
@@ -70,18 +74,15 @@ defmodule Sequin.ConsumersRuntime.RabbitMqPipeline do
 
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: reason})
 
-        Enum.each(
-          messages,
-          &Sequin.Logs.log_for_consumer_message(
-            :error,
-            consumer.account_id,
-            consumer.id,
-            &1.replication_message_trace_id,
-            "Failed to push message to RabbitMQ: #{inspect(reason)}"
-          )
+        Sequin.Logs.log_for_consumer_message(
+          :error,
+          consumer.account_id,
+          consumer.id,
+          Enum.map(messages, & &1.replication_message_trace_id),
+          "Failed to push message to RabbitMQ: #{inspect(reason)}"
         )
 
-        Broadway.Message.failed(message, reason)
+        Broadway.Message.failed(broadway_message, reason)
     end
   end
 

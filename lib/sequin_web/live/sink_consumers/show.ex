@@ -460,25 +460,21 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   def handle_info(:update_backfill, socket) do
+    consumer = Repo.preload(socket.assigns.consumer, :active_backfill, force: true)
+
+    last_completed_backfill =
+      Consumers.find_backfill(consumer.id, state: :completed, limit: 1, order_by: [desc: :completed_at])
+
     # Update backfill every 200ms if there is an active backfill, otherwise every second
-    case socket.assigns.consumer.active_backfill do
+    case consumer.active_backfill do
       nil -> Process.send_after(self(), :update_backfill, 1000)
       %Backfill{} -> Process.send_after(self(), :update_backfill, 200)
     end
 
-    case load_consumer(socket.assigns.consumer.id, socket) do
-      {:ok, consumer} ->
-        last_completed_backfill =
-          Consumers.find_backfill(consumer.id, state: :completed, limit: 1, order_by: [desc: :completed_at])
-
-        {:noreply,
-         socket
-         |> assign(:consumer, consumer)
-         |> assign(:last_completed_backfill, last_completed_backfill)}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
+    {:noreply,
+     socket
+     |> assign(:consumer, consumer)
+     |> assign(:last_completed_backfill, last_completed_backfill)}
   end
 
   @impl Phoenix.LiveView

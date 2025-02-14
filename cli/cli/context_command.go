@@ -266,7 +266,7 @@ func (c *ctxCommand) pickContext(message string) error {
 		return err
 	}
 
-	c.name = strings.SplitN(choice, " ", 2)[0]
+	c.name = choice
 	return nil
 }
 

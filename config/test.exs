@@ -29,7 +29,13 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :sequin, Oban, testing: :manual, prefix: "sequin_config"
-config :sequin, Sequin, datetime_mod: Sequin.TestSupport.DateTimeMock, uuid_mod: Sequin.TestSupport.UUIDMock
+
+config :sequin, Sequin,
+  datetime_mod: Sequin.TestSupport.DateTimeMock,
+  uuid_mod: Sequin.TestSupport.UUIDMock,
+  enum_mod: Sequin.TestSupport.EnumMock,
+  process_mod: Sequin.TestSupport.ProcessMock
+
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Test
 
 config :sequin, Sequin.Pagerduty,

@@ -40,6 +40,9 @@ defmodule Sequin.Case do
   def default_stubs(_context) do
     Sequin.TestSupport.stub_utc_now(fn -> DateTime.utc_now() end)
     Sequin.TestSupport.stub_uuid4(fn -> UUID.uuid4() end)
+    Sequin.TestSupport.stub_random(fn n -> Enum.random(n) end)
+    Sequin.TestSupport.stub_process_alive?(fn pid -> Process.alive?(pid) end)
+
     :ok
   end
 

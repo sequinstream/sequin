@@ -8,8 +8,16 @@ defmodule Sequin do
   """
   @datetime_mod Application.compile_env(:sequin, [Sequin, :datetime_mod], DateTime)
   @uuid_mod Application.compile_env(:sequin, [Sequin, :uuid_mod], UUID)
+  @enum_mod Application.compile_env(:sequin, [Sequin, :enum_mod], Enum)
+  @process_mod Application.compile_env(:sequin, [Sequin, :process_mod], Process)
+
   defdelegate utc_now, to: @datetime_mod
   defdelegate uuid4, to: @uuid_mod
+  defdelegate random(enum), to: @enum_mod
+
+  def process_alive?(pid) do
+    @process_mod.alive?(pid)
+  end
 
   @doc """
   Returns true if the feature is enabled.

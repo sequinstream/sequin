@@ -25,3 +25,11 @@ Mox.defmock(Sequin.TestSupport.UUIDMock,
 Mox.defmock(Sequin.DatabasesRuntime.SlotMessageStoreMock,
   for: Sequin.DatabasesRuntime.SlotMessageStoreBehaviour
 )
+
+Mox.defmock(Sequin.TestSupport.EnumMock,
+  for: Sequin.TestSupport.Enum
+)
+
+Mox.defmock(Sequin.TestSupport.ProcessMock,
+  for: Sequin.TestSupport.Process
+)

@@ -298,11 +298,21 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         _state_name,
         %{batch_id: batch_id} = state
       ) do
-    next_state = process_batch(state, batch_info)
+    {next_state, processed_messages?} = process_batch(state, batch_info)
     Logger.metadata(current_batch_id: nil)
 
-    # Move to commit_batch state instead of immediately transitioning to fetch_batch
-    {:next_state, :commit_batch, next_state, [{:reply, from, :ok}]}
+    if processed_messages? do
+      {:next_state, :commit_batch, next_state, [{:reply, from, :ok}]}
+    else
+      # all the messages must have been filtered out
+      state = complete_batch(state)
+
+      if state.count_pending_messages < state.max_pending_messages do
+        {:next_state, :fetch_batch, state}
+      else
+        {:next_state, {:paused, :max_pending_messages}, state}
+      end
+    end
   end
 
   def handle_event({:call, from}, {:flush_batch, batch_info}, _state_name, _state) do
@@ -421,6 +431,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   defp process_batch(%State{} = state, %{commit_lsn: commit_lsn, drop_pks: drop_pks}) do
+    table = table(state)
+
     pk_columns =
       table(state).columns
       |> Enum.filter(& &1.is_pk?)
@@ -450,11 +462,24 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       Logger.info("[TableReaderServer] Dropped #{map_size_diff} rows")
     end
 
-    {:ok, consumer} = handle_records(state, commit_lsn, filtered_batch)
+    matching_records =
+      table
+      |> records_by_column_attnum(filtered_batch)
+      |> Enum.filter(&Consumers.matches_record?(state.consumer, table.oid, &1))
 
-    # Update current_cursor with next_cursor and persist to Redis
-    :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
-    %State{state | consumer: consumer}
+    case matching_records do
+      [] ->
+        # Update current_cursor with next_cursor and persist to Redis
+        :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
+        {state, false}
+
+      records ->
+        {:ok, consumer} = handle_records(state, commit_lsn, records)
+        # Update current_cursor with next_cursor and persist to Redis
+        :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
+        next_state = %State{state | consumer: consumer}
+        {next_state, true}
+    end
   end
 
   # Message handling
@@ -462,14 +487,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     Logger.info("[TableReaderServer] Handling #{length(records)} record(s)")
     table = table(state)
 
-    matching_records =
-      table
-      |> records_by_column_attnum(records)
-      |> Enum.filter(&Consumers.matches_record?(state.consumer, table.oid, &1))
-
     case state.consumer.message_kind do
-      :record -> handle_record_messages!(state, table, commit_lsn, matching_records)
-      :event -> handle_event_messages!(state, table, commit_lsn, matching_records)
+      :record -> handle_record_messages!(state, table, commit_lsn, records)
+      :event -> handle_event_messages!(state, table, commit_lsn, records)
     end
 
     {:ok, backfill} =
@@ -477,7 +497,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         state.consumer.active_backfill,
         %{
           rows_processed_count: state.consumer.active_backfill.rows_processed_count + length(records),
-          rows_ingested_count: state.consumer.active_backfill.rows_ingested_count + length(matching_records)
+          rows_ingested_count: state.consumer.active_backfill.rows_ingested_count + length(records)
         },
         skip_lifecycle: true
       )

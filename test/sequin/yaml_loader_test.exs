@@ -3,6 +3,7 @@ defmodule Sequin.YamlLoaderTest do
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
+  alias Sequin.Consumers
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.KafkaSink
@@ -14,6 +15,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Error.BadRequestError
@@ -783,6 +785,64 @@ defmodule Sequin.YamlLoaderTest do
                    "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com"
                }
              } = consumer.sink
+    end
+
+    test "handles removing and re-adding a sink after the table is renamed" do
+      # First apply config with sink
+      initial_yaml = """
+      #{account_db_and_sequence_yml()}
+
+      http_endpoints:
+        - name: "sequin-playground-http"
+          url: "https://api.example.com/webhook"
+
+      sinks:
+        - name: "sequin-playground-webhook"
+          database: "test-db"
+          table: "Characters"
+          destination:
+            type: "webhook"
+            http_endpoint: "sequin-playground-http"
+      """
+
+      assert :ok = YamlLoader.apply_from_yml!(initial_yaml)
+
+      # Verify initial state
+      assert [initial_sequence] = Repo.all(Sequence)
+      assert [initial_consumer] = Repo.all(SinkConsumer)
+      assert [db] = Repo.all(PostgresDatabase)
+      assert initial_consumer.sequence_id == initial_sequence.id
+
+      # Remove the sink
+      Consumers.delete_sink_consumer(initial_consumer)
+
+      # Verify sink was removed but sequence remains
+      assert [_sequence] = Repo.all(Sequence)
+      assert [] = Repo.all(SinkConsumer)
+
+      # Re-apply original config with sink and a renamed table
+      new_yaml = String.replace(initial_yaml, "Characters", "Characters_new")
+
+      tables =
+        Enum.map(db.tables, fn table ->
+          table = Sequin.Map.from_struct_deep(table)
+
+          if table.name == "Characters" do
+            %{table | name: "Characters_new"}
+          else
+            table
+          end
+        end)
+
+      Databases.update_db(db, %{tables: tables})
+
+      assert :ok = YamlLoader.apply_from_yml!(new_yaml)
+
+      # Verify final state - should reuse existing sequence
+      assert [final_sequence] = Repo.all(Sequence)
+      assert [final_consumer] = Repo.all(SinkConsumer)
+      assert final_sequence.id == initial_sequence.id
+      assert final_consumer.sequence_id == final_sequence.id
     end
   end
 end

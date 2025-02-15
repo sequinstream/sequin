@@ -374,11 +374,11 @@ defmodule Sequin.YamlLoader do
         {:ok, sequence}
 
       {:error, %NotFoundError{}} ->
-        create_sequence(account_id, database, sequence_attrs)
+        upsert_sequence(account_id, database, sequence_attrs)
     end
   end
 
-  defp create_sequence(account_id, %PostgresDatabase{id: id} = database, sequence) do
+  defp upsert_sequence(account_id, %PostgresDatabase{id: id} = database, sequence) do
     with {:ok, table} <- table_for_sequence(database, sequence),
          {:ok, sort_column_attnum} <- sort_column_attnum_for_sequence(table, sequence) do
       attrs =
@@ -388,7 +388,7 @@ defmodule Sequin.YamlLoader do
         |> Map.put("sort_column_attnum", sort_column_attnum)
 
       account_id
-      |> Databases.create_sequence(attrs)
+      |> Databases.upsert_sequence(attrs)
       |> case do
         {:ok, sequence} ->
           Logger.info("Created stream: #{inspect(sequence, pretty: true)}")

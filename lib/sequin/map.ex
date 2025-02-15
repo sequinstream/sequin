@@ -79,4 +79,23 @@ defmodule Sequin.Map do
     [first | rest] = String.split(key, "_")
     first <> Enum.map_join(rest, &String.capitalize/1)
   end
+
+  @doc """
+  Recursively converts a struct and all nested structs into maps.
+  """
+  def from_struct_deep(struct) when is_struct(struct) do
+    struct
+    |> Map.from_struct()
+    |> from_struct_deep()
+  end
+
+  def from_struct_deep(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {k, from_struct_deep(v)} end)
+  end
+
+  def from_struct_deep(list) when is_list(list) do
+    Enum.map(list, &from_struct_deep/1)
+  end
+
+  def from_struct_deep(value), do: value
 end

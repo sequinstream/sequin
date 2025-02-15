@@ -212,6 +212,15 @@ defmodule Sequin.Databases do
     end
   end
 
+  def upsert_sequence(account_id, attrs) do
+    %Sequence{account_id: account_id}
+    |> Sequence.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace, [:name, :table_schema, :table_name, :sort_column_attnum, :sort_column_name, :updated_at]},
+      conflict_target: [:postgres_database_id, :table_oid]
+    )
+  end
+
   def delete_sequences(%PostgresDatabase{} = db) do
     Repo.transact(fn ->
       db.id

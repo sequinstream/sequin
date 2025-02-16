@@ -2,16 +2,12 @@ package cli
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type TableType int
-
-type tickMsg time.Time
 
 const (
 	PrintableTable TableType = iota

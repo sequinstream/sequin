@@ -12,6 +12,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
+  alias Sequin.DatabasesRuntime.PageSizeOptimizer
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Error
@@ -94,7 +95,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :consumer, SinkConsumer.t()
       field :current_cursor, map() | nil
       field :next_cursor, map() | nil
-      field :page_size, integer()
+      field :page_size_optimizer, PageSizeOptimizer.t()
       field :test_pid, pid()
       field :table_oid, integer()
       field :successive_failure_count, integer(), default: 0
@@ -107,6 +108,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
       field :fetch_batch, (pid(), PostgresDatabaseTable.t(), map(), Keyword.t() -> {:ok, term()} | {:error, term()})
       field :batch_check_count, integer(), default: 0
+      field :page_size_optimizer_mod, module()
     end
   end
 
@@ -120,11 +122,15 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     max_pending_messages =
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
 
-    page_size = Keyword.get(opts, :page_size, 50_000)
+    initial_page_size = Keyword.get(opts, :initial_page_size, 50_000)
+    max_timeout_ms = Keyword.get(opts, :max_timeout_ms, :timer.minutes(1))
+
+    page_size_optimizer_mod = Keyword.get(opts, :page_size_optimizer_mod, PageSizeOptimizer)
 
     state = %State{
       id: Keyword.fetch!(opts, :backfill_id),
-      page_size: page_size,
+      page_size_optimizer: page_size_optimizer_mod.new(initial_page_size, max_timeout_ms),
+      page_size_optimizer_mod: page_size_optimizer_mod,
       test_pid: test_pid,
       table_oid: Keyword.fetch!(opts, :table_oid),
       max_pending_messages: max_pending_messages,
@@ -173,6 +179,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     batch_id = UUID.uuid4()
     Logger.metadata(current_batch_id: batch_id)
 
+    page_size = state.page_size_optimizer_mod.size(state.page_size_optimizer)
+
+    start_time = System.monotonic_time(:millisecond)
+
     res =
       TableReader.with_watermark(
         database(state),
@@ -184,11 +194,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             t_conn,
             table(state),
             state.current_cursor,
-            limit: state.page_size,
+            limit: page_size,
             include_min: include_min
           )
         end
       )
+
+    # Needs to be >0 for PageSizeOptimizer
+    time_ms = max(System.monotonic_time(:millisecond) - start_time, 1)
 
     case res do
       {:ok, %{rows: [], next_cursor: nil}, _lsn} ->
@@ -201,6 +214,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       {:ok, %{rows: rows, next_cursor: next_cursor}, lsn} ->
         Logger.debug("[TableReaderServer] Batch returned #{length(rows)} records")
 
+        # Record successful timing
+        optimizer = state.page_size_optimizer_mod.put_timing(state.page_size_optimizer, page_size, time_ms)
+        state = %{state | page_size_optimizer: optimizer}
+
         if state.test_pid do
           send(state.test_pid, {__MODULE__, {:batch_fetched, batch_id}})
         end
@@ -211,10 +228,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       {:error, error} ->
         Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}", error: error)
 
-        if match?(%ServiceError{service: :postgres, code: :query_timeout}, error) and state.page_size > 1000 do
-          page_size = round(state.page_size / 2)
-          Logger.info("[TableReaderServer] Reducing page size to #{page_size} and retrying")
-          state = %{state | page_size: page_size}
+        if match?(%ServiceError{service: :postgres, code: :query_timeout}, error) do
+          # Record timeout
+          optimizer = state.page_size_optimizer_mod.put_timeout(state.page_size_optimizer, page_size)
+          state = %{state | page_size_optimizer: optimizer}
           {:repeat_state, state}
         else
           state = %{state | successive_failure_count: state.successive_failure_count + 1}
@@ -305,9 +322,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       state = complete_batch(state)
 
       if state.count_pending_messages < state.max_pending_messages do
-        {:next_state, :fetch_batch, state}
+        {:next_state, :fetch_batch, state, [{:reply, from, :ok}]}
       else
-        {:next_state, {:paused, :max_pending_messages}, state}
+        {:next_state, {:paused, :max_pending_messages}, state, [{:reply, from, :ok}]}
       end
     end
   end
@@ -631,6 +648,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   defp maybe_setup_allowances(test_pid) do
     Sandbox.allow(Sequin.Repo, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Mox.allow(Sequin.DatabasesRuntime.PageSizeOptimizerMock, test_pid, self())
   end
 
   defp preload_consumer(consumer) do

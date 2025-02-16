@@ -12,5 +12,3 @@ var (
 type Config struct {
 	ContextName string
 }
-
-const LogFilePath = "sequin.log"

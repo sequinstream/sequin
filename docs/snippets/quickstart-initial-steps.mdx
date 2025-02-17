@@ -38,10 +38,9 @@
       You should see output like the following:
 
       ```
-      CONTAINER ID   IMAGE                                 STATUS          PORTS                                       NAMES
-      abc123def456   sequinstream/sequin:latest           Up 10 seconds    0.0.0.0:7376->7376/tcp                     sequin
-      def456ghi789   redis:7.0                            Up 10 seconds    0.0.0.0:6379->6379/tcp                     sequin-redis
-      ghi789jkl012   postgres:15                          Up 10 seconds    0.0.0.0:5432->5432/tcp                     sequin-postgres
+      CONTAINER ID   IMAGE         STATUS         PORTS                      NAMES
+      2fd334a873e1   redis:7       Up 9 seconds   127.0.0.1:6379->6379/tcp   sequin-dev-redis-1
+      bf4119bf250f   postgres:17   Up 9 seconds   127.0.0.1:5432->5432/tcp   sequin-dev-postgres-1
       ```
 
       <Check>

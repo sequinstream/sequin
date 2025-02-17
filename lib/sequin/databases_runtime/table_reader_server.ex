@@ -305,9 +305,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       state = complete_batch(state)
 
       if state.count_pending_messages < state.max_pending_messages do
-        {:next_state, :fetch_batch, state}
+        {:next_state, :fetch_batch, state, [{:reply, from, :ok}]}
       else
-        {:next_state, {:paused, :max_pending_messages}, state}
+        {:next_state, {:paused, :max_pending_messages}, state, [{:reply, from, :ok}]}
       end
     end
   end

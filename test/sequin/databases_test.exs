@@ -2,6 +2,7 @@ defmodule Sequin.DatabasesTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Databases
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Factory.AccountsFactory
@@ -11,7 +12,7 @@ defmodule Sequin.DatabasesTest do
 
   describe "tables/1" do
     test "returns tables for a database with existing tables" do
-      db = DatabasesFactory.insert_configured_postgres_database!(tables: [DatabasesFactory.table()])
+      db = insert_valid_postgres_database(tables: [DatabasesFactory.table()])
 
       assert {:ok, tables} = Databases.tables(db)
       assert length(tables) > 0
@@ -19,7 +20,7 @@ defmodule Sequin.DatabasesTest do
     end
 
     test "fetches and returns tables for a database without existing tables" do
-      db = DatabasesFactory.insert_configured_postgres_database!(tables: [])
+      db = insert_valid_postgres_database(tables: [])
 
       assert {:ok, tables} = Databases.tables(db)
       assert length(tables) > 0
@@ -29,7 +30,7 @@ defmodule Sequin.DatabasesTest do
 
   describe "update_tables/1" do
     test "updates tables for a database" do
-      db = DatabasesFactory.insert_configured_postgres_database!()
+      db = insert_valid_postgres_database()
 
       assert {:ok, updated_db} = Databases.update_tables(db)
       assert length(updated_db.tables) > 0
@@ -44,7 +45,7 @@ defmodule Sequin.DatabasesTest do
     end
 
     test "updates tables and columns for a database" do
-      db = DatabasesFactory.insert_configured_postgres_database!()
+      db = insert_valid_postgres_database()
 
       assert {:ok, updated_db} = Databases.update_tables(db)
       assert length(updated_db.tables) > 0
@@ -68,7 +69,7 @@ defmodule Sequin.DatabasesTest do
 
   describe "update_sequences_from_db/1" do
     test "updates sequence information from the database" do
-      db = DatabasesFactory.insert_configured_postgres_database!()
+      db = insert_valid_postgres_database()
 
       sequence =
         DatabasesFactory.insert_sequence!(
@@ -110,7 +111,7 @@ defmodule Sequin.DatabasesTest do
 
   describe "to_postgrex_opts/1" do
     test "updates hostname and port when using a local tunnel" do
-      db = DatabasesFactory.insert_configured_postgres_database!(use_local_tunnel: true, port: nil)
+      db = insert_valid_postgres_database(use_local_tunnel: true, port: nil)
 
       postgrex_opts = PostgresDatabase.to_postgrex_opts(db)
 
@@ -119,7 +120,7 @@ defmodule Sequin.DatabasesTest do
     end
 
     test "uses original hostname and port when not using a local tunnel" do
-      db = DatabasesFactory.insert_configured_postgres_database!(use_local_tunnel: false)
+      db = insert_valid_postgres_database(use_local_tunnel: false)
 
       postgrex_opts = PostgresDatabase.to_postgrex_opts(db)
 
@@ -184,5 +185,12 @@ defmodule Sequin.DatabasesTest do
       assert {:ok, 2} = Databases.delete_sequences(database)
       assert Databases.list_sequences_for_account(account.id) == []
     end
+  end
+
+  defp insert_valid_postgres_database(attrs \\ []) do
+    db = DatabasesFactory.insert_configured_postgres_database!(attrs)
+    # Avoid creating a new connection for each test
+    ConnectionCache.cache_connection(db, Repo)
+    db
   end
 end

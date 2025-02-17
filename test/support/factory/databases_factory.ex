@@ -2,7 +2,6 @@ defmodule Sequin.Factory.DatabasesFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
-  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence

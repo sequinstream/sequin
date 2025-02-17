@@ -26,6 +26,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     # Set up the database and consumer
     database = DatabasesFactory.insert_configured_postgres_database!()
 
+    ConnectionCache.cache_connection(database, Repo)
+
     replication =
       ReplicationFactory.insert_postgres_replication!(
         account_id: database.account_id,

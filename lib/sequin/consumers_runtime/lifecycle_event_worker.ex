@@ -120,21 +120,15 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
       "create" ->
         with {:ok, backfill} <- Consumers.get_backfill(id),
              {:ok, consumer} <- Consumers.get_consumer(backfill.sink_consumer_id) do
+          :syn.publish(:consumers, {:backfill_changed, consumer.id}, {:backfill_changed, consumer.id})
+
           InitBackfillStatsWorker.enqueue(backfill.id)
-          DatabasesRuntimeSupervisor.start_table_reader(consumer)
         end
 
       "update" ->
         with {:ok, backfill} <- Consumers.get_backfill(id),
              {:ok, consumer} <- Consumers.get_consumer(backfill.sink_consumer_id) do
-          case backfill.state do
-            :active ->
-              DatabasesRuntimeSupervisor.restart_table_reader(consumer)
-
-            s when s in [:cancelled, :completed] ->
-              Logger.info("Stopping TableReaderServer for backfill #{backfill.id}", backfill_status: s)
-              DatabasesRuntimeSupervisor.stop_table_reader(backfill.id)
-          end
+          :syn.publish(:consumers, {:backfill_changed, consumer.id}, {:backfill_changed, consumer.id})
 
           :ok
         end

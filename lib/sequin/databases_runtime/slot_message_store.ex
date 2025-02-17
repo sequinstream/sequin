@@ -34,13 +34,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.ConsumersRuntime.MessageLedgers
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.DatabasesRuntime.SlotMessageStore.State
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State.BackfillState.Idle
   alias Sequin.DatabasesRuntime.SlotMessageStoreBehaviour
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.Repo
+  alias Sequin.TaskSupervisor
 
   require Logger
 
@@ -215,6 +219,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       raise error
   end
 
+  @spec backfill_logical_message_received(consumer_id(), non_neg_integer()) :: :ok | {:error, Error.t()}
+  def backfill_logical_message_received(consumer_id, commit_lsn) do
+    GenServer.call(via_tuple(consumer_id), {:backfill_logical_message_received, commit_lsn})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
   @doc """
   Counts the number of messages in the message store.
   """
@@ -287,7 +299,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       consumer_id: consumer_id,
       test_pid: Keyword.get(opts, :test_pid),
       setting_system_max_memory_bytes:
-        Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes))
+        Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
+      backfill_state: %Idle{},
+      table_reader_mod: Keyword.get(opts, :table_reader_mod, TableReader)
     }
 
     {:ok, state, {:continue, :init}}
@@ -299,6 +313,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     # so we don't need to recalculate max_memory_bytes on consumers changing
     if state.setting_system_max_memory_bytes do
       :syn.join(:consumers, :consumers_changed, self())
+      :syn.join(:consumers, {:backfill_changed, state.consumer_id}, self())
     end
 
     # Allow test process to access the database connection
@@ -306,6 +321,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
+      Mox.allow(Sequin.DatabasesRuntime.TableReaderMock, state.test_pid, self())
     end
 
     consumer =
@@ -315,11 +331,18 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         Consumers.get_sink_consumer!(state.consumer_id)
       end
 
+    consumer = Repo.preload(consumer, [:active_backfill, :postgres_database, :sequence])
+
     state = %{state | consumer: consumer}
 
     Logger.metadata(account_id: consumer.account_id, replication_id: consumer.replication_slot_id)
 
     :ok = State.setup_ets(consumer)
+
+    state =
+      state
+      |> maybe_backfill_setup()
+      |> maybe_backfill_kickoff_fetch_ids()
 
     persisted_messages =
       consumer
@@ -335,7 +358,36 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     schedule_process_logging(0)
     schedule_max_memory_check()
+    schedule_backfill_reload()
     {:noreply, state}
+  end
+
+  defp maybe_backfill_setup(%State{} = state) do
+    if state.consumer.active_backfill do
+      cursor = state.table_reader_mod.cursor(state.consumer.active_backfill.id)
+      cursor = cursor || state.consumer.active_backfill.initial_min_cursor
+      %{state | backfill_cursor: cursor}
+    else
+      state
+    end
+  end
+
+  defp maybe_backfill_kickoff_fetch_ids(%State{} = state) do
+    if state.backfill_cursor do
+      Task.Supervisor.async_nolink(TaskSupervisor, fn ->
+        case state.table_reader_mod.fetch_batch_primary_keys(database(state), table(state), state.backfill_cursor) do
+          {:ok, primary_keys} ->
+            {:backfill_fetch_ids, {:ok, primary_keys}}
+
+          {:error, error} ->
+            {:backfill_fetch_ids, {:error, error}}
+        end
+      end)
+
+      State.backfill_fetch_ids_started(state)
+    else
+      state
+    end
   end
 
   @impl GenServer
@@ -559,6 +611,23 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end)
   end
 
+  def handle_call({:backfill_logical_message_received, commit_lsn}, _from, state) do
+    execute_timed(:backfill_logical_message_received, fn ->
+      state = State.backfill_logical_message_received(state, commit_lsn)
+
+      if State.backfill_should_flush?(state) do
+        state =
+          state
+          |> State.backfill_flush_messages()
+          |> maybe_backfill_kickoff_fetch_ids()
+
+        {:reply, :ok, state}
+      else
+        {:reply, :ok, state}
+      end
+    end)
+  end
+
   def handle_call(:count_messages, _from, state) do
     execute_timed(:count_messages, fn ->
       {:reply, {:ok, map_size(state.messages)}, state}
@@ -602,6 +671,76 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     else
       {:noreply, state}
     end
+  end
+
+  @impl GenServer
+  def handle_info({ref, {:backfill_fetch_ids, {:ok, []}}}, state) do
+    Process.demonitor(ref, [:flush])
+    Consumers.update_backfill(state.consumer.active_backfill, %{state: :completed})
+    consumer = Repo.preload(state.consumer, :active_backfill, force: true)
+    {:noreply, %{State.backfill_completed(state) | consumer: consumer}}
+  end
+
+  def handle_info({ref, {:backfill_fetch_ids, {:ok, primary_keys}}}, state) do
+    Process.demonitor(ref, [:flush])
+
+    Task.Supervisor.async_nolink(TaskSupervisor, fn ->
+      with {:ok, %{messages: messages}} <-
+             state.table_reader_mod.fetch_batch_by_primary_keys(
+               database(state),
+               state.consumer,
+               table(state),
+               primary_keys
+             ),
+           {:ok, lsn} <- state.table_reader_mod.emit_logic_message(database(state), state.consumer_id) do
+        messages =
+          messages
+          |> Enum.with_index()
+          |> Enum.map(fn {message, index} ->
+            %{message | commit_lsn: lsn, commit_idx: index}
+          end)
+
+        {:backfill_fetch_messages, {:ok, messages, lsn}}
+      else
+        {:error, error} ->
+          {:backfill_fetch_messages, {:error, error}}
+      end
+    end)
+
+    {:noreply, State.backfill_fetch_ids_completed(state, primary_keys)}
+  end
+
+  @impl GenServer
+  def handle_info({ref, {:backfill_fetch_ids, {:error, error}}}, state) do
+    Process.demonitor(ref, [:flush])
+    Logger.error("[SlotMessageStore] Error fetching backfill ids", error: error)
+    # TODO handle error
+    {:noreply, maybe_backfill_kickoff_fetch_ids(state)}
+  end
+
+  @impl GenServer
+  def handle_info({ref, {:backfill_fetch_messages, {:ok, messages, lsn}}}, state) do
+    Process.demonitor(ref, [:flush])
+    state = State.backfill_fetch_messages_completed(state, messages, lsn)
+
+    if State.backfill_should_flush?(state) do
+      state =
+        state
+        |> State.backfill_flush_messages()
+        |> maybe_backfill_setup()
+        |> maybe_backfill_kickoff_fetch_ids()
+
+      {:noreply, state}
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_info({ref, {:backfill_fetch_messages, {:error, error}}}, state) do
+    Process.demonitor(ref, [:flush])
+    Logger.error("[SlotMessageStore] Error fetching backfill messages", error: error)
+    # TODO handle error
+    {:noreply, maybe_backfill_kickoff_fetch_ids(state)}
   end
 
   @impl GenServer
@@ -650,6 +789,25 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:noreply, state}
   end
 
+  def handle_info({:backfill_changed, consumer_id}, %State{consumer_id: consumer_id} = state) do
+    Logger.info("Backfill changed", consumer_id: consumer_id)
+    consumer = Repo.preload(state.consumer, :active_backfill, force: true)
+    state = %{state | consumer: consumer}
+
+    state =
+      state
+      |> maybe_backfill_setup()
+      |> maybe_backfill_kickoff_fetch_ids()
+
+    {:noreply, state}
+  end
+
+  def handle_info(:backfill_reload, state) do
+    consumer = Repo.preload(state.consumer, :active_backfill, force: true)
+    schedule_backfill_reload()
+    {:noreply, %{state | consumer: consumer}}
+  end
+
   defp schedule_process_logging(interval \\ :timer.seconds(30)) do
     Process.send_after(self(), :process_logging, interval)
   end
@@ -657,6 +815,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   # Can be very infrequent, as we use :syn to learn about changes to consumer count
   defp schedule_max_memory_check(interval \\ :timer.minutes(5)) do
     Process.send_after(self(), :max_memory_check, interval)
+  end
+
+  defp schedule_backfill_reload(interval \\ :timer.seconds(30)) do
+    Process.send_after(self(), :backfill_reload, interval)
   end
 
   defp put_max_memory_bytes(%State{} = state) do
@@ -739,5 +901,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     # Convert microseconds to milliseconds
     incr_counter(:"#{name}_total_ms", div(time, 1000))
     result
+  end
+
+  defp database(%State{} = state) do
+    state.consumer.postgres_database
+  end
+
+  defp table(%State{} = state) do
+    table_oid = state.consumer.sequence.table_oid
+    sort_column_attnum = state.consumer.sequence.sort_column_attnum
+    table = Sequin.Enum.find!(state.consumer.postgres_database.tables, &(&1.oid == table_oid))
+    %PostgresDatabaseTable{table | sort_column_attnum: sort_column_attnum}
   end
 end

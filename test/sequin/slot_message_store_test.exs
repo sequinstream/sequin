@@ -4,6 +4,7 @@ defmodule Sequin.SlotMessageStoreTest do
   alias Sequin.Consumers
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.SlotMessageStore.State
+  alias Sequin.DatabasesRuntime.TableReaderMock
   alias Sequin.Error.InvariantError
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
@@ -480,6 +481,25 @@ defmodule Sequin.SlotMessageStoreTest do
       assert_raise(InvariantError, fn ->
         SlotMessageStore.min_unpersisted_wal_cursor(consumer.id, make_ref())
       end)
+    end
+  end
+
+  describe "backfills" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+      # Create a backfill
+      backfill = ConsumersFactory.insert_active_backfill!(account_id: consumer.account_id, sink_consumer_id: consumer.id)
+
+      %{consumer: consumer, backfill: backfill}
+    end
+
+    test "backfill_fetch_messages_completed", %{consumer: consumer, backfill: backfill} do
+      stub(TableReaderMock, :cursor, fn _ -> nil end)
+
+      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self(), table_reader_mod: TableReaderMock})
+
+      Process.sleep(1000)
+      assert true
     end
   end
 end

@@ -163,6 +163,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   @low_watermark_prefix Constants.backfill_batch_low_watermark()
   @high_watermark_prefix Constants.backfill_batch_high_watermark()
+  @watermark_prefix Constants.backfill_batch_watermark()
+
+  @impl MessageHandlerBehaviour
+  def handle_logical_message(ctx, commit_lsn, %LogicalMessage{prefix: @watermark_prefix} = msg) do
+    %{"consumer_id" => consumer_id} = Jason.decode!(msg.content)
+
+    :ok = SlotMessageStore.backfill_logical_message_received(consumer_id, commit_lsn)
+    ctx
+  end
 
   @impl MessageHandlerBehaviour
   def handle_logical_message(ctx, commit_lsn, %LogicalMessage{prefix: @low_watermark_prefix} = msg) do

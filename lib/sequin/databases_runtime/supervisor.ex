@@ -42,7 +42,8 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
 
     opts = Keyword.merge(default_opts, opts)
 
-    Sequin.DynamicSupervisor.start_child(supervisor, {TableReaderServer, opts})
+    # Sequin.DynamicSupervisor.start_child(supervisor, {TableReaderServer, opts})
+    {:ok, nil}
   end
 
   def stop_table_reader(supervisor \\ table_reader_supervisor(), consumer)

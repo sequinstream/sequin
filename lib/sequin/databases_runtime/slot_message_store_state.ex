@@ -5,7 +5,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.DatabasesRuntime.SlotMessageStore.State
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State.BackfillState
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State.BackfillState.FetchingIds
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State.BackfillState.FetchingMessages
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State.BackfillState.Idle
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State.BackfillState.ReadyToFlush
   alias Sequin.Error
   alias Sequin.Multiset
   alias Sequin.Replication
@@ -25,14 +31,47 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :ack_ids_to_cursor_tuples, %{SinkConsumer.ack_id() => cursor_tuple()}, default: %{}
     field :produced_message_groups, Multiset.t(), default: %{}
     field :persisted_message_groups, Multiset.t(), default: %{}
-    field :unpersisted_cursor_tuples_for_table_reader_batch, MapSet.t(), default: MapSet.new()
+    field :slot_processor_monitor_ref, reference() | nil
+
+    # Resource utilization controls
     field :setting_max_messages, non_neg_integer(), default: @default_setting_max_messages
     field :setting_system_max_memory_bytes, non_neg_integer() | nil
     field :max_memory_bytes, non_neg_integer()
     field :payload_size_bytes, non_neg_integer(), default: 0
-    field :slot_processor_monitor_ref, reference() | nil
+
+    # Backfills
+    field :backfill_cursor, KeysetCursor.cursor() | nil
+    field :backfill_state, BackfillState.t()
+    field :table_reader_mod, module()
+
     field :table_reader_batch_id, String.t() | nil
+    field :unpersisted_cursor_tuples_for_table_reader_batch, MapSet.t(), default: MapSet.new()
+
+    # Test
     field :test_pid, pid() | nil
+  end
+
+  defmodule BackfillState do
+    @moduledoc false
+    alias Sequin.DatabasesRuntime.SlotMessageStore.State
+
+    @type t :: Idle.t() | FetchingIds.t() | FetchingMessages.t()
+    typedstruct module: Idle do
+    end
+
+    typedstruct module: FetchingIds do
+    end
+
+    typedstruct module: FetchingMessages do
+      field :emitted_batch_lsn, non_neg_integer() | nil
+      field :logical_message_lsn, non_neg_integer() | nil
+      field :primary_keys_being_fetched, MapSet.t()
+      field :messages, [State.message()] | nil
+    end
+
+    typedstruct module: ReadyToFlush do
+      field :messages, [State.message()]
+    end
   end
 
   @spec setup_ets(Sequin.Consumers.SinkConsumer.t()) :: :ok
@@ -320,6 +359,162 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   @spec unpersisted_table_reader_messages?(State.t()) :: boolean()
   def unpersisted_table_reader_messages?(%State{} = state) do
     MapSet.size(state.unpersisted_cursor_tuples_for_table_reader_batch) != 0
+  end
+
+  @spec backfill_fetch_ids_started(State.t()) :: State.t()
+  def backfill_fetch_ids_started(%State{backfill_state: %Idle{}} = state) do
+    %{state | backfill_state: %FetchingIds{}}
+  end
+
+  def backfill_fetch_ids_completed(%State{backfill_state: %FetchingIds{}} = state, primary_keys) do
+    %{state | backfill_state: %FetchingMessages{primary_keys_being_fetched: MapSet.new(primary_keys)}}
+  end
+
+  @spec backfill_fetch_messages_completed(State.t(), list(message()), non_neg_integer()) :: State.t()
+  def backfill_fetch_messages_completed(
+        %State{backfill_state: %FetchingMessages{logical_message_lsn: nil}} = state,
+        messages,
+        emitted_batch_lsn
+      ) do
+    backfill_state = %FetchingMessages{state.backfill_state | emitted_batch_lsn: emitted_batch_lsn, messages: messages}
+
+    %{state | backfill_state: backfill_state}
+  end
+
+  def backfill_fetch_messages_completed(
+        %State{backfill_state: %FetchingMessages{logical_message_lsn: lsn}} = state,
+        messages,
+        lsn
+      ) do
+    %FetchingMessages{
+      primary_keys_being_fetched: primary_keys_being_fetched
+    } = state.backfill_state
+
+    messages_to_flush =
+      Enum.filter(messages, fn message ->
+        MapSet.member?(primary_keys_being_fetched, message.record_pks)
+      end)
+
+    %{state | backfill_state: %ReadyToFlush{messages: messages_to_flush}}
+  end
+
+  def backfill_fetch_messages_completed(
+        %State{backfill_state: %FetchingMessages{logical_message_lsn: logical_lsn}} = state,
+        messages,
+        emitted_batch_lsn
+      )
+      when emitted_batch_lsn > logical_lsn do
+    %{
+      state
+      | backfill_state: %FetchingMessages{
+          state.backfill_state
+          | emitted_batch_lsn: emitted_batch_lsn,
+            logical_message_lsn: nil,
+            messages: messages
+        }
+    }
+  end
+
+  def backfill_fetch_messages_completed(
+        %State{backfill_state: %FetchingMessages{logical_message_lsn: logical_lsn}},
+        _messages,
+        emitted_batch_lsn
+      )
+      when emitted_batch_lsn < logical_lsn do
+    raise Error.invariant(
+            message:
+              "Previously received a logical message with a commit LSN that is higher than the one emitted by the fetch message Task"
+          )
+  end
+
+  def backfill_fetch_messages_completed(state, _messages, emitted_batch_lsn) do
+    raise Error.invariant(
+            message: """
+            backfill_fetch_messages_completed/3 called with unexpected state:
+              backfill_state: #{inspect(Map.drop(state.backfill_state, [:messages, :primary_keys_being_fetched]), pretty: true)}
+              emitted_batch_lsn: #{emitted_batch_lsn}
+            """
+          )
+  end
+
+  # Logical messages received when we aren't expecting them are likely from a previous backfill
+  def backfill_logical_message_received(%State{backfill_state: %Idle{}} = state, _logical_message_lsn) do
+    state
+  end
+
+  # Logical messages received when we aren't expecting them are likely from a previous backfill
+  def backfill_logical_message_received(%State{backfill_state: %FetchingIds{}} = state, _logical_message_lsn) do
+    state
+  end
+
+  # emitted_batch_lsn is nil because we get the logical message before we receive the fetch_messages response
+  def backfill_logical_message_received(
+        %State{backfill_state: %FetchingMessages{emitted_batch_lsn: nil}} = state,
+        logical_message_lsn
+      ) do
+    %{state | backfill_state: %FetchingMessages{state.backfill_state | logical_message_lsn: logical_message_lsn}}
+  end
+
+  # here the expected_lsn is equal to the commit_lsn of the logical message, so we can flush
+  def backfill_logical_message_received(
+        %State{backfill_state: %FetchingMessages{emitted_batch_lsn: batch_lsn}} = state,
+        batch_lsn
+      ) do
+    %FetchingMessages{
+      messages: messages,
+      primary_keys_being_fetched: primary_keys_being_fetched
+    } = state.backfill_state
+
+    messages_to_flush =
+      Enum.filter(messages, fn message ->
+        MapSet.member?(primary_keys_being_fetched, message.record_pks)
+      end)
+
+    %{state | backfill_state: %ReadyToFlush{messages: messages_to_flush}}
+  end
+
+  # We have an emitted batch LSN from a fetch_messages Task. So any logical message with a commit_lsn
+  # less than the emitted batch LSN is for a batch that we have already processed.
+  def backfill_logical_message_received(
+        %State{backfill_state: %FetchingMessages{emitted_batch_lsn: emitted_batch_lsn}} = state,
+        logical_message_lsn
+      )
+      when logical_message_lsn < emitted_batch_lsn do
+    state
+  end
+
+  def backfill_logical_message_received(
+        %State{backfill_state: %FetchingMessages{emitted_batch_lsn: emitted_batch_lsn}},
+        logical_message_lsn
+      )
+      when logical_message_lsn > emitted_batch_lsn and is_integer(logical_message_lsn) and is_integer(emitted_batch_lsn) do
+    raise Error.invariant(message: "Received logical message with commit_lsn greater than expected commit_lsn")
+  end
+
+  def backfill_logical_message_received(%State{backfill_state: %Idle{}} = state, _logical_message_lsn) do
+    state
+  end
+
+  def backfill_logical_message_received(state, logical_message_lsn) do
+    raise Error.invariant(
+            message: """
+            backfill_logical_message_received/2 called with unexpected state:
+              backfill_state: #{inspect(Map.drop(state.backfill_state, [:messages, :primary_keys_being_fetched]), pretty: true)}
+              logical_message_lsn: #{logical_message_lsn}
+            """
+          )
+  end
+
+  def backfill_should_flush?(%State{backfill_state: %ReadyToFlush{}}), do: true
+  def backfill_should_flush?(%State{backfill_state: _}), do: false
+
+  def backfill_flush_messages(%State{backfill_state: %ReadyToFlush{messages: messages}} = state) do
+    {:ok, state} = State.put_messages(state, messages, skip_limit_check?: true)
+    %State{state | backfill_state: %Idle{}}
+  end
+
+  def backfill_completed(%State{backfill_state: %FetchingIds{}} = state) do
+    %{state | backfill_state: %Idle{}}
   end
 
   defp deliverable_messages(%State{} = state, count) do

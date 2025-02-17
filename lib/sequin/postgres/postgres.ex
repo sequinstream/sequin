@@ -184,6 +184,13 @@ defmodule Sequin.Postgres do
     end
   end
 
+  @emit_logical_message_sql "select pg_logical_emit_message(true, $1, $2)"
+  def emit_logical_message(%PostgresDatabase{} = db, prefix, payload) do
+    with {:ok, %Postgrex.Result{rows: [[lsn]]}} <- query(db, @emit_logical_message_sql, [prefix, payload]) do
+      {:ok, lsn_to_int(lsn)}
+    end
+  end
+
   def get_major_pg_version(conn) do
     with {:ok, %{rows: [[version]]}} <- query(conn, "select version()") do
       # Extract major version number from version string

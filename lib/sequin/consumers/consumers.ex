@@ -76,8 +76,8 @@ defmodule Sequin.Consumers do
 
   def source_table(_), do: nil
 
-  def get_consumer(consumer_id) do
-    get_sink_consumer(consumer_id)
+  def get_consumer(consumer_id, preloads \\ []) do
+    get_sink_consumer(consumer_id, preloads)
   end
 
   def get_consumer!(consumer_id) do
@@ -286,15 +286,17 @@ defmodule Sequin.Consumers do
 
   # SinkConsumer
 
-  def get_sink_consumer(consumer_id) do
-    case Repo.get(SinkConsumer, consumer_id) do
+  def get_sink_consumer(consumer_id, preloads \\ []) do
+    query = preload(SinkConsumer, ^preloads)
+
+    case Repo.get(query, consumer_id) do
       nil -> {:error, Error.not_found(entity: :sink_consumer, params: %{id: consumer_id})}
       consumer -> {:ok, consumer}
     end
   end
 
-  def get_sink_consumer!(consumer_id) do
-    case get_sink_consumer(consumer_id) do
+  def get_sink_consumer!(consumer_id, preloads \\ []) do
+    case get_sink_consumer(consumer_id, preloads) do
       {:ok, consumer} -> consumer
       {:error, error} -> raise error
     end

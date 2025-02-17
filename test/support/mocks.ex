@@ -33,3 +33,7 @@ Mox.defmock(Sequin.TestSupport.EnumMock,
 Mox.defmock(Sequin.TestSupport.ProcessMock,
   for: Sequin.TestSupport.Process
 )
+
+Mox.defmock(Sequin.DatabasesRuntime.TableReaderMock,
+  for: Sequin.DatabasesRuntime.TableReader
+)

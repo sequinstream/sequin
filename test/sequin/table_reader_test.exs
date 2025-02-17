@@ -11,6 +11,8 @@ defmodule Sequin.TableReaderTest do
 
   setup do
     db = DatabasesFactory.insert_configured_postgres_database!(tables: [])
+    ConnectionCache.cache_connection(db, Repo)
+
     {:ok, tables} = Databases.tables(db)
 
     characters_table = Enum.find(tables, &(&1.name == "Characters"))

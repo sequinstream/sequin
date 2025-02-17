@@ -116,10 +116,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   def init(opts) do
     test_pid = Keyword.get(opts, :test_pid)
     maybe_setup_allowances(test_pid)
-    backfill = opts |> Keyword.fetch!(:backfill_id) |> Consumers.get_backfill!() |> Repo.preload(:sink_consumer)
-    consumer = preload_consumer(backfill.sink_consumer)
-
-    Logger.metadata(consumer_id: consumer.id, backfill_id: backfill.id)
 
     max_pending_messages =
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
@@ -127,9 +123,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     page_size = Keyword.get(opts, :page_size, 50_000)
 
     state = %State{
-      id: backfill.id,
-      backfill: backfill,
-      consumer: consumer,
+      id: Keyword.fetch!(opts, :backfill_id),
       page_size: page_size,
       test_pid: test_pid,
       table_oid: Keyword.fetch!(opts, :table_oid),
@@ -152,14 +146,17 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     :keep_state_and_data
   end
 
-  def handle_event(:internal, :init, :initializing, state) do
-    backfill = state.backfill
+  def handle_event(:internal, :init, :initializing, %State{} = state) do
+    backfill = state.id |> Consumers.get_backfill!() |> Repo.preload(:sink_consumer)
+    consumer = preload_consumer(backfill.sink_consumer)
 
-    :syn.join(:consumers, {:table_reader_batch_complete, state.consumer.id}, self())
+    Logger.metadata(consumer_id: consumer.id, backfill_id: backfill.id)
+
+    :syn.join(:consumers, {:table_reader_batch_complete, consumer.id}, self())
 
     cursor = TableReader.cursor(backfill.id)
     cursor = cursor || backfill.initial_min_cursor
-    state = %{state | current_cursor: cursor, next_cursor: nil}
+    state = %{state | backfill: backfill, consumer: consumer, current_cursor: cursor, next_cursor: nil}
 
     actions = [check_state_timeout(state.check_state_timeout)]
 
@@ -308,9 +305,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       state = complete_batch(state)
 
       if state.count_pending_messages < state.max_pending_messages do
-        {:next_state, :fetch_batch, state}
+        {:next_state, :fetch_batch, state, [{:reply, from, :ok}]}
       else
-        {:next_state, {:paused, :max_pending_messages}, state}
+        {:next_state, {:paused, :max_pending_messages}, state, [{:reply, from, :ok}]}
       end
     end
   end

@@ -152,7 +152,7 @@ defmodule Sequin.Databases.ConnectionCache do
 
       # We don't want to accidentally kill the Sequin.Repo connection, which we can store in the
       # ConnectionCache during test. Leads to very hard to debug error!
-      if not is_nil(conn) and conn != Sequin.Repo do
+      if not is_nil(conn) and conn not in [Sequin.Repo, Sequin.Test.UnboxedRepo] do
         state.stop_fn.(conn)
       end
 

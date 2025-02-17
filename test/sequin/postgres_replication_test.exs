@@ -17,7 +17,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.DatabasesRuntime
   alias Sequin.DatabasesRuntime.MessageHandlerMock
   alias Sequin.DatabasesRuntime.SlotMessageStore
@@ -57,6 +57,8 @@ defmodule Sequin.PostgresReplicationTest do
       # Create source database
       account_id = AccountsFactory.insert_account!().id
       source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
+
+      ConnectionCache.cache_connection(source_db, UnboxedRepo)
 
       # Create PostgresReplicationSlot entity
       pg_replication =
@@ -975,6 +977,8 @@ defmodule Sequin.PostgresReplicationTest do
       account_id = AccountsFactory.insert_account!().id
       source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
 
+      ConnectionCache.cache_connection(source_db, UnboxedRepo)
+
       # Create PostgresReplicationSlot entity
       pg_replication =
         ReplicationFactory.insert_postgres_replication!(
@@ -1326,6 +1330,8 @@ defmodule Sequin.PostgresReplicationTest do
       account_id = AccountsFactory.insert_account!().id
       source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
 
+      ConnectionCache.cache_connection(source_db, UnboxedRepo)
+
       # Create PostgresReplicationSlot entity
       pg_replication =
         ReplicationFactory.insert_postgres_replication!(
@@ -1514,6 +1520,9 @@ defmodule Sequin.PostgresReplicationTest do
   end
 
   defp start_replication!(opts) do
+    db = DatabasesFactory.postgres_database()
+    ConnectionCache.cache_connection(db, UnboxedRepo)
+
     opts =
       Keyword.merge(
         [
@@ -1524,7 +1533,7 @@ defmodule Sequin.PostgresReplicationTest do
           id: server_id(),
           message_handler_module: MessageHandlerMock,
           message_handler_ctx: nil,
-          postgres_database: %PostgresDatabase{id: "test_db_id"},
+          postgres_database: db,
           replication_slot: %PostgresReplicationSlot{id: "test_slot_id"}
         ],
         opts

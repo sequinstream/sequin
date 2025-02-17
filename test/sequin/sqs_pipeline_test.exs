@@ -23,6 +23,8 @@ defmodule Sequin.ConsumersRuntime.SqsPipelineTest do
       postgres_database =
         DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: :character_tables)
 
+      ConnectionCache.cache_connection(postgres_database, Sequin.Repo)
+
       replication =
         ReplicationFactory.insert_postgres_replication!(
           account_id: account.id,

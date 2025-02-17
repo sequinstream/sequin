@@ -1195,23 +1195,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp get_cached_conn(%State{} = state) do
-    socket_options = state.connection[:socket_options] || []
-    # Create a PostgresDatabase struct so we can use ConnectionCache. Doesn't matter
-    # that the ID is for the replication_slot. Using ConnectionCache ensures we
-    # do not create a bunch of connections to the database, regardless of the lifecycle
-    # of this GenServer
-    postgres_database = %PostgresDatabase{
-      id: state.id,
-      database: state.connection[:database],
-      hostname: state.connection[:hostname],
-      port: state.connection[:port],
-      username: state.connection[:username],
-      password: state.connection[:password],
-      ssl: state.connection[:ssl] || false,
-      ipv6: :inet6 in socket_options
-    }
-
-    {:ok, conn} = ConnectionCache.connection(postgres_database)
+    {:ok, conn} = ConnectionCache.connection(state.postgres_database)
     conn
   end
 

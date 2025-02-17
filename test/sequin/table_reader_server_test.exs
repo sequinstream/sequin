@@ -26,6 +26,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     # Set up the database and consumer
     database = DatabasesFactory.insert_configured_postgres_database!()
 
+    ConnectionCache.cache_connection(database, Repo)
+
     replication =
       ReplicationFactory.insert_postgres_replication!(
         account_id: database.account_id,
@@ -555,10 +557,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       1000 ->
         raise "Timeout waiting for batch_fetched. Message history: #{inspect(Enum.reverse(message_history))}"
     end
-  catch
-    # TableReaderServer will exit when finishing a batch, and may do so while we're calling flush_batch
-    :exit, _ ->
-      {:ok, messages}
   end
 
   defp start_table_reader_server(backfill, table_oid, opts) do

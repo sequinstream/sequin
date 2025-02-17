@@ -19,6 +19,12 @@ Thank you for your interest in contributing to Sequin! This document outlines th
     ```bash
     docker compose up -d
     ```
+
+    If you encounter an error about the default PostgreSQL user "postgres" not existing, you can create the user with:
+    ```bash
+    createuser -s postgres
+    ```
+
 3. Run the setup script
     ```bash
     mix setup

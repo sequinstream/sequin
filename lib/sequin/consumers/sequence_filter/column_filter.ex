@@ -270,7 +270,7 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
 
   @type t :: %__MODULE__{
           column_attnum: integer,
-          column_name: String.t(),
+          column_name: String.t() | nil,
           operator: atom(),
           value: %{value: any()}
         }

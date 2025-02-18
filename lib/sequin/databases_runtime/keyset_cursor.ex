@@ -3,7 +3,9 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
   alias Sequin.Databases.PostgresDatabaseTable, as: Table
   alias Sequin.Postgres
 
-  @spec attnums_to_names(Table.t(), map()) :: map()
+  @type cursor :: %{non_neg_integer() => any()}
+
+  @spec attnums_to_names(Table.t(), cursor()) :: map()
   def attnums_to_names(%Table{} = table, cursor) do
     Map.new(cursor, fn {attnum, value} ->
       name =
@@ -30,7 +32,7 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
   @doc """
   Given a table and a minimum sort column value, return a cursor with the minimum values for all columns
   """
-  @spec min_cursor(%Table{}, any()) :: map()
+  @spec min_cursor(%Table{}, any()) :: cursor()
   def min_cursor(%Table{} = table, sort_col_value) do
     [sort_column | pk_columns] = cursor_columns(table)
 
@@ -45,6 +47,7 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
   @doc """
   Given a table, return a cursor with the minimum values for all columns
   """
+  @spec min_cursor(%Table{}) :: cursor()
   def min_cursor(%Table{} = table) do
     [sort_column | _pk_columns] = cursor_columns(table)
     sort_col_value = min_for_type(sort_column.type)
@@ -89,7 +92,7 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
     |> Enum.map_join(", ", &"#{&1} #{direction}")
   end
 
-  @spec casted_cursor_values(Table.t(), map()) :: [any()]
+  @spec casted_cursor_values(Table.t(), cursor()) :: [any()]
   def casted_cursor_values(%Table{} = table, cursor) do
     columns = cursor_columns(table)
 
@@ -136,7 +139,7 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
 
   defp cast_value(_, val), do: val
 
-  @spec cursor_from_row(Table.t(), map()) :: map()
+  @spec cursor_from_row(Table.t(), map()) :: cursor()
   def cursor_from_row(%Table{} = table, row) do
     cursor_columns = cursor_columns(table)
 

@@ -15,7 +15,7 @@ defmodule Sequin.Postgres do
 
   require Logger
 
-  @type db_conn() :: pid() | module() | DBConnection.t()
+  @type db_conn() :: pid() | module() | DBConnection.t() | PostgresDatabase.t()
 
   @event_table_columns [
     %{name: "id", type: "serial"},
@@ -181,6 +181,13 @@ defmodule Sequin.Postgres do
 
       {:error, _} = error ->
         error
+    end
+  end
+
+  @emit_logical_message_sql "select pg_logical_emit_message(true, $1, $2)"
+  def emit_logical_message(%PostgresDatabase{} = db, prefix, payload) do
+    with {:ok, %Postgrex.Result{rows: [[lsn]]}} <- query(db, @emit_logical_message_sql, [prefix, payload]) do
+      {:ok, lsn_to_int(lsn)}
     end
   end
 

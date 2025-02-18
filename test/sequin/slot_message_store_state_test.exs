@@ -3,6 +3,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.DatabasesRuntime.SlotMessageStore.State
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State.BackfillState.Idle
   alias Sequin.Error
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
@@ -10,7 +11,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
   alias Sequin.Size
 
   setup do
-    state = %State{consumer: %SinkConsumer{seq: Factory.unique_integer()}}
+    state = %State{consumer: %SinkConsumer{seq: Factory.unique_integer()}, backfill_state: %Idle{}}
     State.setup_ets(state.consumer)
     {:ok, %{state: state}}
   end
@@ -675,6 +676,119 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       # Pop the message
       {[_msg], state} = State.pop_messages(state, [{msg.commit_lsn, msg.commit_idx}])
       refute State.unpersisted_table_reader_messages?(state)
+    end
+  end
+
+  describe "backfills" do
+    test "handles standard backfill flow", %{state: state} do
+      # Fetch IDs started
+      state = State.backfill_fetch_ids_started(state)
+      # Fetch IDs completed
+      backfill_ids = [["1"], ["2"], ["3"]]
+
+      state = State.backfill_fetch_ids_completed(state, backfill_ids)
+
+      # Fetch messages completed
+      messages = [
+        ConsumersFactory.consumer_message(record_pks: [1], commit_lsn: 1, commit_idx: 0),
+        ConsumersFactory.consumer_message(record_pks: [2], commit_lsn: 1, commit_idx: 1),
+        ConsumersFactory.consumer_message(record_pks: [3], commit_lsn: 1, commit_idx: 2)
+      ]
+
+      state = State.backfill_fetch_messages_completed(state, messages, 2)
+
+      # Logical message received
+      state = State.backfill_logical_message_received(state, 2)
+
+      # Should flush?
+      assert State.backfill_should_flush?(state)
+
+      # Flush messages
+      state = State.backfill_flush_messages(state)
+      assert map_size(state.messages) == 3
+      assert %Idle{} = state.backfill_state
+    end
+
+    test "handles logical message before fetch messages completed", %{state: state} do
+      # Fetch IDs started
+      state = State.backfill_fetch_ids_started(state)
+
+      # Fetch IDs completed
+      backfill_ids = [["1"], ["2"], ["3"]]
+
+      state = State.backfill_fetch_ids_completed(state, backfill_ids)
+
+      state = State.backfill_logical_message_received(state, 2)
+
+      refute State.backfill_should_flush?(state)
+
+      messages = [
+        ConsumersFactory.consumer_message(record_pks: [1], commit_lsn: 1, commit_idx: 0),
+        ConsumersFactory.consumer_message(record_pks: [2], commit_lsn: 1, commit_idx: 1),
+        ConsumersFactory.consumer_message(record_pks: [3], commit_lsn: 2, commit_idx: 0)
+      ]
+
+      state = State.backfill_fetch_messages_completed(state, messages, 2)
+
+      # Should flush?
+      assert State.backfill_should_flush?(state)
+
+      # Flush messages
+      state = State.backfill_flush_messages(state)
+      assert map_size(state.messages) == 3
+      assert %Idle{} = state.backfill_state
+    end
+
+    test "handles lower LSN logical messages gracefully during backfill", %{state: state} do
+      # Fetch IDs started
+      state = State.backfill_fetch_ids_started(state)
+
+      assert state = State.backfill_logical_message_received(state, 1)
+      refute State.backfill_should_flush?(state)
+
+      # Fetch IDs completed with higher LSNs
+      backfill_ids = [
+        ["100"],
+        ["100"],
+        ["101"]
+      ]
+
+      state = State.backfill_fetch_ids_completed(state, backfill_ids)
+
+      # Receive lower LSN logical message
+      state = State.backfill_logical_message_received(state, 2)
+      refute State.backfill_should_flush?(state)
+
+      # Fetch messages completed for higher LSNs
+      messages = [
+        ConsumersFactory.consumer_message(record_pks: [100], commit_lsn: 100, commit_idx: 0),
+        ConsumersFactory.consumer_message(record_pks: [101], commit_lsn: 100, commit_idx: 1)
+      ]
+
+      state = State.backfill_fetch_messages_completed(state, messages, 4)
+      refute State.backfill_should_flush?(state)
+
+      # Receive another lower LSN logical message
+      state = State.backfill_logical_message_received(state, 3)
+      refute State.backfill_should_flush?(state)
+
+      # Final logical message at higher LSN
+      state = State.backfill_logical_message_received(state, 4)
+
+      # Should flush?
+      assert State.backfill_should_flush?(state)
+
+      # Flush messages
+      state = State.backfill_flush_messages(state)
+
+      # Verify all messages are present and in correct order
+      assert map_size(state.messages) == 2
+      messages_list = Map.values(state.messages)
+
+      lsns = Enum.map(messages_list, & &1.commit_lsn)
+      assert lsns == Enum.sort(lsns)
+
+      assert %Idle{} = state.backfill_state
     end
   end
 

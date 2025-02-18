@@ -16,6 +16,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Error
+  alias Sequin.Error.InvariantError
   alias Sequin.Error.ServiceError
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -28,6 +29,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   @initial_batch_progress_timeout :timer.seconds(10)
   @max_batch_progress_timeout :timer.minutes(1)
+
+  @max_backoff_ms :timer.seconds(3)
+  @max_backoff_time :timer.minutes(1)
 
   # Client API
 
@@ -123,7 +127,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
 
     initial_page_size = Keyword.get(opts, :initial_page_size, 50_000)
-    max_timeout_ms = Keyword.get(opts, :max_timeout_ms, :timer.minutes(1))
+    max_timeout_ms = Keyword.get(opts, :max_timeout_ms, :timer.seconds(5))
 
     page_size_optimizer_mod = Keyword.get(opts, :page_size_optimizer_mod, PageSizeOptimizer)
 
@@ -521,27 +525,79 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   defp handle_record_messages!(%State{} = state, table, commit_lsn, matching_records) do
-    consumer_records =
-      matching_records
-      |> Enum.with_index()
-      |> Enum.map(fn {record_attnums_to_values, idx} ->
-        data = build_record_data(table, state.consumer, record_attnums_to_values)
-        payload_size_bytes = :erlang.external_size(data)
+    messages = build_consumer_records(state, table, commit_lsn, matching_records)
+    put_messages_with_retry!(state, messages)
+  end
 
-        %ConsumerRecord{
-          consumer_id: state.consumer.id,
-          commit_lsn: commit_lsn,
-          commit_idx: idx,
-          table_oid: table.oid,
-          record_pks: record_pks(table, record_attnums_to_values),
-          group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
-          replication_message_trace_id: UUID.uuid4(),
-          data: data,
-          payload_size_bytes: payload_size_bytes
-        }
-      end)
+  defp handle_event_messages!(%State{} = state, table, commit_lsn, matching_records) do
+    messages = build_consumer_events(state, table, commit_lsn, matching_records)
+    put_messages_with_retry!(state, messages)
+  end
 
-    :ok = SlotMessageStore.put_table_reader_batch(state.consumer.id, consumer_records, state.batch_id)
+  defp put_messages_with_retry!(state, messages, first_attempt_at \\ System.monotonic_time(:millisecond), attempt \\ 1) do
+    elapsed = System.monotonic_time(:millisecond) - first_attempt_at
+
+    case SlotMessageStore.put_table_reader_batch(state.consumer.id, messages, state.batch_id) do
+      :ok ->
+        :ok
+
+      {:error, %InvariantError{code: :payload_size_limit_exceeded}} when elapsed < @max_backoff_time ->
+        backoff = Sequin.Time.exponential_backoff(50, attempt, @max_backoff_ms)
+
+        Logger.info(
+          "[TableReaderServer] Slot message store for consumer #{state.consumer.id} is full. " <>
+            "Backing off for #{backoff}ms before retry #{attempt + 1}..."
+        )
+
+        Process.sleep(backoff)
+        put_messages_with_retry!(state, messages, first_attempt_at, attempt + 1)
+
+      {:error, error} ->
+        raise error
+    end
+  end
+
+  defp build_consumer_records(%State{} = state, table, commit_lsn, matching_records) do
+    matching_records
+    |> Enum.with_index()
+    |> Enum.map(fn {record_attnums_to_values, idx} ->
+      data = build_record_data(table, state.consumer, record_attnums_to_values)
+      payload_size_bytes = :erlang.external_size(data)
+
+      %ConsumerRecord{
+        consumer_id: state.consumer.id,
+        commit_lsn: commit_lsn,
+        commit_idx: idx,
+        table_oid: table.oid,
+        record_pks: record_pks(table, record_attnums_to_values),
+        group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
+        replication_message_trace_id: UUID.uuid4(),
+        data: data,
+        payload_size_bytes: payload_size_bytes
+      }
+    end)
+  end
+
+  defp build_consumer_events(%State{} = state, table, commit_lsn, matching_records) do
+    matching_records
+    |> Enum.with_index()
+    |> Enum.map(fn {record_attnums_to_values, idx} ->
+      data = build_event_data(table, state.consumer, record_attnums_to_values)
+      payload_size_bytes = :erlang.external_size(data)
+
+      %ConsumerEvent{
+        consumer_id: state.consumer.id,
+        commit_lsn: commit_lsn,
+        commit_idx: idx,
+        record_pks: record_pks(table, record_attnums_to_values),
+        group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
+        table_oid: table.oid,
+        deliver_count: 0,
+        replication_message_trace_id: UUID.uuid4(),
+        data: data,
+        payload_size_bytes: payload_size_bytes
+      }
+    end)
   end
 
   defp build_record_data(table, consumer, record_attnums_to_values) do
@@ -561,31 +617,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         commit_timestamp: DateTime.utc_now()
       }
     }
-  end
-
-  defp handle_event_messages!(%State{} = state, table, commit_lsn, matching_records) do
-    consumer_events =
-      matching_records
-      |> Enum.with_index()
-      |> Enum.map(fn {record_attnums_to_values, idx} ->
-        data = build_event_data(table, state.consumer, record_attnums_to_values)
-        payload_size_bytes = :erlang.external_size(data)
-
-        %ConsumerEvent{
-          consumer_id: state.consumer.id,
-          commit_lsn: commit_lsn,
-          commit_idx: idx,
-          record_pks: record_pks(table, record_attnums_to_values),
-          group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
-          table_oid: table.oid,
-          deliver_count: 0,
-          replication_message_trace_id: UUID.uuid4(),
-          data: data,
-          payload_size_bytes: payload_size_bytes
-        }
-      end)
-
-    :ok = SlotMessageStore.put_table_reader_batch(state.consumer.id, consumer_events, state.batch_id)
   end
 
   defp build_event_data(table, consumer, record_attnums_to_values) do

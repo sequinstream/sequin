@@ -153,14 +153,22 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
     popped_message_ack_ids = Enum.map(popped_messages, & &1.ack_id)
 
-    popped_messages_bytes = Enum.sum_by(popped_messages, & &1.payload_size_bytes)
+    next_payload_size_bytes = state.payload_size_bytes - Enum.sum_by(popped_messages, & &1.payload_size_bytes)
+
+    next_payload_size_bytes =
+      if map_size(messages) == 0 and next_payload_size_bytes > 0 do
+        Logger.error("Popped messages bytes is greater than 0 when there are no messages in the state")
+        0
+      else
+        next_payload_size_bytes
+      end
 
     {popped_messages,
      %{
        state
        | messages: messages,
          ack_ids_to_cursor_tuples: Map.drop(state.ack_ids_to_cursor_tuples, popped_message_ack_ids),
-         payload_size_bytes: state.payload_size_bytes - popped_messages_bytes,
+         payload_size_bytes: next_payload_size_bytes,
          produced_message_groups: produced_message_groups,
          persisted_message_groups: persisted_message_groups,
          unpersisted_cursor_tuples_for_table_reader_batch: unpersisted_cursor_tuples_for_table_reader_batch

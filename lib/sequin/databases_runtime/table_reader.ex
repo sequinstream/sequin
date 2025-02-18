@@ -190,6 +190,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
 
   # Add this new function
   def fast_count_estimate(%PostgresDatabase{} = db, %Table{} = table, min_cursor, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, :timer.minutes(1))
     include_min = Keyword.get(opts, :include_min, false)
     min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
     cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)
@@ -214,7 +215,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
 
     sql = Postgres.parameterize_sql(sql)
 
-    with {:ok, %Postgrex.Result{rows: [[count]]}} <- Postgres.query(db, sql, cursor_values, timeout: :timer.minutes(1)) do
+    with {:ok, %Postgrex.Result{rows: [[count]]}} <- Postgres.query(db, sql, cursor_values, timeout: timeout) do
       {:ok, count}
     end
   end

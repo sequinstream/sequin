@@ -689,6 +689,13 @@ defmodule Sequin.Accounts do
   @doc """
   Gets a single user.
   """
+  def get_user(email: email) do
+    case Repo.get_by(User, email: email) do
+      nil -> {:error, Error.not_found(entity: :user)}
+      user -> {:ok, user}
+    end
+  end
+
   def get_user(id) do
     case Repo.get(User, id) do
       nil -> {:error, Error.not_found(entity: :user)}

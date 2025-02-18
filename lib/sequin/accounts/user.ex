@@ -20,6 +20,7 @@ defmodule Sequin.Accounts.User do
            ]}
 
   @type id :: String.t()
+  @type email :: String.t()
 
   typed_schema "users" do
     field :name, :string

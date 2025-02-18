@@ -8,6 +8,7 @@ defmodule Sequin.SlotMessageStoreTest do
   alias Sequin.Error.InvariantError
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
 
   describe "SlotMessageStore with persisted messages" do
     setup do
@@ -484,22 +485,180 @@ defmodule Sequin.SlotMessageStoreTest do
     end
   end
 
-  describe "backfills" do
+  describe "backfills, in isolation" do
     setup do
-      consumer = ConsumersFactory.insert_sink_consumer!()
+      table = DatabasesFactory.table()
+      db = DatabasesFactory.insert_postgres_database!(tables: [table])
+      consumer = ConsumersFactory.insert_sink_consumer!(account_id: db.account_id, postgres_database: db)
+
       # Create a backfill
       backfill = ConsumersFactory.insert_active_backfill!(account_id: consumer.account_id, sink_consumer_id: consumer.id)
 
       %{consumer: consumer, backfill: backfill}
     end
 
-    test "backfill_fetch_messages_completed", %{consumer: consumer, backfill: backfill} do
-      stub(TableReaderMock, :cursor, fn _ -> nil end)
+    test "when current backfill cursor is nil, calls fetch with initial_min_cursor", %{
+      consumer: consumer,
+      backfill: backfill
+    } do
+      test_pid = self()
+      stub(TableReaderMock, :cursor, fn _backfill_id -> nil end)
+
+      stub(TableReaderMock, :fetch_batch_primary_keys, fn _db_or_conn, _table, min_cursor ->
+        send(test_pid, {:cursor, min_cursor})
+        # Don't return a result to the SMS
+        :sys.suspend(self())
+      end)
 
       start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self(), table_reader_mod: TableReaderMock})
 
-      Process.sleep(1000)
-      assert true
+      assert_receive {:cursor, min_cursor}
+      [{key, value}] = Enum.to_list(min_cursor)
+      [{expected_key, expected_value}] = Enum.to_list(backfill.initial_min_cursor)
+      assert key == expected_key
+      assert Sequin.Time.parse_timestamp!(value) == expected_value
     end
+
+    test "when there's a saved cursor, calls fetch with that cursor", %{consumer: consumer} do
+      test_pid = self()
+      cursor = %{5 => DateTime.utc_now()}
+      stub(TableReaderMock, :cursor, fn _backfill_id -> cursor end)
+
+      stub(TableReaderMock, :fetch_batch_primary_keys, fn _db_or_conn, _table, cursor ->
+        send(test_pid, {:cursor, cursor})
+        # Don't return a result to the SMS
+        :sys.suspend(self())
+      end)
+
+      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self(), table_reader_mod: TableReaderMock})
+
+      assert_receive {:cursor, received_cursor}
+      assert received_cursor == cursor
+    end
+
+    test "when backfill_fetch_ids returns an empty list, backfill marked completed", %{
+      consumer: consumer,
+      backfill: backfill
+    } do
+      assert backfill.state == :active
+      stub(TableReaderMock, :cursor, fn _backfill_id -> nil end)
+      stub(TableReaderMock, :fetch_batch_primary_keys, fn _db_or_conn, _table, _min_cursor -> {:ok, []} end)
+
+      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self(), table_reader_mod: TableReaderMock})
+
+      assert_receive {SlotMessageStore, :backfill_completed}
+
+      assert Repo.reload(backfill).state == :completed
+    end
+
+    test "when backfill_fetch_ids returns a list of ids, calls fetch_batch_by_primary_keys and emits logical message", %{
+      consumer: consumer
+    } do
+      test_pid = self()
+      pks = [["1"], ["2"], ["3"]]
+      next_cursor = %{5 => DateTime.utc_now()}
+      records = for pk <- pks, do: ConsumersFactory.consumer_record(record_pks: pk)
+
+      expect(TableReaderMock, :cursor, fn _backfill_id -> nil end)
+      expect(TableReaderMock, :fetch_batch_primary_keys, fn _db_or_conn, _table, _min_cursor -> {:ok, pks} end)
+
+      expect(TableReaderMock, :fetch_batch_by_primary_keys, fn _db, _consumer_id, _table, ^pks ->
+        {:ok, %{messages: records, next_cursor: next_cursor}}
+      end)
+
+      expect(TableReaderMock, :emit_logic_message, fn _db, _consumer_id ->
+        send(test_pid, :emit_logic_message)
+        {:ok, 1}
+      end)
+
+      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self(), table_reader_mod: TableReaderMock})
+
+      assert_receive :emit_logic_message
+    end
+
+    test "when backfill_fetch_ids returns an error, retries"
+
+    test "when backfill_fetch_messages returns before the logical message, awaits the logical message before flushing", %{
+      consumer: consumer
+    } do
+      test_pid = self()
+      pks = [["1"], ["2"], ["3"]]
+      next_cursor = %{5 => DateTime.utc_now()}
+      records = for pk <- pks, do: ConsumersFactory.consumer_record(record_pks: pk)
+      watermark_lsn = 100
+
+      stub(TableReaderMock, :cursor, fn _backfill_id -> nil end)
+      stub(TableReaderMock, :fetch_batch_primary_keys, fn _db_or_conn, _table, _min_cursor -> {:ok, pks} end)
+
+      stub(TableReaderMock, :fetch_batch_by_primary_keys, fn _db, _consumer_id, _table, ^pks ->
+        {:ok, %{messages: records, next_cursor: next_cursor}}
+      end)
+
+      stub(TableReaderMock, :emit_logic_message, fn _db, _consumer_id ->
+        send(test_pid, :emit_logic_message)
+        {:ok, watermark_lsn}
+      end)
+
+      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self(), table_reader_mod: TableReaderMock})
+
+      assert_receive :emit_logic_message
+
+      {:ok, []} = SlotMessageStore.produce(consumer.id, 1, self())
+
+      :ok = SlotMessageStore.backfill_logical_message_received(consumer.id, watermark_lsn)
+
+      assert_receive {SlotMessageStore, :backfill_flush_messages}
+
+      {:ok, [msg1, msg2, msg3]} = SlotMessageStore.produce(consumer.id, 3, self())
+
+      assert msg1.commit_lsn == watermark_lsn
+      assert msg2.commit_lsn == watermark_lsn
+      assert msg3.commit_lsn == watermark_lsn
+      assert msg1.record_pks == ["1"]
+      assert msg2.record_pks == ["2"]
+      assert msg3.record_pks == ["3"]
+    end
+
+    test "when backfill_flush_messages returns after the logical message, flushes right away", %{consumer: consumer} do
+      pks = [["1"], ["2"], ["3"]]
+      next_cursor = %{5 => DateTime.utc_now()}
+      records = for pk <- pks, do: ConsumersFactory.consumer_record(record_pks: pk)
+      watermark_lsn = 100
+
+      stub(TableReaderMock, :cursor, fn _backfill_id -> nil end)
+      stub(TableReaderMock, :fetch_batch_primary_keys, fn _db_or_conn, _table, _min_cursor -> {:ok, pks} end)
+
+      stub(TableReaderMock, :fetch_batch_by_primary_keys, fn _db, _consumer_id, _table, ^pks ->
+        {:ok, %{messages: records, next_cursor: next_cursor}}
+      end)
+
+      stub(TableReaderMock, :emit_logic_message, fn _db, _consumer_id ->
+        # Call in here, so we know the message is received first
+        :ok = SlotMessageStore.backfill_logical_message_received(consumer.id, watermark_lsn)
+        {:ok, watermark_lsn}
+      end)
+
+      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self(), table_reader_mod: TableReaderMock})
+
+      assert_receive {SlotMessageStore, :backfill_flush_messages}
+    end
+
+    test "when backfill_flush_messages errors, retries"
+
+    # test "backfill end-to-end", %{consumer: consumer, backfill: backfill} do
+    # stub(TableReaderMock, :cursor, fn _backfill_id -> nil end)
+    # stub(TableReaderMock, :fetch_batch_primary_keys, fn _db_or_conn, _table, _min_cursor -> {:ok, []} end)
+
+    # stub(TableReaderMock, :fetch_batch_by_primary_keys, fn _db_or_conn, _consumer, _table, _primary_keys ->
+    #   {:ok, %{messages: [], next_cursor: nil}}
+    # end)
+
+    # stub(TableReaderMock, :emit_logic_message, fn _db, _consumer_id -> :ok end)
+
+    # start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self(), table_reader_mod: TableReaderMock})
+
+    # Process.sleep(100)
+    # assert true
+    # end
   end
 end

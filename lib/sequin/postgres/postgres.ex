@@ -15,7 +15,7 @@ defmodule Sequin.Postgres do
 
   require Logger
 
-  @type db_conn() :: pid() | module() | DBConnection.t()
+  @type db_conn() :: pid() | module() | DBConnection.t() | PostgresDatabase.t()
 
   @event_table_columns [
     %{name: "id", type: "serial"},

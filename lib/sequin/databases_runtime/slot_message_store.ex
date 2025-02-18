@@ -373,9 +373,20 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   defp maybe_backfill_kickoff_fetch_ids(%State{} = state) do
+    parent_pid = self()
+
+    # Extract state to avoid copying whole state into Task
+    test_pid = state.test_pid
+    table_reader_mod = state.table_reader_mod
+    database = database(state)
+    table = table(state)
+    backfill_cursor = state.backfill_cursor
+
     if state.backfill_cursor do
       Task.Supervisor.async_nolink(TaskSupervisor, fn ->
-        case state.table_reader_mod.fetch_batch_primary_keys(database(state), table(state), state.backfill_cursor) do
+        maybe_setup_allowances(test_pid, parent_pid)
+
+        case table_reader_mod.fetch_batch_primary_keys(database, table, backfill_cursor) do
           {:ok, primary_keys} ->
             {:backfill_fetch_ids, {:ok, primary_keys}}
 
@@ -616,6 +627,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       state = State.backfill_logical_message_received(state, commit_lsn)
 
       if State.backfill_should_flush?(state) do
+        if state.test_pid do
+          send(state.test_pid, {__MODULE__, :backfill_flush_messages})
+        end
+
         state =
           state
           |> State.backfill_flush_messages()
@@ -678,21 +693,36 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     Process.demonitor(ref, [:flush])
     Consumers.update_backfill(state.consumer.active_backfill, %{state: :completed})
     consumer = Repo.preload(state.consumer, :active_backfill, force: true)
+
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :backfill_completed})
+    end
+
     {:noreply, %{State.backfill_completed(state) | consumer: consumer}}
   end
 
   def handle_info({ref, {:backfill_fetch_ids, {:ok, primary_keys}}}, state) do
+    parent_pid = self()
     Process.demonitor(ref, [:flush])
 
+    # Extract state to avoid copying whole state into Task
+    test_pid = state.test_pid
+    table_reader_mod = state.table_reader_mod
+    database = database(state)
+    consumer = state.consumer
+    table = table(state)
+
     Task.Supervisor.async_nolink(TaskSupervisor, fn ->
+      maybe_setup_allowances(test_pid, parent_pid)
+
       with {:ok, %{messages: messages}} <-
-             state.table_reader_mod.fetch_batch_by_primary_keys(
-               database(state),
-               state.consumer,
-               table(state),
+             table_reader_mod.fetch_batch_by_primary_keys(
+               database,
+               consumer,
+               table,
                primary_keys
              ),
-           {:ok, lsn} <- state.table_reader_mod.emit_logic_message(database(state), state.consumer_id) do
+           {:ok, lsn} <- table_reader_mod.emit_logic_message(database, consumer.id) do
         messages =
           messages
           |> Enum.with_index()
@@ -724,10 +754,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     state = State.backfill_fetch_messages_completed(state, messages, lsn)
 
     if State.backfill_should_flush?(state) do
+      if state.test_pid do
+        send(state.test_pid, {__MODULE__, :backfill_flush_messages})
+      end
+
       state =
         state
         |> State.backfill_flush_messages()
-        |> maybe_backfill_setup()
         |> maybe_backfill_kickoff_fetch_ids()
 
       {:noreply, state}
@@ -894,6 +927,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   defp clear_counter(name) do
     Process.delete(name)
+  end
+
+  defp maybe_setup_allowances(nil, _parent_pid), do: :ok
+
+  defp maybe_setup_allowances(_test_pid, parent_pid) do
+    Mox.allow(TableReaderMock, self(), parent_pid)
   end
 
   defp execute_timed(name, fun) do

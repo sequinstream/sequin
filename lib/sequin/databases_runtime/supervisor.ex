@@ -32,15 +32,15 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     Supervisor.init(children(), strategy: :one_for_one)
   end
 
-  def start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
-    consumer = Repo.preload(consumer, [:active_backfill, :sequence])
+  def start_table_reader(_supervisor \\ table_reader_supervisor(), _consumer, _opts \\ []) do
+    # consumer = Repo.preload(consumer, [:active_backfill, :sequence])
 
-    default_opts = [
-      backfill_id: consumer.active_backfill.id,
-      table_oid: consumer.sequence.table_oid
-    ]
+    # default_opts = [
+    #   backfill_id: consumer.active_backfill.id,
+    #   table_oid: consumer.sequence.table_oid
+    # ]
 
-    opts = Keyword.merge(default_opts, opts)
+    # opts = Keyword.merge(default_opts, opts)
 
     # Sequin.DynamicSupervisor.start_child(supervisor, {TableReaderServer, opts})
     {:ok, nil}

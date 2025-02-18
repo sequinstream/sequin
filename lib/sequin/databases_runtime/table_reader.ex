@@ -26,9 +26,24 @@ defmodule Sequin.DatabasesRuntime.TableReader do
   @callback fetch_batch_primary_keys(
               db_or_conn :: Postgres.db_conn(),
               table :: PostgresDatabaseTable.t(),
+              min_cursor :: KeysetCursor.cursor()
+            ) :: {:ok, primary_key_list()} | {:error, any()}
+
+  @callback fetch_batch_primary_keys(
+              db_or_conn :: Postgres.db_conn(),
+              table :: PostgresDatabaseTable.t(),
               min_cursor :: KeysetCursor.cursor(),
               opts :: Keyword.t()
             ) :: {:ok, primary_key_list()} | {:error, any()}
+
+  @callback fetch_batch_by_primary_keys(
+              db_or_conn :: Postgres.db_conn(),
+              consumer :: SinkConsumer.t(),
+              table :: PostgresDatabaseTable.t(),
+              primary_keys :: primary_key_list()
+            ) ::
+              {:ok, %{messages: [ConsumerRecord.t() | ConsumerEvent.t()], next_cursor: KeysetCursor.cursor()}}
+              | {:error, any()}
 
   @callback fetch_batch_by_primary_keys(
               db_or_conn :: Postgres.db_conn(),
@@ -40,7 +55,8 @@ defmodule Sequin.DatabasesRuntime.TableReader do
               {:ok, %{messages: [ConsumerRecord.t() | ConsumerEvent.t()], next_cursor: KeysetCursor.cursor()}}
               | {:error, any()}
 
-  @callback emit_logic_message(db :: Postgres.db(), consumer_id :: SinkConsumer.id()) :: :ok | {:error, any()}
+  @callback emit_logic_message(db :: Postgres.db_conn(), consumer_id :: SinkConsumer.id()) ::
+              {:ok, lsn :: non_neg_integer()} | {:error, any()}
 
   # Cursor
   # Note: We previously had min and max cursors. We're switching to just use min cursors.

@@ -415,6 +415,35 @@ defmodule Sequin.SlotMessageStoreTest do
       persisted_messages = Consumers.list_consumer_messages_for_consumer(disabled_consumer)
       assert length(persisted_messages) == 3
     end
+
+    test "duplicate messages don't accumulate payload size", %{consumer: consumer} do
+      # Create a message
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          commit_lsn: 1,
+          commit_idx: 1
+        )
+
+      # Put the same message multiple times
+      :ok = SlotMessageStore.put_messages(consumer.id, [message])
+      :ok = SlotMessageStore.put_messages(consumer.id, [message])
+      :ok = SlotMessageStore.put_messages(consumer.id, [message])
+
+      # Verify we can only produce it once
+      {:ok, [delivered]} = SlotMessageStore.produce(consumer.id, 2, self())
+      assert length([delivered]) == 1
+      assert delivered.commit_lsn == 1
+      assert delivered.commit_idx == 1
+
+      # Ack the message
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer.id, [delivered.ack_id])
+
+      # Verify no bytes are accumulated
+      state = SlotMessageStore.peek(consumer.id)
+      assert state.payload_size_bytes == 0
+    end
   end
 
   describe "SlotMessageStore table reader batch handling" do

@@ -38,6 +38,12 @@ defmodule Sequin.Factory.ConsumersFactory do
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
+    if Map.has_key?(attrs, :postgres_database) and Map.has_key?(attrs, :postgres_database_id) do
+      raise ArgumentError, "Cannot specify both postgres_database and postgres_database_id"
+    end
+
+    postgres_database = Map.get(attrs, :postgres_database)
+
     type =
       attrs[:type] || get_in(attrs, [:sink, :type]) ||
         Enum.random([:http_push, :redis, :sqs, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq])
@@ -46,9 +52,13 @@ defmodule Sequin.Factory.ConsumersFactory do
     sink = sink(type, account_id, sink_attrs)
 
     {postgres_database_id, attrs} =
-      Map.pop_lazy(attrs, :postgres_database_id, fn ->
-        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
-      end)
+      if postgres_database do
+        {postgres_database.id, attrs}
+      else
+        Map.pop_lazy(attrs, :postgres_database_id, fn ->
+          DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+        end)
+      end
 
     {replication_slot_id, attrs} =
       Map.pop_lazy(attrs, :replication_slot_id, fn ->
@@ -63,7 +73,11 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     {sequence_id, attrs} =
       Map.pop_lazy(attrs, :sequence_id, fn ->
-        DatabasesFactory.insert_sequence!(account_id: account_id, postgres_database_id: postgres_database_id).id
+        if postgres_database do
+          DatabasesFactory.insert_sequence!(account_id: account_id, postgres_database: postgres_database).id
+        else
+          DatabasesFactory.insert_sequence!(account_id: account_id, postgres_database_id: postgres_database_id).id
+        end
       end)
 
     {sequence_filter, attrs} =

@@ -26,7 +26,7 @@ defmodule Sequin.ConsumersRuntime.InitBackfillStatsWorker do
         |> Sequin.Enum.find!(&(&1.oid == backfill.sink_consumer.sequence.table_oid))
         |> Map.put(:sort_column_attnum, backfill.sink_consumer.sequence.sort_column_attnum)
 
-      case TableReader.fast_count_estimate(database, table, backfill.initial_min_cursor) do
+      case TableReader.fast_count_estimate(database, table, backfill.initial_min_cursor, timeout: :infinity) do
         {:ok, count} ->
           Consumers.update_backfill(backfill, %{rows_initial_count: count}, skip_lifecycle: true)
 

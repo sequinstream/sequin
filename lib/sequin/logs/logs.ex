@@ -16,36 +16,40 @@ defmodule Sequin.Logs do
   end
 
   defp get_logs_from_file(account_id, consumer_id, trace_id) do
-    log_file_path()
-    |> File.stream!()
-    |> Stream.map(&String.trim/1)
-    |> Stream.filter(&(&1 != ""))
-    |> Stream.map(fn entry ->
-      case Jason.decode(entry) do
-        {:ok, log} ->
-          log
+    if File.exists?(log_file_path()) do
+      log_file_path()
+      |> File.stream!()
+      |> Stream.map(&String.trim/1)
+      |> Stream.filter(&(&1 != ""))
+      |> Stream.map(fn entry ->
+        case Jason.decode(entry) do
+          {:ok, log} ->
+            log
 
-        {:error, error} ->
-          Logger.error("Failed to decode log entry", entry: entry, error: error)
-          nil
-      end
-    end)
-    |> Stream.filter(& &1)
-    |> Stream.filter(fn log ->
-      log["account_id"] == account_id and log["consumer_id"] == consumer_id and log["trace_id"] == trace_id and
-        log["console_logs"] == "consumer_message"
-    end)
-    |> Enum.map(fn log ->
-      {:ok, timestamp, 0} = DateTime.from_iso8601(log["timestamp"])
+          {:error, error} ->
+            Logger.error("Failed to decode log entry", entry: entry, error: error)
+            nil
+        end
+      end)
+      |> Stream.filter(& &1)
+      |> Stream.filter(fn log ->
+        log["account_id"] == account_id and log["consumer_id"] == consumer_id and log["trace_id"] == trace_id and
+          log["console_logs"] == "consumer_message"
+      end)
+      |> Enum.map(fn log ->
+        {:ok, timestamp, 0} = DateTime.from_iso8601(log["timestamp"])
 
-      %Log{
-        timestamp: timestamp,
-        status: log["level"],
-        account_id: log["account_id"],
-        message: log["message"]
-      }
-    end)
-    |> then(&{:ok, &1})
+        %Log{
+          timestamp: timestamp,
+          status: log["level"],
+          account_id: log["account_id"],
+          message: log["message"]
+        }
+      end)
+      |> then(&{:ok, &1})
+    else
+      {:ok, []}
+    end
   end
 
   defp get_logs_from_datadog(account_id, consumer_id, trace_id) do

@@ -2174,18 +2174,12 @@ defmodule Sequin.ConsumersTest do
     test "returns legacy_event_transform feature when conditions are met" do
       account = AccountsFactory.account(features: ["legacy_event_transform"])
       event_table = DatabasesFactory.event_table()
-      database = DatabasesFactory.postgres_database(account: account, tables: [event_table])
 
-      sequence =
-        DatabasesFactory.sequence(
-          postgres_database_id: database.id,
-          table_oid: event_table.oid
-        )
+      sequence = DatabasesFactory.sequence(table_oid: event_table.oid)
 
       consumer =
         ConsumersFactory.sink_consumer(
           account: account,
-          postgres_database: database,
           sequence: sequence,
           type: :http_push
         )
@@ -2196,21 +2190,10 @@ defmodule Sequin.ConsumersTest do
     test "does not return legacy_event_transform feature when account doesn't have the feature" do
       account = AccountsFactory.account(features: [], inserted_at: DateTime.utc_now())
       event_table = DatabasesFactory.event_table()
-      database = DatabasesFactory.postgres_database(account: account, tables: [event_table])
 
-      sequence =
-        DatabasesFactory.sequence(
-          postgres_database_id: database.id,
-          table_oid: event_table.oid
-        )
+      sequence = DatabasesFactory.sequence(table_oid: event_table.oid)
 
-      consumer =
-        ConsumersFactory.sink_consumer(
-          account: account,
-          postgres_database: database,
-          sequence: sequence,
-          type: :http_push
-        )
+      consumer = ConsumersFactory.sink_consumer(account: account, sequence: sequence, type: :http_push)
 
       assert Consumers.consumer_features(consumer) == []
     end
@@ -2219,18 +2202,12 @@ defmodule Sequin.ConsumersTest do
       account = AccountsFactory.account(features: [], inserted_at: ~D[2024-11-01])
 
       event_table = DatabasesFactory.event_table()
-      database = DatabasesFactory.postgres_database(account: account, tables: [event_table])
 
-      sequence =
-        DatabasesFactory.sequence(
-          postgres_database_id: database.id,
-          table_oid: event_table.oid
-        )
+      sequence = DatabasesFactory.sequence(table_oid: event_table.oid)
 
       consumer =
         ConsumersFactory.sink_consumer(
           account: account,
-          postgres_database: database,
           sequence: sequence,
           type: :http_push
         )

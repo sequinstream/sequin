@@ -9,6 +9,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.DatabasesRuntime.PageSizeOptimizer
+  alias Sequin.DatabasesRuntime.PageSizeOptimizerMock
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.DatabasesRuntime.TableReaderServer
@@ -126,6 +128,18 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         initial_min_cursor: initial_min_cursor
       )
 
+    # Default stubs for PageSizeOptimizer.
+    # Allows each test to specify a static page size (initial_page_size) by default, bypassing
+    # PageSizeOptimizer's dynamic sizing. This is helpful for determinism/testing pagination in tests.
+
+    Mox.stub(PageSizeOptimizerMock, :new, fn initial_page_size, _max_timeout_ms ->
+      %PageSizeOptimizer{initial_page_size: initial_page_size, max_timeout_ms: 1000}
+    end)
+
+    Mox.stub(PageSizeOptimizerMock, :put_timing, fn state, _page_size, _time_ms -> state end)
+    Mox.stub(PageSizeOptimizerMock, :put_timeout, fn state, _page_size -> state end)
+    Mox.stub(PageSizeOptimizerMock, :size, fn state -> state.initial_page_size end)
+
     {:ok,
      consumer: consumer,
      backfill: backfill,
@@ -160,7 +174,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       |> Repo.update!()
 
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
-      pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
+      pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       Process.monitor(pid)
 
@@ -207,7 +221,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       page_size = 3
 
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
-      pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
+      pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       Process.monitor(pid)
 
@@ -244,7 +258,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       page_size = 3
 
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
-      pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
+      pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       {:ok, messages} = flush_batches(consumer, pid)
 
@@ -266,7 +280,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
 
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
-      pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
+      pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       {:ok, messages} = flush_batches(consumer, pid)
 
@@ -294,7 +308,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       page_size = 10
 
       start_supervised({SlotMessageStore, consumer: filtered_consumer, test_pid: self()})
-      pid = start_table_reader_server(filtered_consumer_backfill, table_oid, page_size: page_size)
+      pid = start_table_reader_server(filtered_consumer_backfill, table_oid, initial_page_size: page_size)
 
       {:ok, messages} = flush_batches(filtered_consumer, pid)
 
@@ -333,7 +347,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       page_size = 3
 
       start_supervised({SlotMessageStore, consumer: event_consumer, test_pid: self()})
-      pid = start_table_reader_server(event_consumer_backfill, table_oid, page_size: page_size)
+      pid = start_table_reader_server(event_consumer_backfill, table_oid, initial_page_size: page_size)
 
       {:ok, messages} = flush_batches(event_consumer, pid)
 
@@ -372,7 +386,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       pid =
         start_table_reader_server(backfill, table_oid,
-          page_size: 2,
+          initial_page_size: 2,
           max_pending_messages: max_pending_messages,
           check_state_timeout: 1
         )
@@ -402,7 +416,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
 
       start_table_reader_server(backfill, table_oid,
-        page_size: 1000,
+        initial_page_size: 1000,
         check_state_timeout: 1,
         fetch_slot_lsn: fetch_slot_lsn
       )
@@ -420,7 +434,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       backfill: backfill,
       table_oid: table_oid
     } do
-      pid = start_table_reader_server(backfill, table_oid, page_size: 2)
+      pid = start_table_reader_server(backfill, table_oid, initial_page_size: 2)
 
       # Get the first batch
       assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
@@ -459,7 +473,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
           2 ->
             # Second call - verify reduced page size and return success
-            assert opts[:limit] == 1000
+            assert opts[:limit] < initial_page_size
             send(test_pid, {:fetch_batch, 2})
             {:ok, %{rows: [], next_cursor: nil}}
 
@@ -470,10 +484,12 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
 
+      # Use PageSizeOptimizer in this test
       pid =
         start_table_reader_server(backfill, table_oid,
-          page_size: initial_page_size,
-          fetch_batch: fetch_batch
+          initial_page_size: initial_page_size,
+          fetch_batch: fetch_batch,
+          page_size_optimizer_mod: nil
         )
 
       Process.monitor(pid)
@@ -504,7 +520,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         )
 
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
-      pid = start_table_reader_server(backfill, table_oid, page_size: 10)
+      pid = start_table_reader_server(backfill, table_oid, initial_page_size: 10)
 
       {:ok, messages} = flush_batches(consumer, pid)
 
@@ -563,14 +579,19 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     defaults = [
       backfill_id: backfill.id,
       table_oid: table_oid,
-      page_size: 3,
+      initial_page_size: 3,
       test_pid: self(),
       max_pending_messages: 100,
       check_state_timeout: :timer.seconds(5),
-      fetch_slot_lsn: fn _db, _slot_name -> {:ok, 0} end
+      fetch_slot_lsn: fn _db, _slot_name -> {:ok, 0} end,
+      page_size_optimizer_mod: PageSizeOptimizerMock
     ]
 
-    config = Keyword.merge(defaults, opts)
+    config =
+      defaults
+      |> Keyword.merge(opts)
+      |> Sequin.Keyword.reject_nils()
+
     start_supervised!({TableReaderServer, config})
   end
 

@@ -84,7 +84,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   Should raise so TableReaderServer cannot continue if this fails.
   """
-  @spec put_table_reader_batch(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t()), TableReader.batch_id()) :: :ok
+  @spec put_table_reader_batch(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t()), TableReader.batch_id()) ::
+          :ok | {:error, Error.t()}
   def put_table_reader_batch(consumer_id, messages, batch_id) do
     GenServer.call(via_tuple(consumer_id), {:put_table_reader_batch, messages, batch_id})
   catch
@@ -252,6 +253,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec consumer_updated(SinkConsumer.t()) :: :ok | {:error, Error.t()}
   def consumer_updated(consumer) do
     GenServer.call(via_tuple(consumer.id), {:consumer_updated, consumer})
+  end
+
+  @spec payload_size_bytes(SinkConsumer.t()) :: non_neg_integer()
+  def payload_size_bytes(consumer) do
+    GenServer.call(via_tuple(consumer.id), :payload_size_bytes)
   end
 
   @doc """
@@ -604,6 +610,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end
   end
 
+  def handle_call(:payload_size_bytes, _from, state) do
+    {:reply, {:ok, state.payload_size_bytes}, state}
+  end
+
   @impl GenServer
   def handle_info(:process_logging, %State{} = state) do
     info =
@@ -646,6 +656,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @impl GenServer
   # :syn notification
   def handle_info(:consumers_changed, state) do
+    state = put_max_memory_bytes(state)
+    {:noreply, state}
+  end
+
+  def handle_info(:max_memory_check, state) do
+    schedule_max_memory_check(state.max_memory_check_interval)
     state = put_max_memory_bytes(state)
     {:noreply, state}
   end

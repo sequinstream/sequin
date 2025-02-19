@@ -98,9 +98,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @doc """
   Should raise so TableReaderServer cannot continue if this fails.
   """
-  @spec batch_progress(consumer_id(), TableReader.batch_id()) :: {:ok, :completed | :in_progress}
-  def batch_progress(consumer_id, batch_id) do
-    GenServer.call(via_tuple(consumer_id), {:batch_progress, batch_id})
+  @spec unpersisted_table_reader_batch_ids(consumer_id()) :: {:ok, [TableReader.batch_id()]}
+  def unpersisted_table_reader_batch_ids(consumer_id) do
+    GenServer.call(via_tuple(consumer_id), :unpersisted_table_reader_batch_ids)
   catch
     :exit, e ->
       error = exit_to_sequin_error(e)
@@ -401,22 +401,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   @impl GenServer
-  def handle_call({:batch_progress, batch_id}, _from, %State{table_reader_batch_id: batch_id} = state) do
-    execute_timed(:batch_progress, fn ->
-      if State.unpersisted_table_reader_messages?(state) do
-        {:reply, {:ok, :in_progress}, state}
-      else
-        {:reply, {:ok, :completed}, state}
-      end
-    end)
-  end
-
-  def handle_call({:batch_progress, _batch_id}, _from, %State{table_reader_batch_id: nil} = state) do
-    {:reply, {:ok, :completed}, state}
-  end
-
-  def handle_call({:batch_progress, batch_id}, _from, %State{table_reader_batch_id: current_batch_id}) do
-    raise "Batch progress called with batch_id #{batch_id} that does not match the current batch_id: #{inspect(current_batch_id)}"
+  def handle_call(:unpersisted_table_reader_batch_ids, _from, %State{} = state) do
+    {:reply, {:ok, State.unpersisted_table_reader_batch_ids(state)}, state}
   end
 
   def handle_call({:produce, count, producer_pid}, from, %State{last_consumer_producer_pid: last_producer_pid} = state)
@@ -461,6 +447,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   def handle_call({:messages_succeeded, ack_ids}, _from, state) do
+    prev_state = state
+
     execute_timed(:messages_succeeded, fn ->
       cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
 
@@ -473,7 +461,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
-      state = maybe_finish_table_reader_batch(state)
+      maybe_finish_table_reader_batch(prev_state, state)
       {:reply, {:ok, {dropped_messages, state.consumer}}, state}
     end)
   end
@@ -483,6 +471,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   def handle_call({:messages_already_succeeded, ack_ids}, _from, state) do
+    prev_state = state
+
     execute_timed(:messages_already_succeeded, fn ->
       cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
 
@@ -497,12 +487,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
-      state = maybe_finish_table_reader_batch(state)
+      maybe_finish_table_reader_batch(prev_state, state)
       {:reply, {:ok, count}, state}
     end)
   end
 
   def handle_call({:messages_failed, message_metadatas}, _from, state) do
+    prev_state = state
+
     execute_timed(:messages_failed, fn ->
       cursor_tuples = State.ack_ids_to_cursor_tuples(state, Enum.map(message_metadatas, & &1.ack_id))
 
@@ -526,7 +518,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
            # Now put the blocked messages into persisted_messages
            {:ok, state} <- State.put_persisted_messages(state, newly_blocked_messages),
            :ok <- upsert_messages(state, messages ++ newly_blocked_messages) do
-        state = maybe_finish_table_reader_batch(state)
+        maybe_finish_table_reader_batch(prev_state, state)
         {:reply, :ok, state}
       else
         error ->
@@ -723,21 +715,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end)
   end
 
-  defp maybe_finish_table_reader_batch(%State{table_reader_batch_id: nil} = state) do
-    state
-  end
-
-  defp maybe_finish_table_reader_batch(%State{} = state) do
-    if State.unpersisted_table_reader_messages?(state) do
-      state
-    else
+  defp maybe_finish_table_reader_batch(%State{} = prev_state, %State{} = state) do
+    unless State.unpersisted_table_reader_batch_ids(prev_state) == State.unpersisted_table_reader_batch_ids(state) do
       :syn.publish(
         :consumers,
-        {:table_reader_batch_complete, state.consumer.id},
-        {:table_reader_batch_complete, state.table_reader_batch_id}
+        {:table_reader_batches_changed, state.consumer.id},
+        :table_reader_batches_changed
       )
-
-      %{state | table_reader_batch_id: nil}
     end
   end
 

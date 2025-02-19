@@ -631,50 +631,139 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "unpersisted_table_reader_messages?/1" do
-    test "returns true when there are unpersisted messages from a table reader batch", %{state: state} do
+  describe "unpersisted_table_reader_batch_ids/1" do
+    test "returns batch IDs of unpersisted messages from table reader batches", %{state: state} do
       batch_id = "test-batch-123"
       msg1 = ConsumersFactory.consumer_message()
       msg2 = ConsumersFactory.consumer_message()
 
       # Put messages in batch
       {:ok, state} = State.put_table_reader_batch(state, [msg1, msg2], batch_id)
-      assert State.unpersisted_table_reader_messages?(state)
+      assert batch_id in State.unpersisted_table_reader_batch_ids(state)
 
       # Produce two messages
       {[msg1, msg2], state} = State.produce_messages(state, 2)
-      assert State.unpersisted_table_reader_messages?(state)
+      assert batch_id in State.unpersisted_table_reader_batch_ids(state)
 
       # Pop one message
       {[_msg], state} = State.pop_messages(state, [{msg2.commit_lsn, msg2.commit_idx}])
-      assert State.unpersisted_table_reader_messages?(state)
+      assert batch_id in State.unpersisted_table_reader_batch_ids(state)
 
       # Pop and put persisted the other message
       {[msg1], state} = State.pop_messages(state, [{msg1.commit_lsn, msg1.commit_idx}])
       {:ok, state} = State.put_persisted_messages(state, [msg1])
-      refute State.unpersisted_table_reader_messages?(state)
+      assert State.unpersisted_table_reader_batch_ids(state) == []
     end
 
-    test "returns false when there are no table reader batch messages", %{state: state} do
+    test "returns empty list when there are no table reader batch messages", %{state: state} do
       # Add regular messages (not from table reader batch)
       msg1 = ConsumersFactory.consumer_message()
       msg2 = ConsumersFactory.consumer_message()
       {:ok, state} = State.put_messages(state, [msg1, msg2])
 
-      refute State.unpersisted_table_reader_messages?(state)
+      assert State.unpersisted_table_reader_batch_ids(state) == []
     end
 
-    test "returns false after all batch messages are removed", %{state: state} do
+    test "returns empty list after all batch messages are removed", %{state: state} do
       batch_id = "test-batch-123"
       msg = ConsumersFactory.consumer_message()
 
       # Put message in batch
       {:ok, state} = State.put_table_reader_batch(state, [msg], batch_id)
-      assert State.unpersisted_table_reader_messages?(state)
+      assert batch_id in State.unpersisted_table_reader_batch_ids(state)
 
       # Pop the message
       {[_msg], state} = State.pop_messages(state, [{msg.commit_lsn, msg.commit_idx}])
-      refute State.unpersisted_table_reader_messages?(state)
+      assert State.unpersisted_table_reader_batch_ids(state) == []
+    end
+
+    test "handles multiple batch IDs correctly", %{state: state} do
+      batch_id1 = "test-batch-123"
+      batch_id2 = "test-batch-456"
+
+      msg1 = ConsumersFactory.consumer_message()
+      msg2 = ConsumersFactory.consumer_message()
+
+      # Put messages in different batches
+      {:ok, state} = State.put_table_reader_batch(state, [msg1], batch_id1)
+      {:ok, state} = State.put_table_reader_batch(state, [msg2], batch_id2)
+
+      batch_ids = State.unpersisted_table_reader_batch_ids(state)
+      assert batch_id1 in batch_ids
+      assert batch_id2 in batch_ids
+      assert length(batch_ids) == 2
+
+      # Pop one message
+      {[_msg], state} = State.pop_messages(state, [{msg1.commit_lsn, msg1.commit_idx}])
+      assert State.unpersisted_table_reader_batch_ids(state) == [batch_id2]
+    end
+
+    test "correctly tracks multiple in-flight batches with partial persistence", %{state: state} do
+      # Set up three different batches
+      batch_id1 = "batch-1"
+      batch_id2 = "batch-2"
+      batch_id3 = "batch-3"
+
+      # Create messages for each batch
+      msgs_batch1 = [
+        ConsumersFactory.consumer_message(group_id: "group1"),
+        ConsumersFactory.consumer_message(group_id: "group1")
+      ]
+
+      msgs_batch2 = [
+        ConsumersFactory.consumer_message(group_id: "group2")
+      ]
+
+      msgs_batch3 = [
+        ConsumersFactory.consumer_message(group_id: "group3"),
+        ConsumersFactory.consumer_message(group_id: "group3")
+      ]
+
+      # Put all batches into state
+      {:ok, state} = State.put_table_reader_batch(state, msgs_batch1, batch_id1)
+      {:ok, state} = State.put_table_reader_batch(state, msgs_batch2, batch_id2)
+      {:ok, state} = State.put_table_reader_batch(state, msgs_batch3, batch_id3)
+
+      # Initially all batch IDs should be present
+      batch_ids = State.unpersisted_table_reader_batch_ids(state)
+      assert length(batch_ids) == 3
+      assert batch_id1 in batch_ids
+      assert batch_id2 in batch_ids
+      assert batch_id3 in batch_ids
+
+      # Persist all messages from batch1
+      {:ok, state} = State.put_persisted_messages(state, msgs_batch1)
+
+      # Pop the persisted messages
+      cursor_tuples = Enum.map(msgs_batch1, &{&1.commit_lsn, &1.commit_idx})
+      {_popped, state} = State.pop_messages(state, cursor_tuples)
+
+      # batch1 should no longer be in unpersisted batches
+      batch_ids = State.unpersisted_table_reader_batch_ids(state)
+      assert length(batch_ids) == 2
+      refute batch_id1 in batch_ids
+      assert batch_id2 in batch_ids
+      assert batch_id3 in batch_ids
+
+      # Persist one message from batch3
+      [msg_batch3 | _] = msgs_batch3
+      {:ok, state} = State.put_persisted_messages(state, [msg_batch3])
+      {_popped, state} = State.pop_messages(state, [{msg_batch3.commit_lsn, msg_batch3.commit_idx}])
+
+      # batch3 should still be present as it has unpersisted messages
+      batch_ids = State.unpersisted_table_reader_batch_ids(state)
+      assert length(batch_ids) == 2
+      assert batch_id2 in batch_ids
+      assert batch_id3 in batch_ids
+
+      # Persist and pop remaining messages
+      remaining_messages = [List.last(msgs_batch3) | msgs_batch2]
+      {:ok, state} = State.put_persisted_messages(state, remaining_messages)
+      cursor_tuples = Enum.map(remaining_messages, &{&1.commit_lsn, &1.commit_idx})
+      {_popped, state} = State.pop_messages(state, cursor_tuples)
+
+      # No batches should remain unpersisted
+      assert State.unpersisted_table_reader_batch_ids(state) == []
     end
   end
 

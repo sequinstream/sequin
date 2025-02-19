@@ -33,6 +33,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   @max_backoff_ms :timer.seconds(3)
   @max_backoff_time :timer.minutes(1)
 
+  defguardp record_messages?(state) when state.consumer.message_kind == :record
+  defguardp event_messages?(state) when state.consumer.message_kind == :event
+
   # Client API
 
   def start_link(opts \\ []) do
@@ -107,6 +110,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :count_pending_messages, integer(), default: 0
       field :check_state_timeout, integer()
       field :batch, list() | nil
+      field :batch_size, non_neg_integer()
       field :batch_id, TableReader.batch_id() | nil
       field :batch_lsn, integer()
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
@@ -226,8 +230,27 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           send(state.test_pid, {__MODULE__, {:batch_fetched, batch_id}})
         end
 
-        state = %{state | batch: rows, batch_id: batch_id, next_cursor: next_cursor, batch_lsn: lsn}
-        {:next_state, :await_flush, state}
+        batch =
+          rows
+          |> messages_from_rows(lsn, state)
+          |> filter_messages(state)
+
+        if batch == [] do
+          # All rows filtered out
+          # Update Redis to the next cursor right away
+          :ok = TableReader.update_cursor(state.consumer.active_backfill.id, next_cursor)
+          {:repeat_state, %{state | current_cursor: next_cursor}}
+        else
+          state = %{
+            state
+            | batch: batch,
+              batch_id: batch_id,
+              next_cursor: next_cursor,
+              batch_lsn: lsn
+          }
+
+          {:next_state, :await_flush, state}
+        end
 
       {:error, error} ->
         Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}", error: error)
@@ -245,7 +268,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             {:state_timeout, backoff, :retry}
           ]
 
-          {:next_state, :awaiting_retry, state, actions}
+          {:next_state, :await_fetch_retry, state, actions}
         end
     end
   end
@@ -254,12 +277,12 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     :keep_state_and_data
   end
 
-  def handle_event(:enter, _old_state, :awaiting_retry, _state) do
+  def handle_event(:enter, _old_state, :await_fetch_retry, _state) do
     :keep_state_and_data
   end
 
   # Handle the retry after backoff
-  def handle_event(:state_timeout, :retry, :awaiting_retry, state) do
+  def handle_event(:state_timeout, :retry, :await_fetch_retry, state) do
     if state.count_pending_messages < state.max_pending_messages do
       {:next_state, :fetch_batch, state}
     else
@@ -314,21 +337,30 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         {:call, from},
         {:flush_batch, %{batch_id: batch_id} = batch_info},
         _state_name,
-        %{batch_id: batch_id} = state
+        %State{batch_id: batch_id, batch: batch} = state
       ) do
-    {next_state, processed_messages?} = process_batch(state, batch_info)
-    Logger.metadata(current_batch_id: nil)
+    batch = drop_messages_by_pk(batch, batch_info.drop_pks)
+    batch_size = length(batch)
 
-    if processed_messages? do
-      {:next_state, :commit_batch, next_state, [{:reply, from, :ok}]}
-    else
-      # all the messages must have been filtered out
+    if batch_size == 0 do
+      # Complete the batch immediately
       state = complete_batch(state)
 
       if state.count_pending_messages < state.max_pending_messages do
-        {:next_state, :fetch_batch, state, [{:reply, from, :ok}]}
+        {:next_state, :fetch_batch, state}
       else
-        {:next_state, {:paused, :max_pending_messages}, state, [{:reply, from, :ok}]}
+        {:next_state, {:paused, :max_pending_messages}, state}
+      end
+    else
+      case push_batch_with_retry(state, batch) do
+        :ok ->
+          # Clear the batch from memory
+          {:next_state, :await_persist, %{state | batch: nil, batch_size: batch_size}, [{:reply, from, :ok}]}
+
+        {:error, error} ->
+          # TODO: Just discard the batch and try again
+          Logger.error("[TableReaderServer] Failed to push batch: #{inspect(error)}", error: error)
+          {:keep_state_and_data, [{:reply, from, :ok}]}
       end
     end
   end
@@ -355,7 +387,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 
-  def handle_event(:enter, _old_state, :commit_batch, state) do
+  def handle_event(:enter, _old_state, :await_persist, state) do
     timeout =
       Sequin.Time.exponential_backoff(
         @initial_batch_progress_timeout,
@@ -402,13 +434,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end
   end
 
-  def handle_event(:info, :table_reader_batches_changed, :commit_batch, _) do
+  def handle_event(:info, :table_reader_batches_changed, :await_persist, _) do
     actions = [{:state_timeout, 0, :check_batch_progress}]
     {:keep_state_and_data, actions}
   end
 
   def handle_event(:info, :table_reader_batches_changed, _state_name, _state) do
-    # Ignore if not in commit_batch state
+    # Ignore if not in await_persist state
     :keep_state_and_data
   end
 
@@ -441,93 +473,76 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     %{db_table | sort_column_attnum: sort_column_attnum(state.consumer)}
   end
 
-  defp process_batch(%State{} = state, %{commit_lsn: commit_lsn, drop_pks: drop_pks}) do
+  defp messages_from_rows(rows, commit_lsn, %State{} = state) when record_messages?(state) do
+    table = table(state)
+    consumer = state.consumer
+
+    rows
+    |> Enum.with_index()
+    |> Enum.map(fn {row, idx} ->
+      data = build_record_data(table, consumer, row)
+      payload_size_bytes = :erlang.external_size(data)
+
+      %ConsumerRecord{
+        consumer_id: consumer.id,
+        commit_lsn: commit_lsn,
+        commit_idx: idx,
+        table_oid: table.oid,
+        record_pks: record_pks(table, row),
+        group_id: generate_group_id(consumer, table, row),
+        replication_message_trace_id: UUID.uuid4(),
+        data: data,
+        payload_size_bytes: payload_size_bytes
+      }
+    end)
+  end
+
+  defp messages_from_rows(rows, commit_lsn, %State{} = state) when event_messages?(state) do
+    table = table(state)
+    consumer = state.consumer
+
+    rows
+    |> Enum.with_index()
+    |> Enum.map(fn {row, idx} ->
+      data = build_event_data(table, consumer, row)
+      payload_size_bytes = :erlang.external_size(data)
+
+      %ConsumerEvent{
+        consumer_id: consumer.id,
+        commit_lsn: commit_lsn,
+        commit_idx: idx,
+        record_pks: record_pks(table, row),
+        group_id: generate_group_id(consumer, table, row),
+        table_oid: table.oid,
+        deliver_count: 0,
+        replication_message_trace_id: UUID.uuid4(),
+        data: data,
+        payload_size_bytes: payload_size_bytes
+      }
+    end)
+  end
+
+  defp filter_messages(messages, %State{} = state) do
     table = table(state)
 
-    pk_columns =
-      table(state).columns
-      |> Enum.filter(& &1.is_pk?)
-      # Important - the system expects the PKs to be sorted by attnum
-      |> Enum.sort_by(& &1.attnum)
-      |> Enum.map(& &1.name)
-
-    batch_by_pk =
-      Map.new(state.batch, fn row ->
-        pks = Enum.map(pk_columns, &Map.fetch!(row, &1))
-        # Important - PKs are passed around as a list of strings
-        pks = Enum.map(pks, &to_string/1)
-        {pks, row}
-      end)
-
-    filtered_batch =
-      batch_by_pk
-      |> Enum.reject(fn {pks, _row} ->
-        MapSet.member?(drop_pks, pks)
-      end)
-      # Unwrap the map into a list of rows
-      |> Enum.map(fn {_pk, row} -> row end)
-
-    map_size_diff = length(state.batch) - length(filtered_batch)
-
-    if map_size_diff > 0 do
-      Logger.info("[TableReaderServer] Dropped #{map_size_diff} rows")
-    end
-
-    matching_records =
-      table
-      |> records_by_column_attnum(filtered_batch)
-      |> Enum.filter(&Consumers.matches_record?(state.consumer, table.oid, &1))
-
-    case matching_records do
-      [] ->
-        # Update current_cursor with next_cursor and persist to Redis
-        :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
-        {state, false}
-
-      records ->
-        {:ok, consumer} = handle_records(state, commit_lsn, records)
-        # Update current_cursor with next_cursor and persist to Redis
-        :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
-        next_state = %State{state | consumer: consumer}
-        {next_state, true}
-    end
+    Enum.filter(messages, fn message ->
+      record = record_by_column_attnum(table, message.data.record)
+      Consumers.matches_record?(state.consumer, table.oid, record)
+    end)
   end
 
-  # Message handling
-  defp handle_records(%State{} = state, commit_lsn, records) do
-    Logger.info("[TableReaderServer] Handling #{length(records)} record(s)")
-    table = table(state)
-
-    case state.consumer.message_kind do
-      :record -> handle_record_messages!(state, table, commit_lsn, records)
-      :event -> handle_event_messages!(state, table, commit_lsn, records)
-    end
-
-    {:ok, backfill} =
-      Consumers.update_backfill(
-        state.consumer.active_backfill,
-        %{
-          rows_processed_count: state.consumer.active_backfill.rows_processed_count + length(records),
-          rows_ingested_count: state.consumer.active_backfill.rows_ingested_count + length(records)
-        },
-        skip_lifecycle: true
-      )
-
-    Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
-    {:ok, %{state.consumer | active_backfill: backfill}}
+  defp drop_messages_by_pk(messages, drop_pks) when is_struct(drop_pks, MapSet) do
+    Enum.reject(messages, fn message ->
+      MapSet.member?(drop_pks, message.record_pks)
+    end)
   end
 
-  defp handle_record_messages!(%State{} = state, table, commit_lsn, matching_records) do
-    messages = build_consumer_records(state, table, commit_lsn, matching_records)
-    put_messages_with_retry!(state, messages)
-  end
-
-  defp handle_event_messages!(%State{} = state, table, commit_lsn, matching_records) do
-    messages = build_consumer_events(state, table, commit_lsn, matching_records)
-    put_messages_with_retry!(state, messages)
-  end
-
-  defp put_messages_with_retry!(state, messages, first_attempt_at \\ System.monotonic_time(:millisecond), attempt \\ 1) do
+  defp push_batch_with_retry(
+         %State{} = state,
+         messages,
+         first_attempt_at \\ System.monotonic_time(:millisecond),
+         attempt \\ 1
+       ) do
     elapsed = System.monotonic_time(:millisecond) - first_attempt_at
 
     case SlotMessageStore.put_table_reader_batch(state.consumer.id, messages, state.batch_id) do
@@ -543,60 +558,18 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         )
 
         Process.sleep(backoff)
-        put_messages_with_retry!(state, messages, first_attempt_at, attempt + 1)
+        push_batch_with_retry(state, messages, first_attempt_at, attempt + 1)
 
       {:error, error} ->
+        # TODO: Just discard the batch and try again
         raise error
     end
   end
 
-  defp build_consumer_records(%State{} = state, table, commit_lsn, matching_records) do
-    matching_records
-    |> Enum.with_index()
-    |> Enum.map(fn {record_attnums_to_values, idx} ->
-      data = build_record_data(table, state.consumer, record_attnums_to_values)
-      payload_size_bytes = :erlang.external_size(data)
-
-      %ConsumerRecord{
-        consumer_id: state.consumer.id,
-        commit_lsn: commit_lsn,
-        commit_idx: idx,
-        table_oid: table.oid,
-        record_pks: record_pks(table, record_attnums_to_values),
-        group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
-        replication_message_trace_id: UUID.uuid4(),
-        data: data,
-        payload_size_bytes: payload_size_bytes
-      }
-    end)
-  end
-
-  defp build_consumer_events(%State{} = state, table, commit_lsn, matching_records) do
-    matching_records
-    |> Enum.with_index()
-    |> Enum.map(fn {record_attnums_to_values, idx} ->
-      data = build_event_data(table, state.consumer, record_attnums_to_values)
-      payload_size_bytes = :erlang.external_size(data)
-
-      %ConsumerEvent{
-        consumer_id: state.consumer.id,
-        commit_lsn: commit_lsn,
-        commit_idx: idx,
-        record_pks: record_pks(table, record_attnums_to_values),
-        group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
-        table_oid: table.oid,
-        deliver_count: 0,
-        replication_message_trace_id: UUID.uuid4(),
-        data: data,
-        payload_size_bytes: payload_size_bytes
-      }
-    end)
-  end
-
-  defp build_record_data(table, consumer, record_attnums_to_values) do
+  defp build_record_data(table, consumer, row) do
     %ConsumerRecordData{
       action: :read,
-      record: build_record_payload(table, record_attnums_to_values),
+      record: build_record_payload(table, row),
       metadata: %ConsumerRecordData.Metadata{
         database_name: consumer.replication_slot.postgres_database.name,
         table_name: table.name,
@@ -612,10 +585,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     }
   end
 
-  defp build_event_data(table, consumer, record_attnums_to_values) do
+  defp build_event_data(table, consumer, row) do
     %ConsumerEventData{
       action: :read,
-      record: build_record_payload(table, record_attnums_to_values),
+      record: build_record_payload(table, row),
       metadata: %ConsumerEventData.Metadata{
         database_name: consumer.replication_slot.postgres_database.name,
         table_name: table.name,
@@ -631,15 +604,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     }
   end
 
-  defp build_record_payload(table, record_attnums_to_values) do
-    Map.new(table.columns, fn column -> {column.name, Map.get(record_attnums_to_values, column.attnum)} end)
+  defp build_record_payload(table, row) do
+    Map.new(table.columns, fn column -> {column.name, Map.get(row, column.name)} end)
   end
 
-  defp records_by_column_attnum(%PostgresDatabaseTable{} = table, records) do
-    Enum.map(records, fn record ->
-      Map.new(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
-        {column.attnum, Map.get(record, column.name)}
-      end)
+  defp record_by_column_attnum(%PostgresDatabaseTable{} = table, record) do
+    Map.new(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
+      {column.attnum, Map.get(record, column.name)}
     end)
   end
 
@@ -647,23 +618,26 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     consumer.active_backfill.initial_min_cursor
   end
 
-  defp record_pks(%PostgresDatabaseTable{} = table, record_attnums_to_values) do
+  defp record_pks(%PostgresDatabaseTable{} = table, row) do
     table.columns
     |> Enum.filter(& &1.is_pk?)
     |> Enum.sort_by(& &1.attnum)
-    |> Enum.map(&Map.fetch!(record_attnums_to_values, &1.attnum))
+    |> Enum.map(&Map.fetch!(row, &1.name))
     |> Enum.map(&to_string/1)
   end
 
-  defp generate_group_id(consumer, table, record_attnums_to_values) do
+  defp generate_group_id(consumer, table, row) do
     group_column_attnums = group_column_attnums(consumer)
 
     if group_column_attnums do
-      Enum.map_join(group_column_attnums, ",", fn attnum ->
-        to_string(Map.get(record_attnums_to_values, attnum))
+      group_columns =
+        Enum.map(group_column_attnums, fn attnum -> Sequin.Enum.find!(table.columns, &(&1.attnum == attnum)) end)
+
+      Enum.map_join(group_columns, ",", fn column ->
+        to_string(Map.get(row, column.name))
       end)
     else
-      table |> record_pks(record_attnums_to_values) |> Enum.join(",")
+      table |> record_pks(row) |> Enum.join(",")
     end
   end
 
@@ -700,13 +674,31 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     # Batch is committed, update cursor and reset state
     :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
 
+    state = update_stats(state, state.batch_size)
+
     %{
       state
       | batch_id: nil,
+        batch_size: nil,
         batch: nil,
         next_cursor: nil,
         current_cursor: state.next_cursor,
         batch_check_count: 0
     }
+  end
+
+  defp update_stats(%State{} = state, message_count) do
+    {:ok, backfill} =
+      Consumers.update_backfill(
+        state.consumer.active_backfill,
+        %{
+          rows_processed_count: state.consumer.active_backfill.rows_processed_count + message_count,
+          rows_ingested_count: state.consumer.active_backfill.rows_ingested_count + message_count
+        },
+        skip_lifecycle: true
+      )
+
+    Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
+    %{state | consumer: %{state.consumer | active_backfill: backfill}}
   end
 end

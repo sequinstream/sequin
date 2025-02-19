@@ -28,6 +28,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :unpersisted_cursor_tuples_for_table_reader_batches, Multiset.t(), default: %{}
     field :setting_max_messages, non_neg_integer(), default: @default_setting_max_messages
     field :setting_system_max_memory_bytes, non_neg_integer() | nil
+    field :setting_max_memory_check_interval, non_neg_integer(), default: :timer.minutes(5)
     field :max_memory_bytes, non_neg_integer()
     field :payload_size_bytes, non_neg_integer(), default: 0
     field :slot_processor_monitor_ref, reference() | nil

@@ -647,13 +647,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   # :syn notification
-  def handle_info(:consumers_changed, state) do
+  def handle_info(:consumers_changed, %State{} = state) do
     state = put_max_memory_bytes(state)
     {:noreply, state}
   end
 
-  def handle_info(:max_memory_check, state) do
-    schedule_max_memory_check(state.max_memory_check_interval)
+  def handle_info(:max_memory_check, %State{} = state) do
+    schedule_max_memory_check(state.setting_max_memory_check_interval)
     state = put_max_memory_bytes(state)
     {:noreply, state}
   end

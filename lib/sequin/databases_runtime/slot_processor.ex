@@ -954,12 +954,17 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         cond do
           not is_nil(low_for_message_stores) ->
             # Use the minimum unpersisted WAL cursor from the message stores.
+            Logger.info("[SlotProcessor] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}")
             low_for_message_stores
 
           accumulated_messages?(state) ->
             # When there are messages that the SlotProcessor has not flushed yet,
             # we need to fallback on the last low_watermark_wal_cursor (not safe to use
             # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
+            Logger.info(
+              "[SlotProcessor] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
+            )
+
             state.low_watermark_wal_cursor
 
           true ->
@@ -971,6 +976,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
             # 2. If the tables in this slot are dormant, the slot will continue to accumulate
             # WAL unless we advance it. (This is the secondary purpose of the health message,
             # to allow us to advance the slot even if tables are dormant.)
+            Logger.info("[SlotProcessor] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
             %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
         end
 

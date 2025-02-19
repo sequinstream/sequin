@@ -85,12 +85,13 @@ defmodule Sequin.DatabasesRuntime.TableReader do
 
   # Queries
   @emit_logical_message_sql "select pg_logical_emit_message(true, $1, $2)"
-  def with_watermark(%PostgresDatabase{} = db, backfill_id, current_batch_id, table_oid, fun) do
+  def with_watermark(%PostgresDatabase{} = db, replication_slot_id, backfill_id, current_batch_id, table_oid, fun) do
     payload =
       Jason.encode!(%{
         table_oid: table_oid,
         batch_id: current_batch_id,
-        backfill_id: backfill_id
+        backfill_id: backfill_id,
+        replication_slot_id: replication_slot_id
       })
 
     with {:ok, conn} <- ConnectionCache.connection(db),

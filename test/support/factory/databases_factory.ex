@@ -232,6 +232,17 @@ defmodule Sequin.Factory.DatabasesFactory do
   def sequence(attrs \\ []) do
     attrs = Map.new(attrs)
 
+    {postgres_database, attrs} = Map.pop(attrs, :postgres_database)
+
+    attrs =
+      if postgres_database do
+        attrs
+        |> Map.put(:postgres_database_id, postgres_database.id)
+        |> Map.put_new_lazy(:table_oid, fn -> postgres_database.tables |> Enum.random() |> Map.fetch!(:oid) end)
+      else
+        attrs
+      end
+
     merge_attributes(
       %Sequence{
         id: Factory.uuid(),
@@ -258,7 +269,13 @@ defmodule Sequin.Factory.DatabasesFactory do
     attrs = Map.new(attrs)
 
     {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
-    attrs = Map.put_new_lazy(attrs, :postgres_database_id, fn -> insert_postgres_database!(account_id: account_id).id end)
+
+    attrs =
+      if !Map.has_key?(attrs, :postgres_database_id) and !Map.has_key?(attrs, :postgres_database) do
+        Map.put(attrs, :postgres_database_id, insert_postgres_database!(account_id: account_id).id)
+      else
+        attrs
+      end
 
     attrs = sequence_attrs(attrs)
 

@@ -14,6 +14,8 @@ defmodule Sequin.Accounts.Impersonate do
 
   require Logger
 
+  @type user_id :: Accounts.User.id() | Accounts.User.email()
+
   def getdel_secret(secret) do
     case Redis.command(["GETDEL", secret]) do
       {:ok, nil} ->
@@ -25,6 +27,8 @@ defmodule Sequin.Accounts.Impersonate do
     end
   end
 
+  @spec generate_link(impersonating_user_id :: user_id(), impersonated_user_id :: user_id()) ::
+          {:ok, String.t()} | {:error, Error.t()}
   def generate_link(impersonating_user_id, impersonated_user_id)
       when is_binary(impersonating_user_id) and is_binary(impersonated_user_id) do
     with {:ok, impersonating_user} <- find_user(impersonating_user_id),
@@ -38,6 +42,8 @@ defmodule Sequin.Accounts.Impersonate do
     end
   end
 
+  @spec generate_link(impersonating_user :: Accounts.User.t(), impersonated_user :: Accounts.User.t()) ::
+          {:ok, String.t()} | {:error, Error.t()}
   def generate_link(impersonating_user, impersonated_user) do
     secret = 48 |> :crypto.strong_rand_bytes() |> Base.encode32(padding: false)
 
@@ -58,7 +64,11 @@ defmodule Sequin.Accounts.Impersonate do
   end
 
   defp find_user(user_id) do
-    Accounts.get_user(user_id)
+    if Sequin.String.is_uuid?(user_id) do
+      Accounts.get_user(user_id)
+    else
+      Accounts.get_user(email: user_id)
+    end
   end
 
   if Mix.env() == :test do

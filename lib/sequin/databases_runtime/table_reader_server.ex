@@ -12,9 +12,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
+  alias Sequin.DatabasesRuntime.PageSizeOptimizer
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Error
+  alias Sequin.Error.InvariantError
   alias Sequin.Error.ServiceError
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -27,6 +29,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   @initial_batch_progress_timeout :timer.seconds(10)
   @max_batch_progress_timeout :timer.minutes(1)
+
+  @max_backoff_ms :timer.seconds(3)
+  @max_backoff_time :timer.minutes(1)
 
   # Client API
 
@@ -94,7 +99,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :consumer, SinkConsumer.t()
       field :current_cursor, map() | nil
       field :next_cursor, map() | nil
-      field :page_size, integer()
+      field :page_size_optimizer, PageSizeOptimizer.t()
       field :test_pid, pid()
       field :table_oid, integer()
       field :successive_failure_count, integer(), default: 0
@@ -107,6 +112,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
       field :fetch_batch, (pid(), PostgresDatabaseTable.t(), map(), Keyword.t() -> {:ok, term()} | {:error, term()})
       field :batch_check_count, integer(), default: 0
+      field :page_size_optimizer_mod, module()
     end
   end
 
@@ -120,11 +126,15 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     max_pending_messages =
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
 
-    page_size = Keyword.get(opts, :page_size, 50_000)
+    initial_page_size = Keyword.get(opts, :initial_page_size, 50_000)
+    max_timeout_ms = Keyword.get(opts, :max_timeout_ms, :timer.seconds(5))
+
+    page_size_optimizer_mod = Keyword.get(opts, :page_size_optimizer_mod, PageSizeOptimizer)
 
     state = %State{
       id: Keyword.fetch!(opts, :backfill_id),
-      page_size: page_size,
+      page_size_optimizer: page_size_optimizer_mod.new(initial_page_size, max_timeout_ms),
+      page_size_optimizer_mod: page_size_optimizer_mod,
       test_pid: test_pid,
       table_oid: Keyword.fetch!(opts, :table_oid),
       max_pending_messages: max_pending_messages,
@@ -173,6 +183,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     batch_id = UUID.uuid4()
     Logger.metadata(current_batch_id: batch_id)
 
+    page_size = state.page_size_optimizer_mod.size(state.page_size_optimizer)
+
+    start_time = System.monotonic_time(:millisecond)
+
     res =
       TableReader.with_watermark(
         database(state),
@@ -184,11 +198,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             t_conn,
             table(state),
             state.current_cursor,
-            limit: state.page_size,
+            limit: page_size,
             include_min: include_min
           )
         end
       )
+
+    # Needs to be >0 for PageSizeOptimizer
+    time_ms = max(System.monotonic_time(:millisecond) - start_time, 1)
 
     case res do
       {:ok, %{rows: [], next_cursor: nil}, _lsn} ->
@@ -201,6 +218,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       {:ok, %{rows: rows, next_cursor: next_cursor}, lsn} ->
         Logger.debug("[TableReaderServer] Batch returned #{length(rows)} records")
 
+        # Record successful timing
+        optimizer = state.page_size_optimizer_mod.put_timing(state.page_size_optimizer, page_size, time_ms)
+        state = %{state | page_size_optimizer: optimizer}
+
         if state.test_pid do
           send(state.test_pid, {__MODULE__, {:batch_fetched, batch_id}})
         end
@@ -211,10 +232,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       {:error, error} ->
         Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}", error: error)
 
-        if match?(%ServiceError{service: :postgres, code: :query_timeout}, error) and state.page_size > 1000 do
-          page_size = round(state.page_size / 2)
-          Logger.info("[TableReaderServer] Reducing page size to #{page_size} and retrying")
-          state = %{state | page_size: page_size}
+        if match?(%ServiceError{service: :postgres, code: :query_timeout}, error) do
+          # Record timeout
+          optimizer = state.page_size_optimizer_mod.put_timeout(state.page_size_optimizer, page_size)
+          state = %{state | page_size_optimizer: optimizer}
           {:repeat_state, state}
         else
           state = %{state | successive_failure_count: state.successive_failure_count + 1}
@@ -504,27 +525,79 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   defp handle_record_messages!(%State{} = state, table, commit_lsn, matching_records) do
-    consumer_records =
-      matching_records
-      |> Enum.with_index()
-      |> Enum.map(fn {record_attnums_to_values, idx} ->
-        data = build_record_data(table, state.consumer, record_attnums_to_values)
-        payload_size_bytes = :erlang.external_size(data)
+    messages = build_consumer_records(state, table, commit_lsn, matching_records)
+    put_messages_with_retry!(state, messages)
+  end
 
-        %ConsumerRecord{
-          consumer_id: state.consumer.id,
-          commit_lsn: commit_lsn,
-          commit_idx: idx,
-          table_oid: table.oid,
-          record_pks: record_pks(table, record_attnums_to_values),
-          group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
-          replication_message_trace_id: UUID.uuid4(),
-          data: data,
-          payload_size_bytes: payload_size_bytes
-        }
-      end)
+  defp handle_event_messages!(%State{} = state, table, commit_lsn, matching_records) do
+    messages = build_consumer_events(state, table, commit_lsn, matching_records)
+    put_messages_with_retry!(state, messages)
+  end
 
-    :ok = SlotMessageStore.put_table_reader_batch(state.consumer.id, consumer_records, state.batch_id)
+  defp put_messages_with_retry!(state, messages, first_attempt_at \\ System.monotonic_time(:millisecond), attempt \\ 1) do
+    elapsed = System.monotonic_time(:millisecond) - first_attempt_at
+
+    case SlotMessageStore.put_table_reader_batch(state.consumer.id, messages, state.batch_id) do
+      :ok ->
+        :ok
+
+      {:error, %InvariantError{code: :payload_size_limit_exceeded}} when elapsed < @max_backoff_time ->
+        backoff = Sequin.Time.exponential_backoff(50, attempt, @max_backoff_ms)
+
+        Logger.info(
+          "[TableReaderServer] Slot message store for consumer #{state.consumer.id} is full. " <>
+            "Backing off for #{backoff}ms before retry #{attempt + 1}..."
+        )
+
+        Process.sleep(backoff)
+        put_messages_with_retry!(state, messages, first_attempt_at, attempt + 1)
+
+      {:error, error} ->
+        raise error
+    end
+  end
+
+  defp build_consumer_records(%State{} = state, table, commit_lsn, matching_records) do
+    matching_records
+    |> Enum.with_index()
+    |> Enum.map(fn {record_attnums_to_values, idx} ->
+      data = build_record_data(table, state.consumer, record_attnums_to_values)
+      payload_size_bytes = :erlang.external_size(data)
+
+      %ConsumerRecord{
+        consumer_id: state.consumer.id,
+        commit_lsn: commit_lsn,
+        commit_idx: idx,
+        table_oid: table.oid,
+        record_pks: record_pks(table, record_attnums_to_values),
+        group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
+        replication_message_trace_id: UUID.uuid4(),
+        data: data,
+        payload_size_bytes: payload_size_bytes
+      }
+    end)
+  end
+
+  defp build_consumer_events(%State{} = state, table, commit_lsn, matching_records) do
+    matching_records
+    |> Enum.with_index()
+    |> Enum.map(fn {record_attnums_to_values, idx} ->
+      data = build_event_data(table, state.consumer, record_attnums_to_values)
+      payload_size_bytes = :erlang.external_size(data)
+
+      %ConsumerEvent{
+        consumer_id: state.consumer.id,
+        commit_lsn: commit_lsn,
+        commit_idx: idx,
+        record_pks: record_pks(table, record_attnums_to_values),
+        group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
+        table_oid: table.oid,
+        deliver_count: 0,
+        replication_message_trace_id: UUID.uuid4(),
+        data: data,
+        payload_size_bytes: payload_size_bytes
+      }
+    end)
   end
 
   defp build_record_data(table, consumer, record_attnums_to_values) do
@@ -544,31 +617,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         commit_timestamp: DateTime.utc_now()
       }
     }
-  end
-
-  defp handle_event_messages!(%State{} = state, table, commit_lsn, matching_records) do
-    consumer_events =
-      matching_records
-      |> Enum.with_index()
-      |> Enum.map(fn {record_attnums_to_values, idx} ->
-        data = build_event_data(table, state.consumer, record_attnums_to_values)
-        payload_size_bytes = :erlang.external_size(data)
-
-        %ConsumerEvent{
-          consumer_id: state.consumer.id,
-          commit_lsn: commit_lsn,
-          commit_idx: idx,
-          record_pks: record_pks(table, record_attnums_to_values),
-          group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
-          table_oid: table.oid,
-          deliver_count: 0,
-          replication_message_trace_id: UUID.uuid4(),
-          data: data,
-          payload_size_bytes: payload_size_bytes
-        }
-      end)
-
-    :ok = SlotMessageStore.put_table_reader_batch(state.consumer.id, consumer_events, state.batch_id)
   end
 
   defp build_event_data(table, consumer, record_attnums_to_values) do
@@ -631,6 +679,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   defp maybe_setup_allowances(test_pid) do
     Sandbox.allow(Sequin.Repo, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Mox.allow(Sequin.DatabasesRuntime.PageSizeOptimizerMock, test_pid, self())
   end
 
   defp preload_consumer(consumer) do

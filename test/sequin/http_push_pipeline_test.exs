@@ -363,7 +363,6 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id, http_endpoint: http_endpoint},
           replication_slot_id: replication.id,
           postgres_database: database,
-          postgres_database_id: database.id,
           sequence_id: sequence.id,
           message_kind: :record
         )

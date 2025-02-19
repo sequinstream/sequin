@@ -432,8 +432,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     @tag capture_log: true
     test "discards batch when told to do so", %{
       backfill: backfill,
-      table_oid: table_oid
+      table_oid: table_oid,
+      consumer: consumer
     } do
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: 2)
 
       # Get the first batch

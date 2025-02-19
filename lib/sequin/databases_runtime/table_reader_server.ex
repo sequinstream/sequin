@@ -180,6 +180,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     Logger.metadata(consumer_id: consumer.id, backfill_id: backfill.id, account_id: consumer.account_id)
 
+    consumer.id
+    |> SlotMessageStore.via_tuple()
+    |> GenServer.whereis()
+    |> Process.monitor()
+
     :syn.join(:consumers, {:table_reader_batches_changed, consumer.id}, self())
 
     cursor = TableReader.cursor(backfill.id)
@@ -466,6 +471,15 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   def handle_event(:info, :table_reader_batches_changed, _state_name, _state) do
     # Ignore if not in await_persist state
     :keep_state_and_data
+  end
+
+  def handle_event(:info, {:DOWN, _ref, :process, _pid, reason}, state_name, state) do
+    Logger.info("[TableReaderServer] Consumer #{state.consumer.id} message store process died, shutting down",
+      reason: reason,
+      state_name: state_name
+    )
+
+    {:stop, :normal}
   end
 
   defp check_state_timeout(timeout) do

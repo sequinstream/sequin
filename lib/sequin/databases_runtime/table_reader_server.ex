@@ -162,7 +162,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     Logger.metadata(consumer_id: consumer.id, backfill_id: backfill.id)
 
-    :syn.join(:consumers, {:table_reader_batch_complete, consumer.id}, self())
+    :syn.join(:consumers, {:table_reader_batches_changed, consumer.id}, self())
 
     cursor = TableReader.cursor(backfill.id)
     cursor = cursor || backfill.initial_min_cursor
@@ -355,24 +355,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 
-  def handle_event(:info, {:table_reader_batch_complete, batch_id}, _state_name, state) do
-    if batch_id == state.batch_id do
-      state = complete_batch(state)
-
-      if state.count_pending_messages < state.max_pending_messages do
-        {:next_state, :fetch_batch, state}
-      else
-        {:next_state, {:paused, :max_pending_messages}, state}
-      end
-    else
-      Logger.warning(
-        "[TableReaderServer] Ignoring table_reader_batch_complete for unknown batch #{batch_id} (current batch: #{state.batch_id})"
-      )
-
-      :keep_state_and_data
-    end
-  end
-
   def handle_event(:enter, _old_state, :commit_batch, state) do
     timeout =
       Sequin.Time.exponential_backoff(
@@ -385,38 +367,49 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     {:keep_state_and_data, actions}
   end
 
-  def handle_event(:state_timeout, :check_batch_progress, :commit_batch, %State{} = state) do
+  def handle_event(:state_timeout, :check_batch_progress, _state_name, %State{} = state) do
     Logger.info("[TableReaderServer] Checking batch progress for #{state.batch_id}")
 
-    case SlotMessageStore.batch_progress(state.consumer.id, state.batch_id) do
-      {:ok, :completed} ->
-        state = complete_batch(state)
+    case SlotMessageStore.unpersisted_table_reader_batch_ids(state.consumer.id) do
+      {:ok, batch_ids} ->
+        if state.batch_id in batch_ids do
+          Logger.info("[TableReaderServer] Batch #{state.batch_id} is in progress")
+          # Increment check count and calculate next timeout
+          state = %{state | batch_check_count: state.batch_check_count + 1}
 
-        if state.count_pending_messages < state.max_pending_messages do
-          {:next_state, :fetch_batch, state}
+          timeout =
+            Sequin.Time.exponential_backoff(
+              @initial_batch_progress_timeout,
+              state.batch_check_count,
+              @max_batch_progress_timeout
+            )
+
+          actions = [{:state_timeout, timeout, :check_batch_progress}]
+          {:keep_state, state, actions}
         else
-          {:next_state, {:paused, :max_pending_messages}, state}
+          state = complete_batch(state)
+
+          if state.count_pending_messages < state.max_pending_messages do
+            {:next_state, :fetch_batch, state}
+          else
+            {:next_state, {:paused, :max_pending_messages}, state}
+          end
         end
-
-      {:ok, :in_progress} ->
-        Logger.info("[TableReaderServer] Batch #{state.batch_id} is in progress")
-        # Increment check count and calculate next timeout
-        state = %{state | batch_check_count: state.batch_check_count + 1}
-
-        timeout =
-          Sequin.Time.exponential_backoff(
-            @initial_batch_progress_timeout,
-            state.batch_check_count,
-            @max_batch_progress_timeout
-          )
-
-        actions = [{:state_timeout, timeout, :check_batch_progress}]
-        {:keep_state, state, actions}
 
       {:error, error} ->
         Logger.error("[TableReaderServer] Batch progress check failed: #{Exception.message(error)}")
         raise error
     end
+  end
+
+  def handle_event(:info, :table_reader_batches_changed, :commit_batch, _) do
+    actions = [{:state_timeout, 0, :check_batch_progress}]
+    {:keep_state_and_data, actions}
+  end
+
+  def handle_event(:info, :table_reader_batches_changed, _state_name, _state) do
+    # Ignore if not in commit_batch state
+    :keep_state_and_data
   end
 
   defp check_state_timeout(timeout) do

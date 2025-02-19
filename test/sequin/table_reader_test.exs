@@ -97,7 +97,7 @@ defmodule Sequin.TableReaderTest do
       # This does not test that watermark messages are emitted, we will do this in a separate test
 
       {:ok, result, _lsn} =
-        TableReader.with_watermark(db, UUID.uuid4(), batch_id, table_oid, fn conn ->
+        TableReader.with_watermark(db, UUID.uuid4(), UUID.uuid4(), batch_id, table_oid, fn conn ->
           Postgrex.query(conn, "select 1", [])
         end)
 

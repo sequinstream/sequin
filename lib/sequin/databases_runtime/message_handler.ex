@@ -166,7 +166,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   @impl MessageHandlerBehaviour
   def handle_logical_message(ctx, commit_lsn, %LogicalMessage{prefix: @low_watermark_prefix} = msg) do
-    %{"batch_id" => batch_id, "table_oid" => table_oid, "backfill_id" => backfill_id} = Jason.decode!(msg.content)
+    content = Jason.decode!(msg.content)
+    %{"batch_id" => batch_id, "table_oid" => table_oid, "backfill_id" => backfill_id} = content
 
     # Split batches into those matching the backfill_id and others
     {matching_batches, remaining_batches} = Enum.split_with(ctx.table_reader_batches, &(&1.backfill_id == backfill_id))
@@ -177,49 +178,63 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       )
     end
 
-    # Create new batch and prepend to remaining batches
-    %{
+    # `replication_slot_id` added later, hence why we access it differently
+    # Safe to extract from Jason.decode! in the future
+    if Map.get(content, "replication_slot_id") == ctx.replication_slot_id do
+      # Create new batch and prepend to remaining batches
+      %{
+        ctx
+        | table_reader_batches: [
+            %BatchState{
+              batch_id: batch_id,
+              table_oid: table_oid,
+              backfill_id: backfill_id,
+              primary_key_values: MapSet.new(),
+              commit_lsn: commit_lsn
+            }
+            | remaining_batches
+          ]
+      }
+    else
+      # If we're sharing the same Postgres database between multiple replication slots,
+      # we may receive low watermark messages for other replication slots.
       ctx
-      | table_reader_batches: [
-          %BatchState{
-            batch_id: batch_id,
-            table_oid: table_oid,
-            backfill_id: backfill_id,
-            primary_key_values: MapSet.new(),
-            commit_lsn: commit_lsn
-          }
-          | remaining_batches
-        ]
-    }
+    end
   end
 
   def handle_logical_message(ctx, _commit_lsn, %LogicalMessage{prefix: @high_watermark_prefix} = msg) do
-    %{"batch_id" => batch_id, "backfill_id" => backfill_id} = Jason.decode!(msg.content)
+    content = Jason.decode!(msg.content)
+    %{"batch_id" => batch_id, "backfill_id" => backfill_id} = content
 
-    case Enum.find(ctx.table_reader_batches, &(&1.batch_id == batch_id)) do
-      nil ->
-        Logger.error(
-          "[MessageHandler] Batch not found in table reader batches (batch_id: #{batch_id}, backfill_id: #{backfill_id})"
-        )
+    # `replication_slot_id` added later, hence why we access it differently
+    # Safe to extract from Jason.decode! in the future
+    if Map.get(content, "replication_slot_id") == ctx.replication_slot_id do
+      case Enum.find(ctx.table_reader_batches, &(&1.batch_id == batch_id)) do
+        nil ->
+          Logger.error(
+            "[MessageHandler] Batch not found in table reader batches (batch_id: #{batch_id}, backfill_id: #{backfill_id})"
+          )
 
-        ctx.table_reader_mod.discard_batch(backfill_id, batch_id)
-        ctx
+          ctx.table_reader_mod.discard_batch(backfill_id, batch_id)
+          ctx
 
-      batch ->
-        :ok =
-          ctx.table_reader_mod.flush_batch(backfill_id, %{
-            batch_id: batch_id,
-            commit_lsn: batch.commit_lsn,
-            drop_pks: batch.primary_key_values
-          })
+        batch ->
+          :ok =
+            ctx.table_reader_mod.flush_batch(backfill_id, %{
+              batch_id: batch_id,
+              commit_lsn: batch.commit_lsn,
+              drop_pks: batch.primary_key_values
+            })
 
-        update_in(ctx.table_reader_batches, fn batches ->
-          Enum.reject(batches, &(&1.batch_id == batch_id))
-        end)
-    end
-  catch
-    :exit, _ ->
+          update_in(ctx.table_reader_batches, fn batches ->
+            Enum.reject(batches, &(&1.batch_id == batch_id))
+          end)
+      end
+    else
+      # If we're sharing the same Postgres database between multiple replication slots,
+      # we may receive low watermark messages for other replication slots.
       ctx
+    end
   end
 
   def handle_logical_message(ctx, _commit_lsn, _msg) do

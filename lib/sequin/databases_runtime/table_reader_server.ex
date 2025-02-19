@@ -53,10 +53,16 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   def discard_batch(backfill_id, batch_id) when is_binary(backfill_id) do
     GenStateMachine.call(via_tuple(backfill_id), {:discard_batch, batch_id})
+  catch
+    :exit, _ ->
+      :ok
   end
 
   def discard_batch(pid, batch_id) when is_pid(pid) do
     GenStateMachine.call(pid, {:discard_batch, batch_id})
+  catch
+    :exit, _ ->
+      :ok
   end
 
   # Convenience function
@@ -194,6 +200,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     res =
       TableReader.with_watermark(
         database(state),
+        state.consumer.replication_slot.id,
         state.id,
         batch_id,
         table_oid(state.consumer),
@@ -338,13 +345,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         {:flush_batch, %{batch_id: batch_id} = batch_info},
         _state_name,
         %State{batch_id: batch_id, batch: batch} = state
-      ) do
+      )
+      when is_list(batch) do
     batch = drop_messages_by_pk(batch, batch_info.drop_pks)
     batch_size = length(batch)
 
     if batch_size == 0 do
       # Complete the batch immediately
-      state = complete_batch(state)
+      state = complete_batch(%{state | batch: nil, batch_size: 0})
 
       if state.count_pending_messages < state.max_pending_messages do
         {:next_state, :fetch_batch, state}
@@ -363,6 +371,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           {:keep_state_and_data, [{:reply, from, :ok}]}
       end
     end
+  end
+
+  def handle_event({:call, from}, {:flush_batch, %{batch_id: batch_id}}, _state_name, %State{
+        batch_id: batch_id,
+        batch: nil
+      }) do
+    Logger.warning("[TableReaderServer] Received flush_batch call after already flushing batch #{batch_id}. Restarting.")
+    {:stop, :normal, [{:reply, from, :ok}]}
   end
 
   def handle_event({:call, from}, {:flush_batch, batch_info}, _state_name, _state) do
@@ -531,7 +547,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end)
   end
 
-  defp drop_messages_by_pk(messages, drop_pks) when is_struct(drop_pks, MapSet) do
+  defp drop_messages_by_pk(messages, drop_pks) when is_list(messages) and is_struct(drop_pks, MapSet) do
     Enum.reject(messages, fn message ->
       MapSet.member?(drop_pks, message.record_pks)
     end)

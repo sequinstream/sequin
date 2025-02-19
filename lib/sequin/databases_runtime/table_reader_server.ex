@@ -45,10 +45,18 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   def flush_batch(backfill_id, batch_info) when is_binary(backfill_id) do
     GenStateMachine.call(via_tuple(backfill_id), {:flush_batch, batch_info})
+  catch
+    :exit, _ ->
+      Logger.warning("[TableReaderServer] Table reader for backfill #{backfill_id} not running, skipping flush")
+      :ok
   end
 
   def flush_batch(pid, batch_info) when is_pid(pid) do
     GenStateMachine.call(pid, {:flush_batch, batch_info})
+  catch
+    :exit, _ ->
+      Logger.warning("[TableReaderServer] Table reader not running, skipping flush")
+      :ok
   end
 
   def discard_batch(backfill_id, batch_id) when is_binary(backfill_id) do
@@ -170,7 +178,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     backfill = state.id |> Consumers.get_backfill!() |> Repo.preload(:sink_consumer)
     consumer = preload_consumer(backfill.sink_consumer)
 
-    Logger.metadata(consumer_id: consumer.id, backfill_id: backfill.id)
+    Logger.metadata(consumer_id: consumer.id, backfill_id: backfill.id, account_id: consumer.account_id)
 
     :syn.join(:consumers, {:table_reader_batches_changed, consumer.id}, self())
 

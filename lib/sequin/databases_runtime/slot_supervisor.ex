@@ -101,7 +101,11 @@ defmodule Sequin.DatabasesRuntime.SlotSupervisor do
   end
 
   def stop_message_store(replication_slot_id, id) do
-    Logger.info("Stopping message store #{id} in slot #{replication_slot_id}")
+    Logger.info("[SlotSupervisor] Stopping message store #{id} in slot #{replication_slot_id}",
+      consumer_id: id,
+      replication_id: replication_slot_id
+    )
+
     sup_via = via_tuple(replication_slot_id)
     child_via = SlotMessageStore.via_tuple(id)
     SlotProcessor.demonitor_message_store(replication_slot_id, id)

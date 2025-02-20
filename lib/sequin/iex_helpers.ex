@@ -92,4 +92,17 @@ defmodule Sequin.IexHelpers do
       whereis(:sink, id)
     end
   end
+
+  # pids in datadog look like this:
+  # #PID<0.30653.0>
+  def dd_pid(pid) do
+    [p1, p2, p3] =
+      pid
+      |> String.trim_leading("#PID<")
+      |> String.trim_trailing(">")
+      |> String.split(".")
+      |> Enum.map(&String.to_integer/1)
+
+    :c.pid(p1, p2, p3)
+  end
 end

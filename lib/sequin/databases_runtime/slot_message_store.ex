@@ -685,7 +685,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   defp exit_to_sequin_error({:noproc, _}) do
-    Error.invariant(message: "[SlotMessageStore] exited with :noproc")
+    Error.invariant(message: "Call to SlotMessageStore failed with :noproc")
   end
 
   defp exit_to_sequin_error(e) when is_exception(e) do

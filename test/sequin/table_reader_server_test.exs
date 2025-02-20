@@ -139,6 +139,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     Mox.stub(PageSizeOptimizerMock, :put_timing, fn state, _page_size, _time_ms -> state end)
     Mox.stub(PageSizeOptimizerMock, :put_timeout, fn state, _page_size -> state end)
     Mox.stub(PageSizeOptimizerMock, :size, fn state -> state.initial_page_size end)
+    Mox.stub(PageSizeOptimizerMock, :history, fn state -> state.history end)
 
     {:ok,
      consumer: consumer,

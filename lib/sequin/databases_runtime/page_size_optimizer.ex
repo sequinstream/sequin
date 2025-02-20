@@ -18,13 +18,20 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizer do
   @callback put_timing(state :: any(), page_size :: pos_integer(), time_ms :: pos_integer()) :: any()
   @callback put_timeout(state :: any(), page_size :: pos_integer()) :: any()
   @callback size(state :: any()) :: pos_integer()
+  @callback history(state :: any()) :: [Timing.t()]
 
   @max_history_entries 20
 
-  typedstruct module: Timing do
-    field :page_size, pos_integer(), enforce: true
-    field :time_ms, pos_integer(), enforce: true
-    field :timed_out, boolean(), default: false
+  defmodule Timing do
+    @moduledoc false
+    use TypedStruct
+
+    @derive Jason.Encoder
+    typedstruct do
+      field :page_size, pos_integer(), enforce: true
+      field :time_ms, pos_integer(), enforce: true
+      field :timed_out, boolean(), default: false
+    end
   end
 
   typedstruct do
@@ -58,6 +65,13 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizer do
   def put_timeout(%__MODULE__{max_timeout_ms: max_timeout_ms} = state, page_size) do
     entry = %{page_size: page_size, time_ms: max_timeout_ms, timed_out: true}
     update_history(state, entry)
+  end
+
+  @doc """
+  Returns the current history of timings.
+  """
+  def history(state) do
+    state.history
   end
 
   defp update_history(state, entry) do

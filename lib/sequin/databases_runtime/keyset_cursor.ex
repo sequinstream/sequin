@@ -3,6 +3,8 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
   alias Sequin.Databases.PostgresDatabaseTable, as: Table
   alias Sequin.Postgres
 
+  @type cursor :: map()
+
   @spec attnums_to_names(Table.t(), map()) :: map()
   def attnums_to_names(%Table{} = table, cursor) do
     Map.new(cursor, fn {attnum, value} ->

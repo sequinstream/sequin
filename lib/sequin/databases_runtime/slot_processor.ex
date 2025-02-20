@@ -163,7 +163,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl ReplicationConnection
   def init(%State{} = state) do
-    Logger.metadata(account_id: state.postgres_database.account_id, replication_id: state.id)
+    Logger.metadata(
+      account_id: state.postgres_database.account_id,
+      replication_id: state.id,
+      database_id: state.postgres_database.id
+    )
 
     Logger.info(
       "[SlotProcessor] Initialized with opts: #{inspect(Keyword.delete(state.connection, :password), pretty: true)}"

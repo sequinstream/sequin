@@ -180,6 +180,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     Logger.metadata(consumer_id: consumer.id, backfill_id: backfill.id, account_id: consumer.account_id)
 
+    Logger.info("[TableReaderServer] Started")
+
     consumer.id
     |> SlotMessageStore.via_tuple()
     |> GenServer.whereis()

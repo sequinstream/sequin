@@ -47,9 +47,7 @@ defmodule Sequin.DatabasesRuntime.Starter do
   end
 
   defp start(%PostgresReplicationSlot{} = pg_replication) do
-    Logger.info("[DatabasesRuntimeStarter] Starting replication", replication_id: pg_replication.id)
     Supervisor.start_replication(pg_replication)
-    Logger.info("[DatabasesRuntimeStarter] Started replication", replication_id: pg_replication.id)
     Supervisor.start_wal_pipeline_servers(pg_replication)
   catch
     :exit, error ->
@@ -60,9 +58,7 @@ defmodule Sequin.DatabasesRuntime.Starter do
   end
 
   defp start(%SinkConsumer{} = consumer) do
-    Logger.info("[DatabasesRuntimeStarter] Starting table reader", consumer_id: consumer.id)
     Supervisor.start_table_reader(consumer)
-    Logger.info("[DatabasesRuntimeStarter] Started table reader", consumer_id: consumer.id)
   catch
     :exit, error ->
       Logger.error("[DatabasesRuntimeStarter] Failed to start table reader", error: error, consumer_id: consumer.id)

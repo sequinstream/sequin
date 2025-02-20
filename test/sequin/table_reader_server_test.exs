@@ -289,6 +289,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       end)
     end
 
+    @tag capture_log: true
     test "processes only characters matching the filter", %{
       filtered_consumer_backfill: filtered_consumer_backfill,
       filtered_consumer: filtered_consumer,
@@ -404,7 +405,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       flush_batches(consumer, pid)
     end
 
-    test "retries batch when LSN indicates it's stale", %{
+    test "stops when LSN indicates a batch is stale", %{
       backfill: backfill,
       table_oid: table_oid,
       consumer: consumer
@@ -415,17 +416,19 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
 
-      start_table_reader_server(backfill, table_oid,
-        initial_page_size: 1000,
-        check_state_timeout: 1,
-        fetch_slot_lsn: fetch_slot_lsn
-      )
+      pid =
+        start_table_reader_server(backfill, table_oid,
+          initial_page_size: 1000,
+          check_state_timeout: 1,
+          fetch_slot_lsn: fetch_slot_lsn
+        )
+
+      Process.monitor(pid)
 
       # We should see multiple fetches of the same batch as it keeps getting marked stale
       assert capture_log(fn ->
                assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
-               assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
-               assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
+               assert_receive {:DOWN, _ref, :process, ^pid, :stale_batch}, 1000
              end) =~ "Detected stale batch"
     end
 

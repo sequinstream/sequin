@@ -102,6 +102,26 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     }
   end
 
+  defmodule Batch do
+    @moduledoc false
+    use TypedStruct
+
+    alias Sequin.DatabasesRuntime.KeysetCursor
+
+    @type status :: :pending_flush | :flushed
+
+    typedstruct do
+      field :messages, list(map())
+      field :id, TableReader.batch_id()
+      field :size, non_neg_integer()
+      # ~LSN around the time the batch was fetched. Approximate, as it doesn't correspond to
+      # the watermark messages emitted by this process (see TableReader.with_watermark/5 for explanation.)
+      field :appx_lsn, non_neg_integer()
+      field :cursor, KeysetCursor.cursor()
+      field :status, status(), default: :pending_flush
+    end
+  end
+
   defmodule State do
     @moduledoc false
     use TypedStruct
@@ -123,12 +143,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :max_pending_messages, integer()
       field :count_pending_messages, integer(), default: 0
       field :check_state_timeout, integer()
-      field :batch, list() | nil
-      field :batch_size, non_neg_integer()
-      field :batch_id, TableReader.batch_id() | nil
-      # ~LSN around the time the batch was fetched. Approximate, as it doesn't correspond to
-      # the watermark messages emitted by this process (see TableReader.with_watermark/5 for explanation.)
-      field :batch_appx_lsn, non_neg_integer() | nil
+      field :batches, [Batch.t()], default: []
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
       field :fetch_batch, (pid(), PostgresDatabaseTable.t(), map(), Keyword.t() -> {:ok, term()} | {:error, term()})
       field :batch_check_count, integer(), default: 0
@@ -193,7 +208,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     cursor = TableReader.cursor(backfill.id)
     cursor = cursor || backfill.initial_min_cursor
-    state = %{state | backfill: backfill, consumer: consumer, current_cursor: cursor, next_cursor: nil}
+    state = %{state | backfill: backfill, consumer: consumer, current_cursor: cursor}
 
     actions = [check_state_timeout(state.check_state_timeout)]
 
@@ -254,24 +269,25 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           send(state.test_pid, {__MODULE__, {:batch_fetched, batch_id}})
         end
 
-        batch =
+        messages =
           rows
           |> messages_from_rows(state)
           |> filter_messages(state)
 
-        if batch == [] do
+        if messages == [] do
           # All rows filtered out
           # Update Redis to the next cursor right away
           :ok = TableReader.update_cursor(state.consumer.active_backfill.id, next_cursor)
           {:repeat_state, %{state | current_cursor: next_cursor}}
         else
-          state = %{
-            state
-            | batch: batch,
-              batch_id: batch_id,
-              next_cursor: next_cursor,
-              batch_appx_lsn: appx_lsn
+          batch = %Batch{
+            messages: messages,
+            id: batch_id,
+            appx_lsn: appx_lsn,
+            cursor: state.current_cursor
           }
+
+          state = %{state | batches: [batch], next_cursor: next_cursor}
 
           {:next_state, :await_flush, state}
         end
@@ -314,7 +330,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end
   end
 
-  def handle_event({:timeout, :check_state}, _evt, state_name, state) do
+  def handle_event({:timeout, :check_state}, _evt, state_name, %State{} = state) do
     case preload_consumer(state.consumer) do
       nil ->
         Logger.info("[TableReaderServer] Consumer #{state.consumer.id} not found, shutting down")
@@ -326,6 +342,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         state = %{state | count_pending_messages: message_count, consumer: consumer}
         current_slot_lsn = fetch_slot_lsn(state)
 
+        stale_batch = Enum.find(state.batches, fn batch -> current_slot_lsn > batch.appx_lsn end)
+
         cond do
           is_nil(consumer.active_backfill) ->
             Logger.info("[TableReaderServer] No active backfill found, shutting down")
@@ -334,14 +352,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           state_name == {:paused, :max_pending_messages} and state.count_pending_messages < state.max_pending_messages ->
             {:next_state, :fetch_batch, state, actions}
 
-          state_name == :await_flush and current_slot_lsn > state.batch_appx_lsn ->
+          stale_batch ->
             Logger.warning(
-              "[TableReaderServer] Detected stale batch #{state.batch_id}. " <>
-                "Batch LSN #{state.batch_appx_lsn} is behind slot LSN #{current_slot_lsn}. Retrying."
+              "[TableReaderServer] Detected stale batch #{stale_batch.id}. " <>
+                "Batch LSN #{stale_batch.appx_lsn} is behind slot LSN #{current_slot_lsn}. Stopping."
             )
 
-            state = %{state | batch: nil, batch_id: nil, next_cursor: nil}
-            {:next_state, :fetch_batch, state, actions}
+            {:stop, :stale_batch, state}
 
           true ->
             {:keep_state, state, actions}
@@ -361,75 +378,85 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         {:call, from},
         {:flush_batch, %{batch_id: batch_id, commit_lsn: commit_lsn} = batch_info},
         _state_name,
-        %State{batch_id: batch_id, batch: batch} = state
-      )
-      when is_list(batch) do
-    batch = drop_messages_by_pk(batch, batch_info.drop_pks)
-    batch_size = length(batch)
+        %State{batches: batches} = state
+      ) do
+    batch = Enum.find(batches, fn batch -> batch.id == batch_id end)
 
-    if batch_size == 0 do
-      # Complete the batch immediately
-      state = complete_batch(%{state | batch: nil, batch_size: 0})
+    cond do
+      is_nil(batch) ->
+        Logger.warning("[TableReaderServer] Received flush_batch call for unknown batch #{batch_info.batch_id}")
+        {:keep_state_and_data, [{:reply, from, :ok}]}
 
-      if state.count_pending_messages < state.max_pending_messages do
-        {:next_state, :fetch_batch, state}
-      else
-        {:next_state, {:paused, :max_pending_messages}, state}
-      end
-    else
-      batch =
-        batch
-        |> Stream.with_index()
-        |> Stream.map(fn
-          {%ConsumerRecord{} = record, idx} ->
-            %{record | commit_lsn: commit_lsn, commit_idx: idx}
+      not is_nil(batch) and batch.status == :pending_flush ->
+        messages = drop_messages_by_pk(batch.messages, batch_info.drop_pks)
+        batch_size = length(messages)
+        batch = %{batch | size: batch_size}
 
-          {%ConsumerEvent{} = event, idx} ->
-            %{event | commit_lsn: commit_lsn, commit_idx: idx}
-        end)
-        |> Enum.to_list()
+        if batch_size == 0 do
+          # Complete the batch immediately
+          state = complete_batch(%{state | batches: [batch]})
 
-      case push_batch_with_retry(state, batch) do
-        :ok ->
-          # Clear the batch from memory
-          {:next_state, :await_persist, %{state | batch: nil, batch_size: batch_size}, [{:reply, from, :ok}]}
+          if state.count_pending_messages < state.max_pending_messages do
+            {:next_state, :fetch_batch, state}
+          else
+            {:next_state, {:paused, :max_pending_messages}, state}
+          end
+        else
+          messages =
+            messages
+            |> Stream.with_index()
+            |> Stream.map(fn
+              {%ConsumerRecord{} = record, idx} ->
+                %{record | commit_lsn: commit_lsn, commit_idx: idx}
 
-        {:error, error} ->
-          # TODO: Just discard the batch and try again
-          Logger.error("[TableReaderServer] Failed to push batch: #{inspect(error)}", error: error)
-          {:keep_state_and_data, [{:reply, from, :ok}]}
-      end
+              {%ConsumerEvent{} = event, idx} ->
+                %{event | commit_lsn: commit_lsn, commit_idx: idx}
+            end)
+            |> Enum.to_list()
+
+          case push_messages_with_retry(state, batch.id, messages) do
+            :ok ->
+              # Clear the messages from memory
+              batch = %{batch | messages: nil}
+              {:next_state, :await_persist, %{state | batches: [batch]}, [{:reply, from, :ok}]}
+
+            {:error, error} ->
+              # TODO: Just discard the batch and try again
+              Logger.error("[TableReaderServer] Failed to push batch: #{inspect(error)}", error: error)
+              {:stop, :failed_to_push_batch, [{:reply, from, :ok}]}
+          end
+        end
+
+      batch and batch.status == :flushed ->
+        Logger.warning(
+          "[TableReaderServer] Received flush_batch call after already flushing batch #{batch_id}. Restarting."
+        )
+
+        {:stop, :normal, [{:reply, from, :ok}]}
     end
-  end
-
-  def handle_event({:call, from}, {:flush_batch, %{batch_id: batch_id}}, _state_name, %State{
-        batch_id: batch_id,
-        batch: nil
-      }) do
-    Logger.warning("[TableReaderServer] Received flush_batch call after already flushing batch #{batch_id}. Restarting.")
-    {:stop, :normal, [{:reply, from, :ok}]}
-  end
-
-  def handle_event({:call, from}, {:flush_batch, batch_info}, _state_name, _state) do
-    Logger.warning("[TableReaderServer] Received flush_batch call for unknown batch #{batch_info.batch_id}")
-    {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 
   # Add call handler
   @impl GenStateMachine
-  def handle_event({:call, from}, {:discard_batch, batch_id}, :await_flush, %State{batch_id: batch_id} = state) do
-    Logger.warning("[TableReaderServer] Discarding batch #{state.batch_id} by request")
+  def handle_event({:call, from}, {:discard_batch, batch_id}, :await_flush, %State{} = state) do
+    {wrapped_batch, remaining_batches} = Enum.split_with(state.batches, fn batch -> batch.id == batch_id end)
+    batch = List.first(wrapped_batch)
+    batch_ids = Enum.map(state.batches, & &1.id)
 
-    state = %{state | batch: nil, batch_id: nil, next_cursor: nil}
+    state =
+      if is_nil(batch) do
+        Logger.warning(
+          "[TableReaderServer] Ignoring call to discard batch, batch not found: #{batch_id} (batch_ids: #{inspect(batch_ids)})"
+        )
+
+        state
+      else
+        Logger.warning("[TableReaderServer] Discarding batch #{batch_id} by request")
+
+        %{state | batches: remaining_batches, next_cursor: nil}
+      end
+
     {:next_state, :fetch_batch, state, [{:reply, from, :ok}]}
-  end
-
-  def handle_event({:call, from}, {:discard_batch, batch_id}, _state_name, %State{} = state) do
-    Logger.info(
-      "[TableReaderServer] Ignoring call to discard batch, batch not found: #{batch_id} (current batch: #{state.batch_id})"
-    )
-
-    {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 
   def handle_event(:enter, _old_state, :await_persist, state) do
@@ -445,12 +472,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   def handle_event(:state_timeout, :check_batch_progress, _state_name, %State{} = state) do
-    Logger.info("[TableReaderServer] Checking batch progress for #{state.batch_id}")
+    Logger.info("[TableReaderServer] Checking batch progress")
+    [batch] = state.batches
 
     case SlotMessageStore.unpersisted_table_reader_batch_ids(state.consumer.id) do
       {:ok, batch_ids} ->
-        if state.batch_id in batch_ids do
-          Logger.info("[TableReaderServer] Batch #{state.batch_id} is in progress")
+        if batch.id in batch_ids do
+          Logger.info("[TableReaderServer] Batch #{batch.id} is in progress")
           # Increment check count and calculate next timeout
           state = %{state | batch_check_count: state.batch_check_count + 1}
 
@@ -585,15 +613,16 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end)
   end
 
-  defp push_batch_with_retry(
+  defp push_messages_with_retry(
          %State{} = state,
+         batch_id,
          messages,
          first_attempt_at \\ System.monotonic_time(:millisecond),
          attempt \\ 1
        ) do
     elapsed = System.monotonic_time(:millisecond) - first_attempt_at
 
-    case SlotMessageStore.put_table_reader_batch(state.consumer.id, messages, state.batch_id) do
+    case SlotMessageStore.put_table_reader_batch(state.consumer.id, messages, batch_id) do
       :ok ->
         :ok
 
@@ -606,7 +635,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         )
 
         Process.sleep(backoff)
-        push_batch_with_retry(state, messages, first_attempt_at, attempt + 1)
+        push_messages_with_retry(state, batch_id, messages, first_attempt_at, attempt + 1)
 
       {:error, error} ->
         # TODO: Just discard the batch and try again
@@ -718,17 +747,16 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   defp complete_batch(%State{} = state) do
-    Logger.info("[TableReaderServer] Batch #{state.batch_id} is committed")
+    [batch] = state.batches
+    Logger.info("[TableReaderServer] Batch #{batch.id} is committed")
     # Batch is committed, update cursor and reset state
     :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
 
-    state = update_stats(state, state.batch_size)
+    state = update_stats(state, batch.size)
 
     %{
       state
-      | batch_id: nil,
-        batch_size: nil,
-        batch: nil,
+      | batches: [],
         next_cursor: nil,
         current_cursor: state.next_cursor,
         batch_check_count: 0

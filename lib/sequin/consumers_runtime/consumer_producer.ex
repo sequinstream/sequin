@@ -228,7 +228,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp schedule_trim_idempotency(state) do
-    trim_timer = Process.send_after(self(), :trim_idempotency, :timer.seconds(30))
+    trim_timer = Process.send_after(self(), :trim_idempotency, :timer.seconds(10))
     %{state | trim_timer: trim_timer}
   end
 

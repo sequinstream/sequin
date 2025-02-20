@@ -140,14 +140,16 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :test_pid, pid()
       field :table_oid, integer()
       field :successive_failure_count, integer(), default: 0
-      field :max_pending_messages, integer()
       field :count_pending_messages, integer(), default: 0
-      field :check_state_timeout, integer()
       field :batches, [Batch.t()], default: []
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
       field :fetch_batch, (pid(), PostgresDatabaseTable.t(), map(), Keyword.t() -> {:ok, term()} | {:error, term()})
       field :batch_check_count, integer(), default: 0
       field :page_size_optimizer_mod, module()
+
+      # Settings
+      field :setting_check_state_timeout, integer()
+      field :setting_max_pending_messages, integer()
     end
   end
 
@@ -172,9 +174,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       page_size_optimizer_mod: page_size_optimizer_mod,
       test_pid: test_pid,
       table_oid: Keyword.fetch!(opts, :table_oid),
-      max_pending_messages: max_pending_messages,
+      setting_max_pending_messages: max_pending_messages,
       count_pending_messages: 0,
-      check_state_timeout: Keyword.get(opts, :check_state_timeout, :timer.seconds(30)),
+      setting_check_state_timeout: Keyword.get(opts, :check_state_timeout, :timer.seconds(30)),
       fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2),
       fetch_batch: Keyword.get(opts, :fetch_batch, &TableReader.fetch_batch/4)
     }
@@ -211,7 +213,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     cursor = cursor || backfill.initial_min_cursor
     state = %{state | backfill: backfill, consumer: consumer, current_cursor: cursor}
 
-    actions = [check_state_timeout(state.check_state_timeout)]
+    actions = [check_state_timeout(state.setting_check_state_timeout)]
 
     {:next_state, :fetch_batch, state, actions}
   end
@@ -326,7 +328,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   # Handle the retry after backoff
   def handle_event(:state_timeout, :retry, :await_fetch_retry, state) do
-    if state.count_pending_messages < state.max_pending_messages do
+    if state.count_pending_messages < state.setting_max_pending_messages do
       {:next_state, :fetch_batch, state}
     else
       {:next_state, {:paused, :max_pending_messages}, state}
@@ -341,7 +343,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
       %SinkConsumer{} = consumer ->
         {:ok, message_count} = SlotMessageStore.count_messages(consumer.id)
-        actions = [check_state_timeout(state.check_state_timeout)]
+        actions = [check_state_timeout(state.setting_check_state_timeout)]
         state = %{state | count_pending_messages: message_count, consumer: consumer}
         current_slot_lsn = fetch_slot_lsn(state)
 
@@ -352,7 +354,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             Logger.info("[TableReaderServer] No active backfill found, shutting down")
             {:stop, :normal}
 
-          state_name == {:paused, :max_pending_messages} and state.count_pending_messages < state.max_pending_messages ->
+          state_name == {:paused, :max_pending_messages} and
+              state.count_pending_messages < state.setting_max_pending_messages ->
             {:next_state, :fetch_batch, state, actions}
 
           stale_batch ->
@@ -400,7 +403,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             # Complete the batch immediately
             state = complete_batch(%{state | batches: [batch]})
 
-            if state.count_pending_messages < state.max_pending_messages do
+            if state.count_pending_messages < state.setting_max_pending_messages do
               {:next_state, :fetch_batch, state}
             else
               {:next_state, {:paused, :max_pending_messages}, state}
@@ -500,7 +503,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           else
             state = complete_batch(state)
 
-            if state.count_pending_messages < state.max_pending_messages do
+            if state.count_pending_messages < state.setting_max_pending_messages do
               {:next_state, :fetch_batch, state}
             else
               {:next_state, {:paused, :max_pending_messages}, state}

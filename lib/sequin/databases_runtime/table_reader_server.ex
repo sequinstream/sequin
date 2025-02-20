@@ -144,7 +144,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     max_pending_messages =
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
 
-    initial_page_size = Keyword.get(opts, :initial_page_size, 50_000)
+    initial_page_size = Keyword.get(opts, :initial_page_size, 1_000)
     max_timeout_ms = Keyword.get(opts, :max_timeout_ms, :timer.seconds(5))
 
     page_size_optimizer_mod = Keyword.get(opts, :page_size_optimizer_mod, PageSizeOptimizer)

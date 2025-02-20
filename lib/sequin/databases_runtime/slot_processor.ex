@@ -383,6 +383,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
             Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
 
             Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
+
+            if wal_cursor.commit_lsn > wal_end do
+              Logger.warning("Server LSN #{wal_end} is behind our LSN #{wal_cursor.commit_lsn}")
+            end
+
             ack_message(wal_cursor.commit_lsn)
 
           reply == 1 ->
@@ -390,6 +395,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
             # we received on boot. This can happen if we're processing a very large xaction.
             # It is therefore safe to send an ack with the last LSN we processed.
             {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
+
+            if low_watermark.commit_lsn > wal_end do
+              Logger.warning("Server LSN #{wal_end} is behind our LSN #{low_watermark.commit_lsn}")
+            end
+
             ack_message(low_watermark.commit_lsn)
 
           true ->

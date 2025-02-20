@@ -96,10 +96,12 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
 
     case Sequin.DynamicSupervisor.start_child(supervisor, {SlotSupervisor, opts}) do
       {:ok, pid} ->
+        Logger.info("[DatabasesRuntime.Supervisor] Started SlotSupervisor", replication_id: pg_replication.id)
         SlotSupervisor.start_children(pg_replication, opts)
         {:ok, pid}
 
       {:ok, pid, _term} ->
+        Logger.info("[DatabasesRuntime.Supervisor] Started SlotSupervisor", replication_id: pg_replication.id)
         SlotSupervisor.start_children(pg_replication, opts)
         {:ok, pid}
 
@@ -108,6 +110,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
         {:ok, pid}
 
       {:error, error} ->
+        Logger.error("[DatabasesRuntime.Supervisor] Failed to start SlotSupervisor", error: error)
         {:error, error}
     end
   end

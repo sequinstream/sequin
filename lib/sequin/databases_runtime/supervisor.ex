@@ -9,6 +9,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.DatabasesRuntime.SlotSupervisor
+  alias Sequin.DatabasesRuntime.SlotSupervisorSupervisor
   alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.DatabasesRuntime.TableReaderServerSupervisor
   alias Sequin.DatabasesRuntime.WalEventSupervisor
@@ -19,7 +20,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   require Logger
 
   defp table_reader_supervisor, do: {:via, :syn, {:replication, TableReaderServerSupervisor}}
-  defp slot_supervisor, do: {:via, :syn, {:replication, SlotSupervisor}}
+  defp slot_supervisor, do: {:via, :syn, {:replication, SlotSupervisorSupervisor}}
   defp wal_event_supervisor, do: {:via, :syn, {:replication, WalEventSupervisor}}
 
   def start_link(opts) do

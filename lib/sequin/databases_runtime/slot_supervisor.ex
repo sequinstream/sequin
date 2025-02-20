@@ -13,7 +13,7 @@ defmodule Sequin.DatabasesRuntime.SlotSupervisor do
   require Logger
 
   def via_tuple(id) do
-    {:via, :syn, {:replication, __MODULE__, id}}
+    {:via, :syn, {:replication, {__MODULE__, id}}}
   end
 
   def start_link(opts) do

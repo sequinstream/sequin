@@ -29,6 +29,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   use GenServer
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
@@ -310,7 +311,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     # Allow test process to access the database connection
     if state.test_pid do
-      Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
+      Sandbox.allow(Sequin.Repo, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
     end
@@ -698,12 +699,28 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   defp upsert_messages(%State{}, []), do: :ok
 
-  defp upsert_messages(%State{} = state, messages) do
-    messages
-    |> Enum.chunk_every(10_000)
-    |> Enum.each(fn chunk ->
-      {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, chunk)
+  defp upsert_messages(%State{} = state, messages, chunk_size \\ 10_000) do
+    Sequin.Repo.transact(fn ->
+      messages
+      |> Enum.chunk_every(chunk_size)
+      |> Enum.each(fn chunk -> Consumers.upsert_consumer_messages(state.consumer, chunk) end)
     end)
+
+    :ok
+  rescue
+    error in Postgrex.QueryError ->
+      case Regex.scan(~r/postgresql protocol can not handle (\d+) parameters/, error.message) do
+        [[_, param_count]] ->
+          # Calculate new chunk size based on max params (65535)
+          current_params = String.to_integer(param_count)
+          reduction_factor = Float.ceil(current_params / 65_535 * 1.2)
+          new_chunk_size = max(floor(chunk_size / reduction_factor), 100)
+
+          upsert_messages(state, messages, new_chunk_size)
+
+        _ ->
+          reraise error, __STACKTRACE__
+      end
   end
 
   defp delete_messages(%State{}, []), do: :ok

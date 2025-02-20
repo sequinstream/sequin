@@ -2243,6 +2243,27 @@ defmodule Sequin.ConsumersTest do
       assert [updated_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       refute updated_msg.not_visible_until == existing_msg.not_visible_until
     end
+
+    test "too many parameters raises an error" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      # Create enough messages to exceed the parameter limit
+      # Each message typically has multiple parameters (id, ack_id, etc.)
+      # So we'll create enough messages to generate > 65535 parameters
+      messages =
+        for _ <- 1..20_000 do
+          ConsumersFactory.consumer_message(
+            message_kind: consumer.message_kind,
+            consumer_id: consumer.id
+          )
+        end
+
+      assert_raise Postgrex.QueryError,
+                   ~r/postgresql protocol can not handle \d+ parameters, the maximum is 65535/,
+                   fn ->
+                     Consumers.upsert_consumer_messages(consumer, messages)
+                   end
+    end
   end
 
   describe "max_system_memory_bytes_for_consumer/3" do

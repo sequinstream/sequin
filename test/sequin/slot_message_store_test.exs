@@ -62,6 +62,20 @@ defmodule Sequin.SlotMessageStoreTest do
 
       assert new_message.record_pks in Enum.map(persisted_messages, & &1.record_pks)
     end
+
+    @tag skip: true
+    test "putting 10k messages with persisted group_ids will upsert to postgres", %{consumer: consumer, msg1: msg1} do
+      messages =
+        for _ <- 1..10_000,
+            do:
+              ConsumersFactory.consumer_message(
+                message_kind: consumer.message_kind,
+                consumer_id: consumer.id,
+                group_id: msg1.group_id
+              )
+
+      :ok = SlotMessageStore.put_messages(consumer.id, messages)
+    end
   end
 
   describe "SlotMessageStore message handling" do

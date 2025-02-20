@@ -35,14 +35,18 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   def start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
     consumer = Repo.preload(consumer, [:active_backfill, :sequence])
 
-    default_opts = [
-      backfill_id: consumer.active_backfill.id,
-      table_oid: consumer.sequence.table_oid
-    ]
+    if is_nil(consumer.active_backfill) do
+      Logger.warning("Consumer #{consumer.id} has no active backfill, skipping start")
+    else
+      default_opts = [
+        backfill_id: consumer.active_backfill.id,
+        table_oid: consumer.sequence.table_oid
+      ]
 
-    opts = Keyword.merge(default_opts, opts)
+      opts = Keyword.merge(default_opts, opts)
 
-    Sequin.DynamicSupervisor.start_child(supervisor, {TableReaderServer, opts})
+      Sequin.DynamicSupervisor.start_child(supervisor, {TableReaderServer, opts})
+    end
   end
 
   def stop_table_reader(supervisor \\ table_reader_supervisor(), consumer)
@@ -139,6 +143,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   end
 
   def stop_replication(supervisor, id) do
+    Logger.info("[DatabasesRuntime.Supervisor] Stopping replication #{id}")
     Sequin.DynamicSupervisor.stop_child(supervisor, SlotProcessor.via_tuple(id))
     :ok
   end

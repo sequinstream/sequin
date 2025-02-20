@@ -25,7 +25,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
       producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid]}
+        module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: 1]}
       ],
       processors: [
         default: [
@@ -37,7 +37,14 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
         consumer: consumer,
         pubsub_client: GcpPubsubSink.pubsub_client(consumer.sink),
         test_pid: test_pid
-      }
+      },
+      batchers: [
+        default: [
+          concurrency: 100,
+          batch_size: 100,
+          batch_timeout: 10
+        ]
+      ]
     )
   end
 
@@ -54,7 +61,24 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
   @impl Broadway
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{
+  def handle_message(_, %Broadway.Message{data: [message]} = broadway_message, %{
+        consumer: consumer,
+        pubsub_client: _pubsub_client,
+        test_pid: test_pid
+      }) do
+    setup_allowances(test_pid)
+
+    Logger.metadata(
+      account_id: consumer.account_id,
+      consumer_id: consumer.id
+    )
+
+    ordering_key = ordering_key(consumer, message.data)
+    Broadway.Message.put_batch_key(broadway_message, ordering_key)
+  end
+
+  @impl Broadway
+  def handle_batch(:default, broadway_messages, %{batch_key: _ordering_key}, %{
         consumer: consumer,
         pubsub_client: pubsub_client,
         test_pid: test_pid
@@ -66,19 +90,17 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
       consumer_id: consumer.id
     )
 
+    messages = Enum.map(broadway_messages, fn %Broadway.Message{data: [message]} -> message end)
     pubsub_messages = Enum.map(messages, &build_pubsub_message(consumer, &1))
 
     case PubSub.publish_messages(pubsub_client, consumer.sink.topic_id, pubsub_messages) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
-
+        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, broadway_messages)
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-        broadway_message
+        broadway_messages
 
       {:error, error} ->
         Logger.warning("Failed to publish message to Pub/Sub: #{inspect(error)}")
-
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
 
         Enum.each(messages, fn msg ->
@@ -91,7 +113,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
           )
         end)
 
-        Broadway.Message.failed(broadway_message, error)
+        Enum.map(broadway_messages, &Broadway.Message.failed(&1, error))
     end
   end
 

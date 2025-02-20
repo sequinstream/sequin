@@ -93,6 +93,18 @@ defmodule Sequin.IexHelpers do
     end
   end
 
+  def entity(id) do
+    with nil <- Repo.get(Sequin.Accounts.Account, id),
+         nil <- Repo.get(Sequin.Accounts.User, id),
+         nil <- Repo.get(Sequin.Consumers.Backfill, id),
+         nil <- Repo.get(Sequin.Consumers.SinkConsumer, id),
+         nil <- Repo.get(Sequin.Databases.PostgresDatabase, id),
+         nil <- Repo.get(Sequin.Databases.PostgresReplicationSlot, id),
+         nil <- Repo.get(Sequin.Databases.Sequence, id) do
+      Repo.get(Sequin.Replication.WalPipeline, id)
+    end
+  end
+
   # pids in datadog look like this:
   # #PID<0.30653.0>
   def dd_pid(pid) do

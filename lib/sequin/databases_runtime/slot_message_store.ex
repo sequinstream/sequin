@@ -700,7 +700,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   defp upsert_messages(%State{} = state, messages) do
     messages
-    |> Enum.chunk_every(10_000)
+    # This value is calculated based on the number of parameters in our consumer_events/consumer_records
+    # upserts and the Postgres limit of 65535 parameters per query.
+    |> Enum.chunk_every(2_000)
     |> Enum.each(fn chunk ->
       {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, chunk)
     end)

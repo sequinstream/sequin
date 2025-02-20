@@ -30,7 +30,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   @max_backoff_ms :timer.seconds(3)
   @max_backoff_time :timer.minutes(1)
 
-  @max_batches 1
+  @max_batches 3
 
   defguardp record_messages?(state) when state.consumer.message_kind == :record
   defguardp event_messages?(state) when state.consumer.message_kind == :event
@@ -107,8 +107,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     alias Sequin.DatabasesRuntime.KeysetCursor
 
-    @type status :: :pending_flush | :flushed
-
+    @derive {Inspect, except: [:messages]}
     typedstruct do
       field :messages, list(map())
       field :id, TableReader.batch_id()
@@ -117,7 +116,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       # the watermark messages emitted by this process (see TableReader.with_watermark/5 for explanation.)
       field :appx_lsn, non_neg_integer()
       field :cursor, KeysetCursor.cursor()
-      field :status, status(), default: :pending_flush
     end
   end
 
@@ -142,8 +140,12 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :page_size_optimizer, PageSizeOptimizer.t()
       field :successive_failure_count, integer(), default: 0
       field :count_pending_messages, integer(), default: 0
-      field :batches, [Batch.t()], default: []
+      field :unflushed_batches, [Batch.t()], default: []
+      field :flushed_batches, [Batch.t()], default: []
       field :last_fetch_request_at, DateTime.t() | nil
+      field :done_fetching, boolean(), default: false
+      # batch_ids that were discarded after fetching
+      field :ignoreable_batch_ids, MapSet.t(), default: MapSet.new()
 
       # Mockable fns
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
@@ -266,11 +268,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
       case res do
         {:ok, %{rows: [], next_cursor: nil}, _appx_lsn} ->
-          Logger.info("[TableReaderServer] Batch returned no records. Table pagination complete.")
-          Consumers.table_reader_finished(state.consumer.id)
-          TableReader.delete_cursor(state.consumer.active_backfill.id)
+          Logger.info("[TableReaderServer] Batch returned no records. Table pagination complete. Awaiting flush.")
 
-          {:stop, :normal}
+          state = %{state | done_fetching: true, ignoreable_batch_ids: MapSet.put(state.ignoreable_batch_ids, batch_id)}
+
+          {:keep_state, state}
 
         {:ok, %{rows: rows, next_cursor: next_cursor}, appx_lsn} ->
           Logger.debug("[TableReaderServer] Batch returned #{length(rows)} records")
@@ -299,9 +301,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             # All rows filtered out
             # Update Redis to the next cursor right away
             :ok = TableReader.update_cursor(state.consumer.active_backfill.id, next_cursor)
-            {:keep_state, %{state | cursor: next_cursor}, [maybe_fetch_timeout()]}
+            state = %{state | cursor: next_cursor, ignoreable_batch_ids: MapSet.put(state.ignoreable_batch_ids, batch_id)}
+            {:keep_state, state, [maybe_fetch_timeout()]}
           else
-            state = %{state | batches: state.batches ++ [batch], cursor: next_cursor}
+            state = %{state | unflushed_batches: state.unflushed_batches ++ [batch], cursor: next_cursor}
             {:keep_state, state, [maybe_fetch_timeout()]}
           end
 
@@ -342,7 +345,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         state = %{state | count_pending_messages: message_count, consumer: consumer}
         current_slot_lsn = fetch_slot_lsn(state)
 
-        stale_batch = Enum.find(state.batches, fn batch -> current_slot_lsn > batch.appx_lsn end)
+        stale_batch = Enum.find(state.unflushed_batches, fn batch -> current_slot_lsn > batch.appx_lsn end)
 
         cond do
           is_nil(consumer.active_backfill) ->
@@ -373,25 +376,34 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         {:call, from},
         {:flush_batch, %{batch_id: batch_id, commit_lsn: commit_lsn} = batch_info},
         _state_name,
-        %State{batches: [batch | batches]} = state
+        %State{unflushed_batches: [batch | batches]} = state
       ) do
+    unflushed_batch_ids = Enum.map(state.unflushed_batches, & &1.id)
+    flushed_batch_ids = Enum.map(state.flushed_batches, & &1.id)
+    ignoreable_batch_id? = MapSet.member?(state.ignoreable_batch_ids, batch_id)
+
     execute_timed(:flush_batch, fn ->
       cond do
+        ignoreable_batch_id? ->
+          # This is a batch that we discarded right after fetching, for example because it had no
+          # messages after filtering.
+          ignoreable_batch_ids = MapSet.delete(state.ignoreable_batch_ids, batch_id)
+          {:keep_state, %{state | ignoreable_batch_ids: ignoreable_batch_ids}, [{:reply, from, :ok}]}
+
+        batch.id != batch_id and batch_id in flushed_batch_ids ->
+          Logger.warning("[TableReaderServer] Received flush_batch call for already flushed batch #{batch_id}")
+          {:stop, :normal, [{:reply, from, :ok}]}
+
         batch.id != batch_id ->
           Logger.warning(
-            "[TableReaderServer] Received flush_batch call for batch that is unknown or out-of-order #{batch_info.batch_id}"
+            "[TableReaderServer] Received flush_batch call for batch that is unknown, out-of-order #{batch_info.batch_id}",
+            unflushed_batch_ids: Enum.join(unflushed_batch_ids, ","),
+            flushed_batch_ids: Enum.join(flushed_batch_ids, ",")
           )
 
           {:keep_state_and_data, [{:reply, from, :ok}]}
 
-        batch.status == :flushed ->
-          Logger.warning(
-            "[TableReaderServer] Received flush_batch call after already flushing batch #{batch_id}. Restarting."
-          )
-
-          {:stop, :normal, [{:reply, from, :ok}]}
-
-        batch.status == :pending_flush ->
+        true ->
           Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
           messages = drop_messages_by_pk(batch.messages, batch_info.drop_pks)
           batch_size = length(messages)
@@ -400,9 +412,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             # Complete the batch immediately
             Logger.info("[TableReaderServer] Batch #{batch.id} is committed")
             :ok = TableReader.update_cursor(state.consumer.active_backfill.id, batch.cursor)
-            state = batch_completed(state, batch_size)
 
-            {:keep_state, %{state | batches: batches}, [maybe_fetch_timeout()]}
+            {:keep_state, %{state | unflushed_batches: batches}, [maybe_fetch_timeout()]}
           else
             messages =
               messages
@@ -419,8 +430,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             case push_messages_with_retry(state, batch.id, messages) do
               :ok ->
                 # Clear the messages from memory
-                batch = %{batch | messages: nil, status: :flushed, size: batch_size}
-                {:keep_state, %{state | batches: [batch | batches]}, [{:reply, from, :ok}]}
+                batch = %Batch{batch | messages: nil, size: batch_size}
+
+                {:keep_state, %{state | unflushed_batches: batches, flushed_batches: state.flushed_batches ++ [batch]},
+                 [{:reply, from, :ok}]}
 
               {:error, error} ->
                 # TODO: Just discard the batch and try again
@@ -432,22 +445,29 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end)
   end
 
-  def handle_event({:call, from}, {:flush_batch, %{batch_id: batch_id, commit_lsn: commit_lsn}}, _state_name, _state) do
-    Logger.warning(
-      "[TableReaderServer] Received a flush, but no batches in state",
-      batch_id: batch_id,
-      commit_lsn: commit_lsn
-    )
+  def handle_event({:call, from}, {:flush_batch, %{batch_id: batch_id, commit_lsn: commit_lsn}}, _state_name, state) do
+    if batch_id in state.ignoreable_batch_ids do
+      # We'll get this when we discard a batch right after fetching, or if it corresponds to our
+      # last fetch request.
+      ignoreable_batch_ids = MapSet.delete(state.ignoreable_batch_ids, batch_id)
+      {:keep_state, %{state | ignoreable_batch_ids: ignoreable_batch_ids}, [{:reply, from, :ok}]}
+    else
+      Logger.warning(
+        "[TableReaderServer] Received a flush, but no unflushed batches in state",
+        batch_id: batch_id,
+        commit_lsn: commit_lsn
+      )
 
-    {:keep_state_and_data, [{:reply, from, :ok}]}
+      {:keep_state_and_data, [{:reply, from, :ok}]}
+    end
   end
 
   # Add call handler
   @impl GenStateMachine
   def handle_event({:call, from}, {:discard_batch, batch_id}, _state_name, %State{} = state) do
     # Find index of batch to discard
-    batch_index = Enum.find_index(state.batches, fn batch -> batch.id == batch_id end)
-    batch_ids = Enum.map(state.batches, & &1.id)
+    batch_index = Enum.find_index(state.unflushed_batches, fn batch -> batch.id == batch_id end)
+    batch_ids = Enum.map(state.unflushed_batches, & &1.id)
 
     state =
       if is_nil(batch_index) do
@@ -458,14 +478,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         state
       else
         # Get the batch we're discarding to access its cursor
-        batch_to_discard = Enum.at(state.batches, batch_index)
+        batch_to_discard = Enum.at(state.unflushed_batches, batch_index)
         # Keep only batches before the one we're discarding
-        remaining_batches = Enum.take(state.batches, batch_index)
+        remaining_batches = Enum.take(state.unflushed_batches, batch_index)
 
         Logger.warning("[TableReaderServer] Discarding batch #{batch_id} and all subsequent batches")
 
         # Rewind cursor to the cursor of the batch we're discarding
-        %{state | batches: remaining_batches, cursor: batch_to_discard.cursor}
+        %{state | unflushed_batches: remaining_batches, cursor: batch_to_discard.cursor, done_fetching: false}
       end
 
     {:keep_state, state, [{:reply, from, :ok}, maybe_fetch_timeout()]}
@@ -477,8 +497,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         {:ok, unpersisted_batch_ids} ->
           # Find completed batches (those no longer in unpersisted_batch_ids)
           {completed_batches, remaining_batches} =
-            Enum.split_with(state.batches, fn batch ->
-              batch.status == :flushed && batch.id not in unpersisted_batch_ids
+            Enum.split_with(state.flushed_batches, fn batch ->
+              batch.id not in unpersisted_batch_ids
             end)
 
           completed_batches_size =
@@ -490,19 +510,20 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             :ok = TableReader.update_cursor(state.consumer.active_backfill.id, batch.cursor)
           end)
 
-          if completed_batches_size > 0 do
-            batch_completed(
-              %{state | batches: remaining_batches},
-              completed_batches_size
-            )
-          end
+          state = maybe_update_backfill(state, completed_batches_size)
 
           actions = [
             check_sms_timeout(state.setting_check_sms_timeout),
             maybe_fetch_timeout()
           ]
 
-          {:keep_state, %{state | batches: remaining_batches}, actions}
+          if state.unflushed_batches == [] and remaining_batches == [] and state.done_fetching do
+            Consumers.table_reader_finished(state.consumer.id)
+            TableReader.delete_cursor(state.consumer.active_backfill.id)
+            {:stop, :normal}
+          else
+            {:keep_state, %{state | flushed_batches: remaining_batches}, actions}
+          end
 
         {:error, error} ->
           Logger.error("[TableReaderServer] Batch progress check failed: #{Exception.message(error)}")
@@ -530,8 +551,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     metadata = [
       memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
       message_queue_len: info[:message_queue_len],
-      batch_len: length(state.batches),
-      batch_statuses: Enum.map(state.batches, & &1.status),
+      unflushed_batch_len: length(state.unflushed_batches),
+      flushed_batch_len: length(state.flushed_batches),
       current_page_size: state.page_size_optimizer_mod.size(state.page_size_optimizer),
       fetch_history: state.page_size_optimizer_mod.history(state.page_size_optimizer)
     ]
@@ -567,9 +588,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         true
       end
 
-    can_fetch_after_backoff? and
+    not state.done_fetching and
+      can_fetch_after_backoff? and
       state.count_pending_messages < state.setting_max_pending_messages and
-      length(state.batches) < @max_batches
+      length(state.unflushed_batches) + length(state.flushed_batches) < @max_batches
   end
 
   defp check_state_timeout(timeout) do
@@ -808,7 +830,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end
   end
 
-  defp batch_completed(%State{} = state, message_count) do
+  defp maybe_update_backfill(%State{} = state, 0) do
+    state
+  end
+
+  defp maybe_update_backfill(%State{} = state, message_count) do
     {:ok, backfill} =
       Consumers.update_backfill(
         state.consumer.active_backfill,

@@ -126,7 +126,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :batch, list() | nil
       field :batch_size, non_neg_integer()
       field :batch_id, TableReader.batch_id() | nil
-      field :batch_lsn, integer()
+      # ~LSN around the time the batch was fetched. Approximate, as it doesn't correspond to
+      # the watermark messages emitted by this process (see TableReader.with_watermark/5 for explanation.)
+      field :batch_appx_lsn, non_neg_integer() | nil
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
       field :fetch_batch, (pid(), PostgresDatabaseTable.t(), map(), Keyword.t() -> {:ok, term()} | {:error, term()})
       field :batch_check_count, integer(), default: 0
@@ -234,14 +236,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     time_ms = max(System.monotonic_time(:millisecond) - start_time, 1)
 
     case res do
-      {:ok, %{rows: [], next_cursor: nil}, _lsn} ->
+      {:ok, %{rows: [], next_cursor: nil}, _appx_lsn} ->
         Logger.info("[TableReaderServer] Batch returned no records. Table pagination complete.")
         Consumers.table_reader_finished(state.consumer.id)
         TableReader.delete_cursor(state.consumer.active_backfill.id)
 
         {:stop, :normal}
 
-      {:ok, %{rows: rows, next_cursor: next_cursor}, lsn} ->
+      {:ok, %{rows: rows, next_cursor: next_cursor}, appx_lsn} ->
         Logger.debug("[TableReaderServer] Batch returned #{length(rows)} records")
 
         # Record successful timing
@@ -254,7 +256,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
         batch =
           rows
-          |> messages_from_rows(lsn, state)
+          |> messages_from_rows(state)
           |> filter_messages(state)
 
         if batch == [] do
@@ -268,7 +270,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             | batch: batch,
               batch_id: batch_id,
               next_cursor: next_cursor,
-              batch_lsn: lsn
+              batch_appx_lsn: appx_lsn
           }
 
           {:next_state, :await_flush, state}
@@ -332,10 +334,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           state_name == {:paused, :max_pending_messages} and state.count_pending_messages < state.max_pending_messages ->
             {:next_state, :fetch_batch, state, actions}
 
-          state_name == :await_flush and current_slot_lsn > state.batch_lsn ->
+          state_name == :await_flush and current_slot_lsn > state.batch_appx_lsn ->
             Logger.warning(
               "[TableReaderServer] Detected stale batch #{state.batch_id}. " <>
-                "Batch LSN #{state.batch_lsn} is behind slot LSN #{current_slot_lsn}. Retrying."
+                "Batch LSN #{state.batch_appx_lsn} is behind slot LSN #{current_slot_lsn}. Retrying."
             )
 
             state = %{state | batch: nil, batch_id: nil, next_cursor: nil}
@@ -357,7 +359,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   def handle_event(
         {:call, from},
-        {:flush_batch, %{batch_id: batch_id} = batch_info},
+        {:flush_batch, %{batch_id: batch_id, commit_lsn: commit_lsn} = batch_info},
         _state_name,
         %State{batch_id: batch_id, batch: batch} = state
       )
@@ -375,6 +377,18 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         {:next_state, {:paused, :max_pending_messages}, state}
       end
     else
+      batch =
+        batch
+        |> Stream.with_index()
+        |> Stream.map(fn
+          {%ConsumerRecord{} = record, idx} ->
+            %{record | commit_lsn: commit_lsn, commit_idx: idx}
+
+          {%ConsumerEvent{} = event, idx} ->
+            %{event | commit_lsn: commit_lsn, commit_idx: idx}
+        end)
+        |> Enum.to_list()
+
       case push_batch_with_retry(state, batch) do
         :ok ->
           # Clear the batch from memory
@@ -513,20 +527,17 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     %{db_table | sort_column_attnum: sort_column_attnum(state.consumer)}
   end
 
-  defp messages_from_rows(rows, commit_lsn, %State{} = state) when record_messages?(state) do
+  defp messages_from_rows(rows, %State{} = state) when record_messages?(state) do
     table = table(state)
     consumer = state.consumer
 
-    rows
-    |> Enum.with_index()
-    |> Enum.map(fn {row, idx} ->
+    Enum.map(rows, fn row ->
       data = build_record_data(table, consumer, row)
       payload_size_bytes = :erlang.external_size(data)
 
+      # commit_lsn and commit_idx are added later
       %ConsumerRecord{
         consumer_id: consumer.id,
-        commit_lsn: commit_lsn,
-        commit_idx: idx,
         table_oid: table.oid,
         record_pks: record_pks(table, row),
         group_id: generate_group_id(consumer, table, row),
@@ -537,20 +548,17 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end)
   end
 
-  defp messages_from_rows(rows, commit_lsn, %State{} = state) when event_messages?(state) do
+  defp messages_from_rows(rows, %State{} = state) when event_messages?(state) do
     table = table(state)
     consumer = state.consumer
 
-    rows
-    |> Enum.with_index()
-    |> Enum.map(fn {row, idx} ->
+    Enum.map(rows, fn row ->
       data = build_event_data(table, consumer, row)
       payload_size_bytes = :erlang.external_size(data)
 
+      # commit_lsn and commit_idx are added later
       %ConsumerEvent{
         consumer_id: consumer.id,
-        commit_lsn: commit_lsn,
-        commit_idx: idx,
         record_pks: record_pks(table, row),
         group_id: generate_group_id(consumer, table, row),
         table_oid: table.oid,

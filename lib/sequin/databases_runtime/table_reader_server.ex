@@ -306,13 +306,18 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           end
 
         {:error, error} ->
+          timeout_error = match?(%ServiceError{service: :postgres, code: :query_timeout}, error)
+
+          error_details = if timeout_error, do: error.details, else: %{}
+
           Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}",
             error: error,
+            error_details: error_details,
             page_size: page_size,
             query_history: state.page_size_optimizer_mod.history(state.page_size_optimizer)
           )
 
-          if match?(%ServiceError{service: :postgres, code: :query_timeout}, error) do
+          if timeout_error do
             # Record timeout
             optimizer = state.page_size_optimizer_mod.put_timeout(state.page_size_optimizer, page_size)
             state = %{state | page_size_optimizer: optimizer}

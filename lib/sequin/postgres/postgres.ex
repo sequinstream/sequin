@@ -107,7 +107,7 @@ defmodule Sequin.Postgres do
          Error.service(
            message: "Query timed out",
            service: :postgres,
-           details: %{timeout: timeout},
+           details: %{timeout: timeout, query: query},
            code: :query_timeout
          )}
 

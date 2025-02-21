@@ -241,7 +241,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       page_size = state.page_size_optimizer_mod.size(state.page_size_optimizer)
 
       start_time = System.monotonic_time(:millisecond)
-      state = %{state | last_fetch_request_at: Sequin.utc_now()}
 
       res =
         TableReader.with_watermark(
@@ -263,6 +262,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
       # Needs to be >0 for PageSizeOptimizer
       time_ms = max(System.monotonic_time(:millisecond) - start_time, 1)
+      state = %{state | last_fetch_request_at: Sequin.utc_now()}
 
       case res do
         {:ok, %{rows: [], next_cursor: nil}, _appx_lsn} ->
@@ -306,7 +306,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           end
 
         {:error, error} ->
-          Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}", error: error)
+          Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}",
+            error: error,
+            page_size: page_size,
+            query_history: state.page_size_optimizer_mod.history(state.page_size_optimizer)
+          )
 
           if match?(%ServiceError{service: :postgres, code: :query_timeout}, error) do
             # Record timeout

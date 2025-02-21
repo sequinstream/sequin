@@ -41,7 +41,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   require Logger
 
   # 10MB
-  @max_accumulated_bytes 10 * 1024 * 1024
+  @max_accumulated_bytes 20 * 1024 * 1024
   @max_accumulated_messages 500
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
@@ -176,6 +176,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     if state.test_pid do
       Mox.allow(Sequin.DatabasesRuntime.MessageHandlerMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
+      Mox.allow(Sequin.TestSupport.EnumMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 
@@ -554,23 +555,29 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       end)
       |> Keyword.new()
 
+    count_metrics =
+      Process.get()
+      |> Enum.filter(fn {key, _} ->
+        key |> to_string() |> String.ends_with?("_count")
+      end)
+      |> Keyword.new()
+
     metadata =
-      Keyword.merge(
-        [
-          memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
-          message_queue_len: info[:message_queue_len],
-          accumulated_payload_size_bytes: elem(state.accumulated_messages, 0),
-          accumulated_message_count: length(elem(state.accumulated_messages, 1)),
-          last_commit_lsn: state.last_commit_lsn,
-          low_watermark_wal_cursor_lsn: state.low_watermark_wal_cursor[:commit_lsn],
-          low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor[:commit_idx],
-          bytes_processed: Process.get(:bytes_processed, 0),
-          messages_processed: Process.get(:messages_processed, 0),
-          bytes_per_second: bytes_per_second,
-          messages_per_second: messages_per_second
-        ],
-        timing_metrics
-      )
+      [
+        memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
+        message_queue_len: info[:message_queue_len],
+        accumulated_payload_size_bytes: elem(state.accumulated_messages, 0),
+        accumulated_message_count: length(elem(state.accumulated_messages, 1)),
+        last_commit_lsn: state.last_commit_lsn,
+        low_watermark_wal_cursor_lsn: state.low_watermark_wal_cursor[:commit_lsn],
+        low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor[:commit_idx],
+        bytes_processed: Process.get(:bytes_processed, 0),
+        messages_processed: Process.get(:messages_processed, 0),
+        bytes_per_second: bytes_per_second,
+        messages_per_second: messages_per_second
+      ]
+      |> Keyword.merge(timing_metrics)
+      |> Keyword.merge(count_metrics)
 
     Logger.info("[SlotProcessor] Process metrics", metadata)
 
@@ -579,8 +586,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     |> Keyword.keys()
     |> Enum.each(&clear_counter/1)
 
+    count_metrics
+    |> Keyword.keys()
+    |> Enum.each(&clear_counter/1)
+
     clear_counter(:bytes_processed)
+    clear_counter(:bytes_processed_since_last_log)
     clear_counter(:messages_processed)
+    clear_counter(:messages_processed_since_last_log)
 
     Process.put(:last_logged_at, Sequin.utc_now())
     schedule_process_logging()
@@ -588,7 +601,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {:noreply, state}
   end
 
-  defp schedule_process_logging(interval \\ :timer.seconds(30)) do
+  defp schedule_process_logging(interval \\ :timer.seconds(10)) do
     Process.send_after(self(), :process_logging, interval)
   end
 
@@ -909,7 +922,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       messages = Enum.reverse(messages)
 
       # Flush accumulated messages
-      {time, res} = :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
+      {time, res} =
+        execute_timed(:handle_messages, fn ->
+          :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
+        end)
+
       time_ms = time / 1000
 
       if time_ms > 100 do
@@ -1307,6 +1324,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {time, result} = :timer.tc(fun)
     # Convert microseconds to milliseconds
     incr_counter(:"#{name}_total_ms", div(time, 1000))
+    incr_counter(:"#{name}_count")
     result
   end
 end

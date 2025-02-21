@@ -355,7 +355,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
         # We may be receiving messages that we've already ingested and persisted, filter out
         # Do we receive messages that we have ingested but not persisted?
-        |> Stream.filter(&(not State.is_message_persisted?(state, &1)))
+        |> Enum.filter(&(not State.is_message_persisted?(state, &1)))
 
       {to_persist, to_put} =
         if state.consumer.status == :disabled do

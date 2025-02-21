@@ -15,7 +15,13 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
   alias Sequin.Replication
+  alias Sequin.TestHelpers
   alias Sequin.TestSupport
+
+  setup do
+    TestSupport.stub_random(fn _ -> 1 end)
+    :ok
+  end
 
   describe "handle_messages/2" do
     test "handles message_kind: event correctly" do

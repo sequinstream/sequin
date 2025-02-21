@@ -1,6 +1,7 @@
 defmodule Sequin.LoadGenerator do
   @moduledoc false
   alias Sequin.Consumers
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Postgres
   alias Sequin.Repo
 
@@ -22,7 +23,7 @@ defmodule Sequin.LoadGenerator do
       values_placeholders = "(#{Enum.map_join(1..length(columns), ", ", &"$#{&1}")})"
 
       example_query = """
-      INSERT INTO #{Postgres.quote_name(table.schema, table.name)}
+      INSERT INTO #{get_table_identifier(sink_consumer, table)}
       (#{column_names})
       VALUES #{values_placeholders}
       """
@@ -31,7 +32,6 @@ defmodule Sequin.LoadGenerator do
       example_values =
         case workload_data.inserts do
           %{templates: [first_template | _]} ->
-            dbg(first_template)
             Enum.map(columns, &Map.get(first_template, &1.name))
 
           _ ->
@@ -104,17 +104,17 @@ defmodule Sequin.LoadGenerator do
       Enum.find(sink_consumer.postgres_database.tables, &(&1.oid == sink_consumer.sequence.table_oid))
 
     # Prepare workload data for each type
-    workload_data = prepare_workloads(sink_consumer.postgres_database, table, workload)
+    workload_data = prepare_workloads(sink_consumer, table, workload)
 
     {sink_consumer, table, workload_data}
   end
 
-  defp prepare_workloads(database, table, workload_types) do
-    Map.new(workload_types, fn type -> {type, prepare_workload(type, database, table)} end)
+  defp prepare_workloads(sink_consumer, table, workload_types) do
+    Map.new(workload_types, fn type -> {type, prepare_workload(type, sink_consumer, table)} end)
   end
 
-  defp prepare_workload(:inserts, database, table) do
-    case prepare_insert_workload(database, table) do
+  defp prepare_workload(:inserts, sink_consumer, table) do
+    case prepare_insert_workload(sink_consumer, table) do
       {:ok, data} ->
         data
 
@@ -124,7 +124,7 @@ defmodule Sequin.LoadGenerator do
     end
   end
 
-  defp prepare_workload(_type, _database, _table) do
+  defp prepare_workload(_type, _sink_consumer, _table) do
     # TODO: Implement prepare_update_workload and prepare_delete_workload
     %{}
   end
@@ -133,21 +133,21 @@ defmodule Sequin.LoadGenerator do
   Prepares workload data for insert operations.
   Returns a map of column values that can be used as templates for new inserts.
   """
-  def prepare_insert_workload(database, table, sample_size \\ 10_000) do
+  def prepare_insert_workload(sink_consumer, table, sample_size \\ 10_000) do
     Logger.info("Preparing insert workload for table #{table.name}")
     # Only exclude the auto-incrementing id column, keep other PKs
     columns = Enum.reject(table.columns, &(&1.is_pk? and &1.name == "id"))
     column_names = Enum.map_join(columns, ", ", &Postgres.quote_name(&1.name))
 
     # Start with a conservative 1% sample
-    result = try_sample(database, table, column_names, sample_size, 1)
+    result = try_sample(sink_consumer, table, column_names, sample_size, 1)
 
     # If we didn't get enough rows, progressively increase sampling
     result =
       case result do
         {:ok, %{templates: templates}} when length(templates) < sample_size ->
           # Try 10%
-          try_sample(database, table, column_names, sample_size, 10)
+          try_sample(sink_consumer, table, column_names, sample_size, 10)
 
         other ->
           other
@@ -156,14 +156,14 @@ defmodule Sequin.LoadGenerator do
     # Final fallback to 50% if needed
     case result do
       {:ok, %{templates: templates}} when length(templates) < sample_size ->
-        try_sample(database, table, column_names, sample_size, 50)
+        try_sample(sink_consumer, table, column_names, sample_size, 50)
 
       other ->
         other
     end
   end
 
-  defp try_sample(database, table, column_names, sample_size, percentage) do
+  defp try_sample(sink_consumer, table, column_names, sample_size, percentage) do
     Logger.info("Sampling table #{table.name} at #{percentage}%")
 
     # Split the column_names string into a list and strip quotes
@@ -174,12 +174,12 @@ defmodule Sequin.LoadGenerator do
 
     query = """
     SELECT #{column_names}
-    FROM #{Postgres.quote_name(table.schema, table.name)}
+    FROM #{get_table_identifier(sink_consumer, table)}
     TABLESAMPLE SYSTEM(#{percentage})
     LIMIT #{sample_size}
     """
 
-    case Postgres.query(database, query, [], timeout: :infinity) do
+    case Postgres.query(sink_consumer.postgres_database, query, [], timeout: :infinity) do
       {:ok, %{rows: rows}} ->
         # Create template records by zipping column names with row values
         templates =
@@ -201,7 +201,7 @@ defmodule Sequin.LoadGenerator do
   @doc """
   Executes a batch of insert operations.
   """
-  def execute_insert_batch(database, table, batch_size, workload_data) do
+  def execute_insert_batch(sink_consumer, table, batch_size, workload_data) do
     # Only exclude the auto-incrementing id column, keep other PKs
     columns = Enum.reject(table.columns, &(&1.is_pk? and &1.name == "id"))
     column_names = Enum.map_join(columns, ", ", &Postgres.quote_name(&1.name))
@@ -229,7 +229,7 @@ defmodule Sequin.LoadGenerator do
         Enum.map(columns, &Map.get(template, &1.name))
       end)
 
-    case Postgres.query(database, query, params) do
+    case Postgres.query(sink_consumer.postgres_database, query, params) do
       {:ok, result} ->
         {:ok, result}
 
@@ -250,7 +250,7 @@ defmodule Sequin.LoadGenerator do
     end
 
     Logger.info("Executing batch of #{batch_size} insert operations")
-    execute_insert_batch(sink_consumer.postgres_database, table, batch_size, workload_data.inserts)
+    execute_insert_batch(sink_consumer, table, batch_size, workload_data.inserts)
   end
 
   def execute_workload({start_time, workload_type, batch_size}, _sink_consumer, _table, _workload_data) do
@@ -266,5 +266,13 @@ defmodule Sequin.LoadGenerator do
     Logger.info("Executing batch of #{batch_size} #{workload_type} operations")
     # TODO: Implement other workload types
     :ok
+  end
+
+  defp get_table_identifier(%SinkConsumer{id: "11fe121c-9462-43bd-8327-eb8d48393567"}, _table) do
+    "public.holdings_acct_uuid_range16_008"
+  end
+
+  defp get_table_identifier(%SinkConsumer{}, table) do
+    Postgres.quote_name(table.schema, table.name)
   end
 end

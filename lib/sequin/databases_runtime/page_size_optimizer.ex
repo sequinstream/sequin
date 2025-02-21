@@ -14,12 +14,6 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizer do
   """
   use TypedStruct
 
-  @callback new(initial_page_size :: pos_integer(), max_timeout_ms :: pos_integer()) :: any()
-  @callback put_timing(state :: any(), page_size :: pos_integer(), time_ms :: pos_integer()) :: any()
-  @callback put_timeout(state :: any(), page_size :: pos_integer()) :: any()
-  @callback size(state :: any()) :: pos_integer()
-  @callback history(state :: any()) :: [Timing.t()]
-
   @max_history_entries 20
 
   defmodule Timing do
@@ -35,16 +29,31 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizer do
   end
 
   typedstruct do
-    field :initial_page_size, pos_integer(), enforce: true
-    field :max_timeout_ms, pos_integer(), enforce: true
+    field :initial_page_size, pos_integer()
+    field :max_timeout_ms, pos_integer()
+    field :max_page_size, pos_integer()
     field :history, [Timing.t()], default: []
   end
 
+  @callback new(opts :: keyword()) :: any()
+  @callback put_timing(state :: any(), page_size :: pos_integer(), time_ms :: pos_integer()) :: any()
+  @callback put_timeout(state :: any(), page_size :: pos_integer()) :: any()
+  @callback size(state :: any()) :: pos_integer()
+  @callback history(state :: any()) :: [Timing.t()]
+
   @doc """
-  Initializes the state with an initial_page_size and a max_timeout_ms.
+  Initializes the state with optional configuration.
+
+  ## Options
+    * `:initial_page_size` - Starting page size
+    * `:max_timeout_ms` - Maximum timeout in milliseconds
   """
-  def new(initial_page_size, max_timeout_ms) do
-    %__MODULE__{initial_page_size: initial_page_size, max_timeout_ms: max_timeout_ms, history: []}
+  def new(opts \\ []) do
+    %__MODULE__{
+      initial_page_size: Keyword.get(opts, :initial_page_size, 100),
+      max_timeout_ms: Keyword.get(opts, :max_timeout_ms, 5000),
+      max_page_size: Keyword.get(opts, :max_page_size, 10_000)
+    }
   end
 
   @doc """
@@ -52,7 +61,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizer do
 
   Adds `%{page_size: page_size, time_ms: time_ms, timed_out: false}` to the history.
   """
-  def put_timing(state, page_size, time_ms) when time_ms > 0 do
+  def put_timing(%__MODULE__{} = state, page_size, time_ms) when time_ms > 0 do
     entry = %{page_size: page_size, time_ms: time_ms, timed_out: false}
     update_history(state, entry)
   end
@@ -93,7 +102,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizer do
   3. If there are only timeouts, we reduce the last timed out page_size.
   4. Rounding is applied to get "nice" page sizes.
   """
-  def size(state) do
+  def size(%__MODULE__{} = state) do
     successes = Enum.filter(state.history, fn m -> not m.timed_out end)
     timeouts = Enum.filter(state.history, fn m -> m.timed_out end)
 
@@ -129,18 +138,19 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizer do
       end
 
     candidate
-    |> nudge_page_size(List.last(state.history))
+    |> nudge_page_size(List.last(state.history), state.max_page_size)
     |> round_page_size()
   end
 
   # This helper can "nudge" the candidate so that it never jumps too much from the last value.
-  defp nudge_page_size(candidate, nil), do: candidate
+  defp nudge_page_size(candidate, nil, _), do: candidate
 
-  defp nudge_page_size(candidate, last_entry) do
+  defp nudge_page_size(candidate, last_entry, max_page_size) do
     last = last_entry.page_size
-    # Ensure we don't jump more than 2x up or 50% down in one shot.
+    # Ensure we don't jump more than 2x up or 50% down in one shot, and respect max_page_size
     candidate
     |> min(last * 2)
+    |> min(max_page_size)
     |> max(last * 0.5)
   end
 

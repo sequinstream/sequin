@@ -5,7 +5,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
 
   describe "initialization" do
     test "returns state with given initial_page_size and max_timeout_ms" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
       assert state.initial_page_size == 100
       assert state.max_timeout_ms == 500
       assert state.history == []
@@ -14,7 +14,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
 
   describe "recording measurements" do
     test "put_timing/3 records a successful timing" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
       state = PageSizeOptimizer.put_timing(state, 100, 50)
 
       assert length(state.history) == 1
@@ -25,7 +25,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
     end
 
     test "put_timeout/2 records a timeout" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
       state = PageSizeOptimizer.put_timeout(state, 120)
 
       assert length(state.history) == 1
@@ -36,7 +36,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
     end
 
     test "history is trimmed to the last 20 entries" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
 
       # Add 25 entries
       state =
@@ -54,7 +54,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
     end
 
     test "maintains history order when mixing timings and timeouts" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
 
       state =
         state
@@ -73,12 +73,12 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
 
   describe "page size computation" do
     test "returns initial_page_size when there is no history" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
       assert PageSizeOptimizer.size(state) == 100
     end
 
     test "with only successes, maintains page_size when performance is good" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
       # time_ms of 450 gives ratio of 1.11 (500/450), which is < 1.2
       state = PageSizeOptimizer.put_timing(state, 100, 450)
 
@@ -86,7 +86,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
     end
 
     test "with only successes, increases page_size when performance is very good" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
       # time_ms of 200 gives ratio of 2.5 (500/200), which is > 1.2
       state = PageSizeOptimizer.put_timing(state, 100, 200)
 
@@ -95,7 +95,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
     end
 
     test "with only timeouts, reduces page_size" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
       state = PageSizeOptimizer.put_timeout(state, 200)
 
       # 200 * 0.8 = 160, but nudged to 150 due to rounding to nearest 50
@@ -104,8 +104,8 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
 
     test "with successes and timeouts, uses binary search when bounds are valid" do
       state =
-        100
-        |> PageSizeOptimizer.new(500)
+        [initial_page_size: 100, max_timeout_ms: 500]
+        |> PageSizeOptimizer.new()
         # success at 150
         |> PageSizeOptimizer.put_timing(150, 100)
         # timeout at 250
@@ -117,8 +117,8 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
 
     test "with successes and timeouts, reduces when bounds are inverted" do
       state =
-        100
-        |> PageSizeOptimizer.new(500)
+        [initial_page_size: 100, max_timeout_ms: 500]
+        |> PageSizeOptimizer.new()
         # success at 250
         |> PageSizeOptimizer.put_timing(250, 100)
         # timeout at 200
@@ -130,7 +130,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
     end
 
     test "respects maximum jump limits from previous value" do
-      state = PageSizeOptimizer.new(100, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 100, max_timeout_ms: 500)
 
       # Try to make a very large jump (ratio would suggest 400)
       # ratio = 4.0
@@ -141,7 +141,7 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
     end
 
     test "respects minimum drop limits from previous value" do
-      state = PageSizeOptimizer.new(200, 500)
+      state = PageSizeOptimizer.new(initial_page_size: 200, max_timeout_ms: 500)
       state = PageSizeOptimizer.put_timeout(state, 200)
 
       # Raw calculation would suggest 160 (200 * 0.8)
@@ -151,8 +151,8 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
 
     test "rounds to nearest 10 for values under 100" do
       state =
-        100
-        |> PageSizeOptimizer.new(500)
+        [initial_page_size: 100, max_timeout_ms: 500]
+        |> PageSizeOptimizer.new()
         |> PageSizeOptimizer.put_timeout(95)
 
       # 95 * 0.8 = 76, should round to 80
@@ -161,8 +161,8 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
 
     test "rounds to nearest 50 for values between 100 and 1000" do
       state =
-        100
-        |> PageSizeOptimizer.new(500)
+        [initial_page_size: 100, max_timeout_ms: 500]
+        |> PageSizeOptimizer.new()
         |> PageSizeOptimizer.put_timing(525, 200)
 
       # The implementation is doubling the value due to good performance
@@ -172,8 +172,8 @@ defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
 
     test "rounds to nearest 100 for values over 1000" do
       state =
-        1000
-        |> PageSizeOptimizer.new(500)
+        [initial_page_size: 1000, max_timeout_ms: 500]
+        |> PageSizeOptimizer.new()
         |> PageSizeOptimizer.put_timing(1234, 200)
 
       # The implementation is doubling due to good performance

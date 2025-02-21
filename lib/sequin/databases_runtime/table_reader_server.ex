@@ -27,10 +27,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   @callback flush_batch(String.t() | pid(), map()) :: :ok
   @callback discard_batch(String.t() | pid(), String.t()) :: :ok
 
-  @max_backoff_ms :timer.seconds(3)
+  @max_backoff_ms :timer.seconds(1)
   @max_backoff_time :timer.minutes(1)
 
-  @max_batches 3
+  @max_batches 5
 
   defguardp record_messages?(state) when state.consumer.message_kind == :record
   defguardp event_messages?(state) when state.consumer.message_kind == :event
@@ -176,7 +176,12 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     state = %State{
       id: Keyword.fetch!(opts, :backfill_id),
-      page_size_optimizer: page_size_optimizer_mod.new(initial_page_size, max_timeout_ms),
+      page_size_optimizer:
+        page_size_optimizer_mod.new(
+          initial_page_size: initial_page_size,
+          max_timeout_ms: max_timeout_ms,
+          max_page_size: 50_000
+        ),
       page_size_optimizer_mod: page_size_optimizer_mod,
       test_pid: test_pid,
       table_oid: Keyword.fetch!(opts, :table_oid),

@@ -132,8 +132,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     # Allows each test to specify a static page size (initial_page_size) by default, bypassing
     # PageSizeOptimizer's dynamic sizing. This is helpful for determinism/testing pagination in tests.
 
-    Mox.stub(PageSizeOptimizerMock, :new, fn initial_page_size, _max_timeout_ms ->
-      %PageSizeOptimizer{initial_page_size: initial_page_size, max_timeout_ms: 1000}
+    Mox.stub(PageSizeOptimizerMock, :new, fn opts ->
+      PageSizeOptimizer.new(opts)
     end)
 
     Mox.stub(PageSizeOptimizerMock, :put_timing, fn state, _page_size, _time_ms -> state end)

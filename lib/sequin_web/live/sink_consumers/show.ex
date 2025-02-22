@@ -311,7 +311,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   def handle_event("acknowledge_message", %{"ack_id" => ack_id}, socket) do
     consumer = socket.assigns.consumer
-    SlotMessageStore.messages_succeeded(consumer.id, [ack_id])
+    {:ok, messages} = SlotMessageStore.messages_succeeded_returning_messages(consumer.id, [ack_id])
+    {:ok, _count} = Consumers.after_messages_acked(consumer, messages)
 
     updated_socket =
       socket

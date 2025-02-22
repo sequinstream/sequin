@@ -138,13 +138,26 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       )
     end
 
+    # Cut this struct down as it will be passed to each process
+    # Processes already have the consumer in context, but this is for the acknowledger. When we
+    # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
+    bare_consumer =
+      Map.drop(state.consumer, [
+        :source_tables,
+        :active_backfill,
+        :sequence,
+        :postgres_database,
+        :replication_slot,
+        :account
+      ])
+
     broadway_messages =
       messages
       |> Enum.chunk_every(state.batch_size)
       |> Enum.map(fn batch ->
         %Message{
           data: batch,
-          acknowledger: {__MODULE__, {state.consumer.id, state.test_pid, state.slot_message_store_mod}, nil}
+          acknowledger: {__MODULE__, {bare_consumer, state.test_pid, state.slot_message_store_mod}, nil}
         }
       end)
 
@@ -239,8 +252,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], %{state | receive_timer: nil, trim_timer: nil}}
   end
 
-  @spec ack({SinkConsumer.id(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) :: :ok
-  def ack({consumer_id, test_pid, slot_message_store_mod}, successful, failed) do
+  @spec ack({SinkConsumer.t(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) :: :ok
+  def ack({%SinkConsumer{} = consumer, test_pid, slot_message_store_mod}, successful, failed) do
     successful_messages = Enum.flat_map(successful, & &1.data)
     failed_messages = Enum.flat_map(failed, & &1.data)
 
@@ -248,7 +261,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     # Ack all messages in SlotMessageStore to remove from buffer
     unless successful_ack_ids == [] do
-      {:ok, _count} = slot_message_store_mod.messages_succeeded(consumer_id, successful_ack_ids)
+      {:ok, _count} = slot_message_store_mod.messages_succeeded(consumer.id, successful_ack_ids)
+      {:ok, _count} = Consumers.after_messages_acked(consumer, successful_messages)
     end
 
     failed_message_metadatas =
@@ -257,7 +271,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       |> Enum.map(&%{&1 | data: nil})
 
     unless failed_message_metadatas == [] do
-      :ok = slot_message_store_mod.messages_failed(consumer_id, failed_message_metadatas)
+      :ok = slot_message_store_mod.messages_failed(consumer.id, failed_message_metadatas)
     end
 
     if test_pid do

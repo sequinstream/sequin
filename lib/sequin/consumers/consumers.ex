@@ -796,6 +796,46 @@ defmodule Sequin.Consumers do
     :syn.publish(:consumers, {:messages_changed, consumer_id}, :messages_changed)
   end
 
+  @spec after_messages_acked(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t())) ::
+          {:ok, non_neg_integer()}
+  def after_messages_acked(%SinkConsumer{} = consumer, acked_messages) do
+    count = length(acked_messages)
+    Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
+
+    AcknowledgedMessages.store_messages(consumer.id, acked_messages)
+
+    Metrics.incr_consumer_messages_processed_count(consumer, count)
+    Metrics.incr_consumer_messages_processed_throughput(consumer, count)
+
+    bytes_processed =
+      Enum.sum_by(
+        acked_messages,
+        fn message when is_struct(message, ConsumerRecord) or is_struct(message, ConsumerEvent) ->
+          message.encoded_data_size_bytes || message.payload_size_bytes
+        end
+      )
+
+    Metrics.incr_consumer_messages_processed_bytes(consumer, bytes_processed)
+
+    :telemetry.execute(
+      [:sequin, :posthog, :event],
+      %{event: "consumer_ack"},
+      %{
+        distinct_id: "00000000-0000-0000-0000-000000000000",
+        properties: %{
+          consumer_id: consumer.id,
+          consumer_name: consumer.name,
+          message_count: count,
+          bytes_processed: bytes_processed,
+          message_kind: consumer.message_kind,
+          "$groups": %{account: consumer.account_id}
+        }
+      }
+    )
+
+    {:ok, count}
+  end
+
   # HttpEndpoint
 
   def get_http_endpoint(id) do

@@ -16,6 +16,7 @@ defmodule Sequin.Sinks.Kafka.Client do
   def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, message)
       when is_struct(message, ConsumerRecord) or is_struct(message, ConsumerEvent) do
     message_key = Kafka.message_key(consumer, message)
+    encoded_data = message.encoded_data || Jason.encode!(message.data)
 
     with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
          :ok <-
@@ -24,7 +25,7 @@ defmodule Sequin.Sinks.Kafka.Client do
              consumer.sink.topic,
              :hash,
              message_key,
-             Jason.encode!(message.data)
+             encoded_data
            ) do
       :ok
     else
@@ -34,6 +35,12 @@ defmodule Sequin.Sinks.Kafka.Client do
 
   @impl Kafka
   def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, partition, messages) when is_list(messages) do
+    payload =
+      Enum.map(messages, fn message ->
+        encoded_data = message.encoded_data || Jason.encode!(message.data)
+        %{key: Kafka.message_key(consumer, message), value: encoded_data}
+      end)
+
     with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
          :ok <-
            :brod.produce_sync(
@@ -41,9 +48,7 @@ defmodule Sequin.Sinks.Kafka.Client do
              consumer.sink.topic,
              partition,
              "unused_key",
-             Enum.map(messages, fn message ->
-               %{key: Kafka.message_key(consumer, message), value: Jason.encode!(message.data)}
-             end)
+             payload
            ) do
       :ok
     else

@@ -73,8 +73,14 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       consumer_id: consumer.id
     )
 
+    encoded_data = Jason.encode!(message.data)
+    message = %{message | encoded_data: encoded_data, encoded_data_size_bytes: byte_size(encoded_data)}
+
     partition = partition_from_message(consumer, message)
-    Broadway.Message.put_batch_key(broadway_message, partition)
+
+    broadway_message
+    |> Broadway.Message.put_data([message])
+    |> Broadway.Message.put_batch_key(partition)
   end
 
   @impl Broadway

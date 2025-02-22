@@ -894,6 +894,16 @@ defmodule Sequin.YamlLoader do
      }}
   end
 
+  defp parse_sink(%{"type" => "s2"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :s2,
+       token: attrs["token"],
+       stream: attrs["stream"],
+       basin: attrs["basin"]
+     }}
+  end
+
   defp find_database_by_name(name, databases) do
     case Enum.find(databases, &(&1.name == name)) do
       nil -> {:error, Error.not_found(entity: :database, params: %{name: name})}

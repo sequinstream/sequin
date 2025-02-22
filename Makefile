@@ -117,3 +117,6 @@ docs: ## Run mintlify dev server for documentation
 redis-console-consumer: ## Read from redis stream <stream-key> [from-beginning]
 	@./scripts/redis-console-consumer.sh $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 
+gen-protos:
+	buf generate --clean
+	mix format

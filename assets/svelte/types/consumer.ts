@@ -9,7 +9,8 @@ export type BaseConsumer = {
     | "sequin_stream"
     | "gcp_pubsub"
     | "nats"
-    | "rabbitmq";
+    | "rabbitmq"
+    | "s2";
   name: string;
   annotations: Record<string, boolean>;
   status: string;
@@ -150,6 +151,17 @@ export type GcpPubsubConsumer = BaseConsumer & {
   };
 };
 
+// S2 specific sink
+export type S2Consumer = BaseConsumer & {
+  type: "s2";
+  sink: {
+    type: "s2";
+    token: string;
+    stream: string;
+    basin: string;
+  };
+};
+
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer
@@ -160,4 +172,5 @@ export type Consumer =
   | GcpPubsubConsumer
   | NatsConsumer
   | AzureEventHubConsumer
-  | RabbitMqConsumer;
+  | RabbitMqConsumer
+  | S2Consumer;

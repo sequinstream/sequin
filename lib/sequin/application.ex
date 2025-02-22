@@ -70,6 +70,7 @@ defmodule Sequin.Application do
       Sequin.Sinks.Kafka.ConnectionCache,
       Sequin.Sinks.Nats.ConnectionCache,
       Sequin.Sinks.RabbitMq.ConnectionCache,
+      Sequin.Sinks.S2.ConnectionCache,
       SequinWeb.Presence,
       Sequin.SystemMetricsServer,
       # Sequin.Tracer.DynamicSupervisor,

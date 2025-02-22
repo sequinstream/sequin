@@ -30,7 +30,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   use GenServer
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.ConsumersRuntime.MessageLedgers
@@ -40,7 +39,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
-  alias Sequin.Metrics
 
   require Logger
 
@@ -124,36 +122,20 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   Acknowledges messages as successfully processed using their ack_ids.
   """
   @impl SlotMessageStoreBehaviour
-  def messages_succeeded(_consumer_id, []), do: :ok
+  def messages_succeeded_returning_messages(_consumer_id, []), do: {:ok, []}
+
+  def messages_succeeded_returning_messages(consumer_id, ack_ids) do
+    GenServer.call(via_tuple(consumer_id), {:messages_succeeded, ack_ids, true})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
+  @impl SlotMessageStoreBehaviour
+  def messages_succeeded(_consumer_id, []), do: {:ok, 0}
 
   def messages_succeeded(consumer_id, ack_ids) do
-    with {:ok, {dropped_messages, consumer}} <- GenServer.call(via_tuple(consumer_id), {:messages_succeeded, ack_ids}) do
-      count = length(dropped_messages)
-      Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-      AcknowledgedMessages.store_messages(consumer_id, dropped_messages)
-
-      Metrics.incr_consumer_messages_processed_count(consumer, count)
-      Metrics.incr_consumer_messages_processed_throughput(consumer, count)
-      Metrics.incr_consumer_messages_processed_bytes(consumer, Enum.sum_by(dropped_messages, & &1.payload_size_bytes))
-
-      :telemetry.execute(
-        [:sequin, :posthog, :event],
-        %{event: "consumer_ack"},
-        %{
-          distinct_id: "00000000-0000-0000-0000-000000000000",
-          properties: %{
-            consumer_id: consumer.id,
-            consumer_name: consumer.name,
-            message_count: count,
-            message_kind: consumer.message_kind,
-            "$groups": %{account: consumer.account_id}
-          }
-        }
-      )
-
-      {:ok, count}
-    end
+    GenServer.call(via_tuple(consumer_id), {:messages_succeeded, ack_ids, false})
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -443,11 +425,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end)
   end
 
-  def handle_call({:messages_succeeded, []}, _from, state) do
+  def handle_call({:messages_succeeded, [], _return_messages?}, _from, state) do
     {:reply, {:ok, 0}, state}
   end
 
-  def handle_call({:messages_succeeded, ack_ids}, _from, state) do
+  def handle_call({:messages_succeeded, ack_ids, return_messages?}, _from, state) do
     prev_state = state
 
     execute_timed(:messages_succeeded, fn ->
@@ -463,7 +445,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
       maybe_finish_table_reader_batch(prev_state, state)
-      {:reply, {:ok, {dropped_messages, state.consumer}}, state}
+
+      if return_messages? do
+        {:reply, {:ok, dropped_messages}, state}
+      else
+        # Optionally, avoid returning full messages (more CPU/memory intensive)
+        {:reply, {:ok, length(dropped_messages)}, state}
+      end
     end)
   end
 

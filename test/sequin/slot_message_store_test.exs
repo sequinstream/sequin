@@ -444,6 +444,32 @@ defmodule Sequin.SlotMessageStoreTest do
       state = SlotMessageStore.peek(consumer.id)
       assert state.payload_size_bytes == 0
     end
+
+    test "messages_succeeded_returning_messages returns the acked messages", %{consumer: consumer} do
+      # Create test messages
+      messages = [
+        ConsumersFactory.consumer_message(),
+        ConsumersFactory.consumer_message()
+      ]
+
+      # Put messages in store
+      :ok = SlotMessageStore.put_messages(consumer.id, messages)
+
+      # Retrieve messages
+      {:ok, delivered} = SlotMessageStore.produce(consumer.id, 2, self())
+      assert length(delivered) == 2
+
+      # Get ack_ids and call messages_succeeded_returning_messages
+      ack_ids = Enum.map(delivered, & &1.ack_id)
+      {:ok, returned_messages} = SlotMessageStore.messages_succeeded_returning_messages(consumer.id, ack_ids)
+
+      # Verify returned messages match what was delivered
+      assert length(returned_messages) == 2
+      assert Enum.map(returned_messages, & &1.ack_id) == ack_ids
+
+      # Verify messages were removed from store
+      {:ok, []} = SlotMessageStore.produce(consumer.id, 2, self())
+    end
   end
 
   describe "SlotMessageStore table reader batch handling" do

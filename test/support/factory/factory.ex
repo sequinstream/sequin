@@ -31,7 +31,7 @@ defmodule Sequin.Factory do
   def http_method, do: one_of([:get, :post, :put, :patch, :delete])
   def index, do: Faker.random_between(1, 250_000)
   def integer, do: Faker.random_between(1, 100_000)
-  def non_neg_integer, do: Faker.random_between(0, 100_000)
+  def non_neg_integer, do: Faker.random_between(1, 100_000)
   def iso_timestamp, do: DateTime.to_iso8601(timestamp())
   def last_name, do: Faker.Person.last_name()
   def milliseconds, do: Faker.random_between(1, 300_000)

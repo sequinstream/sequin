@@ -41,7 +41,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   require Logger
 
   # 10MB
-  @max_accumulated_bytes 10 * 1024 * 1024
+  @max_accumulated_bytes 20 * 1024 * 1024
   @max_accumulated_messages 500
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
@@ -84,7 +84,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :bytes_processed_since_last_limit_check, non_neg_integer(), default: 0
       field :check_memory_fn, nil | (-> non_neg_integer())
       field :heartbeat_timer, nil | reference()
-      field :counters, %{atom() => non_neg_integer()}, default: %{}
     end
   end
 
@@ -164,7 +163,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl ReplicationConnection
   def init(%State{} = state) do
-    Logger.metadata(account_id: state.postgres_database.account_id, replication_id: state.id)
+    Logger.metadata(
+      account_id: state.postgres_database.account_id,
+      replication_id: state.id,
+      database_id: state.postgres_database.id
+    )
 
     Logger.info(
       "[SlotProcessor] Initialized with opts: #{inspect(Keyword.delete(state.connection, :password), pretty: true)}"
@@ -173,6 +176,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     if state.test_pid do
       Mox.allow(Sequin.DatabasesRuntime.MessageHandlerMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
+      Mox.allow(Sequin.TestSupport.EnumMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 
@@ -257,84 +261,84 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl ReplicationConnection
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    # TODO: Move to better spot after we vendor ReplicationConnection
-    Health.put_event(
-      state.replication_slot,
-      %Event{slug: :replication_connected, status: :success}
-    )
-
-    msg = Decoder.decode_message(msg)
-
-    next_state =
-      if skip_message?(msg, state) do
-        state
-      else
-        msg
-        |> maybe_cast_message(state)
-        |> process_message(state)
-      end
-
-    next_state =
-      if is_struct(msg, Insert) or is_struct(msg, Update) or is_struct(msg, Delete) do
-        %{next_state | current_commit_idx: next_state.current_commit_idx + 1}
-      else
-        next_state
-      end
-
-    {prev_acc_size_bytes, _} = state.accumulated_messages
-    {acc_size_bytes, acc_messages} = next_state.accumulated_messages
-    acc_size_count = length(acc_messages)
-
-    # Calculate bytes processed in this message
-    bytes_processed = acc_size_bytes - prev_acc_size_bytes
-
-    next_state =
-      next_state
-      |> incr_counter(:bytes_processed, bytes_processed)
-      |> incr_counter(:bytes_processed_since_last_log, bytes_processed)
-      |> incr_counter(:messages_processed)
-      |> incr_counter(:messages_processed_since_last_log)
-
-    # Update bytes processed and check limits
-    {limit_status, next_state} = handle_limit_check(next_state, bytes_processed)
-
-    unless match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, msg) do
-      # A replication message is *their* message(s), not our message.
+    execute_timed(:handle_data, fn ->
+      # TODO: Move to better spot after we vendor ReplicationConnection
       Health.put_event(
         state.replication_slot,
-        %Event{slug: :replication_message_processed, status: :success}
+        %Event{slug: :replication_connected, status: :success}
       )
-    end
 
-    cond do
-      limit_status == :over_limit ->
+      msg = Decoder.decode_message(msg)
+
+      next_state =
+        if skip_message?(msg, state) do
+          state
+        else
+          msg
+          |> maybe_cast_message(state)
+          |> process_message(state)
+        end
+
+      next_state =
+        if is_struct(msg, Insert) or is_struct(msg, Update) or is_struct(msg, Delete) do
+          %{next_state | current_commit_idx: next_state.current_commit_idx + 1}
+        else
+          next_state
+        end
+
+      {prev_acc_size_bytes, _} = state.accumulated_messages
+      {acc_size_bytes, acc_messages} = next_state.accumulated_messages
+      acc_size_count = length(acc_messages)
+
+      # Calculate bytes processed in this message
+      bytes_processed = acc_size_bytes - prev_acc_size_bytes
+
+      incr_counter(:bytes_processed, bytes_processed)
+      incr_counter(:bytes_processed_since_last_log, bytes_processed)
+      incr_counter(:messages_processed)
+      incr_counter(:messages_processed_since_last_log)
+
+      # Update bytes processed and check limits
+      {limit_status, next_state} = handle_limit_check(next_state, bytes_processed)
+
+      unless match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, msg) do
+        # A replication message is *their* message(s), not our message.
         Health.put_event(
           state.replication_slot,
-          %Event{slug: :replication_memory_limit_exceeded, status: :info}
+          %Event{slug: :replication_message_processed, status: :success}
         )
+      end
 
-        Logger.warning("[SlotProcessor] System hit memory limit, shutting down",
-          limit: next_state.max_memory_bytes,
-          current_memory: next_state.check_memory_fn.()
-        )
+      cond do
+        limit_status == :over_limit ->
+          Health.put_event(
+            state.replication_slot,
+            %Event{slug: :replication_memory_limit_exceeded, status: :info}
+          )
 
-        flush_messages(next_state)
-        launch_stop(next_state)
-        {:noreply, next_state}
+          Logger.warning("[SlotProcessor] System hit memory limit, shutting down",
+            limit: next_state.max_memory_bytes,
+            current_memory: next_state.check_memory_fn.()
+          )
 
-      is_struct(msg, Commit) ->
-        if next_state.dirty or state.dirty, do: Logger.warning("Got a commit message while DIRTY")
+          flush_messages(next_state)
+          launch_stop(next_state)
+          {:noreply, next_state}
 
-        next_state = flush_messages(next_state)
-        {:noreply, next_state}
+        is_struct(msg, Commit) ->
+          if next_state.dirty or state.dirty, do: Logger.warning("Got a commit message while DIRTY")
 
-      acc_size_count > @max_accumulated_messages or acc_size_bytes > @max_accumulated_bytes ->
-        next_state = flush_messages(next_state)
-        {:noreply, next_state}
+          next_state = flush_messages(next_state)
+          {:noreply, next_state}
 
-      true ->
-        {:noreply, next_state}
-    end
+        acc_size_count > @max_accumulated_messages or acc_size_bytes > @max_accumulated_bytes ->
+          next_state = flush_messages(next_state)
+          {:noreply, next_state}
+
+        true ->
+          {:noreply, next_state}
+      end
+    end)
   rescue
     e ->
       if match?(%Error.ServiceError{code: :payload_size_limit_exceeded}, e) do
@@ -361,38 +365,50 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
-    # Because these are <14 Postgres databases, they will not receive heartbeat messages
-    # temporarily mark them as healthy if we receive a keepalive message
-    if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
-      Health.put_event(
-        state.replication_slot,
-        %Event{slug: :replication_heartbeat_received, status: :success}
-      )
-    end
-
-    messages =
-      cond do
-        reply == 1 and not is_nil(state.last_commit_lsn) ->
-          # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
-          # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
-          wal_cursor = safe_wal_cursor(state)
-          Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
-
-          Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
-          ack_message(wal_cursor.commit_lsn)
-
-        reply == 1 ->
-          # If we don't have a last_commit_lsn, we're still processing the first xaction
-          # we received on boot. This can happen if we're processing a very large xaction.
-          # It is therefore safe to send an ack with the last LSN we processed.
-          {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
-          ack_message(low_watermark.commit_lsn)
-
-        true ->
-          []
+    execute_timed(:handle_data_keepalive, fn ->
+      # Because these are <14 Postgres databases, they will not receive heartbeat messages
+      # temporarily mark them as healthy if we receive a keepalive message
+      if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
+        Health.put_event(
+          state.replication_slot,
+          %Event{slug: :replication_heartbeat_received, status: :success}
+        )
       end
 
-    {:noreply, messages, state}
+      messages =
+        cond do
+          reply == 1 and not is_nil(state.last_commit_lsn) ->
+            # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
+            # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
+            wal_cursor = safe_wal_cursor(state)
+            Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
+
+            Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
+
+            if wal_cursor.commit_lsn > wal_end do
+              Logger.warning("Server LSN #{wal_end} is behind our LSN #{wal_cursor.commit_lsn}")
+            end
+
+            ack_message(wal_cursor.commit_lsn)
+
+          reply == 1 ->
+            # If we don't have a last_commit_lsn, we're still processing the first xaction
+            # we received on boot. This can happen if we're processing a very large xaction.
+            # It is therefore safe to send an ack with the last LSN we processed.
+            {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
+
+            if low_watermark.commit_lsn > wal_end do
+              Logger.warning("Server LSN #{wal_end} is behind our LSN #{low_watermark.commit_lsn}")
+            end
+
+            ack_message(low_watermark.commit_lsn)
+
+          true ->
+            []
+        end
+
+      {:noreply, messages, state}
+    end)
   end
 
   def handle_data(data, %State{} = state) do
@@ -402,41 +418,47 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl ReplicationConnection
   def handle_call({:update_message_handler_ctx, ctx}, from, state) do
-    state = %{state | message_handler_ctx: ctx}
-    # Need to manually send reply
-    GenServer.reply(from, :ok)
-    {:noreply, state}
+    execute_timed(:update_message_handler_ctx, fn ->
+      state = %{state | message_handler_ctx: ctx}
+      # Need to manually send reply
+      GenServer.reply(from, :ok)
+      {:noreply, state}
+    end)
   end
 
   @impl ReplicationConnection
   def handle_call({:monitor_message_store, consumer_id}, from, state) do
-    if Map.has_key?(state.message_store_refs, consumer_id) do
-      GenServer.reply(from, :ok)
-      {:noreply, state}
-    else
-      pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer_id))
-      ref = Process.monitor(pid)
-      :ok = SlotMessageStore.set_monitor_ref(pid, ref)
-      Logger.info("Monitoring message store for consumer #{consumer_id}")
-      GenServer.reply(from, :ok)
-      {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer_id, ref)}}
-    end
+    execute_timed(:monitor_message_store, fn ->
+      if Map.has_key?(state.message_store_refs, consumer_id) do
+        GenServer.reply(from, :ok)
+        {:noreply, state}
+      else
+        pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer_id))
+        ref = Process.monitor(pid)
+        :ok = SlotMessageStore.set_monitor_ref(pid, ref)
+        Logger.info("Monitoring message store for consumer #{consumer_id}")
+        GenServer.reply(from, :ok)
+        {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer_id, ref)}}
+      end
+    end)
   end
 
   @impl ReplicationConnection
   def handle_call({:demonitor_message_store, consumer_id}, from, state) do
-    case state.message_store_refs[consumer_id] do
-      nil ->
-        Logger.warning("No monitor found for consumer #{consumer_id}")
-        GenServer.reply(from, :ok)
-        {:noreply, state}
+    execute_timed(:demonitor_message_store, fn ->
+      case state.message_store_refs[consumer_id] do
+        nil ->
+          Logger.warning("No monitor found for consumer #{consumer_id}")
+          GenServer.reply(from, :ok)
+          {:noreply, state}
 
-      ref ->
-        res = Process.demonitor(ref)
-        Logger.info("Demonitored message store for consumer #{consumer_id}: (res=#{inspect(res)})")
-        GenServer.reply(from, :ok)
-        {:noreply, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
-    end
+        ref ->
+          res = Process.demonitor(ref)
+          Logger.info("Demonitored message store for consumer #{consumer_id}: (res=#{inspect(res)})")
+          GenServer.reply(from, :ok)
+          {:noreply, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
+      end
+    end)
   end
 
   @impl ReplicationConnection
@@ -458,39 +480,45 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl ReplicationConnection
   def handle_info(:emit_heartbeat, %State{id: "dcfba45f-d503-4fef-bb11-9221b9efa70a"} = state) do
-    # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
-    # This heartbeat is not used for health, but rather to advance the slot even if tables are dormant.
-    conn = get_cached_conn(state)
+    execute_timed(:handle_info_emit_heartbeat, fn ->
+      # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
+      # This heartbeat is not used for health, but rather to advance the slot even if tables are dormant.
+      conn = get_cached_conn(state)
 
-    # We can schedule right away, as we'll not be receiving a heartbeat message
-    state = schedule_heartbeat(%{state | heartbeat_timer: nil})
-    q = "insert into sequin_heartbeat(id, updated_at) values (1, now()) on conflict (id) do update set updated_at = now()"
+      # We can schedule right away, as we'll not be receiving a heartbeat message
+      state = schedule_heartbeat(%{state | heartbeat_timer: nil})
 
-    case Postgres.query(conn, q) do
-      {:ok, _res} ->
-        Logger.info("Emitted heartbeat", emitted_at: Sequin.utc_now())
+      q =
+        "insert into sequin_heartbeat(id, updated_at) values (1, now()) on conflict (id) do update set updated_at = now()"
 
-      {:error, error} ->
-        Logger.error("Error emitting heartbeat: #{inspect(error)}")
-    end
+      case Postgres.query(conn, q) do
+        {:ok, _res} ->
+          Logger.info("Emitted heartbeat", emitted_at: Sequin.utc_now())
 
-    {:noreply, state}
+        {:error, error} ->
+          Logger.error("Error emitting heartbeat: #{inspect(error)}")
+      end
+
+      {:noreply, state}
+    end)
   end
 
   def handle_info(:emit_heartbeat, %State{} = state) do
-    conn = get_cached_conn(state)
+    execute_timed(:emit_heartbeat, fn ->
+      conn = get_cached_conn(state)
 
-    emitted_at = Sequin.utc_now()
+      emitted_at = Sequin.utc_now()
 
-    case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.0', '#{emitted_at}')") do
-      {:ok, _res} ->
-        Logger.info("Emitted heartbeat", emitted_at: emitted_at)
+      case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.0', '#{emitted_at}')") do
+        {:ok, _res} ->
+          Logger.info("Emitted heartbeat", emitted_at: emitted_at)
 
-      {:error, error} ->
-        Logger.error("Error emitting heartbeat: #{inspect(error)}")
-    end
+        {:error, error} ->
+          Logger.error("Error emitting heartbeat: #{inspect(error)}")
+      end
 
-    {:noreply, %{state | heartbeat_timer: nil}}
+      {:noreply, %{state | heartbeat_timer: nil}}
+    end)
   end
 
   @impl ReplicationConnection
@@ -504,8 +532,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       ])
 
     last_logged_at = Process.get(:last_logged_at)
-    bytes_processed_since_last_log = state.counters[:bytes_processed_since_last_log]
-    messages_processed_since_last_log = state.counters[:messages_processed_since_last_log]
+    bytes_processed_since_last_log = Process.get(:bytes_processed_since_last_log)
+    messages_processed_since_last_log = Process.get(:messages_processed_since_last_log)
     seconds_diff = if last_logged_at, do: DateTime.diff(Sequin.utc_now(), last_logged_at, :second), else: 0
 
     {messages_per_second, bytes_per_second} =
@@ -519,30 +547,61 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       "[SlotProcessor] #{Float.round(messages_per_second, 1)} messages/s, #{Sequin.String.format_bytes(bytes_per_second)}/s"
     )
 
-    Logger.info("[SlotProcessor] Process metrics",
-      memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
-      message_queue_len: info[:message_queue_len],
-      accumulated_payload_size_bytes: elem(state.accumulated_messages, 0),
-      accumulated_message_count: length(elem(state.accumulated_messages, 1)),
-      last_commit_lsn: state.last_commit_lsn,
-      low_watermark_wal_cursor_lsn: state.low_watermark_wal_cursor[:commit_lsn],
-      low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor[:commit_idx],
-      bytes_processed: state.counters[:bytes_processed] || 0,
-      messages_processed: state.counters[:messages_processed] || 0,
-      bytes_per_second: bytes_per_second,
-      messages_per_second: messages_per_second
-    )
+    # Get all timing metrics from process dictionary
+    timing_metrics =
+      Process.get()
+      |> Enum.filter(fn {key, _} ->
+        key |> to_string() |> String.ends_with?("_total_ms")
+      end)
+      |> Keyword.new()
+
+    count_metrics =
+      Process.get()
+      |> Enum.filter(fn {key, _} ->
+        key |> to_string() |> String.ends_with?("_count")
+      end)
+      |> Keyword.new()
+
+    metadata =
+      [
+        memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
+        message_queue_len: info[:message_queue_len],
+        accumulated_payload_size_bytes: elem(state.accumulated_messages, 0),
+        accumulated_message_count: length(elem(state.accumulated_messages, 1)),
+        last_commit_lsn: state.last_commit_lsn,
+        low_watermark_wal_cursor_lsn: state.low_watermark_wal_cursor[:commit_lsn],
+        low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor[:commit_idx],
+        bytes_processed: Process.get(:bytes_processed, 0),
+        messages_processed: Process.get(:messages_processed, 0),
+        bytes_per_second: bytes_per_second,
+        messages_per_second: messages_per_second
+      ]
+      |> Keyword.merge(timing_metrics)
+      |> Keyword.merge(count_metrics)
+
+    Logger.info("[SlotProcessor] Process metrics", metadata)
+
+    # Clear timing metrics after logging
+    timing_metrics
+    |> Keyword.keys()
+    |> Enum.each(&clear_counter/1)
+
+    count_metrics
+    |> Keyword.keys()
+    |> Enum.each(&clear_counter/1)
+
+    clear_counter(:bytes_processed)
+    clear_counter(:bytes_processed_since_last_log)
+    clear_counter(:messages_processed)
+    clear_counter(:messages_processed_since_last_log)
 
     Process.put(:last_logged_at, Sequin.utc_now())
     schedule_process_logging()
 
-    {:noreply,
-     state
-     |> reset_counter(:bytes_processed_since_last_log)
-     |> reset_counter(:messages_processed_since_last_log)}
+    {:noreply, state}
   end
 
-  defp schedule_process_logging(interval \\ :timer.seconds(30)) do
+  defp schedule_process_logging(interval \\ :timer.seconds(10)) do
     Process.send_after(self(), :process_logging, interval)
   end
 
@@ -858,46 +917,52 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   defp flush_messages(%State{accumulated_messages: {_, []}} = state), do: state
 
   defp flush_messages(%State{} = state) do
-    {_, messages} = state.accumulated_messages
-    messages = Enum.reverse(messages)
+    execute_timed(:flush_messages, fn ->
+      {_, messages} = state.accumulated_messages
+      messages = Enum.reverse(messages)
 
-    # Flush accumulated messages
-    {time, res} = :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
-    time_ms = time / 1000
+      # Flush accumulated messages
+      {time, res} =
+        execute_timed(:handle_messages, fn ->
+          :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
+        end)
 
-    if time_ms > 100 do
-      Logger.warning("[SlotProcessor] Flushed messages took longer than 100ms",
-        duration_ms: time_ms,
-        message_count: length(messages)
-      )
-    end
+      time_ms = time / 1000
 
-    case res do
-      {:ok, _count, message_handler_ctx} ->
-        if state.test_pid do
-          send(state.test_pid, {__MODULE__, :flush_messages})
-        end
+      if time_ms > 100 do
+        Logger.warning("[SlotProcessor] Flushed messages took longer than 100ms",
+          duration_ms: time_ms,
+          message_count: length(messages)
+        )
+      end
 
-        %{
-          state
-          | accumulated_messages: {0, []},
-            message_handler_ctx: message_handler_ctx
-        }
+      case res do
+        {:ok, _count, message_handler_ctx} ->
+          if state.test_pid do
+            send(state.test_pid, {__MODULE__, :flush_messages})
+          end
 
-      {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} ->
-        error =
-          Error.service(
-            message:
-              "One or more of your sinks has exceeded memory limitations for buffered messages. Sequin has stopped processing new messages from your replication slot until the sink(s) drain messages.",
-            service: :postgres_replication_slot,
-            code: :payload_size_limit_exceeded
-          )
+          %{
+            state
+            | accumulated_messages: {0, []},
+              message_handler_ctx: message_handler_ctx
+          }
 
-        raise error
+        {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} ->
+          error =
+            Error.service(
+              message:
+                "One or more of your sinks has exceeded memory limitations for buffered messages. Sequin has stopped processing new messages from your replication slot until the sink(s) drain messages.",
+              service: :postgres_replication_slot,
+              code: :payload_size_limit_exceeded
+            )
 
-      {:error, error} ->
-        raise error
-    end
+          raise error
+
+        {:error, error} ->
+          raise error
+      end
+    end)
   end
 
   defp safe_wal_cursor(%State{last_commit_lsn: nil}),
@@ -920,12 +985,17 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         cond do
           not is_nil(low_for_message_stores) ->
             # Use the minimum unpersisted WAL cursor from the message stores.
+            Logger.info("[SlotProcessor] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}")
             low_for_message_stores
 
           accumulated_messages?(state) ->
             # When there are messages that the SlotProcessor has not flushed yet,
             # we need to fallback on the last low_watermark_wal_cursor (not safe to use
             # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
+            Logger.info(
+              "[SlotProcessor] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
+            )
+
             state.low_watermark_wal_cursor
 
           true ->
@@ -937,6 +1007,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
             # 2. If the tables in this slot are dormant, the slot will continue to accumulate
             # WAL unless we advance it. (This is the secondary purpose of the health message,
             # to allow us to advance the slot even if tables are dormant.)
+            Logger.info("[SlotProcessor] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
             %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
         end
 
@@ -1226,14 +1297,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     Application.get_env(:sequin, :max_memory_bytes)
   end
 
-  defp incr_counter(%State{} = state, name, amount \\ 1) do
-    %{state | counters: Map.update(state.counters, name, amount, fn count -> count + amount end)}
-  end
-
-  defp reset_counter(%State{} = state, name) do
-    %{state | counters: Map.delete(state.counters, name)}
-  end
-
   defp launch_stop(state) do
     # Returning :stop tuple results in an error that looks like a crash
     task =
@@ -1246,5 +1309,22 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       end)
 
     Process.demonitor(task.ref, [:flush])
+  end
+
+  defp incr_counter(name, amount \\ 1) do
+    current = Process.get(name, 0)
+    Process.put(name, current + amount)
+  end
+
+  defp clear_counter(name) do
+    Process.delete(name)
+  end
+
+  defp execute_timed(name, fun) do
+    {time, result} = :timer.tc(fun)
+    # Convert microseconds to milliseconds
+    incr_counter(:"#{name}_total_ms", div(time, 1000))
+    incr_counter(:"#{name}_count")
+    result
   end
 end

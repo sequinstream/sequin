@@ -17,6 +17,11 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Replication
   alias Sequin.TestSupport
 
+  setup do
+    TestSupport.stub_random(fn _ -> 1 end)
+    :ok
+  end
+
   describe "handle_messages/2" do
     test "handles message_kind: event correctly" do
       account = AccountsFactory.insert_account!()

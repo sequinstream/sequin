@@ -38,6 +38,8 @@ defmodule Sequin.DatabasesRuntime.LifecycleEventWorker do
   end
 
   defp handle_database_event(event, id, data) do
+    Logger.info("[LifecycleEventWorker] Handling event `#{event}` for database", database_id: id)
+
     case event do
       "create" ->
         :ok
@@ -55,6 +57,10 @@ defmodule Sequin.DatabasesRuntime.LifecycleEventWorker do
   end
 
   defp handle_postgres_replication_slot_event(event, id) do
+    Logger.info("[LifecycleEventWorker] Handling event `#{event}` for postgres_replication_slot",
+      replication_id: id
+    )
+
     case event do
       "create" ->
         with {:ok, pg_replication} <- Replication.get_pg_replication(id) do

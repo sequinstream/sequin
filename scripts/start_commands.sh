@@ -11,6 +11,16 @@ if [ "${AUTO_ASSIGN_RELEASE_NODE:-false}" = "true" ]; then
     echo "Generated node name: $RELEASE_NODE"
 fi
 
+set_agent_address() {
+  # Datadog Agent Address and OTEL Exporter Endpoint based on ECS metadata endpoint
+  AGENT_ADDRESS=$(curl -s -S http://169.254.169.254/latest/meta-data/local-ipv4 || echo "meta-data curl failed")
+
+  echo "Datadog Agent Address: $AGENT_ADDRESS"
+
+  export AGENT_ADDRESS
+  export OTEL_EXPORTER_OTLP_ENDPOINT="http://$AGENT_ADDRESS:4318"
+}
+
 migrate() {
   echo "Starting migrations"
   ./prod/rel/sequin/bin/sequin eval "Sequin.Release.migrate"
@@ -30,6 +40,11 @@ start_application() {
 
 # Main script execution starts here
 echo "Starting: start_commands.sh"
+
+if [ "${SELF_HOSTED:-0}" = "0" ]; then
+    echo "Setting agent address for cloud deployment"
+    set_agent_address
+fi
 
 migrate
 apply_config

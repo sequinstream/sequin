@@ -48,6 +48,9 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   end
 
   defp handle_consumer_event(event, id, data) do
+    Logger.metadata(consumer_id: id)
+    Logger.info("[LifecycleEventWorker] Handling event `#{event}` for consumer")
+
     :syn.publish(:consumers, :consumers_changed, :consumers_changed)
 
     case event do
@@ -99,6 +102,9 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   end
 
   defp handle_http_endpoint_event(event, id) do
+    Logger.metadata(http_endpoint_id: id)
+    Logger.info("[LifecycleEventWorker] Handling event `#{event}` for http_endpoint")
+
     case event do
       "create" ->
         CheckHttpEndpointHealthWorker.enqueue(id)
@@ -116,10 +122,15 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   end
 
   defp handle_backfill_event(event, id) do
+    Logger.metadata(backfill_id: id)
+    Logger.info("[LifecycleEventWorker] Loading backfill and consumer for backfill #{id}")
+
     case event do
       "create" ->
         with {:ok, backfill} <- Consumers.get_backfill(id),
              {:ok, consumer} <- Consumers.get_consumer(backfill.sink_consumer_id) do
+          Logger.metadata(consumer_id: consumer.id)
+          Logger.info("[LifecycleEventWorker] Handling event `#{event}` for backfill")
           InitBackfillStatsWorker.enqueue(backfill.id)
           DatabasesRuntimeSupervisor.start_table_reader(consumer)
         end
@@ -127,6 +138,9 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
       "update" ->
         with {:ok, backfill} <- Consumers.get_backfill(id),
              {:ok, consumer} <- Consumers.get_consumer(backfill.sink_consumer_id) do
+          Logger.metadata(consumer_id: consumer.id)
+          Logger.info("[LifecycleEventWorker] Handling event `#{event}` for backfill")
+
           case backfill.state do
             :active ->
               DatabasesRuntimeSupervisor.restart_table_reader(consumer)

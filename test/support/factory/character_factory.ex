@@ -112,7 +112,7 @@ defmodule Sequin.Factory.CharacterFactory do
         name: Factory.name(),
         status: Factory.one_of([:active, :inactive, :retired]),
         power_level: Factory.non_neg_integer(),
-        age: Factory.integer(),
+        age: Factory.non_neg_integer(),
         height: Factory.float(min: 1, max: 3),
         is_hero: Factory.boolean(),
         biography: Faker.Lorem.paragraph(),

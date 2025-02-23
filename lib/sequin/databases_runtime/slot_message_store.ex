@@ -30,7 +30,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   use GenServer
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.ConsumersRuntime.MessageLedgers
@@ -40,7 +39,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
-  alias Sequin.Metrics
 
   require Logger
 
@@ -98,9 +96,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @doc """
   Should raise so TableReaderServer cannot continue if this fails.
   """
-  @spec batch_progress(consumer_id(), TableReader.batch_id()) :: {:ok, :completed | :in_progress}
-  def batch_progress(consumer_id, batch_id) do
-    GenServer.call(via_tuple(consumer_id), {:batch_progress, batch_id})
+  @spec unpersisted_table_reader_batch_ids(consumer_id()) :: {:ok, [TableReader.batch_id()]}
+  def unpersisted_table_reader_batch_ids(consumer_id) do
+    GenServer.call(via_tuple(consumer_id), :unpersisted_table_reader_batch_ids)
   catch
     :exit, e ->
       error = exit_to_sequin_error(e)
@@ -124,36 +122,20 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   Acknowledges messages as successfully processed using their ack_ids.
   """
   @impl SlotMessageStoreBehaviour
-  def messages_succeeded(_consumer_id, []), do: :ok
+  def messages_succeeded_returning_messages(_consumer_id, []), do: {:ok, []}
+
+  def messages_succeeded_returning_messages(consumer_id, ack_ids) do
+    GenServer.call(via_tuple(consumer_id), {:messages_succeeded, ack_ids, true})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
+  @impl SlotMessageStoreBehaviour
+  def messages_succeeded(_consumer_id, []), do: {:ok, 0}
 
   def messages_succeeded(consumer_id, ack_ids) do
-    with {:ok, {dropped_messages, consumer}} <- GenServer.call(via_tuple(consumer_id), {:messages_succeeded, ack_ids}) do
-      count = length(dropped_messages)
-      Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-      AcknowledgedMessages.store_messages(consumer_id, dropped_messages)
-
-      Metrics.incr_consumer_messages_processed_count(consumer, count)
-      Metrics.incr_consumer_messages_processed_throughput(consumer, count)
-      Metrics.incr_consumer_messages_processed_bytes(consumer, Enum.sum_by(dropped_messages, & &1.payload_size_bytes))
-
-      :telemetry.execute(
-        [:sequin, :posthog, :event],
-        %{event: "consumer_ack"},
-        %{
-          distinct_id: "00000000-0000-0000-0000-000000000000",
-          properties: %{
-            consumer_id: consumer.id,
-            consumer_name: consumer.name,
-            message_count: count,
-            message_kind: consumer.message_kind,
-            "$groups": %{account: consumer.account_id}
-          }
-        }
-      )
-
-      {:ok, count}
-    end
+    GenServer.call(via_tuple(consumer_id), {:messages_succeeded, ack_ids, false})
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -287,6 +269,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     consumer_id = if consumer, do: consumer.id, else: Keyword.fetch!(opts, :consumer_id)
 
     Logger.metadata(consumer_id: consumer_id)
+    Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
 
     state = %State{
       consumer: consumer,
@@ -354,7 +337,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
         # We may be receiving messages that we've already ingested and persisted, filter out
         # Do we receive messages that we have ingested but not persisted?
-        |> Stream.filter(&(not State.is_message_persisted?(state, &1)))
+        |> Enum.filter(&(not State.is_message_persisted?(state, &1)))
 
       {to_persist, to_put} =
         if state.consumer.status == :disabled do
@@ -401,22 +384,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   @impl GenServer
-  def handle_call({:batch_progress, batch_id}, _from, %State{table_reader_batch_id: batch_id} = state) do
-    execute_timed(:batch_progress, fn ->
-      if State.unpersisted_table_reader_messages?(state) do
-        {:reply, {:ok, :in_progress}, state}
-      else
-        {:reply, {:ok, :completed}, state}
-      end
-    end)
-  end
-
-  def handle_call({:batch_progress, _batch_id}, _from, %State{table_reader_batch_id: nil} = state) do
-    {:reply, {:ok, :completed}, state}
-  end
-
-  def handle_call({:batch_progress, batch_id}, _from, %State{table_reader_batch_id: current_batch_id}) do
-    raise "Batch progress called with batch_id #{batch_id} that does not match the current batch_id: #{inspect(current_batch_id)}"
+  def handle_call(:unpersisted_table_reader_batch_ids, _from, %State{} = state) do
+    {:reply, {:ok, State.unpersisted_table_reader_batch_ids(state)}, state}
   end
 
   def handle_call({:produce, count, producer_pid}, from, %State{last_consumer_producer_pid: last_producer_pid} = state)
@@ -456,11 +425,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end)
   end
 
-  def handle_call({:messages_succeeded, []}, _from, state) do
+  def handle_call({:messages_succeeded, [], _return_messages?}, _from, state) do
     {:reply, {:ok, 0}, state}
   end
 
-  def handle_call({:messages_succeeded, ack_ids}, _from, state) do
+  def handle_call({:messages_succeeded, ack_ids, return_messages?}, _from, state) do
+    prev_state = state
+
     execute_timed(:messages_succeeded, fn ->
       cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
 
@@ -473,8 +444,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
-      state = maybe_finish_table_reader_batch(state)
-      {:reply, {:ok, {dropped_messages, state.consumer}}, state}
+      maybe_finish_table_reader_batch(prev_state, state)
+
+      if return_messages? do
+        {:reply, {:ok, dropped_messages}, state}
+      else
+        # Optionally, avoid returning full messages (more CPU/memory intensive)
+        {:reply, {:ok, length(dropped_messages)}, state}
+      end
     end)
   end
 
@@ -483,6 +460,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   def handle_call({:messages_already_succeeded, ack_ids}, _from, state) do
+    prev_state = state
+
     execute_timed(:messages_already_succeeded, fn ->
       cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
 
@@ -497,12 +476,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
-      state = maybe_finish_table_reader_batch(state)
+      maybe_finish_table_reader_batch(prev_state, state)
       {:reply, {:ok, count}, state}
     end)
   end
 
   def handle_call({:messages_failed, message_metadatas}, _from, state) do
+    prev_state = state
+
     execute_timed(:messages_failed, fn ->
       cursor_tuples = State.ack_ids_to_cursor_tuples(state, Enum.map(message_metadatas, & &1.ack_id))
 
@@ -526,7 +507,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
            # Now put the blocked messages into persisted_messages
            {:ok, state} <- State.put_persisted_messages(state, newly_blocked_messages),
            :ok <- upsert_messages(state, messages ++ newly_blocked_messages) do
-        state = maybe_finish_table_reader_batch(state)
+        maybe_finish_table_reader_batch(prev_state, state)
         {:reply, :ok, state}
       else
         error ->
@@ -655,13 +636,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   # :syn notification
-  def handle_info(:consumers_changed, state) do
+  def handle_info(:consumers_changed, %State{} = state) do
     state = put_max_memory_bytes(state)
     {:noreply, state}
   end
 
-  def handle_info(:max_memory_check, state) do
-    schedule_max_memory_check(state.max_memory_check_interval)
+  def handle_info(:max_memory_check, %State{} = state) do
+    schedule_max_memory_check(state.setting_max_memory_check_interval)
     state = put_max_memory_bytes(state)
     {:noreply, state}
   end
@@ -692,7 +673,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   defp exit_to_sequin_error({:noproc, _}) do
-    Error.invariant(message: "[SlotMessageStore] exited with :noproc")
+    Error.invariant(message: "Call to SlotMessageStore failed with :noproc")
   end
 
   defp exit_to_sequin_error(e) when is_exception(e) do
@@ -707,7 +688,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   defp upsert_messages(%State{} = state, messages) do
     messages
-    |> Enum.chunk_every(10_000)
+    # This value is calculated based on the number of parameters in our consumer_events/consumer_records
+    # upserts and the Postgres limit of 65535 parameters per query.
+    |> Enum.chunk_every(2_000)
     |> Enum.each(fn chunk ->
       {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, chunk)
     end)
@@ -723,21 +706,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end)
   end
 
-  defp maybe_finish_table_reader_batch(%State{table_reader_batch_id: nil} = state) do
-    state
-  end
-
-  defp maybe_finish_table_reader_batch(%State{} = state) do
-    if State.unpersisted_table_reader_messages?(state) do
-      state
-    else
+  defp maybe_finish_table_reader_batch(%State{} = prev_state, %State{} = state) do
+    unless State.unpersisted_table_reader_batch_ids(prev_state) == State.unpersisted_table_reader_batch_ids(state) do
       :syn.publish(
         :consumers,
-        {:table_reader_batch_complete, state.consumer.id},
-        {:table_reader_batch_complete, state.table_reader_batch_id}
+        {:table_reader_batches_changed, state.consumer.id},
+        :table_reader_batches_changed
       )
-
-      %{state | table_reader_batch_id: nil}
     end
   end
 

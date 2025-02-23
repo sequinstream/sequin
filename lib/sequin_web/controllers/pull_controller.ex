@@ -33,7 +33,8 @@ defmodule SequinWeb.PullController do
 
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, ack_ids} <- parse_ack_ids(params),
-         {:ok, _count} <- SlotMessageStore.messages_succeeded(consumer.id, ack_ids) do
+         {:ok, messages} <- SlotMessageStore.messages_succeeded_returning_messages(consumer.id, ack_ids),
+         {:ok, _count} <- Consumers.after_messages_acked(consumer, messages) do
       json(conn, %{success: true})
     end
   end

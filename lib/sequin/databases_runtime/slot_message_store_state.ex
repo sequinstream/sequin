@@ -25,9 +25,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :ack_ids_to_cursor_tuples, %{SinkConsumer.ack_id() => cursor_tuple()}, default: %{}
     field :produced_message_groups, Multiset.t(), default: %{}
     field :persisted_message_groups, Multiset.t(), default: %{}
-    field :unpersisted_cursor_tuples_for_table_reader_batch, MapSet.t(), default: MapSet.new()
+    field :unpersisted_cursor_tuples_for_table_reader_batches, Multiset.t(), default: %{}
     field :setting_max_messages, non_neg_integer(), default: @default_setting_max_messages
     field :setting_system_max_memory_bytes, non_neg_integer() | nil
+    field :setting_max_memory_check_interval, non_neg_integer(), default: :timer.minutes(5)
     field :max_memory_bytes, non_neg_integer()
     field :payload_size_bytes, non_neg_integer(), default: 0
     field :slot_processor_monitor_ref, reference() | nil
@@ -111,11 +112,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
           {:ok, State.t()} | {:error, Error.t()}
   def put_table_reader_batch(%State{} = state, messages, batch_id) do
     messages = Enum.map(messages, &%{&1 | table_reader_batch_id: batch_id})
-
     cursor_tuples = Enum.map(messages, &{&1.commit_lsn, &1.commit_idx})
 
-    unpersisted_cursor_tuples_for_table_reader_batch =
-      MapSet.union(state.unpersisted_cursor_tuples_for_table_reader_batch, MapSet.new(cursor_tuples))
+    unpersisted_cursor_tuples_for_table_reader_batches =
+      Multiset.union(state.unpersisted_cursor_tuples_for_table_reader_batches, batch_id, MapSet.new(cursor_tuples))
 
     case put_messages(state, messages) do
       {:ok, %State{} = state} ->
@@ -123,7 +123,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
          %{
            state
            | table_reader_batch_id: batch_id,
-             unpersisted_cursor_tuples_for_table_reader_batch: unpersisted_cursor_tuples_for_table_reader_batch
+             unpersisted_cursor_tuples_for_table_reader_batches: unpersisted_cursor_tuples_for_table_reader_batches
          }}
 
       error ->
@@ -153,8 +153,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         Multiset.delete(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
       end)
 
-    unpersisted_cursor_tuples_for_table_reader_batch =
-      MapSet.difference(state.unpersisted_cursor_tuples_for_table_reader_batch, MapSet.new(cursor_tuples))
+    cursor_tuples_set = MapSet.new(cursor_tuples)
+
+    unpersisted_cursor_tuples_for_table_reader_batches =
+      state.unpersisted_cursor_tuples_for_table_reader_batches
+      |> Multiset.keys()
+      |> Enum.reduce(
+        state.unpersisted_cursor_tuples_for_table_reader_batches,
+        fn batch_id, acc ->
+          Multiset.difference(acc, batch_id, cursor_tuples_set)
+        end
+      )
 
     popped_message_ack_ids = Enum.map(popped_messages, & &1.ack_id)
 
@@ -176,7 +185,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
          payload_size_bytes: next_payload_size_bytes,
          produced_message_groups: produced_message_groups,
          persisted_message_groups: persisted_message_groups,
-         unpersisted_cursor_tuples_for_table_reader_batch: unpersisted_cursor_tuples_for_table_reader_batch
+         unpersisted_cursor_tuples_for_table_reader_batches: unpersisted_cursor_tuples_for_table_reader_batches
      }}
   end
 
@@ -330,9 +339,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
      }}
   end
 
-  @spec unpersisted_table_reader_messages?(State.t()) :: boolean()
-  def unpersisted_table_reader_messages?(%State{} = state) do
-    MapSet.size(state.unpersisted_cursor_tuples_for_table_reader_batch) != 0
+  @spec unpersisted_table_reader_batch_ids(State.t()) :: list(String.t())
+  def unpersisted_table_reader_batch_ids(%State{} = state) do
+    Multiset.keys(state.unpersisted_cursor_tuples_for_table_reader_batches)
   end
 
   defp deliverable_messages(%State{} = state, count) do

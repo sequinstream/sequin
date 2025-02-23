@@ -132,13 +132,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     # Allows each test to specify a static page size (initial_page_size) by default, bypassing
     # PageSizeOptimizer's dynamic sizing. This is helpful for determinism/testing pagination in tests.
 
-    Mox.stub(PageSizeOptimizerMock, :new, fn initial_page_size, _max_timeout_ms ->
-      %PageSizeOptimizer{initial_page_size: initial_page_size, max_timeout_ms: 1000}
+    Mox.stub(PageSizeOptimizerMock, :new, fn opts ->
+      PageSizeOptimizer.new(opts)
     end)
 
     Mox.stub(PageSizeOptimizerMock, :put_timing, fn state, _page_size, _time_ms -> state end)
     Mox.stub(PageSizeOptimizerMock, :put_timeout, fn state, _page_size -> state end)
     Mox.stub(PageSizeOptimizerMock, :size, fn state -> state.initial_page_size end)
+    Mox.stub(PageSizeOptimizerMock, :history, fn state -> state.history end)
 
     {:ok,
      consumer: consumer,
@@ -191,7 +192,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       # We expect only 5 records (the last 5 characters)
       assert length(messages) == 5
 
-      assert Enum.frequencies_by(messages, & &1.commit_lsn) == %{1 => 3, 2 => 2}
+      assert messages |> Enum.frequencies_by(& &1.commit_lsn) |> Map.values() == [3, 2]
 
       # Verify that the records match the last 5 inserted characters
       messages = Enum.sort_by(messages, & &1.record_pks)
@@ -289,6 +290,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       end)
     end
 
+    @tag capture_log: true
     test "processes only characters matching the filter", %{
       filtered_consumer_backfill: filtered_consumer_backfill,
       filtered_consumer: filtered_consumer,
@@ -404,7 +406,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       flush_batches(consumer, pid)
     end
 
-    test "retries batch when LSN indicates it's stale", %{
+    test "stops when LSN indicates a batch is stale", %{
       backfill: backfill,
       table_oid: table_oid,
       consumer: consumer
@@ -415,25 +417,29 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
 
-      start_table_reader_server(backfill, table_oid,
-        initial_page_size: 1000,
-        check_state_timeout: 1,
-        fetch_slot_lsn: fetch_slot_lsn
-      )
+      pid =
+        start_table_reader_server(backfill, table_oid,
+          initial_page_size: 1000,
+          check_state_timeout: 1,
+          fetch_slot_lsn: fetch_slot_lsn
+        )
+
+      Process.monitor(pid)
 
       # We should see multiple fetches of the same batch as it keeps getting marked stale
       assert capture_log(fn ->
                assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
-               assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
-               assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
+               assert_receive {:DOWN, _ref, :process, ^pid, :stale_batch}, 1000
              end) =~ "Detected stale batch"
     end
 
     @tag capture_log: true
     test "discards batch when told to do so", %{
       backfill: backfill,
-      table_oid: table_oid
+      table_oid: table_oid,
+      consumer: consumer
     } do
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: 2)
 
       # Get the first batch
@@ -573,6 +579,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       1000 ->
         raise "Timeout waiting for batch_fetched. Message history: #{inspect(Enum.reverse(message_history))}"
     end
+  catch
+    :exit, _ ->
+      {:ok, messages}
   end
 
   defp start_table_reader_server(backfill, table_oid, opts) do

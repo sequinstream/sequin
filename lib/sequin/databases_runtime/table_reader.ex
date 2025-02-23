@@ -85,12 +85,13 @@ defmodule Sequin.DatabasesRuntime.TableReader do
 
   # Queries
   @emit_logical_message_sql "select pg_logical_emit_message(true, $1, $2)"
-  def with_watermark(%PostgresDatabase{} = db, backfill_id, current_batch_id, table_oid, fun) do
+  def with_watermark(%PostgresDatabase{} = db, replication_slot_id, backfill_id, current_batch_id, table_oid, fun) do
     payload =
       Jason.encode!(%{
         table_oid: table_oid,
         batch_id: current_batch_id,
-        backfill_id: backfill_id
+        backfill_id: backfill_id,
+        replication_slot_id: replication_slot_id
       })
 
     with {:ok, conn} <- ConnectionCache.connection(db),
@@ -102,12 +103,17 @@ defmodule Sequin.DatabasesRuntime.TableReader do
            ]),
          {:ok, res} <- fun.(conn),
          Logger.debug("[TableReader] Emitting high watermark for batch #{current_batch_id}"),
-         {:ok, %{rows: [[lsn]]}} <-
+         {:ok, _} <-
            Postgres.query(conn, @emit_logical_message_sql, [
              Constants.backfill_batch_high_watermark(),
              payload
-           ]) do
-      {:ok, res, lsn}
+           ]),
+         # Note: We can't trust the LSN returned by pg_logical_emit_message function. For reasons we
+         # don't understand yet, we can have a situation where the LSN returned by this function is
+         # way different from `pg_current_wal_lsn()` / the LSNs coming from the replication slot.
+         {:ok, %{rows: [[appx_lsn]]}} <-
+           Postgres.query(conn, "select pg_current_wal_lsn()") do
+      {:ok, res, appx_lsn}
     end
   end
 

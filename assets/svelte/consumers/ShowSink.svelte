@@ -227,6 +227,13 @@
   }
 
   function createThroughputChart(element, data, options = {}) {
+    const MAX_DATA_POINTS = 300; // Keep 5 minutes of data at 1 second intervals
+
+    // Trim data to max length if needed
+    if (data.length > MAX_DATA_POINTS) {
+      data = data.slice(-MAX_DATA_POINTS);
+    }
+
     const config = {
       width: element.clientWidth,
       height: element.clientHeight,
@@ -375,6 +382,10 @@
 
     return {
       update: function (newData) {
+        // Trim incoming data if needed
+        if (newData.length > MAX_DATA_POINTS) {
+          newData = newData.slice(-MAX_DATA_POINTS);
+        }
         currentData = newData;
         y.domain([0, d3.max(newData) * 1.1]);
 
@@ -407,6 +418,13 @@
   }
 
   function createBytesChart(element, data, options = {}) {
+    const MAX_DATA_POINTS = 300; // Keep 5 minutes of data at 1 second intervals
+
+    // Trim data to max length if needed
+    if (data.length > MAX_DATA_POINTS) {
+      data = data.slice(-MAX_DATA_POINTS);
+    }
+
     const config = {
       width: element.clientWidth,
       height: element.clientHeight,
@@ -555,6 +573,10 @@
 
     return {
       update: function (newData) {
+        // Trim incoming data if needed
+        if (newData.length > MAX_DATA_POINTS) {
+          newData = newData.slice(-MAX_DATA_POINTS);
+        }
         currentData = newData;
         y.domain([0, d3.max(newData) * 1.1]);
 

@@ -9,6 +9,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.DatabasesRuntime.SlotSupervisor
+  alias Sequin.DatabasesRuntime.SlotSupervisorSupervisor
   alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.DatabasesRuntime.TableReaderServerSupervisor
   alias Sequin.DatabasesRuntime.WalEventSupervisor
@@ -19,7 +20,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   require Logger
 
   defp table_reader_supervisor, do: {:via, :syn, {:replication, TableReaderServerSupervisor}}
-  defp slot_supervisor, do: {:via, :syn, {:replication, SlotSupervisor}}
+  defp slot_supervisor, do: {:via, :syn, {:replication, SlotSupervisorSupervisor}}
   defp wal_event_supervisor, do: {:via, :syn, {:replication, WalEventSupervisor}}
 
   def start_link(opts) do
@@ -35,14 +36,18 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   def start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
     consumer = Repo.preload(consumer, [:active_backfill, :sequence])
 
-    default_opts = [
-      backfill_id: consumer.active_backfill.id,
-      table_oid: consumer.sequence.table_oid
-    ]
+    if is_nil(consumer.active_backfill) do
+      Logger.warning("Consumer #{consumer.id} has no active backfill, skipping start")
+    else
+      default_opts = [
+        backfill_id: consumer.active_backfill.id,
+        table_oid: consumer.sequence.table_oid
+      ]
 
-    opts = Keyword.merge(default_opts, opts)
+      opts = Keyword.merge(default_opts, opts)
 
-    Sequin.DynamicSupervisor.start_child(supervisor, {TableReaderServer, opts})
+      Sequin.DynamicSupervisor.start_child(supervisor, {TableReaderServer, opts})
+    end
   end
 
   def stop_table_reader(supervisor \\ table_reader_supervisor(), consumer)
@@ -91,10 +96,12 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
 
     case Sequin.DynamicSupervisor.start_child(supervisor, {SlotSupervisor, opts}) do
       {:ok, pid} ->
+        Logger.info("[DatabasesRuntime.Supervisor] Started SlotSupervisor", replication_id: pg_replication.id)
         SlotSupervisor.start_children(pg_replication, opts)
         {:ok, pid}
 
       {:ok, pid, _term} ->
+        Logger.info("[DatabasesRuntime.Supervisor] Started SlotSupervisor", replication_id: pg_replication.id)
         SlotSupervisor.start_children(pg_replication, opts)
         {:ok, pid}
 
@@ -103,6 +110,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
         {:ok, pid}
 
       {:error, error} ->
+        Logger.error("[DatabasesRuntime.Supervisor] Failed to start SlotSupervisor", error: error)
         {:error, error}
     end
   end
@@ -139,6 +147,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   end
 
   def stop_replication(supervisor, id) do
+    Logger.info("[DatabasesRuntime.Supervisor] Stopping replication #{id}")
     Sequin.DynamicSupervisor.stop_child(supervisor, SlotProcessor.via_tuple(id))
     :ok
   end

@@ -150,4 +150,46 @@ defmodule Sequin.Multiset do
   def keys(multiset) do
     Map.keys(multiset)
   end
+
+  @doc """
+  Removes a set of values from the set associated with the given key.
+  If the resulting set is empty, removes the key entirely.
+
+  ## Examples
+      iex> multiset = Sequin.Multiset.new([{"group1", "value1"}, {"group1", "value2"}])
+      iex> values_to_remove = MapSet.new(["value1", "value2"])
+      iex> Sequin.Multiset.difference(multiset, "group1", values_to_remove)
+      %{}
+  """
+  @spec difference(t(), key(), MapSet.t(value())) :: t()
+  def difference(multiset, key, values) when is_struct(values, MapSet) do
+    case Map.get(multiset, key) do
+      nil ->
+        multiset
+
+      set ->
+        next_set = MapSet.difference(set, values)
+
+        if MapSet.size(next_set) == 0 do
+          Map.delete(multiset, key)
+        else
+          Map.put(multiset, key, next_set)
+        end
+    end
+  end
+
+  @doc """
+  Adds a set of values to the set associated with the given key.
+  If the key doesn't exist, creates a new set with the values.
+
+  ## Examples
+      iex> multiset = Sequin.Multiset.new([{"group1", "value1"}])
+      iex> values_to_add = MapSet.new(["value2", "value3"])
+      iex> Sequin.Multiset.union(multiset, "group1", values_to_add)
+      %{"group1" => MapSet.new(["value1", "value2", "value3"])}
+  """
+  @spec union(t(), key(), MapSet.t(value())) :: t()
+  def union(multiset, key, values) when is_struct(values, MapSet) do
+    Map.update(multiset, key, values, &MapSet.union(&1, values))
+  end
 end

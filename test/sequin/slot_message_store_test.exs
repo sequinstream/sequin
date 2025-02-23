@@ -444,6 +444,32 @@ defmodule Sequin.SlotMessageStoreTest do
       state = SlotMessageStore.peek(consumer.id)
       assert state.payload_size_bytes == 0
     end
+
+    test "messages_succeeded_returning_messages returns the acked messages", %{consumer: consumer} do
+      # Create test messages
+      messages = [
+        ConsumersFactory.consumer_message(),
+        ConsumersFactory.consumer_message()
+      ]
+
+      # Put messages in store
+      :ok = SlotMessageStore.put_messages(consumer.id, messages)
+
+      # Retrieve messages
+      {:ok, delivered} = SlotMessageStore.produce(consumer.id, 2, self())
+      assert length(delivered) == 2
+
+      # Get ack_ids and call messages_succeeded_returning_messages
+      ack_ids = Enum.map(delivered, & &1.ack_id)
+      {:ok, returned_messages} = SlotMessageStore.messages_succeeded_returning_messages(consumer.id, ack_ids)
+
+      # Verify returned messages match what was delivered
+      assert length(returned_messages) == 2
+      assert Enum.map(returned_messages, & &1.ack_id) == ack_ids
+
+      # Verify messages were removed from store
+      {:ok, []} = SlotMessageStore.produce(consumer.id, 2, self())
+    end
   end
 
   describe "SlotMessageStore table reader batch handling" do
@@ -457,7 +483,8 @@ defmodule Sequin.SlotMessageStoreTest do
 
     test "puts batch and reports on batch progress", %{consumer: consumer} do
       consumer_id = consumer.id
-      :syn.join(:consumers, {:table_reader_batch_complete, consumer_id}, self())
+      :syn.join(:consumers, {:table_reader_batches_changed, consumer_id}, self())
+
       # Create test events
       messages = [
         ConsumersFactory.consumer_message(),
@@ -470,7 +497,7 @@ defmodule Sequin.SlotMessageStoreTest do
       # Retrieve messages
       {:ok, [delivered]} = SlotMessageStore.produce(consumer_id, 1, self())
 
-      assert {:ok, :in_progress} == SlotMessageStore.batch_progress(consumer_id, "test-batch-id")
+      assert {:ok, ["test-batch-id"]} == SlotMessageStore.unpersisted_table_reader_batch_ids(consumer_id)
 
       # For acks
       {:ok, 1} = SlotMessageStore.messages_succeeded(consumer_id, [delivered.ack_id])
@@ -479,13 +506,13 @@ defmodule Sequin.SlotMessageStoreTest do
       {:ok, [delivered]} = SlotMessageStore.produce(consumer_id, 1, self())
 
       # Delivered messages don't "complete" a batch
-      assert {:ok, :in_progress} == SlotMessageStore.batch_progress(consumer_id, "test-batch-id")
+      assert {:ok, ["test-batch-id"]} == SlotMessageStore.unpersisted_table_reader_batch_ids(consumer_id)
 
       {:ok, 1} = SlotMessageStore.messages_succeeded(consumer_id, [delivered.ack_id])
 
-      assert_received {:table_reader_batch_complete, "test-batch-id"}
+      assert_received :table_reader_batches_changed
 
-      assert {:ok, :completed} == SlotMessageStore.batch_progress(consumer_id, "test-batch-id")
+      assert {:ok, []} == SlotMessageStore.unpersisted_table_reader_batch_ids(consumer_id)
     end
   end
 

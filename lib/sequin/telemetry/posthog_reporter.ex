@@ -121,6 +121,9 @@ defmodule Sequin.Telemetry.PosthogReporter do
 
     total_count = Enum.sum(for {_, metadata, _} <- events, do: metadata.properties.message_count)
 
+    total_bytes =
+      Enum.sum(for {_, metadata, _} <- events, do: metadata.properties.bytes_processed)
+
     {
       event,
       %{
@@ -130,6 +133,7 @@ defmodule Sequin.Telemetry.PosthogReporter do
           consumer_name: base_metadata.properties.consumer_name,
           event_count: length(events),
           message_count: total_count,
+          bytes_processed: total_bytes,
           message_kind: base_metadata.properties.message_kind,
           "$groups": base_metadata.properties[:"$groups"]
         }

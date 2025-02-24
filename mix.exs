@@ -111,13 +111,7 @@ defmodule Sequin.MixProject do
         &remove_consumer_messages_log/1
       ],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind sequin", "esbuild sequin"],
-      "assets.deploy": [
-        "tailwind sequin --minify",
-        "cmd --cd assets node build.js --deploy",
-        "phx.digest"
-      ]
+      "assets.setup": ["cmd --cd assets npm install"]
     ]
   end
 

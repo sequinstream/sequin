@@ -108,7 +108,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
       {:ok, lag_bytes} ->
         lag_mb = Float.round(lag_bytes / 1024 / 1024, 0)
 
-        if lag_bytes > Replication.lag_bytes_alert_threshold() do
+        if lag_bytes > Replication.lag_bytes_alert_threshold(slot) do
           Logger.warning("Replication lag is #{lag_mb}MB")
         else
           Logger.info("Replication lag is #{lag_mb}MB")

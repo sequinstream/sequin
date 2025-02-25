@@ -456,7 +456,7 @@ defmodule Sequin.Replication do
 
   def measure_replication_lag(%PostgresReplicationSlot{} = slot, measure_fn \\ &replication_lag_bytes/1) do
     with {:ok, lag_bytes} <- measure_fn.(slot) do
-      if lag_bytes > lag_bytes_alert_threshold() do
+      if lag_bytes > lag_bytes_alert_threshold(slot) do
         Health.put_event(slot, %Health.Event{
           slug: :replication_lag_checked,
           status: :warning,
@@ -481,7 +481,14 @@ defmodule Sequin.Replication do
     Postgres.replication_lag_bytes(slot.postgres_database, slot.slot_name)
   end
 
-  def lag_bytes_alert_threshold, do: 2.5 * 1024 * 1024 * 1024
+  def lag_bytes_alert_threshold(%PostgresReplicationSlot{account_id: "52b3c9ff-4bd3-44f8-988e-9cc4b1162dc8"}) do
+    # Higher for specific account
+    10 * 1024 * 1024 * 1024
+  end
+
+  def lag_bytes_alert_threshold(_slot) do
+    2.5 * 1024 * 1024 * 1024
+  end
 
   defp env do
     Application.get_env(:sequin, :env)

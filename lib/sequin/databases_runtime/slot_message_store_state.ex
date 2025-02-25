@@ -49,24 +49,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     :"slot_message_store_state_ordered_cursors_consumer_#{consumer.seq}"
   end
 
-  @spec put_messages(State.t(), list(message()) | Enumerable.t()) ::
-          {:ok, State.t()} | {:error, Error.t()}
-  def put_messages(%State{} = state, messages, opts \\ []) do
+  @spec validate_put_messages(State.t(), list(message()) | Enumerable.t(), keyword()) ::
+          {:ok, non_neg_integer()} | {:error, Error.t()}
+  def validate_put_messages(%State{} = state, messages, opts \\ []) do
     skip_limit_check? = Keyword.get(opts, :skip_limit_check?, false)
 
-    # Create new messages map while filtering out existing messages
-    new_messages =
-      messages
-      |> Stream.reject(&Map.has_key?(state.messages, {&1.commit_lsn, &1.commit_idx}))
-      |> Map.new(&{{&1.commit_lsn, &1.commit_idx}, &1})
-
-    # Only count payload sizes for new messages
-    incoming_payload_size_bytes = Enum.sum_by(Map.values(new_messages), & &1.payload_size_bytes)
+    incoming_payload_size_bytes = Enum.sum_by(messages, & &1.payload_size_bytes)
 
     bytes_exceeded? =
       state.payload_size_bytes + incoming_payload_size_bytes > state.max_memory_bytes
 
-    messages_exceeded? = map_size(new_messages) + map_size(state.messages) > state.setting_max_messages
+    messages_exceeded? = length(messages) + map_size(state.messages) > state.setting_max_messages
 
     cond do
       not skip_limit_check? and bytes_exceeded? ->
@@ -76,26 +69,39 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         {:error, Error.invariant(message: "Message count limit exceeded", code: :payload_size_limit_exceeded)}
 
       true ->
-        # Insert into ETS
-        ets_keys = Enum.map(new_messages, fn {commit_tuple, _msg} -> {commit_tuple} end)
-
-        state.consumer
-        |> ordered_cursors_table()
-        |> :ets.insert(ets_keys)
-
-        ack_ids_to_cursor_tuples =
-          Map.new(new_messages, fn {_commit_tuple, msg} -> {msg.ack_id, {msg.commit_lsn, msg.commit_idx}} end)
-
-        state =
-          %{
-            state
-            | messages: Map.merge(state.messages, new_messages),
-              ack_ids_to_cursor_tuples: Map.merge(state.ack_ids_to_cursor_tuples, ack_ids_to_cursor_tuples),
-              payload_size_bytes: state.payload_size_bytes + incoming_payload_size_bytes
-          }
-
-        {:ok, state}
+        {:ok, incoming_payload_size_bytes}
     end
+  end
+
+  @spec put_messages(State.t(), list(message()) | Enumerable.t(), keyword()) ::
+          {:ok, State.t()} | {:error, Error.t()}
+  def put_messages(%State{} = state, messages, opts \\ []) do
+    messages = Enum.reject(messages, &message_exists?(state, &1))
+
+    with {:ok, incoming_payload_size_bytes} <- validate_put_messages(state, messages, opts) do
+      # Insert into ETS
+      ets_keys = Enum.map(messages, fn msg -> {{msg.commit_lsn, msg.commit_idx}} end)
+
+      state.consumer
+      |> ordered_cursors_table()
+      |> :ets.insert(ets_keys)
+
+      cursor_tuples_to_messages = Map.new(messages, fn msg -> {{msg.commit_lsn, msg.commit_idx}, msg} end)
+      ack_ids_to_cursor_tuples = Map.new(messages, fn msg -> {msg.ack_id, {msg.commit_lsn, msg.commit_idx}} end)
+
+      {:ok,
+       %{
+         state
+         | messages: Map.merge(state.messages, cursor_tuples_to_messages),
+           ack_ids_to_cursor_tuples: Map.merge(state.ack_ids_to_cursor_tuples, ack_ids_to_cursor_tuples),
+           payload_size_bytes: state.payload_size_bytes + incoming_payload_size_bytes
+       }}
+    end
+  end
+
+  @spec message_exists?(State.t(), message()) :: boolean()
+  def message_exists?(%State{} = state, message) do
+    Map.has_key?(state.messages, {message.commit_lsn, message.commit_idx})
   end
 
   @spec put_persisted_messages(State.t(), list(message()) | Enumerable.t()) :: {:ok, State.t()} | {:error, Error.t()}

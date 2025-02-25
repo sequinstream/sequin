@@ -67,6 +67,26 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
   end
 
+  describe "validate_put_messages/2" do
+    test "returns payload size if under memory limit", %{state: state} do
+      msg1 = ConsumersFactory.consumer_message(payload_size_bytes: 100)
+      msg2 = ConsumersFactory.consumer_message(payload_size_bytes: 200)
+
+      {:ok, payload_size} = State.validate_put_messages(state, [msg1, msg2])
+
+      assert payload_size == 300
+    end
+
+    test "returns error when exceeding setting_max_accumulated_payload_bytes", %{state: state} do
+      state = %{state | max_memory_bytes: Size.mb(100)}
+
+      msg1 = ConsumersFactory.consumer_message(payload_size_bytes: Size.mb(100))
+      msg2 = ConsumersFactory.consumer_message(payload_size_bytes: Size.mb(100))
+
+      assert {:error, %Error.InvariantError{}} = State.validate_put_messages(state, [msg1, msg2])
+    end
+  end
+
   describe "put_persisted_messages/2" do
     test "updates persisted_message_groups", %{state: state} do
       msg1 = ConsumersFactory.consumer_message(group_id: "group1")

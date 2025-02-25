@@ -328,33 +328,48 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   @impl GenServer
-  def handle_call({:put_messages, messages}, _from, %State{} = state) do
+  def handle_call({:put_messages, messages}, from, %State{} = state) do
     execute_timed(:put_messages, fn ->
       now = Sequin.utc_now()
 
       messages =
         messages
+        |> Stream.reject(&State.message_exists?(state, &1))
         |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
-        # We may be receiving messages that we've already ingested and persisted, filter out
-        # Do we receive messages that we have ingested but not persisted?
-        |> Enum.filter(&(not State.is_message_persisted?(state, &1)))
+        |> Enum.to_list()
 
-      {to_persist, to_put} =
-        if state.consumer.status == :disabled do
-          {Enum.to_list(messages), []}
-        else
-          Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
-        end
+      # Validate first
+      case State.validate_put_messages(state, messages) do
+        {:ok, _incoming_payload_size_bytes} ->
+          # Reply early since validation passed. This frees up the SlotProcessor to continue
+          # calling other SMSs, accumulating messages, etc.
+          GenServer.reply(from, :ok)
 
-      with {:ok, state} <- State.put_messages(state, to_put),
-           :ok <- upsert_messages(state, to_persist),
-           {:ok, state} <- State.put_persisted_messages(state, to_persist) do
-        Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
-        :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
+          execute_timed(:put_messages_after_reply, fn ->
+            {to_persist, to_put} =
+              if state.consumer.status == :disabled do
+                {messages, []}
+              else
+                Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
+              end
 
-        {:reply, :ok, state}
-      else
+            {:ok, state} = State.put_messages(state, to_put)
+
+            :ok = upsert_messages(state, to_persist)
+            {:ok, state} = State.put_persisted_messages(state, to_persist)
+
+            Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
+            :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
+
+            if state.test_pid do
+              send(state.test_pid, {:put_messages_done, state.consumer.id})
+            end
+
+            {:noreply, state}
+          end)
+
         {:error, error} ->
+          # Reply with error if validation fails
           {:reply, {:error, error}, state}
       end
     end)

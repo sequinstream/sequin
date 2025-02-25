@@ -57,6 +57,9 @@ defmodule Sequin.SlotMessageStoreTest do
 
       :ok = SlotMessageStore.put_messages(consumer.id, [new_message])
 
+      consumer_id = consumer.id
+      assert_receive {:put_messages_done, ^consumer_id}, 1000
+
       persisted_messages = Consumers.list_consumer_messages_for_consumer(consumer)
       assert length(persisted_messages) == 3
 
@@ -380,6 +383,8 @@ defmodule Sequin.SlotMessageStoreTest do
     end
 
     test "persists all messages when consumer is disabled", %{consumer: consumer} do
+      consumer_id = consumer.id
+
       # Put initial message in store while active
       initial_message =
         ConsumersFactory.consumer_message(
@@ -388,6 +393,7 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       :ok = SlotMessageStore.put_messages(consumer.id, [initial_message])
+      assert_receive {:put_messages_done, ^consumer_id}, 1000
 
       # Verify message is not persisted yet
       assert [] == Consumers.list_consumer_messages_for_consumer(consumer)
@@ -410,6 +416,7 @@ defmodule Sequin.SlotMessageStoreTest do
       ]
 
       :ok = SlotMessageStore.put_messages(consumer.id, new_messages)
+      assert_receive {:put_messages_done, ^consumer_id}, 1000
 
       # Verify all messages are persisted
       persisted_messages = Consumers.list_consumer_messages_for_consumer(disabled_consumer)

@@ -269,8 +269,9 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   defp member_from_wal_cursor(%{commit_lsn: commit_lsn, commit_idx: commit_idx}), do: "#{commit_lsn}:#{commit_idx}"
   defp score_from_wal_cursor(%{commit_lsn: commit_lsn, commit_idx: commit_idx}), do: commit_lsn + commit_idx
 
-  defp delivered_cursors_key(consumer_id), do: "consumer:#{consumer_id}:consumer_idempotency"
-  defp undelivered_cursors_key(consumer_id), do: "consumer:#{consumer_id}:commit_verification"
+  defp delivered_cursors_key(consumer_id), do: "consumer:{#{consumer_id}}:consumer_idempotency"
+  defp undelivered_cursors_key(consumer_id), do: "consumer:{#{consumer_id}}:commit_verification"
+  defp checkpoint_key(consumer_id, checkpoint), do: "consumer:{#{consumer_id}}:checkpoint:#{checkpoint}"
 
   @doc """
   Called when WAL cursors reach a specific checkpoint in processing. Similar to wal_cursors_ingested,
@@ -326,8 +327,6 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   end
 
   def wal_cursor_from_message(message), do: Map.take(message, [:commit_lsn, :commit_idx])
-
-  defp checkpoint_key(consumer_id, checkpoint), do: "consumer:#{consumer_id}:checkpoint:#{checkpoint}"
 
   defp subsample?, do: env() != :prod or Enum.random(1..10) == 1
 

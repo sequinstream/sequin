@@ -48,7 +48,9 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
           ]
         end)
 
-      case Redis.pipeline(commands) do
+      query_name = "message_ledgers:wal_cursors_ingested"
+
+      case Redis.pipeline(commands, query_name: query_name) do
         {:ok, _results} -> :ok
         {:error, error} -> {:error, error}
       end
@@ -66,6 +68,8 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   def wal_cursors_delivered(_, []), do: :ok
 
   def wal_cursors_delivered(consumer_id, wal_cursors) do
+    query_name = "message_ledgers:wal_cursors_delivered"
+
     wal_cursors
     |> Enum.flat_map(fn commit ->
       [
@@ -73,7 +77,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
         ["ZADD", delivered_cursors_key(consumer_id), score_from_wal_cursor(commit), member_from_wal_cursor(commit)]
       ]
     end)
-    |> Redis.pipeline()
+    |> Redis.pipeline(query_name: query_name)
     |> case do
       {:ok, _} -> :ok
       {:error, error} -> {:error, error}
@@ -92,8 +96,10 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
 
   def filter_delivered_wal_cursors(consumer_id, wal_cursors) do
     encoded_wal_cursors = Enum.map(wal_cursors, &member_from_wal_cursor/1)
+    query_name = "message_ledgers:filter_delivered_wal_cursors"
 
-    with {:ok, results} <- Redis.command(["ZMSCORE", delivered_cursors_key(consumer_id) | encoded_wal_cursors]) do
+    with {:ok, results} <-
+           Redis.command(["ZMSCORE", delivered_cursors_key(consumer_id) | encoded_wal_cursors], query_name: query_name) do
       # Convert results to integers, filtering out nils (non-delivered messages)
       delivered_wal_cursors =
         results
@@ -115,10 +121,14 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   @spec trim_delivered_cursors_set(consumer_id(), Replication.wal_cursor()) :: :ok | {:error, Error.t()}
   def trim_delivered_cursors_set(consumer_id, wal_cursor) do
     key = delivered_cursors_key(consumer_id)
+    query_name = "message_ledgers:trim_delivered_cursors_set"
 
-    with {:ok, initial_size} <- Redis.command(["ZCARD", key]),
-         {:ok, trimmed} <- Redis.command(["ZREMRANGEBYSCORE", key, "-inf", "(#{score_from_wal_cursor(wal_cursor)}"]),
-         {:ok, final_size} <- Redis.command(["ZCARD", key]) do
+    with {:ok, initial_size} <- Redis.command(["ZCARD", key], query_name: query_name),
+         {:ok, trimmed} <-
+           Redis.command(["ZREMRANGEBYSCORE", key, "-inf", "(#{score_from_wal_cursor(wal_cursor)}"],
+             query_name: query_name
+           ),
+         {:ok, final_size} <- Redis.command(["ZCARD", key], query_name: query_name) do
       Logger.info("[MessageLedgers] Trimmed delivered_cursors set to: #{inspect(wal_cursor)}",
         commit: wal_cursor,
         consumer_id: consumer_id,
@@ -153,9 +163,12 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
           {:ok, [Replication.wal_cursor()]} | {:error, Error.t()}
   def list_undelivered_wal_cursors(consumer_id, older_than_timestamp) do
     older_than_timestamp = DateTime.to_unix(older_than_timestamp, :second)
+    query_name = "message_ledgers:list_undelivered_wal_cursors"
 
     res =
-      Redis.command(["ZRANGEBYSCORE", undelivered_cursors_key(consumer_id), "-inf", older_than_timestamp, "WITHSCORES"])
+      Redis.command(["ZRANGEBYSCORE", undelivered_cursors_key(consumer_id), "-inf", older_than_timestamp, "WITHSCORES"],
+        query_name: query_name
+      )
 
     with {:ok, results} <- res do
       cursors =
@@ -184,10 +197,11 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   def trim_stale_undelivered_wal_cursors(consumer_id, older_than_timestamp) do
     key = undelivered_cursors_key(consumer_id)
     older_than_timestamp = DateTime.to_unix(older_than_timestamp, :second)
+    query_name = "message_ledgers:trim_stale_undelivered_wal_cursors"
 
-    with {:ok, initial_size} <- Redis.command(["ZCARD", key]),
-         {:ok, trimmed} <- Redis.command(["ZREMRANGEBYSCORE", key, "-inf", older_than_timestamp]),
-         {:ok, final_size} <- Redis.command(["ZCARD", key]) do
+    with {:ok, initial_size} <- Redis.command(["ZCARD", key], query_name: query_name),
+         {:ok, trimmed} <- Redis.command(["ZREMRANGEBYSCORE", key, "-inf", older_than_timestamp], query_name: query_name),
+         {:ok, final_size} <- Redis.command(["ZCARD", key], query_name: query_name) do
       Logger.info("[MessageLedgers] Trimmed commits older than #{older_than_timestamp}",
         consumer_id: consumer_id,
         initial_size: initial_size,
@@ -206,8 +220,9 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   @spec count_delivered_cursors_set(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   def count_delivered_cursors_set(consumer_id) do
     key = delivered_cursors_key(consumer_id)
+    query_name = "message_ledgers:count_delivered_cursors_set"
 
-    case Redis.command(["ZCARD", key]) do
+    case Redis.command(["ZCARD", key], query_name: query_name) do
       {:ok, count} -> {:ok, String.to_integer(count)}
       {:error, error} -> {:error, error}
     end
@@ -216,8 +231,9 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   @spec count_commit_verification_set(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   def count_commit_verification_set(consumer_id) do
     key = undelivered_cursors_key(consumer_id)
+    query_name = "message_ledgers:count_commit_verification_set"
 
-    case Redis.command(["ZCARD", key]) do
+    case Redis.command(["ZCARD", key], query_name: query_name) do
       {:ok, count} -> {:ok, String.to_integer(count)}
       {:error, error} -> {:error, error}
     end
@@ -226,8 +242,9 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   @spec drop_delivered_cursors_set(consumer_id()) :: :ok | {:error, Error.t()}
   def drop_delivered_cursors_set(consumer_id) do
     key = delivered_cursors_key(consumer_id)
+    query_name = "message_ledgers:drop_delivered_cursors_set"
 
-    with {:ok, _} <- Redis.command(["DEL", key]) do
+    with {:ok, _} <- Redis.command(["DEL", key], query_name: query_name) do
       :ok
     end
   end
@@ -235,8 +252,9 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   @spec drop_verification_set(consumer_id()) :: :ok | {:error, Error.t()}
   def drop_verification_set(consumer_id) do
     key = undelivered_cursors_key(consumer_id)
+    query_name = "message_ledgers:drop_verification_set"
 
-    with {:ok, _} <- Redis.command(["DEL", key]) do
+    with {:ok, _} <- Redis.command(["DEL", key], query_name: query_name) do
       :ok
     end
   end
@@ -264,6 +282,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   def wal_cursors_reached_checkpoint(consumer_id, checkpoint, wal_cursors) do
     if env() == :dev and auditing?() do
       reached_at = Sequin.utc_now()
+      query_name = "message_ledgers:wal_cursors_reached_checkpoint"
 
       commands =
         Enum.map(wal_cursors, fn wal_cursor ->
@@ -275,7 +294,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
           ]
         end)
 
-      case Redis.pipeline(commands) do
+      case Redis.pipeline(commands, query_name: query_name) do
         {:ok, _results} -> :ok
         {:error, error} -> {:error, error}
       end

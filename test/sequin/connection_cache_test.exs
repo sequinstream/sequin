@@ -99,6 +99,64 @@ defmodule Sequin.Databases.ConnectionCacheTest do
       assert {:error, %Sequin.Error.NotFoundError{}} = ConnectionCache.existing_connection(cache, db)
     end
 
+    test "when multiple callers want to start the same connection at the same time, fans out the result to them" do
+      test_pid = self()
+
+      db = DatabasesFactory.postgres_database()
+
+      start_fn = fn _db ->
+        send(test_pid, {:started, self()})
+
+        receive do
+          :go -> {:ok, spawn(fn -> Process.sleep(5_000) end)}
+        after
+          1_000 -> raise "Timed out waiting for go signal"
+        end
+      end
+
+      cache = start_cache(start_fn: start_fn)
+
+      task1 = Task.async(fn -> ConnectionCache.connection(cache, db) end)
+      assert_receive {:started, pid}
+      task2 = Task.async(fn -> ConnectionCache.connection(cache, db) end)
+      :erlang.yield()
+
+      send(pid, :go)
+
+      res = Task.await_many([task1, task2])
+      [{:ok, pid1}, {:ok, pid1}] = res
+
+      refute_received {:started, _pid}
+    end
+
+    test "if start_fn fails, returns the error to the callers" do
+      test_pid = self()
+      db = DatabasesFactory.postgres_database()
+      error = {:error, %Postgrex.Error{message: "Failed to start"}}
+
+      start_fn = fn _db ->
+        send(test_pid, {:started, self()})
+
+        receive do
+          :go -> error
+        after
+          1_000 -> raise "Timed out waiting for go signal"
+        end
+      end
+
+      cache = start_cache(start_fn: start_fn)
+
+      task1 = Task.async(fn -> ConnectionCache.connection(cache, db) end)
+      assert_receive {:started, pid}
+      task2 = Task.async(fn -> ConnectionCache.connection(cache, db) end)
+      :erlang.yield()
+
+      send(pid, :go)
+
+      res = Task.await_many([task1, task2])
+      [{:error, error}, {:error, error}] = res
+    end
+
     defp start_cache(overrides \\ []) do
       opts =
         Keyword.merge(

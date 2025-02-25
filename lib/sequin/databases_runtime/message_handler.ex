@@ -81,9 +81,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
       {ctx, messages} = load_unchanged_toasts(ctx, messages)
 
-      messages_with_consumer =
-        execute_timed(:messages_with_consumer, fn ->
-          messages_with_consumer(ctx, messages)
+      messages_by_consumer_id =
+        execute_timed(:messages_by_consumer_id, fn ->
+          messages_by_consumer_id(ctx, messages)
         end)
 
       wal_events =
@@ -99,19 +99,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
       matching_pipeline_ids = wal_events |> Enum.map(& &1.wal_pipeline_id) |> Enum.uniq()
 
-      messages_by_consumer =
-        Enum.group_by(
-          messages_with_consumer,
-          # key function
-          fn {{_action, _event_or_record}, consumer} -> consumer end,
-          # value function
-          fn {{_action, event_or_record}, _consumer} -> event_or_record end
-        )
-
       res =
         with {:ok, count} <-
                execute_timed(:call_consumer_message_stores, fn ->
-                 call_consumer_message_stores(messages_by_consumer)
+                 call_consumer_message_stores(messages_by_consumer_id)
                end) do
           {:ok, wal_event_count} =
             execute_timed(:insert_wal_events, fn ->
@@ -222,7 +213,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     ctx
   end
 
-  defp violates_payload_size?(replication_slot_id, {{_action, event_or_record}, _consumer}) do
+  defp violates_payload_size?(replication_slot_id, event_or_record) do
     max_payload_size_bytes = Map.get(@max_payload_sizes_by_replication_slot_id, replication_slot_id)
 
     if max_payload_size_bytes do
@@ -375,23 +366,23 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     |> Map.new()
   end
 
-  defp call_consumer_message_stores(messages_by_consumer) do
+  defp call_consumer_message_stores(messages_by_consumer_id) do
     res =
-      Enum.reduce_while(messages_by_consumer, :ok, fn {consumer, messages}, :ok ->
+      Enum.reduce_while(messages_by_consumer_id, :ok, fn {consumer_id, messages}, :ok ->
         messages_to_ingest =
           execute_timed(:message_ledgers, fn ->
             all_wal_cursors = Enum.map(messages, &MessageLedgers.wal_cursor_from_message/1)
 
             # Step 1: Mark all WAL cursors as ingested first
             if Sequin.random(1..100) == 1 do
-              :ok = MessageLedgers.wal_cursors_ingested(consumer.id, all_wal_cursors)
+              :ok = MessageLedgers.wal_cursors_ingested(consumer_id, all_wal_cursors)
             end
 
             # Step 2: Check which ones were already delivered
-            {:ok, delivered_wal_cursors} = MessageLedgers.filter_delivered_wal_cursors(consumer.id, all_wal_cursors)
+            {:ok, delivered_wal_cursors} = MessageLedgers.filter_delivered_wal_cursors(consumer_id, all_wal_cursors)
 
             # Step 3: Re-mark delivered wal cursors as delivered
-            :ok = MessageLedgers.wal_cursors_delivered(consumer.id, delivered_wal_cursors)
+            :ok = MessageLedgers.wal_cursors_delivered(consumer_id, delivered_wal_cursors)
 
             # Step 4: Filter out already delivered messages before sending downstream
             delivered_wal_cursors = MapSet.new(delivered_wal_cursors)
@@ -403,7 +394,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
           end)
 
         execute_timed(:put_messages, fn ->
-          case put_messages(consumer, messages_to_ingest) do
+          case put_messages(consumer_id, messages_to_ingest) do
             :ok -> {:cont, :ok}
             {:error, _} = error -> {:halt, error}
           end
@@ -411,37 +402,37 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       end)
 
     with :ok <- res do
-      {:ok, Enum.sum_by(messages_by_consumer, fn {_, messages} -> length(messages) end)}
+      {:ok, Enum.sum_by(messages_by_consumer_id, fn {_, messages} -> length(messages) end)}
     end
   end
 
   @max_backoff_ms :timer.seconds(1)
   @max_attempts 5
-  defp put_messages(%SinkConsumer{} = consumer, messages_to_ingest, attempt \\ 1) do
-    case SlotMessageStore.put_messages(consumer.id, messages_to_ingest) do
+  defp put_messages(consumer_id, messages_to_ingest, attempt \\ 1) do
+    case SlotMessageStore.put_messages(consumer_id, messages_to_ingest) do
       :ok ->
-        Health.put_event(consumer, %Event{slug: :messages_ingested, status: :success})
+        Health.put_event(:sink_consumer, consumer_id, %Event{slug: :messages_ingested, status: :success})
         :ok
 
       {:error, %InvariantError{code: :payload_size_limit_exceeded}} when attempt <= @max_attempts ->
         backoff = Sequin.Time.exponential_backoff(50, attempt, @max_backoff_ms)
 
         Logger.debug(
-          "[MessageHandler] Slot message store for consumer #{consumer.id} is full. " <>
+          "[MessageHandler] Slot message store for consumer #{consumer_id} is full. " <>
             "Backing off for #{backoff}ms before retry #{attempt + 1}/#{@max_attempts}..."
         )
 
         Process.sleep(backoff)
-        put_messages(consumer, messages_to_ingest, attempt + 1)
+        put_messages(consumer_id, messages_to_ingest, attempt + 1)
 
       {:error, error} ->
-        Health.put_event(consumer, %Event{slug: :messages_ingested, status: :fail, error: error})
+        Health.put_event(:sink_consumer, consumer_id, %Event{slug: :messages_ingested, status: :failed, error: error})
         {:error, error}
     end
   end
 
-  defp messages_with_consumer(%Context{} = ctx, messages) do
-    Enum.flat_map(ctx.consumers, fn consumer ->
+  defp messages_by_consumer_id(%Context{} = ctx, messages) do
+    Map.new(ctx.consumers, fn consumer ->
       matching_messages =
         execute_timed(:filter_matching_messages, fn ->
           Enum.filter(messages, &Consumers.matches_message?(consumer, &1))
@@ -452,22 +443,25 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
           Enum.map(matching_messages, fn message ->
             cond do
               consumer.message_kind == :event ->
-                {{:insert, consumer_event(consumer, message)}, consumer}
+                consumer_event(consumer, message)
 
               consumer.message_kind == :record and message.action == :delete ->
                 # We do not propagate delete messages to record consumers
                 nil
 
               consumer.message_kind == :record ->
-                {{:insert, consumer_record(consumer, message)}, consumer}
+                consumer_record(consumer, message)
             end
           end)
         end)
 
-      consumer_messages
-      |> Stream.reject(&is_nil/1)
-      |> Stream.reject(&violates_payload_size?(ctx.replication_slot_id, &1))
-      |> Enum.to_list()
+      messages =
+        consumer_messages
+        |> Stream.reject(&is_nil/1)
+        |> Stream.reject(&violates_payload_size?(ctx.replication_slot_id, &1))
+        |> Enum.to_list()
+
+      {consumer.id, messages}
     end)
   end
 
@@ -599,7 +593,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   defp execute_timed(name, fun) do
     {time, result} = :timer.tc(fun)
     # Convert microseconds to milliseconds
-    incr_counter(:"#{name}_total_ms", div(time, 1000))
+    incr_counter(:"#{name}_total_ms", time / 1000)
     incr_counter(:"#{name}_count")
     result
   end

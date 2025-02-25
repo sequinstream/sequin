@@ -5,6 +5,7 @@ defmodule Sequin.SystemMetricsServer do
   require Logger
 
   @interval :timer.seconds(30)
+  @run_queue_threshold 50
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -30,11 +31,17 @@ defmodule Sequin.SystemMetricsServer do
   defp log_metrics do
     memory_info = :erlang.memory()
     cpu_load = cpu_load()
+    run_queue = :erlang.statistics(:run_queue)
+
+    if run_queue > @run_queue_threshold do
+      Logger.warning("[SystemMetricsServer] Run queue is high (#{run_queue}), system may be resource constrained")
+    end
 
     Logger.info(
       """
       [SystemMetricsServer]
       CPU Load:      #{format_cpu_load(cpu_load)}
+      Run Queue:     #{run_queue}
       Memory Total:  #{format_bytes(memory_info[:total])}
         Processes:   #{format_bytes(memory_info[:processes])}
         Atoms:       #{format_bytes(memory_info[:atom])}
@@ -43,6 +50,7 @@ defmodule Sequin.SystemMetricsServer do
         ETS:         #{format_bytes(memory_info[:ets])}
       """,
       cpu_load: cpu_load,
+      run_queue: run_queue,
       memory_total_bytes: memory_info[:total],
       memory_processes_bytes: memory_info[:processes],
       memory_atoms_bytes: memory_info[:atom],

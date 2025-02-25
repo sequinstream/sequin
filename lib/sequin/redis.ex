@@ -146,12 +146,13 @@ defmodule Sequin.Redis do
 
   @sample_rate 1
   defp maybe_time([command_kind | _commands], query_name, fun) do
+    command_kind = if is_list(command_kind), do: "pipeline-#{List.first(command_kind)}", else: command_kind
     query_name = query_name || "unnamed_query"
     {time_us, result} = :timer.tc(fun)
 
     if Enum.random(0..99) < @sample_rate do
       time_ms = time_us / 1000
-      Statsd.timing("sequin.redis.#{command_kind}", time_ms, tags: %{query: query_name})
+      Statsd.timing("sequin.redis", time_ms, tags: %{query: query_name, command_kind: command_kind})
     end
 
     result

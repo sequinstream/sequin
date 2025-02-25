@@ -3,12 +3,14 @@ defmodule Sequin.Redis do
   alias __MODULE__
   alias Sequin.Error
   alias Sequin.Error.ServiceError
+  alias Sequin.Statsd
 
   require Logger
 
   @type command :: [any()]
   @type redis_value :: binary() | integer() | nil | [redis_value()]
   @type pipeline_return_value :: redis_value() | ServiceError.t()
+  @type command_opt :: {:query_name, String.t()}
 
   @doc """
   :eredis_cluster_sup_sup has already been started elsewhere. To start nodes underneath it,
@@ -47,60 +49,69 @@ defmodule Sequin.Redis do
       raise "Failed to connect to Redis: #{inspect(error)}"
   end
 
-  @spec command(command()) :: {:ok, redis_value()} | {:error, ServiceError.t()}
-  def command(command) do
-    res =
-      connection()
-      |> :eredis_cluster.q(command)
-      |> parse_result()
+  @spec command(command(), [opt]) :: {:ok, redis_value()} | {:error, ServiceError.t()}
+        when opt: command_opt()
+  def command(command, opts \\ []) do
+    maybe_time(command, opts[:query_name], fn ->
+      res =
+        connection()
+        |> :eredis_cluster.q(command)
+        |> parse_result()
 
-    case res do
-      {:ok, result} ->
-        {:ok, result}
+      case res do
+        {:ok, result} ->
+          {:ok, result}
 
-      {:error, :no_connection} ->
-        {:error, Error.service(service: :redis, code: "no_connection", message: "No connection to Redis")}
+        {:error, :no_connection} ->
+          {:error, Error.service(service: :redis, code: "no_connection", message: "No connection to Redis")}
 
-      {:error, :timeout} ->
-        {:error, Error.service(service: :redis, code: :timeout, message: "Timeout connecting to Redis")}
+        {:error, :timeout} ->
+          {:error, Error.service(service: :redis, code: :timeout, message: "Timeout connecting to Redis")}
 
-      {:error, error} when is_binary(error) or is_atom(error) ->
-        Logger.error("Redis command failed: #{error}", error: error)
-        {:error, Error.service(service: :redis, code: :command_failed, message: to_string(error))}
-    end
+        {:error, error} when is_binary(error) or is_atom(error) ->
+          Logger.error("Redis command failed: #{error}", error: error)
+          {:error, Error.service(service: :redis, code: :command_failed, message: to_string(error))}
+      end
+    end)
   end
 
-  @spec command!(command()) :: redis_value()
-  def command!(command) do
-    res = connection() |> :eredis_cluster.q(command) |> parse_result()
+  @spec command!(command(), [opt]) :: redis_value()
+        when opt: command_opt()
+  def command!(command, opts \\ []) do
+    maybe_time(command, opts[:query_name], fn ->
+      res = connection() |> :eredis_cluster.q(command) |> parse_result()
 
-    case res do
-      {:ok, result} -> result
-      {:error, error} when is_exception(error) -> raise error
-      {:error, error} -> raise Error.service(service: :redis, code: :command_failed, message: error)
-    end
+      case res do
+        {:ok, result} -> result
+        {:error, error} when is_exception(error) -> raise error
+        {:error, error} -> raise Error.service(service: :redis, code: :command_failed, message: error)
+      end
+    end)
   end
 
-  @spec pipeline([command()]) :: {:ok, [pipeline_return_value()]} | {:error, ServiceError.t()}
-  def pipeline(commands) do
-    case :eredis_cluster.q(connection(), commands) do
-      results when is_list(results) ->
-        # Convert eredis results to Redix-style results
-        {:ok,
-         Enum.map(results, fn
-           {:ok, :undefined} ->
-             nil
+  @spec pipeline([command()], [opt]) :: {:ok, [pipeline_return_value()]} | {:error, ServiceError.t()}
+        when opt: command_opt()
+  def pipeline(commands, opts \\ []) do
+    maybe_time(commands, opts[:query_name], fn ->
+      case :eredis_cluster.q(connection(), commands) do
+        results when is_list(results) ->
+          # Convert eredis results to Redix-style results
+          {:ok,
+           Enum.map(results, fn
+             {:ok, :undefined} ->
+               nil
 
-           {:ok, value} ->
-             value
+             {:ok, value} ->
+               value
 
-           {:error, error} when is_binary(error) ->
-             Error.service(service: :redis, code: :command_failed, message: error)
-         end)}
+             {:error, error} when is_binary(error) ->
+               Error.service(service: :redis, code: :command_failed, message: error)
+           end)}
 
-      {:error, :no_connection} ->
-        {:error, Error.service(service: :redis, code: "no_connection", message: "No connection to Redis")}
-    end
+        {:error, :no_connection} ->
+          {:error, Error.service(service: :redis, code: "no_connection", message: "No connection to Redis")}
+      end
+    end)
   end
 
   defp parse_result({:ok, :undefined}), do: {:ok, nil}
@@ -131,5 +142,18 @@ defmodule Sequin.Redis do
 
   defp pool_size do
     :sequin |> Application.fetch_env!(Redis) |> Keyword.fetch!(:pool_size)
+  end
+
+  @sample_rate 1
+  defp maybe_time([command_kind | _commands], query_name, fun) do
+    query_name = query_name || "unnamed_query"
+    {time_us, result} = :timer.tc(fun)
+
+    if Enum.random(0..99) < @sample_rate do
+      time_ms = time_us / 1000
+      Statsd.timing("sequin.redis.#{command_kind}", time_ms, tags: %{query: query_name})
+    end
+
+    result
   end
 end

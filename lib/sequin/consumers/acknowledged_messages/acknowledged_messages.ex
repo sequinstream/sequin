@@ -27,9 +27,10 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
 
     # Trim sorted set to the latest @max_messages
     commands = commands ++ [["ZREMRANGEBYRANK", key, 0, -(max_messages + 1)]]
+    query_name = "acknowledged_messages:store_messages"
 
     commands
-    |> Redis.pipeline()
+    |> Redis.pipeline(query_name: query_name)
     |> case do
       {:ok, _} -> :ok
       error -> error
@@ -45,7 +46,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
     key = "acknowledged_messages:#{consumer_id}"
 
     ["ZREVRANGE", key, offset, offset + count - 1]
-    |> Redis.command()
+    |> Redis.command(query_name: "acknowledged_messages:fetch")
     |> case do
       {:ok, messages} -> {:ok, Enum.map(messages, &AcknowledgedMessage.decode/1)}
       error -> error
@@ -59,7 +60,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   def count_messages(consumer_id) do
     key = "acknowledged_messages:#{consumer_id}"
 
-    case Redis.command(["ZCARD", key]) do
+    case Redis.command(["ZCARD", key], query_name: "acknowledged_messages:count") do
       {:ok, count} -> {:ok, String.to_integer(count)}
       error -> error
     end

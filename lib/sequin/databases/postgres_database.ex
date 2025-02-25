@@ -13,6 +13,8 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   require Logger
 
+  @type id :: String.t()
+
   @default_connect_timeout :timer.seconds(20)
 
   @derive {Jason.Encoder,

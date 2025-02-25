@@ -1,6 +1,7 @@
 defmodule Sequin.CheckSystemHealth do
   @moduledoc false
   alias Sequin.Error
+  alias Sequin.Error.ServiceError
   alias Sequin.Error.ValidationError
   alias Sequin.NetworkUtils
   alias Sequin.Redis
@@ -9,10 +10,19 @@ defmodule Sequin.CheckSystemHealth do
   require Logger
 
   def check do
-    with {:ok, %Postgrex.Result{rows: [[1]]}} <- Repo.query("SELECT 1"),
-         {:ok, "PONG"} <- Redis.command(["PING", "PONG"]) do
+    with {:ok, %Postgrex.Result{rows: [[1]]}} <- Repo.query("select 1"),
+         {:ok, "PONG"} <- Redis.command(["PING", "PONG"]),
+         {:ok, _} <- Redis.command(["SET", "_sequin_primary_check", "1", "PX", "100", "NX"]) do
       :ok
     else
+      {:error, %ServiceError{message: "READONLY" <> _}} ->
+        {:error,
+         Error.service(
+           service: :redis,
+           message: "Connected to a Redis replica instead of a primary node",
+           code: "redis_readonly_error"
+         )}
+
       {:error, %Error.ServiceError{service: :redis, code: "connection_error"} = error} ->
         redis_url = Application.get_env(:sequin, Sequin.Redis)[:url]
         %{host: redis_host, port: redis_port} = URI.parse(redis_url)

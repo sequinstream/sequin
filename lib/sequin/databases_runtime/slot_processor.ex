@@ -922,10 +922,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       messages = Enum.reverse(messages)
 
       # Flush accumulated messages
-      {time, res} =
-        execute_timed(:handle_messages, fn ->
-          :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
-        end)
+      {time, res} = :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
 
       time_ms = time / 1000
 

@@ -17,6 +17,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SourceTable
@@ -59,7 +60,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :max_memory_mb, :integer, default: 1024
 
     field :type, Ecto.Enum,
-      values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
+      values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub, :s2],
       read_after_writes: true
 
     field :health, :map, virtual: true
@@ -85,7 +86,8 @@ defmodule Sequin.Consumers.SinkConsumer do
         gcp_pubsub: GcpPubsubSink,
         nats: NatsSink,
         rabbitmq: RabbitMqSink,
-        azure_event_hub: AzureEventHubSink
+        azure_event_hub: AzureEventHubSink,
+        s2: S2Sink
       ],
       on_replace: :update,
       type_field_name: :type

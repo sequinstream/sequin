@@ -10,6 +10,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
@@ -227,8 +228,24 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       current_user={@current_user}
       module={ConsumerForm}
       id="new-consumer"
-      action={:new}
       consumer={%SinkConsumer{type: :azure_event_hub, sink: %AzureEventHubSink{}}}
+      http_endpoints={[]}
+      databases={[]}
+      form_errors={@form_errors}
+    />
+    """
+  end
+
+  defp render_consumer_form(%{form_kind: "s2"} = assigns) do
+    ~H"""
+    <.live_component
+      current_user={@current_user}
+      module={ConsumerForm}
+      id="new-consumer"
+      consumer={%SinkConsumer{type: :s2, sink: %S2Sink{}}}
+      http_endpoints={[]}
+      databases={[]}
+      form_errors={@form_errors}
     />
     """
   end

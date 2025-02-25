@@ -91,7 +91,10 @@ defmodule Sequin.MixProject do
       {:eredis_cluster, "~> 0.9"},
       {:eredis, github: "acco/eredis", override: true},
       {:benchee, "~> 1.0", only: :dev},
-      {:pgvector, "~> 0.3.0"}
+      {:pgvector, "~> 0.3.0"},
+      {:protobuf, "~> 0.14"},
+      {:grpc, "~> 0.9"},
+      {:ranch, "~> 2.1", override: true}
     ]
   end
 

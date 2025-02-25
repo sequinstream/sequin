@@ -426,7 +426,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
         put_messages(consumer_id, messages_to_ingest, attempt + 1)
 
       {:error, error} ->
-        Health.put_event(:sink_consumer, consumer_id, %Event{slug: :messages_ingested, status: :failed, error: error})
+        Health.put_event(:sink_consumer, consumer_id, %Event{slug: :messages_ingested, status: :fail, error: error})
         {:error, error}
     end
   end

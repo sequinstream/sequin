@@ -639,35 +639,11 @@ defmodule Sequin.Consumers do
         :record -> ConsumerRecord
       end
 
-    {count, msgs} =
+    {count, _} =
       consumer.id
       |> msg_module.where_consumer_id()
       |> msg_module.where_ack_ids(ack_ids)
-      |> select([ce], ce)
       |> Repo.delete_all()
-
-    :telemetry.execute(
-      [:sequin, :posthog, :event],
-      %{event: "consumer_ack"},
-      %{
-        distinct_id: "00000000-0000-0000-0000-000000000000",
-        properties: %{
-          consumer_id: consumer.id,
-          consumer_name: consumer.name,
-          message_count: count,
-          message_kind: consumer.message_kind,
-          "$groups": %{account: consumer.account_id}
-        }
-      }
-    )
-
-    Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-    Metrics.incr_consumer_messages_processed_count(consumer, count)
-    Metrics.incr_consumer_messages_processed_throughput(consumer, count)
-
-    TracerServer.messages_acked(consumer, ack_ids)
-
-    AcknowledgedMessages.store_messages(consumer.id, msgs)
 
     {:ok, count}
   end
@@ -804,9 +780,6 @@ defmodule Sequin.Consumers do
 
     AcknowledgedMessages.store_messages(consumer.id, acked_messages)
 
-    Metrics.incr_consumer_messages_processed_count(consumer, count)
-    Metrics.incr_consumer_messages_processed_throughput(consumer, count)
-
     bytes_processed =
       Enum.sum_by(
         acked_messages,
@@ -815,6 +788,8 @@ defmodule Sequin.Consumers do
         end
       )
 
+    Metrics.incr_consumer_messages_processed_count(consumer, count)
+    Metrics.incr_consumer_messages_processed_throughput(consumer, count)
     Metrics.incr_consumer_messages_processed_bytes(consumer, bytes_processed)
 
     :telemetry.execute(
@@ -832,6 +807,9 @@ defmodule Sequin.Consumers do
         }
       }
     )
+
+    ack_ids = Enum.map(acked_messages, & &1.ack_id)
+    TracerServer.messages_acked(consumer, ack_ids)
 
     {:ok, count}
   end

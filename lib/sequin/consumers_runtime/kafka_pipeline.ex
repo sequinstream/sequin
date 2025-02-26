@@ -30,9 +30,9 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       ],
       processors: [
         default: [
-          concurrency: 100,
-          max_demand: 10,
-          min_demand: 5
+          concurrency: System.schedulers_online() * 3,
+          max_demand: 100,
+          min_demand: 50
         ]
       ],
       context: %{
@@ -41,7 +41,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       },
       batchers: [
         default: [
-          concurrency: 20,
+          concurrency: 80,
           batch_size: consumer.batch_size,
           batch_timeout: 10
         ]

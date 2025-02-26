@@ -612,6 +612,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_info(:process_logging, %State{} = state) do
+    now = System.monotonic_time(:millisecond)
+    interval_ms = if state.last_logged_stats_at, do: now - state.last_logged_stats_at
+
     info =
       Process.info(self(), [
         # Total memory used by process in bytes
@@ -636,7 +639,32 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       end)
       |> Keyword.new()
 
-    metadata = Keyword.merge(metadata, timing_metrics)
+    # Log all timing metrics as histograms
+    Enum.each(timing_metrics, fn {key, value} ->
+      metric_name = "slot_message_store.#{key}"
+      Sequin.Statsd.histogram(metric_name, value, tags: %{consumer_id: state.consumer_id})
+    end)
+
+    unaccounted_ms =
+      if interval_ms do
+        # Calculate total accounted time
+        total_accounted_ms = Enum.reduce(timing_metrics, 0, fn {_key, value}, acc -> acc + value end)
+
+        # Calculate unaccounted time
+        max(0, interval_ms - total_accounted_ms)
+      end
+
+    if unaccounted_ms do
+      # Log unaccounted time
+      Sequin.Statsd.histogram("slot_message_store.unaccounted_total_ms", unaccounted_ms,
+        tags: %{consumer_id: state.consumer_id}
+      )
+    end
+
+    metadata =
+      metadata
+      |> Keyword.merge(timing_metrics)
+      |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
 
     Logger.info("[SlotMessageStore] Process metrics", metadata)
 
@@ -646,7 +674,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     |> Enum.each(&clear_counter/1)
 
     schedule_process_logging()
-    {:noreply, state}
+    {:noreply, %{state | last_logged_stats_at: now}}
   end
 
   @impl GenServer

@@ -34,6 +34,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :slot_processor_monitor_ref, reference() | nil
     field :table_reader_batch_id, String.t() | nil
     field :test_pid, pid() | nil
+    field :last_logged_stats_at, non_neg_integer() | nil
   end
 
   @spec setup_ets(Sequin.Consumers.SinkConsumer.t()) :: :ok

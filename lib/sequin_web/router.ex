@@ -1,6 +1,7 @@
 defmodule SequinWeb.Router do
   use SequinWeb, :router
 
+  import Phoenix.LiveDashboard.Router
   import SequinWeb.UserAuth
 
   alias SequinWeb.Plugs.AssignCurrentPath
@@ -22,6 +23,10 @@ defmodule SequinWeb.Router do
   pipeline :api do
     plug :accepts, ["json"]
     plug VerifyApiToken
+  end
+
+  pipeline :admins_only do
+    plug :admin_basic_auth
   end
 
   scope "/", SequinWeb do
@@ -160,24 +165,27 @@ defmodule SequinWeb.Router do
     get("/config/export", YamlController, :export)
   end
 
+  scope "/" do
+    pipe_through [:browser, :admins_only]
+
+    live_dashboard("/admin/dashboard",
+      metrics: SequinWeb.Telemetry,
+      additional_pages: [
+        broadway: BroadwayDashboard
+      ]
+    )
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", SequinWeb do
   #   pipe_through :api
   # end
 
-  # Enable LiveDashboard and Swoosh mailbox preview in development
+  # Enable Swoosh mailbox preview in development
   if Application.compile_env(:sequin, :dev_routes) do
-    # If you want to use the LiveDashboard in production, you should put
-    # it behind authentication and allow only admins to access it.
-    # If your application does not have an admins-only section yet,
-    # you can use Plug.BasicAuth to set up some basic authentication
-    # as long as you are also using SSL (which you should anyway).
-    import Phoenix.LiveDashboard.Router
-
     scope "/dev" do
       pipe_through(:browser)
 
-      live_dashboard("/dashboard", metrics: SequinWeb.Telemetry)
       forward("/mailbox", Plug.Swoosh.MailboxPreview)
     end
 
@@ -187,5 +195,11 @@ defmodule SequinWeb.Router do
       post "/nack", SequinWeb.PushWebhookController, :nack
       post "/timeout", SequinWeb.PushWebhookController, :timeout
     end
+  end
+
+  defp admin_basic_auth(conn, _opts) do
+    username = System.fetch_env!("ADMIN_USER")
+    password = System.fetch_env!("ADMIN_PASSWORD")
+    Plug.BasicAuth.basic_auth(conn, username: username, password: password)
   end
 end

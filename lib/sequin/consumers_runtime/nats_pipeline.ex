@@ -1,67 +1,58 @@
 defmodule Sequin.ConsumersRuntime.NatsPipeline do
   @moduledoc false
-  use Broadway
+  @behaviour Sequin.ConsumersRuntime.SinkPipeline
 
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.ConsumersRuntime.ConsumerProducer
+  alias Sequin.ConsumersRuntime.SinkPipeline
   alias Sequin.Error
-  alias Sequin.Health
-  alias Sequin.Health.Event
   alias Sequin.Sinks.Nats
 
   require Logger
 
-  def start_link(opts) do
-    %SinkConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
-
-    producer = Keyword.get(opts, :producer, Sequin.ConsumersRuntime.ConsumerProducer)
-
-    Broadway.start_link(__MODULE__,
-      name: via_tuple(consumer.id),
-      producer: [
-        module: {producer, [consumer: consumer]}
-      ],
-      processors: [
-        default: [
-          concurrency: consumer.max_waiting,
-          max_demand: 10,
-          min_demand: 5
-        ]
-      ],
-      context: %{
-        consumer: consumer,
-        test_pid: Keyword.get(opts, :test_pid)
-      }
-    )
+  @impl SinkPipeline
+  def init(context, _opts) do
+    context
   end
 
-  def via_tuple(consumer_id) do
-    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
+  @impl SinkPipeline
+  def processors_config(%SinkConsumer{max_waiting: max_waiting}) do
+    [
+      default: [
+        concurrency: max_waiting,
+        max_demand: 10,
+        min_demand: 5
+      ]
+    ]
   end
 
-  # Used by Broadway to name processes in topology according to our registry
-  @impl Broadway
-  def process_name({:via, :syn, {:consumers, {__MODULE__, id}}}, base_name) do
-    {:via, :syn, {:consumers, {__MODULE__, {base_name, id}}}}
+  @impl SinkPipeline
+  def batchers_config(%SinkConsumer{batch_size: batch_size}) do
+    [
+      default: [
+        concurrency: 1,
+        batch_size: batch_size,
+        batch_timeout: 50
+      ]
+    ]
   end
 
-  @impl Broadway
-  # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
-  @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{consumer: consumer} = ctx) do
-    setup_allowances(ctx)
+  @impl SinkPipeline
+  def handle_message(message, _context) do
+    # Just pass the message through - all work happens in handle_batch
+    message
+  end
 
-    Logger.metadata(
-      account_id: consumer.account_id,
-      consumer_id: consumer.id
-    )
+  @impl SinkPipeline
+  def handle_batch(:default, messages, _batch_info, context) do
+    %{consumer: consumer, test_pid: test_pid} = context
+    setup_allowances(test_pid)
 
-    case Nats.send_messages(consumer.sink, messages) do
+    # Flatten the messages from each Broadway.Message
+    nats_messages = Enum.flat_map(messages, fn message -> message.data end)
+
+    case Nats.send_messages(consumer.sink, nats_messages) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-        broadway_message
+        SinkPipeline.on_success(context, messages)
 
       {:error, error} ->
         reason =
@@ -72,25 +63,13 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
             details: %{error: error}
           )
 
-        Logger.warning("Failed to push message to NATS: #{inspect(reason)}")
-
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: reason})
-
-        Sequin.Logs.log_for_consumer_message(
-          :error,
-          consumer.account_id,
-          consumer.id,
-          Enum.map(messages, & &1.replication_message_trace_id),
-          "Failed to push message to NATS: #{inspect(reason)}"
-        )
-
-        Broadway.Message.failed(broadway_message, reason)
+        SinkPipeline.on_failure(context, reason, messages)
     end
   end
 
-  defp setup_allowances(%{test_pid: nil}), do: :ok
+  defp setup_allowances(nil), do: :ok
 
-  defp setup_allowances(%{test_pid: test_pid}) do
+  defp setup_allowances(test_pid) do
     Mox.allow(Sequin.Sinks.NatsMock, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end

@@ -35,7 +35,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   alias Sequin.Postgres
   alias Sequin.Postgres.ReplicationConnection
   alias Sequin.Replication
-  alias Sequin.Tracer.Server, as: TracerServer
   alias Sequin.Workers.CreateReplicationSlotWorker
 
   require Logger
@@ -286,6 +285,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   def stop(pid), do: GenServer.stop(pid)
 
   @impl ReplicationConnection
+  # Handle relation messages synchronously because we update state.schemas and there are dependencies
+  # on the state.schemas in maybe_cast_message/2 which occurs async.
+  def handle_data(<<?w, _header::192, ?R, _::binary>> = binary, %State{} = state) do
+    <<?w, _header::192, msg::binary>> = binary
+    relation_msg = Decoder.decode_message(msg)
+    state = process_relation_message(relation_msg, state)
+    {:noreply, state}
+  end
+
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
     execute_timed(:handle_data_sequin, fn ->
       raw_bytes_received = byte_size(msg)
@@ -754,8 +762,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp skip_message?(_, _state), do: false
 
-  @spec process_message(map(), State.t()) :: State.t()
-  defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
+  @spec process_relation_message(map(), State.t()) :: State.t()
+  defp process_relation_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
     conn = get_cached_conn(state)
 
     # First, determine if this is a partition and get its parent table info
@@ -835,6 +843,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     %{state | schemas: updated_schemas}
   end
 
+  @spec process_message(map(), State.t()) :: State.t()
   defp process_message(
          %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid},
          %State{last_commit_lsn: last_commit_lsn} = state
@@ -880,7 +889,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp process_message(%Message{} = msg, state) do
-    TracerServer.message_replicated(state.postgres_database, msg)
+    # TracerServer.message_replicated(state.postgres_database, msg)
 
     Health.put_event(
       state.replication_slot,

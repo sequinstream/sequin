@@ -641,8 +641,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     # Log all timing metrics as histograms
     Enum.each(timing_metrics, fn {key, value} ->
-      metric_name = "slot_message_store.#{key}"
-      Sequin.Statsd.histogram(metric_name, value, tags: %{consumer_id: state.consumer_id})
+      "sequin.slot_message_store.timing.#{key}"
+      |> String.replace("_total_ms", "")
+      |> Sequin.Statsd.histogram(value, tags: %{consumer_id: state.consumer_id})
     end)
 
     unaccounted_ms =
@@ -656,7 +657,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     if unaccounted_ms do
       # Log unaccounted time
-      Sequin.Statsd.histogram("slot_message_store.unaccounted_total_ms", unaccounted_ms,
+      Sequin.Statsd.histogram("sequin.slot_message_store.timing.unaccounted", unaccounted_ms,
         tags: %{consumer_id: state.consumer_id}
       )
     end

@@ -639,11 +639,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       end)
       |> Keyword.new()
 
-    # Log all timing metrics as histograms
+    # Log all timing metrics as histograms with operation tag
     Enum.each(timing_metrics, fn {key, value} ->
-      "sequin.slot_message_store.timing.#{key}"
-      |> String.replace("_total_ms", "")
-      |> Sequin.Statsd.histogram(value, tags: %{consumer_id: state.consumer_id})
+      operation = key |> to_string() |> String.replace("_total_ms", "")
+
+      Sequin.Statsd.histogram("sequin.slot_message_store.operation_time_ms", value,
+        tags: %{
+          consumer_id: state.consumer_id,
+          operation: operation
+        }
+      )
     end)
 
     unaccounted_ms =
@@ -656,9 +661,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       end
 
     if unaccounted_ms do
-      # Log unaccounted time
-      Sequin.Statsd.histogram("sequin.slot_message_store.timing.unaccounted", unaccounted_ms,
-        tags: %{consumer_id: state.consumer_id}
+      # Log unaccounted time with same metric but different operation tag
+      Sequin.Statsd.histogram("sequin.slot_message_store.operation_time_ms", unaccounted_ms,
+        tags: %{
+          consumer_id: state.consumer_id,
+          operation: "unaccounted"
+        }
       )
     end
 

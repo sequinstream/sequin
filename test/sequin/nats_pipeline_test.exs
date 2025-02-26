@@ -4,7 +4,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipelineTest do
   import Hammox
 
   alias Sequin.Consumers
-  alias Sequin.ConsumersRuntime.NatsPipeline
+  alias Sequin.ConsumersRuntime.SinkBroadway
   alias Sequin.Error
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Sinks.NatsMock
@@ -13,6 +13,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipelineTest do
     setup do
       consumer =
         ConsumersFactory.sink_consumer(
+          type: :nats,
           sink: %{
             type: :nats,
             host: "localhost",
@@ -96,7 +97,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipelineTest do
 
   defp send_test_events(consumer, events) do
     start_supervised!(
-      {NatsPipeline,
+      {SinkBroadway,
        [
          consumer: consumer,
          producer: Broadway.DummyProducer,
@@ -105,7 +106,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipelineTest do
     )
 
     Broadway.test_message(
-      NatsPipeline.via_tuple(consumer.id),
+      SinkBroadway.via_tuple(consumer.id),
       events,
       metadata: %{topic: "test_topic", headers: []}
     )

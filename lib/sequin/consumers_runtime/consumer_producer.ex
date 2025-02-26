@@ -47,10 +47,12 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
       test_pid: test_pid,
       scheduled_handle_demand: false,
-      slot_message_store_mod: slot_message_store_mod
+      slot_message_store_mod: slot_message_store_mod,
+      last_logged_stats_at: nil
     }
 
     Process.send_after(self(), :init, 0)
+    schedule_process_logging(0)
 
     {:producer, state}
   end
@@ -113,63 +115,138 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], schedule_trim_idempotency(state)}
   end
 
-  defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    desired_count = demand * state.batch_size
-    {time, messages} = :timer.tc(fn -> produce_messages(state, desired_count) end)
-    more_upstream_messages? = length(messages) == desired_count
+  @impl GenStage
+  def handle_info(:process_logging, state) do
+    now = System.monotonic_time(:millisecond)
+    interval_ms = if state.last_logged_stats_at, do: now - state.last_logged_stats_at
 
-    if div(time, 1000) > @min_log_time_ms do
-      Logger.warning(
-        "[ConsumerProducer] produce_messages took longer than expected",
-        count: length(messages),
-        demand: demand,
-        batch_size: state.batch_size,
-        duration_ms: div(time, 1000)
-      )
-    end
-
-    {time, messages} = :timer.tc(fn -> reject_delivered_messages(state, messages) end)
-
-    if div(time, 1000) > @min_log_time_ms do
-      Logger.warning(
-        "[ConsumerProducer] reject_delivered_messages took longer than expected",
-        duration_ms: div(time, 1000),
-        message_count: length(messages)
-      )
-    end
-
-    # Cut this struct down as it will be passed to each process
-    # Processes already have the consumer in context, but this is for the acknowledger. When we
-    # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
-    bare_consumer =
-      Map.drop(state.consumer, [
-        :source_tables,
-        :active_backfill,
-        :sequence,
-        :postgres_database,
-        :replication_slot,
-        :account
+    info =
+      Process.info(self(), [
+        :memory,
+        :message_queue_len
       ])
 
-    broadway_messages =
-      messages
-      |> Enum.chunk_every(state.batch_size)
-      |> Enum.map(fn batch ->
-        %Message{
-          data: batch,
-          acknowledger: {__MODULE__, {bare_consumer, state.test_pid, state.slot_message_store_mod}, nil}
-        }
+    metadata = [
+      memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
+      message_queue_len: info[:message_queue_len],
+      demand: state.demand,
+      batch_size: state.batch_size
+    ]
+
+    # Get all timing metrics from process dictionary
+    timing_metrics =
+      Process.get()
+      |> Enum.filter(fn {key, _} ->
+        key |> to_string() |> String.ends_with?("_total_ms")
       end)
+      |> Keyword.new()
 
-    new_demand = demand - length(broadway_messages)
-    new_demand = if new_demand < 0, do: 0, else: new_demand
-    state = %{state | demand: new_demand}
+    # Log all timing metrics as histograms with operation tag
+    Enum.each(timing_metrics, fn {key, value} ->
+      operation = key |> to_string() |> String.replace("_total_ms", "")
 
-    if new_demand > 0 and more_upstream_messages? do
-      {:noreply, broadway_messages, maybe_schedule_demand(state)}
-    else
-      {:noreply, broadway_messages, state}
+      Sequin.Statsd.histogram("sequin.consumer_producer.operation_time_ms", value,
+        tags: %{
+          consumer_id: state.consumer.id,
+          operation: operation
+        }
+      )
+    end)
+
+    unaccounted_ms =
+      if interval_ms do
+        # Calculate total accounted time
+        total_accounted_ms = Enum.reduce(timing_metrics, 0, fn {_key, value}, acc -> acc + value end)
+
+        # Calculate unaccounted time
+        max(0, interval_ms - total_accounted_ms)
+      end
+
+    if unaccounted_ms do
+      # Log unaccounted time with same metric but different operation tag
+      Sequin.Statsd.histogram("sequin.consumer_producer.operation_time_ms", unaccounted_ms,
+        tags: %{
+          consumer_id: state.consumer.id,
+          operation: "unaccounted"
+        }
+      )
     end
+
+    metadata =
+      metadata
+      |> Keyword.merge(timing_metrics)
+      |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
+
+    Logger.info("[ConsumerProducer] Process metrics", metadata)
+
+    # Clear timing metrics after logging
+    timing_metrics
+    |> Keyword.keys()
+    |> Enum.each(&clear_counter/1)
+
+    schedule_process_logging()
+    {:noreply, [], %{state | last_logged_stats_at: now}}
+  end
+
+  defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
+    execute_timed(:handle_receive_messages, fn ->
+      desired_count = demand * state.batch_size
+      {time, messages} = :timer.tc(fn -> produce_messages(state, desired_count) end)
+      more_upstream_messages? = length(messages) == desired_count
+
+      if div(time, 1000) > @min_log_time_ms do
+        Logger.warning(
+          "[ConsumerProducer] produce_messages took longer than expected",
+          count: length(messages),
+          demand: demand,
+          batch_size: state.batch_size,
+          duration_ms: div(time, 1000)
+        )
+      end
+
+      {time, messages} = :timer.tc(fn -> reject_delivered_messages(state, messages) end)
+
+      if div(time, 1000) > @min_log_time_ms do
+        Logger.warning(
+          "[ConsumerProducer] reject_delivered_messages took longer than expected",
+          duration_ms: div(time, 1000),
+          message_count: length(messages)
+        )
+      end
+
+      # Cut this struct down as it will be passed to each process
+      # Processes already have the consumer in context, but this is for the acknowledger. When we
+      # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
+      bare_consumer =
+        Map.drop(state.consumer, [
+          :source_tables,
+          :active_backfill,
+          :sequence,
+          :postgres_database,
+          :replication_slot,
+          :account
+        ])
+
+      broadway_messages =
+        messages
+        |> Enum.chunk_every(state.batch_size)
+        |> Enum.map(fn batch ->
+          %Message{
+            data: batch,
+            acknowledger: {__MODULE__, {bare_consumer, state.test_pid, state.slot_message_store_mod}, nil}
+          }
+        end)
+
+      new_demand = demand - length(broadway_messages)
+      new_demand = if new_demand < 0, do: 0, else: new_demand
+      state = %{state | demand: new_demand}
+
+      if new_demand > 0 and more_upstream_messages? do
+        {:noreply, broadway_messages, maybe_schedule_demand(state)}
+      else
+        {:noreply, broadway_messages, state}
+      end
+    end)
   end
 
   defp handle_receive_messages(state) do
@@ -177,62 +254,66 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp produce_messages(state, count) do
-    consumer = state.consumer
+    execute_timed(:produce_messages, fn ->
+      consumer = state.consumer
 
-    case state.slot_message_store_mod.produce(consumer.id, count, self()) do
-      {:ok, messages} ->
-        unless messages == [] do
-          Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
-        end
+      case state.slot_message_store_mod.produce(consumer.id, count, self()) do
+        {:ok, messages} ->
+          unless messages == [] do
+            Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
+          end
 
-        messages
+          messages
 
-      {:error, _error} ->
-        []
-    end
+        {:error, _error} ->
+          []
+      end
+    end)
   end
 
   defp reject_delivered_messages(state, messages) do
-    wal_cursors_to_deliver =
-      messages
-      |> Stream.reject(fn
-        # We don't enforce idempotency for read actions
-        %ConsumerEvent{data: %ConsumerEventData{action: :read}} -> true
-        %ConsumerRecord{data: %ConsumerRecordData{action: :read}} -> true
-        # We only recently added :action to ConsumerRecordData, so we need to ignore
-        # any messages that don't have it for backwards compatibility
-        %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
-        _ -> false
-      end)
-      |> Enum.map(fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
+    execute_timed(:reject_delivered_messages, fn ->
+      wal_cursors_to_deliver =
+        messages
+        |> Stream.reject(fn
+          # We don't enforce idempotency for read actions
+          %ConsumerEvent{data: %ConsumerEventData{action: :read}} -> true
+          %ConsumerRecord{data: %ConsumerRecordData{action: :read}} -> true
+          # We only recently added :action to ConsumerRecordData, so we need to ignore
+          # any messages that don't have it for backwards compatibility
+          %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
+          _ -> false
+        end)
+        |> Enum.map(fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
 
-    {:ok, delivered_wal_cursors} =
-      MessageLedgers.filter_delivered_wal_cursors(state.consumer.id, wal_cursors_to_deliver)
+      {:ok, delivered_wal_cursors} =
+        MessageLedgers.filter_delivered_wal_cursors(state.consumer.id, wal_cursors_to_deliver)
 
-    delivered_cursor_set = MapSet.new(delivered_wal_cursors)
+      delivered_cursor_set = MapSet.new(delivered_wal_cursors)
 
-    {delivered_messages, filtered_messages} =
-      Enum.split_with(messages, fn message ->
-        MapSet.member?(delivered_cursor_set, %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx})
-      end)
+      {delivered_messages, filtered_messages} =
+        Enum.split_with(messages, fn message ->
+          MapSet.member?(delivered_cursor_set, %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx})
+        end)
 
-    if delivered_messages == [] do
-      filtered_messages
-    else
-      Logger.info(
-        "[ConsumerProducer] Rejected messages for idempotency",
-        rejected_message_count: length(delivered_messages),
-        commits: delivered_wal_cursors,
-        message_count: length(filtered_messages)
-      )
+      if delivered_messages == [] do
+        filtered_messages
+      else
+        Logger.info(
+          "[ConsumerProducer] Rejected messages for idempotency",
+          rejected_message_count: length(delivered_messages),
+          commits: delivered_wal_cursors,
+          message_count: length(filtered_messages)
+        )
 
-      state.slot_message_store_mod.messages_already_succeeded(
-        state.consumer.id,
-        Enum.map(delivered_messages, & &1.ack_id)
-      )
+        state.slot_message_store_mod.messages_already_succeeded(
+          state.consumer.id,
+          Enum.map(delivered_messages, & &1.ack_id)
+        )
 
-      filtered_messages
-    end
+        filtered_messages
+      end
+    end)
   end
 
   defp schedule_receive_messages(state) do
@@ -299,4 +380,24 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp maybe_schedule_demand(state), do: state
+
+  defp schedule_process_logging(interval \\ :timer.seconds(30)) do
+    Process.send_after(self(), :process_logging, interval)
+  end
+
+  defp incr_counter(name, amount) do
+    current = Process.get(name, 0)
+    Process.put(name, current + amount)
+  end
+
+  defp clear_counter(name) do
+    Process.delete(name)
+  end
+
+  defp execute_timed(name, fun) do
+    {time, result} = :timer.tc(fun)
+    # Convert microseconds to milliseconds
+    incr_counter(:"#{name}_total_ms", div(time, 1000))
+    result
+  end
 end

@@ -536,6 +536,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     messages_processed_since_last_log = Process.get(:messages_processed_since_last_log)
     seconds_diff = if last_logged_at, do: DateTime.diff(Sequin.utc_now(), last_logged_at, :second), else: 0
 
+    ms_since_last_logged_at =
+      if last_logged_at, do: DateTime.diff(Sequin.utc_now(), last_logged_at, :millisecond)
+
     {messages_per_second, bytes_per_second} =
       if is_integer(bytes_processed_since_last_log) and is_integer(messages_processed_since_last_log) and seconds_diff > 0 do
         {messages_processed_since_last_log / seconds_diff, bytes_processed_since_last_log / seconds_diff}
@@ -562,6 +565,37 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       end)
       |> Keyword.new()
 
+    # Log all timing metrics as histograms with operation tag
+    Enum.each(timing_metrics, fn {key, value} ->
+      operation = key |> to_string() |> String.replace("_total_ms", "")
+
+      Sequin.Statsd.histogram("sequin.slot_processor.operation_time_ms", value,
+        tags: %{
+          replication_slot_id: state.replication_slot.id,
+          operation: operation
+        }
+      )
+    end)
+
+    unaccounted_ms =
+      if ms_since_last_logged_at do
+        # Calculate total accounted time
+        total_accounted_ms = Enum.reduce(timing_metrics, 0, fn {_key, value}, acc -> acc + value end)
+
+        # Calculate unaccounted time
+        max(0, ms_since_last_logged_at - total_accounted_ms)
+      end
+
+    if unaccounted_ms do
+      # Log unaccounted time with same metric but different operation tag
+      Sequin.Statsd.histogram("sequin.slot_processor.operation_time_ms", unaccounted_ms,
+        tags: %{
+          replication_slot_id: state.replication_slot.id,
+          operation: "unaccounted"
+        }
+      )
+    end
+
     metadata =
       [
         memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
@@ -578,6 +612,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       ]
       |> Keyword.merge(timing_metrics)
       |> Keyword.merge(count_metrics)
+      |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
 
     Logger.info("[SlotProcessor] Process metrics", metadata)
 

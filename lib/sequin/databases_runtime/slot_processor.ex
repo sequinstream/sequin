@@ -43,9 +43,34 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # 10MB
   @max_accumulated_bytes 20 * 1024 * 1024
   @max_accumulated_messages 500
+  @max_accumulated_messages_time_ms 50
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
+
+  def max_accumulated_bytes do
+    Application.get_env(:sequin, :slot_processor_max_accumulated_bytes) || @max_accumulated_bytes
+  end
+
+  def max_accumulated_messages do
+    Application.get_env(:sequin, :slot_processor_max_accumulated_messages) || @max_accumulated_messages
+  end
+
+  def max_accumulated_messages_time_ms do
+    Application.get_env(:sequin, :slot_processor_max_accumulated_messages_time_ms) || @max_accumulated_messages_time_ms
+  end
+
+  def set_max_accumulated_messages(value) do
+    Application.put_env(:sequin, :slot_processor_max_accumulated_messages, value)
+  end
+
+  def set_max_accumulated_bytes(value) do
+    Application.put_env(:sequin, :slot_processor_max_accumulated_bytes, value)
+  end
+
+  def set_max_accumulated_messages_time_ms(value) do
+    Application.put_env(:sequin, :slot_processor_max_accumulated_messages_time_ms, value)
+  end
 
   def ets_table, do: __MODULE__
 
@@ -84,6 +109,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :bytes_processed_since_last_limit_check, non_neg_integer(), default: 0
       field :check_memory_fn, nil | (-> non_neg_integer())
       field :heartbeat_timer, nil | reference()
+      field :flush_timer, nil | reference()
     end
   end
 
@@ -278,6 +304,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         if skip_message?(msg, state) do
           state
         else
+          state = maybe_schedule_flush(state)
+
           msg
           |> maybe_cast_message(state)
           |> process_message(state)
@@ -329,13 +357,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
           launch_stop(next_state)
           {:noreply, next_state}
 
-        is_struct(msg, Commit) ->
-          if next_state.dirty or state.dirty, do: Logger.warning("Got a commit message while DIRTY")
-
-          next_state = flush_messages(next_state)
-          {:noreply, next_state}
-
-        acc_size_count > @max_accumulated_messages or acc_size_bytes > @max_accumulated_bytes ->
+        acc_size_count > max_accumulated_messages() or acc_size_bytes > max_accumulated_bytes() ->
           next_state = flush_messages(next_state)
           {:noreply, next_state}
 
@@ -462,6 +484,13 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
           GenServer.reply(from, :ok)
           {:noreply, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
       end
+    end)
+  end
+
+  @impl ReplicationConnection
+  def handle_info(:flush_messages, %State{} = state) do
+    execute_timed(:handle_info_flush_messages, fn ->
+      {:noreply, flush_messages(%{state | flush_timer: nil})}
     end)
   end
 
@@ -646,6 +675,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {:noreply, state}
   end
 
+  defp maybe_schedule_flush(%State{flush_timer: nil} = state) do
+    ref = Process.send_after(self(), :flush_messages, max_accumulated_messages_time_ms())
+    %{state | flush_timer: ref}
+  end
+
+  defp maybe_schedule_flush(%State{flush_timer: ref} = state) when is_reference(ref) do
+    state
+  end
+
   defp schedule_process_logging(interval \\ :timer.seconds(10)) do
     Process.send_after(self(), :process_logging, interval)
   end
@@ -784,7 +822,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp process_message(
          %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid},
-         %State{accumulated_messages: {0, []}, last_commit_lsn: last_commit_lsn} = state
+         %State{last_commit_lsn: last_commit_lsn} = state
        ) do
     begin_lsn = Postgres.lsn_to_int(lsn)
 
@@ -963,6 +1001,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp flush_messages(%State{} = state) do
     execute_timed(:flush_messages, fn ->
+      if ref = state.flush_timer do
+        Process.cancel_timer(ref)
+      end
+
       {_, messages} = state.accumulated_messages
       messages = Enum.reverse(messages)
 

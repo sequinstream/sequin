@@ -287,7 +287,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl ReplicationConnection
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    execute_timed(:handle_data, fn ->
+    execute_timed(:handle_data_sequin, fn ->
       raw_bytes_received = byte_size(msg)
       incr_counter(:raw_bytes_received, raw_bytes_received)
       incr_counter(:raw_bytes_received_since_last_log, raw_bytes_received)
@@ -615,7 +615,22 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     unaccounted_ms =
       if ms_since_last_logged_at do
         # Calculate total accounted time
-        total_accounted_ms = Enum.reduce(timing_metrics, 0, fn {_key, value}, acc -> acc + value end)
+        slot_processor_metrics =
+          MapSet.new([
+            :handle_data_total_ms,
+            :handle_data_keepalive_total_ms,
+            :update_message_handler_ctx_total_ms,
+            :monitor_message_store_total_ms,
+            :demonitor_message_store_total_ms,
+            :handle_info_emit_heartbeat_total_ms,
+            :emit_heartbeat_total_ms,
+            :flush_messages_total_ms
+          ])
+
+        total_accounted_ms =
+          Enum.reduce(timing_metrics, 0, fn {key, value}, acc ->
+            if MapSet.member?(slot_processor_metrics, key), do: acc + value, else: acc
+          end)
 
         # Calculate unaccounted time
         max(0, ms_since_last_logged_at - total_accounted_ms)
@@ -1407,7 +1422,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   defp execute_timed(name, fun) do
     {time, result} = :timer.tc(fun)
     # Convert microseconds to milliseconds
-    incr_counter(:"#{name}_total_ms", div(time, 1000))
+    incr_counter(:"#{name}_total_ms", time / 1000)
     incr_counter(:"#{name}_count")
     result
   end

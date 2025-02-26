@@ -330,14 +330,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @impl GenServer
   def handle_call({:put_messages, messages}, from, %State{} = state) do
     execute_timed(:put_messages, fn ->
-      now = Sequin.utc_now()
-
-      messages =
-        messages
-        |> Stream.reject(&State.message_exists?(state, &1))
-        |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
-        |> Enum.to_list()
-
       # Validate first
       case State.validate_put_messages(state, messages) do
         {:ok, _incoming_payload_size_bytes} ->
@@ -346,6 +338,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
           GenServer.reply(from, :ok)
 
           execute_timed(:put_messages_after_reply, fn ->
+            now = Sequin.utc_now()
+
+            messages =
+              messages
+              |> Stream.reject(&State.message_exists?(state, &1))
+              |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
+              |> Enum.to_list()
+
             {to_persist, to_put} =
               if state.consumer.status == :disabled do
                 {messages, []}

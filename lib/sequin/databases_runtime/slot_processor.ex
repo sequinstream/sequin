@@ -262,6 +262,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   @impl ReplicationConnection
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
     execute_timed(:handle_data, fn ->
+      raw_bytes_received = byte_size(msg)
+      incr_counter(:raw_bytes_received, raw_bytes_received)
+      incr_counter(:raw_bytes_received_since_last_log, raw_bytes_received)
+
       # TODO: Move to better spot after we vendor ReplicationConnection
       Health.put_event(
         state.replication_slot,
@@ -533,21 +537,23 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     last_logged_at = Process.get(:last_logged_at)
     bytes_processed_since_last_log = Process.get(:bytes_processed_since_last_log)
+    raw_bytes_received_since_last_log = Process.get(:raw_bytes_received_since_last_log)
     messages_processed_since_last_log = Process.get(:messages_processed_since_last_log)
     seconds_diff = if last_logged_at, do: DateTime.diff(Sequin.utc_now(), last_logged_at, :second), else: 0
 
     ms_since_last_logged_at =
       if last_logged_at, do: DateTime.diff(Sequin.utc_now(), last_logged_at, :millisecond)
 
-    {messages_per_second, bytes_per_second} =
+    {messages_per_second, bytes_per_second, raw_bytes_per_second} =
       if is_integer(bytes_processed_since_last_log) and is_integer(messages_processed_since_last_log) and seconds_diff > 0 do
-        {messages_processed_since_last_log / seconds_diff, bytes_processed_since_last_log / seconds_diff}
+        {messages_processed_since_last_log / seconds_diff, bytes_processed_since_last_log / seconds_diff,
+         raw_bytes_received_since_last_log / seconds_diff}
       else
-        {0.0, 0}
+        {0.0, 0, 0}
       end
 
     Logger.info(
-      "[SlotProcessor] #{Float.round(messages_per_second, 1)} messages/s, #{Sequin.String.format_bytes(bytes_per_second)}/s"
+      "[SlotProcessor] #{Float.round(messages_per_second, 1)} messages/s, #{Sequin.String.format_bytes(raw_bytes_per_second)}/s"
     )
 
     # Get all timing metrics from process dictionary
@@ -607,8 +613,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor[:commit_idx],
         bytes_processed: Process.get(:bytes_processed, 0),
         messages_processed: Process.get(:messages_processed, 0),
+        raw_bytes_received: Process.get(:raw_bytes_received, 0),
         bytes_per_second: bytes_per_second,
-        messages_per_second: messages_per_second
+        messages_per_second: messages_per_second,
+        raw_bytes_per_second: raw_bytes_per_second
       ]
       |> Keyword.merge(timing_metrics)
       |> Keyword.merge(count_metrics)
@@ -629,6 +637,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     clear_counter(:bytes_processed_since_last_log)
     clear_counter(:messages_processed)
     clear_counter(:messages_processed_since_last_log)
+    clear_counter(:raw_bytes_received)
+    clear_counter(:raw_bytes_received_since_last_log)
 
     Process.put(:last_logged_at, Sequin.utc_now())
     schedule_process_logging()

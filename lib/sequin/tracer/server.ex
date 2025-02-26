@@ -52,7 +52,7 @@ defmodule Sequin.Tracer.Server do
 
   def messages_acked(_consumer, []), do: :ok
 
-  def messages_acked(consumer, ack_ids) do
+  def messages_acked(consumer, ack_ids) when is_list(ack_ids) do
     GenServer.cast(via_tuple(consumer.account_id), {:acked, consumer, ack_ids})
   end
 

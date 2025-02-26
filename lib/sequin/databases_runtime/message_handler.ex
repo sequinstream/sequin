@@ -369,32 +369,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   defp call_consumer_message_stores(messages_by_consumer_id) do
     res =
       Enum.reduce_while(messages_by_consumer_id, :ok, fn {consumer_id, messages}, :ok ->
-        messages_to_ingest =
-          execute_timed(:message_ledgers, fn ->
+        execute_timed(:message_ledgers, fn ->
+          if Sequin.random(1..100) == 1 do
             all_wal_cursors = Enum.map(messages, &MessageLedgers.wal_cursor_from_message/1)
-
-            # Step 1: Mark all WAL cursors as ingested first
-            if Sequin.random(1..100) == 1 do
-              :ok = MessageLedgers.wal_cursors_ingested(consumer_id, all_wal_cursors)
-            end
-
-            # Step 2: Check which ones were already delivered
-            {:ok, delivered_wal_cursors} = MessageLedgers.filter_delivered_wal_cursors(consumer_id, all_wal_cursors)
-
-            # Step 3: Re-mark delivered wal cursors as delivered
-            :ok = MessageLedgers.wal_cursors_delivered(consumer_id, delivered_wal_cursors)
-
-            # Step 4: Filter out already delivered messages before sending downstream
-            delivered_wal_cursors = MapSet.new(delivered_wal_cursors)
-
-            Enum.reject(messages, fn message ->
-              wal_cursor = Map.take(message, [:commit_lsn, :commit_idx])
-              MapSet.member?(delivered_wal_cursors, wal_cursor)
-            end)
-          end)
+            :ok = MessageLedgers.wal_cursors_ingested(consumer_id, all_wal_cursors)
+          end
+        end)
 
         execute_timed(:put_messages, fn ->
-          case put_messages(consumer_id, messages_to_ingest) do
+          case put_messages(consumer_id, messages) do
             :ok -> {:cont, :ok}
             {:error, _} = error -> {:halt, error}
           end

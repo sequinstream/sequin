@@ -15,6 +15,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.Error
+  alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -453,7 +454,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     end
 
     @tag :capture_log
-    test "reduces page size and retries on query timeout when page size > 1000", %{
+    test "reduces page size and retries on fetch_batch_primary_keys query timeout when page size > 1000", %{
       backfill: backfill,
       table_oid: table_oid,
       consumer: consumer
@@ -462,7 +463,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       test_pid = self()
       call_count = :atomics.new(1, [])
 
-      fetch_batch = fn _conn, _table, _cursor, opts ->
+      fetch_batch_primary_keys = fn _conn, _table, _cursor, opts ->
         count = :atomics.add_get(call_count, 1, 1)
 
         case count do
@@ -494,7 +495,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       pid =
         start_table_reader_server(backfill, table_oid,
           initial_page_size: initial_page_size,
-          fetch_batch: fetch_batch,
+          fetch_batch_primary_keys: fetch_batch_primary_keys,
           page_size_optimizer_mod: nil
         )
 
@@ -503,6 +504,127 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       assert_receive {:fetch_batch, 1}, 1000
       assert_receive {:fetch_batch, 2}, 1000
 
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
+    end
+
+    @tag :capture_log
+    test "reduces page size and retries on fetch_batch_by_primary_keys query timeout when page size > 1000", %{
+      backfill: backfill,
+      table_oid: table_oid,
+      consumer: consumer
+    } do
+      initial_page_size = 2000
+      test_pid = self()
+      call_count2 = :atomics.new(1, [])
+      call_count1 = :atomics.new(1, [])
+
+      # First, mock the primary keys fetch to return some keys
+      fetch_batch_primary_keys = fn _conn, _table, _cursor, _opts ->
+        count = :atomics.add_get(call_count1, 1, 1)
+
+        case count do
+          1 ->
+            # Return some dummy primary keys
+            {:ok, %{rows: [["1"], ["2"], ["3"]], next_cursor: ["4"]}}
+
+          2 ->
+            # System isn't very smart - it will re-run the ID fetch!
+            {:ok, %{rows: [["1"], ["2"], ["3"]], next_cursor: ["4"]}}
+
+          3 ->
+            {:ok, %{rows: [], next_cursor: nil}}
+        end
+      end
+
+      # Then, mock the batch fetch to timeout on first call
+      fetch_batch_by_primary_keys = fn _conn, _consumer, _table, _primary_keys ->
+        count = :atomics.add_get(call_count2, 1, 1)
+
+        case count do
+          1 ->
+            send(test_pid, {:fetch_batch_by_primary_keys, 1})
+            # First call - return timeout error
+            {:error,
+             Error.service(
+               message: "Query timed out",
+               service: :postgres,
+               details: %{timeout: 5000},
+               code: :query_timeout
+             )}
+
+          2 ->
+            # Second call - verify we retry and return success
+            send(test_pid, {:fetch_batch_by_primary_keys, 2})
+            {:ok, %{messages: [], next_cursor: nil}}
+
+          _ ->
+            raise "Unexpected call count #{count}"
+        end
+      end
+
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+
+      # Use PageSizeOptimizer in this test
+      pid =
+        start_table_reader_server(backfill, table_oid,
+          initial_page_size: initial_page_size,
+          fetch_batch_primary_keys: fetch_batch_primary_keys,
+          fetch_batch_by_primary_keys: fetch_batch_by_primary_keys,
+          page_size_optimizer_mod: nil
+        )
+
+      Process.monitor(pid)
+
+      assert_receive {:fetch_batch_by_primary_keys, 1}, 1000
+      assert_receive {:fetch_batch_by_primary_keys, 2}, 1000
+
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
+    end
+
+    test "continues to next page when fetch_batch_by_primary_keys returns no results after filtering", %{
+      filtered_consumer_backfill: backfill,
+      filtered_consumer: consumer,
+      table_oid: table_oid
+    } do
+      # Set a small page size to ensure we need multiple pages
+      page_size = 2
+
+      # Insert characters with older timestamps that don't match the filter
+      non_matching_characters =
+        Enum.map(1..3, fn _i ->
+          updated_at = Factory.timestamp_past()
+          CharacterFactory.insert_character_detailed!(name: "Not Stilgar", updated_at: updated_at)
+        end)
+
+      # Create with older timestamps to ensure they come first in pagination
+
+      # Insert a character that matches the filter with a newer timestamp
+      matching_character =
+        CharacterFactory.insert_character_detailed!(
+          name: @filter_name,
+          updated_at: DateTime.utc_now()
+        )
+
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
+
+      # Monitor the process to track when it completes
+      Process.monitor(pid)
+
+      # We should get exactly one batch with our matching character
+      {:ok, messages} = flush_batches(consumer, pid)
+
+      # We should only get the one matching character
+      assert length(messages) == 1
+      message = List.first(messages)
+      assert message.record_pks == [to_string(matching_character.id)]
+
+      # Verify that non-matching characters were not processed
+      non_matching_ids = Enum.map(non_matching_characters, & &1.id)
+      processed_ids = Enum.flat_map(messages, & &1.record_pks)
+      assert Enum.all?(non_matching_ids, &(to_string(&1) not in processed_ids))
+
+      # Verify the process completed successfully
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
     end
 

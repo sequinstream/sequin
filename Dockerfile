@@ -15,10 +15,6 @@ FROM ${BUILDER_IMAGE} AS builder
 ARG SELF_HOSTED
 ENV SELF_HOSTED=${SELF_HOSTED}
 
-# Pass through RELEASE_VERSION to the build environment
-ARG RELEASE_VERSION
-ENV RELEASE_VERSION=${RELEASE_VERSION}
-
 # Pass through SENTRY_DSN to the build environment
 ARG SENTRY_DSN
 ENV SENTRY_DSN=${SENTRY_DSN}
@@ -69,6 +65,11 @@ WORKDIR /app
 
 # compile assets
 RUN mix assets.deploy
+
+# Pass through RELEASE_VERSION to the build environment
+# Do this as late as possible, because it changes on ~every build
+ARG RELEASE_VERSION
+ENV RELEASE_VERSION=${RELEASE_VERSION}
 
 # Compile the release
 RUN mix compile

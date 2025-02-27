@@ -28,14 +28,14 @@ defmodule Sequin.DatabasesRuntime.TableReader do
               db_or_conn :: Postgres.db_conn(),
               table :: PostgresDatabaseTable.t(),
               min_cursor :: KeysetCursor.cursor()
-            ) :: {:ok, primary_key_list()} | {:error, any()}
+            ) :: {:ok, %{rows: primary_key_list(), next_cursor: KeysetCursor.cursor() | nil}} | {:error, any()}
 
   @callback fetch_batch_primary_keys(
               db_or_conn :: Postgres.db_conn(),
               table :: PostgresDatabaseTable.t(),
               min_cursor :: KeysetCursor.cursor(),
               opts :: Keyword.t()
-            ) :: {:ok, primary_key_list()} | {:error, any()}
+            ) :: {:ok, %{rows: primary_key_list(), next_cursor: KeysetCursor.cursor() | nil}} | {:error, any()}
 
   @callback fetch_batch_by_primary_keys(
               db_or_conn :: Postgres.db_conn(),
@@ -213,7 +213,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
           table :: PostgresDatabaseTable.t(),
           min_cursor :: KeysetCursor.cursor(),
           opts :: Keyword.t()
-        ) :: {:ok, primary_key_list()} | {:error, any()}
+        ) :: {:ok, %{rows: primary_key_list(), next_cursor: KeysetCursor.cursor() | nil}} | {:error, any()}
   def fetch_batch_primary_keys(db_or_conn, %PostgresDatabaseTable{} = table, min_cursor, opts \\ []) do
     limit = Keyword.get(opts, :limit, 1000)
     include_min = Keyword.get(opts, :include_min, false)
@@ -228,10 +228,14 @@ defmodule Sequin.DatabasesRuntime.TableReader do
       |> Enum.filter(& &1.is_pk?)
       |> Enum.sort_by(& &1.attnum)
 
-    primary_key_select_statement = Enum.map_join(primary_key_columns, ", ", &Postgres.quote_name(&1.name))
+    # Get all cursor columns which already include primary keys
+    cursor_columns = KeysetCursor.cursor_columns(table)
+
+    # Create a select statement with all needed columns
+    select_statement = Enum.map_join(cursor_columns, ", ", &Postgres.quote_name(&1.name))
 
     sql = """
-    select #{primary_key_select_statement}
+    select #{select_statement}
     from #{Postgres.quote_name(table.schema, table.name)}
     where #{min_where_clause}
     order by #{order_by}
@@ -247,17 +251,22 @@ defmodule Sequin.DatabasesRuntime.TableReader do
 
       {:ok, %Postgrex.Result{} = result} ->
         rows = Postgres.result_to_maps(result)
+        loaded_rows = Postgres.load_rows(table, rows)
 
-        rows =
-          table
-          |> Postgres.load_rows(rows)
-          |> Enum.map(fn row ->
-            primary_key_columns
-            |> Enum.map(fn column -> Map.fetch!(row, column.name) end)
-            |> Enum.map(&to_string/1)
+        primary_key_rows =
+          Enum.map(loaded_rows, fn row ->
+            primary_key_columns |> Enum.map(fn column -> Map.fetch!(row, column.name) end) |> Enum.map(&to_string/1)
           end)
 
-        {:ok, rows}
+        last_row = List.last(loaded_rows)
+
+        next_cursor =
+          case loaded_rows do
+            [] -> nil
+            _records -> KeysetCursor.cursor_from_row(table, last_row)
+          end
+
+        {:ok, %{rows: primary_key_rows, next_cursor: next_cursor}}
 
       error ->
         error

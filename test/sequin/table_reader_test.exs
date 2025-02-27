@@ -293,10 +293,13 @@ defmodule Sequin.TableReaderTest do
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
       # Fetch primary keys
-      {:ok, primary_keys} = TableReader.fetch_batch_primary_keys(db, table, initial_cursor, include_min: true)
+      {:ok, %{rows: primary_keys, next_cursor: next_cursor}} =
+        TableReader.fetch_batch_primary_keys(db, table, initial_cursor, include_min: true)
 
       assert length(primary_keys) == 3
       assert primary_keys == [[to_string(char1.id)], [to_string(char2.id)], [to_string(char3.id)]]
+      # Verify next cursor matches last record
+      assert next_cursor[table.sort_column_attnum] == char3.updated_at
 
       # Fetch full records using primary keys
       {:ok, %{messages: messages}} = TableReader.fetch_batch_by_primary_keys(db, consumer, table, primary_keys)
@@ -319,9 +322,11 @@ defmodule Sequin.TableReaderTest do
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
       # Fetch primary keys
-      {:ok, primary_keys} = TableReader.fetch_batch_primary_keys(db, table, initial_cursor, include_min: true)
+      {:ok, %{rows: primary_keys, next_cursor: next_cursor}} =
+        TableReader.fetch_batch_primary_keys(db, table, initial_cursor, include_min: true)
 
       assert length(primary_keys) == 3
+      assert next_cursor != nil
 
       expected_pks = [
         CharacterMultiPK.record_pks(char1),
@@ -356,7 +361,7 @@ defmodule Sequin.TableReaderTest do
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
       # Fetch first page of primary keys
-      {:ok, primary_keys} =
+      {:ok, %{rows: primary_keys, next_cursor: first_page_cursor}} =
         TableReader.fetch_batch_primary_keys(db, table, initial_cursor,
           include_min: true,
           limit: 3
@@ -365,6 +370,7 @@ defmodule Sequin.TableReaderTest do
       assert length(primary_keys) == 3
       assert Enum.all?(primary_keys, fn pks -> Enum.all?(pks, &is_binary/1) end)
       assert primary_keys == [[to_string(char1.id)], [to_string(char2.id)], [to_string(char3.id)]]
+      assert first_page_cursor[table.sort_column_attnum] == char3.updated_at
 
       # Fetch first page of records and get next cursor
       {:ok, %{messages: messages, next_cursor: next_cursor}} =
@@ -377,7 +383,7 @@ defmodule Sequin.TableReaderTest do
       assert next_cursor[table.sort_column_attnum] == char3.updated_at
 
       # Fetch second page using next_cursor
-      {:ok, primary_keys} =
+      {:ok, %{rows: primary_keys, next_cursor: second_page_cursor}} =
         TableReader.fetch_batch_primary_keys(db, table, next_cursor,
           include_min: false,
           limit: 3
@@ -385,6 +391,7 @@ defmodule Sequin.TableReaderTest do
 
       assert length(primary_keys) == 2
       assert primary_keys == [[to_string(char4.id)], [to_string(char5.id)]]
+      assert second_page_cursor[table.sort_column_attnum] == char5.updated_at
 
       # Fetch second page of records
       {:ok, %{messages: messages, next_cursor: final_cursor}} =

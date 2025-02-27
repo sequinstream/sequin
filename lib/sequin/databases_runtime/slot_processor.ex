@@ -39,10 +39,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   require Logger
 
-  # 10MB
-  @max_accumulated_bytes 20 * 1024 * 1024
-  @max_accumulated_messages 500
-  @max_accumulated_messages_time_ms 50
+  # 100 MB
+  @max_accumulated_bytes 100 * 1024 * 1024
+  @max_accumulated_messages 100_000
+  @max_accumulated_messages_time_ms 100
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
@@ -99,13 +99,16 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :test_pid, pid()
       field :connection, map()
       field :schemas, %{}, default: %{}
-      field :accumulated_messages, {non_neg_integer(), [Message.t()]}, default: {0, []}
+
+      field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
+        default: %{count: 0, bytes: 0, binaries: []}
+
       field :connect_attempts, non_neg_integer(), default: 0
       field :dirty, boolean(), default: false
       field :heartbeat_interval, non_neg_integer()
       field :max_memory_bytes, non_neg_integer()
       field :bytes_between_limit_checks, non_neg_integer()
-      field :bytes_processed_since_last_limit_check, non_neg_integer(), default: 0
+      field :bytes_received_since_last_limit_check, non_neg_integer(), default: 0
       field :check_memory_fn, nil | (-> non_neg_integer())
       field :heartbeat_timer, nil | reference()
       field :flush_timer, nil | reference()
@@ -300,54 +303,21 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       incr_counter(:raw_bytes_received, raw_bytes_received)
       incr_counter(:raw_bytes_received_since_last_log, raw_bytes_received)
 
+      state = maybe_schedule_flush(state)
+
+      state =
+        Map.update!(state, :accumulated_msg_binaries, fn acc ->
+          %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, binaries: [msg | acc.binaries]}
+        end)
+
       # TODO: Move to better spot after we vendor ReplicationConnection
       Health.put_event(
         state.replication_slot,
         %Event{slug: :replication_connected, status: :success}
       )
 
-      msg = Decoder.decode_message(msg)
-
-      next_state =
-        if skip_message?(msg, state) do
-          state
-        else
-          state = maybe_schedule_flush(state)
-
-          msg
-          |> maybe_cast_message(state)
-          |> process_message(state)
-        end
-
-      next_state =
-        if is_struct(msg, Insert) or is_struct(msg, Update) or is_struct(msg, Delete) do
-          %{next_state | current_commit_idx: next_state.current_commit_idx + 1}
-        else
-          next_state
-        end
-
-      {prev_acc_size_bytes, _} = state.accumulated_messages
-      {acc_size_bytes, acc_messages} = next_state.accumulated_messages
-      acc_size_count = length(acc_messages)
-
-      # Calculate bytes processed in this message
-      bytes_processed = acc_size_bytes - prev_acc_size_bytes
-
-      incr_counter(:bytes_processed, bytes_processed)
-      incr_counter(:bytes_processed_since_last_log, bytes_processed)
-      incr_counter(:messages_processed)
-      incr_counter(:messages_processed_since_last_log)
-
       # Update bytes processed and check limits
-      {limit_status, next_state} = handle_limit_check(next_state, bytes_processed)
-
-      unless match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, msg) do
-        # A replication message is *their* message(s), not our message.
-        Health.put_event(
-          state.replication_slot,
-          %Event{slug: :replication_message_processed, status: :success}
-        )
-      end
+      {limit_status, next_state} = handle_limit_check(state, raw_bytes_received)
 
       cond do
         limit_status == :over_limit ->
@@ -361,11 +331,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
             current_memory: next_state.check_memory_fn.()
           )
 
-          flush_messages(next_state)
+          next_state = flush_messages(next_state)
           launch_stop(next_state)
           {:noreply, next_state}
 
-        acc_size_count > max_accumulated_messages() or acc_size_bytes > max_accumulated_bytes() ->
+        next_state.accumulated_msg_binaries.count > max_accumulated_messages() or
+            next_state.accumulated_msg_binaries.bytes > max_accumulated_bytes() ->
           next_state = flush_messages(next_state)
           {:noreply, next_state}
 
@@ -658,8 +629,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       [
         memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
         message_queue_len: info[:message_queue_len],
-        accumulated_payload_size_bytes: elem(state.accumulated_messages, 0),
-        accumulated_message_count: length(elem(state.accumulated_messages, 1)),
+        accumulated_payload_size_bytes: state.accumulated_msg_binaries.bytes,
+        accumulated_message_count: state.accumulated_msg_binaries.count,
         last_commit_lsn: state.last_commit_lsn,
         low_watermark_wal_cursor_lsn: state.low_watermark_wal_cursor[:commit_lsn],
         low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor[:commit_idx],
@@ -744,23 +715,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
   end
 
-  # Used in debugging, worth keeping around.
-  # defp lsn_to_tuple(lsn) when is_integer(lsn) do
-  #   {lsn >>> 32, lsn &&& 0xFFFFFFFF}
-  # end
-
-  defp skip_message?(%struct{} = msg, %State{} = state) when struct in [Insert, Update, Delete] do
+  defp skip_message?(%Message{} = msg, %State{} = state) do
     %{commit_lsn: low_watermark_lsn, commit_idx: low_watermark_idx} = state.low_watermark_wal_cursor
-    {message_lsn, message_idx} = {state.current_xaction_lsn, state.current_commit_idx}
-    %{schema: schema} = Map.get(state.schemas, msg.relation_id)
+    {message_lsn, message_idx} = {msg.commit_lsn, msg.commit_idx}
 
     lte_watermark? =
       message_lsn < low_watermark_lsn or (message_lsn == low_watermark_lsn and message_idx <= low_watermark_idx)
 
-    lte_watermark? or schema in [@config_schema, @stream_schema]
+    lte_watermark? or (msg.table_schema in [@config_schema, @stream_schema] and msg.table_schema != "public")
   end
-
-  defp skip_message?(_, _state), do: false
 
   @spec process_relation_message(map(), State.t()) :: State.t()
   defp process_relation_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
@@ -843,10 +806,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     %{state | schemas: updated_schemas}
   end
 
-  @spec process_message(map(), State.t()) :: State.t()
+  @spec process_message(State.t(), map()) :: {State.t(), map() | nil}
   defp process_message(
-         %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid},
-         %State{last_commit_lsn: last_commit_lsn} = state
+         %State{last_commit_lsn: last_commit_lsn} = state,
+         %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid} = msg
        ) do
     begin_lsn = Postgres.lsn_to_int(lsn)
 
@@ -861,13 +824,13 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         state
       end
 
-    %{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: begin_lsn, current_xid: xid}
+    {%State{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: begin_lsn, current_xid: xid}, msg}
   end
 
   # Ensure we do not have an out-of-order bug by asserting equality
   defp process_message(
-         %Commit{lsn: lsn, commit_timestamp: ts},
-         %State{current_xaction_lsn: current_lsn, current_commit_ts: ts, id: id} = state
+         %State{current_xaction_lsn: current_lsn, current_commit_ts: ts, id: id} = state,
+         %Commit{lsn: lsn, commit_timestamp: ts} = msg
        ) do
     lsn = Postgres.lsn_to_int(lsn)
 
@@ -877,18 +840,25 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
 
-    %{
-      state
-      | last_commit_lsn: lsn,
-        current_xaction_lsn: nil,
-        current_xid: nil,
-        current_commit_ts: nil,
-        current_commit_idx: 0,
-        dirty: false
-    }
+    {%State{
+       state
+       | last_commit_lsn: lsn,
+         current_xaction_lsn: nil,
+         current_xid: nil,
+         current_commit_ts: nil,
+         current_commit_idx: 0,
+         dirty: false
+     }, msg}
   end
 
-  defp process_message(%Message{} = msg, state) do
+  defp process_message(%State{} = state, %Message{} = msg) do
+    msg = %Message{
+      msg
+      | commit_lsn: state.current_xaction_lsn,
+        commit_idx: state.current_commit_idx,
+        commit_timestamp: state.current_commit_ts
+    }
+
     # TracerServer.message_replicated(state.postgres_database, msg)
 
     Health.put_event(
@@ -896,21 +866,18 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       %Event{slug: :replication_message_processed, status: :success}
     )
 
-    {acc_size, acc_messages} = state.accumulated_messages
-    new_size = acc_size + :erlang.external_size(msg)
-
-    %{state | accumulated_messages: {new_size, [msg | acc_messages]}}
+    {%State{state | current_commit_idx: state.current_commit_idx + 1}, msg}
   end
 
   # Ignore type messages, we receive them before type columns:
   # %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Type{id: 551312, namespace: "public", name: "citext"}
   # Custom enum:
   # %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Type{id: 3577319, namespace: "public", name: "character_status"}
-  defp process_message(%Decoder.Messages.Type{}, state) do
-    state
+  defp process_message(%State{} = state, %Decoder.Messages.Type{}) do
+    {state, nil}
   end
 
-  defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}, state) do
+  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
     Logger.info("[SlotProcessor] Heartbeat received", emitted_at: emitted_at)
     Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
 
@@ -921,39 +888,37 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       send(state.test_pid, {__MODULE__, :heartbeat_received})
     end
 
-    state
+    {state, nil}
   end
 
-  defp process_message(%LogicalMessage{prefix: "sequin." <> _} = msg, state) do
+  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin." <> _} = msg) do
     message_handler_ctx =
       state.message_handler_module.handle_logical_message(state.message_handler_ctx, state.current_xaction_lsn, msg)
 
-    %{state | message_handler_ctx: message_handler_ctx}
+    {%State{state | message_handler_ctx: message_handler_ctx}, nil}
   end
 
   # Ignore other logical messages
-  defp process_message(%LogicalMessage{}, state) do
-    state
+  defp process_message(%State{} = state, %LogicalMessage{}) do
+    {state, nil}
   end
 
   # It's important we assert this message is not a message that we *should* have a handler for
-  defp process_message(%struct{} = msg, state) when struct not in [Begin, Commit, Message, LogicalMessage, Relation] do
+  defp process_message(%State{} = state, %struct{} = msg)
+       when struct not in [Begin, Commit, Message, LogicalMessage, Relation] do
     Logger.error("Unknown message: #{inspect(msg)}")
-    state
+    {state, nil}
   end
 
-  @spec maybe_cast_message(decoded_message :: map(), State.t()) :: Message.t() | map()
-  defp maybe_cast_message(%Insert{} = msg, state) do
+  @spec maybe_cast_message(decoded_message :: map(), schemas :: map()) :: Message.t() | map()
+  defp maybe_cast_message(%Insert{} = msg, schemas) do
     %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
-      Map.get(state.schemas, msg.relation_id)
+      Map.get(schemas, msg.relation_id)
 
     ids = data_tuple_to_ids(columns, msg.tuple_data)
 
     %Message{
       action: :insert,
-      commit_lsn: state.current_xaction_lsn,
-      commit_idx: state.current_commit_idx,
-      commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: ids,
       table_schema: schema,
@@ -964,9 +929,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     }
   end
 
-  defp maybe_cast_message(%Update{} = msg, state) do
+  defp maybe_cast_message(%Update{} = msg, schemas) do
     %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
-      Map.get(state.schemas, msg.relation_id)
+      Map.get(schemas, msg.relation_id)
 
     ids = data_tuple_to_ids(columns, msg.tuple_data)
 
@@ -977,9 +942,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     %Message{
       action: :update,
-      commit_lsn: state.current_xaction_lsn,
-      commit_idx: state.current_commit_idx,
-      commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: ids,
       table_schema: schema,
@@ -991,9 +953,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     }
   end
 
-  defp maybe_cast_message(%Delete{} = msg, state) do
+  defp maybe_cast_message(%Delete{} = msg, schemas) do
     %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
-      Map.get(state.schemas, msg.relation_id)
+      Map.get(schemas, msg.relation_id)
 
     prev_tuple_data =
       if msg.old_tuple_data do
@@ -1006,9 +968,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     %Message{
       action: :delete,
-      commit_lsn: state.current_xaction_lsn,
-      commit_idx: state.current_commit_idx,
-      commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: ids,
       table_schema: schema,
@@ -1019,9 +978,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     }
   end
 
-  defp maybe_cast_message(msg, _state), do: msg
+  defp maybe_cast_message(msg, _schemas), do: msg
 
-  defp flush_messages(%State{accumulated_messages: {_, []}} = state), do: state
+  defp flush_messages(%State{accumulated_msg_binaries: %{count: 0}} = state), do: state
 
   defp flush_messages(%State{} = state) do
     execute_timed(:flush_messages, fn ->
@@ -1029,8 +988,42 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         Process.cancel_timer(ref)
       end
 
-      {_, messages} = state.accumulated_messages
+      messages =
+        state.accumulated_msg_binaries.binaries
+        |> Enum.reverse()
+        |> Enum.map(fn msg ->
+          msg
+          |> Decoder.decode_message()
+          |> maybe_cast_message(state.schemas)
+        end)
+
+      if Enum.any?(messages, &(not match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, &1))) do
+        # A replication message is *their* message(s), not our message.
+        Health.put_event(
+          state.replication_slot,
+          %Event{slug: :replication_message_processed, status: :success}
+        )
+      end
+
+      {state, messages} =
+        Enum.reduce(messages, {state, []}, fn msg, {state, messages} ->
+          case process_message(state, msg) do
+            {%State{} = state, %Message{} = message} ->
+              if skip_message?(message, state) do
+                {state, messages}
+              else
+                {state, [message | messages]}
+              end
+
+            {%State{} = state, _} ->
+              {state, messages}
+          end
+        end)
+
       messages = Enum.reverse(messages)
+
+      incr_counter(:messages_processed)
+      incr_counter(:messages_processed_since_last_log)
 
       # Flush accumulated messages
       {time, res} = :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
@@ -1052,7 +1045,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
           %{
             state
-            | accumulated_messages: {0, []},
+            | accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []},
               message_handler_ctx: message_handler_ctx
           }
 
@@ -1124,13 +1117,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
   end
 
-  defp accumulated_messages?(%State{accumulated_messages: {0, []}}) do
-    false
-  end
-
-  defp accumulated_messages?(%State{accumulated_messages: {num_bytes, acc}})
-       when is_integer(num_bytes) and is_list(acc) do
-    true
+  defp accumulated_messages?(%State{accumulated_msg_binaries: %{count: count}}) when is_integer(count) do
+    count > 0
   end
 
   defp verify_monitor_refs(%State{} = state) do
@@ -1378,9 +1366,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     conn
   end
 
-  defp handle_limit_check(%State{} = state, bytes_processed) do
+  defp handle_limit_check(%State{} = state, raw_bytes_received) do
     # Check if it's been a while since we last checked the limit
-    if state.bytes_processed_since_last_limit_check + bytes_processed >= state.bytes_between_limit_checks do
+    if state.bytes_received_since_last_limit_check + raw_bytes_received >= state.bytes_between_limit_checks do
       current_memory = state.check_memory_fn.()
 
       status =
@@ -1390,10 +1378,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
           :ok
         end
 
-      {status, %{state | bytes_processed_since_last_limit_check: 0}}
+      {status, %{state | bytes_received_since_last_limit_check: 0}}
     else
-      new_bytes = state.bytes_processed_since_last_limit_check + bytes_processed
-      {:ok, %{state | bytes_processed_since_last_limit_check: new_bytes}}
+      new_bytes = state.bytes_received_since_last_limit_check + raw_bytes_received
+      {:ok, %{state | bytes_received_since_last_limit_check: new_bytes}}
     end
   end
 

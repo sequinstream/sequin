@@ -19,6 +19,10 @@ defmodule Sequin.Metrics do
     Store.get_count("consumer_messages_processed:#{id}")
   end
 
+  def reset_consumer_messages_processed_count(%{id: id}) do
+    Store.reset_count("consumer_messages_processed:#{id}")
+  end
+
   def incr_consumer_messages_processed_throughput(consumer, count \\ 1)
 
   def incr_consumer_messages_processed_throughput(_consumer, 0), do: :ok

@@ -922,6 +922,10 @@ defmodule Sequin.PostgresReplicationTest do
       # Attempt to start replication with the non-existent slot
       start_replication!(heartbeat_interval: 5)
 
+      stub(MessageHandlerMock, :handle_messages, fn ctx, [] ->
+        {:ok, 0, ctx}
+      end)
+
       assert_receive {SlotProcessor, :heartbeat_received}, 1000
       assert_receive {SlotProcessor, :heartbeat_received}, 1000
 

@@ -160,7 +160,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :last_fetch_request_started_at, DateTime.t() | nil
       field :last_fetch_request_finished_at, DateTime.t() | nil
       # {task_ref, batch_id}
-      field :current_fetch_task, {reference(), String.t()} | nil
+      field :current_fetch_task, {reference(), batch_id :: String.t(), page_size :: integer()} | nil
     end
   end
 
@@ -432,6 +432,24 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             {:keep_state, state, actions}
         end
     end
+  end
+
+  def handle_event({:call, from}, {:flush_batch, %{batch_id: batch_id} = batch_info}, _state_name, %State{
+        current_fetch_task: {_ref, batch_id, _page_size}
+      }) do
+    # Race condition: We received a flush_batch call for a batch that's just about to return to us
+    # Re-queue this message to the end of our mailbox with a small delay
+    Logger.debug(
+      "[TableReaderServer] Received flush_batch for batch #{batch_id} that's just about to return, re-queueing"
+    )
+
+    Process.send_after(self(), {:requeued_flush_batch, {from, batch_info}}, 1)
+    :keep_state_and_data
+  end
+
+  # Handle re-queued flush_batch messages
+  def handle_event(:info, {:requeued_flush_batch, {from, batch_info}}, state_name, state) do
+    handle_event({:call, from}, {:flush_batch, batch_info}, state_name, state)
   end
 
   def handle_event(

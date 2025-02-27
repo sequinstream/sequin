@@ -5,12 +5,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Databases.PostgresDatabaseTable
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.PageSizeOptimizer
   alias Sequin.DatabasesRuntime.SlotMessageStore
@@ -38,9 +35,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   @max_backoff_time :timer.minutes(1)
 
   @max_batches 5
-
-  defguardp record_messages?(state) when state.consumer.message_kind == :record
-  defguardp event_messages?(state) when state.consumer.message_kind == :event
 
   # Client API
 
@@ -157,7 +151,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
       # Mockable fns
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
-      field :fetch_batch, (pid(), PostgresDatabaseTable.t(), map(), Keyword.t() -> {:ok, term()} | {:error, term()})
+
+      field :fetch_batch_primary_keys, TableReader.fetch_batch_primary_keys()
+      field :fetch_batch_by_primary_keys, TableReader.fetch_batch_by_primary_keys()
+
       field :page_size_optimizer_mod, module()
 
       # Settings
@@ -165,7 +162,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :setting_check_sms_timeout, integer()
       field :setting_max_pending_messages, integer()
 
-      field :current_fetch_task, TableReaderServer.fetch_task() | nil
+      # Two-stage fetching tasks
+      field :current_id_fetch_task, TableReaderServer.fetch_task() | nil
+      field :current_batch_fetch_task, TableReaderServer.fetch_task() | nil
+      # Tracks the time taken for the ID fetch task to use for page size optimization
+      field :last_id_fetch_time_ms, integer() | nil
     end
   end
 
@@ -200,7 +201,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       setting_check_state_timeout: Keyword.get(opts, :check_state_timeout, :timer.seconds(30)),
       setting_check_sms_timeout: Keyword.get(opts, :check_sms_timeout, :timer.seconds(5)),
       fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2),
-      fetch_batch: Keyword.get(opts, :fetch_batch, &TableReader.fetch_batch/4)
+      fetch_batch_primary_keys: Keyword.get(opts, :fetch_batch_primary_keys, &TableReader.fetch_batch_primary_keys/4),
+      fetch_batch_by_primary_keys:
+        Keyword.get(opts, :fetch_batch_by_primary_keys, &TableReader.fetch_batch_by_primary_keys/4)
     }
 
     actions = [
@@ -249,7 +252,12 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end
   end
 
-  def handle_event({:timeout, :fetch_batch}, _, :running, %State{current_fetch_task: nil} = state) do
+  def handle_event(
+        {:timeout, :fetch_batch},
+        _,
+        :running,
+        %State{current_id_fetch_task: nil, current_batch_fetch_task: nil} = state
+      ) do
     execute_timed(:fetch_batch, fn ->
       include_min = state.cursor == initial_min_cursor(state.consumer)
       batch_id = UUID.uuid4()
@@ -259,38 +267,27 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       page_size = state.page_size_optimizer_mod.size(state.page_size_optimizer)
       test_pid = state.test_pid
       database = database(state)
-      id = state.id
       table = table(state)
-      table_oid = table_oid(state.consumer)
       cursor = state.cursor
-      slot_id = state.consumer.replication_slot.id
-      fetch_batch_fun = state.fetch_batch
 
       task =
         Task.Supervisor.async(Sequin.TaskSupervisor, fn ->
           maybe_setup_allowances(test_pid)
 
-          TableReader.with_watermark(
-            database,
-            slot_id,
-            id,
-            batch_id,
-            table_oid,
-            fn t_conn ->
-              fetch_batch_fun.(
-                t_conn,
-                table,
-                cursor,
-                limit: page_size,
-                include_min: include_min
-              )
-            end
-          )
+          with {:ok, conn} <- ConnectionCache.connection(database) do
+            state.fetch_batch_primary_keys.(
+              conn,
+              table,
+              cursor,
+              limit: page_size,
+              include_min: include_min
+            )
+          end
         end)
 
       state = %{
         state
-        | current_fetch_task: %{
+        | current_id_fetch_task: %{
             ref: task.ref,
             batch_id: batch_id,
             page_size: page_size,
@@ -302,7 +299,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end)
   end
 
-  def handle_event({:timeout, :fetch_batch}, _, :running, %State{current_fetch_task: task}) when not is_nil(task) do
+  def handle_event({:timeout, :fetch_batch}, _, :running, %State{}) do
+    # Either ID fetch or batch fetch is in progress
     {:keep_state_and_data, [maybe_fetch_timeout(1)]}
   end
 
@@ -310,66 +308,163 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         :info,
         {ref, result},
         :running,
-        %State{current_fetch_task: %{ref: ref, batch_id: batch_id, page_size: page_size}} = state
+        %State{current_id_fetch_task: %{ref: ref, batch_id: batch_id, page_size: page_size}} = state
       ) do
     Process.demonitor(ref, [:flush])
     now = Sequin.utc_now()
-    time_ms = DateTime.diff(now, state.current_fetch_task.started_at, :millisecond)
-
-    state = %{state | current_fetch_task: nil}
+    time_ms = DateTime.diff(now, state.current_id_fetch_task.started_at, :millisecond)
 
     case result do
-      {:ok, %{rows: [], next_cursor: nil}, _appx_lsn} ->
+      {:ok, %{rows: []}} ->
+        # No more rows to fetch
+        state = %{state | current_id_fetch_task: nil}
+
         if state.unflushed_batches == [] and state.flushed_batches == [] do
           Consumers.table_reader_finished(state.consumer.id)
           TableReader.delete_cursor(state.consumer.active_backfill.id)
-          Logger.info("[TableReaderServer] Batch returned no records. No batches to flush. Table pagination complete.")
+          Logger.info("[TableReaderServer] ID fetch returned no records. No batches to flush. Table pagination complete.")
           {:stop, :normal}
         else
-          Logger.info("[TableReaderServer] Batch returned no records. Table pagination complete. Awaiting flush.")
+          Logger.info("[TableReaderServer] ID fetch returned no records. Table pagination complete. Awaiting flush.")
           state = %{state | done_fetching: true, ignoreable_batch_ids: MapSet.put(state.ignoreable_batch_ids, batch_id)}
           {:keep_state, state}
         end
 
-      {:ok, %{rows: rows, next_cursor: next_cursor}, appx_lsn} ->
-        Logger.debug("[TableReaderServer] Batch returned #{length(rows)} records")
+      {:ok, %{rows: primary_keys}} ->
+        Logger.debug("[TableReaderServer] ID fetch returned #{length(primary_keys)} primary keys")
 
-        # Record successful timing
-        optimizer = state.page_size_optimizer_mod.put_timing(state.page_size_optimizer, page_size, time_ms)
-        state = %{state | page_size_optimizer: optimizer, successive_failure_count: 0}
-
-        if state.test_pid do
-          send(state.test_pid, {__MODULE__, {:batch_fetched, batch_id}})
-        end
-
-        messages =
-          rows
-          |> messages_from_rows(state)
-          |> filter_messages(state)
-
-        batch = %Batch{
-          messages: messages,
-          id: batch_id,
-          appx_lsn: appx_lsn,
-          cursor: state.cursor
+        state = %{
+          state
+          | successive_failure_count: 0,
+            current_id_fetch_task: nil,
+            last_id_fetch_time_ms: time_ms
         }
 
-        if messages == [] do
-          # All rows filtered out
-          # Update Redis to the next cursor right away
-          :ok = TableReader.update_cursor(state.consumer.active_backfill.id, next_cursor)
-          state = %{state | cursor: next_cursor, ignoreable_batch_ids: MapSet.put(state.ignoreable_batch_ids, batch_id)}
-          {:keep_state, state, [maybe_fetch_timeout()]}
-        else
-          state = %{state | unflushed_batches: state.unflushed_batches ++ [batch], cursor: next_cursor}
-          {:keep_state, state, [maybe_fetch_timeout()]}
-        end
+        # Start the batch fetch task
+        test_pid = state.test_pid
+        database = database(state)
+        table = table(state)
+        table_oid = table_oid(state.consumer)
+        consumer = state.consumer
+        id = state.id
+        slot_id = state.consumer.replication_slot.id
+
+        task =
+          Task.Supervisor.async(Sequin.TaskSupervisor, fn ->
+            maybe_setup_allowances(test_pid)
+
+            TableReader.with_watermark(
+              database,
+              slot_id,
+              id,
+              batch_id,
+              table_oid,
+              fn t_conn ->
+                state.fetch_batch_by_primary_keys.(
+                  t_conn,
+                  consumer,
+                  table,
+                  primary_keys
+                )
+              end
+            )
+          end)
+
+        state = %{
+          state
+          | current_batch_fetch_task: %{
+              ref: task.ref,
+              batch_id: batch_id,
+              page_size: page_size,
+              started_at: Sequin.utc_now()
+            }
+        }
+
+        {:keep_state, state}
 
       {:error, error} ->
         timeout_error = match?(%ServiceError{service: :postgres, code: :query_timeout}, error)
         error_details = if timeout_error, do: error.details, else: %{}
 
-        Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}",
+        Logger.error("[TableReaderServer] Failed to fetch primary keys: #{inspect(error)}",
+          error: error,
+          error_details: error_details,
+          page_size: page_size,
+          query_history: state.page_size_optimizer_mod.history(state.page_size_optimizer)
+        )
+
+        state = %{state | current_id_fetch_task: nil}
+
+        if timeout_error do
+          # Record timeout
+          optimizer = state.page_size_optimizer_mod.put_timeout(state.page_size_optimizer, page_size)
+          state = %{state | page_size_optimizer: optimizer, last_id_fetch_time_ms: nil}
+          {:keep_state, state, [maybe_fetch_timeout()]}
+        else
+          state = %{state | successive_failure_count: state.successive_failure_count + 1, last_id_fetch_time_ms: nil}
+          {:keep_state, state, [maybe_fetch_timeout(1)]}
+        end
+    end
+  end
+
+  def handle_event(
+        :info,
+        {ref, result},
+        :running,
+        %State{current_batch_fetch_task: %{ref: ref, batch_id: batch_id, page_size: page_size}} = state
+      ) do
+    Process.demonitor(ref, [:flush])
+    now = Sequin.utc_now()
+    batch_time_ms = DateTime.diff(now, state.current_batch_fetch_task.started_at, :millisecond)
+
+    # Use the slower of the two times (ID fetch or batch fetch) for page size optimization
+    # This ensures we optimize for the slowest part of the process, whether it's fetching IDs or fetching the actual data
+    # PageSizeOptimizer expects a number >0
+    time_ms = batch_time_ms |> max(state.last_id_fetch_time_ms || 0) |> max(1)
+
+    state = %{state | current_batch_fetch_task: nil, last_id_fetch_time_ms: nil}
+
+    case result do
+      {:ok, %{messages: [], next_cursor: nil}, _appx_lsn} ->
+        # No messages after filtering
+        # Record successful timing using the slower of the two operations
+        optimizer = state.page_size_optimizer_mod.put_timing(state.page_size_optimizer, page_size, time_ms)
+
+        state = %{
+          state
+          | page_size_optimizer: optimizer,
+            ignoreable_batch_ids: MapSet.put(state.ignoreable_batch_ids, batch_id)
+        }
+
+        {:keep_state, state, [maybe_fetch_timeout()]}
+
+      {:ok, %{messages: messages, next_cursor: next_cursor}, appx_lsn} ->
+        Logger.debug("[TableReaderServer] Batch fetch returned #{length(messages)} messages")
+
+        # Record successful timing using the slower of the two operations
+        optimizer = state.page_size_optimizer_mod.put_timing(state.page_size_optimizer, page_size, time_ms)
+        state = %{state | page_size_optimizer: optimizer}
+
+        if state.test_pid do
+          send(state.test_pid, {__MODULE__, {:batch_fetched, batch_id}})
+        end
+
+        batch = %Batch{
+          messages: messages,
+          id: batch_id,
+          appx_lsn: appx_lsn,
+          size: length(messages),
+          cursor: state.cursor
+        }
+
+        state = %{state | unflushed_batches: state.unflushed_batches ++ [batch], cursor: next_cursor}
+        {:keep_state, state, [maybe_fetch_timeout()]}
+
+      {:error, error} ->
+        timeout_error = match?(%ServiceError{service: :postgres, code: :query_timeout}, error)
+        error_details = if timeout_error, do: error.details, else: %{}
+
+        Logger.error("[TableReaderServer] Failed to fetch batch by primary keys: #{inspect(error)}",
           error: error,
           error_details: error_details,
           page_size: page_size,
@@ -379,21 +474,43 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         if timeout_error do
           # Record timeout
           optimizer = state.page_size_optimizer_mod.put_timeout(state.page_size_optimizer, page_size)
-          state = %{state | page_size_optimizer: optimizer}
+          state = %{state | page_size_optimizer: optimizer, last_id_fetch_time_ms: nil}
           {:keep_state, state, [maybe_fetch_timeout()]}
         else
-          state = %{state | successive_failure_count: state.successive_failure_count + 1}
+          state = %{state | successive_failure_count: state.successive_failure_count + 1, last_id_fetch_time_ms: nil}
           {:keep_state, state, [maybe_fetch_timeout(1)]}
         end
     end
   end
 
-  def handle_event(:info, {:DOWN, ref, :process, _pid, reason}, :running, %State{current_fetch_task: %{ref: ref}} = state) do
-    Logger.error("[TableReaderServer] Fetch task failed", reason: reason)
+  def handle_event(
+        :info,
+        {:DOWN, ref, :process, _pid, reason},
+        :running,
+        %State{current_id_fetch_task: %{ref: ref}} = state
+      ) do
+    Logger.error("[TableReaderServer] ID fetch task failed", reason: reason)
 
     state = %{
       state
-      | current_fetch_task: nil,
+      | current_id_fetch_task: nil,
+        successive_failure_count: state.successive_failure_count + 1
+    }
+
+    {:keep_state, state, [maybe_fetch_timeout(1)]}
+  end
+
+  def handle_event(
+        :info,
+        {:DOWN, ref, :process, _pid, reason},
+        :running,
+        %State{current_batch_fetch_task: %{ref: ref}} = state
+      ) do
+    Logger.error("[TableReaderServer] Batch fetch task failed", reason: reason)
+
+    state = %{
+      state
+      | current_batch_fetch_task: nil,
         successive_failure_count: state.successive_failure_count + 1
     }
 
@@ -439,7 +556,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   def handle_event({:call, from}, {:flush_batch, %{batch_id: batch_id} = batch_info}, _state_name, %State{
-        current_fetch_task: %{batch_id: batch_id}
+        current_batch_fetch_task: %{batch_id: batch_id}
       }) do
     # Race condition: We received a flush_batch call for a batch that's just about to return to us
     # Re-queue this message to the end of our mailbox with a small delay
@@ -497,7 +614,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             Logger.info("[TableReaderServer] Batch #{batch.id} is committed")
             :ok = TableReader.update_cursor(state.consumer.active_backfill.id, batch.cursor)
 
-            {:keep_state, %{state | unflushed_batches: batches}, [maybe_fetch_timeout()]}
+            {:keep_state, %{state | unflushed_batches: batches}, [maybe_fetch_timeout(), {:reply, from, :ok}]}
           else
             messages =
               messages
@@ -638,7 +755,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       unflushed_batch_len: length(state.unflushed_batches),
       flushed_batch_len: length(state.flushed_batches),
       current_page_size: state.page_size_optimizer_mod.size(state.page_size_optimizer),
-      fetch_history: state.page_size_optimizer_mod.history(state.page_size_optimizer)
+      fetch_history: state.page_size_optimizer_mod.history(state.page_size_optimizer),
+      id_fetch_in_progress: not is_nil(state.current_id_fetch_task),
+      batch_fetch_in_progress: not is_nil(state.current_batch_fetch_task)
     ]
 
     # Get all timing metrics from process dictionary
@@ -675,7 +794,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     not state.done_fetching and
       can_fetch_after_backoff? and
       state.count_pending_messages < state.setting_max_pending_messages and
-      length(state.unflushed_batches) + length(state.flushed_batches) < @max_batches
+      length(state.unflushed_batches) + length(state.flushed_batches) < @max_batches and
+      is_nil(state.current_id_fetch_task) and
+      is_nil(state.current_batch_fetch_task)
   end
 
   defp check_state_timeout(timeout) do
@@ -712,67 +833,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   defp sort_column_attnum(%{sequence: %Sequence{sort_column_attnum: sort_column_attnum}}), do: sort_column_attnum
   defp sort_column_attnum(%{source_tables: [source_table | _]}), do: source_table.sort_column_attnum
 
-  defp group_column_attnums(%{sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums}}),
-    do: group_column_attnums
-
-  defp group_column_attnums(%{source_tables: [source_table | _]}), do: source_table.group_column_attnums
-
   defp table(%State{} = state) do
     database = database(state)
     db_table = Sequin.Enum.find!(database.tables, &(&1.oid == state.table_oid))
     %{db_table | sort_column_attnum: sort_column_attnum(state.consumer)}
-  end
-
-  defp messages_from_rows(rows, %State{} = state) when record_messages?(state) do
-    table = table(state)
-    consumer = state.consumer
-
-    Enum.map(rows, fn row ->
-      data = build_record_data(table, consumer, row)
-      payload_size_bytes = :erlang.external_size(data)
-
-      # commit_lsn and commit_idx are added later
-      %ConsumerRecord{
-        consumer_id: consumer.id,
-        table_oid: table.oid,
-        record_pks: record_pks(table, row),
-        group_id: generate_group_id(consumer, table, row),
-        replication_message_trace_id: UUID.uuid4(),
-        data: data,
-        payload_size_bytes: payload_size_bytes
-      }
-    end)
-  end
-
-  defp messages_from_rows(rows, %State{} = state) when event_messages?(state) do
-    table = table(state)
-    consumer = state.consumer
-
-    Enum.map(rows, fn row ->
-      data = build_event_data(table, consumer, row)
-      payload_size_bytes = :erlang.external_size(data)
-
-      # commit_lsn and commit_idx are added later
-      %ConsumerEvent{
-        consumer_id: consumer.id,
-        record_pks: record_pks(table, row),
-        group_id: generate_group_id(consumer, table, row),
-        table_oid: table.oid,
-        deliver_count: 0,
-        replication_message_trace_id: UUID.uuid4(),
-        data: data,
-        payload_size_bytes: payload_size_bytes
-      }
-    end)
-  end
-
-  defp filter_messages(messages, %State{} = state) do
-    table = table(state)
-
-    Enum.filter(messages, fn message ->
-      record = record_by_column_attnum(table, message.data.record)
-      Consumers.matches_record?(state.consumer, table.oid, record)
-    end)
   end
 
   defp drop_messages_by_pk(messages, drop_pks) when is_list(messages) and is_struct(drop_pks, MapSet) do
@@ -811,79 +875,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end
   end
 
-  defp build_record_data(table, consumer, row) do
-    %ConsumerRecordData{
-      action: :read,
-      record: build_record_payload(table, row),
-      metadata: %ConsumerRecordData.Metadata{
-        database_name: consumer.replication_slot.postgres_database.name,
-        table_name: table.name,
-        table_schema: table.schema,
-        consumer: %{
-          id: consumer.id,
-          name: consumer.name,
-          inserted_at: consumer.inserted_at,
-          updated_at: consumer.updated_at
-        },
-        commit_timestamp: DateTime.utc_now()
-      }
-    }
-  end
-
-  defp build_event_data(table, consumer, row) do
-    %ConsumerEventData{
-      action: :read,
-      record: build_record_payload(table, row),
-      metadata: %ConsumerEventData.Metadata{
-        database_name: consumer.replication_slot.postgres_database.name,
-        table_name: table.name,
-        table_schema: table.schema,
-        consumer: %{
-          id: consumer.id,
-          name: consumer.name,
-          inserted_at: consumer.inserted_at,
-          updated_at: consumer.updated_at
-        },
-        commit_timestamp: DateTime.utc_now()
-      }
-    }
-  end
-
-  defp build_record_payload(table, row) do
-    Map.new(table.columns, fn column -> {column.name, Map.get(row, column.name)} end)
-  end
-
-  defp record_by_column_attnum(%PostgresDatabaseTable{} = table, record) do
-    Map.new(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
-      {column.attnum, Map.get(record, column.name)}
-    end)
-  end
-
   defp initial_min_cursor(consumer) do
     consumer.active_backfill.initial_min_cursor
-  end
-
-  defp record_pks(%PostgresDatabaseTable{} = table, row) do
-    table.columns
-    |> Enum.filter(& &1.is_pk?)
-    |> Enum.sort_by(& &1.attnum)
-    |> Enum.map(&Map.fetch!(row, &1.name))
-    |> Enum.map(&to_string/1)
-  end
-
-  defp generate_group_id(consumer, table, row) do
-    group_column_attnums = group_column_attnums(consumer)
-
-    if group_column_attnums do
-      group_columns =
-        Enum.map(group_column_attnums, fn attnum -> Sequin.Enum.find!(table.columns, &(&1.attnum == attnum)) end)
-
-      Enum.map_join(group_columns, ",", fn column ->
-        to_string(Map.get(row, column.name))
-      end)
-    else
-      table |> record_pks(row) |> Enum.join(",")
-    end
   end
 
   defp maybe_setup_allowances(nil), do: :ok

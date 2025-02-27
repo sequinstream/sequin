@@ -99,7 +99,7 @@ defmodule Sequin.IexHelpers do
          nil <- Repo.get(Sequin.Consumers.Backfill, id),
          nil <- Repo.get(Sequin.Consumers.SinkConsumer, id),
          nil <- Repo.get(Sequin.Databases.PostgresDatabase, id),
-         nil <- Repo.get(Sequin.Databases.PostgresReplicationSlot, id),
+         nil <- Repo.get(Sequin.Replication.PostgresReplicationSlot, id),
          nil <- Repo.get(Sequin.Databases.Sequence, id) do
       Repo.get(Sequin.Replication.WalPipeline, id)
     end

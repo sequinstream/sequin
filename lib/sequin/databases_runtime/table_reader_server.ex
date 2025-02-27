@@ -262,7 +262,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       fetch_batch_fun = state.fetch_batch
 
       task =
-        Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+        Task.Supervisor.async(Sequin.TaskSupervisor, fn ->
           maybe_setup_allowances(test_pid)
 
           TableReader.with_watermark(

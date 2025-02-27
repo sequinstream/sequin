@@ -579,9 +579,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       1000 ->
         raise "Timeout waiting for batch_fetched. Message history: #{inspect(Enum.reverse(message_history))}"
     end
-  catch
-    :exit, _ ->
-      {:ok, messages}
   end
 
   defp start_table_reader_server(backfill, table_oid, opts) do

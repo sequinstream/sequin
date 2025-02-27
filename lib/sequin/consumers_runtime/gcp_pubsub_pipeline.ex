@@ -131,7 +131,8 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
       },
       attributes: %{
         "trace_id" => record.replication_message_trace_id,
-        "type" => "record"
+        "type" => "record",
+        "table_name" => record.data.metadata.table_name
       },
       ordering_key: ordering_key(consumer, record.data)
     }
@@ -154,7 +155,9 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
       },
       attributes: %{
         "trace_id" => event.replication_message_trace_id,
-        "type" => "event"
+        "type" => "event",
+        "table_name" => event.data.metadata.table_name,
+        "action" => to_string(event.data.action)
       },
       ordering_key: ordering_key(consumer, event.data)
     }

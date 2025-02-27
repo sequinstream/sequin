@@ -24,6 +24,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   require Logger
 
+  @type fetch_task :: %{
+          ref: reference(),
+          batch_id: String.t(),
+          page_size: integer(),
+          started_at: DateTime.t()
+        }
+
   @callback flush_batch(String.t() | pid(), map()) :: :ok
   @callback discard_batch(String.t() | pid(), String.t()) :: :ok
 
@@ -126,6 +133,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     alias Sequin.Consumers.Backfill
     alias Sequin.Consumers.SinkConsumer
     alias Sequin.Databases.PostgresDatabase
+    alias Sequin.DatabasesRuntime.TableReaderServer
 
     typedstruct do
       # Core data
@@ -157,10 +165,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :setting_check_sms_timeout, integer()
       field :setting_max_pending_messages, integer()
 
-      field :last_fetch_request_started_at, DateTime.t() | nil
-      field :last_fetch_request_finished_at, DateTime.t() | nil
-      # {task_ref, batch_id}
-      field :current_fetch_task, {reference(), batch_id :: String.t(), page_size :: integer()} | nil
+      field :current_fetch_task, TableReaderServer.fetch_task() | nil
     end
   end
 
@@ -285,28 +290,33 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
       state = %{
         state
-        | current_fetch_task: {task.ref, batch_id, page_size},
-          last_fetch_request_started_at: Sequin.utc_now()
+        | current_fetch_task: %{
+            ref: task.ref,
+            batch_id: batch_id,
+            page_size: page_size,
+            started_at: Sequin.utc_now()
+          }
       }
 
       {:keep_state, state}
     end)
   end
 
-  def handle_event({:timeout, :fetch_batch}, _, :running, %State{current_fetch_task: {_ref, _batch_id, _page_size}}) do
+  def handle_event({:timeout, :fetch_batch}, _, :running, %State{current_fetch_task: task}) when not is_nil(task) do
     {:keep_state_and_data, [maybe_fetch_timeout(1)]}
   end
 
-  def handle_event(:info, {ref, result}, :running, %State{current_fetch_task: {ref, batch_id, page_size}} = state) do
+  def handle_event(
+        :info,
+        {ref, result},
+        :running,
+        %State{current_fetch_task: %{ref: ref, batch_id: batch_id, page_size: page_size}} = state
+      ) do
     Process.demonitor(ref, [:flush])
     now = Sequin.utc_now()
-    time_ms = DateTime.diff(now, state.last_fetch_request_started_at, :millisecond)
+    time_ms = DateTime.diff(now, state.current_fetch_task.started_at, :millisecond)
 
-    state = %{
-      state
-      | current_fetch_task: nil,
-        last_fetch_request_finished_at: now
-    }
+    state = %{state | current_fetch_task: nil}
 
     case result do
       {:ok, %{rows: [], next_cursor: nil}, _appx_lsn} ->
@@ -378,19 +388,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end
   end
 
-  def handle_event(
-        :info,
-        {:DOWN, ref, :process, _pid, reason},
-        :running,
-        %State{current_fetch_task: {ref, _batch_id}} = state
-      ) do
+  def handle_event(:info, {:DOWN, ref, :process, _pid, reason}, :running, %State{current_fetch_task: %{ref: ref}} = state) do
     Logger.error("[TableReaderServer] Fetch task failed", reason: reason)
 
     state = %{
       state
       | current_fetch_task: nil,
-        successive_failure_count: state.successive_failure_count + 1,
-        last_fetch_request_finished_at: Sequin.utc_now()
+        successive_failure_count: state.successive_failure_count + 1
     }
 
     {:keep_state, state, [maybe_fetch_timeout(1)]}
@@ -435,7 +439,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   def handle_event({:call, from}, {:flush_batch, %{batch_id: batch_id} = batch_info}, _state_name, %State{
-        current_fetch_task: {_ref, batch_id, _page_size}
+        current_fetch_task: %{batch_id: batch_id}
       }) do
     # Race condition: We received a flush_batch call for a batch that's just about to return to us
     # Re-queue this message to the end of our mailbox with a small delay

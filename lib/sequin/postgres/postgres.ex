@@ -740,7 +740,7 @@ defmodule Sequin.Postgres do
 
             # This is the catch-all when encode is not implemented
             Jason.Encoder.impl_for(value) == Jason.Encoder.Any ->
-              Logger.info("[Postgres] No Jason.Encoder for #{inspect(value)}", column: col.name, table: table.name)
+              Logger.debug("[Postgres] No Jason.Encoder for #{inspect(value)}", column: col.name, table: table.name)
               nil
 
             true ->

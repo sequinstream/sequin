@@ -24,8 +24,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   alias Sequin.TestSupport.Models.CharacterDetailed
 
   @filter_name "Stilgar"
+  @task_sup_name Module.concat(__MODULE__, TaskSupervisor)
 
   setup do
+    start_supervised!({Task.Supervisor, name: @task_sup_name})
+
     # Set up the database and consumer
     database = DatabasesFactory.insert_configured_postgres_database!()
 
@@ -712,7 +715,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       max_pending_messages: 100,
       check_state_timeout: :timer.seconds(5),
       fetch_slot_lsn: fn _db, _slot_name -> {:ok, 0} end,
-      page_size_optimizer_mod: PageSizeOptimizerMock
+      page_size_optimizer_mod: PageSizeOptimizerMock,
+      task_supervisor: GenServer.whereis(@task_sup_name)
     ]
 
     config =

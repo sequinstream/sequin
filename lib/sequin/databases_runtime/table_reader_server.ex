@@ -165,8 +165,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       # Two-stage fetching tasks
       field :current_id_fetch_task, TableReaderServer.fetch_task() | nil
       field :current_batch_fetch_task, TableReaderServer.fetch_task() | nil
+      field :slot_message_store_ref, reference() | nil
       # Tracks the time taken for the ID fetch task to use for page size optimization
       field :last_id_fetch_time_ms, integer() | nil
+      # Allow for overwriting the task_supervisor in tests
+      # this will allow us to exit the task when the test ends, avoiding
+      # flooding our logs with DbConnection errors related to the sandbox ending
+      field :task_supervisor, pid() | module()
     end
   end
 
@@ -203,7 +208,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2),
       fetch_batch_primary_keys: Keyword.get(opts, :fetch_batch_primary_keys, &TableReader.fetch_batch_primary_keys/4),
       fetch_batch_by_primary_keys:
-        Keyword.get(opts, :fetch_batch_by_primary_keys, &TableReader.fetch_batch_by_primary_keys/4)
+        Keyword.get(opts, :fetch_batch_by_primary_keys, &TableReader.fetch_batch_by_primary_keys/4),
+      task_supervisor: Keyword.get(opts, :task_supervisor, Sequin.TaskSupervisor)
     }
 
     actions = [
@@ -224,16 +230,24 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     Logger.info("[TableReaderServer] Started")
 
-    consumer.id
-    |> SlotMessageStore.via_tuple()
-    |> GenServer.whereis()
-    |> Process.monitor()
+    slot_message_store_ref =
+      consumer.id
+      |> SlotMessageStore.via_tuple()
+      |> GenServer.whereis()
+      |> Process.monitor()
 
     :syn.join(:consumers, {:table_reader_batches_changed, consumer.id}, self())
 
     cursor = TableReader.cursor(backfill.id)
     cursor = cursor || backfill.initial_min_cursor
-    state = %{state | backfill: backfill, consumer: consumer, cursor: cursor}
+
+    state = %{
+      state
+      | backfill: backfill,
+        consumer: consumer,
+        cursor: cursor,
+        slot_message_store_ref: slot_message_store_ref
+    }
 
     actions = [
       check_state_timeout(state.setting_check_state_timeout),
@@ -271,18 +285,21 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       cursor = state.cursor
 
       task =
-        Task.Supervisor.async(Sequin.TaskSupervisor, fn ->
+        Task.Supervisor.async_nolink(state.task_supervisor, fn ->
           maybe_setup_allowances(test_pid)
 
-          with {:ok, conn} <- ConnectionCache.connection(database) do
-            state.fetch_batch_primary_keys.(
-              conn,
-              table,
-              cursor,
-              limit: page_size,
-              include_min: include_min
-            )
-          end
+          res =
+            with {:ok, conn} <- ConnectionCache.connection(database) do
+              state.fetch_batch_primary_keys.(
+                conn,
+                table,
+                cursor,
+                limit: page_size,
+                include_min: include_min
+              )
+            end
+
+          {:task_result, res}
         end)
 
       state = %{
@@ -306,7 +323,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   def handle_event(
         :info,
-        {ref, result},
+        {ref, {:task_result, result}},
         :running,
         %State{current_id_fetch_task: %{ref: ref, batch_id: batch_id, page_size: page_size}} = state
       ) do
@@ -350,24 +367,27 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         slot_id = state.consumer.replication_slot.id
 
         task =
-          Task.Supervisor.async(Sequin.TaskSupervisor, fn ->
+          Task.Supervisor.async_nolink(state.task_supervisor, fn ->
             maybe_setup_allowances(test_pid)
 
-            TableReader.with_watermark(
-              database,
-              slot_id,
-              id,
-              batch_id,
-              table_oid,
-              fn t_conn ->
-                state.fetch_batch_by_primary_keys.(
-                  t_conn,
-                  consumer,
-                  table,
-                  primary_keys
-                )
-              end
-            )
+            res =
+              TableReader.with_watermark(
+                database,
+                slot_id,
+                id,
+                batch_id,
+                table_oid,
+                fn t_conn ->
+                  state.fetch_batch_by_primary_keys.(
+                    t_conn,
+                    consumer,
+                    table,
+                    primary_keys
+                  )
+                end
+              )
+
+            {:task_result, res}
           end)
 
         state = %{
@@ -409,7 +429,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   def handle_event(
         :info,
-        {ref, result},
+        {ref, {:task_result, result}},
         :running,
         %State{current_batch_fetch_task: %{ref: ref, batch_id: batch_id, page_size: page_size}} = state
       ) do
@@ -433,7 +453,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         state = %{
           state
           | page_size_optimizer: optimizer,
-            ignoreable_batch_ids: MapSet.put(state.ignoreable_batch_ids, batch_id)
+            ignoreable_batch_ids: MapSet.put(state.ignoreable_batch_ids, batch_id),
+            successive_failure_count: 0
         }
 
         {:keep_state, state, [maybe_fetch_timeout()]}
@@ -457,7 +478,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           cursor: state.cursor
         }
 
-        state = %{state | unflushed_batches: state.unflushed_batches ++ [batch], cursor: next_cursor}
+        state = %{
+          state
+          | unflushed_batches: state.unflushed_batches ++ [batch],
+            cursor: next_cursor,
+            successive_failure_count: 0
+        }
+
         {:keep_state, state, [maybe_fetch_timeout()]}
 
       {:error, error} ->
@@ -486,7 +513,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   def handle_event(
         :info,
         {:DOWN, ref, :process, _pid, reason},
-        :running,
+        _state_name,
         %State{current_id_fetch_task: %{ref: ref}} = state
       ) do
     Logger.error("[TableReaderServer] ID fetch task failed", reason: reason)
@@ -503,7 +530,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   def handle_event(
         :info,
         {:DOWN, ref, :process, _pid, reason},
-        :running,
+        _state_name,
         %State{current_batch_fetch_task: %{ref: ref}} = state
       ) do
     Logger.error("[TableReaderServer] Batch fetch task failed", reason: reason)
@@ -515,6 +542,31 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     }
 
     {:keep_state, state, [maybe_fetch_timeout(1)]}
+  end
+
+  def handle_event(:info, {:DOWN, ref, :process, _pid, reason}, state_name, %State{slot_message_store_ref: ref} = state) do
+    Logger.info("[TableReaderServer] Consumer #{state.consumer.id} message store process died, shutting down",
+      reason: reason,
+      state_name: state_name
+    )
+
+    {:stop, :normal}
+  end
+
+  def handle_event(:info, {ref, {:task_result, _result}}, _state_name, %State{
+        current_batch_fetch_task: task1,
+        current_id_fetch_task: task2
+      }) do
+    # This will happen if we e.g. discarded batches while a fetch was in progress
+    stale_ref = not match?(%{ref: ^ref}, task1) and not match?(%{ref: ^ref}, task2)
+
+    if stale_ref do
+      Process.demonitor(ref, [:flush])
+      :keep_state_and_data
+    else
+      raise ArgumentError,
+            "Expected to fall through with a stale ref, instead not handling ref #{ref} with task1 #{inspect(task1)} and task2 #{inspect(task2)}"
+    end
   end
 
   def handle_event({:timeout, :check_state}, _, _state_name, %State{} = state) do
@@ -686,7 +738,15 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         Logger.warning("[TableReaderServer] Discarding batch #{batch_id} and all subsequent batches")
 
         # Rewind cursor to the cursor of the batch we're discarding
-        %{state | unflushed_batches: remaining_batches, cursor: batch_to_discard.cursor, done_fetching: false}
+        # Ignore any incoming Tasks
+        %{
+          state
+          | unflushed_batches: remaining_batches,
+            cursor: batch_to_discard.cursor,
+            done_fetching: false,
+            current_id_fetch_task: nil,
+            current_batch_fetch_task: nil
+        }
       end
 
     {:keep_state, state, [{:reply, from, :ok}, maybe_fetch_timeout()]}
@@ -735,15 +795,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   def handle_event(:info, :table_reader_batches_changed, _state_name, _state) do
     {:keep_state_and_data, [check_sms_timeout(0)]}
-  end
-
-  def handle_event(:info, {:DOWN, _ref, :process, _pid, reason}, state_name, state) do
-    Logger.info("[TableReaderServer] Consumer #{state.consumer.id} message store process died, shutting down",
-      reason: reason,
-      state_name: state_name
-    )
-
-    {:stop, :normal}
   end
 
   def handle_event({:timeout, :process_logging}, _, _state_name, %State{} = state) do

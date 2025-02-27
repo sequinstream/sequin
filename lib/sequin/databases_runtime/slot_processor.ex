@@ -474,6 +474,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   @impl ReplicationConnection
+  def handle_info({:EXIT, _pid, :normal}, %State{} = state) do
+    # Probably a Flow process
+    {:noreply, state}
+  end
+
+  @impl ReplicationConnection
   def handle_info({:DOWN, ref, :process, _pid, reason}, %State{} = state) do
     if Application.get_env(:sequin, :env) == :test and reason == :shutdown do
       {:noreply, state}
@@ -988,14 +994,23 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         Process.cancel_timer(ref)
       end
 
+      accumulated_binares = state.accumulated_msg_binaries.binaries
+      schemas = state.schemas
+
       messages =
-        state.accumulated_msg_binaries.binaries
+        accumulated_binares
         |> Enum.reverse()
-        |> Enum.map(fn msg ->
-          msg
-          |> Decoder.decode_message()
-          |> maybe_cast_message(state.schemas)
+        |> Enum.with_index()
+        |> Flow.from_enumerable()
+        |> Flow.map(fn {msg, idx} ->
+          {msg |> Decoder.decode_message() |> maybe_cast_message(schemas), idx}
         end)
+        # Merge back to single partition
+        |> Flow.partition(stages: 1)
+        # Sort by original index
+        |> Enum.sort_by(&elem(&1, 1))
+        # Extract just the messages
+        |> Enum.map(&elem(&1, 0))
 
       if Enum.any?(messages, &(not match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, &1))) do
         # A replication message is *their* message(s), not our message.

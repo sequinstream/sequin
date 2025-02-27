@@ -19,6 +19,13 @@ defmodule Sequin.Metrics.Store do
     end
   end
 
+  def reset_count(key) do
+    case Redis.command(["DEL", "metrics:count:#{key}"]) do
+      {:ok, _} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
   # Throughput functions
   # 70 seconds of throughput telemetry is stored; 5 seconds of read telemetry is read for "instant" throughput
   # We store more than 60 seconds so we can do smoothing and then take 60 seconds of smoothed data

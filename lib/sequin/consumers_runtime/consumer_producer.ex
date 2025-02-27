@@ -289,6 +289,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       {:ok, delivered_wal_cursors} =
         MessageLedgers.filter_delivered_wal_cursors(state.consumer.id, wal_cursors_to_deliver)
 
+      :ok = MessageLedgers.wal_cursors_delivered(state.consumer.id, delivered_wal_cursors)
+
       delivered_cursor_set = MapSet.new(delivered_wal_cursors)
 
       {delivered_messages, filtered_messages} =

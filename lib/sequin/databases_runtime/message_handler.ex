@@ -73,6 +73,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   @impl MessageHandlerBehaviour
+  def handle_messages(%Context{} = ctx, []) do
+    {:ok, 0, ctx}
+  end
+
   def handle_messages(%Context{} = ctx, messages) do
     execute_timed(:handle_messages, fn ->
       Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
@@ -370,7 +374,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     res =
       Enum.reduce_while(messages_by_consumer_id, :ok, fn {consumer_id, messages}, :ok ->
         execute_timed(:message_ledgers, fn ->
-          if Sequin.random(1..100) == 1 do
+          if env() != :prod or Sequin.random(1..100) == 1 do
             all_wal_cursors = Enum.map(messages, &MessageLedgers.wal_cursor_from_message/1)
             :ok = MessageLedgers.wal_cursors_ingested(consumer_id, all_wal_cursors)
           end
@@ -584,5 +588,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   defp incr_counter(name, amount \\ 1) do
     current = Process.get(name, 0)
     Process.put(name, current + amount)
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

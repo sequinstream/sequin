@@ -4,7 +4,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   use Oban.Worker,
     queue: :default,
     max_attempts: 1,
-    unique: [period: 120, timestamp: :scheduled_at]
+    unique: [period: 10, timestamp: :scheduled_at]
 
   import Sequin.Error.Guards, only: [is_error: 1]
 

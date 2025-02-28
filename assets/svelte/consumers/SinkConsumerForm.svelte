@@ -82,7 +82,6 @@
     consumer: Record<string, string>;
     sequence: Record<string, string>;
   };
-  export let submitError;
   export let isSelfHosted: boolean;
 
   let initialForm = {

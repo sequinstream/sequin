@@ -110,13 +110,18 @@
   let updateBytesChart;
   let resizeBytesObserver;
 
+  // Track SVG elements for proper cleanup
+  let chartSvg;
+  let bytesSvg;
+
   let hovered_messages_processed_throughput: number | null = null;
   let hovered_messages_processed_bytes: number | null = null;
   let hoveredXValue: number | null = null;
 
   onMount(() => {
+    // Initial chart creation
     if (metrics.messages_processed_throughput_timeseries.length > 0) {
-      updateChart = createThroughputChart(
+      const chartResult = createThroughputChart(
         chartElement,
         metrics.messages_processed_throughput_timeseries,
         {
@@ -127,21 +132,24 @@
         },
       );
 
-      // Create resize observer
+      updateChart = chartResult.update;
+      chartSvg = chartResult.svg;
+
+      // Create resize observer - only update dimensions, don't recreate chart
       resizeObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
-          if (entry.target === chartElement) {
-            // Recreate the chart with new dimensions
-            updateChart = createThroughputChart(
-              chartElement,
-              metrics.messages_processed_throughput_timeseries,
-              {
-                lineColor: "rgb(59, 130, 246)",
-                lineOpacity: 0.75,
-                areaColor: "rgb(59, 130, 246)",
-                areaOpacity: 0.05,
-              },
-            );
+          if (entry.target === chartElement && chartSvg) {
+            // Update dimensions only
+            const width = entry.contentRect.width;
+            const height = entry.contentRect.height;
+
+            chartSvg.attr("width", width).attr("height", height);
+
+            // Update chart with new dimensions
+            updateChart(metrics.messages_processed_throughput_timeseries, {
+              width,
+              height,
+            });
           }
         }
       });
@@ -151,7 +159,7 @@
     }
 
     if (metrics.messages_processed_bytes_timeseries.length > 0) {
-      updateBytesChart = createBytesChart(
+      const bytesChartResult = createBytesChart(
         bytesChartElement,
         metrics.messages_processed_bytes_timeseries,
         {
@@ -162,21 +170,24 @@
         },
       );
 
-      // Create resize observer
+      updateBytesChart = bytesChartResult.update;
+      bytesSvg = bytesChartResult.svg;
+
+      // Create resize observer - only update dimensions, don't recreate chart
       resizeBytesObserver = new ResizeObserver((entries) => {
         for (const entry of entries) {
-          if (entry.target === bytesChartElement) {
-            // Recreate the chart with new dimensions
-            updateBytesChart = createBytesChart(
-              bytesChartElement,
-              metrics.messages_processed_bytes_timeseries,
-              {
-                lineColor: "rgb(59, 130, 246)",
-                lineOpacity: 0.75,
-                areaColor: "rgb(59, 130, 246)",
-                areaOpacity: 0.05,
-              },
-            );
+          if (entry.target === bytesChartElement && bytesSvg) {
+            // Update dimensions only
+            const width = entry.contentRect.width;
+            const height = entry.contentRect.height;
+
+            bytesSvg.attr("width", width).attr("height", height);
+
+            // Update chart with new dimensions
+            updateBytesChart(metrics.messages_processed_bytes_timeseries, {
+              width,
+              height,
+            });
           }
         }
       });
@@ -187,28 +198,48 @@
 
     // Cleanup on component destruction
     return () => {
+      // Disconnect observers
       if (resizeObserver) {
         resizeObserver.disconnect();
+        resizeObserver = null;
       }
       if (resizeBytesObserver) {
         resizeBytesObserver.disconnect();
+        resizeBytesObserver = null;
       }
+
+      // Clean up D3 elements and event listeners
+      if (chartSvg) {
+        chartSvg.selectAll("*").remove();
+        chartSvg.remove();
+        chartSvg = null;
+      }
+
+      if (bytesSvg) {
+        bytesSvg.selectAll("*").remove();
+        bytesSvg.remove();
+        bytesSvg = null;
+      }
+
+      // Clear update functions
+      updateChart = null;
+      updateBytesChart = null;
     };
   });
 
   // Fix the reactive statement for metrics updates
   $: if (
-    updateChart?.update &&
+    updateChart &&
     metrics.messages_processed_throughput_timeseries.length > 0
   ) {
-    updateChart.update(metrics.messages_processed_throughput_timeseries);
+    updateChart(metrics.messages_processed_throughput_timeseries);
   }
 
   $: if (
-    updateBytesChart?.update &&
+    updateBytesChart &&
     metrics.messages_processed_bytes_timeseries.length > 0
   ) {
-    updateBytesChart.update(metrics.messages_processed_bytes_timeseries);
+    updateBytesChart(metrics.messages_processed_bytes_timeseries);
   }
 
   // Fix the reactive statement for hover sync
@@ -266,7 +297,7 @@
 
     const y = d3
       .scaleLinear()
-      .domain([0, d3.max(data) * 1.1])
+      .domain([0, d3.max(data) * 1.1 || 1])
       .range([chartHeight, 0]);
 
     // Create a chart group and translate it to account for margins
@@ -302,14 +333,14 @@
       .y0(chartHeight)
       .y1((d) => y(d));
 
-    chartGroup
+    const areaPath = chartGroup
       .append("path")
       .datum(data)
       .attr("fill", config.areaColor)
       .attr("fill-opacity", config.areaOpacity)
       .attr("d", area);
 
-    chartGroup
+    const linePath = chartGroup
       .append("path")
       .datum(data)
       .attr("fill", "none")
@@ -348,7 +379,7 @@
       .attr("fill", config.lineColor)
       .attr(
         "transform",
-        `translate(${x(data.length - 1)},${y(data[data.length - 1])})`,
+        `translate(${x(data.length - 1)},${y(data[data.length - 1] || 0)})`,
       );
 
     // Modify mouseArea event handlers
@@ -381,40 +412,62 @@
       }
     };
 
-    return {
-      update: function (newData) {
-        // Trim incoming data if needed
-        if (newData.length > MAX_DATA_POINTS) {
-          newData = newData.slice(-MAX_DATA_POINTS);
-        }
-        currentData = newData;
-        y.domain([0, d3.max(newData) * 1.1]);
+    // Improved update function that can handle dimension changes
+    const update = function (newData, newDimensions = null) {
+      // Trim incoming data if needed
+      if (newData.length > MAX_DATA_POINTS) {
+        newData = newData.slice(-MAX_DATA_POINTS);
+      }
+      currentData = newData;
 
-        // Update default dot position
+      // Update scales if dimensions changed
+      if (newDimensions) {
+        const newWidth = newDimensions.width;
+        const newHeight = newDimensions.height;
+
+        const newChartWidth =
+          newWidth - config.margin.left - config.margin.right;
+        const newChartHeight =
+          newHeight - config.margin.top - config.margin.bottom;
+
+        x.range([0, newChartWidth]);
+        y.range([newChartHeight, 0]);
+
+        // Update mouse area dimensions
+        mouseArea.attr("width", newWidth).attr("height", newHeight);
+
+        // Update chart group position
+        chartGroup.attr(
+          "transform",
+          `translate(${config.margin.left},${config.margin.top})`,
+        );
+      }
+
+      // Update y domain based on new data
+      y.domain([0, d3.max(newData) * 1.1 || 1]);
+
+      // Update default dot position
+      if (newData.length > 0) {
         defaultDot.attr(
           "transform",
-          `translate(${x(newData.length - 1)},${y(newData[newData.length - 1])})`,
+          `translate(${x(newData.length - 1)},${y(newData[newData.length - 1] || 0)})`,
         );
+      }
 
-        chartGroup
-          .select("path[fill]")
-          .datum(newData)
-          .transition()
-          .duration(0)
-          .attr("d", area);
+      // Update area and line paths
+      areaPath.datum(newData).attr("d", area);
 
-        chartGroup
-          .select("path[stroke]")
-          .datum(newData)
-          .transition()
-          .duration(0)
-          .attr("d", line);
+      linePath.datum(newData).attr("d", line);
 
-        if (lastMouseX !== null) {
-          handleMouseMove(null);
-        }
-      },
+      if (lastMouseX !== null) {
+        handleMouseMove(null);
+      }
+    };
+
+    return {
+      update,
       updateHover,
+      svg, // Return the svg element for cleanup
     };
   }
 
@@ -457,7 +510,7 @@
 
     const y = d3
       .scaleLinear()
-      .domain([0, d3.max(data) * 1.1])
+      .domain([0, d3.max(data) * 1.1 || 1])
       .range([chartHeight, 0]);
 
     // Create a chart group and translate it to account for margins
@@ -493,14 +546,14 @@
       .y0(chartHeight)
       .y1((d) => y(d));
 
-    chartGroup
+    const areaPath = chartGroup
       .append("path")
       .datum(data)
       .attr("fill", config.areaColor)
       .attr("fill-opacity", config.areaOpacity)
       .attr("d", area);
 
-    chartGroup
+    const linePath = chartGroup
       .append("path")
       .datum(data)
       .attr("fill", "none")
@@ -539,7 +592,7 @@
       .attr("fill", config.lineColor)
       .attr(
         "transform",
-        `translate(${x(data.length - 1)},${y(data[data.length - 1])})`,
+        `translate(${x(data.length - 1)},${y(data[data.length - 1] || 0)})`,
       );
 
     // Modify mouseArea event handlers
@@ -572,40 +625,62 @@
       }
     };
 
-    return {
-      update: function (newData) {
-        // Trim incoming data if needed
-        if (newData.length > MAX_DATA_POINTS) {
-          newData = newData.slice(-MAX_DATA_POINTS);
-        }
-        currentData = newData;
-        y.domain([0, d3.max(newData) * 1.1]);
+    // Improved update function that can handle dimension changes
+    const update = function (newData, newDimensions = null) {
+      // Trim incoming data if needed
+      if (newData.length > MAX_DATA_POINTS) {
+        newData = newData.slice(-MAX_DATA_POINTS);
+      }
+      currentData = newData;
 
-        // Update default dot position
+      // Update scales if dimensions changed
+      if (newDimensions) {
+        const newWidth = newDimensions.width;
+        const newHeight = newDimensions.height;
+
+        const newChartWidth =
+          newWidth - config.margin.left - config.margin.right;
+        const newChartHeight =
+          newHeight - config.margin.top - config.margin.bottom;
+
+        x.range([0, newChartWidth]);
+        y.range([newChartHeight, 0]);
+
+        // Update mouse area dimensions
+        mouseArea.attr("width", newWidth).attr("height", newHeight);
+
+        // Update chart group position
+        chartGroup.attr(
+          "transform",
+          `translate(${config.margin.left},${config.margin.top})`,
+        );
+      }
+
+      // Update y domain based on new data
+      y.domain([0, d3.max(newData) * 1.1 || 1]);
+
+      // Update default dot position
+      if (newData.length > 0) {
         defaultDot.attr(
           "transform",
-          `translate(${x(newData.length - 1)},${y(newData[newData.length - 1])})`,
+          `translate(${x(newData.length - 1)},${y(newData[newData.length - 1] || 0)})`,
         );
+      }
 
-        chartGroup
-          .select("path[fill]")
-          .datum(newData)
-          .transition()
-          .duration(0)
-          .attr("d", area);
+      // Update area and line paths
+      areaPath.datum(newData).attr("d", area);
 
-        chartGroup
-          .select("path[stroke]")
-          .datum(newData)
-          .transition()
-          .duration(0)
-          .attr("d", line);
+      linePath.datum(newData).attr("d", line);
 
-        if (lastMouseX !== null) {
-          handleMouseMove(null);
-        }
-      },
+      if (lastMouseX !== null) {
+        handleMouseMove(null);
+      }
+    };
+
+    return {
+      update,
       updateHover,
+      svg, // Return the svg element for cleanup
     };
   }
 

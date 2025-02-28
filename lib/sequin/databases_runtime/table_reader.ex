@@ -75,8 +75,8 @@ defmodule Sequin.DatabasesRuntime.TableReader do
   #             {:ok, %{messages: [ConsumerRecord.t() | ConsumerEvent.t()], next_cursor: KeysetCursor.cursor()}}
   #             | {:error, any()}
 
-  @callback emit_logic_message(db :: Postgres.db_conn(), consumer_id :: SinkConsumer.id()) ::
-              {:ok, lsn :: non_neg_integer()} | {:error, any()}
+  # @callback emit_logic_message(db :: Postgres.db_conn(), consumer_id :: SinkConsumer.id()) ::
+  # {:ok, lsn :: non_neg_integer()} | {:error, any()}
 
   # Cursor
   # Note: We previously had min and max cursors. We're switching to just use min cursors.
@@ -160,12 +160,6 @@ defmodule Sequin.DatabasesRuntime.TableReader do
       })
 
     with {:ok, conn} <- ConnectionCache.connection(db),
-         Logger.debug("[TableReader] Emitting low watermark for batch #{current_batch_id}"),
-         {:ok, _} <-
-           Postgres.query(conn, @emit_logical_message_sql, [
-             Constants.backfill_batch_low_watermark(),
-             payload
-           ]),
          {:ok, res} <- fun.(conn),
          Logger.debug("[TableReader] Emitting high watermark for batch #{current_batch_id}"),
          {:ok, _} <-

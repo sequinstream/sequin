@@ -54,9 +54,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       field :wal_pipelines, [WalPipeline.t()], default: []
       field :replication_slot_id, String.t()
       field :postgres_database, PostgresDatabase.t()
-      field :table_reader_batches, [BatchState.t()], default: []
-      field :max_pks_per_batch, non_neg_integer(), default: 1_000_000
       field :table_reader_mod, module(), default: TableReaderServer
+      field :running_backfill_ids, MapSet.t(String.t()), default: MapSet.new()
     end
   end
 
@@ -80,8 +79,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   def handle_messages(%Context{} = ctx, messages) do
     execute_timed(:handle_messages, fn ->
       Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
-
-      ctx = update_table_reader_batch_pks(ctx, messages)
 
       {ctx, messages} = load_unchanged_toasts(ctx, messages)
 
@@ -137,75 +134,20 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     end)
   end
 
-  @low_watermark_prefix Constants.backfill_batch_low_watermark()
   @high_watermark_prefix Constants.backfill_batch_high_watermark()
-
   @impl MessageHandlerBehaviour
-  def handle_logical_message(ctx, commit_lsn, %LogicalMessage{prefix: @low_watermark_prefix} = msg) do
-    content = Jason.decode!(msg.content)
-    %{"batch_id" => batch_id, "table_oid" => table_oid, "backfill_id" => backfill_id} = content
-
-    # Split batches into those matching the backfill_id and others
-    {matching_batches, remaining_batches} = Enum.split_with(ctx.table_reader_batches, &(&1.backfill_id == backfill_id))
-
-    if length(matching_batches) > 0 do
-      Logger.warning(
-        "[MessageHandler] Got unexpected low watermark. Discarding #{length(matching_batches)} existing batch(es) for backfill_id: #{backfill_id}"
-      )
-    end
-
-    # `replication_slot_id` added later, hence why we access it differently
-    # Safe to extract from Jason.decode! in the future
-    if Map.get(content, "replication_slot_id") == ctx.replication_slot_id do
-      # Create new batch and prepend to remaining batches
-      %{
-        ctx
-        | table_reader_batches: [
-            %BatchState{
-              batch_id: batch_id,
-              table_oid: table_oid,
-              backfill_id: backfill_id,
-              primary_key_values: MapSet.new(),
-              commit_lsn: commit_lsn
-            }
-            | remaining_batches
-          ]
-      }
-    else
-      # If we're sharing the same Postgres database between multiple replication slots,
-      # we may receive low watermark messages for other replication slots.
-      ctx
-    end
-  end
-
-  def handle_logical_message(ctx, _commit_lsn, %LogicalMessage{prefix: @high_watermark_prefix} = msg) do
+  def handle_logical_message(ctx, commit_lsn, %LogicalMessage{prefix: @high_watermark_prefix} = msg) do
     content = Jason.decode!(msg.content)
     %{"batch_id" => batch_id, "backfill_id" => backfill_id} = content
 
     # `replication_slot_id` added later, hence why we access it differently
     # Safe to extract from Jason.decode! in the future
     if Map.get(content, "replication_slot_id") == ctx.replication_slot_id do
-      case Enum.find(ctx.table_reader_batches, &(&1.batch_id == batch_id)) do
-        nil ->
-          Logger.error(
-            "[MessageHandler] Discarding batch: Batch not found in table reader batches (batch_id: #{batch_id}, backfill_id: #{backfill_id})"
-          )
-
-          ctx.table_reader_mod.discard_batch(backfill_id, batch_id)
-          ctx
-
-        batch ->
-          :ok =
-            ctx.table_reader_mod.flush_batch(backfill_id, %{
-              batch_id: batch_id,
-              commit_lsn: batch.commit_lsn,
-              drop_pks: batch.primary_key_values
-            })
-
-          update_in(ctx.table_reader_batches, fn batches ->
-            Enum.reject(batches, &(&1.batch_id == batch_id))
-          end)
-      end
+      :ok =
+        ctx.table_reader_mod.flush_batch(backfill_id, %{
+          batch_id: batch_id,
+          commit_lsn: commit_lsn
+        })
     else
       # If we're sharing the same Postgres database between multiple replication slots,
       # we may receive low watermark messages for other replication slots.
@@ -225,29 +167,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     else
       event_or_record.payload_size_bytes > 5_000_000
     end
-  end
-
-  # Track primary key values that match a backfill batch (a current backfill with an open low watermark)
-  defp update_table_reader_batch_pks(%Context{} = ctx, messages) do
-    update_in(ctx.table_reader_batches, fn batches ->
-      batches
-      |> Enum.map(fn batch ->
-        matching_msgs = Enum.filter(messages, &(&1.table_oid == batch.table_oid))
-
-        # Create a MapSet of all ids from matching messages and union with existing values
-
-        incoming_pks = MapSet.new(matching_msgs, fn msg -> Enum.map(msg.ids, &to_string/1) end)
-        new_pks = MapSet.union(batch.primary_key_values, incoming_pks)
-
-        if MapSet.size(new_pks) > ctx.max_pks_per_batch do
-          Logger.error("[MessageHandler] Batch #{batch.batch_id} has too many primary key values. Evicting batch.")
-          nil
-        else
-          %{batch | primary_key_values: MapSet.union(batch.primary_key_values, incoming_pks)}
-        end
-      end)
-      |> Enum.reject(&is_nil/1)
-    end)
   end
 
   defp consumer_event(consumer, message) do

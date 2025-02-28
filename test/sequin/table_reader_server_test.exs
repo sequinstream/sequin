@@ -317,8 +317,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       pid = start_table_reader_server(filtered_consumer_backfill, table_oid, initial_page_size: page_size)
 
       {:ok, messages} = flush_batches(filtered_consumer, pid)
+      record_pks = Enum.map(messages, & &1.record_pks)
+      assert_lists_equal(record_pks, Enum.uniq(record_pks))
 
-      # We expect only 2 records (the matching characters)
       assert length(messages) == 2
 
       # Verify that the records match only the characters with status "active"

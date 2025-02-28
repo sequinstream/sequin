@@ -402,6 +402,49 @@ defmodule Sequin.TableReaderTest do
       assert_character_equal(Enum.at(messages, 1).data.record, char5)
       assert final_cursor[table.sort_column_attnum] == char5.updated_at
     end
+
+    test "correctly uses join with unnest for compound primary keys", %{
+      db: db,
+      character_multi_pk_consumer: consumer,
+      characters_multi_pk_table: table
+    } do
+      # Insert test data with specific values for easier verification
+      char1 = CharacterFactory.insert_character_multi_pk!(name: "Character One")
+      char2 = CharacterFactory.insert_character_multi_pk!(name: "Character Two")
+      char3 = CharacterFactory.insert_character_multi_pk!(name: "Character Three")
+      # Create primary keys in the format expected by fetch_batch_by_primary_keys
+      # But intentionally mix up the order to test that the join approach works correctly
+      # regardless of the order of the primary keys
+      primary_keys =
+        Enum.map(
+          [CharacterMultiPK.record_pks(char2), CharacterMultiPK.record_pks(char1), CharacterMultiPK.record_pks(char3)],
+          fn pks -> Enum.map(pks, &to_string/1) end
+        )
+
+      # Fetch records using primary keys
+      {:ok, %{messages: messages}} = TableReader.fetch_batch_by_primary_keys(db, consumer, table, primary_keys)
+
+      # Verify we got all three records back
+      assert length(messages) == 3
+
+      # Create a map of records by name for easier verification
+      record_map = Map.new(messages, fn msg -> {msg.data.record["name"], msg.data.record} end)
+
+      # Verify all records were returned correctly
+      assert record_map["Character One"]["id_string"] == char1.id_string
+      assert record_map["Character One"]["id_uuid"] == char1.id_uuid
+
+      assert record_map["Character Two"]["id_string"] == char2.id_string
+      assert record_map["Character Two"]["id_uuid"] == char2.id_uuid
+
+      assert record_map["Character Three"]["id_string"] == char3.id_string
+      assert record_map["Character Three"]["id_uuid"] == char3.id_uuid
+
+      # Verify the full records match what we expect
+      assert_multi_pk_character_equal(record_map["Character One"], char1)
+      assert_multi_pk_character_equal(record_map["Character Two"], char2)
+      assert_multi_pk_character_equal(record_map["Character Three"], char3)
+    end
   end
 
   defp map_column_attnums(table) do

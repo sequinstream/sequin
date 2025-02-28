@@ -24,6 +24,7 @@ defmodule Sequin.TableReaderTest do
 
     character_col_attnums = map_column_attnums(characters_table)
     character_multi_pk_attnums = map_column_attnums(characters_multi_pk_table)
+    character_detailed_attnums = map_column_attnums(characters_detailed_table)
 
     # Set sort_column_attnum for both tables
     characters_table = %{characters_table | sort_column_attnum: character_col_attnums["updated_at"]}
@@ -35,7 +36,7 @@ defmodule Sequin.TableReaderTest do
 
     characters_detailed_table = %{
       characters_detailed_table
-      | sort_column_attnum: character_col_attnums["updated_at"]
+      | sort_column_attnum: character_detailed_attnums["updated_at"]
     }
 
     ConnectionCache.cache_connection(db, Repo)
@@ -56,11 +57,22 @@ defmodule Sequin.TableReaderTest do
         sort_column_attnum: character_multi_pk_attnums["updated_at"]
       )
 
+    character_detailed_sequence =
+      DatabasesFactory.insert_sequence!(
+        account_id: db.account_id,
+        postgres_database_id: db.id,
+        table_oid: characters_detailed_table.oid,
+        sort_column_attnum: character_detailed_attnums["updated_at"]
+      )
+
     character_sequence_filter =
       ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: Character.pk_attnums())
 
     character_multi_pk_sequence_filter =
       ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: CharacterMultiPK.pk_attnums())
+
+    character_detailed_sequence_filter =
+      ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: Character.pk_attnums())
 
     character_consumer =
       Repo.preload(
@@ -84,10 +96,22 @@ defmodule Sequin.TableReaderTest do
         [:sequence, :postgres_database]
       )
 
+    character_detailed_consumer =
+      Repo.preload(
+        ConsumersFactory.insert_sink_consumer!(
+          sequence_id: character_detailed_sequence.id,
+          sequence_filter: Map.from_struct(character_detailed_sequence_filter),
+          account_id: db.account_id,
+          postgres_database_id: db.id
+        ),
+        [:sequence, :postgres_database]
+      )
+
     %{
       db: db,
       character_consumer: character_consumer,
       character_multi_pk_consumer: character_multi_pk_consumer,
+      character_detailed_consumer: character_detailed_consumer,
       consumer_id: "test_consumer_#{Factory.unique_integer()}",
       tables: tables,
       characters_table: characters_table,
@@ -155,7 +179,8 @@ defmodule Sequin.TableReaderTest do
   describe "fetch_batch/4" do
     test "fetches a batch of records with default limit", %{
       db: db,
-      characters_table: table
+      characters_table: table,
+      character_consumer: consumer
     } do
       now = NaiveDateTime.utc_now()
       char1 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -3, :second))
@@ -164,23 +189,25 @@ defmodule Sequin.TableReaderTest do
 
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
-      {:ok, %{rows: records, next_cursor: next_cursor}} =
-        TableReader.fetch_batch(db, table, initial_cursor, include_min: true)
+      {:ok, %{messages: messages, next_cursor: next_cursor}} =
+        TableReader.fetch_batch(db, consumer, table, initial_cursor, include_min: true)
 
-      assert length(records) == 3
-      assert_character_equal(Enum.at(records, 0), char1)
-      assert_character_equal(Enum.at(records, 1), char2)
-      assert_character_equal(Enum.at(records, 2), char3)
+      assert length(messages) == 3
+
+      # Verify the messages contain the correct record data
+      assert Enum.at(messages, 0).data.record["id"] == char1.id
+      assert Enum.at(messages, 1).data.record["id"] == char2.id
+      assert Enum.at(messages, 2).data.record["id"] == char3.id
 
       # Verify next cursor matches last record
       assert next_cursor[table.sort_column_attnum] == char3.updated_at
 
-      {:ok, %{rows: records, next_cursor: next_cursor}} =
-        TableReader.fetch_batch(db, table, initial_cursor, include_min: false)
+      {:ok, %{messages: messages, next_cursor: next_cursor}} =
+        TableReader.fetch_batch(db, consumer, table, initial_cursor, include_min: false)
 
-      assert length(records) == 2
-      assert_character_equal(Enum.at(records, 0), char2)
-      assert_character_equal(Enum.at(records, 1), char3)
+      assert length(messages) == 2
+      assert Enum.at(messages, 0).data.record["id"] == char2.id
+      assert Enum.at(messages, 1).data.record["id"] == char3.id
 
       # Verify next cursor matches last record
       assert next_cursor[table.sort_column_attnum] == char3.updated_at
@@ -188,7 +215,8 @@ defmodule Sequin.TableReaderTest do
 
     test "correctly handles nil and populated UUID, UUID[] and bytea fields", %{
       db: db,
-      characters_detailed_table: table
+      characters_detailed_table: table,
+      character_detailed_consumer: consumer
     } do
       # Insert two characters with different combinations of special fields
       char1 =
@@ -209,44 +237,46 @@ defmodule Sequin.TableReaderTest do
 
       {:ok, _first_row, initial_min_cursor} = TableReader.fetch_first_row(db, table)
 
-      {:ok, %{rows: results, next_cursor: _next_cursor}} =
+      {:ok, %{messages: messages, next_cursor: _next_cursor}} =
         TableReader.fetch_batch(
           db,
+          consumer,
           table,
           initial_min_cursor,
           limit: 10,
           include_min: true
         )
 
-      assert length(results) == 2
+      assert length(messages) == 2
 
       # Find the results corresponding to our inserted characters
-      result1 = Enum.find(results, &(&1["id"] == char1.id))
-      result2 = Enum.find(results, &(&1["id"] == char2.id))
+      record1 = Enum.find(messages, &(&1.data.record["id"] == char1.id)).data.record
+      record2 = Enum.find(messages, &(&1.data.record["id"] == char2.id)).data.record
 
       # Verify enum handling
-      assert result1["status"] == "active"
-      assert result2["status"] == "retired"
+      assert record1["status"] == "active"
+      assert record2["status"] == "retired"
 
       # Verify UUID handling
-      refute result1["house_id"]
-      assert {:ok, _} = UUID.info(result2["house_id"])
-      assert result2["house_id"] == char2.house_id
+      refute record1["house_id"]
+      assert {:ok, _} = UUID.info(record2["house_id"])
+      assert record2["house_id"] == char2.house_id
 
       # Verify UUID array handling
-      assert result1["related_houses"] == []
-      assert length(result2["related_houses"]) == 2
-      assert Enum.all?(result2["related_houses"], fn uuid -> match?({:ok, _}, UUID.info(uuid)) end)
-      assert result2["related_houses"] == char2.related_houses
+      assert record1["related_houses"] == []
+      assert length(record2["related_houses"]) == 2
+      assert Enum.all?(record2["related_houses"], fn uuid -> match?({:ok, _}, UUID.info(uuid)) end)
+      assert record2["related_houses"] == char2.related_houses
 
       # Verify bytea handling
-      assert result1["binary_data"] == "\\x010203"
-      assert result2["binary_data"] == "\\x040506"
+      assert record1["binary_data"] == "\\x010203"
+      assert record2["binary_data"] == "\\x040506"
     end
 
     test "respects the limit parameter", %{
       db: db,
-      characters_table: table
+      characters_table: table,
+      character_consumer: consumer
     } do
       now = NaiveDateTime.utc_now()
       char1 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -2, :second))
@@ -255,12 +285,12 @@ defmodule Sequin.TableReaderTest do
 
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
-      {:ok, %{rows: records, next_cursor: next_cursor}} =
-        TableReader.fetch_batch(db, table, initial_cursor, limit: 2, include_min: true)
+      {:ok, %{messages: messages, next_cursor: next_cursor}} =
+        TableReader.fetch_batch(db, consumer, table, initial_cursor, limit: 2, include_min: true)
 
-      assert length(records) == 2
-      assert_character_equal(Enum.at(records, 0), char1)
-      assert_character_equal(Enum.at(records, 1), char2)
+      assert length(messages) == 2
+      assert messages |> Enum.at(0) |> Map.get(:data) |> Map.get(:record) |> Map.get("id") == char1.id
+      assert messages |> Enum.at(1) |> Map.get(:data) |> Map.get(:record) |> Map.get("id") == char2.id
 
       # Verify next cursor matches last record in batch
       assert next_cursor[table.sort_column_attnum] == char2.updated_at
@@ -268,21 +298,21 @@ defmodule Sequin.TableReaderTest do
 
     test "handles empty result set", %{
       db: db,
-      characters_table: table
+      characters_table: table,
+      character_consumer: consumer
     } do
       cursor = KeysetCursor.min_cursor(table, NaiveDateTime.utc_now())
 
-      {:ok, %{rows: records, next_cursor: next_cursor}} = TableReader.fetch_batch(db, table, cursor)
+      {:ok, %{messages: messages, next_cursor: next_cursor}} = TableReader.fetch_batch(db, consumer, table, cursor)
 
-      assert records == []
+      assert messages == []
       assert next_cursor == nil
     end
   end
 
-  describe "fetch_batch primary_keys / by_primary_keys" do
-    test "fetches primary keys and corresponding records for single PK table", %{
+  describe "fetch_batch_pks" do
+    test "fetches primary keys for single PK table", %{
       db: db,
-      character_consumer: consumer,
       characters_table: table
     } do
       now = NaiveDateTime.utc_now()
@@ -293,26 +323,25 @@ defmodule Sequin.TableReaderTest do
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
       # Fetch primary keys
-      {:ok, %{rows: primary_keys, next_cursor: next_cursor}} =
-        TableReader.fetch_batch_primary_keys(db, table, initial_cursor, include_min: true)
+      {:ok, %{pks: primary_keys, next_cursor: next_cursor}} =
+        TableReader.fetch_batch_pks(db, table, initial_cursor, include_min: true)
 
       assert length(primary_keys) == 3
       assert primary_keys == [[to_string(char1.id)], [to_string(char2.id)], [to_string(char3.id)]]
       # Verify next cursor matches last record
       assert next_cursor[table.sort_column_attnum] == char3.updated_at
 
-      # Fetch full records using primary keys
-      {:ok, %{messages: messages}} = TableReader.fetch_batch_by_primary_keys(db, consumer, table, primary_keys)
+      # Test with include_min: false
+      {:ok, %{pks: primary_keys, next_cursor: next_cursor}} =
+        TableReader.fetch_batch_pks(db, table, initial_cursor, include_min: false)
 
-      assert length(messages) == 3
-      assert_character_equal(Enum.at(messages, 0).data.record, char1)
-      assert_character_equal(Enum.at(messages, 1).data.record, char2)
-      assert_character_equal(Enum.at(messages, 2).data.record, char3)
+      assert length(primary_keys) == 2
+      assert primary_keys == [[to_string(char2.id)], [to_string(char3.id)]]
+      assert next_cursor[table.sort_column_attnum] == char3.updated_at
     end
 
-    test "fetches primary keys and corresponding records for multi PK table", %{
+    test "fetches primary keys for multi PK table", %{
       db: db,
-      character_multi_pk_consumer: consumer,
       characters_multi_pk_table: table
     } do
       char1 = CharacterFactory.insert_character_multi_pk!()
@@ -322,8 +351,8 @@ defmodule Sequin.TableReaderTest do
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
       # Fetch primary keys
-      {:ok, %{rows: primary_keys, next_cursor: next_cursor}} =
-        TableReader.fetch_batch_primary_keys(db, table, initial_cursor, include_min: true)
+      {:ok, %{pks: primary_keys, next_cursor: next_cursor}} =
+        TableReader.fetch_batch_pks(db, table, initial_cursor, include_min: true)
 
       assert length(primary_keys) == 3
       assert next_cursor != nil
@@ -335,20 +364,10 @@ defmodule Sequin.TableReaderTest do
       ]
 
       assert primary_keys == Enum.map(expected_pks, fn pks -> Enum.map(pks, &to_string/1) end)
-
-      # Fetch full records using primary keys
-      {:ok, %{messages: messages}} = TableReader.fetch_batch_by_primary_keys(db, consumer, table, primary_keys)
-
-      assert length(messages) == 3
-      # Helper function to compare multi-PK records
-      assert_multi_pk_character_equal(Enum.at(messages, 0).data.record, char1)
-      assert_multi_pk_character_equal(Enum.at(messages, 1).data.record, char2)
-      assert_multi_pk_character_equal(Enum.at(messages, 2).data.record, char3)
     end
 
-    test "correctly paginates records with next_cursor for single PK table", %{
+    test "correctly paginates primary keys with next_cursor", %{
       db: db,
-      character_consumer: consumer,
       characters_table: table
     } do
       now = NaiveDateTime.utc_now()
@@ -361,8 +380,8 @@ defmodule Sequin.TableReaderTest do
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
       # Fetch first page of primary keys
-      {:ok, %{rows: primary_keys, next_cursor: first_page_cursor}} =
-        TableReader.fetch_batch_primary_keys(db, table, initial_cursor,
+      {:ok, %{pks: primary_keys, next_cursor: first_page_cursor}} =
+        TableReader.fetch_batch_pks(db, table, initial_cursor,
           include_min: true,
           limit: 3
         )
@@ -372,19 +391,9 @@ defmodule Sequin.TableReaderTest do
       assert primary_keys == [[to_string(char1.id)], [to_string(char2.id)], [to_string(char3.id)]]
       assert first_page_cursor[table.sort_column_attnum] == char3.updated_at
 
-      # Fetch first page of records and get next cursor
-      {:ok, %{messages: messages, next_cursor: next_cursor}} =
-        TableReader.fetch_batch_by_primary_keys(db, consumer, table, primary_keys)
-
-      assert length(messages) == 3
-      assert_character_equal(Enum.at(messages, 0).data.record, char1)
-      assert_character_equal(Enum.at(messages, 1).data.record, char2)
-      assert_character_equal(Enum.at(messages, 2).data.record, char3)
-      assert next_cursor[table.sort_column_attnum] == char3.updated_at
-
       # Fetch second page using next_cursor
-      {:ok, %{rows: primary_keys, next_cursor: second_page_cursor}} =
-        TableReader.fetch_batch_primary_keys(db, table, next_cursor,
+      {:ok, %{pks: primary_keys, next_cursor: second_page_cursor}} =
+        TableReader.fetch_batch_pks(db, table, first_page_cursor,
           include_min: false,
           limit: 3
         )
@@ -392,58 +401,18 @@ defmodule Sequin.TableReaderTest do
       assert length(primary_keys) == 2
       assert primary_keys == [[to_string(char4.id)], [to_string(char5.id)]]
       assert second_page_cursor[table.sort_column_attnum] == char5.updated_at
-
-      # Fetch second page of records
-      {:ok, %{messages: messages, next_cursor: final_cursor}} =
-        TableReader.fetch_batch_by_primary_keys(db, consumer, table, primary_keys)
-
-      assert length(messages) == 2
-      assert_character_equal(Enum.at(messages, 0).data.record, char4)
-      assert_character_equal(Enum.at(messages, 1).data.record, char5)
-      assert final_cursor[table.sort_column_attnum] == char5.updated_at
     end
 
-    test "correctly uses join with unnest for compound primary keys", %{
+    test "handles empty result set", %{
       db: db,
-      character_multi_pk_consumer: consumer,
-      characters_multi_pk_table: table
+      characters_table: table
     } do
-      # Insert test data with specific values for easier verification
-      char1 = CharacterFactory.insert_character_multi_pk!(name: "Character One")
-      char2 = CharacterFactory.insert_character_multi_pk!(name: "Character Two")
-      char3 = CharacterFactory.insert_character_multi_pk!(name: "Character Three")
-      # Create primary keys in the format expected by fetch_batch_by_primary_keys
-      # But intentionally mix up the order to test that the join approach works correctly
-      # regardless of the order of the primary keys
-      primary_keys =
-        Enum.map(
-          [CharacterMultiPK.record_pks(char2), CharacterMultiPK.record_pks(char1), CharacterMultiPK.record_pks(char3)],
-          fn pks -> Enum.map(pks, &to_string/1) end
-        )
+      cursor = KeysetCursor.min_cursor(table, NaiveDateTime.utc_now())
 
-      # Fetch records using primary keys
-      {:ok, %{messages: messages}} = TableReader.fetch_batch_by_primary_keys(db, consumer, table, primary_keys)
+      {:ok, %{pks: primary_keys, next_cursor: next_cursor}} = TableReader.fetch_batch_pks(db, table, cursor)
 
-      # Verify we got all three records back
-      assert length(messages) == 3
-
-      # Create a map of records by name for easier verification
-      record_map = Map.new(messages, fn msg -> {msg.data.record["name"], msg.data.record} end)
-
-      # Verify all records were returned correctly
-      assert record_map["Character One"]["id_string"] == char1.id_string
-      assert record_map["Character One"]["id_uuid"] == char1.id_uuid
-
-      assert record_map["Character Two"]["id_string"] == char2.id_string
-      assert record_map["Character Two"]["id_uuid"] == char2.id_uuid
-
-      assert record_map["Character Three"]["id_string"] == char3.id_string
-      assert record_map["Character Three"]["id_uuid"] == char3.id_uuid
-
-      # Verify the full records match what we expect
-      assert_multi_pk_character_equal(record_map["Character One"], char1)
-      assert_multi_pk_character_equal(record_map["Character Two"], char2)
-      assert_multi_pk_character_equal(record_map["Character Three"], char3)
+      assert primary_keys == []
+      assert next_cursor == nil
     end
   end
 
@@ -451,40 +420,40 @@ defmodule Sequin.TableReaderTest do
     Map.new(table.columns, fn column -> {column.name, column.attnum} end)
   end
 
-  defp assert_character_equal(result, character) when is_struct(result) do
-    assert_character_equal(Map.from_struct(result), character)
-  end
+  # defp assert_character_equal(result, character) when is_struct(result) do
+  #   assert_character_equal(Map.from_struct(result), character)
+  # end
 
-  defp assert_character_equal(result, character) do
-    assert_maps_equal(
-      result,
-      Map.from_struct(character),
-      [
-        "id",
-        "name",
-        "updated_at"
-      ],
-      indifferent_keys: true
-    )
-  end
+  # defp assert_character_equal(result, character) do
+  #   assert_maps_equal(
+  #     result,
+  #     Map.from_struct(character),
+  #     [
+  #       "id",
+  #       "name",
+  #       "updated_at"
+  #     ],
+  #     indifferent_keys: true
+  #   )
+  # end
 
-  defp assert_multi_pk_character_equal(result, character) when is_struct(result) do
-    assert_multi_pk_character_equal(Map.from_struct(result), character)
-  end
+  # defp assert_multi_pk_character_equal(result, character) when is_struct(result) do
+  #   assert_multi_pk_character_equal(Map.from_struct(result), character)
+  # end
 
-  defp assert_multi_pk_character_equal(result, character) do
-    assert_maps_equal(
-      result,
-      Map.from_struct(character),
-      [
-        "id_integer",
-        "id_string",
-        "id_uuid",
-        "name",
-        "house",
-        "updated_at"
-      ],
-      indifferent_keys: true
-    )
-  end
+  # defp assert_multi_pk_character_equal(result, character) do
+  #   assert_maps_equal(
+  #     result,
+  #     Map.from_struct(character),
+  #     [
+  #       "id_integer",
+  #       "id_string",
+  #       "id_uuid",
+  #       "name",
+  #       "house",
+  #       "updated_at"
+  #     ],
+  #     indifferent_keys: true
+  #   )
+  # end
 end

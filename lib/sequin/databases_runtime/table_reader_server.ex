@@ -139,6 +139,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
       # Fetching
       field :cursor, map() | nil
+      field :next_cursor, map() | nil
       field :page_size_optimizer, PageSizeOptimizer.t()
       field :successive_failure_count, integer(), default: 0
       field :count_pending_messages, integer(), default: 0
@@ -151,9 +152,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
       # Mockable fns
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
-
-      field :fetch_batch_primary_keys, TableReader.fetch_batch_primary_keys()
-      field :fetch_batch_by_primary_keys, TableReader.fetch_batch_by_primary_keys()
+      field :fetch_batch_pks, function()
+      field :fetch_batch, function()
 
       field :page_size_optimizer_mod, module()
 
@@ -206,9 +206,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       setting_check_state_timeout: Keyword.get(opts, :check_state_timeout, :timer.seconds(30)),
       setting_check_sms_timeout: Keyword.get(opts, :check_sms_timeout, :timer.seconds(5)),
       fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2),
-      fetch_batch_primary_keys: Keyword.get(opts, :fetch_batch_primary_keys, &TableReader.fetch_batch_primary_keys/4),
-      fetch_batch_by_primary_keys:
-        Keyword.get(opts, :fetch_batch_by_primary_keys, &TableReader.fetch_batch_by_primary_keys/4),
+      fetch_batch_pks: Keyword.get(opts, :fetch_batch_pks, &TableReader.fetch_batch_pks/4),
+      fetch_batch: Keyword.get(opts, :fetch_batch, &TableReader.fetch_batch/5),
       task_supervisor: Keyword.get(opts, :task_supervisor, Sequin.TaskSupervisor)
     }
 
@@ -290,7 +289,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
           res =
             with {:ok, conn} <- ConnectionCache.connection(database) do
-              state.fetch_batch_primary_keys.(
+              state.fetch_batch_pks.(
                 conn,
                 table,
                 cursor,
@@ -327,12 +326,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         :running,
         %State{current_id_fetch_task: %{ref: ref, batch_id: batch_id, page_size: page_size}} = state
       ) do
+    include_min = state.cursor == initial_min_cursor(state.consumer)
     Process.demonitor(ref, [:flush])
     now = Sequin.utc_now()
     time_ms = DateTime.diff(now, state.current_id_fetch_task.started_at, :millisecond)
 
     case result do
-      {:ok, %{rows: []}} ->
+      {:ok, %{pks: []}} ->
         # No more rows to fetch
         state = %{state | current_id_fetch_task: nil}
 
@@ -347,14 +347,15 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           {:keep_state, state}
         end
 
-      {:ok, %{rows: primary_keys}} ->
+      {:ok, %{pks: primary_keys, next_cursor: next_cursor}} ->
         Logger.debug("[TableReaderServer] ID fetch returned #{length(primary_keys)} primary keys")
 
         state = %{
           state
           | successive_failure_count: 0,
             current_id_fetch_task: nil,
-            last_id_fetch_time_ms: time_ms
+            last_id_fetch_time_ms: time_ms,
+            next_cursor: next_cursor
         }
 
         # Start the batch fetch task
@@ -365,6 +366,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         consumer = state.consumer
         id = state.id
         slot_id = state.consumer.replication_slot.id
+        cursor = state.cursor
 
         task =
           Task.Supervisor.async_nolink(state.task_supervisor, fn ->
@@ -378,11 +380,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
                 batch_id,
                 table_oid,
                 fn t_conn ->
-                  state.fetch_batch_by_primary_keys.(
+                  state.fetch_batch.(
                     t_conn,
                     consumer,
                     table,
-                    primary_keys
+                    cursor,
+                    include_min: include_min,
+                    limit: page_size
                   )
                 end
               )
@@ -406,7 +410,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         timeout_error = match?(%ServiceError{service: :postgres, code: :query_timeout}, error)
         error_details = if timeout_error, do: error.details, else: %{}
 
-        Logger.error("[TableReaderServer] Failed to fetch primary keys: #{inspect(error)}",
+        Logger.error("[TableReaderServer] Failed to fetch primary keys with fetch_batch_pks: #{inspect(error)}",
           error: error,
           error_details: error_details,
           page_size: page_size,
@@ -445,7 +449,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     state = %{state | current_batch_fetch_task: nil, last_id_fetch_time_ms: nil}
 
     case result do
-      {:ok, %{messages: [], next_cursor: nil}, _appx_lsn} ->
+      {:ok, %{messages: []}, _appx_lsn} ->
         # No messages after filtering
         # Record successful timing using the slower of the two operations
         optimizer = state.page_size_optimizer_mod.put_timing(state.page_size_optimizer, page_size, time_ms)
@@ -454,12 +458,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           state
           | page_size_optimizer: optimizer,
             ignoreable_batch_ids: MapSet.put(state.ignoreable_batch_ids, batch_id),
+            cursor: state.next_cursor,
             successive_failure_count: 0
         }
 
         {:keep_state, state, [maybe_fetch_timeout()]}
 
-      {:ok, %{messages: messages, next_cursor: next_cursor}, appx_lsn} ->
+      {:ok, %{messages: messages}, appx_lsn} ->
         Logger.debug("[TableReaderServer] Batch fetch returned #{length(messages)} messages")
 
         # Record successful timing using the slower of the two operations
@@ -481,7 +486,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         state = %{
           state
           | unflushed_batches: state.unflushed_batches ++ [batch],
-            cursor: next_cursor,
+            # Important that we update to the cursor of the ID fetch, not the follow-up fetch
+            cursor: state.next_cursor,
+            next_cursor: nil,
             successive_failure_count: 0
         }
 
@@ -491,7 +498,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         timeout_error = match?(%ServiceError{service: :postgres, code: :query_timeout}, error)
         error_details = if timeout_error, do: error.details, else: %{}
 
-        Logger.error("[TableReaderServer] Failed to fetch batch by primary keys: #{inspect(error)}",
+        Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}",
           error: error,
           error_details: error_details,
           page_size: page_size,

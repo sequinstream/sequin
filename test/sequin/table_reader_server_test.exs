@@ -458,7 +458,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     end
 
     @tag :capture_log
-    test "reduces page size and retries on fetch_batch_primary_keys query timeout when page size > 1000", %{
+    test "reduces page size and retries on fetch_batch_pks query timeout when page size > 1000", %{
       backfill: backfill,
       table_oid: table_oid,
       consumer: consumer
@@ -467,7 +467,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       test_pid = self()
       call_count = :atomics.new(1, [])
 
-      fetch_batch_primary_keys = fn _conn, _table, _cursor, opts ->
+      fetch_batch_pks = fn _conn, _table, _cursor, opts ->
         count = :atomics.add_get(call_count, 1, 1)
 
         case count do
@@ -486,7 +486,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
             # Second call - verify reduced page size and return success
             assert opts[:limit] < initial_page_size
             send(test_pid, {:fetch_batch, 2})
-            {:ok, %{rows: [], next_cursor: nil}}
+            {:ok, %{pks: [], next_cursor: nil}}
 
           _ ->
             raise "Unexpected call count #{count}"
@@ -499,7 +499,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       pid =
         start_table_reader_server(backfill, table_oid,
           initial_page_size: initial_page_size,
-          fetch_batch_primary_keys: fetch_batch_primary_keys,
+          fetch_batch_pks: fetch_batch_pks,
           page_size_optimizer_mod: nil
         )
 
@@ -512,41 +512,41 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     end
 
     @tag :capture_log
-    test "reduces page size and retries on fetch_batch_by_primary_keys query timeout when page size > 1000", %{
+    test "reduces page size and retries on fetch_batch query timeout when page size > 1000", %{
       backfill: backfill,
       table_oid: table_oid,
       consumer: consumer
     } do
       initial_page_size = 2000
       test_pid = self()
-      call_count2 = :atomics.new(1, [])
       call_count1 = :atomics.new(1, [])
+      call_count2 = :atomics.new(1, [])
 
       # First, mock the primary keys fetch to return some keys
-      fetch_batch_primary_keys = fn _conn, _table, _cursor, _opts ->
+      fetch_batch_pks = fn _conn, _table, _cursor, _opts ->
         count = :atomics.add_get(call_count1, 1, 1)
 
         case count do
           1 ->
             # Return some dummy primary keys
-            {:ok, %{rows: [["1"], ["2"], ["3"]], next_cursor: ["4"]}}
+            {:ok, %{pks: [["1"], ["2"], ["3"]], next_cursor: ["4"]}}
 
           2 ->
             # System isn't very smart - it will re-run the ID fetch!
-            {:ok, %{rows: [["1"], ["2"], ["3"]], next_cursor: ["4"]}}
+            {:ok, %{pks: [["1"], ["2"], ["3"]], next_cursor: ["4"]}}
 
           3 ->
-            {:ok, %{rows: [], next_cursor: nil}}
+            {:ok, %{pks: [], next_cursor: nil}}
         end
       end
 
       # Then, mock the batch fetch to timeout on first call
-      fetch_batch_by_primary_keys = fn _conn, _consumer, _table, _primary_keys ->
+      fetch_batch = fn _conn, _consumer, _table, _cursor, _opts ->
         count = :atomics.add_get(call_count2, 1, 1)
 
         case count do
           1 ->
-            send(test_pid, {:fetch_batch_by_primary_keys, 1})
+            send(test_pid, {:fetch_batch, 1})
             # First call - return timeout error
             {:error,
              Error.service(
@@ -558,7 +558,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
           2 ->
             # Second call - verify we retry and return success
-            send(test_pid, {:fetch_batch_by_primary_keys, 2})
+            send(test_pid, {:fetch_batch, 2})
             {:ok, %{messages: [], next_cursor: nil}}
 
           _ ->
@@ -572,20 +572,20 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       pid =
         start_table_reader_server(backfill, table_oid,
           initial_page_size: initial_page_size,
-          fetch_batch_primary_keys: fetch_batch_primary_keys,
-          fetch_batch_by_primary_keys: fetch_batch_by_primary_keys,
+          fetch_batch_pks: fetch_batch_pks,
+          fetch_batch: fetch_batch,
           page_size_optimizer_mod: nil
         )
 
       Process.monitor(pid)
 
-      assert_receive {:fetch_batch_by_primary_keys, 1}, 1000
-      assert_receive {:fetch_batch_by_primary_keys, 2}, 1000
+      assert_receive {:fetch_batch, 1}, 1000
+      assert_receive {:fetch_batch, 2}, 1000
 
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
     end
 
-    test "continues to next page when fetch_batch_by_primary_keys returns no results after filtering", %{
+    test "continues to next page when fetch_batch returns no results after filtering", %{
       filtered_consumer_backfill: backfill,
       filtered_consumer: consumer,
       table_oid: table_oid

@@ -276,23 +276,12 @@ defmodule Sequin.DatabasesRuntime.TableReader do
   # primary_keys is a list of lists, where each inner list contains the primary key values for a row
   # To select multiple rows by one or more primary keys apiece, we use unnest like so:
   #
-  # select *
-  # from your_table
-  # where (column1, column2) in (
-  #   select *
-  #   from unnest($1, $2)
-  # );
-  # where unnest behaves like this:
-  # select *
-  # from unnest(array[3, 5], array[4, 6]);
+  # select t.*
+  # from your_table t
+  # join unnest($1::type1[], $2::type2[]) as u(pk1, pk2)
+  #   on t.pk1 = u.pk1 and t.pk2 = u.pk2
   #
-  # unnest | unnest
-  # --------+--------
-  #       3 |      4
-  #       5 |      6
-  #
-  # So, $1 in unnest is the list of all the first primary key values across all rows,
-  # $2 is the list of all the second primary key values across all rows, etc.
+  # This approach is more efficient than using WHERE IN with a subquery
   @spec fetch_batch_by_primary_keys(
           db_or_conn :: Postgres.db_conn(),
           consumer :: SinkConsumer.t(),
@@ -311,25 +300,48 @@ defmodule Sequin.DatabasesRuntime.TableReader do
       ) do
     timeout = Keyword.get(opts, :timeout, :timer.minutes(1))
 
-    order_by = KeysetCursor.order_by_sql(table)
-
     primary_key_columns =
       table.columns
       |> Enum.filter(& &1.is_pk?)
       |> Enum.sort_by(& &1.attnum)
 
+    order_by = KeysetCursor.order_by_sql(table)
+
+    # Create the unnest parameters with proper type casting
+    unnest_params =
+      Enum.map_join(primary_key_columns, ", ", fn column ->
+        "?::#{column.type}[]"
+      end)
+
+    # Create the unnest alias column names
+    unnest_alias_columns =
+      Enum.map_join(primary_key_columns, ", ", fn column ->
+        Postgres.quote_name(column.name)
+      end)
+
+    # Create the join conditions
+    join_conditions =
+      Enum.map_join(primary_key_columns, " and ", fn column ->
+        "t.#{Postgres.quote_name(column.name)} = u.#{Postgres.quote_name(column.name)}"
+      end)
+
+    # Get the safe column names from Postgres module
     select_columns = Postgres.safe_select_columns(table)
-    id_col_names = Enum.map_join(primary_key_columns, ", ", &Postgres.quote_name(&1.name))
-    unnest_params = Enum.map_join(primary_key_columns, ", ", fn column -> "?::#{column.type}[]" end)
+
+    # Add table alias to each column
+    column_names_with_alias =
+      select_columns |> String.split(", ") |> Enum.map_join(", ", fn col -> "t.#{col}" end)
 
     sql = """
-    select #{select_columns}
-    from #{Postgres.quote_name(table.schema, table.name)}
-    where (#{id_col_names}) in (select * from unnest(#{unnest_params}))
+    select #{column_names_with_alias}
+    from #{Postgres.quote_name(table.schema, table.name)} as t
+    join unnest(#{unnest_params}) as u(#{unnest_alias_columns})
+      on #{join_conditions}
     order by #{order_by}
     """
 
     sql = Postgres.parameterize_sql(sql)
+
     # create the lists that will be used in unnest
     # Enum.zip() will create a list of tuples, where the first tuple contains the first primary key values across all rows, etc
     params =

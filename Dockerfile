@@ -4,7 +4,8 @@ ARG DEBIAN_VERSION=buster-20240612-slim
 ARG RELEASE_VERSION
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
-ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
+# Ensure Elixir installed on the runtime image for tooling purposes
+ARG RUNNER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 
 ARG SELF_HOSTED=0
 

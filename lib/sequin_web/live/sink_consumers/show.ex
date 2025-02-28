@@ -163,6 +163,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   consumer: encode_consumer(@consumer),
                   parent: "consumer-show",
                   metrics: @metrics,
+                  metrics_loading: @metrics_loading,
                   cursor_position: encode_backfill(@consumer, @last_completed_backfill),
                   apiBaseUrl: @api_base_url,
                   apiTokens: encode_api_tokens(@api_tokens)
@@ -183,7 +184,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   showAcked: @show_acked,
                   apiBaseUrl: @api_base_url,
                   apiTokens: encode_api_tokens(@api_tokens),
-                  metrics: @metrics
+                  metrics: @metrics,
+                  metrics_loading: @metrics_loading
                 }
               }
             />
@@ -487,23 +489,37 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_info(:update_metrics, socket) do
+    Task.async(fn -> load_metrics(socket.assigns.consumer) end)
+    {:noreply, socket}
+  end
+
+  def handle_info({ref, metrics}, socket) when is_reference(ref) do
+    Process.demonitor(ref, [:flush])
     Process.send_after(self(), :update_metrics, 1000)
-    {:noreply, assign_metrics(socket)}
+
+    {:noreply, assign(socket, metrics: metrics, metrics_loading: false)}
+  end
+
+  # The load_metrics/1 task failed
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
+    Process.send_after(self(), :update_metrics, 200)
+    {:noreply, socket}
   end
 
   @impl Phoenix.LiveView
   def handle_info(:update_messages, %{assigns: %{paused: true}} = socket) do
-    schedule_update()
+    Process.send_after(self(), :update_messages, 1000)
     {:noreply, socket}
   end
 
   @impl Phoenix.LiveView
   def handle_info(:update_messages, socket) do
     socket = load_consumer_messages(socket)
-    schedule_update()
+    Process.send_after(self(), :update_messages, 1000)
     {:noreply, socket}
   end
 
+  @impl Phoenix.LiveView
   def handle_info(:sink_config_checked, socket) do
     consumer = put_health(socket.assigns.consumer)
     {:noreply, assign(socket, :consumer, consumer)}
@@ -511,9 +527,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @smoothing_window 5
   @timeseries_window_count 60
-  defp assign_metrics(socket) do
-    consumer = socket.assigns.consumer
-
+  defp load_metrics(consumer) do
     {:ok, messages_processed_count} = Metrics.get_consumer_messages_processed_count(consumer)
 
     # Get 60 + @smoothing_window seconds of throughput data
@@ -540,7 +554,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:error, _} -> 0
       end
 
-    metrics = %{
+    %{
       messages_processed_count: messages_processed_count,
       messages_processed_throughput: Float.round(messages_processed_throughput, 1),
       messages_processed_bytes: messages_processed_bytes,
@@ -549,8 +563,22 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       messages_failing_count: messages_failing_count,
       messages_pending_count: messages_pending_count
     }
+  end
 
-    assign(socket, :metrics, metrics)
+  # Initialize metrics with default values
+  defp assign_metrics(socket) do
+    assign(socket,
+      metrics: %{
+        messages_processed_count: 0,
+        messages_processed_throughput: 0,
+        messages_processed_bytes: 0,
+        messages_processed_throughput_timeseries: Enum.map(1..@timeseries_window_count, fn _ -> 0 end),
+        messages_processed_bytes_timeseries: Enum.map(1..@timeseries_window_count, fn _ -> 0 end),
+        messages_failing_count: 0,
+        messages_pending_count: 0
+      },
+      metrics_loading: true
+    )
   end
 
   defp smooth_timeseries_and_extract_latest(timeseries, window_count) do
@@ -796,6 +824,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   # Function to load messages for the consumer
+  defp load_consumer_messages(%{assigns: %{live_action: action}} = socket) when action != :messages do
+    assign(socket, messages: [], total_count: 0)
+  end
 
   defp load_consumer_messages(
          %{assigns: %{consumer: consumer, page: page, page_size: page_size, show_acked: show_acked}} = socket
@@ -876,12 +907,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp fetch_message_data(%AcknowledgedMessage{}, _) do
     {:ok, nil}
-  end
-
-  # Function to schedule periodic message updates
-  defp schedule_update do
-    # Adjust the interval as needed
-    Process.send_after(self(), :update_messages, 1000)
   end
 
   # Function to encode messages for the Svelte component

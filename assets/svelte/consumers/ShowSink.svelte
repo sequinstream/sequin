@@ -37,6 +37,7 @@
     live.pushEventTo(`#${parent}`, event, data, cb);
   }
 
+  export let metrics_loading: boolean;
   export let metrics = {
     messages_failing_count: 0,
     messages_pending_count: 0,
@@ -650,29 +651,41 @@
           </div>
           <div class="flex justify-between items-center space-x-4">
             <span>
-              <div class="text-md font-bold">
-                {metrics.messages_pending_count
-                  ? formatNumberWithCommas(metrics.messages_pending_count)
-                  : "0"}
-              </div>
+              {#if metrics_loading}
+                <div class="text-md font-light">-</div>
+              {:else}
+                <div class="text-md font-bold">
+                  {metrics.messages_pending_count
+                    ? formatNumberWithCommas(metrics.messages_pending_count)
+                    : "0"}
+                </div>
+              {/if}
               <div class="text-xs text-gray-500">pending</div>
             </span>
             <span>
-              <div class="text-md font-bold">
-                {metrics.messages_processed_count
-                  ? formatNumberWithCommas(metrics.messages_processed_count)
-                  : "0"}
-              </div>
+              {#if metrics_loading}
+                <div class="text-md font-light">-</div>
+              {:else}
+                <div class="text-md font-bold">
+                  {metrics.messages_processed_count
+                    ? formatNumberWithCommas(metrics.messages_processed_count)
+                    : "0"}
+                </div>
+              {/if}
               <div class="text-xs text-gray-500">processed</div>
             </span>
             <span>
-              <div
-                class="text-md font-bold {metrics.messages_failing_count > 0
-                  ? 'text-red-500'
-                  : 'text-black'}"
-              >
-                {formatNumberWithCommas(metrics.messages_failing_count)}
-              </div>
+              {#if metrics_loading}
+                <div class="text-md font-light">-</div>
+              {:else}
+                <div
+                  class="text-md font-bold {metrics.messages_failing_count > 0
+                    ? 'text-red-500'
+                    : 'text-black'}"
+                >
+                  {formatNumberWithCommas(metrics.messages_failing_count)}
+                </div>
+              {/if}
               <div class="text-xs text-gray-500">failing</div>
             </span>
           </div>
@@ -687,18 +700,22 @@
                 >Message Throughput</span
               >
               <div>
-                <span class="text-2xl font-bold"
-                  >{(hovered_messages_processed_throughput ??
-                    metrics.messages_processed_throughput) > 0
-                    ? (
-                        hovered_messages_processed_throughput ??
-                        metrics.messages_processed_throughput
-                      ).toFixed(1)
-                    : "0"}</span
-                >
-                <span class="text-xs font-medium ml-1 text-gray-500"
-                  >msgs/sec</span
-                >
+                {#if metrics_loading}
+                  <div class="text-md font-light">-</div>
+                {:else}
+                  <span class="text-2xl font-bold"
+                    >{(hovered_messages_processed_throughput ??
+                      metrics.messages_processed_throughput) > 0
+                      ? (
+                          hovered_messages_processed_throughput ??
+                          metrics.messages_processed_throughput
+                        ).toFixed(1)
+                      : "0"}</span
+                  >
+                  <span class="text-xs font-medium ml-1 text-gray-500"
+                    >msgs/sec</span
+                  >
+                {/if}
               </div>
             </div>
           </div>
@@ -713,7 +730,9 @@
                 >Bytes Throughput</span
               >
               <div>
-                {#if (hovered_messages_processed_bytes ?? metrics.messages_processed_bytes) !== null}
+                {#if metrics_loading}
+                  <div class="text-md font-light">-</div>
+                {:else if (hovered_messages_processed_bytes ?? metrics.messages_processed_bytes) !== null}
                   {@const formatted = formatBytes(
                     hovered_messages_processed_bytes ??
                       metrics.messages_processed_bytes,

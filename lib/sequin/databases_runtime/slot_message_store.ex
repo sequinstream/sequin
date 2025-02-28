@@ -724,6 +724,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end
   end
 
+  defp exit_to_sequin_error({:timeout, {GenServer, :call, [_, _, timeout]}}) do
+    Error.invariant(message: "[SlotMessageStore] call timed out after #{timeout}ms")
+  end
+
   defp exit_to_sequin_error({:noproc, _}) do
     Error.invariant(message: "Call to SlotMessageStore failed with :noproc")
   end

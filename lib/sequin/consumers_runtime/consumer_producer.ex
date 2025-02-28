@@ -344,7 +344,11 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     # Ack all messages in SlotMessageStore to remove from buffer
     unless successful_ack_ids == [] do
-      {:ok, _count} = slot_message_store_mod.messages_succeeded(consumer.id, successful_ack_ids)
+      case slot_message_store_mod.messages_succeeded(consumer.id, successful_ack_ids) do
+        {:ok, _count} -> :ok
+        {:error, error} -> raise error
+      end
+
       {:ok, _count} = Consumers.after_messages_acked(consumer, successful_messages)
     end
 

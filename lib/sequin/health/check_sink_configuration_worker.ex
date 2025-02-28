@@ -4,7 +4,7 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
   use Oban.Worker,
     queue: :default,
     max_attempts: 1,
-    unique: [period: 120, timestamp: :scheduled_at]
+    unique: [period: 30, timestamp: :scheduled_at]
 
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer

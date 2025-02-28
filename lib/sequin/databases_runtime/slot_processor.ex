@@ -1407,6 +1407,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     # Returning :stop tuple results in an error that looks like a crash
     task =
       Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+        Logger.metadata(replication_id: state.id, database_id: state.postgres_database.id)
+        Logger.info("[SlotProcessor] Stopping replication for #{state.id}")
+
         if Application.get_env(:sequin, :env) == :test and not is_nil(state.test_pid) do
           send(state.test_pid, {:stop_replication, state.id})
         else

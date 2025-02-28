@@ -875,6 +875,8 @@ defmodule Sequin.Postgres do
          Error.not_found(entity: :publication_membership, params: %{name: publication_name, table_oid: table_oid})}
 
       {:error, error} ->
+        Logger.error("[Postgres] Failed to check if table is in publication", error: error)
+
         {:error,
          Error.service(
            service: :postgres,

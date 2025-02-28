@@ -34,7 +34,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   @max_backoff_ms :timer.seconds(1)
   @max_backoff_time :timer.minutes(1)
 
-  @max_batches 5
+  @max_batches 3
 
   # Client API
 
@@ -196,7 +196,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         page_size_optimizer_mod.new(
           initial_page_size: initial_page_size,
           max_timeout_ms: max_timeout_ms,
-          max_page_size: 50_000
+          max_page_size: 40_000
         ),
       page_size_optimizer_mod: page_size_optimizer_mod,
       test_pid: test_pid,

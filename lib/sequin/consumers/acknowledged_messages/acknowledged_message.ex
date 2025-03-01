@@ -6,7 +6,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage do
   alias Sequin.JSON
 
   @derive Jason.Encoder
-  typedstruct enforce: true do
+  typedstruct do
     field :id, String.t()
     field :consumer_id, String.t()
     field :commit_lsn, String.t()

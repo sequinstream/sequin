@@ -996,11 +996,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         accumulated_binares
         |> Enum.reverse()
         |> Enum.with_index()
-        |> Flow.from_enumerable()
+        |> Flow.from_enumerable(max_demand: 50, min_demand: 25)
         |> Flow.map(fn {msg, idx} ->
           {msg |> Decoder.decode_message() |> maybe_cast_message(schemas), idx}
         end)
-        # Merge back to single partition
+        # Merge back to single partition - always use 1 stage to ensure ordering
         |> Flow.partition(stages: 1)
         # Sort by original index
         |> Enum.sort_by(&elem(&1, 1))

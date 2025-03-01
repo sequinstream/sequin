@@ -333,6 +333,14 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
+  def list_active_sink_consumer_ids(preloads \\ []) do
+    :active
+    |> SinkConsumer.where_status()
+    |> preload(^preloads)
+    |> select([c], c.id)
+    |> Repo.all()
+  end
+
   @legacy_event_singleton_transform_cutoff_date ~D[2024-11-06]
   def consumer_features(%SinkConsumer{} = consumer) do
     consumer = Repo.lazy_preload(consumer, [:account])

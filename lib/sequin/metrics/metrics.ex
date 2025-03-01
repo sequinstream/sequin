@@ -45,6 +45,14 @@ defmodule Sequin.Metrics do
     Store.get_throughput_timeseries("consumer_messages_processed_bytes:#{id}", window_count)
   end
 
+  def get_consumer_messages_processed_throughput(consumer_id) when is_binary(consumer_id) do
+    Store.get_throughput("consumer_messages_processed_throughput:#{consumer_id}")
+  end
+
+  def get_consumer_messages_processed_bytes(consumer_id) when is_binary(consumer_id) do
+    Store.get_throughput("consumer_messages_processed_bytes:#{consumer_id}")
+  end
+
   # Database Average Latency
   def measure_database_avg_latency(%PostgresDatabase{id: id}, latency) do
     Store.measure_latency("database_avg_latency:#{id}", latency)

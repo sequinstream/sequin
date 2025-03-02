@@ -1,8 +1,6 @@
 defmodule Sequin.MessageHandlerTest do
   use Sequin.DataCase, async: false
 
-  import ExUnit.CaptureLog
-
   alias Sequin.Constants
   alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.DatabasesRuntime.SlotMessageStore
@@ -61,7 +59,7 @@ defmodule Sequin.MessageHandlerTest do
       now = DateTime.utc_now()
       TestSupport.expect_utc_now(4, fn -> now end)
 
-      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
       [event] = list_messages(consumer.id)
       assert event.consumer_id == consumer.id
@@ -125,7 +123,7 @@ defmodule Sequin.MessageHandlerTest do
       now = DateTime.utc_now()
       TestSupport.expect_utc_now(4, fn -> now end)
 
-      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
       [record] = list_messages(consumer.id)
       assert record.consumer_id == consumer.id
@@ -220,7 +218,7 @@ defmodule Sequin.MessageHandlerTest do
         replication_slot_id: UUID.uuid4()
       }
 
-      {:ok, 4, _} = MessageHandler.handle_messages(context, [message1, message2])
+      {:ok, 4} = MessageHandler.handle_messages(context, [message1, message2])
 
       consumer1_messages = list_messages(consumer1.id)
       consumer2_messages = list_messages(consumer2.id)
@@ -280,7 +278,7 @@ defmodule Sequin.MessageHandlerTest do
         replication_slot_id: UUID.uuid4()
       }
 
-      {:ok, 6, _} = MessageHandler.handle_messages(context, [message1, message2])
+      {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2])
 
       consumer1_messages = list_messages(consumer1.id)
       consumer2_messages = list_messages(consumer2.id)
@@ -334,7 +332,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
       messages = list_messages(consumer.id)
       assert length(messages) == 1
@@ -351,7 +349,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 0, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
       messages = list_messages(consumer.id)
       assert Enum.empty?(messages)
@@ -400,7 +398,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
       messages = list_messages(consumer.id)
       assert length(messages) == 1
@@ -429,7 +427,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 0, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
       messages = list_messages(consumer.id)
       assert Enum.empty?(messages)
@@ -449,7 +447,7 @@ defmodule Sequin.MessageHandlerTest do
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 2, _} = MessageHandler.handle_messages(context, [insert_message, update_message])
+      {:ok, 2} = MessageHandler.handle_messages(context, [insert_message, update_message])
 
       {[insert_event], [update_event]} =
         wal_pipeline.id |> Replication.list_wal_events() |> Enum.split_with(&(&1.action == :insert))
@@ -475,7 +473,7 @@ defmodule Sequin.MessageHandlerTest do
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
       wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert length(wal_events) == 1
@@ -488,7 +486,7 @@ defmodule Sequin.MessageHandlerTest do
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 0, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
       wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert Enum.empty?(wal_events)
@@ -512,7 +510,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
       wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert length(wal_events) == 1
@@ -538,7 +536,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 0, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
       wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert Enum.empty?(wal_events)
@@ -589,188 +587,20 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
       [record] = list_messages(consumer.id)
       assert record.group_id == "A"
     end
-
-    test "updates table reader batch primary key values correctly" do
-      # Create three batches with different table OIDs
-      batch1 =
-        batch_state(%{
-          batch_id: "batch1",
-          table_oid: 123,
-          # Some existing PKs
-          primary_key_values: MapSet.new([["1"], ["2"]])
-        })
-
-      batch2 =
-        batch_state(%{
-          batch_id: "batch2",
-          table_oid: 456,
-          # Empty initial set
-          primary_key_values: MapSet.new()
-        })
-
-      batch3 =
-        batch_state(%{
-          batch_id: "batch3",
-          table_oid: 789,
-          backfill_id: "backfill2",
-          seq: 3,
-          # One existing PK
-          primary_key_values: MapSet.new([["10"]])
-        })
-
-      context = %MessageHandler.Context{
-        consumers: [],
-        replication_slot_id: UUID.uuid4(),
-        table_reader_batches: [batch1, batch2, batch3]
-      }
-
-      # Create messages that should match different batches
-      messages = [
-        # Should match batch1
-        ReplicationFactory.postgres_message(table_oid: 123, ids: [3]),
-        ReplicationFactory.postgres_message(table_oid: 123, ids: [4]),
-        # Should match batch1 (with overlap)
-        ReplicationFactory.postgres_message(table_oid: 123, ids: [4]),
-        ReplicationFactory.postgres_message(table_oid: 123, ids: [5]),
-        # Should match batch2
-        ReplicationFactory.postgres_message(table_oid: 456, ids: [100]),
-        ReplicationFactory.postgres_message(table_oid: 456, ids: [101]),
-        # Should match no batch
-        ReplicationFactory.postgres_message(table_oid: 999, ids: [200]),
-        ReplicationFactory.postgres_message(table_oid: 999, ids: [201])
-      ]
-
-      {:ok, _count, new_context} = MessageHandler.handle_messages(context, messages)
-
-      # Find updated batches
-      updated_batch1 = Enum.find(new_context.table_reader_batches, &(&1.batch_id == "batch1"))
-      updated_batch2 = Enum.find(new_context.table_reader_batches, &(&1.batch_id == "batch2"))
-      updated_batch3 = Enum.find(new_context.table_reader_batches, &(&1.batch_id == "batch3"))
-
-      # Verify batch1 has original PKs plus new ones (without duplicates)
-      assert MapSet.equal?(
-               updated_batch1.primary_key_values,
-               MapSet.new([["1"], ["2"], ["3"], ["4"], ["5"]])
-             )
-
-      # Verify batch2 has only the new PKs
-      assert MapSet.equal?(
-               updated_batch2.primary_key_values,
-               MapSet.new([["100"], ["101"]])
-             )
-
-      # Verify batch3 is unchanged
-      assert MapSet.equal?(
-               updated_batch3.primary_key_values,
-               MapSet.new([["10"]])
-             )
-    end
   end
 
   describe "handle_logical_message/3" do
-    test "handles low watermark message by adding new batch state while preserving existing batches" do
-      # Create an existing batch in the context
-      existing_batch =
-        batch_state(%{
-          batch_id: "existing-batch"
-        })
-
-      context = %MessageHandler.Context{
-        table_reader_batches: [existing_batch]
-      }
-
-      # Create a low watermark message
-      message =
-        ReplicationFactory.postgres_logical_message(%{
-          prefix: Constants.backfill_batch_low_watermark(),
-          content:
-            Jason.encode!(%{
-              "batch_id" => "new-batch",
-              "table_oid" => 123,
-              "backfill_id" => "new-backfill"
-            })
-        })
-
-      # Process the message
-      new_context = MessageHandler.handle_logical_message(context, 43, message)
-
-      # Assert we have both batches
-      assert length(new_context.table_reader_batches) == 2
-
-      # Assert the existing batch is unchanged
-      [existing_batch_updated] =
-        Enum.filter(new_context.table_reader_batches, &(&1.batch_id == "existing-batch"))
-
-      assert existing_batch_updated == existing_batch
-
-      # Assert the new batch was created correctly
-      [new_batch] =
-        Enum.filter(new_context.table_reader_batches, &(&1.batch_id == "new-batch"))
-
-      assert new_batch.batch_id == "new-batch"
-      assert new_batch.table_oid == 123
-      assert new_batch.backfill_id == "new-backfill"
-      assert new_batch.commit_lsn == 43
-      assert new_batch.primary_key_values == MapSet.new()
-    end
-
-    test "handles high watermark message by discarding batch when no matching batch exists" do
-      # Create a context with no matching batch
-      context = %MessageHandler.Context{
-        table_reader_batches: [
-          batch_state(%{
-            batch_id: "other-batch"
-          })
-        ],
-        table_reader_mod: TableReaderServerMock
-      }
-
-      # Create a high watermark message for a non-existent batch
-      message =
-        ReplicationFactory.postgres_logical_message(%{
-          prefix: Constants.backfill_batch_high_watermark(),
-          content:
-            Jason.encode!(%{
-              "batch_id" => "non-existent-batch",
-              "backfill_id" => "test-backfill"
-            })
-        })
-
-      expect(TableReaderServerMock, :discard_batch, 1, fn "test-backfill", "non-existent-batch" ->
-        :ok
-      end)
-
-      # Process the message
-      capture_log(fn ->
-        MessageHandler.handle_logical_message(context, 43, message)
-      end) =~ "Batch not found"
-    end
-
     test "handles high watermark message by flushing batch and removing it from context" do
-      # Create a context with a matching batch that has some PKs
-      existing_batch =
-        batch_state(%{
-          batch_id: "matching-batch",
-          table_oid: 123,
-          backfill_id: "test-backfill",
-          commit_lsn: 42,
-          primary_key_values: MapSet.new([["1"], ["2"], ["3"]])
-        })
-
-      batch_info = %{batch_id: "matching-batch", commit_lsn: 42, drop_pks: MapSet.new([["1"], ["2"], ["3"]])}
+      batch_info = %{batch_id: "matching-batch", commit_lsn: 42}
+      slot_id = Factory.uuid()
 
       context = %MessageHandler.Context{
-        table_reader_batches: [
-          existing_batch,
-          batch_state(%{
-            batch_id: "other-batch"
-          })
-        ],
+        replication_slot_id: slot_id,
         table_reader_mod: TableReaderServerMock
       }
 
@@ -781,7 +611,8 @@ defmodule Sequin.MessageHandlerTest do
           content:
             Jason.encode!(%{
               "batch_id" => "matching-batch",
-              "backfill_id" => "test-backfill"
+              "backfill_id" => "test-backfill",
+              "replication_slot_id" => slot_id
             })
         })
 
@@ -790,52 +621,7 @@ defmodule Sequin.MessageHandlerTest do
       end)
 
       # Process the message
-      new_context = MessageHandler.handle_logical_message(context, 44, message)
-
-      assert length(new_context.table_reader_batches) == 1
-      assert Enum.all?(new_context.table_reader_batches, &(&1.batch_id != "matching-batch"))
-    end
-
-    test "handles low watermark message by discarding existing batches with same backfill_id" do
-      # Create context with multiple batches, some with matching backfill_id
-      context = %MessageHandler.Context{
-        table_reader_batches: [
-          batch_state(%{
-            batch_id: "existing-batch",
-            backfill_id: "test-backfill"
-          }),
-          batch_state(%{
-            batch_id: "other-batch",
-            backfill_id: "other-backfill"
-          })
-        ]
-      }
-
-      # Create a low watermark message
-      message =
-        ReplicationFactory.postgres_logical_message(%{
-          prefix: Constants.backfill_batch_low_watermark(),
-          content:
-            Jason.encode!(%{
-              "batch_id" => "new-batch",
-              "table_oid" => 123,
-              "backfill_id" => "test-backfill"
-            })
-        })
-
-      log =
-        capture_log(fn ->
-          # Process the message
-          new_context = MessageHandler.handle_logical_message(context, 45, message)
-
-          # Assert we only have two batches now (the new one and the unrelated one)
-          assert length(new_context.table_reader_batches) == 2
-
-          assert_lists_equal(["other-batch", "new-batch"], Enum.map(new_context.table_reader_batches, & &1.batch_id))
-        end)
-
-      # Verify the warning was logged
-      assert log =~ "Discarding"
+      :ok = MessageHandler.handle_logical_message(context, 42, message)
     end
   end
 
@@ -893,7 +679,7 @@ defmodule Sequin.MessageHandlerTest do
       message =
         ReplicationFactory.postgres_message(action: :update, table_oid: 123, fields: fields, old_fields: old_fields)
 
-      {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
       [message] = list_messages(consumer.id)
 
       assert message.data.record["name"] == "Harry"
@@ -912,7 +698,7 @@ defmodule Sequin.MessageHandlerTest do
 
       message = ReplicationFactory.postgres_message(action: :update, table_oid: 123, fields: fields, old_fields: nil)
 
-      {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
       [message] = list_messages(consumer.id)
 
       # unchanged_toast values are not loaded
@@ -928,7 +714,7 @@ defmodule Sequin.MessageHandlerTest do
       field = ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1)
       message = ReplicationFactory.postgres_message(action: :insert, table_oid: 123, fields: [field])
 
-      {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
       assert [_] = list_messages(consumer.id)
     end
 
@@ -936,7 +722,7 @@ defmodule Sequin.MessageHandlerTest do
       field = ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1)
       message = ReplicationFactory.postgres_message(action: :delete, table_oid: 123, old_fields: [field])
 
-      {:ok, count, _context} = MessageHandler.handle_messages(context, [message])
+      {:ok, count} = MessageHandler.handle_messages(context, [message])
 
       case consumer.message_kind do
         :record ->
@@ -950,18 +736,6 @@ defmodule Sequin.MessageHandlerTest do
           assert length(events) == 1
       end
     end
-  end
-
-  defp batch_state(attrs) do
-    defaults = %{
-      batch_id: "batch-#{UUID.uuid4()}",
-      table_oid: Factory.unique_integer(),
-      backfill_id: "backfill-#{UUID.uuid4()}",
-      commit_lsn: Factory.unique_integer(),
-      primary_key_values: MapSet.new()
-    }
-
-    struct(MessageHandler.BatchState, Map.merge(defaults, attrs))
   end
 
   defp list_messages(consumer_id) do

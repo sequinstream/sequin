@@ -258,7 +258,7 @@
       </p>
     {:else}
       <p class="text-sm text-gray-500">
-        Run a backfill to process all existing records in the table.
+        Run a backfill to process existing records in the table.
       </p>
     {/if}
   </CardContent>

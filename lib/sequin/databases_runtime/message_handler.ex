@@ -55,7 +55,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       field :replication_slot_id, String.t()
       field :postgres_database, PostgresDatabase.t()
       field :table_reader_mod, module(), default: TableReaderServer
-      field :running_backfill_ids, MapSet.t(String.t()), default: MapSet.new()
     end
   end
 
@@ -72,15 +71,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   @impl MessageHandlerBehaviour
-  def handle_messages(%Context{} = ctx, []) do
-    {:ok, 0, ctx}
+  def handle_messages(%Context{}, []) do
+    {:ok, 0}
   end
 
   def handle_messages(%Context{} = ctx, messages) do
     execute_timed(:handle_messages, fn ->
       Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
 
-      {ctx, messages} = load_unchanged_toasts(ctx, messages)
+      messages = load_unchanged_toasts(ctx, messages)
 
       messages_by_consumer_id =
         execute_timed(:messages_by_consumer_id, fn ->
@@ -97,6 +96,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
             end)
           end)
         end)
+
+      Enum.each(messages_by_consumer_id, fn {consumer_id, messages} ->
+        pks = Enum.map(messages, & &1.record_pks)
+        ctx.table_reader_mod.pks_seen(consumer_id, pks)
+      end)
 
       matching_pipeline_ids = wal_events |> Enum.map(& &1.wal_pipeline_id) |> Enum.uniq()
 
@@ -128,9 +132,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
         :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)
       end)
 
-      with {:ok, count} <- res do
-        {:ok, count, ctx}
-      end
+      res
     end)
   end
 
@@ -151,12 +153,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     else
       # If we're sharing the same Postgres database between multiple replication slots,
       # we may receive low watermark messages for other replication slots.
-      ctx
+      :ok
     end
-  end
-
-  def handle_logical_message(ctx, _commit_lsn, _msg) do
-    ctx
   end
 
   defp violates_payload_size?(replication_slot_id, event_or_record) do
@@ -447,7 +445,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     if Enum.any?(messages, &has_unchanged_toast?/1) do
       load_unchanged_toasts_from_old(ctx, messages)
     else
-      {ctx, messages}
+      messages
     end
   end
 
@@ -458,16 +456,16 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   defp load_unchanged_toasts_from_old(%Context{} = ctx, messages) do
-    {ctx, messages} =
-      Enum.reduce(messages, {ctx, []}, fn
-        %SlotProcessor.Message{action: :update, old_fields: nil} = message, {ctx, messages_acc} ->
+    messages =
+      Enum.reduce(messages, [], fn
+        %SlotProcessor.Message{action: :update, old_fields: nil} = message, messages_acc ->
           if has_unchanged_toast?(message) do
             put_unchanged_toast_health_event(ctx, message)
           end
 
-          {ctx, [message | messages_acc]}
+          [message | messages_acc]
 
-        %SlotProcessor.Message{action: :update, fields: fields, old_fields: old_fields} = message, {ctx, messages_acc} ->
+        %SlotProcessor.Message{action: :update, fields: fields, old_fields: old_fields} = message, messages_acc ->
           updated_fields =
             Enum.map(fields, fn
               %SlotProcessor.Message.Field{value: :unchanged_toast} = field ->
@@ -478,20 +476,19 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
                 field
             end)
 
-          {ctx, [%{message | fields: updated_fields} | messages_acc]}
+          [%{message | fields: updated_fields} | messages_acc]
 
-        %SlotProcessor.Message{} = message, {ctx, messages_acc} ->
-          {ctx, [message | messages_acc]}
+        %SlotProcessor.Message{} = message, messages_acc ->
+          [message | messages_acc]
       end)
 
-    {ctx, Enum.reverse(messages)}
+    Enum.reverse(messages)
   end
 
   defp put_unchanged_toast_health_event(%Context{} = ctx, message) do
     Enum.each(ctx.consumers, fn %SinkConsumer{} = consumer ->
       if Consumers.matches_message?(consumer, message) do
         Health.put_event(consumer, %Event{slug: :toast_columns_detected, status: :warning})
-        ctx
       end
     end)
   end

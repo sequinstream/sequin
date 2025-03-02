@@ -15,6 +15,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Error.ServiceError
+  alias Sequin.EtsMultiset
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
@@ -73,6 +74,43 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     :exit, _ ->
       Logger.warning("[TableReaderServer] Table reader for backfill #{backfill_id} not running, skipping drop_pks")
       :ok
+  end
+
+  @doc """
+  Marks primary keys as seen, removing them from all batches in the ETS multiset.
+
+  This function directly accesses the ETS table without going through the GenServer,
+  making it more efficient for high-frequency operations.
+
+  ## Parameters
+    * `backfill_id` - The ID of the backfill
+    * `pks` - A list of primary key lists to remove from all batches
+
+  ## Returns
+    * `:ok` - Always returns :ok, even if the table doesn't exist (to avoid race conditions)
+  """
+  @spec pks_seen(String.t(), [any()]) :: :ok
+  def pks_seen(consumer_id, pks) do
+    table_name = multiset_name(consumer_id)
+
+    # Get the ETS table reference
+    case :ets.whereis(table_name) do
+      :undefined ->
+        # TableReaderServer not running, so we don't need to worry about dropping PKs
+        :ok
+
+      table ->
+        # Get all batch_ids (keys) from the multiset
+        batch_ids = EtsMultiset.keys(table)
+
+        # Create a MapSet of the primary keys for efficient lookups
+        pks_set = MapSet.new(pks)
+
+        # Remove the primary keys from each batch
+        Enum.each(batch_ids, fn batch_id ->
+          EtsMultiset.difference(table, batch_id, pks_set)
+        end)
+    end
   end
 
   # Convenience function
@@ -152,7 +190,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       # batch_ids that were discarded after fetching
       field :ignoreable_batch_ids, MapSet.t(), default: MapSet.new()
       # Multiset to track primary keys by batch_id
-      field :pk_multiset, Sequin.Multiset.t(), default: Sequin.Multiset.new()
+      field :pk_multiset, :ets.tid()
 
       # Mockable fns
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
@@ -233,6 +271,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     Logger.info("[TableReaderServer] Started")
 
+    # Create a named ETS multiset with public access
+    pk_multiset = EtsMultiset.new_named(multiset_name(consumer.id), access: :public)
+
     slot_message_store_ref =
       consumer.id
       |> SlotMessageStore.via_tuple()
@@ -249,7 +290,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       | backfill: backfill,
         consumer: consumer,
         cursor: cursor,
-        slot_message_store_ref: slot_message_store_ref
+        slot_message_store_ref: slot_message_store_ref,
+        pk_multiset: pk_multiset
     }
 
     actions = [
@@ -354,16 +396,15 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       {:ok, %{pks: primary_keys, next_cursor: next_cursor}} ->
         Logger.debug("[TableReaderServer] ID fetch returned #{length(primary_keys)} primary keys")
 
-        # Store primary keys in the multiset under the batch_id key
-        pk_multiset = Sequin.Multiset.union(state.pk_multiset, batch_id, MapSet.new(primary_keys))
+        # Store primary keys in the ETS multiset under the batch_id key
+        EtsMultiset.union(state.pk_multiset, batch_id, MapSet.new(primary_keys))
 
         state = %{
           state
           | successive_failure_count: 0,
             current_id_fetch_task: nil,
             last_id_fetch_time_ms: time_ms,
-            next_cursor: next_cursor,
-            pk_multiset: pk_multiset
+            next_cursor: next_cursor
         }
 
         # Start the batch fetch task
@@ -463,15 +504,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         optimizer = state.page_size_optimizer_mod.put_timing(state.page_size_optimizer, page_size, time_ms)
 
         # Clean up the multiset for this batch since we won't be using it
-        pk_multiset = Map.delete(state.pk_multiset, batch_id)
+        EtsMultiset.delete_key(state.pk_multiset, batch_id)
 
         state = %{
           state
           | page_size_optimizer: optimizer,
             ignoreable_batch_ids: MapSet.put(state.ignoreable_batch_ids, batch_id),
             cursor: state.next_cursor,
-            successive_failure_count: 0,
-            pk_multiset: pk_multiset
+            successive_failure_count: 0
         }
 
         {:keep_state, state, [maybe_fetch_timeout()]}
@@ -661,10 +701,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           # messages after filtering.
           ignoreable_batch_ids = MapSet.delete(state.ignoreable_batch_ids, batch_id)
           # Clean up the multiset for this batch
-          pk_multiset = Map.delete(state.pk_multiset, batch_id)
+          EtsMultiset.delete_key(state.pk_multiset, batch_id)
 
-          {:keep_state, %{state | ignoreable_batch_ids: ignoreable_batch_ids, pk_multiset: pk_multiset},
-           [{:reply, from, :ok}]}
+          {:keep_state, %{state | ignoreable_batch_ids: ignoreable_batch_ids}, [{:reply, from, :ok}]}
 
         batch.id != batch_id and batch_id in flushed_batch_ids ->
           Logger.warning("[TableReaderServer] Received flush_batch call for already flushed batch #{batch_id}")
@@ -683,24 +722,22 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
 
           # Then filter out messages whose PKs are not in the multiset
-
           messages =
             Enum.filter(batch.messages, fn message ->
-              Sequin.Multiset.value_member?(state.pk_multiset, batch_id, message.record_pks)
+              EtsMultiset.value_member?(state.pk_multiset, batch_id, message.record_pks)
             end)
 
           batch_size = length(messages)
 
           # Clean up the multiset for this batch
-          pk_multiset = Map.delete(state.pk_multiset, batch_id)
+          EtsMultiset.delete_key(state.pk_multiset, batch_id)
 
           if batch_size == 0 do
             # Complete the batch immediately
             Logger.info("[TableReaderServer] Batch #{batch.id} is committed")
             :ok = TableReader.update_cursor(state.consumer.active_backfill.id, batch.cursor)
 
-            {:keep_state, %{state | unflushed_batches: batches, pk_multiset: pk_multiset},
-             [maybe_fetch_timeout(), {:reply, from, :ok}]}
+            {:keep_state, %{state | unflushed_batches: batches}, [maybe_fetch_timeout(), {:reply, from, :ok}]}
           else
             messages =
               messages
@@ -723,8 +760,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
                  %{
                    state
                    | unflushed_batches: batches,
-                     flushed_batches: state.flushed_batches ++ [batch],
-                     pk_multiset: pk_multiset
+                     flushed_batches: state.flushed_batches ++ [batch]
                  }, [{:reply, from, :ok}]}
 
               {:error, error} ->
@@ -743,10 +779,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       # last fetch request.
       ignoreable_batch_ids = MapSet.delete(state.ignoreable_batch_ids, batch_id)
       # Clean up the multiset for this batch
-      pk_multiset = Map.delete(state.pk_multiset, batch_id)
+      EtsMultiset.delete_key(state.pk_multiset, batch_id)
 
-      {:keep_state, %{state | ignoreable_batch_ids: ignoreable_batch_ids, pk_multiset: pk_multiset},
-       [{:reply, from, :ok}]}
+      {:keep_state, %{state | ignoreable_batch_ids: ignoreable_batch_ids}, [{:reply, from, :ok}]}
     else
       Logger.warning(
         "[TableReaderServer] Received a flush, but no unflushed batches in state",
@@ -763,12 +798,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   """
   def handle_event({:call, from}, {:drop_pks, pks}, _state_name, %State{} = state) do
     # Remove the PKs from all batch multisets
-    pk_multiset =
-      Enum.reduce(Sequin.Multiset.keys(state.pk_multiset), state.pk_multiset, fn batch_id, multiset ->
-        Sequin.Multiset.difference(multiset, batch_id, MapSet.new(pks))
-      end)
+    batch_ids = EtsMultiset.keys(state.pk_multiset)
 
-    {:keep_state, %{state | pk_multiset: pk_multiset}, [{:reply, from, :ok}]}
+    Enum.each(batch_ids, fn batch_id ->
+      EtsMultiset.difference(state.pk_multiset, batch_id, MapSet.new(pks))
+    end)
+
+    {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 
   def handle_event({:timeout, :check_sms}, _, _state_name, %State{} = state) do
@@ -1005,5 +1041,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   defp clear_counter(name) do
     Process.delete(name)
+  end
+
+  # Returns the name of the ETS multiset for a given backfill ID
+  @doc false
+  defp multiset_name(consumer_id) do
+    Module.concat(__MODULE__, consumer_id)
   end
 end

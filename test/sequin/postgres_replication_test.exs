@@ -714,9 +714,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       test_pid = self()
 
-      stub(MessageHandlerMock, :handle_messages, fn ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
-        {:ok, length(msgs), ctx}
+        {:ok, length(msgs)}
       end)
 
       start_replication!(message_handler_module: MessageHandlerMock)
@@ -733,9 +733,9 @@ defmodule Sequin.PostgresReplicationTest do
     test "changes in a transaction are buffered then delivered to message handler in order" do
       test_pid = self()
 
-      stub(MessageHandlerMock, :handle_messages, fn ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:changes, msgs})
-        {:ok, length(msgs), ctx}
+        {:ok, length(msgs)}
       end)
 
       start_replication!(message_handler_module: MessageHandlerMock)
@@ -797,9 +797,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       stop_replication!()
 
-      stub(MessageHandlerMock, :handle_messages, fn ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
-        {:ok, length(msgs), ctx}
+        {:ok, length(msgs)}
       end)
 
       start_replication!(message_handler_module: MessageHandlerMock)
@@ -814,9 +814,9 @@ defmodule Sequin.PostgresReplicationTest do
     test "creates, updates, and deletes are captured" do
       test_pid = self()
 
-      stub(MessageHandlerMock, :handle_messages, fn ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
-        {:ok, length(msgs), ctx}
+        {:ok, length(msgs)}
       end)
 
       start_replication!(message_handler_module: MessageHandlerMock)
@@ -862,9 +862,9 @@ defmodule Sequin.PostgresReplicationTest do
     test "messages are processed exactly once, even after crash and reboot" do
       test_pid = self()
 
-      stub(MessageHandlerMock, :handle_messages, fn ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:changes, msgs})
-        {:ok, length(msgs), ctx}
+        {:ok, length(msgs)}
       end)
 
       start_replication!(message_handler_module: MessageHandlerMock)
@@ -922,8 +922,8 @@ defmodule Sequin.PostgresReplicationTest do
       # Attempt to start replication with the non-existent slot
       start_replication!(heartbeat_interval: 5)
 
-      stub(MessageHandlerMock, :handle_messages, fn ctx, [] ->
-        {:ok, 0, ctx}
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, [] ->
+        {:ok, 0}
       end)
 
       assert_receive {SlotProcessor, :heartbeat_received}, 1000
@@ -946,8 +946,8 @@ defmodule Sequin.PostgresReplicationTest do
         :atomics.get(memory_counter, 1)
       end
 
-      stub(MessageHandlerMock, :handle_messages, fn ctx, msgs ->
-        {:ok, length(msgs), ctx}
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        {:ok, length(msgs)}
       end)
 
       # Start with very low limits to trigger checks frequently

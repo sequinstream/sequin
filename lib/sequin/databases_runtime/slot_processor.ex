@@ -1413,7 +1413,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         if Application.get_env(:sequin, :env) == :test and not is_nil(state.test_pid) do
           send(state.test_pid, {:stop_replication, state.id})
         else
-          DatabasesRuntime.Supervisor.stop_replication(state.id)
+          :ok = DatabasesRuntime.Supervisor.stop_replication(state.id)
         end
       end)
 

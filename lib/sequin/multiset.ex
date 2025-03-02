@@ -130,6 +130,23 @@ defmodule Sequin.Multiset do
     Map.get(multiset, key)
   end
 
+  @doc """
+  Gets all values associated with a key. Raises if the key doesn't exist.
+
+  ## Examples
+      iex> multiset = Sequin.Multiset.new([{"group1", "value1"}, {"group1", "value2"}])
+      iex> Sequin.Multiset.fetch!(multiset, "group1")
+      MapSet.new(["value1", "value2"])
+
+      iex> multiset = Sequin.Multiset.new()
+      iex> Sequin.Multiset.fetch!(multiset, "nonexistent")
+      ** (KeyError) key "nonexistent" not found in: %{}
+  """
+  @spec fetch!(t(), key()) :: MapSet.t(value())
+  def fetch!(multiset, key) do
+    Map.fetch!(multiset, key)
+  end
+
   @spec count(t(), key()) :: non_neg_integer()
   def count(multiset, key) do
     case Map.get(multiset, key) do

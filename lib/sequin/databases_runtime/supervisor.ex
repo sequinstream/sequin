@@ -148,7 +148,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
 
   def stop_replication(supervisor, id) do
     Logger.info("[DatabasesRuntime.Supervisor] Stopping replication #{id}")
-    Sequin.DynamicSupervisor.stop_child(supervisor, SlotProcessor.via_tuple(id))
+    Sequin.DynamicSupervisor.stop_child(supervisor, SlotSupervisor.via_tuple(id))
     :ok
   end
 

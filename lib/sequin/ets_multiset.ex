@@ -7,35 +7,43 @@ defmodule Sequin.EtsMultiset do
 
   Values within each group are unique, but the same value can appear in different groups.
   """
-
   @type key :: any()
   @type value :: any()
   @type t :: :ets.tid()
+  @type access :: :protected | :private | :public
 
   @doc """
   Creates a new empty multiset as an ETS table.
+
+  ## Options
+    * `:access` - Access mode for the table. Can be `:protected`, `:private`, or `:public`. Defaults to `:protected`.
 
   ## Examples
       iex> table = Sequin.EtsMultiset.new()
       iex> is_reference(table)
       true
   """
-  @spec new() :: t()
-  def new do
-    :ets.new(:ets_multiset, [:set, :protected])
+  @spec new(keyword()) :: t()
+  def new(opts \\ []) do
+    access = Keyword.get(opts, :access, :protected)
+    :ets.new(:ets_multiset, [:set, access])
   end
 
   @doc """
   Creates a new empty multiset as an ETS table with a specified name.
 
+  ## Options
+    * `:access` - Access mode for the table. Can be `:protected`, `:private`, or `:public`. Defaults to `:protected`.
+
   ## Examples
-      iex> table = Sequin.EtsMultiset.new(:my_table)
+      iex> table = Sequin.EtsMultiset.new_named(:my_table)
       iex> is_reference(table)
       true
   """
-  @spec new(atom()) :: t()
-  def new(name) when is_atom(name) do
-    :ets.new(name, [:set, :protected])
+  @spec new_named(atom(), keyword()) :: t()
+  def new_named(name, opts \\ []) when is_atom(name) do
+    access = Keyword.get(opts, :access, :protected)
+    :ets.new(name, [:named_table, :set, access])
   end
 
   @doc """
@@ -48,7 +56,7 @@ defmodule Sequin.EtsMultiset do
   """
   @spec new_from_list([{key(), value()}], atom() | nil) :: t()
   def new_from_list(entries, name \\ nil) do
-    table = if is_nil(name), do: new(), else: new(name)
+    table = if is_nil(name), do: new(), else: new_named(name)
     put_many(table, entries)
     table
   end
@@ -97,6 +105,23 @@ defmodule Sequin.EtsMultiset do
   @spec delete(t(), key(), value()) :: t()
   def delete(table, key, value) do
     :ets.delete_object(table, {{key, value}})
+    table
+  end
+
+  @doc """
+  Removes all values associated with the given key.
+
+  ## Examples
+      iex> table = Sequin.EtsMultiset.new([{"group1", "value1"}, {"group1", "value2"}, {"group2", "value3"}])
+      iex> Sequin.EtsMultiset.delete_key(table, "group1")
+      iex> Sequin.EtsMultiset.get(table, "group1")
+      []
+      iex> Sequin.EtsMultiset.get(table, "group2")
+      ["value3"]
+  """
+  @spec delete_key(t(), key()) :: t()
+  def delete_key(table, key) do
+    :ets.select_delete(table, [{{{key, :_}}, [], [true]}])
     table
   end
 

@@ -14,6 +14,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   alias __MODULE__
   alias Ecto.Adapters.SQL.Sandbox
+  alias Sequin.Constants
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.DatabasesRuntime
@@ -43,6 +44,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   @max_accumulated_bytes 100 * 1024 * 1024
   @max_accumulated_messages 100_000
   @max_accumulated_messages_time_ms 100
+  @backfill_batch_high_watermark Constants.backfill_batch_high_watermark()
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
@@ -102,6 +104,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
       field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
         default: %{count: 0, bytes: 0, binaries: []}
+
+      field :backfill_watermark_messages, [LogicalMessage.t()], default: []
 
       field :connect_attempts, non_neg_integer(), default: 0
       field :dirty, boolean(), default: false
@@ -892,11 +896,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {state, nil}
   end
 
-  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin." <> _} = msg) do
-    message_handler_ctx =
-      state.message_handler_module.handle_logical_message(state.message_handler_ctx, state.current_xaction_lsn, msg)
-
-    {%State{state | message_handler_ctx: message_handler_ctx}, nil}
+  defp process_message(%State{} = state, %LogicalMessage{prefix: @backfill_batch_high_watermark} = msg) do
+    {%State{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}, nil}
   end
 
   # Ignore other logical messages
@@ -1032,23 +1033,31 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
       messages = Enum.reverse(messages)
 
-      incr_counter(:messages_processed, length(messages))
-      incr_counter(:messages_processed_since_last_log, length(messages))
+      count = length(messages)
+      incr_counter(:messages_processed, count)
+      incr_counter(:messages_processed_since_last_log, count)
 
       # Flush accumulated messages
       {time, res} = :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
+
+      state.backfill_watermark_messages
+      |> Enum.reverse()
+      |> Enum.each(fn %LogicalMessage{} = msg ->
+        lsn = Postgres.lsn_to_int(msg.lsn)
+        state.message_handler_module.handle_logical_message(state.message_handler_ctx, lsn, msg)
+      end)
 
       time_ms = time / 1000
 
       if time_ms > 100 do
         Logger.warning("[SlotProcessor] Flushed messages took longer than 100ms",
           duration_ms: time_ms,
-          message_count: length(messages)
+          message_count: count
         )
       end
 
       case res do
-        {:ok, _count, message_handler_ctx} ->
+        {:ok, _count} ->
           if state.test_pid do
             send(state.test_pid, {__MODULE__, :flush_messages})
           end
@@ -1056,7 +1065,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
           %{
             state
             | accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []},
-              message_handler_ctx: message_handler_ctx
+              backfill_watermark_messages: []
           }
 
         {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} ->

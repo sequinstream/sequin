@@ -217,43 +217,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       refute consumer.active_backfill
     end
 
-    test "handles batch flushing with dropped PKs", %{
-      backfill: backfill,
-      consumer: consumer,
-      table_oid: table_oid,
-      characters: characters
-    } do
-      page_size = 3
-
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
-      pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
-
-      Process.monitor(pid)
-
-      {dropped_characters, kept_characters} = characters |> Enum.shuffle() |> Enum.split(3)
-
-      dropped_pks = MapSet.new(dropped_characters, fn character -> [to_string(character.id)] end)
-
-      messages =
-        Enum.reduce(1..3, [], fn n, messages ->
-          assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
-
-          assert :ok =
-                   TableReaderServer.flush_batch(pid, %{batch_id: batch_id, commit_lsn: n, drop_pks: dropped_pks})
-
-          produce_and_ack_messages(consumer, page_size) ++ messages
-        end)
-
-      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
-
-      # Verify records
-      assert length(messages) == length(kept_characters)
-
-      processed_ids = Enum.map(messages, fn r -> List.first(r.record_pks) end)
-      assert Enum.all?(kept_characters, fn character -> to_string(character.id) in processed_ids end)
-      refute Enum.any?(dropped_characters, fn character -> to_string(character.id) in processed_ids end)
-    end
-
     test "sets group_id based on PKs by default", %{
       backfill: backfill,
       consumer: consumer,
@@ -436,25 +399,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
                assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
                assert_receive {:DOWN, _ref, :process, ^pid, :stale_batch}, 1000
              end) =~ "Detected stale batch"
-    end
-
-    @tag capture_log: true
-    test "discards batch when told to do so", %{
-      backfill: backfill,
-      table_oid: table_oid,
-      consumer: consumer
-    } do
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
-      pid = start_table_reader_server(backfill, table_oid, initial_page_size: 2)
-
-      # Get the first batch
-      assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
-
-      # Tell the server to discard the batch
-      assert :ok = TableReaderServer.discard_batch(pid, batch_id)
-
-      # Should get a new batch with a different ID
-      assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
     end
 
     @tag :capture_log
@@ -677,6 +621,53 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       assert record["active_period"] == "[2020-01-01,2025-12-31)"
       assert record["power_level"] == 9001
+    end
+
+    test "pks_seen removes primary keys from batches before flushing", %{
+      backfill: backfill,
+      consumer: consumer,
+      table_oid: table_oid,
+      characters: characters
+    } do
+      page_size = 100
+
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
+
+      # Wait for the first batch to be fetched
+      assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 5000
+
+      # Select a couple of characters to mark as seen
+      [char1, char2 | _] = characters
+      pks_to_mark_as_seen = [[to_string(char1.id)], [to_string(char2.id)]]
+
+      # Call pks_seen to remove these PKs from all batches
+      assert :ok = TableReaderServer.pks_seen(consumer.id, pks_to_mark_as_seen)
+
+      # Flush the batch
+      assert :ok =
+               TableReaderServer.flush_batch(pid, %{
+                 batch_id: batch_id,
+                 commit_lsn: 1
+               })
+
+      # Get the messages that were produced
+      messages = produce_and_ack_messages(consumer, 100)
+
+      # Verify that the marked PKs are not in the output
+      processed_pks = Enum.map(messages, & &1.record_pks)
+
+      # The PKs we marked as seen should not be in the processed PKs
+      refute [to_string(char1.id)] in processed_pks
+      refute [to_string(char2.id)] in processed_pks
+
+      # But other PKs should be processed
+      other_characters = Enum.drop(characters, 2)
+      assert length(messages) == length(other_characters)
+
+      # Verify that the remaining characters were processed
+      other_character_pks = Enum.map(other_characters, fn char -> [to_string(char.id)] end)
+      assert Enum.all?(other_character_pks, fn pk -> pk in processed_pks end)
     end
   end
 

@@ -39,6 +39,7 @@ defmodule Sequin.Application do
   defp children(_) do
     base_children() ++
       [
+        SequinWeb.Telemetry,
         MutexedSupervisor.child_spec(
           Sequin.Runtime.MutexedSupervisor,
           [
@@ -56,7 +57,6 @@ defmodule Sequin.Application do
     Sequin.Redis.connect_cluster()
 
     [
-      SequinWeb.Telemetry,
       Sequin.Repo,
       Sequin.Vault,
       Sequin.PubSub.child_spec(),

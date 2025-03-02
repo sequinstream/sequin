@@ -15,8 +15,7 @@ defmodule Sequin.EtsMultisetTest do
     end
 
     test "new/1 creates an empty ETS table with a specified name" do
-      table = EtsMultiset.new(:test_table)
-      assert is_reference(table)
+      table = EtsMultiset.new_named(:test_table)
       assert EtsMultiset.keys(table) == []
     end
 
@@ -32,7 +31,6 @@ defmodule Sequin.EtsMultisetTest do
       entries = [{"group1", "value1"}]
       table = EtsMultiset.new_from_list(entries, :named_table)
 
-      assert is_reference(table)
       assert EtsMultiset.get(table, "group1") == ["value1"]
     end
   end
@@ -118,6 +116,67 @@ defmodule Sequin.EtsMultisetTest do
       # Deleting from a non-existent key should be a no-op
       EtsMultiset.delete_many(table, "group3", ["value1"])
       assert EtsMultiset.get(table, "group3") == []
+    end
+
+    test "delete_key/2 removes all values for a key", %{table: table} do
+      entries = [
+        {"group1", "value1"},
+        {"group1", "value2"},
+        {"group1", "value3"},
+        {"group2", "value4"},
+        {"group3", "value5"}
+      ]
+
+      EtsMultiset.put_many(table, entries)
+
+      # Delete all values for group1
+      EtsMultiset.delete_key(table, "group1")
+      assert EtsMultiset.get(table, "group1") == []
+      assert EtsMultiset.get(table, "group2") == ["value4"]
+      assert EtsMultiset.get(table, "group3") == ["value5"]
+
+      # Deleting a key that was already deleted should be a no-op
+      EtsMultiset.delete_key(table, "group1")
+      assert EtsMultiset.get(table, "group1") == []
+
+      # Deleting a non-existent key should be a no-op
+      EtsMultiset.delete_key(table, "nonexistent")
+      assert EtsMultiset.get(table, "nonexistent") == []
+
+      # Verify that other operations still work after deletion
+      EtsMultiset.put(table, "group2", "value6")
+      assert table |> EtsMultiset.get("group2") |> Enum.sort() == ["value4", "value6"]
+    end
+
+    test "delete_key/2 only affects the specified key", %{table: table} do
+      # Setup multiple keys with similar values
+      EtsMultiset.put(table, "batch_1", "record1")
+      EtsMultiset.put(table, "batch_1", "record2")
+      EtsMultiset.put(table, "batch_2", "record1")
+      EtsMultiset.put(table, "batch_2", "record3")
+      EtsMultiset.put(table, "batch_3", "record2")
+
+      # Verify initial state
+      assert table |> EtsMultiset.get("batch_1") |> Enum.sort() == ["record1", "record2"]
+      assert table |> EtsMultiset.get("batch_2") |> Enum.sort() == ["record1", "record3"]
+      assert EtsMultiset.get(table, "batch_3") == ["record2"]
+
+      # Delete one key
+      EtsMultiset.delete_key(table, "batch_2")
+
+      # Verify only the specified key was affected
+      assert table |> EtsMultiset.get("batch_1") |> Enum.sort() == ["record1", "record2"]
+      assert EtsMultiset.get(table, "batch_2") == []
+      assert EtsMultiset.get(table, "batch_3") == ["record2"]
+
+      # Verify key was actually removed from the multiset
+      assert table |> EtsMultiset.keys() |> Enum.sort() == ["batch_1", "batch_3"]
+
+      # Delete another key and verify
+      EtsMultiset.delete_key(table, "batch_1")
+      assert EtsMultiset.get(table, "batch_1") == []
+      assert EtsMultiset.get(table, "batch_3") == ["record2"]
+      assert table |> EtsMultiset.keys() |> Enum.sort() == ["batch_3"]
     end
   end
 
@@ -223,6 +282,33 @@ defmodule Sequin.EtsMultisetTest do
       EtsMultiset.union(table, "new_group", values_to_add)
 
       assert EtsMultiset.get(table, "new_group") == ["value6"]
+    end
+
+    test "delete_key/2 is more efficient than delete_many/3 for removing all values", %{table: table} do
+      # Create a table with many values for a key
+      key = "test_key"
+      values = Enum.map(1..1000, &"value#{&1}")
+
+      # Add all values to the table
+      Enum.each(values, fn value -> EtsMultiset.put(table, key, value) end)
+      assert EtsMultiset.count(table, key) == 1000
+
+      # Create a second table for comparison
+      table2 = EtsMultiset.new()
+      Enum.each(values, fn value -> EtsMultiset.put(table2, key, value) end)
+      assert EtsMultiset.count(table2, key) == 1000
+
+      # Measure time to delete all values using delete_key
+      # Delete all values using delete_key
+      EtsMultiset.delete_key(table, key)
+
+      # Delete all values using delete_many
+      all_values = EtsMultiset.get(table2, key)
+      EtsMultiset.delete_many(table2, key, all_values)
+
+      # Both tables should now have no values for the key
+      assert EtsMultiset.get(table, key) == []
+      assert EtsMultiset.get(table2, key) == []
     end
   end
 

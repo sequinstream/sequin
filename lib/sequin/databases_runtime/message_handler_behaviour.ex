@@ -19,7 +19,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour do
     The return value is an updated context.
   """
   @callback handle_messages(context :: any(), messages :: [Message.t()]) ::
-              {:ok, count :: non_neg_integer(), context :: any()} | {:error, reason :: any()}
+              {:ok, count :: non_neg_integer()} | {:error, reason :: any()}
 
   @doc """
   Callback invoked to handle a single logical message.
@@ -34,5 +34,5 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour do
     The return value is an updated context.
   """
   @callback handle_logical_message(context :: any(), seq :: non_neg_integer(), message :: LogicalMessage.t()) ::
-              {:ok, context :: any()} | {:error, reason :: any()}
+              :ok | {:error, reason :: any()}
 end

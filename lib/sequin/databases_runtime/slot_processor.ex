@@ -43,7 +43,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # 100 MB
   @max_accumulated_bytes 100 * 1024 * 1024
   @max_accumulated_messages 100_000
-  @max_accumulated_messages_time_ms 100
   @backfill_batch_high_watermark Constants.backfill_batch_high_watermark()
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
@@ -58,7 +57,17 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   def max_accumulated_messages_time_ms do
-    Application.get_env(:sequin, :slot_processor_max_accumulated_messages_time_ms) || @max_accumulated_messages_time_ms
+    case Application.get_env(:sequin, :slot_processor_max_accumulated_messages_time_ms) do
+      nil ->
+        if Application.get_env(:sequin, :env) == :test do
+          10
+        else
+          100
+        end
+
+      value ->
+        value
+    end
   end
 
   def set_max_accumulated_messages(value) do

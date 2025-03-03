@@ -12,8 +12,12 @@ if [ "${AUTO_ASSIGN_RELEASE_NODE:-false}" = "true" ]; then
 fi
 
 set_agent_address() {
-  # Datadog Agent Address and OTEL Exporter Endpoint based on ECS metadata endpoint
-  AGENT_ADDRESS=$(curl -s -S http://169.254.169.254/latest/meta-data/local-ipv4 || echo "meta-data curl failed")
+  # Use STATSD_HOST if set, otherwise get from ECS metadata endpoint
+  if [ -n "${STATSD_HOST:-}" ]; then
+    AGENT_ADDRESS="$STATSD_HOST"
+  else
+    AGENT_ADDRESS=$(curl -s -S http://169.254.169.254/latest/meta-data/local-ipv4 || echo "meta-data curl failed")
+  fi
 
   echo "Datadog Agent Address: $AGENT_ADDRESS"
 

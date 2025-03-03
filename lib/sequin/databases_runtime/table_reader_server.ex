@@ -31,6 +31,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   @callback flush_batch(String.t() | pid(), map()) :: :ok
 
+  @callback pks_seen(String.t(), [any()]) :: :ok
+
+  @callback running_for_consumer?(String.t()) :: boolean()
+
   @max_backoff_ms :timer.seconds(1)
   @max_backoff_time :timer.minutes(1)
 
@@ -74,6 +78,24 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     :exit, _ ->
       Logger.warning("[TableReaderServer] Table reader for backfill #{backfill_id} not running, skipping drop_pks")
       :ok
+  end
+
+  @doc """
+  Checks if a table reader server is running for a given consumer ID.
+
+  ## Parameters
+    * `consumer_id` - The ID of the consumer to check
+
+  ## Returns
+    * `true` - If the table reader server is running
+    * `false` - If the table reader server is not running
+  """
+  @spec running_for_consumer?(String.t()) :: boolean()
+  def running_for_consumer?(consumer_id) when is_binary(consumer_id) do
+    case :ets.whereis(multiset_name(consumer_id)) do
+      :undefined -> false
+      _table -> true
+    end
   end
 
   @doc """

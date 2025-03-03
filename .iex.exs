@@ -9,6 +9,7 @@ alias Sequin.Databases.PostgresDatabase
 alias Sequin.DatabasesRuntime.SlotMessageStore
 alias Sequin.DatabasesRuntime.SlotProcessor
 alias Sequin.DatabasesRuntime.SlotSupervisor
+alias Sequin.DatabasesRuntime.TableReaderServer
 alias Sequin.Health
 alias Sequin.Postgres
 alias Sequin.Replication

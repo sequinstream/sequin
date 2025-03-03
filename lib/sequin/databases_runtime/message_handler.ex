@@ -71,6 +71,41 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   @impl MessageHandlerBehaviour
+  def before_handle_messages(%Context{} = ctx, messages) do
+    # First, filter to only consumers with running TableReaderServers
+    backfilling_consumers =
+      Enum.filter(ctx.consumers, fn consumer ->
+        ctx.table_reader_mod.running_for_consumer?(consumer.id)
+      end)
+
+    case backfilling_consumers do
+      [] ->
+        :ok
+
+      _ ->
+        # Get set of table_oids that have running TRSs for efficient lookup
+        backfilling_table_oids =
+          MapSet.new(backfilling_consumers, & &1.sequence.table_oid)
+
+        # Create filtered map of messages, only including those for tables with running TRSs
+        messages_by_table_oid =
+          messages
+          |> Stream.filter(&MapSet.member?(backfilling_table_oids, &1.table_oid))
+          |> Enum.group_by(& &1.table_oid, & &1.ids)
+          |> Map.new()
+
+        # Process each active consumer
+        Enum.each(backfilling_consumers, fn consumer ->
+          if table_oid = consumer.sequence.table_oid do
+            if pks = Map.get(messages_by_table_oid, table_oid) do
+              ctx.table_reader_mod.pks_seen(consumer.id, pks)
+            end
+          end
+        end)
+    end
+  end
+
+  @impl MessageHandlerBehaviour
   def handle_messages(%Context{}, []) do
     {:ok, 0}
   end
@@ -96,11 +131,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
             end)
           end)
         end)
-
-      Enum.each(messages_by_consumer_id, fn {consumer_id, messages} ->
-        pks = Enum.map(messages, & &1.record_pks)
-        ctx.table_reader_mod.pks_seen(consumer_id, pks)
-      end)
 
       matching_pipeline_ids = wal_events |> Enum.map(& &1.wal_pipeline_id) |> Enum.uniq()
 

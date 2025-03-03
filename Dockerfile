@@ -89,6 +89,12 @@ RUN mix release
 # ---- App Stage ----
 FROM ${RUNNER_IMAGE} AS app
 
+# Install additional packages
+# Do this before setting RELEASE_VERSION which changes on every build
+RUN apt-get update -y && \
+    apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates curl ssh jq telnet netcat htop \
+    && apt-get clean && rm -f /var/lib/apt/lists/*_*
+
 # Pass the SELF_HOSTED arg again in this stage
 ARG SELF_HOSTED
 ENV SELF_HOSTED=${SELF_HOSTED}
@@ -97,9 +103,6 @@ ENV SELF_HOSTED=${SELF_HOSTED}
 ARG RELEASE_VERSION
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 
-RUN apt-get update -y && \
-    apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates curl ssh jq telnet netcat htop \
-    && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Set the locale
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen

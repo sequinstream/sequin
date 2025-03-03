@@ -181,7 +181,7 @@ if config_env() == :prod and not self_hosted do
     ]
 
   config :sequin, SequinWeb.Endpoint,
-    url: [host: "console.sequinstream.com", port: 443, scheme: "https"],
+    url: [host: server_host, port: server_port, scheme: "https"],
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: server_port
@@ -192,7 +192,7 @@ if config_env() == :prod and not self_hosted do
   config :sequin, :koala, public_key: "pk_ec2e6140b3d56f5eb1735350eb20e92b8002"
 
   config :sequin,
-    api_base_url: "https://api.sequinstream.com",
+    api_base_url: "https://#{System.fetch_env!("API_HOST")}",
     # Arbitrarily high memory limit in prod of 100GB
     max_memory_bytes: 100 * 1024 * 1024 * 1024
 end

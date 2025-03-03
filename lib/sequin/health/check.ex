@@ -12,6 +12,7 @@ defmodule Sequin.Health.Check do
   typedstruct do
     field :slug, atom(), enforce: true
     field :status, status(), enforce: true
+    field :name, String.t()
     field :error, Error.t() | nil
     field :error_slug, atom() | nil
     field :initial_event_at, DateTime.t() | nil
@@ -52,7 +53,7 @@ defmodule Sequin.Health.Check do
     }
   end
 
-  def check_name(%Check{} = check) do
+  def check_name(%Check{name: nil} = check) do
     case check.slug do
       # Postgres replication slot checks
       :reachable -> "Database reachable"
@@ -71,6 +72,10 @@ defmodule Sequin.Health.Check do
       :destination_insert -> "Destination insert"
       :slot_health -> "Database"
     end
+  end
+
+  def check_name(%Check{name: name}) do
+    name
   end
 
   defimpl Jason.Encoder do

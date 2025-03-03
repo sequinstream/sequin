@@ -478,8 +478,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         {:keep_state, state}
 
       {:error, error} ->
-        timeout_error = match?(%ServiceError{service: :postgres, code: :query_timeout}, error)
-        error_details = if timeout_error, do: error.details, else: %{}
+        timeout_error? = match?(%ServiceError{service: :postgres, code: :query_timeout}, error)
+        error_details = if timeout_error?, do: error.details, else: %{}
 
         Logger.error("[TableReaderServer] Failed to fetch primary keys with fetch_batch_pks: #{inspect(error)}",
           error: error,
@@ -490,14 +490,22 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
         state = %{state | current_id_fetch_task: nil}
 
-        if timeout_error do
-          # Record timeout
-          optimizer = state.page_size_optimizer_mod.put_timeout(state.page_size_optimizer, page_size)
-          state = %{state | page_size_optimizer: optimizer, last_id_fetch_time_ms: nil}
-          {:keep_state, state, [maybe_fetch_timeout()]}
-        else
-          state = %{state | successive_failure_count: state.successive_failure_count + 1, last_id_fetch_time_ms: nil}
-          {:keep_state, state, [maybe_fetch_timeout(1)]}
+        cond do
+          timeout_error? ->
+            # Record timeout
+            optimizer = state.page_size_optimizer_mod.put_timeout(state.page_size_optimizer, page_size)
+            state = %{state | page_size_optimizer: optimizer, last_id_fetch_time_ms: nil}
+            {:keep_state, state, [maybe_fetch_timeout()]}
+
+          is_struct(error, Postgrex.Error) ->
+            error = Error.ServiceError.from_postgrex(error)
+            Health.put_event(state.consumer, %Event{slug: :backfill_fetch_batch, status: :warning, error: error})
+            state = %{state | successive_failure_count: state.successive_failure_count + 1, last_id_fetch_time_ms: nil}
+            {:keep_state, state, [maybe_fetch_timeout(1)]}
+
+          true ->
+            state = %{state | successive_failure_count: state.successive_failure_count + 1, last_id_fetch_time_ms: nil}
+            {:keep_state, state, [maybe_fetch_timeout(1)]}
         end
     end
   end

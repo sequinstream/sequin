@@ -91,6 +91,60 @@ defmodule Sequin.HealthTest do
     end
   end
 
+  describe "messages_ingested check" do
+    test "reflects ingested event state when no backfill event exists" do
+      entity = sink_consumer()
+
+      # Test initial state (no events)
+      {:ok, health} = Health.health(entity)
+      check = Enum.find(health.checks, &(&1.slug == :messages_ingested))
+      assert check.status == :waiting
+
+      # Test success state
+      :ok = Health.put_event(entity, %Event{slug: :messages_ingested, status: :success})
+      {:ok, health} = Health.health(entity)
+      check = Enum.find(health.checks, &(&1.slug == :messages_ingested))
+      assert check.status == :healthy
+
+      # Test warning state
+      :ok = Health.put_event(entity, %Event{slug: :messages_ingested, status: :warning})
+      {:ok, health} = Health.health(entity)
+      check = Enum.find(health.checks, &(&1.slug == :messages_ingested))
+      assert check.status == :warning
+
+      # Test error state
+      error = ErrorFactory.random_error()
+      :ok = Health.put_event(entity, %Event{slug: :messages_ingested, status: :fail, error: error})
+      {:ok, health} = Health.health(entity)
+      check = Enum.find(health.checks, &(&1.slug == :messages_ingested))
+      assert check.status == :error
+      assert check.error == error
+    end
+
+    test "shows warning when backfill fetch batch event has warning" do
+      entity = sink_consumer()
+
+      # Set up a successful ingestion event
+      :ok = Health.put_event(entity, %Event{slug: :messages_ingested, status: :success})
+
+      # Add a warning backfill event
+      backfill_error = ErrorFactory.service_error()
+
+      :ok =
+        Health.put_event(entity, %Event{
+          slug: :backfill_fetch_batch,
+          status: :warning,
+          error: backfill_error
+        })
+
+      # Check that the warning state is reflected
+      {:ok, health} = Health.health(entity)
+      check = Enum.find(health.checks, &(&1.slug == :messages_ingested))
+      assert check.status == :warning
+      assert check.error == backfill_error
+    end
+  end
+
   describe "to_external/1" do
     test "converts the health to an external format" do
       entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())

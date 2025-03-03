@@ -16,6 +16,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotSupervisor
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
+  alias Sequin.Health
   alias Sequin.Health.CheckHttpEndpointHealthWorker
   alias Sequin.Health.CheckSinkConfigurationWorker
   alias Sequin.Repo
@@ -146,6 +147,9 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
               DatabasesRuntimeSupervisor.restart_table_reader(consumer)
 
             s when s in [:cancelled, :completed] ->
+              # Clear out the backfill_fetch_batch event - if backfill was erroring, we want to
+              # clear out that state/event.
+              Health.delete_event(consumer.id, "backfill_fetch_batch")
               Logger.info("Stopping TableReaderServer for backfill #{backfill.id}", backfill_status: s)
               DatabasesRuntimeSupervisor.stop_table_reader(backfill.id)
           end

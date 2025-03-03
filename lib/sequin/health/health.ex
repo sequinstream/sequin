@@ -387,7 +387,7 @@ defmodule Sequin.Health do
   defp checks(%SinkConsumer{} = consumer, events) do
     config_check = check(:sink_configuration, consumer, events)
     filter_check = basic_check(:messages_filtered, events, :waiting)
-    ingestion_check = basic_check(:messages_ingested, events, :waiting)
+    ingestion_check = check(:messages_ingested, consumer, events)
     delivery_check = basic_check(:messages_pending_delivery, events, :waiting)
     acknowledge_check = basic_check(:messages_delivered, events, :waiting)
 
@@ -626,6 +626,35 @@ defmodule Sequin.Health do
 
       true ->
         put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
+    end
+  end
+
+  defp check(:messages_ingested, %SinkConsumer{}, events) do
+    base_check = %Check{slug: :messages_ingested, status: :waiting}
+    ingested_event = find_event(events, :messages_ingested)
+    backfill_fetch_batch_event = find_event(events, :backfill_fetch_batch)
+
+    cond do
+      is_nil(ingested_event) ->
+        base_check
+
+      ingested_event.status == :fail ->
+        put_check_timestamps(
+          %{base_check | status: :error, error: ingested_event.error},
+          [ingested_event]
+        )
+
+      not is_nil(backfill_fetch_batch_event) and backfill_fetch_batch_event.status == :warning ->
+        put_check_timestamps(
+          %{base_check | status: :warning, error: backfill_fetch_batch_event.error, name: "Backfill fetch process"},
+          [
+            backfill_fetch_batch_event
+          ]
+        )
+
+      true ->
+        status = if ingested_event.status == :success, do: :healthy, else: :warning
+        put_check_timestamps(%{base_check | status: status}, [ingested_event])
     end
   end
 

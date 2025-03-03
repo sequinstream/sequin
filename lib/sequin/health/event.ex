@@ -43,7 +43,9 @@ defmodule Sequin.Health.Event do
     :messages_delivered,
     :alert_replica_identity_not_full_dismissed,
     :alert_toast_columns_detected_dismissed,
-    :toast_columns_detected
+    :toast_columns_detected,
+    :backfill_fetch_batch,
+    :backfill_finished
   ]
 
   @http_endpoint_event_slugs [

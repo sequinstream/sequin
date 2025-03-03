@@ -7,6 +7,21 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour do
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
 
   @doc """
+  Callback invoked before handling a batch of replication messages.
+
+  ## Parameters
+
+    * `context` - Any context passed by the caller to SlotProcessor.
+    * `messages` - A list of Record types (InsertedRecord, UpdatedRecord, or DeletedRecord) that SlotProcessor handles.
+
+  ## Returns
+
+    The return value is :ok or {:error, reason}.
+  """
+  @callback before_handle_messages(context :: any(), messages :: [Message.t()]) ::
+              :ok | {:error, reason :: any()}
+
+  @doc """
   Callback invoked to handle a batch of replication messages.
 
   ## Parameters

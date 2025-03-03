@@ -625,6 +625,126 @@ defmodule Sequin.MessageHandlerTest do
     end
   end
 
+  describe "before_handle_messages/2" do
+    test "only processes messages for tables with running TableReaderServers" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      # Create two sequences with different table_oids
+      sequence1 =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 123,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      sequence2 =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 456,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      # Create two consumers
+      consumer1 =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: sequence1.id,
+          sequence_filter: ConsumersFactory.sequence_filter_attrs()
+        )
+
+      consumer2 =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: sequence2.id,
+          sequence_filter: ConsumersFactory.sequence_filter_attrs()
+        )
+
+      # Preload consumers with their sequences
+      consumers = [
+        Repo.preload(consumer1, :sequence),
+        Repo.preload(consumer2, :sequence)
+      ]
+
+      # Create messages for both table_oids
+      messages = [
+        # composite pk for one row
+        ReplicationFactory.postgres_message(table_oid: 123, ids: [1, 2]),
+        # composite pk for one row
+        ReplicationFactory.postgres_message(table_oid: 456, ids: [3, 4])
+      ]
+
+      context = %MessageHandler.Context{
+        consumers: consumers,
+        table_reader_mod: TableReaderServerMock
+      }
+
+      # Mock that only consumer1 has a running TableReaderServer
+      expect(TableReaderServerMock, :running_for_consumer?, 2, fn consumer_id ->
+        consumer_id == consumer1.id
+      end)
+
+      # Expect pks_seen to be called only for consumer1's messages
+      expect(TableReaderServerMock, :pks_seen, 1, fn consumer_id, pks ->
+        assert consumer_id == consumer1.id
+        # Single composite pk
+        assert pks == [[1, 2]]
+        :ok
+      end)
+
+      MessageHandler.before_handle_messages(context, messages)
+    end
+
+    test "handles multiple messages for the same table_oid" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 123,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: ConsumersFactory.sequence_filter_attrs()
+        )
+
+      consumer = Repo.preload(consumer, :sequence)
+
+      # Create multiple messages for the same table_oid
+      messages = [
+        # First row's composite pk
+        ReplicationFactory.postgres_message(table_oid: 123, ids: [1, 2]),
+        # Second row's composite pk
+        ReplicationFactory.postgres_message(table_oid: 123, ids: [3, 4, 5])
+      ]
+
+      context = %MessageHandler.Context{
+        consumers: [consumer],
+        table_reader_mod: TableReaderServerMock
+      }
+
+      # Mock that the consumer has a running TableReaderServer
+      expect(TableReaderServerMock, :running_for_consumer?, 1, fn consumer_id ->
+        consumer_id == consumer.id
+      end)
+
+      # Expect pks_seen to be called with composite pks from both messages
+      expect(TableReaderServerMock, :pks_seen, 1, fn consumer_id, pks ->
+        assert consumer_id == consumer.id
+        # Two different composite pks
+        assert pks == [[1, 2], [3, 4, 5]]
+        :ok
+      end)
+
+      MessageHandler.before_handle_messages(context, messages)
+    end
+  end
+
   describe "handle_messages/2 with unchanged_toast" do
     setup do
       account = AccountsFactory.insert_account!()

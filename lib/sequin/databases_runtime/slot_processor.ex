@@ -1047,6 +1047,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       incr_counter(:messages_processed_since_last_log, count)
 
       # Flush accumulated messages
+      # Temp: Do this here, as handle_messages call is going to become async
+      state.message_handler_module.before_handle_messages(state.message_handler_ctx, messages)
       {time, res} = :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
 
       state.backfill_watermark_messages

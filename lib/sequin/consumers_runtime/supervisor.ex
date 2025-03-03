@@ -48,36 +48,23 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   def start_for_sink_consumer(supervisor, %SinkConsumer{} = consumer, opts) do
     consumer = Repo.preload(consumer, [:sequence, :postgres_database], force: true)
 
-    # If a consumer has no sequence, it may be that the consumer was created in a transaction
-    # along with a new sequence. We need to wait for the transaction to commit before starting
-    # the consumer.
-    # TODO: remove this once lifecycle is async
-    if is_nil(consumer.sequence) or is_nil(consumer.postgres_database) or Repo.in_transaction?() do
-      Logger.warning("Consumer #{consumer.id} has no sequence or postgres_database, re-scheduling start")
+    SlotSupervisor.start_message_store!(consumer)
 
-      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-        Process.sleep(1000)
-        start_for_sink_consumer(supervisor, consumer, opts)
-      end)
+    if consumer.type == :sequin_stream do
+      :ok
     else
-      SlotSupervisor.start_message_store!(consumer)
+      default_opts = [consumer: consumer]
+      consumer_features = Consumers.consumer_features(consumer)
 
-      if consumer.type == :sequin_stream do
-        :ok
-      else
-        default_opts = [consumer: consumer]
-        consumer_features = Consumers.consumer_features(consumer)
+      {features, opts} = Keyword.pop(opts, :features, [])
+      features = Keyword.merge(consumer_features, features)
 
-        {features, opts} = Keyword.pop(opts, :features, [])
-        features = Keyword.merge(consumer_features, features)
+      opts =
+        default_opts
+        |> Keyword.merge(opts)
+        |> Keyword.put(:features, features)
 
-        opts =
-          default_opts
-          |> Keyword.merge(opts)
-          |> Keyword.put(:features, features)
-
-        Sequin.DynamicSupervisor.start_child(supervisor, {pipeline(consumer), opts})
-      end
+      Sequin.DynamicSupervisor.start_child(supervisor, {pipeline(consumer), opts})
     end
   end
 

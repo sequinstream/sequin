@@ -124,6 +124,9 @@ if config_env() == :prod and self_hosted do
     socket_options: ecto_socket_opts
 
   config :sequin, SequinWeb.Endpoint,
+    # `url` is used for configuring links in the console. So it corresponds to the *external*
+    # host and port of the application
+    # TODO: Default to 443
     url: [host: server_host, port: server_port, scheme: "https"],
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
@@ -181,7 +184,9 @@ if config_env() == :prod and not self_hosted do
     ]
 
   config :sequin, SequinWeb.Endpoint,
-    url: [host: server_host, port: server_port, scheme: "https"],
+    # `url` is used for configuring links in the console. So it corresponds to the *external*
+    # host and port of the application
+    url: [host: server_host, port: 443, scheme: "https"],
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: server_port

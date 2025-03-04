@@ -212,7 +212,9 @@ defmodule Sequin.Databases.ConnectionCache do
 
     defp default_stop(conn) do
       Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-        GenServer.stop(conn)
+        if Process.alive?(conn) do
+          GenServer.stop(conn)
+        end
       end)
 
       :ok

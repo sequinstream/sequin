@@ -16,7 +16,6 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   alias Sequin.Runtime.InitBackfillStatsWorker
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotMessageStore
-  alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
 
   require Logger
@@ -66,14 +65,16 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
 
       "update" ->
         with {:ok, consumer} <- Consumers.get_consumer(id) do
+          consumer = Repo.preload(consumer, :replication_slot)
           CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
-          :ok = RuntimeSupervisor.start_for_sink_consumer(consumer)
           :ok = SlotMessageStore.consumer_updated(consumer)
 
           case consumer.status do
             :active ->
-              :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-              :ok = SlotProcessor.monitor_message_store(consumer.replication_slot_id, consumer.id)
+              # We have to restart the ConsumerProducer. Because the ConsumerProducer and SMS are
+              # merging soon, we need to start the SMS as well. Therefore, we need to restart the
+              # SlotProcessor.
+              RuntimeSupervisor.restart_replication(consumer.replication_slot)
               :ok
 
             :paused ->

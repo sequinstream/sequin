@@ -1,6 +1,8 @@
 defmodule Sequin.Runtime.RedisPipelineTest do
   use Sequin.DataCase, async: true
 
+  import Mox
+
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
@@ -13,12 +15,14 @@ defmodule Sequin.Runtime.RedisPipelineTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.ConsumerProducer
   alias Sequin.Runtime.RedisPipeline
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Sinks.RedisMock
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
 
-  describe "events are sent to Redis" do
+  setup :verify_on_exit!
+
+  describe "RedisPipeline" do
     setup do
       account = AccountsFactory.insert_account!()
 
@@ -116,40 +120,6 @@ defmodule Sequin.Runtime.RedisPipelineTest do
       ref = send_test_events(consumer)
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
     end
-  end
-
-  describe "messages flow from postgres to Redis end-to-end" do
-    setup do
-      account = AccountsFactory.insert_account!()
-
-      database = DatabasesFactory.configured_postgres_database(account_id: account.id)
-      ConnectionCache.cache_connection(database, Sequin.Repo)
-
-      sequence =
-        DatabasesFactory.sequence(
-          postgres_database_id: database.id,
-          postgres_database: database,
-          table_oid: CharacterDetailed.table_oid()
-        )
-
-      replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
-
-      consumer =
-        ConsumersFactory.sink_consumer(
-          id: UUID.uuid4(),
-          account_id: account.id,
-          type: :redis,
-          replication_slot_id: replication.id,
-          sequence_id: sequence.id,
-          sequence: sequence,
-          message_kind: :record,
-          postgres_database: database
-        )
-
-      :ok = Consumers.create_consumer_partition(consumer)
-
-      {:ok, %{consumer: consumer}}
-    end
 
     test "messages are sent from postgres to Redis", %{consumer: consumer} do
       test_pid = self()
@@ -161,13 +131,13 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
       consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_record])
+      start_supervised!({SlotMessageProducer, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
+      SlotMessageProducer.put_messages(consumer.id, [consumer_record])
 
       start_supervised!({RedisPipeline, [consumer: consumer, test_pid: test_pid]})
 
       assert_receive {:redis_request, _sink, _redis_messages}, 5_000
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+      assert_receive {:ack, _ref, [%{data: [%ConsumerRecord{}]}], []}, 5_000
     end
   end
 

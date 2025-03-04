@@ -28,7 +28,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime
   alias Sequin.Runtime.MessageHandlerMock
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Sinks.RedisMock
@@ -1615,7 +1615,7 @@ defmodule Sequin.PostgresReplicationTest do
   defp list_messages(%SinkConsumer{id: id}), do: list_messages(id)
 
   defp list_messages(id) do
-    %SlotMessageStore.State{messages: messages} = SlotMessageStore.peek(id)
+    %SlotMessageProducer.State{messages: messages} = SlotMessageProducer.peek(id)
     Map.values(messages)
   end
 end

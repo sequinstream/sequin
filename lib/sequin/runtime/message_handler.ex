@@ -20,7 +20,7 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandler do
   alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.SlotProcessor.MessageHandlerBehaviour
@@ -343,7 +343,7 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandler do
   @max_backoff_ms :timer.seconds(1)
   @max_attempts 5
   defp put_messages(consumer_id, messages_to_ingest, attempt \\ 1) do
-    case SlotMessageStore.put_messages(consumer_id, messages_to_ingest) do
+    case SlotMessageProducer.put_messages(consumer_id, messages_to_ingest) do
       :ok ->
         Health.put_event(:sink_consumer, consumer_id, %Event{slug: :messages_ingested, status: :success})
         :ok

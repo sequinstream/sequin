@@ -6,7 +6,7 @@ defmodule Sequin.Runtime.RabbitMqPipeline do
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Sinks.RabbitMq
 
   require Logger
@@ -14,7 +14,7 @@ defmodule Sequin.Runtime.RabbitMqPipeline do
   def start_link(opts) do
     %SinkConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
 
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
+    producer = Keyword.get(opts, :producer, Sequin.Runtime.SlotMessageProducer)
 
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
@@ -55,7 +55,7 @@ defmodule Sequin.Runtime.RabbitMqPipeline do
 
     case RabbitMq.send_messages(consumer.sink, messages) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
+        :ok = SlotMessageProducer.pre_ack_delivered_messages(consumer, [broadway_message])
 
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 

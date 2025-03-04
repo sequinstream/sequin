@@ -18,7 +18,7 @@ defmodule Sequin.IexHelpers do
   end
 
   def via(:slot_store, id) do
-    Sequin.Runtime.SlotMessageStore.via_tuple(id)
+    Sequin.Runtime.SlotMessageProducer.via_tuple(id)
   end
 
   def via(sink, id) when sink in @sinks do

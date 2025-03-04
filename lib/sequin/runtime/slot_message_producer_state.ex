@@ -1,4 +1,4 @@
-defmodule Sequin.Runtime.SlotMessageStore.State do
+defmodule Sequin.Runtime.SlotMessageProducer.State do
   @moduledoc false
   use TypedStruct
 
@@ -8,7 +8,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   alias Sequin.Error
   alias Sequin.Multiset
   alias Sequin.Replication
-  alias Sequin.Runtime.SlotMessageStore.State
+  alias Sequin.Runtime.SlotMessageProducer.State
 
   require Logger
 
@@ -35,6 +35,13 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :table_reader_batch_id, String.t() | nil
     field :test_pid, pid() | nil
     field :last_logged_stats_at, non_neg_integer() | nil
+    # Broadway producer state
+    field :demand, non_neg_integer(), default: 0
+    field :receive_timer, reference() | nil
+    field :trim_timer, reference() | nil
+    field :batch_size, non_neg_integer(), default: 10
+    field :batch_timeout, non_neg_integer(), default: :timer.seconds(10)
+    field :scheduled_handle_demand, boolean(), default: false
   end
 
   @spec setup_ets(Sequin.Consumers.SinkConsumer.t()) :: :ok
@@ -228,18 +235,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   @spec is_message_persisted?(State.t(), message()) :: boolean()
   def is_message_persisted?(%State{} = state, msg) do
     Multiset.value_member?(state.persisted_message_groups, msg.group_id, {msg.commit_lsn, msg.commit_idx})
-  end
-
-  @doc """
-  Clears all messages from produced_message_groups.
-
-  Called whenever the ConsumerProducer changes (and therefore is presumed to have crashed.)
-  """
-  @spec nack_produced_messages(State.t()) :: {State.t(), non_neg_integer()}
-  def nack_produced_messages(%State{} = state) do
-    nacked_count = state.produced_message_groups |> Multiset.values() |> length()
-
-    {%{state | produced_message_groups: Multiset.new()}, nacked_count}
   end
 
   @doc """

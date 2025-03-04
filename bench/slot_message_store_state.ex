@@ -1,7 +1,7 @@
-defmodule Sequin.Bench.SlotMessageStoreState do
+defmodule Sequin.Bench.SlotMessageProducerState do
   @moduledoc false
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Runtime.SlotMessageStore.State
+  alias Sequin.Runtime.SlotMessageProducer.State
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
 

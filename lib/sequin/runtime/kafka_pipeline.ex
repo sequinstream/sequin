@@ -8,7 +8,7 @@ defmodule Sequin.Runtime.KafkaPipeline do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Sinks.Kafka
 
   require Logger
@@ -20,11 +20,13 @@ defmodule Sequin.Runtime.KafkaPipeline do
       |> Keyword.fetch!(:consumer)
       |> Repo.lazy_preload([:sequence, :postgres_database])
 
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
+    producer = Keyword.get(opts, :producer, Sequin.Runtime.SlotMessageProducer)
     test_pid = Keyword.get(opts, :test_pid)
 
+    dbg(producer.via_tuple(consumer.id))
+
     Broadway.start_link(__MODULE__,
-      name: via_tuple(consumer.id),
+      name: producer.via_tuple(consumer.id),
       producer: [
         module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: 1]}
       ],
@@ -49,14 +51,10 @@ defmodule Sequin.Runtime.KafkaPipeline do
     )
   end
 
-  def via_tuple(consumer_id) do
-    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
-  end
-
   # Used by Broadway to name processes in topology according to our registry
   @impl Broadway
-  def process_name({:via, :syn, {:consumers, {__MODULE__, id}}}, base_name) do
-    {:via, :syn, {:consumers, {__MODULE__, {base_name, id}}}}
+  def process_name({:via, :syn, {:replication, {_producer_module, consumer_id}}}, base_name) do
+    {:via, :syn, {:consumers, {__MODULE__, {base_name, consumer_id}}}}
   end
 
   @impl Broadway
@@ -99,7 +97,7 @@ defmodule Sequin.Runtime.KafkaPipeline do
 
     case Kafka.publish(consumer, partition, messages) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, broadway_messages)
+        :ok = SlotMessageProducer.pre_ack_delivered_messages(consumer, broadway_messages)
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
         broadway_messages

@@ -7,8 +7,8 @@ defmodule Sequin.Runtime.RedisPipeline do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
-  alias Sequin.Runtime.ConsumerProducer
   alias Sequin.Runtime.MessageLedgers
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Sinks.Redis
 
   require Logger
@@ -20,11 +20,11 @@ defmodule Sequin.Runtime.RedisPipeline do
       |> Keyword.fetch!(:consumer)
       |> Repo.lazy_preload([:sequence, :postgres_database])
 
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
+    producer = Keyword.get(opts, :producer, Sequin.Runtime.SlotMessageProducer)
     test_pid = Keyword.get(opts, :test_pid)
 
     Broadway.start_link(__MODULE__,
-      name: via_tuple(consumer.id),
+      name: producer.via_tuple(consumer.id),
       producer: [
         module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: consumer.batch_size]}
       ],
@@ -40,10 +40,6 @@ defmodule Sequin.Runtime.RedisPipeline do
         test_pid: test_pid
       }
     )
-  end
-
-  def via_tuple(consumer_id) do
-    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
   end
 
   # Used by Broadway to name processes in topology according to our registry
@@ -74,7 +70,7 @@ defmodule Sequin.Runtime.RedisPipeline do
 
     case Redis.send_messages(sink, redis_messages) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
+        :ok = SlotMessageProducer.pre_ack_delivered_messages(consumer, [broadway_message])
 
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 

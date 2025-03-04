@@ -1,44 +1,54 @@
-defmodule Sequin.Runtime.SlotMessageStore do
+defmodule Sequin.Runtime.SlotMessageProducer do
   @moduledoc """
-  A GenServer that manages an in-memory message buffer for sink consumers.
+  A GenServer that manages an in-memory message buffer for sink consumers and acts as a Broadway producer.
 
-  The SlotMessageStore serves as a central buffer between the SlotProcessor and ConsumerProcessor. It maintains an in-memory buffer for never-delivered messages for a SinkConsumer.
+  The SlotMessageProducer serves as a central buffer between the SlotProcessor and ConsumerProcessor. It maintains an in-memory buffer for never-delivered messages for a SinkConsumer.
 
   Message Lifecycle:
-  1. SlotProcessor pushes messages to SlotMessageStore
+  1. SlotProcessor pushes messages to SlotMessageProducer
   2. ConsumerProcessor pulls messages for delivery to consumers
-  3. On success/failure, ConsumerProcessor acknowledges messages which removes them from SlotMessageStore buffer
-  4. If ConsumerProcessor crashes, SlotMessageStore finds out by changing pid in the next pull
+  3. On success/failure, ConsumerProcessor acknowledges messages which removes them from SlotMessageProducer buffer
+  4. If ConsumerProcessor crashes, SlotMessageProducer finds out by changing pid in the next pull
 
   Backpressure:
-  - SlotMessageStore buffers grow if ConsumerProcessors slow down or stop consuming
-  - When buffers reach configured limits, SlotMessageStore signals SlotProcessor to pause replication
+  - SlotMessageProducer buffers grow if ConsumerProcessors slow down or stop consuming
+  - When buffers reach configured limits, SlotMessageProducer signals SlotProcessor to pause replication
   - SlotProcessor resumes when buffer space becomes available
 
   Integration Points:
   - Receives messages from SlotProcessor
   - Serves messages to ConsumerProcessors
+  - Acts as a Broadway producer for pipeline implementations
 
-  The SlotMessageStore is designed to be ephemeral - if it crashes, SlotProcessor will need to reconnect and replay
+  The SlotMessageProducer is designed to be ephemeral - if it crashes, SlotProcessor will need to reconnect and replay
   messages. This is handled automatically by the supervision tree.
 
-  Note: Failed message handling is managed by ConsumerProducer, not SlotMessageStore. ConsumerProducer writes failed
-  messages to persistent storage and handles redelivery attempts.
+  Note: Failed message handling is managed by the Broadway pipeline, not SlotMessageProducer. Failed messages are written
+  to persistent storage and handled for redelivery attempts.
   """
-  @behaviour Sequin.Runtime.SlotMessageStoreBehaviour
+  @behaviour Broadway.Producer
+  @behaviour Sequin.Runtime.SlotMessageProducerBehaviour
 
-  use GenServer
+  use GenStage
 
+  alias Broadway.Message
+  alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
+  alias Sequin.Postgres
+  alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
-  alias Sequin.Runtime.SlotMessageStore.State
-  alias Sequin.Runtime.SlotMessageStoreBehaviour
+  alias Sequin.Runtime.SlotMessageProducer.State
+  alias Sequin.Runtime.SlotMessageProducerBehaviour
   alias Sequin.Runtime.TableReader
+  alias Sequin.TestSupport.DateTimeMock
 
   require Logger
 
@@ -72,7 +82,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   catch
     :exit, e ->
       error = exit_to_sequin_error(e)
-      Logger.error("[SlotMessageStore] Failed to put messages", error: error)
+      Logger.error("[SlotMessageProducer] Failed to put messages", error: error)
       raise error
   end
 
@@ -89,7 +99,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   catch
     :exit, e ->
       error = exit_to_sequin_error(e)
-      Logger.error("[SlotMessageStore] Failed to put table reader batch", error: error)
+      Logger.error("[SlotMessageProducer] Failed to put table reader batch", error: error)
       raise error
   end
 
@@ -102,7 +112,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   catch
     :exit, e ->
       error = exit_to_sequin_error(e)
-      Logger.error("[SlotMessageStore] Failed to get batch progress", error: error)
+      Logger.error("[SlotMessageProducer] Failed to get batch progress", error: error)
       raise error
   end
 
@@ -110,9 +120,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
   Produces the next batch of deliverable messages, up to the specified count.
   Returns `{:ok, messages}` where messages is a list of deliverable messages.
   """
-  @impl SlotMessageStoreBehaviour
-  def produce(consumer_id, count, producer_pid) do
-    GenServer.call(via_tuple(consumer_id), {:produce, count, producer_pid})
+  @impl SlotMessageProducerBehaviour
+  def produce(consumer_id, count) do
+    GenServer.call(via_tuple(consumer_id), {:produce, count})
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -121,7 +131,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Acknowledges messages as successfully processed using their ack_ids.
   """
-  @impl SlotMessageStoreBehaviour
+  @impl SlotMessageProducerBehaviour
   def messages_succeeded_returning_messages(_consumer_id, []), do: {:ok, []}
 
   def messages_succeeded_returning_messages(consumer_id, ack_ids) do
@@ -131,7 +141,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
-  @impl SlotMessageStoreBehaviour
+  @impl SlotMessageProducerBehaviour
   def messages_succeeded(_consumer_id, []), do: {:ok, 0}
 
   def messages_succeeded(consumer_id, ack_ids) do
@@ -144,7 +154,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Acknowledges messages as already succeeded, likely due to idempotency checks.
   """
-  @impl SlotMessageStoreBehaviour
+  @impl SlotMessageProducerBehaviour
   def messages_already_succeeded(_consumer_id, []), do: :ok
 
   def messages_already_succeeded(consumer_id, ack_ids) do
@@ -154,7 +164,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
-  @impl SlotMessageStoreBehaviour
+  @impl SlotMessageProducerBehaviour
   def messages_failed(_consumer_id, []), do: :ok
 
   def messages_failed(consumer_id, message_metadatas) do
@@ -194,7 +204,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   catch
     :exit, e ->
       error = exit_to_sequin_error(e)
-      Logger.error("[SlotMessageStore] Failed to get min unflushed commit lsn", error: error)
+      Logger.error("[SlotMessageProducer] Failed to get min unflushed commit lsn", error: error)
       raise error
   end
 
@@ -210,7 +220,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @doc """
-  Peek at SlotMessageStore state. For use in dev/test only.
+  Peek at SlotMessageProducer state. For use in dev/test only.
   """
   @spec peek(consumer_id()) :: State.t() | {:error, Exception.t()}
   def peek(consumer_id) do
@@ -243,14 +253,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @doc """
-  Set the monitor reference for the SlotMessageStore into State
+  Set the monitor reference for the SlotMessageProducer into State
 
   We use `pid` to call here because we want to confirm the `ref` is generated
   from Process.monitor/1 and we want to double ack that the `pid` is the correct one.
   """
   @spec set_monitor_ref(pid(), reference()) :: :ok
   def set_monitor_ref(pid, ref) do
-    GenServer.call(pid, {:set_monitor_ref, ref}, :timer.seconds(120))
+    GenServer.call(pid, {:set_monitor_ref, ref})
   end
 
   def child_spec(opts) do
@@ -263,71 +273,51 @@ defmodule Sequin.Runtime.SlotMessageStore do
     }
   end
 
-  @impl GenServer
+  @impl GenStage
   def init(opts) do
     consumer = opts[:consumer]
     consumer_id = if consumer, do: consumer.id, else: Keyword.fetch!(opts, :consumer_id)
+    test_pid = Keyword.get(opts, :test_pid)
 
     Logger.metadata(consumer_id: consumer_id)
-    Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
+    Logger.info("[SlotMessageProducer] Initializing message store and producer for consumer #{consumer_id}")
+
+    if test_pid do
+      Sandbox.allow(Sequin.Repo, test_pid, self())
+      Mox.allow(DateTimeMock, test_pid, self())
+      Mox.allow(Sequin.Runtime.SlotMessageProducerMock, test_pid, self())
+    end
+
+    :syn.join(:consumers, {:messages_ingested, consumer_id}, self())
 
     state = %State{
       consumer: consumer,
       consumer_id: consumer_id,
-      test_pid: Keyword.get(opts, :test_pid),
+      test_pid: test_pid,
       setting_system_max_memory_bytes:
-        Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes))
+        Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
+      # Broadway producer state
+      demand: 0,
+      receive_timer: nil,
+      trim_timer: nil,
+      batch_size: Keyword.get(opts, :batch_size, 10),
+      batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
+      scheduled_handle_demand: false,
+      last_logged_stats_at: nil
     }
 
-    {:ok, state, {:continue, :init}}
-  end
-
-  @impl GenServer
-  def handle_continue(:init, %State{} = state) do
-    # If we're not self-hosted, there will be no system-wide max memory bytes
-    # so we don't need to recalculate max_memory_bytes on consumers changing
-    if state.setting_system_max_memory_bytes do
-      :syn.join(:consumers, :consumers_changed, self())
-    end
-
-    # Allow test process to access the database connection
-    if state.test_pid do
-      Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
-      Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
-      Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
-    end
-
-    consumer =
-      if state.consumer do
-        state.consumer
-      else
-        Consumers.get_sink_consumer!(state.consumer_id)
-      end
-
-    state = %{state | consumer: consumer}
-
-    Logger.metadata(account_id: consumer.account_id, replication_id: consumer.replication_slot_id)
-
-    :ok = State.setup_ets(consumer)
-
-    persisted_messages =
-      consumer
-      |> Consumers.list_consumer_messages_for_consumer()
-      |> Enum.map(fn msg ->
-        %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
-      end)
-
-    {:ok, state} =
+    state =
       state
-      |> put_max_memory_bytes()
-      |> State.put_persisted_messages(persisted_messages)
+      |> schedule_receive_messages()
+      |> schedule_trim_idempotency()
 
+    Process.send_after(self(), :init, 0)
     schedule_process_logging(0)
-    schedule_max_memory_check()
-    {:noreply, state}
+
+    {:producer, state}
   end
 
-  @impl GenServer
+  @impl GenStage
   def handle_call({:put_messages, messages}, from, %State{} = state) do
     execute_timed(:put_messages, fn ->
       # Validate first
@@ -365,7 +355,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
               send(state.test_pid, {:put_messages_done, state.consumer.id})
             end
 
-            {:noreply, state}
+            {:noreply, [], state}
           end)
 
         {:error, error} ->
@@ -375,7 +365,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end)
   end
 
-  @impl GenServer
+  @impl GenStage
   def handle_call({:put_table_reader_batch, messages, batch_id}, _from, %State{} = state) do
     execute_timed(:put_table_reader_batch, fn ->
       now = Sequin.utc_now()
@@ -398,45 +388,16 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end)
   end
 
-  @impl GenServer
+  @impl GenStage
   def handle_call(:unpersisted_table_reader_batch_ids, _from, %State{} = state) do
     {:reply, {:ok, State.unpersisted_table_reader_batch_ids(state)}, state}
   end
 
-  def handle_call({:produce, count, producer_pid}, from, %State{last_consumer_producer_pid: last_producer_pid} = state)
-      when not is_nil(last_producer_pid) and last_producer_pid != producer_pid do
+  def handle_call({:produce, count}, _from, %State{} = state) do
     execute_timed(:produce, fn ->
-      # Producer has changed, so we need to reset the state
-      {state, _count} = State.nack_produced_messages(state)
-      handle_call({:produce, count, producer_pid}, from, %{state | last_consumer_producer_pid: producer_pid})
-    end)
-  end
+      {:ok, {messages, state}} = produce_messages(state, count)
 
-  def handle_call({:produce, count, producer_pid}, _from, %State{} = state) do
-    execute_timed(:produce, fn ->
-      {time, {messages, state}} =
-        :timer.tc(fn ->
-          {_messages, _state} = State.produce_messages(state, count)
-        end)
-
-      messages
-      |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
-      |> then(&MessageLedgers.wal_cursors_reached_checkpoint(state.consumer_id, "slot_message_store.produce", &1))
-
-      if div(time, 1000) > @min_log_time_ms do
-        Logger.warning(
-          "[SlotMessageStore] Produce messages took longer than expected",
-          count: length(messages),
-          duration_ms: div(time, 1000),
-          message_count: map_size(state.messages)
-        )
-      end
-
-      if length(messages) > 0 do
-        Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
-      end
-
-      {:reply, {:ok, messages}, %{state | last_consumer_producer_pid: producer_pid}}
+      {:reply, {:ok, messages}, state}
     end)
   end
 
@@ -600,16 +561,16 @@ defmodule Sequin.Runtime.SlotMessageStore do
         # Persist them all to disk
         with :ok <- upsert_messages(state, messages),
              {:ok, state} <- State.put_persisted_messages(state, messages) do
-          {:noreply, state}
+          {:noreply, [], state}
         end
 
       old_consumer.status != :active and consumer.status == :active ->
         # Give the ConsumerProducer a kick to come fetch messages
         :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
-        {:noreply, state}
+        {:noreply, [], state}
 
       true ->
-        {:noreply, state}
+        {:noreply, [], state}
     end
   end
 
@@ -617,7 +578,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {:reply, {:ok, state.payload_size_bytes}, state}
   end
 
-  @impl GenServer
+  @impl GenStage
   def handle_info(:process_logging, %State{} = state) do
     now = System.monotonic_time(:millisecond)
     interval_ms = if state.last_logged_stats_at, do: now - state.last_logged_stats_at
@@ -682,7 +643,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       |> Keyword.merge(timing_metrics)
       |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
 
-    Logger.info("[SlotMessageStore] Process metrics", metadata)
+    Logger.info("[SlotMessageProducer] Process metrics", metadata)
 
     # Clear timing metrics after logging
     timing_metrics
@@ -690,20 +651,107 @@ defmodule Sequin.Runtime.SlotMessageStore do
     |> Enum.each(&clear_counter/1)
 
     schedule_process_logging()
-    {:noreply, %{state | last_logged_stats_at: now}}
+    {:noreply, [], %{state | last_logged_stats_at: now}}
   end
 
-  @impl GenServer
+  @impl GenStage
   # :syn notification
   def handle_info(:consumers_changed, %State{} = state) do
     state = put_max_memory_bytes(state)
-    {:noreply, state}
+    {:noreply, [], state}
   end
 
+  @impl GenStage
   def handle_info(:max_memory_check, %State{} = state) do
     schedule_max_memory_check(state.setting_max_memory_check_interval)
     state = put_max_memory_bytes(state)
-    {:noreply, state}
+    {:noreply, [], state}
+  end
+
+  @impl GenStage
+  def handle_info(:init, state) do
+    # If we're not self-hosted, there will be no system-wide max memory bytes
+    # so we don't need to recalculate max_memory_bytes on consumers changing
+    if state.setting_system_max_memory_bytes do
+      :syn.join(:consumers, :consumers_changed, self())
+    end
+
+    # Allow test process to access the database connection
+    if state.test_pid do
+      Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
+      Mox.allow(DateTimeMock, state.test_pid, self())
+      Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
+    end
+
+    consumer =
+      if state.consumer do
+        state.consumer
+      else
+        state.consumer_id
+        |> Consumers.get_sink_consumer!()
+        |> Repo.lazy_preload(postgres_database: [:replication_slot])
+      end
+
+    state = %{state | consumer: consumer}
+
+    Logger.metadata(account_id: consumer.account_id, replication_id: consumer.replication_slot_id)
+
+    :ok = State.setup_ets(consumer)
+
+    persisted_messages =
+      consumer
+      |> Consumers.list_consumer_messages_for_consumer()
+      |> Enum.map(fn msg ->
+        %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
+      end)
+
+    {:ok, state} =
+      state
+      |> put_max_memory_bytes()
+      |> State.put_persisted_messages(persisted_messages)
+
+    schedule_process_logging(0)
+    schedule_max_memory_check()
+
+    {:noreply, [], state}
+  end
+
+  @impl GenStage
+  def handle_info(:handle_demand, state) do
+    handle_receive_messages(%{state | scheduled_handle_demand: false})
+  end
+
+  @impl GenStage
+  def handle_info(:receive_messages, state) do
+    new_state = schedule_receive_messages(state)
+    handle_receive_messages(new_state)
+  end
+
+  @impl GenStage
+  def handle_info(:messages_ingested, state) do
+    new_state = maybe_schedule_demand(state)
+    {:noreply, [], new_state}
+  end
+
+  @impl GenStage
+  def handle_info(:trim_idempotency, state) do
+    %SinkConsumer{} = consumer = state.consumer
+
+    case Postgres.confirmed_flush_lsn(consumer.postgres_database) do
+      {:ok, nil} ->
+        :ok
+
+      {:ok, lsn} ->
+        MessageLedgers.trim_delivered_cursors_set(state.consumer.id, %{commit_lsn: lsn, commit_idx: 0})
+
+      {:error, error} when is_exception(error) ->
+        Logger.error("Error trimming idempotency seqs", error: Exception.message(error))
+
+      {:error, error} ->
+        Logger.error("Error trimming idempotency seqs", error: inspect(error))
+    end
+
+    {:noreply, [], schedule_trim_idempotency(state)}
   end
 
   defp schedule_process_logging(interval \\ :timer.seconds(30)) do
@@ -732,19 +780,19 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   defp exit_to_sequin_error({:timeout, {GenServer, :call, [_, _, timeout]}}) do
-    Error.invariant(message: "[SlotMessageStore] call timed out after #{timeout}ms")
+    Error.invariant(message: "[SlotMessageProducer] call timed out after #{timeout}ms")
   end
 
   defp exit_to_sequin_error({:noproc, _}) do
-    Error.invariant(message: "Call to SlotMessageStore failed with :noproc")
+    Error.invariant(message: "Call to SlotMessageProducer failed with :noproc")
   end
 
   defp exit_to_sequin_error(e) when is_exception(e) do
-    Error.invariant(message: "[SlotMessageStore] exited with #{Exception.message(e)}")
+    Error.invariant(message: "[SlotMessageProducer] exited with #{Exception.message(e)}")
   end
 
   defp exit_to_sequin_error(e) do
-    Error.invariant(message: "[SlotMessageStore] exited with #{inspect(e)}")
+    Error.invariant(message: "[SlotMessageProducer] exited with #{inspect(e)}")
   end
 
   defp upsert_messages(%State{}, []), do: :ok
@@ -794,4 +842,207 @@ defmodule Sequin.Runtime.SlotMessageStore do
     incr_counter(:"#{name}_total_ms", div(time, 1000))
     result
   end
+
+  @impl GenStage
+  def handle_demand(incoming_demand, %{demand: demand} = state) do
+    new_state = maybe_schedule_demand(state)
+    new_state = %{new_state | demand: demand + incoming_demand}
+
+    {:noreply, [], new_state}
+  end
+
+  @impl Broadway.Producer
+  def prepare_for_draining(%{receive_timer: receive_timer, trim_timer: trim_timer} = state) do
+    if receive_timer, do: Process.cancel_timer(receive_timer)
+    if trim_timer, do: Process.cancel_timer(trim_timer)
+    {:noreply, [], %{state | receive_timer: nil, trim_timer: nil}}
+  end
+
+  @spec ack({SinkConsumer.t(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) :: :ok
+  def ack({%SinkConsumer{} = consumer, test_pid, slot_message_store_mod}, successful, failed) do
+    successful_messages = Enum.flat_map(successful, & &1.data)
+    failed_messages = Enum.flat_map(failed, & &1.data)
+
+    successful_ack_ids = Enum.map(successful_messages, & &1.ack_id)
+
+    # Ack all messages in SlotMessageProducer to remove from buffer
+    unless successful_ack_ids == [] do
+      case slot_message_store_mod.messages_succeeded(consumer.id, successful_ack_ids) do
+        {:ok, _count} -> :ok
+        {:error, error} -> raise error
+      end
+
+      {:ok, _count} = Consumers.after_messages_acked(consumer, successful_messages)
+    end
+
+    failed_message_metadatas =
+      failed_messages
+      |> Stream.map(&Consumers.advance_delivery_state_for_failure/1)
+      |> Enum.map(&%{&1 | data: nil})
+
+    unless failed_message_metadatas == [] do
+      :ok = slot_message_store_mod.messages_failed(consumer.id, failed_message_metadatas)
+    end
+
+    if test_pid do
+      failed_ack_ids = Enum.map(failed_messages, & &1.ack_id)
+      send(test_pid, {__MODULE__, :ack_finished, successful_ack_ids, failed_ack_ids})
+    end
+
+    :ok
+  end
+
+  @spec pre_ack_delivered_messages(SinkConsumer.t(), list(Message.t())) :: :ok
+  def pre_ack_delivered_messages(consumer, broadway_messages) do
+    delivered_messages = Enum.flat_map(broadway_messages, & &1.data)
+
+    wal_cursors =
+      Enum.map(delivered_messages, fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
+
+    :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
+    :ok = MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "consumer_producer.ack", wal_cursors)
+  end
+
+  defp produce_messages(%State{} = state, count) do
+    {messages, state} = State.produce_messages(state, count)
+
+    messages
+    |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
+    |> then(&MessageLedgers.wal_cursors_reached_checkpoint(state.consumer_id, "slot_message_store.produce", &1))
+
+    if length(messages) > 0 do
+      Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
+    end
+
+    {:ok, {messages, state}}
+  end
+
+  defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
+    execute_timed(:handle_receive_messages, fn ->
+      desired_count = demand * state.batch_size
+      {time, {:ok, {messages, state}}} = :timer.tc(fn -> produce_messages(state, desired_count) end)
+      more_upstream_messages? = length(messages) == desired_count
+
+      if div(time, 1000) > @min_log_time_ms do
+        Logger.warning(
+          "[SlotMessageProducer] produce_messages took longer than expected",
+          count: length(messages),
+          demand: demand,
+          batch_size: state.batch_size,
+          duration_ms: div(time, 1000)
+        )
+      end
+
+      {time, messages} = :timer.tc(fn -> reject_delivered_messages(state, messages) end)
+
+      if div(time, 1000) > @min_log_time_ms do
+        Logger.warning(
+          "[SlotMessageProducer] reject_delivered_messages took longer than expected",
+          duration_ms: div(time, 1000),
+          message_count: length(messages)
+        )
+      end
+
+      # Cut this struct down as it will be passed to each process
+      # Processes already have the consumer in context, but this is for the acknowledger. When we
+      # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
+      bare_consumer =
+        Map.drop(state.consumer, [
+          :source_tables,
+          :active_backfill,
+          :sequence,
+          :postgres_database,
+          :replication_slot,
+          :account
+        ])
+
+      broadway_messages =
+        messages
+        |> Enum.chunk_every(state.batch_size)
+        |> Enum.map(fn batch ->
+          %Message{
+            data: batch,
+            acknowledger: {__MODULE__, {bare_consumer, state.test_pid, __MODULE__}, nil}
+          }
+        end)
+
+      new_demand = demand - length(broadway_messages)
+      new_demand = if new_demand < 0, do: 0, else: new_demand
+      state = %{state | demand: new_demand}
+
+      if new_demand > 0 and more_upstream_messages? do
+        {:noreply, broadway_messages, maybe_schedule_demand(state)}
+      else
+        {:noreply, broadway_messages, state}
+      end
+    end)
+  end
+
+  defp handle_receive_messages(state) do
+    {:noreply, [], state}
+  end
+
+  defp reject_delivered_messages(state, messages) do
+    execute_timed(:reject_delivered_messages, fn ->
+      wal_cursors_to_deliver =
+        messages
+        |> Stream.reject(fn
+          # We don't enforce idempotency for read actions
+          %ConsumerEvent{data: %ConsumerEventData{action: :read}} -> true
+          %ConsumerRecord{data: %ConsumerRecordData{action: :read}} -> true
+          # We only recently added :action to ConsumerRecordData, so we need to ignore
+          # any messages that don't have it for backwards compatibility
+          %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
+          _ -> false
+        end)
+        |> Enum.map(fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
+
+      {:ok, delivered_wal_cursors} =
+        MessageLedgers.filter_delivered_wal_cursors(state.consumer.id, wal_cursors_to_deliver)
+
+      :ok = MessageLedgers.wal_cursors_delivered(state.consumer.id, delivered_wal_cursors)
+
+      delivered_cursor_set = MapSet.new(delivered_wal_cursors)
+
+      {delivered_messages, filtered_messages} =
+        Enum.split_with(messages, fn message ->
+          MapSet.member?(delivered_cursor_set, %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx})
+        end)
+
+      if delivered_messages == [] do
+        filtered_messages
+      else
+        Logger.info(
+          "[SlotMessageProducer] Rejected messages for idempotency",
+          rejected_message_count: length(delivered_messages),
+          commits: delivered_wal_cursors,
+          message_count: length(filtered_messages)
+        )
+
+        messages_already_succeeded(
+          state.consumer.id,
+          Enum.map(delivered_messages, & &1.ack_id)
+        )
+
+        filtered_messages
+      end
+    end)
+  end
+
+  defp schedule_receive_messages(state) do
+    receive_timer = Process.send_after(self(), :receive_messages, state.batch_timeout)
+    %{state | receive_timer: receive_timer}
+  end
+
+  defp schedule_trim_idempotency(state) do
+    trim_timer = Process.send_after(self(), :trim_idempotency, :timer.seconds(10))
+    %{state | trim_timer: trim_timer}
+  end
+
+  defp maybe_schedule_demand(%{scheduled_handle_demand: false} = state) do
+    Process.send_after(self(), :handle_demand, 10)
+    %{state | scheduled_handle_demand: true}
+  end
+
+  defp maybe_schedule_demand(state), do: state
 end

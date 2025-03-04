@@ -12,7 +12,7 @@ defmodule Sequin.Runtime.SqsPipeline do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SlotMessageProducer
 
   require Logger
 
@@ -23,7 +23,7 @@ defmodule Sequin.Runtime.SqsPipeline do
       |> Keyword.fetch!(:consumer)
       |> Repo.lazy_preload([:sequence, :postgres_database])
 
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
+    producer = Keyword.get(opts, :producer, Sequin.Runtime.SlotMessageProducer)
     test_pid = Keyword.get(opts, :test_pid)
 
     Broadway.start_link(__MODULE__,
@@ -75,7 +75,7 @@ defmodule Sequin.Runtime.SqsPipeline do
 
     case SQS.send_messages(sqs_client, consumer.sink.queue_url, sqs_messages) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
+        :ok = SlotMessageProducer.pre_ack_delivered_messages(consumer, [broadway_message])
 
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 

@@ -3,7 +3,7 @@ defmodule SequinWeb.PullController do
 
   alias Sequin.Consumers
   alias Sequin.Error
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.String, as: SequinString
   alias Sequin.Time
   alias Sequin.Tracer
@@ -19,8 +19,8 @@ defmodule SequinWeb.PullController do
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, batch_size} <- parse_batch_size(params),
          :ok <- maybe_wait(params, consumer),
-         :ok <- SlotMessageStore.nack_stale_produced_messages(consumer.id),
-         {:ok, messages} <- SlotMessageStore.produce(consumer.id, batch_size, :consistent_pid) do
+         :ok <- SlotMessageProducer.nack_stale_produced_messages(consumer.id),
+         {:ok, messages} <- SlotMessageProducer.produce(consumer.id, batch_size) do
       Logger.metadata(batch_size: batch_size)
       Tracer.Server.messages_received(consumer, messages)
       render(conn, "receive.json", messages: messages)
@@ -33,7 +33,7 @@ defmodule SequinWeb.PullController do
 
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, ack_ids} <- parse_ack_ids(params),
-         {:ok, messages} <- SlotMessageStore.messages_succeeded_returning_messages(consumer.id, ack_ids),
+         {:ok, messages} <- SlotMessageProducer.messages_succeeded_returning_messages(consumer.id, ack_ids),
          {:ok, _count} <- Consumers.after_messages_acked(consumer, messages) do
       json(conn, %{success: true})
     end
@@ -45,7 +45,7 @@ defmodule SequinWeb.PullController do
 
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, ack_ids} <- parse_ack_ids(params),
-         :ok <- SlotMessageStore.reset_message_visibilities(consumer.id, ack_ids) do
+         :ok <- SlotMessageProducer.reset_message_visibilities(consumer.id, ack_ids) do
       json(conn, %{success: true})
     end
   end
@@ -115,7 +115,7 @@ defmodule SequinWeb.PullController do
   defp maybe_wait(_params, _consumer), do: :ok
 
   defp wait(consumer, wait_for) do
-    {duration_us, res} = :timer.tc(fn -> SlotMessageStore.count_messages(consumer.id) end)
+    {duration_us, res} = :timer.tc(fn -> SlotMessageProducer.count_messages(consumer.id) end)
 
     count =
       case res do

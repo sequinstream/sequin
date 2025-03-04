@@ -40,7 +40,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
 
     embeds_one :data, ConsumerRecordData
 
-    # For SlotMessageStore
+    # For SlotMessageProducer
     field :ingested_at, :utc_datetime_usec, virtual: true
     field :table_reader_batch_id, :string, virtual: true
     # Sometimes we encode the data early on, before sending to sink, and store

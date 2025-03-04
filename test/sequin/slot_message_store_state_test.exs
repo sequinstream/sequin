@@ -1,4 +1,4 @@
-defmodule Sequin.Runtime.SlotMessageStoreStateTest do
+defmodule Sequin.Runtime.SlotMessageProducerStateTest do
   use Sequin.Case, async: true
 
   alias Sequin.Consumers.SinkConsumer
@@ -6,7 +6,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Multiset
-  alias Sequin.Runtime.SlotMessageStore.State
+  alias Sequin.Runtime.SlotMessageProducer.State
   alias Sequin.Size
 
   setup do

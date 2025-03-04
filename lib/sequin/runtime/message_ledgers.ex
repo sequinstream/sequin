@@ -12,7 +12,7 @@ defmodule Sequin.Runtime.MessageLedgers do
   We trim the set of acknowledged messages below some threshold to reclaim memory.
 
   For at-least-once delivery:
-  As messages are fanned out to SlotMessageStores, WAL cursors are written to a Redis sorted set
+  As messages are fanned out to SlotMessageProducers, WAL cursors are written to a Redis sorted set
   with the commit timestamp as the score. When messages are acknowledged, the corresponding WAL
   cursors are removed.
 

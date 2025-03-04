@@ -15,7 +15,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   alias Sequin.Repo
   alias Sequin.Runtime.InitBackfillStatsWorker
   alias Sequin.Runtime.MessageLedgers
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
 
@@ -68,7 +68,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
         with {:ok, consumer} <- Consumers.get_consumer(id) do
           CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
           :ok = RuntimeSupervisor.start_for_sink_consumer(consumer)
-          :ok = SlotMessageStore.consumer_updated(consumer)
+          :ok = SlotMessageProducer.consumer_updated(consumer)
 
           case consumer.status do
             :active ->

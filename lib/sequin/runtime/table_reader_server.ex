@@ -17,7 +17,7 @@ defmodule Sequin.Runtime.TableReaderServer do
   alias Sequin.Health.Event
   alias Sequin.Repo
   alias Sequin.Runtime.PageSizeOptimizer
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Runtime.TableReader
 
   require Logger
@@ -229,7 +229,7 @@ defmodule Sequin.Runtime.TableReaderServer do
       # Two-stage fetching tasks
       field :current_id_fetch_task, TableReaderServer.fetch_task() | nil
       field :current_batch_fetch_task, TableReaderServer.fetch_task() | nil
-      field :slot_message_store_ref, reference() | nil
+      field :slot_message_producer_ref, reference() | nil
       # Tracks the time taken for the ID fetch task to use for page size optimization
       field :last_id_fetch_time_ms, integer() | nil
       # Allow for overwriting the task_supervisor in tests
@@ -296,9 +296,9 @@ defmodule Sequin.Runtime.TableReaderServer do
     # Create a named ETS multiset with public access
     pk_multiset = EtsMultiset.new_named(multiset_name(consumer.id), access: :public)
 
-    slot_message_store_ref =
+    slot_message_producer_ref =
       consumer.id
-      |> SlotMessageStore.via_tuple()
+      |> SlotMessageProducer.via_tuple()
       |> GenServer.whereis()
       |> Process.monitor()
 
@@ -312,7 +312,7 @@ defmodule Sequin.Runtime.TableReaderServer do
       | backfill: backfill,
         consumer: consumer,
         cursor: cursor,
-        slot_message_store_ref: slot_message_store_ref,
+        slot_message_producer_ref: slot_message_producer_ref,
         pk_multiset: pk_multiset
     }
 
@@ -633,7 +633,12 @@ defmodule Sequin.Runtime.TableReaderServer do
     {:keep_state, state, [maybe_fetch_timeout(1)]}
   end
 
-  def handle_event(:info, {:DOWN, ref, :process, _pid, reason}, state_name, %State{slot_message_store_ref: ref} = state) do
+  def handle_event(
+        :info,
+        {:DOWN, ref, :process, _pid, reason},
+        state_name,
+        %State{slot_message_producer_ref: ref} = state
+      ) do
     Logger.info("[TableReaderServer] Consumer #{state.consumer.id} message store process died, shutting down",
       reason: reason,
       state_name: state_name
@@ -665,7 +670,7 @@ defmodule Sequin.Runtime.TableReaderServer do
         {:stop, :normal}
 
       %SinkConsumer{} = consumer ->
-        {:ok, message_count} = SlotMessageStore.count_messages(consumer.id)
+        {:ok, message_count} = SlotMessageProducer.count_messages(consumer.id)
         state = %{state | count_pending_messages: message_count, consumer: consumer}
         current_slot_lsn = fetch_slot_lsn(state)
 
@@ -839,7 +844,7 @@ defmodule Sequin.Runtime.TableReaderServer do
 
   def handle_event({:timeout, :check_sms}, _, _state_name, %State{} = state) do
     execute_timed(:check_sms, fn ->
-      case SlotMessageStore.unpersisted_table_reader_batch_ids(state.consumer.id) do
+      case SlotMessageProducer.unpersisted_table_reader_batch_ids(state.consumer.id) do
         {:ok, unpersisted_batch_ids} ->
           # Find completed batches (those no longer in unpersisted_batch_ids)
           {completed_batches, remaining_batches} =
@@ -984,7 +989,7 @@ defmodule Sequin.Runtime.TableReaderServer do
        ) do
     elapsed = System.monotonic_time(:millisecond) - first_attempt_at
 
-    case SlotMessageStore.put_table_reader_batch(state.consumer.id, messages, batch_id) do
+    case SlotMessageProducer.put_table_reader_batch(state.consumer.id, messages, batch_id) do
       :ok ->
         :ok
 

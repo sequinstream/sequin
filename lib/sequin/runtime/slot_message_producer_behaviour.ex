@@ -1,6 +1,6 @@
-defmodule Sequin.Runtime.SlotMessageStoreBehaviour do
+defmodule Sequin.Runtime.SlotMessageProducerBehaviour do
   @moduledoc """
-  Behaviour for SlotMessageStore implementations.
+  Behaviour for SlotMessageProducer implementations.
   """
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
@@ -19,6 +19,6 @@ defmodule Sequin.Runtime.SlotMessageStoreBehaviour do
 
   @callback messages_failed(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok | {:error, Exception.t()}
 
-  @callback produce(consumer_id(), pos_integer(), pid()) ::
+  @callback produce(consumer_id(), pos_integer()) ::
               {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())} | {:error, Exception.t()}
 end

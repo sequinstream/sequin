@@ -59,12 +59,12 @@ defmodule Sequin.Runtime.Supervisor do
     sink_consumer = Repo.preload(consumer, :replication_slot)
 
     with {:ok, _} <- start_replication(slot_supervisor(), sink_consumer.replication_slot, opts) do
-      SlotSupervisor.start_store_and_pipeline!(consumer, opts)
+      SlotSupervisor.start_pipeline!(consumer, opts)
     end
   end
 
   def restart_for_sink_consumer(%SinkConsumer{} = consumer) do
-    SlotSupervisor.restart_store_and_pipeline(consumer)
+    SlotSupervisor.restart_pipeline(consumer)
   end
 
   def stop_for_sink_consumer(%SinkConsumer{} = consumer) do
@@ -72,7 +72,7 @@ defmodule Sequin.Runtime.Supervisor do
   end
 
   def stop_for_sink_consumer(replication_slot_id, id) do
-    SlotSupervisor.stop_store_and_pipeline(replication_slot_id, id)
+    SlotSupervisor.stop_pipeline(replication_slot_id, id)
   end
 
   def start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
@@ -129,12 +129,6 @@ defmodule Sequin.Runtime.Supervisor do
   def start_replication(supervisor, %PostgresReplicationSlot{} = pg_replication, opts) do
     pg_replication = Repo.preload(pg_replication, [:postgres_database, sink_consumers: [:sequence]])
     opts = Keyword.put(opts, :pg_replication, pg_replication)
-    test_pid = Keyword.get(opts, :test_pid)
-
-    opts =
-      Keyword.update(opts, :slot_message_store_opts, [test_pid: test_pid], fn opts ->
-        Keyword.put(opts, :test_pid, test_pid)
-      end)
 
     case Sequin.DynamicSupervisor.maybe_start_child(supervisor, {SlotSupervisor, opts}) do
       {:ok, pid} ->

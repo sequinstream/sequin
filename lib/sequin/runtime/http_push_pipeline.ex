@@ -9,14 +9,14 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SlotMessageProducer
 
   require Logger
 
   def start_link(opts) do
     %SinkConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
     consumer = SinkConsumer.preload_http_endpoint(consumer)
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
+    producer = Keyword.get(opts, :producer, Sequin.Runtime.SlotMessageProducer)
     req_opts = Keyword.get(opts, :req_opts, [])
     test_pid = Keyword.get(opts, :test_pid)
     features = Keyword.get(opts, :features, [])
@@ -91,7 +91,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
     case push_message(http_endpoint, consumer, message_data, req_opts) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
+        :ok = SlotMessageProducer.pre_ack_delivered_messages(consumer, [broadway_message])
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
         Metrics.incr_http_endpoint_throughput(http_endpoint)
 

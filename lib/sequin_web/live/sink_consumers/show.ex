@@ -31,7 +31,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Metrics
   alias Sequin.Repo
   alias Sequin.Runtime.KeysetCursor
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
 
@@ -313,7 +313,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   def handle_event("acknowledge_message", %{"ack_id" => ack_id}, socket) do
     consumer = socket.assigns.consumer
-    {:ok, messages} = SlotMessageStore.messages_succeeded_returning_messages(consumer.id, [ack_id])
+    {:ok, messages} = SlotMessageProducer.messages_succeeded_returning_messages(consumer.id, [ack_id])
     {:ok, _count} = Consumers.after_messages_acked(consumer, messages)
 
     updated_socket =
@@ -437,7 +437,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def handle_event("reset_all_visibility", _params, socket) do
     consumer = socket.assigns.consumer
 
-    case SlotMessageStore.reset_all_message_visibilities(consumer.id) do
+    case SlotMessageProducer.reset_all_message_visibilities(consumer.id) do
       :ok ->
         {:reply, %{ok: true},
          socket
@@ -549,7 +549,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 1)
 
     messages_pending_count =
-      case SlotMessageStore.count_messages(consumer.id) do
+      case SlotMessageProducer.count_messages(consumer.id) do
         {:ok, count} -> count
         {:error, _} -> 0
       end
@@ -866,7 +866,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer_messages_from_store(consumer, limit) do
-    case SlotMessageStore.peek_messages(consumer.id, limit) do
+    case SlotMessageProducer.peek_messages(consumer.id, limit) do
       messages when is_list(messages) ->
         messages
 

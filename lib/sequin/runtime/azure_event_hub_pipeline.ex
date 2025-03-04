@@ -7,7 +7,7 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Sinks.Azure.EventHub
 
   require Logger
@@ -19,11 +19,11 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
       |> Keyword.fetch!(:consumer)
       |> Repo.lazy_preload([:sequence, :postgres_database])
 
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
+    producer = Keyword.get(opts, :producer, Sequin.Runtime.SlotMessageProducer)
     test_pid = Keyword.get(opts, :test_pid)
 
     Broadway.start_link(__MODULE__,
-      name: via_tuple(consumer.id),
+      name: producer.via_tuple(consumer.id),
       producer: [
         module: {producer, [consumer: consumer, test_pid: test_pid]}
       ],
@@ -39,10 +39,6 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
         test_pid: test_pid
       }
     )
-  end
-
-  def via_tuple(consumer_id) do
-    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
   end
 
   @impl Broadway
@@ -68,7 +64,7 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
 
     case EventHub.publish_messages(event_hub_client, event_hub_messages) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
+        :ok = SlotMessageProducer.pre_ack_delivered_messages(consumer, [broadway_message])
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
         broadway_message

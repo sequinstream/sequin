@@ -8,8 +8,8 @@ alias Sequin.Health
 alias Sequin.Postgres
 alias Sequin.Replication
 alias Sequin.Repo
-alias Sequin.Runtime.ConsumerProducer
 alias Sequin.Runtime.MessageLedgers
+alias Sequin.Runtime.SlotMessageProducer
 alias Sequin.Runtime.SlotMessageStore
 alias Sequin.Runtime.SlotProcessor
 alias Sequin.Runtime.SlotSupervisor

@@ -1,6 +1,8 @@
 defmodule Sequin.Runtime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
+  import Mox
+
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
@@ -10,11 +12,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Runtime.ConsumerProducer
   alias Sequin.Runtime.HttpPushPipeline
   alias Sequin.Runtime.MessageLedgers
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
+  alias Sequin.TestSupport.HttpClient
   alias Sequin.TestSupport.Models.CharacterDetailed
+
+  setup :verify_on_exit!
 
   describe "events are sent to the HTTP endpoint" do
     setup do
@@ -175,7 +179,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
     end
   end
 
-  describe "messages flow from SlotMessageStore to http end-to-end" do
+  describe "messages flow from SlotMessageProducer to http end-to-end" do
     setup do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
@@ -230,8 +234,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_event])
+      start_supervised({SlotMessageProducer, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      SlotMessageProducer.put_messages(consumer.id, [consumer_event])
 
       # Start the pipeline
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -247,10 +251,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert json["metadata"]["table_name"] == "users"
       assert json["metadata"]["table_schema"] == "public"
 
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+      assert_receive {SlotMessageProducer, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      state = SlotMessageStore.peek(consumer.id)
+      state = SlotMessageProducer.peek(consumer.id)
       assert state.messages == %{}
     end
 
@@ -286,12 +290,12 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 500)}
       end
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self()]})
+      start_supervised!({SlotMessageProducer, [consumer: consumer, test_pid: self()]})
 
       expect_uuid4(fn -> event1.ack_id end)
       expect_uuid4(fn -> event2.ack_id end)
 
-      SlotMessageStore.put_messages(consumer.id, [event1, event2])
+      SlotMessageProducer.put_messages(consumer.id, [event1, event2])
 
       # Start the pipeline with the failing adapter
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -299,10 +303,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       # Assert that the ack receives the failed events
       assert_receive :sent, 1_000
       assert_receive :sent, 1_000
-      assert_receive {ConsumerProducer, :ack_finished, [], [_failed1, _failed2]}, 2_000
+      assert_receive {SlotMessageProducer, :ack_finished, [], [_failed1, _failed2]}, 2_000
 
       # Reload the events from the database to check not_visible_until
-      %SlotMessageStore.State{} = state = SlotMessageStore.peek(consumer.id)
+      %SlotMessageProducer.State{} = state = SlotMessageProducer.peek(consumer.id)
       updated_event1 = Map.fetch!(state.messages, {event1.commit_lsn, event1.commit_idx})
       updated_event2 = Map.fetch!(state.messages, {event2.commit_lsn, event2.commit_idx})
 
@@ -334,19 +338,19 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert :ok = MessageLedgers.wal_cursors_ingested(consumer.id, [wal_cursor])
       assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [event])
+      start_supervised!({SlotMessageProducer, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      SlotMessageProducer.put_messages(consumer.id, [event])
 
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: self()]})
 
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 1_000
+      assert_receive {SlotMessageProducer, :ack_finished, [_successful], []}, 1_000
 
       assert {:ok, 0} = MessageLedgers.count_commit_verification_set(consumer.id)
     end
   end
 
-  describe "messages flow from SlotMessageStore to http end-to-end for message_kind=record" do
+  describe "messages flow from SlotMessageProducer to http end-to-end for message_kind=record" do
     setup do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
@@ -401,8 +405,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           }
         )
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_record])
+      start_supervised!({SlotMessageProducer, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      SlotMessageProducer.put_messages(consumer.id, [consumer_record])
 
       # Start the pipeline
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -421,10 +425,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert json["metadata"]["table_name"] == "characters_detailed"
       assert json["metadata"]["table_schema"] == "public"
 
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+      assert_receive {SlotMessageProducer, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      state = SlotMessageStore.peek(consumer.id)
+      state = SlotMessageProducer.peek(consumer.id)
       assert state.messages == %{}
     end
 
@@ -456,8 +460,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [record])
+      start_supervised!({SlotMessageProducer, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      SlotMessageProducer.put_messages(consumer.id, [record])
 
       # Start the pipeline with legacy_event_transform feature enabled
       start_supervised!(
@@ -490,10 +494,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert json["action"] == "insert"
       assert json["changes"] == nil
 
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+      assert_receive {SlotMessageProducer, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      state = SlotMessageStore.peek(consumer.id)
+      state = SlotMessageProducer.peek(consumer.id)
       assert state.messages == %{}
     end
   end

@@ -1,6 +1,8 @@
 defmodule Sequin.Runtime.SqsPipelineTest do
   use Sequin.DataCase, async: true
 
+  import Mox
+
   alias Sequin.Aws.HttpClient
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
@@ -11,10 +13,12 @@ defmodule Sequin.Runtime.SqsPipelineTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.ConsumerProducer
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Runtime.SqsPipeline
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
+
+  setup :verify_on_exit!
 
   describe "events are sent to SQS" do
     setup do
@@ -175,8 +179,8 @@ defmodule Sequin.Runtime.SqsPipelineTest do
 
       consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_record])
+      start_supervised!({SlotMessageProducer, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
+      SlotMessageProducer.put_messages(consumer.id, [consumer_record])
 
       start_supervised!({SqsPipeline, [consumer: consumer, test_pid: test_pid]})
 

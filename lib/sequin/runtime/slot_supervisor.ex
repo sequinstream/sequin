@@ -14,7 +14,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
   alias Sequin.Runtime.NatsPipeline
   alias Sequin.Runtime.RabbitMqPipeline
   alias Sequin.Runtime.RedisPipeline
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.MessageHandler
   alias Sequin.Runtime.SqsPipeline
@@ -29,7 +29,8 @@ defmodule Sequin.Runtime.SlotSupervisor do
     gcp_pubsub: GcpPubsubPipeline,
     nats: NatsPipeline,
     rabbitmq: RabbitMqPipeline,
-    azure_event_hub: AzureEventHubPipeline
+    azure_event_hub: AzureEventHubPipeline,
+    sequin_stream: SlotMessageProducer
   }
 
   def sinks_to_pipelines, do: @sinks_to_pipelines
@@ -73,7 +74,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
     # First start all message stores for consumers
     opts = Keyword.put(opts, :skip_monitor, true)
-    Enum.each(pg_replication.not_disabled_sink_consumers, &start_store_and_pipeline!(&1, opts))
+    Enum.each(pg_replication.not_disabled_sink_consumers, &start_pipeline!(&1, opts))
 
     # Then start the slot processor
     case Sequin.DynamicSupervisor.maybe_start_child(sup, slot_processor_spec) do
@@ -92,19 +93,17 @@ defmodule Sequin.Runtime.SlotSupervisor do
     end
   end
 
-  def start_store_and_pipeline!(%SinkConsumer{} = sink_consumer, opts \\ []) do
+  def start_pipeline!(%SinkConsumer{} = sink_consumer, opts \\ []) do
     sink_consumer = Repo.preload(sink_consumer, :replication_slot)
-    store_child_spec = slot_message_store_child_spec(sink_consumer, opts)
-    supervisor = via_tuple(sink_consumer.replication_slot_id)
 
-    with {:ok, _store_pid} <- Sequin.DynamicSupervisor.maybe_start_child(supervisor, store_child_spec),
-         :ok <- maybe_start_consumer_pipeline(sink_consumer, opts) do
-      unless Keyword.get(opts, :skip_monitor, false) do
-        :ok = SlotProcessor.monitor_message_store(sink_consumer.replication_slot_id, sink_consumer.id)
-      end
+    case start_pipeline(sink_consumer, opts) do
+      :ok ->
+        unless Keyword.get(opts, :skip_monitor, false) do
+          :ok = SlotProcessor.monitor_message_store(sink_consumer.replication_slot_id, sink_consumer.id)
+        end
 
-      :ok
-    else
+        :ok
+
       error ->
         Logger.error("[SlotSupervisor] Failed to start child",
           error: error,
@@ -116,37 +115,27 @@ defmodule Sequin.Runtime.SlotSupervisor do
     end
   end
 
-  def stop_store_and_pipeline(%SinkConsumer{} = sink_consumer) do
-    stop_store_and_pipeline(sink_consumer.replication_slot_id, sink_consumer.id)
+  def stop_pipeline(%SinkConsumer{} = sink_consumer) do
+    stop_pipeline(sink_consumer.replication_slot_id, sink_consumer.id)
   end
 
-  def stop_store_and_pipeline(replication_slot_id, id) do
+  def stop_pipeline(replication_slot_id, id) do
     Logger.info("[SlotSupervisor] Stopping message store and pipeline #{id} in slot #{replication_slot_id}",
       consumer_id: id,
       replication_id: replication_slot_id
     )
 
     sup_via = via_tuple(replication_slot_id)
-    store_child_via = SlotMessageStore.via_tuple(id)
+    store_child_via = SlotMessageProducer.via_tuple(id)
 
     SlotProcessor.demonitor_message_store(replication_slot_id, id)
 
     Sequin.DynamicSupervisor.stop_child(sup_via, store_child_via)
-
-    Enum.each(
-      Map.values(@sinks_to_pipelines),
-      &Sequin.DynamicSupervisor.stop_child(sup_via, &1.via_tuple(id))
-    )
   end
 
-  def restart_store_and_pipeline(%SinkConsumer{} = sink_consumer) do
-    stop_store_and_pipeline(sink_consumer)
-    start_store_and_pipeline!(sink_consumer)
-  end
-
-  defp slot_message_store_child_spec(%SinkConsumer{} = sink_consumer, opts) do
-    opts = Keyword.put(opts, :consumer_id, sink_consumer.id)
-    {SlotMessageStore, opts}
+  def restart_pipeline(%SinkConsumer{} = sink_consumer) do
+    stop_pipeline(sink_consumer)
+    start_pipeline(sink_consumer)
   end
 
   defp slot_processor_child_spec(%PostgresReplicationSlot{} = pg_replication, opts) do
@@ -166,29 +155,25 @@ defmodule Sequin.Runtime.SlotSupervisor do
     {Sequin.Runtime.SlotProcessor, opts}
   end
 
-  defp maybe_start_consumer_pipeline(%SinkConsumer{} = sink_consumer, opts) do
+  defp start_pipeline(%SinkConsumer{} = sink_consumer, opts \\ []) do
     consumer = Repo.preload(sink_consumer, [:sequence, :postgres_database])
     supervisor = via_tuple(sink_consumer.replication_slot_id)
 
-    if consumer.type == :sequin_stream do
+    default_opts = [consumer_id: consumer.id, consumer: consumer]
+    consumer_features = Consumers.consumer_features(consumer)
+
+    {features, opts} = Keyword.pop(opts, :features, [])
+    features = Keyword.merge(consumer_features, features)
+
+    opts =
+      default_opts
+      |> Keyword.merge(opts)
+      |> Keyword.put(:features, features)
+
+    child_spec = {pipeline(consumer), opts}
+
+    with {:ok, _} <- Sequin.DynamicSupervisor.maybe_start_child(supervisor, child_spec) do
       :ok
-    else
-      default_opts = [consumer: consumer]
-      consumer_features = Consumers.consumer_features(consumer)
-
-      {features, opts} = Keyword.pop(opts, :features, [])
-      features = Keyword.merge(consumer_features, features)
-
-      opts =
-        default_opts
-        |> Keyword.merge(opts)
-        |> Keyword.put(:features, features)
-
-      child_spec = {pipeline(consumer), opts}
-
-      with {:ok, _} <- Sequin.DynamicSupervisor.maybe_start_child(supervisor, child_spec) do
-        :ok
-      end
     end
   end
 

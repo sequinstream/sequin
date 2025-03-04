@@ -33,7 +33,7 @@ defmodule Sequin.Runtime.SlotProcessor do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageProducer
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.SlotProcessor.MessageHandler
   alias Sequin.Workers.CreateReplicationSlotWorker
@@ -451,9 +451,9 @@ defmodule Sequin.Runtime.SlotProcessor do
         GenServer.reply(from, :ok)
         {:noreply, state}
       else
-        pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer_id))
+        pid = GenServer.whereis(SlotMessageProducer.via_tuple(consumer_id))
         ref = Process.monitor(pid)
-        :ok = SlotMessageStore.set_monitor_ref(pid, ref)
+        :ok = SlotMessageProducer.set_monitor_ref(pid, ref)
         Logger.info("Monitoring message store for consumer #{consumer_id}")
         GenServer.reply(from, :ok)
         {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer_id, ref)}}
@@ -500,12 +500,12 @@ defmodule Sequin.Runtime.SlotProcessor do
       {consumer_id, ^ref} = Enum.find(state.message_store_refs, fn {_, r} -> r == ref end)
 
       Logger.error(
-        "[SlotProcessor] SlotMessageStore died. Shutting down.",
+        "[SlotProcessor] SlotMessageProducer died. Shutting down.",
         consumer_id: consumer_id,
         reason: reason
       )
 
-      raise "SlotMessageStore died (consumer_id=#{consumer_id}, reason=#{inspect(reason)})"
+      raise "SlotMessageProducer died (consumer_id=#{consumer_id}, reason=#{inspect(reason)})"
     end
   end
 
@@ -1105,7 +1105,7 @@ defmodule Sequin.Runtime.SlotProcessor do
         low_for_message_stores =
           state.message_store_refs
           |> Enum.map(fn {consumer_id, ref} ->
-            SlotMessageStore.min_unpersisted_wal_cursor(consumer_id, ref)
+            SlotMessageProducer.min_unpersisted_wal_cursor(consumer_id, ref)
           end)
           |> Enum.filter(& &1)
           |> case do
@@ -1122,7 +1122,7 @@ defmodule Sequin.Runtime.SlotProcessor do
           accumulated_messages?(state) ->
             # When there are messages that the SlotProcessor has not flushed yet,
             # we need to fallback on the last low_watermark_wal_cursor (not safe to use
-            # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
+            # the last_commit_lsn, as it has not been flushed or processed by SlotMessageProducers yet)
             Logger.info(
               "[SlotProcessor] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
             )

@@ -22,8 +22,8 @@ Mox.defmock(Sequin.TestSupport.UUIDMock,
   for: Sequin.TestSupport.UUID
 )
 
-Mox.defmock(Sequin.Runtime.SlotMessageStoreMock,
-  for: Sequin.Runtime.SlotMessageStoreBehaviour
+Mox.defmock(Sequin.Runtime.SlotMessageProducerMock,
+  for: Sequin.Runtime.SlotMessageProducerBehaviour
 )
 
 Mox.defmock(Sequin.TestSupport.EnumMock,

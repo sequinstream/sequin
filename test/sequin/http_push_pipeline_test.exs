@@ -1,19 +1,19 @@
-defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
+defmodule Sequin.Runtime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.ConsumersRuntime.ConsumerProducer
-  alias Sequin.ConsumersRuntime.HttpPushPipeline
-  alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.HttpPushPipeline
+  alias Sequin.Runtime.MessageLedgers
+  alias Sequin.Runtime.SlotMessageStore
   alias Sequin.TestSupport.Models.CharacterDetailed
 
   describe "events are sent to the HTTP endpoint" do

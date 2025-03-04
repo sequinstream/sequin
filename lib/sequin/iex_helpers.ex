@@ -2,23 +2,23 @@ defmodule Sequin.IexHelpers do
   @moduledoc false
   alias Ecto.Repo
   alias Sequin.Consumers
-  alias Sequin.ConsumersRuntime.Supervisor, as: ConsumerSupervisor
   alias Sequin.Databases
   alias Sequin.Repo
+  alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
 
-  @sinks_to_pipelines ConsumerSupervisor.sinks_to_pipelines()
+  @sinks_to_pipelines RuntimeSupervisor.sinks_to_pipelines()
   @sinks Map.keys(@sinks_to_pipelines)
 
   def via(:slot, id) do
-    Sequin.DatabasesRuntime.SlotProcessor.via_tuple(id)
+    Sequin.Runtime.SlotProcessor.via_tuple(id)
   end
 
   def via(:table_reader, id) do
-    Sequin.DatabasesRuntime.TableReaderServer.via_tuple(id)
+    Sequin.Runtime.TableReaderServer.via_tuple(id)
   end
 
   def via(:slot_store, id) do
-    Sequin.DatabasesRuntime.SlotMessageStore.via_tuple(id)
+    Sequin.Runtime.SlotMessageStore.via_tuple(id)
   end
 
   def via(sink, id) when sink in @sinks do

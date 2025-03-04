@@ -2,18 +2,18 @@ import Sequin.IexHelpers
 
 alias Sequin.Consumers
 alias Sequin.Consumers.SinkConsumer
-alias Sequin.ConsumersRuntime.ConsumerProducer
-alias Sequin.ConsumersRuntime.MessageLedgers
 alias Sequin.Databases
 alias Sequin.Databases.PostgresDatabase
-alias Sequin.DatabasesRuntime.SlotMessageStore
-alias Sequin.DatabasesRuntime.SlotProcessor
-alias Sequin.DatabasesRuntime.SlotSupervisor
-alias Sequin.DatabasesRuntime.TableReaderServer
 alias Sequin.Health
 alias Sequin.Postgres
 alias Sequin.Replication
 alias Sequin.Repo
+alias Sequin.Runtime.ConsumerProducer
+alias Sequin.Runtime.MessageLedgers
+alias Sequin.Runtime.SlotMessageStore
+alias Sequin.Runtime.SlotProcessor
+alias Sequin.Runtime.SlotSupervisor
+alias Sequin.Runtime.TableReaderServer
 
 IEx.configure(auto_reload: true)
 

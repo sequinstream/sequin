@@ -3,11 +3,11 @@ defmodule SequinWeb.PullControllerTest do
 
   alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Runtime.SlotMessageStore
 
   setup :authenticated_conn
 

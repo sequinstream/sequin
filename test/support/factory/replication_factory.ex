@@ -2,9 +2,6 @@ defmodule Sequin.Factory.ReplicationFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
-  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
-  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Relation
-  alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
@@ -13,6 +10,9 @@ defmodule Sequin.Factory.ReplicationFactory do
   alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
+  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
+  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
+  alias Sequin.Runtime.SlotProcessor.Message
 
   def commit_lsn, do: Factory.unique_integer()
 

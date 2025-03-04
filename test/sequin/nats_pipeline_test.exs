@@ -6,13 +6,14 @@ defmodule Sequin.Runtime.NatsPipelineTest do
   alias Sequin.Consumers
   alias Sequin.Error
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Runtime.NatsPipeline
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.NatsMock
 
   describe "message handling" do
     setup do
       consumer =
         ConsumersFactory.sink_consumer(
+          type: :nats,
           sink: %{
             type: :nats,
             host: "localhost",
@@ -96,7 +97,7 @@ defmodule Sequin.Runtime.NatsPipelineTest do
 
   defp send_test_events(consumer, events) do
     start_supervised!(
-      {NatsPipeline,
+      {SinkPipeline,
        [
          consumer: consumer,
          producer: Broadway.DummyProducer,
@@ -105,7 +106,7 @@ defmodule Sequin.Runtime.NatsPipelineTest do
     )
 
     Broadway.test_message(
-      NatsPipeline.via_tuple(consumer.id),
+      SinkPipeline.via_tuple(consumer.id),
       events,
       metadata: %{topic: "test_topic", headers: []}
     )

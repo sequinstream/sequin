@@ -1,93 +1,57 @@
 defmodule Sequin.Runtime.AzureEventHubPipeline do
   @moduledoc false
-  use Broadway
+  @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Health
-  alias Sequin.Health.Event
-  alias Sequin.Repo
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Azure.EventHub
 
   require Logger
 
-  def start_link(opts) do
-    %SinkConsumer{} =
-      consumer =
-      opts
-      |> Keyword.fetch!(:consumer)
-      |> Repo.lazy_preload([:sequence, :postgres_database])
-
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
-    test_pid = Keyword.get(opts, :test_pid)
-
-    Broadway.start_link(__MODULE__,
-      name: via_tuple(consumer.id),
-      producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid]}
-      ],
-      processors: [
-        default: [
-          concurrency: consumer.max_waiting,
-          max_demand: 100
-        ]
-      ],
-      context: %{
-        consumer: consumer,
-        event_hub_client: AzureEventHubSink.event_hub_client(consumer.sink),
-        test_pid: test_pid
-      }
-    )
+  @impl SinkPipeline
+  def init(context, _opts) do
+    %{consumer: %SinkConsumer{sink: sink}} = context
+    Map.put(context, :event_hub_client, AzureEventHubSink.event_hub_client(sink))
   end
 
-  def via_tuple(consumer_id) do
-    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
+  @impl SinkPipeline
+  def processors_config(%SinkConsumer{max_waiting: max_waiting}) do
+    [
+      default: [
+        concurrency: max_waiting,
+        max_demand: 100
+      ]
+    ]
   end
 
-  @impl Broadway
-  def process_name({:via, :syn, {:consumers, {__MODULE__, id}}}, base_name) do
-    {:via, :syn, {:consumers, {__MODULE__, {base_name, id}}}}
+  @impl SinkPipeline
+  def batchers_config(%SinkConsumer{batch_size: batch_size}) do
+    [
+      default: [
+        concurrency: 1,
+        batch_size: batch_size,
+        batch_timeout: 50
+      ]
+    ]
   end
 
-  @impl Broadway
-  @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{
-        consumer: consumer,
-        event_hub_client: event_hub_client,
-        test_pid: test_pid
-      }) do
+  @impl SinkPipeline
+  def handle_batch(:default, messages, _batch_info, context) do
+    %{consumer: consumer, event_hub_client: event_hub_client, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    Logger.metadata(
-      account_id: consumer.account_id,
-      consumer_id: consumer.id
-    )
-
-    event_hub_messages = Enum.map(messages, &build_event_hub_message(consumer, &1))
+    event_hub_messages =
+      Enum.map(messages, fn %{data: data} ->
+        build_event_hub_message(consumer, data)
+      end)
 
     case EventHub.publish_messages(event_hub_client, event_hub_messages) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-        broadway_message
+        {:ok, messages, context}
 
       {:error, error} ->
-        Logger.warning("Failed to publish message to Azure Event Hub: #{inspect(error)}")
-
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
-
-        Enum.each(messages, fn msg ->
-          Sequin.Logs.log_for_consumer_message(
-            :error,
-            consumer.account_id,
-            msg.replication_message_trace_id,
-            "Failed to publish message to Azure Event Hub: #{inspect(error)}"
-          )
-        end)
-
-        Broadway.Message.failed(broadway_message, error)
+        {:error, error}
     end
   end
 

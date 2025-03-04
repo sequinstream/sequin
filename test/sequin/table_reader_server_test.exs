@@ -1,4 +1,4 @@
-defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
+defmodule Sequin.Runtime.TableReaderServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
@@ -9,11 +9,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.PageSizeOptimizer
-  alias Sequin.DatabasesRuntime.PageSizeOptimizerMock
-  alias Sequin.DatabasesRuntime.SlotMessageStore
-  alias Sequin.DatabasesRuntime.TableReader
-  alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.Error
   alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
@@ -21,6 +16,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
+  alias Sequin.Runtime.PageSizeOptimizer
+  alias Sequin.Runtime.PageSizeOptimizerMock
+  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.TableReader
+  alias Sequin.Runtime.TableReaderServer
   alias Sequin.TestSupport.Models.CharacterDetailed
 
   @filter_name "Stilgar"

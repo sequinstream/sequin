@@ -1,18 +1,18 @@
-defmodule Sequin.ConsumersRuntime.SqsPipelineTest do
+defmodule Sequin.Runtime.SqsPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Aws.HttpClient
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.ConsumersRuntime.ConsumerProducer
-  alias Sequin.ConsumersRuntime.SqsPipeline
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SqsPipeline
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
 

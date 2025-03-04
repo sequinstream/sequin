@@ -14,7 +14,7 @@ UnboxedRepo.delete_all(Sequin.TestSupport.Models.TestEventLogPartitioned)
 
 # Clean out health redis keys
 :ok = Sequin.Health.clean_test_keys()
-:ok = Sequin.DatabasesRuntime.TableReader.clean_test_keys()
+:ok = Sequin.Runtime.TableReader.clean_test_keys()
 
 # Cache the metadata for the character tables, for use in factory
 {:ok, tables} = Sequin.Databases.list_tables(UnboxedRepo)

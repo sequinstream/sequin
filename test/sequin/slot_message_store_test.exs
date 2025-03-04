@@ -2,11 +2,11 @@ defmodule Sequin.SlotMessageStoreTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
-  alias Sequin.DatabasesRuntime.SlotMessageStore
-  alias Sequin.DatabasesRuntime.SlotMessageStore.State
   alias Sequin.Error.InvariantError
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageStore.State
 
   describe "SlotMessageStore with persisted messages" do
     setup do

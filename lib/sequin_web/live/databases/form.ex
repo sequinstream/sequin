@@ -9,7 +9,6 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.ApiTokens
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Name
@@ -17,6 +16,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
+  alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
 
   require Logger
 
@@ -368,7 +368,7 @@ defmodule SequinWeb.DatabasesLive.Form do
 
         with {:ok, db} <- res do
           # It's now safe to start the replication slot
-          DatabasesRuntimeSupervisor.start_replication(db.replication_slot)
+          RuntimeSupervisor.start_replication(db.replication_slot)
 
           {:ok, db}
         end

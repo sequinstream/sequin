@@ -1,8 +1,8 @@
-defmodule Sequin.DatabasesRuntime.KeysetCursorTest do
+defmodule Sequin.Runtime.KeysetCursorTest do
   use ExUnit.Case, async: true
 
-  alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Runtime.KeysetCursor
 
   @sort_column_attnum 1
 

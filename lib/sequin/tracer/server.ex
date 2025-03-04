@@ -5,7 +5,7 @@ defmodule Sequin.Tracer.Server do
   import Sequin.Consumers.Guards, only: [is_event_or_record: 1]
 
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.DatabasesRuntime.SlotProcessor.Message
+  alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Tracer.State
 
   require Logger

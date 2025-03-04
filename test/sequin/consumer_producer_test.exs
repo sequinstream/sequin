@@ -1,10 +1,10 @@
-defmodule Sequin.ConsumersRuntime.ConsumerProducerTest do
+defmodule Sequin.Runtime.ConsumerProducerTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.ConsumersRuntime.ConsumerProducer
-  alias Sequin.ConsumersRuntime.MessageLedgers
-  alias Sequin.DatabasesRuntime.SlotMessageStoreMock
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.MessageLedgers
+  alias Sequin.Runtime.SlotMessageStoreMock
   alias Sequin.TestSupport.DateTimeMock
 
   defmodule Forwarder do
@@ -12,7 +12,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducerTest do
     use Broadway
 
     alias Broadway.Message
-    alias Sequin.DatabasesRuntime.SlotMessageStoreMock
+    alias Sequin.Runtime.SlotMessageStoreMock
 
     def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 

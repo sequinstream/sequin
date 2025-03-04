@@ -26,12 +26,12 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
-  alias Sequin.DatabasesRuntime.KeysetCursor
-  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Health
   alias Sequin.Health.CheckSinkConfigurationWorker
   alias Sequin.Metrics
   alias Sequin.Repo
+  alias Sequin.Runtime.KeysetCursor
+  alias Sequin.Runtime.SlotMessageStore
   alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
 

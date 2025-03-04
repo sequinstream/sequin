@@ -18,11 +18,6 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime
-  alias Sequin.DatabasesRuntime.MessageHandlerMock
-  alias Sequin.DatabasesRuntime.SlotMessageStore
-  alias Sequin.DatabasesRuntime.SlotProcessor
-  alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
@@ -31,6 +26,11 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.TestEventLogFactory
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Runtime
+  alias Sequin.Runtime.MessageHandlerMock
+  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotProcessor
+  alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
@@ -228,9 +228,9 @@ defmodule Sequin.PostgresReplicationTest do
       record_character_ident_consumer = Repo.preload(record_character_ident_consumer, :postgres_database)
       record_character_multi_pk_consumer = Repo.preload(record_character_multi_pk_consumer, :postgres_database)
       test_event_log_partitioned_consumer = Repo.preload(test_event_log_partitioned_consumer, :postgres_database)
-      sup = Module.concat(__MODULE__, DatabasesRuntime.Supervisor)
+      sup = Module.concat(__MODULE__, Runtime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
-      {:ok, _} = DatabasesRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
+      {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       %{
         pg_replication: pg_replication,
@@ -551,7 +551,7 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: sequence_filter})
-      DatabasesRuntime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+      Runtime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
 
       # Insert a character that doesn't match the filter
       CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
@@ -1043,10 +1043,10 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Start replication
-      sup = Module.concat(__MODULE__, DatabasesRuntime.Supervisor)
+      sup = Module.concat(__MODULE__, Runtime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
 
-      {:ok, _} = DatabasesRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
+      {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       %{
         pg_replication: pg_replication,
@@ -1245,7 +1245,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Restart the consumer to apply the changes
       Consumers.update_sink_consumer(consumer, %{})
-      DatabasesRuntime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+      Runtime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
 
       # Insert a character that doesn't match the filter
       CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
@@ -1381,10 +1381,10 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Start replication
-      sup = Module.concat(__MODULE__, DatabasesRuntime.Supervisor)
+      sup = Module.concat(__MODULE__, Runtime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
 
-      {:ok, _} = DatabasesRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
+      {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       %{
         source_db: source_db,
@@ -1452,7 +1452,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Restart the consumer to apply the changes
       {:ok, _} = Consumers.update_sink_consumer(consumer, %{})
-      DatabasesRuntime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+      Runtime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
 
       {:ok, matching_character} =
         UnboxedRepo.transaction(fn ->

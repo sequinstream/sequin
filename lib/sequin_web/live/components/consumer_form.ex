@@ -21,14 +21,14 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
-  alias Sequin.DatabasesRuntime
-  alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Name
   alias Sequin.Postgres
   alias Sequin.Posthog
   alias Sequin.Repo
+  alias Sequin.Runtime
+  alias Sequin.Runtime.KeysetCursor
   alias Sequin.Sinks.Azure.EventHub
   alias Sequin.Sinks.Gcp.Credentials
   alias Sequin.Sinks.Gcp.PubSub
@@ -837,7 +837,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       {:ok, consumer} ->
         case consumer.active_backfill do
           nil -> :ok
-          %Backfill{state: :active} -> DatabasesRuntime.Supervisor.start_table_reader(consumer)
+          %Backfill{state: :active} -> Runtime.Supervisor.start_table_reader(consumer)
           %Backfill{state: _} -> :ok
         end
 

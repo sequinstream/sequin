@@ -2,8 +2,8 @@ defmodule SequinWeb.PullController do
   use SequinWeb, :controller
 
   alias Sequin.Consumers
-  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Error
+  alias Sequin.Runtime.SlotMessageStore
   alias Sequin.String, as: SequinString
   alias Sequin.Time
   alias Sequin.Tracer

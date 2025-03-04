@@ -8,7 +8,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.LifecycleEventWorker
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -16,7 +15,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
-  alias Sequin.ConsumersRuntime.LifecycleEventWorker
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
@@ -25,6 +23,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health.Event
   alias Sequin.Metrics
   alias Sequin.Repo
+  alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Time
   alias Sequin.Tracer.Server, as: TracerServer
 
@@ -242,7 +241,7 @@ defmodule Sequin.Consumers do
       with {:ok, consumer} <- res,
            consumer = Repo.reload!(consumer),
            :ok <- create_consumer_partition(consumer),
-           {:ok, _} <- LifecycleEventWorker.enqueue(:create, :sink_consumer, consumer.id) do
+           {:ok, _} <- ConsumerLifecycleEventWorker.enqueue(:create, :sink_consumer, consumer.id) do
         {:ok, consumer}
       end
     end)
@@ -257,7 +256,7 @@ defmodule Sequin.Consumers do
 
       with {:ok, consumer} <- res do
         unless opts[:skip_lifecycle] do
-          LifecycleEventWorker.enqueue(:update, :sink_consumer, consumer.id)
+          ConsumerLifecycleEventWorker.enqueue(:update, :sink_consumer, consumer.id)
         end
 
         {:ok, consumer}
@@ -269,7 +268,7 @@ defmodule Sequin.Consumers do
     Repo.transact(fn ->
       with {:ok, _} <- Repo.delete(consumer),
            :ok <- delete_consumer_partition(consumer) do
-        LifecycleEventWorker.enqueue(:delete, :sink_consumer, consumer.id, %{
+        ConsumerLifecycleEventWorker.enqueue(:delete, :sink_consumer, consumer.id, %{
           "replication_slot_id" => consumer.replication_slot_id
         })
       end
@@ -881,7 +880,7 @@ defmodule Sequin.Consumers do
 
       with {:ok, http_endpoint} <- res do
         unless opts[:skip_lifecycle] do
-          LifecycleEventWorker.enqueue(:create, :http_endpoint, http_endpoint.id)
+          ConsumerLifecycleEventWorker.enqueue(:create, :http_endpoint, http_endpoint.id)
         end
 
         {:ok, http_endpoint}
@@ -898,7 +897,7 @@ defmodule Sequin.Consumers do
 
       with {:ok, http_endpoint} <- res do
         unless opts[:skip_lifecycle] do
-          LifecycleEventWorker.enqueue(:update, :http_endpoint, http_endpoint.id)
+          ConsumerLifecycleEventWorker.enqueue(:update, :http_endpoint, http_endpoint.id)
         end
 
         {:ok, http_endpoint}
@@ -915,7 +914,7 @@ defmodule Sequin.Consumers do
 
       with {:ok, http_endpoint} <- res do
         unless opts[:skip_lifecycle] do
-          LifecycleEventWorker.enqueue(:delete, :http_endpoint, http_endpoint.id)
+          ConsumerLifecycleEventWorker.enqueue(:delete, :http_endpoint, http_endpoint.id)
         end
 
         {:ok, http_endpoint}
@@ -1223,7 +1222,7 @@ defmodule Sequin.Consumers do
 
       with {:ok, backfill} <- res do
         unless opts[:skip_lifecycle] do
-          LifecycleEventWorker.enqueue(:update, :backfill, backfill.id)
+          ConsumerLifecycleEventWorker.enqueue(:update, :backfill, backfill.id)
         end
 
         {:ok, backfill}
@@ -1240,7 +1239,7 @@ defmodule Sequin.Consumers do
 
       with {:ok, backfill} <- res do
         unless opts[:skip_lifecycle] do
-          LifecycleEventWorker.enqueue(:create, :backfill, backfill.id)
+          ConsumerLifecycleEventWorker.enqueue(:create, :backfill, backfill.id)
         end
 
         {:ok, backfill}

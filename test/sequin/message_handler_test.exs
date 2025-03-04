@@ -2,10 +2,6 @@ defmodule Sequin.MessageHandlerTest do
   use Sequin.DataCase, async: false
 
   alias Sequin.Constants
-  alias Sequin.ConsumersRuntime.MessageLedgers
-  alias Sequin.DatabasesRuntime.SlotMessageStore
-  alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
-  alias Sequin.DatabasesRuntime.TableReaderServerMock
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
@@ -13,6 +9,10 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
   alias Sequin.Replication
+  alias Sequin.Runtime.MessageLedgers
+  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotProcessor.MessageHandler
+  alias Sequin.Runtime.TableReaderServerMock
   alias Sequin.TestSupport
 
   setup do

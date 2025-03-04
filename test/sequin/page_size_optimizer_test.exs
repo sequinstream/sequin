@@ -1,7 +1,7 @@
-defmodule Sequin.DatabasesRuntime.PageSizeOptimizerTest do
+defmodule Sequin.Runtime.PageSizeOptimizerTest do
   use ExUnit.Case, async: true
 
-  alias Sequin.DatabasesRuntime.PageSizeOptimizer
+  alias Sequin.Runtime.PageSizeOptimizer
 
   describe "initialization" do
     test "returns state with given initial_page_size and max_timeout_ms" do

@@ -1,19 +1,19 @@
-defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
+defmodule Sequin.Runtime.RedisPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.RedisSink
-  alias Sequin.ConsumersRuntime.ConsumerProducer
-  alias Sequin.ConsumersRuntime.RedisPipeline
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.RedisPipeline
+  alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Sinks.RedisMock
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed

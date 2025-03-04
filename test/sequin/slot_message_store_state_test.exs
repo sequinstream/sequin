@@ -1,12 +1,12 @@
-defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
+defmodule Sequin.Runtime.SlotMessageStoreStateTest do
   use Sequin.Case, async: true
 
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.DatabasesRuntime.SlotMessageStore.State
   alias Sequin.Error
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Multiset
+  alias Sequin.Runtime.SlotMessageStore.State
   alias Sequin.Size
 
   setup do

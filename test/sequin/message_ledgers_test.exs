@@ -1,8 +1,8 @@
-defmodule Sequin.ConsumersRuntime.MessageLedgersTest do
+defmodule Sequin.Runtime.MessageLedgersTest do
   use Sequin.Case, async: true
 
-  alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.Factory
+  alias Sequin.Runtime.MessageLedgers
   alias Sequin.TestSupport
 
   setup do

@@ -3,12 +3,12 @@ defmodule Sequin.TableReaderTest do
 
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.KeysetCursor
-  alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Runtime.KeysetCursor
+  alias Sequin.Runtime.TableReader
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterMultiPK
 

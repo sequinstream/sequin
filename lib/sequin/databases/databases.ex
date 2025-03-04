@@ -7,7 +7,6 @@ defmodule Sequin.Databases do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
-  alias Sequin.DatabasesRuntime.LifecycleEventWorker
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Health.CheckPostgresReplicationSlotWorker
@@ -17,6 +16,7 @@ defmodule Sequin.Databases do
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
+  alias Sequin.Runtime.DatabaseLifecycleEventWorker
 
   require Logger
 
@@ -96,7 +96,7 @@ defmodule Sequin.Databases do
       case res do
         {:ok, updated_db} ->
           CheckPostgresReplicationSlotWorker.enqueue(updated_db.id, unique: false)
-          LifecycleEventWorker.enqueue(:update, :postgres_database, updated_db.id)
+          DatabaseLifecycleEventWorker.enqueue(:update, :postgres_database, updated_db.id)
           {:ok, updated_db}
 
         {:error, changeset} ->
@@ -124,7 +124,10 @@ defmodule Sequin.Databases do
            {:ok, _} <- delete_sequences(db),
            {:ok, _} <- Repo.delete(db),
            {:ok, _} <- Oban.cancel_all_jobs(health_checker_query) do
-        LifecycleEventWorker.enqueue(:delete, :postgres_database, db.id, %{replication_slot_id: db.replication_slot.id})
+        DatabaseLifecycleEventWorker.enqueue(:delete, :postgres_database, db.id, %{
+          replication_slot_id: db.replication_slot.id
+        })
+
         :ok
       end
     end)

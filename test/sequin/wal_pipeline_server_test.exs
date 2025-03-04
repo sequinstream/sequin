@@ -1,17 +1,17 @@
 # test/sequin/wal_pipeline_server_test.exs
 
-defmodule Sequin.DatabasesRuntime.WalPipelineServerTest do
+defmodule Sequin.Runtime.WalPipelineServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.WalPipelineServer
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
   alias Sequin.Replication
+  alias Sequin.Runtime.WalPipelineServer
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterMultiPK
   alias Sequin.TestSupport.Models.TestEventLog

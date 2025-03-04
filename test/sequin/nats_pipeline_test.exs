@@ -1,12 +1,12 @@
-defmodule Sequin.ConsumersRuntime.NatsPipelineTest do
+defmodule Sequin.Runtime.NatsPipelineTest do
   use Sequin.DataCase, async: true
 
   import Hammox
 
   alias Sequin.Consumers
-  alias Sequin.ConsumersRuntime.NatsPipeline
   alias Sequin.Error
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Runtime.NatsPipeline
   alias Sequin.Sinks.NatsMock
 
   describe "message handling" do

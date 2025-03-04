@@ -41,8 +41,11 @@ defmodule Sequin.Runtime.Starter do
 
   def start do
     Logger.info("[RuntimeStarter] Starting")
-    Enum.each(Replication.all_active_pg_replications(), &start/1)
-    Enum.each(Consumers.list_sink_consumers_with_active_backfill(), &start/1)
+
+    (Replication.all_active_pg_replications() ++ Consumers.list_sink_consumers_with_active_backfill())
+    |> Task.async_stream(&start/1, timeout: :timer.seconds(30))
+    |> Stream.run()
+
     Logger.info("[RuntimeStarter] Finished starting")
   end
 

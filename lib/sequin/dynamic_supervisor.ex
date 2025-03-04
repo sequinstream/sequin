@@ -26,6 +26,19 @@ defmodule Sequin.DynamicSupervisor do
     DynamicSupervisor.start_child(supervisor, child_spec)
   end
 
+  def maybe_start_child(supervisor \\ __MODULE__, child_spec) do
+    case start_child(supervisor, child_spec) do
+      {:ok, pid} ->
+        {:ok, pid}
+
+      {:error, {:already_started, pid}} ->
+        {:ok, pid}
+
+      error ->
+        error
+    end
+  end
+
   def stop_child(supervisor \\ __MODULE__, child_id) do
     case GenServer.whereis(child_id) do
       nil -> :ok

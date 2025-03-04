@@ -322,6 +322,10 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   end
 
   @spec produce_messages(State.t(), non_neg_integer()) :: {list(message()), State.t()}
+  def produce_messages(%State{} = state, _count) when state.consumer.status != :active do
+    {[], state}
+  end
+
   def produce_messages(%State{} = state, count) do
     now = Sequin.utc_now()
 

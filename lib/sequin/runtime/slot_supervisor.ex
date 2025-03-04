@@ -60,6 +60,11 @@ defmodule Sequin.Runtime.SlotSupervisor do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
+  def stop_slot_processor(id) do
+    sup_via = via_tuple(id)
+    Sequin.DynamicSupervisor.stop_child(sup_via, SlotProcessor.via_tuple(id))
+  end
+
   def start_children(%PostgresReplicationSlot{} = pg_replication, opts) do
     pg_replication =
       Repo.preload(pg_replication, [

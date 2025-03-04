@@ -592,17 +592,24 @@ defmodule Sequin.Runtime.SlotMessageStore do
     # Reply early as to not block. Could take a moment to upsert messages
     GenServer.reply(from, :ok)
 
-    if old_consumer.status == :active and consumer.status == :disabled do
-      # Get all messages from memory
-      {messages, state} = State.pop_all_messages(state)
+    cond do
+      old_consumer.status == :active and consumer.status == :disabled ->
+        # Get all messages from memory
+        {messages, state} = State.pop_all_messages(state)
 
-      # Persist them all to disk
-      with :ok <- upsert_messages(state, messages),
-           {:ok, state} <- State.put_persisted_messages(state, messages) do
+        # Persist them all to disk
+        with :ok <- upsert_messages(state, messages),
+             {:ok, state} <- State.put_persisted_messages(state, messages) do
+          {:noreply, state}
+        end
+
+      old_consumer.status != :active and consumer.status == :active ->
+        # Give the ConsumerProducer a kick to come fetch messages
+        :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
         {:noreply, state}
-      end
-    else
-      {:noreply, state}
+
+      true ->
+        {:noreply, state}
     end
   end
 

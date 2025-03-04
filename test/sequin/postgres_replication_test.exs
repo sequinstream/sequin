@@ -31,6 +31,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.Sinks.RedisMock
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
@@ -103,6 +104,7 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.insert_sink_consumer!(
           name: "event_character_consumer",
           message_kind: :event,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -119,6 +121,7 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.insert_sink_consumer!(
           name: "event_character_ident_consumer",
           message_kind: :event,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -135,6 +138,7 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.insert_sink_consumer!(
           name: "event_character_multi_pk_consumer",
           message_kind: :event,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -156,6 +160,7 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.insert_sink_consumer!(
           name: "record_character_consumer",
           message_kind: :record,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -172,6 +177,7 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.insert_sink_consumer!(
           name: "record_character_ident_consumer",
           message_kind: :record,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -188,6 +194,7 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.insert_sink_consumer!(
           name: "record_character_multi_pk_consumer",
           message_kind: :record,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -208,6 +215,7 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.insert_sink_consumer!(
           name: "test_event_log_partitioned_consumer",
           message_kind: :event,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -1020,6 +1028,7 @@ defmodule Sequin.PostgresReplicationTest do
       event_consumer =
         ConsumersFactory.insert_sink_consumer!(
           message_kind: :event,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -1031,6 +1040,7 @@ defmodule Sequin.PostgresReplicationTest do
       record_consumer =
         ConsumersFactory.insert_sink_consumer!(
           message_kind: :record,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -1352,6 +1362,10 @@ defmodule Sequin.PostgresReplicationTest do
 
       ConnectionCache.cache_connection(source_db, UnboxedRepo)
 
+      Mox.stub(RedisMock, :send_messages, fn _sink, _redis_messages ->
+        :ok
+      end)
+
       # Create PostgresReplicationSlot entity
       pg_replication =
         ReplicationFactory.insert_postgres_replication!(
@@ -1373,6 +1387,7 @@ defmodule Sequin.PostgresReplicationTest do
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           message_kind: :event,
+          status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],

@@ -17,7 +17,6 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor
-  alias Sequin.Runtime.SlotSupervisor
   alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
 
   require Logger
@@ -61,7 +60,6 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
           Databases.update_sequences_from_db(consumer.postgres_database)
           CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
           RuntimeSupervisor.start_for_sink_consumer(consumer)
-          :ok = SlotSupervisor.start_message_store!(consumer)
           :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
           :ok
         end
@@ -69,22 +67,20 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
       "update" ->
         with {:ok, consumer} <- Consumers.get_consumer(id) do
           CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
+          :ok = RuntimeSupervisor.start_for_sink_consumer(consumer)
           :ok = SlotMessageStore.consumer_updated(consumer)
 
           case consumer.status do
             :active ->
-              RuntimeSupervisor.restart_for_sink_consumer(consumer)
               :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
               :ok = SlotProcessor.monitor_message_store(consumer.replication_slot_id, consumer.id)
               :ok
 
             :paused ->
               :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-              RuntimeSupervisor.stop_for_sink_consumer(consumer)
               :ok
 
             :disabled ->
-              :ok = SlotProcessor.demonitor_message_store(consumer.replication_slot_id, consumer.id)
               :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
               RuntimeSupervisor.stop_for_sink_consumer(consumer)
               :ok
@@ -95,8 +91,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
         replication_slot_id = Map.fetch!(data, "replication_slot_id")
 
         :ok = RuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id)
-        :ok = SlotSupervisor.stop_message_store(replication_slot_id, id)
-        :ok = RuntimeSupervisor.stop_for_sink_consumer(id)
+        :ok = RuntimeSupervisor.stop_for_sink_consumer(replication_slot_id, id)
         :ok = MessageLedgers.drop_for_consumer(id)
     end
   end

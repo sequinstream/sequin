@@ -1,65 +1,51 @@
 defmodule Sequin.Runtime.RabbitMqPipeline do
   @moduledoc false
-  use Broadway
+  @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
-  alias Sequin.Health
-  alias Sequin.Health.Event
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.RabbitMq
 
   require Logger
 
-  def start_link(opts) do
-    %SinkConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
-
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
-
-    Broadway.start_link(__MODULE__,
-      name: via_tuple(consumer.id),
-      producer: [
-        module: {producer, [consumer: consumer]}
-      ],
-      processors: [
-        default: [
-          concurrency: consumer.max_waiting,
-          max_demand: 10,
-          min_demand: 5
-        ]
-      ],
-      context: %{
-        consumer: consumer,
-        test_pid: Keyword.get(opts, :test_pid)
-      }
-    )
+  @impl SinkPipeline
+  def init(context, _opts) do
+    context
   end
 
-  def via_tuple(consumer_id) do
-    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
+  @impl SinkPipeline
+  def processors_config(%SinkConsumer{max_waiting: max_waiting}) do
+    [
+      default: [
+        concurrency: max_waiting,
+        max_demand: 10,
+        min_demand: 5
+      ]
+    ]
   end
 
-  @impl Broadway
-  def process_name({:via, :syn, {:consumers, {__MODULE__, id}}}, base_name) do
-    {:via, :syn, {:consumers, {__MODULE__, {base_name, id}}}}
+  @impl SinkPipeline
+  def batchers_config(%SinkConsumer{batch_size: batch_size}) do
+    [
+      default: [
+        concurrency: 1,
+        batch_size: batch_size,
+        batch_timeout: 50
+      ]
+    ]
   end
 
-  @impl Broadway
-  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{consumer: consumer} = ctx) do
-    setup_allowances(ctx)
+  @impl SinkPipeline
+  def handle_batch(:default, messages, _batch_info, context) do
+    %{consumer: consumer, test_pid: test_pid} = context
+    setup_allowances(test_pid)
 
-    Logger.metadata(
-      account_id: consumer.account_id,
-      consumer_id: consumer.id
-    )
+    messages_to_send = Enum.map(messages, & &1.data)
 
-    case RabbitMq.send_messages(consumer.sink, messages) do
+    case RabbitMq.send_messages(consumer.sink, messages_to_send) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
-
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-        broadway_message
+        {:ok, messages, context}
 
       {:error, error} ->
         reason =
@@ -70,25 +56,13 @@ defmodule Sequin.Runtime.RabbitMqPipeline do
             details: %{error: error}
           )
 
-        Logger.warning("Failed to push message to RabbitMQ: #{inspect(reason)}")
-
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: reason})
-
-        Sequin.Logs.log_for_consumer_message(
-          :error,
-          consumer.account_id,
-          consumer.id,
-          Enum.map(messages, & &1.replication_message_trace_id),
-          "Failed to push message to RabbitMQ: #{inspect(reason)}"
-        )
-
-        Broadway.Message.failed(broadway_message, reason)
+        {:error, reason}
     end
   end
 
-  defp setup_allowances(%{test_pid: nil}), do: :ok
+  defp setup_allowances(nil), do: :ok
 
-  defp setup_allowances(%{test_pid: test_pid}) do
+  defp setup_allowances(test_pid) do
     Mox.allow(Sequin.Sinks.RabbitMqMock, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end

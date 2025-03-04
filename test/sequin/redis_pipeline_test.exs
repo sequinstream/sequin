@@ -12,7 +12,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.ConsumerProducer
-  alias Sequin.Runtime.RedisPipeline
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Sinks.RedisMock
   alias Sequin.TestSupport.Models.Character
@@ -164,7 +164,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
       start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
-      start_supervised!({RedisPipeline, [consumer: consumer, test_pid: test_pid]})
+      start_supervised!({SinkPipeline, [consumer: consumer, test_pid: test_pid]})
 
       assert_receive {:redis_request, _sink, _redis_messages}, 5_000
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
@@ -173,7 +173,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
   defp start_pipeline!(consumer) do
     start_supervised!(
-      {RedisPipeline,
+      {SinkPipeline,
        [
          consumer: consumer,
          producer: Broadway.DummyProducer,
@@ -191,6 +191,6 @@ defmodule Sequin.Runtime.RedisPipelineTest do
   end
 
   defp broadway(consumer) do
-    RedisPipeline.via_tuple(consumer.id)
+    SinkPipeline.via_tuple(consumer.id)
   end
 end

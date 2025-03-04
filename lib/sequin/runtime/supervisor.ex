@@ -8,37 +8,16 @@ defmodule Sequin.Runtime.Supervisor do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
-  alias Sequin.Runtime.AzureEventHubPipeline
-  alias Sequin.Runtime.GcpPubsubPipeline
-  alias Sequin.Runtime.HttpPushPipeline
-  alias Sequin.Runtime.KafkaPipeline
-  alias Sequin.Runtime.NatsPipeline
-  alias Sequin.Runtime.RabbitMqPipeline
-  alias Sequin.Runtime.RedisPipeline
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.MessageHandler
   alias Sequin.Runtime.SlotSupervisor
   alias Sequin.Runtime.SlotSupervisorSupervisor
-  alias Sequin.Runtime.SqsPipeline
   alias Sequin.Runtime.TableReaderServer
   alias Sequin.Runtime.TableReaderServerSupervisor
   alias Sequin.Runtime.WalEventSupervisor
   alias Sequin.Runtime.WalPipelineServer
 
   require Logger
-
-  @sinks_to_pipelines %{
-    http_push: HttpPushPipeline,
-    sqs: SqsPipeline,
-    redis: RedisPipeline,
-    kafka: KafkaPipeline,
-    gcp_pubsub: GcpPubsubPipeline,
-    nats: NatsPipeline,
-    rabbitmq: RabbitMqPipeline,
-    azure_event_hub: AzureEventHubPipeline
-  }
-
-  def sinks_to_pipelines, do: @sinks_to_pipelines
 
   defp table_reader_supervisor, do: {:via, :syn, {:replication, TableReaderServerSupervisor}}
   defp slot_supervisor, do: {:via, :syn, {:replication, SlotSupervisorSupervisor}}

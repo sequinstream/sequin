@@ -6,7 +6,6 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
-  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
@@ -17,6 +16,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
   alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
 
   require Logger
@@ -43,7 +43,6 @@ defmodule Sequin.Runtime.ConsumerProducer do
       consumer: consumer,
       receive_timer: nil,
       trim_timer: nil,
-      batch_size: Keyword.get(opts, :batch_size, 10),
       batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
       test_pid: test_pid,
       scheduled_handle_demand: false,
@@ -129,8 +128,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
     metadata = [
       memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
       message_queue_len: info[:message_queue_len],
-      demand: state.demand,
-      batch_size: state.batch_size
+      demand: state.demand
     ]
 
     # Get all timing metrics from process dictionary
@@ -190,16 +188,14 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
     execute_timed(:handle_receive_messages, fn ->
-      desired_count = demand * state.batch_size
-      {time, messages} = :timer.tc(fn -> produce_messages(state, desired_count) end)
-      more_upstream_messages? = length(messages) == desired_count
+      {time, messages} = :timer.tc(fn -> produce_messages(state, demand) end)
+      more_upstream_messages? = length(messages) == demand
 
       if div(time, 1000) > @min_log_time_ms do
         Logger.warning(
           "[ConsumerProducer] produce_messages took longer than expected",
           count: length(messages),
           demand: demand,
-          batch_size: state.batch_size,
           duration_ms: div(time, 1000)
         )
       end
@@ -228,12 +224,10 @@ defmodule Sequin.Runtime.ConsumerProducer do
         ])
 
       broadway_messages =
-        messages
-        |> Enum.chunk_every(state.batch_size)
-        |> Enum.map(fn batch ->
+        Enum.map(messages, fn message ->
           %Message{
-            data: batch,
-            acknowledger: {__MODULE__, {bare_consumer, state.test_pid, state.slot_message_store_mod}, nil}
+            data: message,
+            acknowledger: {SinkPipeline, {bare_consumer, state.test_pid, state.slot_message_store_mod}, nil}
           }
         end)
 
@@ -333,51 +327,6 @@ defmodule Sequin.Runtime.ConsumerProducer do
     if receive_timer, do: Process.cancel_timer(receive_timer)
     if trim_timer, do: Process.cancel_timer(trim_timer)
     {:noreply, [], %{state | receive_timer: nil, trim_timer: nil}}
-  end
-
-  @spec ack({SinkConsumer.t(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) :: :ok
-  def ack({%SinkConsumer{} = consumer, test_pid, slot_message_store_mod}, successful, failed) do
-    successful_messages = Enum.flat_map(successful, & &1.data)
-    failed_messages = Enum.flat_map(failed, & &1.data)
-
-    successful_ack_ids = Enum.map(successful_messages, & &1.ack_id)
-
-    # Ack all messages in SlotMessageStore to remove from buffer
-    unless successful_ack_ids == [] do
-      case slot_message_store_mod.messages_succeeded(consumer.id, successful_ack_ids) do
-        {:ok, _count} -> :ok
-        {:error, error} -> raise error
-      end
-
-      {:ok, _count} = Consumers.after_messages_acked(consumer, successful_messages)
-    end
-
-    failed_message_metadatas =
-      failed_messages
-      |> Stream.map(&Consumers.advance_delivery_state_for_failure/1)
-      |> Enum.map(&%{&1 | data: nil})
-
-    unless failed_message_metadatas == [] do
-      :ok = slot_message_store_mod.messages_failed(consumer.id, failed_message_metadatas)
-    end
-
-    if test_pid do
-      failed_ack_ids = Enum.map(failed_messages, & &1.ack_id)
-      send(test_pid, {__MODULE__, :ack_finished, successful_ack_ids, failed_ack_ids})
-    end
-
-    :ok
-  end
-
-  @spec pre_ack_delivered_messages(SinkConsumer.t(), list(Message.t())) :: :ok
-  def pre_ack_delivered_messages(consumer, broadway_messages) do
-    delivered_messages = Enum.flat_map(broadway_messages, & &1.data)
-
-    wal_cursors =
-      Enum.map(delivered_messages, fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
-
-    :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
-    :ok = MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "consumer_producer.ack", wal_cursors)
   end
 
   defp maybe_schedule_demand(%{scheduled_handle_demand: false} = state) do

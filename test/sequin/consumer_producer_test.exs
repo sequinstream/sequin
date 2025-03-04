@@ -20,23 +20,23 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
       {:ok, opts}
     end
 
-    def handle_message(_, broadway_message, %{fail?: true, test_pid: test_pid}) do
-      Mox.allow(SlotMessageStoreMock, test_pid, self())
-      Mox.allow(DateTimeMock, test_pid, self())
-
-      send(test_pid, {:messages_failed, broadway_message.data})
-      Message.failed(broadway_message, "failed")
-    end
-
-    def handle_message(_, broadway_message, %{test_pid: test_pid}) do
-      Mox.allow(SlotMessageStoreMock, test_pid, self())
-      Mox.allow(DateTimeMock, test_pid, self())
-
-      send(test_pid, {:messages_succeeded, broadway_message.data})
+    def handle_message(_, broadway_message, _ctx) do
       broadway_message
     end
 
-    def handle_batch(_, messages, _, _) do
+    def handle_batch(_, messages, _, %{fail?: true, test_pid: test_pid}) do
+      Mox.allow(SlotMessageStoreMock, test_pid, self())
+      Mox.allow(DateTimeMock, test_pid, self())
+
+      send(test_pid, {:messages_failed, messages})
+      Enum.map(messages, &Message.failed(&1, "failed"))
+    end
+
+    def handle_batch(_, messages, _, %{test_pid: test_pid}) do
+      Mox.allow(SlotMessageStoreMock, test_pid, self())
+      Mox.allow(DateTimeMock, test_pid, self())
+
+      send(test_pid, {:messages_succeeded, messages})
       messages
     end
   end
@@ -69,14 +69,16 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
         {:ok, 2}
       end)
 
-      start_broadway(consumer: consumer)
+      start_broadway(consumer: consumer, batch_size: 2)
 
       assert_receive {:messages_succeeded, messages}, 1_000
-      assert length(messages) == 2
+      message_data = Enum.map(messages, & &1.data)
+      assert_lists_equal(message_data, [msg1, msg2], fn a, b -> a.data == b.data end)
 
       stop_broadway()
     end
 
+    @tag capture_log: true
     test "failed messages are failed to sms", %{consumer: consumer} do
       msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
@@ -131,6 +133,8 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
         opts
       )
 
+    batch_size = Keyword.get(opts, :batch_size, 1)
+
     {context, opts} = Keyword.pop(opts, :context, %{})
 
     {:ok, pid} =
@@ -144,6 +148,9 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
         ],
         processors: [
           default: [concurrency: 1, max_demand: 1]
+        ],
+        batchers: [
+          default: [concurrency: 1, batch_size: batch_size]
         ]
       )
 

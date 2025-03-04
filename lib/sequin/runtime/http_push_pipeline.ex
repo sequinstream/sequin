@@ -1,116 +1,91 @@
 defmodule Sequin.Runtime.HttpPushPipeline do
   @moduledoc false
-  use Broadway
+  @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
-  alias Sequin.Health
-  alias Sequin.Health.Event
   alias Sequin.Metrics
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SinkPipeline
 
   require Logger
 
-  def start_link(opts) do
-    %SinkConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
+  @impl SinkPipeline
+  def init(context, opts) do
+    consumer = Map.fetch!(context, :consumer)
     consumer = SinkConsumer.preload_http_endpoint(consumer)
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
     req_opts = Keyword.get(opts, :req_opts, [])
-    test_pid = Keyword.get(opts, :test_pid)
     features = Keyword.get(opts, :features, [])
-    legacy_event_transform = features[:legacy_event_transform]
-    legacy_event_singleton_transform = features[:legacy_event_singleton_transform]
 
-    Broadway.start_link(__MODULE__,
-      name: via_tuple(consumer.id),
-      producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: consumer.batch_size]}
-      ],
-      processors: [
-        default: [
-          concurrency: consumer.max_waiting,
-          max_demand: 10,
-          min_demand: 5
-        ]
-      ],
-      context: %{
-        consumer: consumer,
-        http_endpoint: consumer.sink.http_endpoint,
-        req_opts: req_opts,
-        features: [
-          legacy_event_transform: legacy_event_transform,
-          legacy_event_singleton_transform: legacy_event_singleton_transform
-        ],
-        test_pid: test_pid
-      }
-    )
+    context
+    |> Map.put(:consumer, consumer)
+    |> Map.put(:http_endpoint, consumer.sink.http_endpoint)
+    |> Map.put(:req_opts, req_opts)
+    |> Map.put(:features, features)
   end
 
-  def via_tuple(consumer_id) do
-    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
+  @impl SinkPipeline
+  def processors_config(%SinkConsumer{max_waiting: max_waiting}) do
+    [
+      default: [
+        concurrency: max_waiting,
+        max_demand: 10,
+        min_demand: 5
+      ]
+    ]
   end
 
-  # Used by Broadway to name processes in topology according to our registry
-  @impl Broadway
-  def process_name({:via, :syn, {:consumers, {__MODULE__, id}}}, base_name) do
-    {:via, :syn, {:consumers, {__MODULE__, {base_name, id}}}}
+  @impl SinkPipeline
+  def batchers_config(%SinkConsumer{batch_size: batch_size}) do
+    [
+      default: [
+        concurrency: 1,
+        batch_size: batch_size,
+        batch_timeout: 50
+      ]
+    ]
   end
 
-  @impl Broadway
-  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{
-        consumer: consumer,
-        http_endpoint: http_endpoint,
-        req_opts: req_opts,
-        features: features,
-        test_pid: test_pid
-      }) do
+  @impl SinkPipeline
+  def handle_batch(:default, messages, _batch_info, context) do
+    %{
+      consumer: consumer,
+      http_endpoint: http_endpoint,
+      req_opts: req_opts,
+      features: features,
+      test_pid: test_pid
+    } = context
+
     setup_allowances(test_pid)
 
-    Logger.metadata(
-      account_id: consumer.account_id,
-      consumer_id: consumer.id,
-      http_endpoint_id: http_endpoint.id
-    )
-
     message_data =
-      cond do
-        features[:legacy_event_transform] && length(messages) == 1 ->
-          [message] = messages
-
-          legacy_event_transform_message(consumer, message.data)
-
-        features[:legacy_event_singleton_transform] && length(messages) == 1 ->
-          [message] = messages
-          message.data
-
-        true ->
-          %{data: Enum.map(messages, & &1.data)}
-      end
+      messages
+      |> Enum.map(& &1.data)
+      |> prepare_message_data(consumer, features)
 
     case push_message(http_endpoint, consumer, message_data, req_opts) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
         Metrics.incr_http_endpoint_throughput(http_endpoint)
+        {:ok, messages, context}
 
-        broadway_message
+      {:error, error} when is_exception(error) ->
+        {:error, error}
+    end
+  end
 
-      {:error, reason} ->
-        Logger.warning("Failed to push message: #{inspect(reason)}")
+  defp prepare_message_data(messages, consumer, features) do
+    cond do
+      features[:legacy_event_transform] && length(messages) == 1 ->
+        [message] = messages
+        legacy_event_transform_message(consumer, message.data)
 
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: reason})
+      features[:legacy_event_singleton_transform] && length(messages) == 1 ->
+        [message] = messages
+        message.data
 
-        Sequin.Logs.log_for_consumer_message(
-          :error,
-          consumer.account_id,
-          consumer.id,
-          Enum.map(messages, & &1.replication_message_trace_id),
-          "Failed to push message: #{Exception.message(reason)}"
-        )
-
-        Broadway.Message.failed(broadway_message, reason)
+      true ->
+        %{data: Enum.map(messages, & &1.data)}
     end
   end
 

@@ -7,32 +7,12 @@ defmodule Sequin.Runtime.SlotSupervisor do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
-  alias Sequin.Runtime.AzureEventHubPipeline
-  alias Sequin.Runtime.GcpPubsubPipeline
-  alias Sequin.Runtime.HttpPushPipeline
-  alias Sequin.Runtime.KafkaPipeline
-  alias Sequin.Runtime.NatsPipeline
-  alias Sequin.Runtime.RabbitMqPipeline
-  alias Sequin.Runtime.RedisPipeline
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.MessageHandler
-  alias Sequin.Runtime.SqsPipeline
 
   require Logger
-
-  @sinks_to_pipelines %{
-    http_push: HttpPushPipeline,
-    sqs: SqsPipeline,
-    redis: RedisPipeline,
-    kafka: KafkaPipeline,
-    gcp_pubsub: GcpPubsubPipeline,
-    nats: NatsPipeline,
-    rabbitmq: RabbitMqPipeline,
-    azure_event_hub: AzureEventHubPipeline
-  }
-
-  def sinks_to_pipelines, do: @sinks_to_pipelines
 
   def via_tuple(id) do
     {:via, :syn, {:replication, {__MODULE__, id}}}
@@ -137,11 +117,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
     SlotProcessor.demonitor_message_store(replication_slot_id, id)
 
     Sequin.DynamicSupervisor.stop_child(sup_via, store_child_via)
-
-    Enum.each(
-      Map.values(@sinks_to_pipelines),
-      &Sequin.DynamicSupervisor.stop_child(sup_via, &1.via_tuple(id))
-    )
+    Sequin.DynamicSupervisor.stop_child(sup_via, SinkPipeline.via_tuple(id))
   end
 
   def restart_store_and_pipeline(%SinkConsumer{} = sink_consumer) do
@@ -189,15 +165,11 @@ defmodule Sequin.Runtime.SlotSupervisor do
         |> Keyword.merge(opts)
         |> Keyword.put(:features, features)
 
-      child_spec = {pipeline(consumer), opts}
+      child_spec = {SinkPipeline, opts}
 
       with {:ok, _} <- Sequin.DynamicSupervisor.maybe_start_child(supervisor, child_spec) do
         :ok
       end
     end
-  end
-
-  defp pipeline(%SinkConsumer{} = consumer) do
-    Map.fetch!(@sinks_to_pipelines, consumer.type)
   end
 end

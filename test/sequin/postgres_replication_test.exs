@@ -290,7 +290,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {SlotProcessor, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 1000
 
       # Fetch consumer records
       [consumer_record] = list_messages(consumer.id)

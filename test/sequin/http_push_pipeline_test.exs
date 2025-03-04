@@ -10,9 +10,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Runtime.ConsumerProducer
-  alias Sequin.Runtime.HttpPushPipeline
   alias Sequin.Runtime.MessageLedgers
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.TestSupport.Models.CharacterDetailed
 
@@ -24,6 +23,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
+          type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           message_kind: :event
         )
@@ -65,8 +65,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       start_pipeline!(consumer, adapter)
 
-      ref = send_test_events(consumer, [event])
-      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}]}], []}, 1_000
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
       assert_receive :sent, 1_000
     end
 
@@ -93,9 +93,19 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       start_pipeline!(consumer, adapter)
 
-      ref = send_test_events(consumer, [event1, event2])
+      ref = send_test_batch(consumer, [event1, event2])
 
-      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}, %{data: %{action: :update}}]}], []}, 1_000
+      expected = [
+        %{data: %{data: %{action: :insert}}},
+        %{data: %{data: %{action: :update}}}
+      ]
+
+      assert_receive {:ack, ^ref, received, []}, 1_000
+
+      assert_lists_equal(received, expected, fn a, b ->
+        assert a.data.data.action == b.data.data.action
+      end)
+
       assert_receive :sent, 1_000
     end
 
@@ -120,7 +130,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       # Start pipeline with legacy_event_singleton_transform enabled
       start_supervised!(
-        {HttpPushPipeline,
+        {SinkPipeline,
          [
            consumer: consumer,
            req_opts: [adapter: adapter],
@@ -129,8 +139,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
          ]}
       )
 
-      ref = send_test_events(consumer, [event])
-      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}]}], []}, 1_000
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
       assert_receive :sent, 1_000
     end
 
@@ -142,7 +152,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       start_pipeline!(consumer, adapter)
 
-      ref = send_test_events(consumer)
+      ref = send_test_event(consumer)
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
     end
 
@@ -154,7 +164,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       start_pipeline!(consumer, adapter)
 
-      ref = send_test_events(consumer)
+      ref = send_test_event(consumer)
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
     end
 
@@ -169,7 +179,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       start_pipeline!(consumer, adapter)
 
-      ref = send_test_events(consumer)
+      ref = send_test_event(consumer)
 
       assert_receive {:ack, ^ref, [], [_failed]}, 2000
     end
@@ -188,6 +198,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         ConsumersFactory.sink_consumer(
           id: UUID.uuid4(),
           account_id: account.id,
+          type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id, http_endpoint: http_endpoint},
           replication_slot_id: replication.id,
           sequence_id: sequence.id,
@@ -234,7 +245,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer.id, [consumer_event])
 
       # Start the pipeline
-      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
 
       # Wait for the message to be processed
       assert_receive {:http_request, req}, 1_000
@@ -247,7 +258,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert json["metadata"]["table_name"] == "users"
       assert json["metadata"]["table_schema"] == "public"
 
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
       state = SlotMessageStore.peek(consumer.id)
@@ -294,12 +305,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer.id, [event1, event2])
 
       # Start the pipeline with the failing adapter
-      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
 
       # Assert that the ack receives the failed events
       assert_receive :sent, 1_000
       assert_receive :sent, 1_000
-      assert_receive {ConsumerProducer, :ack_finished, [], [_failed1, _failed2]}, 2_000
+      assert_receive {SinkPipeline, :ack_finished, [], [_failed1]}, 2_000
+      assert_receive {SinkPipeline, :ack_finished, [], [_failed2]}, 2_000
 
       # Reload the events from the database to check not_visible_until
       %SlotMessageStore.State{} = state = SlotMessageStore.peek(consumer.id)
@@ -338,9 +350,9 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer.id, [event])
 
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
-      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: self()]})
+      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: self()]})
 
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 1_000
+      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 1_000
 
       assert {:ok, 0} = MessageLedgers.count_commit_verification_set(consumer.id)
     end
@@ -360,6 +372,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         ConsumersFactory.sink_consumer(
           id: UUID.uuid4(),
           account_id: account.id,
+          type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id, http_endpoint: http_endpoint},
           replication_slot_id: replication.id,
           postgres_database: database,
@@ -405,7 +418,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
       # Start the pipeline
-      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
 
       # Wait for the message to be processed
       assert_receive {:http_request, req}, 5_000
@@ -421,7 +434,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert json["metadata"]["table_name"] == "characters_detailed"
       assert json["metadata"]["table_schema"] == "public"
 
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
       state = SlotMessageStore.peek(consumer.id)
@@ -461,7 +474,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       # Start the pipeline with legacy_event_transform feature enabled
       start_supervised!(
-        {HttpPushPipeline,
+        {SinkPipeline,
          [
            consumer: consumer,
            req_opts: [adapter: adapter],
@@ -490,7 +503,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert json["action"] == "insert"
       assert json["changes"] == nil
 
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
       state = SlotMessageStore.peek(consumer.id)
@@ -500,7 +513,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
   defp start_pipeline!(consumer, adapter) do
     start_supervised!(
-      {HttpPushPipeline,
+      {SinkPipeline,
        [
          consumer: consumer,
          req_opts: [adapter: adapter],
@@ -510,12 +523,16 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
     )
   end
 
-  defp send_test_events(consumer, events \\ nil) do
-    events = events || [ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)]
-    Broadway.test_message(broadway(consumer), events, metadata: %{topic: "test_topic", headers: []})
+  defp send_test_event(consumer, event \\ nil) do
+    event = event || ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+    Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test_topic", headers: []})
+  end
+
+  defp send_test_batch(consumer, events) do
+    Broadway.test_batch(broadway(consumer), events, metadata: %{topic: "test_topic", headers: []})
   end
 
   defp broadway(consumer) do
-    HttpPushPipeline.via_tuple(consumer.id)
+    SinkPipeline.via_tuple(consumer.id)
   end
 end

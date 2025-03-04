@@ -4,10 +4,6 @@ defmodule Sequin.IexHelpers do
   alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Repo
-  alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
-
-  @sinks_to_pipelines RuntimeSupervisor.sinks_to_pipelines()
-  @sinks Map.keys(@sinks_to_pipelines)
 
   def via(:slot, id) do
     Sequin.Runtime.SlotProcessor.via_tuple(id)
@@ -21,9 +17,8 @@ defmodule Sequin.IexHelpers do
     Sequin.Runtime.SlotMessageStore.via_tuple(id)
   end
 
-  def via(sink, id) when sink in @sinks do
-    pipeline_mod = @sinks_to_pipelines[sink]
-    pipeline_mod.via_tuple(id)
+  def via(:sink, id) do
+    Sequin.Runtime.SinkPipeline.via_tuple(id)
   end
 
   def whereis(:slot, pg_replication_or_database_id) do
@@ -73,12 +68,9 @@ defmodule Sequin.IexHelpers do
   end
 
   def whereis(:sink, id) do
-    Enum.reduce_while(@sinks, nil, fn sink, acc ->
-      case whereis(sink, id) do
-        nil -> {:cont, acc}
-        pid -> {:halt, pid}
-      end
-    end)
+    :sink
+    |> via(id)
+    |> GenServer.whereis()
   end
 
   def whereis(entity, id) do

@@ -60,7 +60,10 @@ defmodule Sequin.Runtime.SlotProcessor do
     case Application.get_env(:sequin, :slot_processor_max_accumulated_messages_time_ms) do
       nil ->
         if Application.get_env(:sequin, :env) == :test do
-          10
+          # We can lower this even more when we handle heartbeat messages sync
+          # Right now, there are races where we receive a heartbeat message before our
+          # regular messages get a chance to come through and be part of the batch.
+          20
         else
           100
         end

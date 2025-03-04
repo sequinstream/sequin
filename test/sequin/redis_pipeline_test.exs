@@ -11,8 +11,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Runtime.ConsumerProducer
-  alias Sequin.Runtime.RedisPipeline
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Sinks.RedisMock
   alias Sequin.TestSupport.Models.Character
@@ -71,8 +70,8 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
       start_pipeline!(consumer)
 
-      ref = send_test_events(consumer, [record])
-      assert_receive {:ack, ^ref, [%{data: [%ConsumerRecord{}]}], []}, 1_000
+      ref = send_test_event(consumer, record)
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
       assert_receive {:redis_request, %RedisSink{}, [%ConsumerRecordData{}]}, 1_000
     end
 
@@ -92,16 +91,16 @@ defmodule Sequin.Runtime.RedisPipelineTest do
         |> ConsumersFactory.insert_deliverable_consumer_record!()
         |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
 
-      Mox.expect(RedisMock, :send_messages, fn sink, redis_messages ->
+      Mox.expect(RedisMock, :send_messages, 1, fn sink, redis_messages ->
         send(test_pid, {:redis_request, sink, redis_messages})
         :ok
       end)
 
       start_pipeline!(consumer)
 
-      ref = send_test_events(consumer, [event1, event2])
+      ref = send_test_batch(consumer, [event1, event2])
 
-      assert_receive {:ack, ^ref, [%{data: [%ConsumerRecord{}, %ConsumerRecord{}]}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}, %{data: %ConsumerRecord{}}], []}, 1_000
       assert_receive {:redis_request, _sink, _redis_messages}, 1_000
     end
 
@@ -113,8 +112,8 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
       start_pipeline!(consumer)
 
-      ref = send_test_events(consumer)
-      assert_receive {:ack, ^ref, [], [_failed]}, 2_000
+      ref = send_test_event(consumer)
+      assert_receive({:ack, ^ref, [], [_failed]}, 2_000)
     end
   end
 
@@ -164,16 +163,16 @@ defmodule Sequin.Runtime.RedisPipelineTest do
       start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
-      start_supervised!({RedisPipeline, [consumer: consumer, test_pid: test_pid]})
+      start_supervised!({SinkPipeline, [consumer: consumer, test_pid: test_pid]})
 
       assert_receive {:redis_request, _sink, _redis_messages}, 5_000
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
     end
   end
 
   defp start_pipeline!(consumer) do
     start_supervised!(
-      {RedisPipeline,
+      {SinkPipeline,
        [
          consumer: consumer,
          producer: Broadway.DummyProducer,
@@ -182,15 +181,19 @@ defmodule Sequin.Runtime.RedisPipelineTest do
     )
   end
 
-  defp send_test_events(consumer, events \\ nil) do
+  defp send_test_event(consumer, event \\ nil) do
     events =
-      events ||
-        [ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)]
+      event ||
+        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
 
     Broadway.test_message(broadway(consumer), events, metadata: %{topic: "test_topic", headers: []})
   end
 
+  defp send_test_batch(consumer, events) do
+    Broadway.test_batch(broadway(consumer), events, metadata: %{topic: "test_topic", headers: []})
+  end
+
   defp broadway(consumer) do
-    RedisPipeline.via_tuple(consumer.id)
+    SinkPipeline.via_tuple(consumer.id)
   end
 end

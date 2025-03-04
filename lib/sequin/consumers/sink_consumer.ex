@@ -97,7 +97,6 @@ defmodule Sequin.Consumers.SinkConsumer do
   def create_changeset(consumer, attrs) do
     consumer
     |> cast(attrs, [
-      :name,
       :replication_slot_id,
       :status,
       :sequence_id,
@@ -121,6 +120,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   def changeset(consumer, attrs) do
     consumer
     |> cast(attrs, [
+      :name,
       :batch_size,
       :ack_wait_ms,
       :max_waiting,

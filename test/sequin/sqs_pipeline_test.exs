@@ -10,9 +10,8 @@ defmodule Sequin.Runtime.SqsPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
-  alias Sequin.Runtime.SqsPipeline
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
 
@@ -69,8 +68,8 @@ defmodule Sequin.Runtime.SqsPipelineTest do
 
       start_pipeline!(consumer)
 
-      ref = send_test_events(consumer, [record])
-      assert_receive {:ack, ^ref, [%{data: [%ConsumerRecord{}]}], []}, 1_000
+      ref = send_test_event(consumer, record)
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
       assert_receive {:sqs_request, _conn}, 1_000
     end
 
@@ -104,9 +103,9 @@ defmodule Sequin.Runtime.SqsPipelineTest do
 
       start_pipeline!(consumer)
 
-      ref = send_test_events(consumer, [event1, event2])
+      ref = send_test_batch(consumer, [event1, event2])
 
-      assert_receive {:ack, ^ref, [%{data: [%ConsumerRecord{}, %ConsumerRecord{}]}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}, %{data: %ConsumerRecord{}}], []}, 1_000
       assert_receive {:sqs_request, _conn}, 1_000
     end
 
@@ -127,7 +126,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
 
       start_pipeline!(consumer)
 
-      ref = send_test_events(consumer)
+      ref = send_test_event(consumer)
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
     end
   end
@@ -178,16 +177,16 @@ defmodule Sequin.Runtime.SqsPipelineTest do
       start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
-      start_supervised!({SqsPipeline, [consumer: consumer, test_pid: test_pid]})
+      start_supervised!({SinkPipeline, [consumer: consumer, test_pid: test_pid]})
 
       assert_receive {:sqs_request, _conn}, 1_000
-      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
     end
   end
 
   defp start_pipeline!(consumer) do
     start_supervised!(
-      {SqsPipeline,
+      {SinkPipeline,
        [
          consumer: consumer,
          producer: Broadway.DummyProducer,
@@ -196,15 +195,19 @@ defmodule Sequin.Runtime.SqsPipelineTest do
     )
   end
 
-  defp send_test_events(consumer, events \\ nil) do
-    events =
-      events ||
-        [ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)]
+  defp send_test_event(consumer, event \\ nil) do
+    event =
+      event ||
+        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
 
-    Broadway.test_message(broadway(consumer), events, metadata: %{topic: "test_topic", headers: []})
+    Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test_topic", headers: []})
+  end
+
+  defp send_test_batch(consumer, events) do
+    Broadway.test_batch(broadway(consumer), events, metadata: %{topic: "test_topic", headers: []})
   end
 
   defp broadway(consumer) do
-    SqsPipeline.via_tuple(consumer.id)
+    SinkPipeline.via_tuple(consumer.id)
   end
 end

@@ -1,103 +1,54 @@
 defmodule Sequin.Runtime.RedisPipeline do
   @moduledoc false
-  use Broadway
+  @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Health
-  alias Sequin.Health.Event
-  alias Sequin.Repo
-  alias Sequin.Runtime.ConsumerProducer
-  alias Sequin.Runtime.MessageLedgers
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Redis
 
   require Logger
 
-  def start_link(opts) do
-    %SinkConsumer{} =
-      consumer =
-      opts
-      |> Keyword.fetch!(:consumer)
-      |> Repo.lazy_preload([:sequence, :postgres_database])
-
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
-    test_pid = Keyword.get(opts, :test_pid)
-
-    Broadway.start_link(__MODULE__,
-      name: via_tuple(consumer.id),
-      producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: consumer.batch_size]}
-      ],
-      processors: [
-        default: [
-          concurrency: consumer.max_waiting,
-          max_demand: 10,
-          min_demand: 5
-        ]
-      ],
-      context: %{
-        consumer: consumer,
-        test_pid: test_pid
-      }
-    )
+  @impl SinkPipeline
+  def init(context, _opts) do
+    context
   end
 
-  def via_tuple(consumer_id) do
-    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
+  @impl SinkPipeline
+  def processors_config(%SinkConsumer{max_waiting: max_waiting}) do
+    [
+      default: [
+        concurrency: max_waiting,
+        max_demand: 10,
+        min_demand: 5
+      ]
+    ]
   end
 
-  # Used by Broadway to name processes in topology according to our registry
-  @impl Broadway
-  def process_name({:via, :syn, {:consumers, {__MODULE__, id}}}, base_name) do
-    {:via, :syn, {:consumers, {__MODULE__, {base_name, id}}}}
+  @impl SinkPipeline
+  def batchers_config(%SinkConsumer{batch_size: batch_size}) do
+    [
+      default: [
+        concurrency: 1,
+        batch_size: batch_size,
+        batch_timeout: 50
+      ]
+    ]
   end
 
-  @impl Broadway
-  # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
-  @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = broadway_message, %{
-        consumer: %SinkConsumer{sink: %RedisSink{} = sink} = consumer,
-        test_pid: test_pid
-      }) do
+  @impl SinkPipeline
+  def handle_batch(:default, messages, _batch_info, context) do
+    %{consumer: %SinkConsumer{sink: %RedisSink{} = sink}, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    Logger.metadata(
-      account_id: consumer.account_id,
-      consumer_id: consumer.id
-    )
-
-    messages
-    |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
-    |> then(&MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "redis_pipeline.handle_message", &1))
-
-    redis_messages = Enum.map(messages, & &1.data)
+    redis_messages = Enum.map(messages, & &1.data.data)
 
     case Redis.send_messages(sink, redis_messages) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, [broadway_message])
-
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-        messages
-        |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
-        |> then(&MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "redis_pipeline.sent", &1))
-
-        broadway_message
+        {:ok, messages, context}
 
       {:error, error} when is_exception(error) ->
-        Logger.warning("Failed to push message to Redis: #{Exception.message(error)}")
-
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
-
-        Sequin.Logs.log_for_consumer_message(
-          :error,
-          consumer.account_id,
-          consumer.id,
-          Enum.map(messages, & &1.replication_message_trace_id),
-          "Failed to push message to Redis: #{Exception.message(error)}"
-        )
-
-        Broadway.Message.failed(broadway_message, error)
+        {:error, error}
     end
   end
 

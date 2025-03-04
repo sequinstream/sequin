@@ -1,146 +1,103 @@
 defmodule Sequin.Runtime.KafkaPipeline do
   @moduledoc false
-  use Broadway
+  @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
-  alias Sequin.Health
-  alias Sequin.Health.Event
-  alias Sequin.Repo
-  alias Sequin.Runtime.ConsumerProducer
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Kafka
 
   require Logger
 
-  def start_link(opts) do
-    %SinkConsumer{} =
-      consumer =
-      opts
-      |> Keyword.fetch!(:consumer)
-      |> Repo.lazy_preload([:sequence, :postgres_database])
+  @impl SinkPipeline
+  def init(context, _opts) do
+    context
+  end
 
-    producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
-    test_pid = Keyword.get(opts, :test_pid)
-
-    Broadway.start_link(__MODULE__,
-      name: via_tuple(consumer.id),
-      producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: 1]}
-      ],
-      processors: [
-        default: [
-          concurrency: System.schedulers_online(),
-          max_demand: 400,
-          min_demand: 200
-        ]
-      ],
-      context: %{
-        consumer: consumer,
-        test_pid: test_pid
-      },
-      batchers: [
-        default: [
-          concurrency: 80,
-          batch_size: consumer.batch_size,
-          batch_timeout: 10
-        ]
+  @impl SinkPipeline
+  def processors_config(%SinkConsumer{}) do
+    [
+      default: [
+        concurrency: 100,
+        max_demand: 10,
+        min_demand: 5
       ]
-    )
+    ]
   end
 
-  def via_tuple(consumer_id) do
-    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
+  @impl SinkPipeline
+  def batchers_config(%SinkConsumer{batch_size: batch_size}) do
+    [
+      default: [
+        concurrency: 20,
+        batch_size: batch_size,
+        batch_timeout: 50
+      ]
+    ]
   end
 
-  # Used by Broadway to name processes in topology according to our registry
-  @impl Broadway
-  def process_name({:via, :syn, {:consumers, {__MODULE__, id}}}, base_name) do
-    {:via, :syn, {:consumers, {__MODULE__, {base_name, id}}}}
+  @impl SinkPipeline
+  def handle_message(message, context) do
+    %{consumer: consumer, test_pid: test_pid} = context
+    setup_allowances(test_pid)
+    context = maybe_put_partition_count(context)
+
+    # Only prepare the message with its partition information
+    msg = message.data
+    encoded_data = Jason.encode!(msg.data)
+    msg = %{msg | encoded_data: encoded_data, encoded_data_size_bytes: byte_size(encoded_data)}
+
+    partition = partition_from_message(consumer, msg, context.partition_count)
+
+    message =
+      message
+      |> Broadway.Message.put_data(msg)
+      |> Broadway.Message.put_batch_key(partition)
+
+    {:ok, message, context}
+  catch
+    {:failed_to_connect, error} ->
+      Logger.error("[KafkaPipeline] Failed to connect to Kafka: #{inspect(error)}", error: error)
+      {:error, Error.service(service: :kafka, message: "failed to connect")}
   end
 
-  @impl Broadway
-  # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
-  @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: [message]} = broadway_message, %{
-        consumer: %SinkConsumer{sink: %KafkaSink{}} = consumer,
-        test_pid: test_pid
-      }) do
+  @impl SinkPipeline
+  def handle_batch(:default, messages, %{batch_key: partition}, context) do
+    %{consumer: %SinkConsumer{sink: %KafkaSink{}} = consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    Logger.metadata(
-      account_id: consumer.account_id,
-      consumer_id: consumer.id
-    )
+    msgs = Enum.map(messages, & &1.data)
 
-    encoded_data = Jason.encode!(message.data)
-    message = %{message | encoded_data: encoded_data, encoded_data_size_bytes: byte_size(encoded_data)}
-
-    partition = partition_from_message(consumer, message)
-
-    broadway_message
-    |> Broadway.Message.put_data([message])
-    |> Broadway.Message.put_batch_key(partition)
-  end
-
-  @impl Broadway
-  def handle_batch(:default, broadway_messages, %{batch_key: partition}, %{
-        consumer: %SinkConsumer{sink: %KafkaSink{}} = consumer,
-        test_pid: test_pid
-      }) do
-    setup_allowances(test_pid)
-
-    Logger.metadata(
-      account_id: consumer.account_id,
-      consumer_id: consumer.id
-    )
-
-    messages = Enum.map(broadway_messages, fn %Broadway.Message{data: [message]} -> message end)
-
-    case Kafka.publish(consumer, partition, messages) do
+    case Kafka.publish(consumer, partition, msgs) do
       :ok ->
-        :ok = ConsumerProducer.pre_ack_delivered_messages(consumer, broadway_messages)
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-        broadway_messages
+        {:ok, messages, context}
 
       {:error, error} when is_exception(error) ->
-        Logger.warning("Failed to publish message to Kafka: #{Exception.message(error)}")
-
-        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
-
-        Sequin.Logs.log_for_consumer_message(
-          :error,
-          consumer.account_id,
-          consumer.id,
-          Enum.map(broadway_messages, fn %Broadway.Message{data: [message]} ->
-            message.replication_message_trace_id
-          end),
-          "Failed to publish message to Kafka: #{Exception.message(error)}"
-        )
-
-        Enum.map(broadway_messages, &Broadway.Message.failed(&1, error))
+        {:error, error}
     end
+  catch
+    {:failed_to_connect, error} ->
+      Logger.error("[KafkaPipeline] Failed to connect to Kafka: #{inspect(error)}", error: error)
+      {:error, Error.service(service: :kafka, message: "failed to connect")}
   end
 
-  defp partition_from_message(%SinkConsumer{sink: %KafkaSink{}} = consumer, message) do
-    partition_count = get_cached_partition_count!(consumer)
+  def maybe_put_partition_count(%{partition_count: partition_count} = context) when is_integer(partition_count) do
+    context
+  end
 
+  def maybe_put_partition_count(%{consumer: consumer, test_pid: test_pid} = context) do
+    setup_allowances(test_pid)
+
+    partition_count = get_partition_count!(consumer)
+
+    Map.put(context, :partition_count, partition_count)
+  end
+
+  defp partition_from_message(%SinkConsumer{sink: %KafkaSink{}} = consumer, message, partition_count) do
     case Kafka.message_key(consumer, message) do
       "" -> Enum.random(1..partition_count)
       group_id when is_binary(group_id) -> :erlang.phash2(group_id, partition_count)
-    end
-  end
-
-  defp get_cached_partition_count!(%SinkConsumer{sink: %KafkaSink{}} = consumer) do
-    case Process.get(:cached_partition_count) do
-      nil ->
-        partition_count = get_partition_count!(consumer)
-        Process.put(:cached_partition_count, partition_count)
-        partition_count
-
-      partition_count when is_integer(partition_count) ->
-        partition_count
     end
   end
 

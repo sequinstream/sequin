@@ -134,12 +134,12 @@ defmodule Sequin.Sinks.Azure.EventHub do
       {:error, error} when is_error(error) ->
         {:error, error}
 
-      {:ok, res} ->
+      {:ok, %Req.Response{} = res} ->
         {:error,
          Error.service(
            service: :azure_event_hub,
            message: "Request failed: #{req_desc}, bad status (status=#{res.status})",
-           details: res
+           details: Map.from_struct(res)
          )}
 
       {:error, error} ->

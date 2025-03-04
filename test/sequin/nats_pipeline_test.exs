@@ -6,13 +6,14 @@ defmodule Sequin.Runtime.NatsPipelineTest do
   alias Sequin.Consumers
   alias Sequin.Error
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Runtime.NatsPipeline
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.NatsMock
 
   describe "message handling" do
     setup do
       consumer =
         ConsumersFactory.sink_consumer(
+          type: :nats,
           sink: %{
             type: :nats,
             host: "localhost",
@@ -38,10 +39,10 @@ defmodule Sequin.Runtime.NatsPipelineTest do
           action: :insert
         )
 
-      ref = send_test_events(consumer, [event])
+      ref = send_test_event(consumer, event)
 
       # Verify successful acknowledgment
-      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}]}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
 
       # Verify event was processed (deleted)
       refute Consumers.reload(event)
@@ -60,7 +61,7 @@ defmodule Sequin.Runtime.NatsPipelineTest do
           action: :insert
         )
 
-      ref = send_test_events(consumer, [event])
+      ref = send_test_event(consumer, [event])
 
       # Verify failed acknowledgment
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
@@ -88,15 +89,15 @@ defmodule Sequin.Runtime.NatsPipelineTest do
           action: :update
         )
 
-      ref = send_test_events(consumer, [event1, event2])
+      ref = send_test_batch(consumer, [event1, event2])
 
-      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}, %{data: %{action: :update}}]}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}, %{data: %{data: %{action: :update}}}], []}, 1_000
     end
   end
 
-  defp send_test_events(consumer, events) do
+  defp send_test_event(consumer, event) do
     start_supervised!(
-      {NatsPipeline,
+      {SinkPipeline,
        [
          consumer: consumer,
          producer: Broadway.DummyProducer,
@@ -105,7 +106,24 @@ defmodule Sequin.Runtime.NatsPipelineTest do
     )
 
     Broadway.test_message(
-      NatsPipeline.via_tuple(consumer.id),
+      SinkPipeline.via_tuple(consumer.id),
+      event,
+      metadata: %{topic: "test_topic", headers: []}
+    )
+  end
+
+  defp send_test_batch(consumer, events) do
+    start_supervised!(
+      {SinkPipeline,
+       [
+         consumer: consumer,
+         producer: Broadway.DummyProducer,
+         test_pid: self()
+       ]}
+    )
+
+    Broadway.test_batch(
+      SinkPipeline.via_tuple(consumer.id),
       events,
       metadata: %{topic: "test_topic", headers: []}
     )

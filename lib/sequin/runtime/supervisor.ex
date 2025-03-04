@@ -119,7 +119,7 @@ defmodule Sequin.Runtime.Supervisor do
     start_table_reader(supervisor, consumer, opts)
   end
 
-  def start_replication(supervisor \\ slot_supervisor(), pg_replication_or_id, opts \\ [])
+  def start_replication(supervisor \\ slot_supervisor(), pg_replication, opts \\ [])
 
   def start_replication(_supervisor, %PostgresReplicationSlot{status: :disabled} = pg_replication, _opts) do
     Logger.info("PostgresReplicationSlot #{pg_replication.id} is disabled, skipping start")
@@ -179,12 +179,13 @@ defmodule Sequin.Runtime.Supervisor do
 
   def stop_replication(supervisor, id) do
     Logger.info("[Runtime.Supervisor] Stopping replication #{id}")
+    SlotSupervisor.stop_slot_processor(id)
     Sequin.DynamicSupervisor.stop_child(supervisor, SlotSupervisor.via_tuple(id))
   end
 
-  def restart_replication(supervisor \\ slot_supervisor(), pg_replication_or_id) do
-    stop_replication(supervisor, pg_replication_or_id)
-    start_replication(supervisor, pg_replication_or_id)
+  def restart_replication(supervisor \\ slot_supervisor(), %PostgresReplicationSlot{} = pg_replication) do
+    stop_replication(supervisor, pg_replication)
+    start_replication(supervisor, pg_replication)
   end
 
   def start_wal_pipeline_servers(supervisor \\ wal_event_supervisor(), pg_replication) do

@@ -298,7 +298,9 @@ defmodule Sequin.Runtime.TableReaderServer do
 
     slot_message_store_ref =
       consumer.id
-      |> SlotMessageStore.via_tuple()
+      # Monitor just the first partition (there's always at least one) and if any crash they will all restart
+      # due to supervisor setting of :one_for_all
+      |> SlotMessageStore.via_tuple(0)
       |> GenServer.whereis()
       |> Process.monitor()
 

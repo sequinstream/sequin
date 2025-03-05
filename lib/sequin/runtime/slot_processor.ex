@@ -454,9 +454,11 @@ defmodule Sequin.Runtime.SlotProcessor do
         GenServer.reply(from, :ok)
         {:noreply, state}
       else
-        pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer_id))
+        # Monitor just the first partition (there's always at least one) and if any crash they will all restart
+        # due to supervisor setting of :one_for_all
+        pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer_id, 0))
         ref = Process.monitor(pid)
-        :ok = SlotMessageStore.set_monitor_ref(pid, ref)
+        :ok = SlotMessageStore.set_monitor_ref(consumer_id, ref)
         Logger.info("Monitoring message store for consumer #{consumer_id}")
         GenServer.reply(from, :ok)
         {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer_id, ref)}}
@@ -1107,8 +1109,8 @@ defmodule Sequin.Runtime.SlotProcessor do
       :ok ->
         low_for_message_stores =
           state.message_store_refs
-          |> Enum.map(fn {consumer_id, ref} ->
-            SlotMessageStore.min_unpersisted_wal_cursor(consumer_id, ref)
+          |> Enum.flat_map(fn {consumer_id, ref} ->
+            SlotMessageStore.min_unpersisted_wal_cursors(consumer_id, ref)
           end)
           |> Enum.filter(& &1)
           |> case do

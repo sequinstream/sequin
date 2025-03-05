@@ -26,11 +26,11 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime
+  alias Sequin.Runtime.MessageHandler
   alias Sequin.Runtime.MessageHandlerMock
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
-  alias Sequin.Runtime.SlotProcessor.MessageHandler
   alias Sequin.Sinks.RedisMock
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character

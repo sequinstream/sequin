@@ -1,5 +1,9 @@
 Mox.defmock(Sequin.Runtime.MessageHandlerMock,
-  for: Sequin.Runtime.SlotProcessor.MessageHandlerBehaviour
+  for: Sequin.Runtime.MessageHandler
+)
+
+Mox.defmock(Sequin.Runtime.SlotMessageHandlerMock,
+  for: Sequin.Runtime.SlotMessageHandler
 )
 
 Mox.defmock(Sequin.Sinks.NatsMock,

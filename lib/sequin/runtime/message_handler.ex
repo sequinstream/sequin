@@ -1,6 +1,5 @@
-defmodule Sequin.Runtime.SlotProcessor.MessageHandler do
+defmodule Sequin.Runtime.MessageHandler do
   @moduledoc false
-  @behaviour Sequin.Runtime.SlotProcessor.MessageHandlerBehaviour
 
   alias Sequin.Constants
   alias Sequin.Consumers
@@ -23,27 +22,22 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandler do
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
-  alias Sequin.Runtime.SlotProcessor.MessageHandlerBehaviour
   alias Sequin.Runtime.TableReaderServer
 
   require Logger
 
+  @callback before_handle_messages(context :: any(), messages :: [Message.t()]) ::
+              :ok | {:error, reason :: any()}
+
+  @callback handle_messages(context :: any(), messages :: [Message.t()]) ::
+              {:ok, count :: non_neg_integer()} | {:error, reason :: any()}
+
+  @callback handle_logical_message(context :: any(), seq :: non_neg_integer(), message :: LogicalMessage.t()) ::
+              :ok | {:error, reason :: any()}
+
   @max_payload_sizes_by_replication_slot_id %{
     "42df29fa-d2ba-4ef3-9c36-6525af31e598" => 1024 * 1024
   }
-
-  defmodule BatchState do
-    @moduledoc false
-    use TypedStruct
-
-    typedstruct do
-      field :batch_id, String.t()
-      field :table_oid, non_neg_integer()
-      field :backfill_id, String.t()
-      field :commit_lsn, integer()
-      field :primary_key_values, MapSet.t(list()), default: MapSet.new()
-    end
-  end
 
   defmodule Context do
     @moduledoc false
@@ -70,7 +64,6 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandler do
     }
   end
 
-  @impl MessageHandlerBehaviour
   def before_handle_messages(%Context{} = ctx, messages) do
     # First, filter to only consumers with running TableReaderServers
     backfilling_consumers =
@@ -105,7 +98,6 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandler do
     end
   end
 
-  @impl MessageHandlerBehaviour
   def handle_messages(%Context{}, []) do
     {:ok, 0}
   end
@@ -167,7 +159,6 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandler do
   end
 
   @high_watermark_prefix Constants.backfill_batch_high_watermark()
-  @impl MessageHandlerBehaviour
   def handle_logical_message(ctx, commit_lsn, %LogicalMessage{prefix: @high_watermark_prefix} = msg) do
     content = Jason.decode!(msg.content)
     %{"batch_id" => batch_id, "backfill_id" => backfill_id} = content

@@ -26,6 +26,7 @@ defmodule Sequin.Runtime.SlotProcessor do
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Runtime
+  alias Sequin.Runtime.MessageHandler
   alias Sequin.Runtime.PostgresAdapter.Decoder
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
@@ -36,7 +37,6 @@ defmodule Sequin.Runtime.SlotProcessor do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor.Message
-  alias Sequin.Runtime.SlotProcessor.MessageHandler
   alias Sequin.Workers.CreateReplicationSlotWorker
 
   require Logger
@@ -363,11 +363,7 @@ defmodule Sequin.Runtime.SlotProcessor do
     end)
   rescue
     e ->
-      if match?(%Error.ServiceError{code: :payload_size_limit_exceeded}, e) do
-        Logger.warning(Exception.message(e))
-      else
-        Logger.error("Error processing message: #{inspect(e)}")
-      end
+      Logger.error("Error processing message: #{inspect(e)}")
 
       error = if is_error(e), do: e, else: Error.service(service: :replication, message: Exception.message(e))
 
@@ -441,6 +437,7 @@ defmodule Sequin.Runtime.SlotProcessor do
   @impl ReplicationConnection
   def handle_call({:update_message_handler_ctx, ctx}, from, state) do
     execute_timed(:update_message_handler_ctx, fn ->
+      :ok = state.message_handler_mod.reload_entities(state.id, state.replication_slot.processor_count)
       state = %{state | message_handler_ctx: ctx}
       # Need to manually send reply
       GenServer.reply(from, :ok)
@@ -1055,7 +1052,11 @@ defmodule Sequin.Runtime.SlotProcessor do
       # Flush accumulated messages
       # Temp: Do this here, as handle_messages call is going to become async
       state.message_handler_module.before_handle_messages(state.message_handler_ctx, messages)
-      {time, res} = :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
+
+      {time, res} =
+        :timer.tc(fn ->
+          state.message_handler_module.handle_messages(state.id, state.replication_slot.processor_count, messages)
+        end)
 
       state.backfill_watermark_messages
       |> Enum.reverse()
@@ -1074,7 +1075,7 @@ defmodule Sequin.Runtime.SlotProcessor do
       end
 
       case res do
-        {:ok, _count} ->
+        :ok ->
           if state.test_pid do
             send(state.test_pid, {__MODULE__, :flush_messages})
           end
@@ -1084,17 +1085,6 @@ defmodule Sequin.Runtime.SlotProcessor do
             | accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []},
               backfill_watermark_messages: []
           }
-
-        {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} ->
-          error =
-            Error.service(
-              message:
-                "One or more of your sinks has exceeded memory limitations for buffered messages. Sequin has stopped processing new messages from your replication slot until the sink(s) drain messages.",
-              service: :postgres_replication_slot,
-              code: :payload_size_limit_exceeded
-            )
-
-          raise error
 
         {:error, error} ->
           raise error
@@ -1109,49 +1099,78 @@ defmodule Sequin.Runtime.SlotProcessor do
     consumers =
       Repo.preload(state.replication_slot, :not_disabled_sink_consumers, force: true).not_disabled_sink_consumers
 
-    case verify_monitor_refs(state) do
-      :ok ->
-        low_for_message_stores =
-          state.message_store_refs
-          |> Enum.flat_map(fn {consumer_id, ref} ->
-            consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
-            SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
-          end)
-          |> Enum.filter(& &1)
-          |> case do
-            [] -> nil
-            cursors -> Enum.min_by(cursors, &{&1.commit_lsn, &1.commit_idx})
-          end
-
-        cond do
-          not is_nil(low_for_message_stores) ->
-            # Use the minimum unpersisted WAL cursor from the message stores.
-            Logger.info("[SlotProcessor] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}")
-            low_for_message_stores
-
-          accumulated_messages?(state) ->
-            # When there are messages that the SlotProcessor has not flushed yet,
-            # we need to fallback on the last low_watermark_wal_cursor (not safe to use
-            # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
-            Logger.info(
-              "[SlotProcessor] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
-            )
-
-            state.low_watermark_wal_cursor
-
-          true ->
-            # The SlotProcessor has processed messages beyond what the message stores have.
-            # This might be due to health messages or messages for tables that do not belong
-            # to any sinks.
-            # We want to advance the slot to the last_commit_lsn in that case because:
-            # 1. It's safe to do.
-            # 2. If the tables in this slot are dormant, the slot will continue to accumulate
-            # WAL unless we advance it. (This is the secondary purpose of the health message,
-            # to allow us to advance the slot even if tables are dormant.)
-            Logger.info("[SlotProcessor] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
-            %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
+    with :ok <- verify_messages_flushed(state),
+         :ok <- verify_monitor_refs(state) do
+      low_for_message_stores =
+        state.message_store_refs
+        |> Enum.flat_map(fn {consumer_id, ref} ->
+          consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
+          SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+        end)
+        |> Enum.filter(& &1)
+        |> case do
+          [] -> nil
+          cursors -> Enum.min_by(cursors, &{&1.commit_lsn, &1.commit_idx})
         end
 
+      cond do
+        not is_nil(low_for_message_stores) ->
+          # Use the minimum unpersisted WAL cursor from the message stores.
+          Logger.info("[SlotProcessor] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}")
+          low_for_message_stores
+
+        accumulated_messages?(state) ->
+          # When there are messages that the SlotProcessor has not flushed yet,
+          # we need to fallback on the last low_watermark_wal_cursor (not safe to use
+          # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
+          Logger.info(
+            "[SlotProcessor] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
+          )
+
+          state.low_watermark_wal_cursor
+
+        true ->
+          # The SlotProcessor has processed messages beyond what the message stores have.
+          # This might be due to health messages or messages for tables that do not belong
+          # to any sinks.
+          # We want to advance the slot to the last_commit_lsn in that case because:
+          # 1. It's safe to do.
+          # 2. If the tables in this slot are dormant, the slot will continue to accumulate
+          # WAL unless we advance it. (This is the secondary purpose of the health message,
+          # to allow us to advance the slot even if tables are dormant.)
+          Logger.info("[SlotProcessor] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
+          %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
+      end
+
+      cond do
+        not is_nil(low_for_message_stores) ->
+          # Use the minimum unpersisted WAL cursor from the message stores.
+          Logger.info("[SlotProcessor] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}")
+          low_for_message_stores
+
+        accumulated_messages?(state) ->
+          # When there are messages that the SlotProcessor has not flushed yet,
+          # we need to fallback on the last low_watermark_wal_cursor (not safe to use
+          # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
+          Logger.info(
+            "[SlotProcessor] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
+          )
+
+          state.low_watermark_wal_cursor
+
+        true ->
+          # The SlotProcessor has processed messages beyond what the message stores have.
+          # This might be due to health messages or messages for tables that do not belong
+          # to any sinks.
+          # We want to advance the slot to the last_commit_lsn in that case because:
+          # 1. It's safe to do.
+          # 2. If the tables in this slot are dormant, the slot will continue to accumulate
+          # WAL unless we advance it. (This is the secondary purpose of the health message,
+          # to allow us to advance the slot even if tables are dormant.)
+          Logger.info("[SlotProcessor] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
+          %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
+      end
+    else
       {:error, error} ->
         raise error
     end
@@ -1198,6 +1217,10 @@ defmodule Sequin.Runtime.SlotProcessor do
       true ->
         :ok
     end
+  end
+
+  defp verify_messages_flushed(%State{} = state) do
+    state.message_handler_module.flush_messages(state.id, state.replication_slot.processor_count)
   end
 
   def data_tuple_to_ids(columns, tuple_data) do

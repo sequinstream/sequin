@@ -111,6 +111,15 @@ if config_env() == :prod and self_hosted do
       _ -> false
     end
 
+  check_origin =
+    case System.get_env("SERVER_CHECK_ORIGIN", "false") do
+      "true" -> true
+      "1" -> true
+      "false" -> false
+      "0" -> false
+      other -> raise("Invalid SERVER_CHECK_ORIGIN: #{other}, must be true or false or 1 or 0")
+    end
+
   config :sequin, Sequin.Posthog,
     req_opts: [base_url: "https://us.i.posthog.com"],
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
@@ -128,6 +137,7 @@ if config_env() == :prod and self_hosted do
     # host and port of the application
     # TODO: Default to 443
     url: [host: server_host, port: server_port, scheme: "https"],
+    check_origin: check_origin,
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: server_port

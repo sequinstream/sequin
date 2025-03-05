@@ -26,15 +26,6 @@ defmodule Sequin.Runtime.MessageHandler do
 
   require Logger
 
-  @callback before_handle_messages(context :: any(), messages :: [Message.t()]) ::
-              :ok | {:error, reason :: any()}
-
-  @callback handle_messages(context :: any(), messages :: [Message.t()]) ::
-              {:ok, count :: non_neg_integer()} | {:error, reason :: any()}
-
-  @callback handle_logical_message(context :: any(), seq :: non_neg_integer(), message :: LogicalMessage.t()) ::
-              :ok | {:error, reason :: any()}
-
   @max_payload_sizes_by_replication_slot_id %{
     "42df29fa-d2ba-4ef3-9c36-6525af31e598" => 1024 * 1024
   }
@@ -49,6 +40,7 @@ defmodule Sequin.Runtime.MessageHandler do
       field :replication_slot_id, String.t()
       field :postgres_database, PostgresDatabase.t()
       field :table_reader_mod, module(), default: TableReaderServer
+      field :partition_count, non_neg_integer()
     end
   end
 
@@ -60,7 +52,8 @@ defmodule Sequin.Runtime.MessageHandler do
       consumers: pr.not_disabled_sink_consumers,
       wal_pipelines: pr.wal_pipelines,
       postgres_database: pr.postgres_database,
-      replication_slot_id: pr.id
+      replication_slot_id: pr.id,
+      partition_count: pr.partition_count
     }
   end
 

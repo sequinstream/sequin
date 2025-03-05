@@ -19,6 +19,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
   alias Sequin.Runtime.PageSizeOptimizer
   alias Sequin.Runtime.PageSizeOptimizerMock
   alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.Runtime.TableReader
   alias Sequin.Runtime.TableReaderServer
   alias Sequin.TestSupport.Models.CharacterDetailed
@@ -178,7 +179,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       |> Ecto.Changeset.change(%{initial_min_cursor: initial_min_cursor})
       |> Repo.update!()
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       Process.monitor(pid)
@@ -225,7 +226,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
     } do
       page_size = 3
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       {:ok, messages} = flush_batches(consumer, pid)
@@ -247,7 +248,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [CharacterDetailed.column_attnum("name")]}
       {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       {:ok, messages} = flush_batches(consumer, pid)
@@ -276,7 +277,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
 
       page_size = 10
 
-      start_supervised({SlotMessageStore, consumer: filtered_consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: filtered_consumer, test_pid: self()})
       pid = start_table_reader_server(filtered_consumer_backfill, table_oid, initial_page_size: page_size)
 
       {:ok, messages} = flush_batches(filtered_consumer, pid)
@@ -316,7 +317,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
     } do
       page_size = 3
 
-      start_supervised({SlotMessageStore, consumer: event_consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: event_consumer, test_pid: self()})
       pid = start_table_reader_server(event_consumer_backfill, table_oid, initial_page_size: page_size)
 
       {:ok, messages} = flush_batches(event_consumer, pid)
@@ -352,7 +353,9 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       # Set below 8 characters in table
       max_pending_messages = 1
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self(), flush_interval: 1, flush_wait_ms: 1})
+      start_supervised(
+        {SlotMessageStoreSupervisor, consumer: consumer, test_pid: self(), flush_interval: 1, flush_wait_ms: 1}
+      )
 
       pid =
         start_table_reader_server(backfill, table_oid,
@@ -383,7 +386,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       max_lsn = (1 <<< 64) - 1
       fetch_slot_lsn = fn _db, _slot_name -> {:ok, max_lsn} end
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
 
       pid =
         start_table_reader_server(backfill, table_oid,
@@ -437,7 +440,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
         end
       end
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
 
       # Use PageSizeOptimizer in this test
       pid =
@@ -510,7 +513,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
         end
       end
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
 
       # Use PageSizeOptimizer in this test
       pid =
@@ -553,7 +556,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
           updated_at: DateTime.utc_now()
         )
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       # Monitor the process to track when it completes
@@ -595,7 +598,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
           power_level: 9001
         )
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: 10)
 
       {:ok, messages} = flush_batches(consumer, pid)
@@ -631,7 +634,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
     } do
       page_size = 100
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       # Wait for the first batch to be fetched

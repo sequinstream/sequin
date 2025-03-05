@@ -7,8 +7,8 @@ defmodule Sequin.Bench.SlotMessageStoreState do
 
   def run do
     # Setup initial states with different message counts
-    {state_5k, messages_5k} = setup_state_with_messages(5_000)
-    {state_50k, messages_50k} = setup_state_with_messages(50_000)
+    {state_5k, messages_5k} = setup_state_with_messages(5_000, 0)
+    {state_50k, messages_50k} = setup_state_with_messages(50_000, 0)
 
     # Sample messages for operations that need specific messages
     sample_messages_5k = Enum.take_random(messages_5k, 100)
@@ -71,11 +71,11 @@ defmodule Sequin.Bench.SlotMessageStoreState do
   end
 
   # Helper function to set up state with n messages
-  defp setup_state_with_messages(count) do
+  defp setup_state_with_messages(count, partition) do
     consumer = %SinkConsumer{id: "test-consumer", seq: Factory.unique_integer()}
     messages = Enum.map(1..count, fn _ -> ConsumersFactory.consumer_message() end)
-    state = %State{consumer: consumer}
-    :ok = State.setup_ets(consumer)
+    state = %State{consumer: consumer, partition: partition}
+    :ok = State.setup_ets(state)
     {:ok, state_with_messages} = State.put_messages(state, messages)
     {state_with_messages, messages}
   end

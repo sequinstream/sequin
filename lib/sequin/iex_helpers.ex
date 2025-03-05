@@ -4,6 +4,7 @@ defmodule Sequin.IexHelpers do
   alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Repo
+  alias Sequin.Runtime.SlotMessageStoreSupervisor
 
   def via(:slot, id) do
     Sequin.Runtime.SlotProcessor.via_tuple(id)
@@ -13,8 +14,15 @@ defmodule Sequin.IexHelpers do
     Sequin.Runtime.TableReaderServer.via_tuple(id)
   end
 
-  def via(:slot_store, id) do
-    Sequin.Runtime.SlotMessageStore.via_tuple(id)
+  def via(:slot_stores, id) do
+    sup_via = SlotMessageStoreSupervisor.via_tuple(id)
+
+    store_vias =
+      Enum.map(0..(SlotMessageStoreSupervisor.partition_count() - 1), fn partition ->
+        Sequin.Runtime.SlotMessageStore.via_tuple(id, partition)
+      end)
+
+    {sup_via, store_vias}
   end
 
   def via(:sink, id) do
@@ -61,10 +69,12 @@ defmodule Sequin.IexHelpers do
     end
   end
 
-  def whereis(:slot_store, consumer_id) do
-    :slot_store
-    |> via(consumer_id)
-    |> GenServer.whereis()
+  def whereis(:slot_stores, consumer_id) do
+    {sup_via, store_vias} = via(:slot_stores, consumer_id)
+    sup_pid = GenServer.whereis(sup_via)
+    store_pids = Enum.map(store_vias, &GenServer.whereis/1)
+
+    {sup_pid, store_pids}
   end
 
   def whereis(:sink, id) do
@@ -80,7 +90,7 @@ defmodule Sequin.IexHelpers do
   def whereis(id) do
     with nil <- whereis(:slot, id),
          nil <- whereis(:table_reader, id),
-         nil <- whereis(:slot_store, id) do
+         nil <- whereis(:slot_stores, id) do
       whereis(:sink, id)
     end
   end

@@ -64,7 +64,7 @@ defmodule Sequin.Runtime.SlotProcessor do
           # We can lower this even more when we handle heartbeat messages sync
           # Right now, there are races where we receive a heartbeat message before our
           # regular messages get a chance to come through and be part of the batch.
-          20
+          30
         else
           100
         end
@@ -435,9 +435,9 @@ defmodule Sequin.Runtime.SlotProcessor do
   end
 
   @impl ReplicationConnection
-  def handle_call({:update_message_handler_ctx, ctx}, from, state) do
+  def handle_call({:update_message_handler_ctx, ctx}, from, %State{} = state) do
     execute_timed(:update_message_handler_ctx, fn ->
-      :ok = state.message_handler_mod.reload_entities(state.id, state.replication_slot.processor_count)
+      :ok = state.message_handler_module.reload_entities(ctx)
       state = %{state | message_handler_ctx: ctx}
       # Need to manually send reply
       GenServer.reply(from, :ok)
@@ -1055,7 +1055,7 @@ defmodule Sequin.Runtime.SlotProcessor do
 
       {time, res} =
         :timer.tc(fn ->
-          state.message_handler_module.handle_messages(state.id, state.replication_slot.processor_count, messages)
+          state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
         end)
 
       state.backfill_watermark_messages
@@ -1077,6 +1077,7 @@ defmodule Sequin.Runtime.SlotProcessor do
       case res do
         :ok ->
           if state.test_pid do
+            state.message_handler_module.flush_messages(state.message_handler_ctx)
             send(state.test_pid, {__MODULE__, :flush_messages})
           end
 
@@ -1220,7 +1221,7 @@ defmodule Sequin.Runtime.SlotProcessor do
   end
 
   defp verify_messages_flushed(%State{} = state) do
-    state.message_handler_module.flush_messages(state.id, state.replication_slot.processor_count)
+    state.message_handler_module.flush_messages(state.message_handler_ctx)
   end
 
   def data_tuple_to_ids(columns, tuple_data) do

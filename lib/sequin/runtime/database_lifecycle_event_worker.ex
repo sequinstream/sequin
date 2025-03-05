@@ -72,7 +72,7 @@ defmodule Sequin.Runtime.DatabaseLifecycleEventWorker do
           if pg_replication.status == :disabled do
             Runtime.Supervisor.stop_replication(pg_replication)
           else
-            Runtime.Supervisor.start_replication(pg_replication)
+            Runtime.Supervisor.restart_replication(pg_replication)
           end
         end
 

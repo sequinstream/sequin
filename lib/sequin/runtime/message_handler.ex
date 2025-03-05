@@ -25,6 +25,7 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandler do
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.SlotProcessor.MessageHandlerBehaviour
   alias Sequin.Runtime.TableReaderServer
+  alias Wasmex.Wasi.WasiP2Options
 
   require Logger
 
@@ -120,6 +121,81 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandler do
         execute_timed(:messages_by_consumer_id, fn ->
           messages_by_consumer_id(ctx, messages)
         end)
+
+      dbg(messages_by_consumer_id)
+
+      messages_by_consumer_id =
+        Enum.map(messages_by_consumer_id, fn {con_id, messages} ->
+          messages =
+            Enum.map(messages, fn message ->
+              message_data = message.data
+
+              record_data =
+                message.data
+                |> Map.take([:record, :action])
+                |> Map.put(:old, Map.merge(message.data.record, message.data.changes))
+                |> Map.update!(
+                  :record,
+                  &Map.new(&1, fn {key, value} ->
+                    case value do
+                      %NaiveDateTime{} = dt -> {key, NaiveDateTime.to_iso8601(dt)}
+                      _ -> {key, value}
+                    end
+                  end)
+                )
+                |> Map.update!(
+                  :old,
+                  &Map.new(&1, fn {key, value} ->
+                    case value do
+                      %NaiveDateTime{} = dt -> {key, NaiveDateTime.to_iso8601(dt)}
+                      _ -> {key, value}
+                    end
+                  end)
+                )
+                |> Map.put(:action, to_string(message_data.action))
+
+              # record_data =
+              #   message.data
+              #   |> Map.fetch!(:record)
+              #   |> Map.new(fn {key, value} ->
+              #     case value do
+              #       %NaiveDateTime{} = dt -> {key, NaiveDateTime.to_iso8601(dt)}
+              #       _ -> {key, value}
+              #     end
+              #   end)
+
+              # |> Map.take([:record, :metadata, :action])
+              # |> Map.put(:old, Map.merge(message.data.record, message.data.changes))
+
+              dbg(record_data)
+
+              bytes = File.read!("/Users/acco/x/sequin/wasm/transform.wasm")
+
+              {time, instance_pid} =
+                :timer.tc(fn ->
+                  {:ok, instance_pid} =
+                    Wasmex.Components.start_link(%{bytes: bytes, wasi: %WasiP2Options{allow_http: true}})
+
+                  instance_pid
+                end)
+
+              dbg({"load time (ms)", time / 1000})
+
+              {time, new_data} =
+                :timer.tc(fn ->
+                  {:ok, new_data} = Wasmex.Components.call_function(instance_pid, "transform", [record_data])
+                  new_data
+                end)
+
+              dbg({"transform time (ms)", time / 1000})
+
+              %{message | data: new_data}
+            end)
+
+          {con_id, messages}
+        end)
+
+      dbg(messages_by_consumer_id)
 
       wal_events =
         execute_timed(:wal_events, fn ->

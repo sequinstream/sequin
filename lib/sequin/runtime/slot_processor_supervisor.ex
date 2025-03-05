@@ -47,10 +47,11 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
     slot_opts = Keyword.merge(default_opts, opts)
 
     message_handlers =
-      Enum.map(0..(slot.processor_count - 1), fn idx ->
+      Enum.map(0..(slot.partition_count - 1), fn idx ->
         opts = [
           replication_slot_id: slot.id,
-          processor_idx: idx
+          processor_idx: idx,
+          test_pid: opts[:test_pid]
         ]
 
         SlotMessageHandler.child_spec(opts)

@@ -16,25 +16,26 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Runtime.MessageHandler
+  alias Sequin.Runtime.MessageHandler.Context
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.TableReaderServer
 
   require Logger
 
-  @callback before_handle_messages(context :: any(), messages :: [Message.t()]) ::
+  @callback before_handle_messages(Context.t(), messages :: [Message.t()]) ::
               :ok | {:error, reason :: any()}
 
-  @callback handle_messages(slot_id :: String.t(), processor_count :: non_neg_integer(), messages :: [Message.t()]) ::
+  @callback handle_messages(context :: Context.t(), messages :: [Message.t()]) ::
               :ok | {:error, reason :: any()}
 
-  @callback handle_logical_message(context :: any(), seq :: non_neg_integer(), message :: LogicalMessage.t()) ::
+  @callback handle_logical_message(Context.t(), seq :: non_neg_integer(), message :: LogicalMessage.t()) ::
               :ok | {:error, reason :: any()}
 
-  @callback reload_entities(slot_id :: String.t(), processor_count :: non_neg_integer()) ::
+  @callback reload_entities(context :: Context.t()) ::
               :ok | {:error, reason :: any()}
 
-  @callback flush_messages(slot_id :: String.t(), processor_count :: non_neg_integer()) ::
+  @callback flush_messages(context :: Context.t()) ::
               :ok | {:error, reason :: any()}
 
   defdelegate before_handle_messages(context, messages), to: MessageHandler
@@ -52,7 +53,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     typedstruct do
       field :id, PostgresReplicationSlot.id()
       field :processor_idx, non_neg_integer()
-      field :processor_count, non_neg_integer()
+      field :partition_count, non_neg_integer()
       field :last_logged_stats_at, non_neg_integer()
 
       # Entities
@@ -74,7 +75,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
   * `:context` - The MessageHandler.Context to use
   * `:processor_idx` - The ID of this partition (0-based)
-  * `:processor_count` - The total number of partitions
+  * `:partition_count` - The total number of partitions
   """
   def start_link(opts) do
     replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
@@ -112,13 +113,14 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
   Implements the MessageHandlerBehaviour.handle_messages/2 callback.
   """
-  def handle_messages(_slot_id, _processor_count, []) do
+  def handle_messages(_ctx, []) do
     :ok
   end
 
-  def handle_messages(slot_id, processor_count, messages) do
+  def handle_messages(%Context{} = ctx, messages) do
+    %{replication_slot_id: slot_id, partition_count: partition_count} = ctx
     # Determine which partition to send to based on a hash of the message
-    messages_by_partition = partition_messages(messages, processor_count)
+    messages_by_partition = partition_messages(messages, partition_count)
 
     # Send messages to each partition
     Sequin.Enum.reduce_while_ok(messages_by_partition, fn {processor_idx, partition_messages} ->
@@ -127,8 +129,10 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     end)
   end
 
-  def reload_entities(slot_id, processor_count) do
-    Sequin.Enum.reduce_while_ok(0..(processor_count - 1), fn processor_idx ->
+  def reload_entities(%Context{} = ctx) do
+    %{replication_slot_id: slot_id, partition_count: partition_count} = ctx
+
+    Sequin.Enum.reduce_while_ok(0..(partition_count - 1), fn processor_idx ->
       name = via_tuple(slot_id, processor_idx)
       GenServer.call(name, :load_entities)
     end)
@@ -140,8 +144,10 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   This ensures that all SlotMessageHandlers have finished processing their messages.
   Upstream callers can use this to ensure all handlers are done processing.
   """
-  def flush_messages(slot_id, processor_count) do
-    Sequin.Enum.reduce_while_ok(0..(processor_count - 1), fn processor_idx ->
+  def flush_messages(%Context{} = ctx) do
+    %{replication_slot_id: slot_id, partition_count: partition_count} = ctx
+
+    Sequin.Enum.reduce_while_ok(0..(partition_count - 1), fn processor_idx ->
       name = via_tuple(slot_id, processor_idx)
       GenServer.call(name, :flush)
     end)
@@ -158,6 +164,10 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       replication_slot_id: replication_slot_id,
       processor_idx: processor_idx
     )
+
+    if test_pid = Keyword.get(opts, :test_pid) do
+      Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    end
 
     Logger.info("[SlotMessageHandler] Starting partition #{processor_idx} for slot #{replication_slot_id}")
 
@@ -219,19 +229,12 @@ defmodule Sequin.Runtime.SlotMessageHandler do
           %Health.Event{slug: :replication_message_processed, status: :fail, error: error}
         )
 
-        {:noreply, state}
+        raise error
 
       error ->
         Logger.error("[SlotMessageHandler] Error handling messages: #{inspect(error)}", error: error)
         raise error
     end
-  end
-
-  @impl GenServer
-  def handle_info(:load_entities, %State{} = state) do
-    # Load entities from the database
-    state = load_entities(state)
-    {:noreply, state}
   end
 
   @impl GenServer
@@ -251,7 +254,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
       message_queue_len: info[:message_queue_len],
       processor_idx: state.processor_idx,
-      processor_count: state.processor_count,
+      partition_count: state.partition_count,
       replication_slot_id: state.id
     ]
 
@@ -262,7 +265,6 @@ defmodule Sequin.Runtime.SlotMessageHandler do
         key |> to_string() |> String.ends_with?("_total_ms")
       end)
       |> Keyword.new()
-      |> IO.inspect()
 
     # Log all timing metrics as histograms with operation tag
     Enum.each(timing_metrics, fn {key, value} ->
@@ -297,10 +299,6 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       )
     end
 
-    timing_metrics
-    |> Keyword.put(:unaccounted_ms, unaccounted_ms)
-    |> IO.inspect(label: "timing_metrics")
-
     metadata =
       metadata
       |> Keyword.merge(timing_metrics)
@@ -323,15 +321,15 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     Process.send_after(self(), :process_logging, interval)
   end
 
-  defp partition_messages(messages, processor_count) do
-    Enum.group_by(messages, &message_to_processor_idx(&1, processor_count))
+  defp partition_messages(messages, partition_count) do
+    Enum.group_by(messages, &message_to_processor_idx(&1, partition_count))
   end
 
-  defp message_to_processor_idx(%Message{} = message, processor_count) do
+  defp message_to_processor_idx(%Message{} = message, partition_count) do
     # Use table_oid and ids to determine partition
     # This ensures related messages go to the same partition
-    hash_input = "#{message.table_oid}:#{Enum.join(message.ids, ",")}"
-    :erlang.phash2(hash_input, processor_count)
+    hash_input = {message.table_oid, message.ids}
+    :erlang.phash2(hash_input, partition_count)
   end
 
   defp load_entities(%State{} = state) do
@@ -349,7 +347,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       | postgres_database: db,
         consumers: consumers,
         wal_pipelines: pipelines,
-        processor_count: slot.processor_count
+        partition_count: slot.partition_count
     }
   end
 

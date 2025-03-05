@@ -5,6 +5,7 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandlerBehaviour do
 
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.Runtime.SlotProcessor.MessageHandler.Context
 
   @doc """
   Callback invoked before handling a batch of replication messages.
@@ -18,7 +19,7 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandlerBehaviour do
 
     The return value is :ok or {:error, reason}.
   """
-  @callback before_handle_messages(context :: any(), messages :: [Message.t()]) ::
+  @callback before_handle_messages(context :: Context.t(), messages :: [Message.t()]) ::
               :ok | {:error, reason :: any()}
 
   @doc """
@@ -33,7 +34,7 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandlerBehaviour do
 
     The return value is an updated context.
   """
-  @callback handle_messages(context :: any(), messages :: [Message.t()]) ::
+  @callback handle_messages(context :: Context.t(), messages :: [Message.t()]) ::
               {:ok, count :: non_neg_integer()} | {:error, reason :: any()}
 
   @doc """
@@ -48,6 +49,6 @@ defmodule Sequin.Runtime.SlotProcessor.MessageHandlerBehaviour do
 
     The return value is an updated context.
   """
-  @callback handle_logical_message(context :: any(), seq :: non_neg_integer(), message :: LogicalMessage.t()) ::
+  @callback handle_logical_message(context :: Context.t(), seq :: non_neg_integer(), message :: LogicalMessage.t()) ::
               :ok | {:error, reason :: any()}
 end

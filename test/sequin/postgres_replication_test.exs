@@ -31,6 +31,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.Runtime.SlotProcessor.MessageHandler
   alias Sequin.Sinks.RedisMock
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
@@ -1567,7 +1568,13 @@ defmodule Sequin.PostgresReplicationTest do
           test_pid: self(),
           id: server_id(),
           message_handler_module: MessageHandlerMock,
-          message_handler_ctx: nil,
+          message_handler_ctx: %MessageHandler.Context{
+            consumers: [],
+            wal_pipelines: [],
+            replication_slot_id: "test_slot_id",
+            postgres_database: db,
+            table_reader_mod: TableReaderServer
+          },
           postgres_database: db,
           replication_slot: %PostgresReplicationSlot{id: "test_slot_id"}
         ],

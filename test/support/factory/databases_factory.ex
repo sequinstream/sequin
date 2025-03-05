@@ -153,9 +153,9 @@ defmodule Sequin.Factory.DatabasesFactory do
     {columns, attrs} =
       Map.pop_lazy(attrs, :columns, fn ->
         # Ensure at least one PK column
-        pk = column_attrs(is_pk?: true, type: Enum.random(["integer", "uuid"]))
+        pk = column(is_pk?: true, type: Enum.random(["integer", "uuid"]))
         num_columns = Enum.random(1..5)
-        cols = for _ <- 1..num_columns, do: column_attrs()
+        cols = for _ <- 1..num_columns, do: column()
         Enum.shuffle([pk | cols])
       end)
 

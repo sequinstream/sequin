@@ -13,6 +13,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.TestSupport.Models.CharacterDetailed
 
   describe "events are sent to the HTTP endpoint" do
@@ -241,7 +242,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_event])
 
       # Start the pipeline
@@ -261,8 +262,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      state = SlotMessageStore.peek(consumer.id)
-      assert state.messages == %{}
+      assert [] == SlotMessageStore.peek_messages(consumer.id, 10)
     end
 
     @tag capture_log: true
@@ -297,7 +297,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 500)}
       end
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self()]})
+      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self()]})
 
       expect_uuid4(fn -> event1.ack_id end)
       expect_uuid4(fn -> event2.ack_id end)
@@ -314,9 +314,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {SinkPipeline, :ack_finished, [], [_failed2]}, 2_000
 
       # Reload the events from the database to check not_visible_until
-      %SlotMessageStore.State{} = state = SlotMessageStore.peek(consumer.id)
-      updated_event1 = Map.fetch!(state.messages, {event1.commit_lsn, event1.commit_idx})
-      updated_event2 = Map.fetch!(state.messages, {event2.commit_lsn, event2.commit_idx})
+      messages = SlotMessageStore.peek_messages(consumer.id, 10)
+
+      updated_event1 =
+        Sequin.Enum.find!(messages, &(&1.commit_lsn == event1.commit_lsn and &1.commit_idx == event1.commit_idx))
+
+      updated_event2 =
+        Sequin.Enum.find!(messages, &(&1.commit_lsn == event2.commit_lsn and &1.commit_idx == event2.commit_idx))
 
       assert updated_event1.not_visible_until
       assert updated_event2.not_visible_until
@@ -346,7 +350,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert :ok = MessageLedgers.wal_cursors_ingested(consumer.id, [wal_cursor])
       assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [event])
 
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
@@ -414,7 +418,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           }
         )
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
       # Start the pipeline
@@ -437,8 +441,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      state = SlotMessageStore.peek(consumer.id)
-      assert state.messages == %{}
+      assert [] == SlotMessageStore.peek_messages(consumer.id, 10)
     end
 
     test "legacy event transform is applied when feature flag is enabled", %{consumer: consumer} do
@@ -469,7 +472,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [record])
 
       # Start the pipeline with legacy_event_transform feature enabled
@@ -506,8 +509,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      state = SlotMessageStore.peek(consumer.id)
-      assert state.messages == %{}
+      assert [] == SlotMessageStore.peek_messages(consumer.id, 10)
     end
   end
 

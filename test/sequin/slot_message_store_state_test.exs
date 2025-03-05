@@ -10,8 +10,8 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
   alias Sequin.Size
 
   setup do
-    state = %State{consumer: %SinkConsumer{seq: Factory.unique_integer()}}
-    State.setup_ets(state.consumer)
+    state = %State{consumer: %SinkConsumer{seq: Factory.unique_integer()}, partition: 0}
+    State.setup_ets(state)
     {:ok, %{state: state}}
   end
 

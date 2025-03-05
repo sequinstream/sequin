@@ -1622,7 +1622,6 @@ defmodule Sequin.PostgresReplicationTest do
   defp list_messages(%SinkConsumer{id: id}), do: list_messages(id)
 
   defp list_messages(id) do
-    %SlotMessageStore.State{messages: messages} = SlotMessageStore.peek(id)
-    Map.values(messages)
+    SlotMessageStore.peek_messages(id, 1000)
   end
 end

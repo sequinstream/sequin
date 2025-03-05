@@ -12,6 +12,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
 
@@ -174,7 +175,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
 
       consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
+      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
       start_supervised!({SinkPipeline, [consumer: consumer, test_pid: test_pid]})

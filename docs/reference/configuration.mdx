@@ -20,6 +20,8 @@ You can configure Sequin by setting environment variables.
   - This is the port that Sequin will listen on for incoming connections. It's the port for both the web console as well as the API.
 - `SERVER_HOST`: Host name for the server
   - If you're hosting Sequin at a custom domain, you should set this to that domain.
+- `SERVER_CHECK_ORIGIN`: Enable origin checking (default: `false`)
+  - If you're hosting Sequin at a public URL, you should set this to `true` and set `SERVER_HOST` to your public domain. This will ensure that Sequin only serves requests from origins matching `SERVER_HOST`. e.g. if your app is hosted at `https://sequin.example.com`, you should set `SERVER_HOST` to `sequin.example.com` and `SERVER_CHECK_ORIGIN` to `true`.
 
 ### Configuration file
 
@@ -151,6 +153,10 @@ openssl rand -base64 64
 # Generate VAULT_KEY
 openssl rand -base64 32
 ```
+
+### Set `SERVER_CHECK_ORIGIN` and `SERVER_HOST`
+
+If you're hosting Sequin at a public URL, you should set `SERVER_CHECK_ORIGIN` to `true` and `SERVER_HOST` to your public domain. See [General configuration](#general-configuration).
 
 ### Active-passive architecture
 

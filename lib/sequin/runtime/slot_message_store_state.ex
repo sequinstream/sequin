@@ -23,6 +23,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :last_consumer_producer_pid, pid() | nil
     field :messages, %{cursor_tuple() => message()}, default: %{}
     field :ack_ids_to_cursor_tuples, %{SinkConsumer.ack_id() => cursor_tuple()}, default: %{}
+    field :partition, non_neg_integer()
     field :produced_message_groups, Multiset.t(), default: %{}
     field :persisted_message_groups, Multiset.t(), default: %{}
     field :unpersisted_cursor_tuples_for_table_reader_batches, Multiset.t(), default: %{}
@@ -37,17 +38,17 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :last_logged_stats_at, non_neg_integer() | nil
   end
 
-  @spec setup_ets(Sequin.Consumers.SinkConsumer.t()) :: :ok
-  def setup_ets(consumer) do
-    table_name = ordered_cursors_table(consumer)
+  @spec setup_ets(State.t()) :: :ok
+  def setup_ets(%State{} = state) do
+    table_name = ordered_cursors_table(state)
 
     :ets.new(table_name, [:ordered_set, :named_table, :protected])
     :ok
   end
 
-  @spec ordered_cursors_table(Sequin.Consumers.SinkConsumer.t()) :: atom()
-  defp ordered_cursors_table(consumer) do
-    :"slot_message_store_state_ordered_cursors_consumer_#{consumer.seq}"
+  @spec ordered_cursors_table(State.t()) :: atom()
+  defp ordered_cursors_table(%State{} = state) do
+    :"slot_message_store_state_ordered_cursors_consumer_#{state.consumer.seq}_partition_#{state.partition}"
   end
 
   @spec validate_put_messages(State.t(), list(message()) | Enumerable.t(), keyword()) ::
@@ -83,7 +84,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       # Insert into ETS
       ets_keys = Enum.map(messages, fn msg -> {{msg.commit_lsn, msg.commit_idx}} end)
 
-      state.consumer
+      state
       |> ordered_cursors_table()
       |> :ets.insert(ets_keys)
 
@@ -144,7 +145,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     messages = Map.drop(state.messages, cursor_tuples)
 
     # Remove from ETS
-    table = ordered_cursors_table(state.consumer)
+    table = ordered_cursors_table(state)
 
     Enum.each(popped_messages, fn msg ->
       :ets.delete(table, {msg.commit_lsn, msg.commit_idx})
@@ -414,7 +415,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   # This function provides an optimized way to take the first N messages from a map,
   # using ETS ordered set to maintain sort order
   defp sorted_message_stream(%State{} = state) do
-    table = ordered_cursors_table(state.consumer)
+    table = ordered_cursors_table(state)
 
     Stream.unfold(:ets.first(table), fn
       :"$end_of_table" ->
@@ -432,7 +433,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   and vice versa.
   """
   def count_unsynced_messages(%State{} = state) do
-    table = ordered_cursors_table(state.consumer)
+    table = ordered_cursors_table(state)
     message_keys = Map.keys(state.messages)
 
     # Count keys in messages that aren't in ETS

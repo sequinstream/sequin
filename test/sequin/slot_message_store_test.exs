@@ -7,6 +7,7 @@ defmodule Sequin.SlotMessageStoreTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotMessageStore.State
+  alias Sequin.Runtime.SlotMessageStoreSupervisor
 
   describe "SlotMessageStore with persisted messages" do
     setup do
@@ -15,7 +16,7 @@ defmodule Sequin.SlotMessageStoreTest do
       msg1 = ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
       msg2 = ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
 
       %{consumer: consumer, msg1: msg1, msg2: msg2}
     end
@@ -29,7 +30,9 @@ defmodule Sequin.SlotMessageStoreTest do
       assert length(delivered) == 2
       assert Enum.all?(delivered, fn msg -> msg.id in [msg1.id, msg2.id] end)
 
-      assert SlotMessageStore.peek(consumer.id).payload_size_bytes > 0
+      assert Enum.any?(SlotMessageStore.peek(consumer.id), fn state ->
+               state.payload_size_bytes > 0
+             end)
     end
 
     test "producing and acking persisted messages deletes them from disk", %{consumer: consumer} do
@@ -71,8 +74,8 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
       event_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
-      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self()})
-      start_supervised!({SlotMessageStore, consumer_id: event_consumer.id, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer: event_consumer, test_pid: self()})
       %{consumer: consumer, event_consumer: event_consumer}
     end
 
@@ -120,7 +123,8 @@ defmodule Sequin.SlotMessageStoreTest do
         ack_id: delivered.ack_id,
         deliver_count: 1,
         last_delivered_at: DateTime.utc_now(),
-        not_visible_until: DateTime.utc_now()
+        not_visible_until: DateTime.utc_now(),
+        group_id: delivered.group_id
       }
 
       :ok = SlotMessageStore.messages_failed(consumer.id, [meta])
@@ -158,7 +162,8 @@ defmodule Sequin.SlotMessageStoreTest do
         ack_id: delivered.ack_id,
         deliver_count: 1,
         last_delivered_at: DateTime.utc_now(),
-        not_visible_until: DateTime.utc_now()
+        not_visible_until: DateTime.utc_now(),
+        group_id: delivered.group_id
       }
 
       :ok = SlotMessageStore.messages_failed(consumer.id, [meta])
@@ -197,7 +202,8 @@ defmodule Sequin.SlotMessageStoreTest do
             ack_id: msg.ack_id,
             deliver_count: 1,
             last_delivered_at: now,
-            not_visible_until: not_visible_until
+            not_visible_until: not_visible_until,
+            group_id: msg.group_id
           }
         end)
 
@@ -238,6 +244,7 @@ defmodule Sequin.SlotMessageStoreTest do
       meta = %{
         ack_id: delivered.ack_id,
         deliver_count: 1,
+        group_id: delivered.group_id,
         last_delivered_at: DateTime.utc_now(),
         not_visible_until: DateTime.add(DateTime.utc_now(), 60)
       }
@@ -303,6 +310,7 @@ defmodule Sequin.SlotMessageStoreTest do
       meta = %{
         ack_id: delivered.ack_id,
         deliver_count: 1,
+        group_id: nil,
         last_delivered_at: DateTime.utc_now(),
         not_visible_until: DateTime.add(DateTime.utc_now(), 60)
       }
@@ -332,6 +340,7 @@ defmodule Sequin.SlotMessageStoreTest do
       meta = %{
         ack_id: delivered.ack_id,
         deliver_count: 1,
+        group_id: nil,
         last_delivered_at: DateTime.utc_now(),
         not_visible_until: DateTime.add(DateTime.utc_now(), 60)
       }
@@ -339,8 +348,9 @@ defmodule Sequin.SlotMessageStoreTest do
       :ok = SlotMessageStore.messages_failed(consumer.id, [meta])
 
       # Peek at state to verify is_message_group_persisted? returns false
-      state = SlotMessageStore.peek(consumer.id)
-      refute State.is_message_group_persisted?(state, nil)
+      Enum.each(SlotMessageStore.peek(consumer.id), fn state ->
+        refute State.is_message_group_persisted?(state, nil)
+      end)
     end
 
     test "pop_blocked_messages does not block messages with nil group_ids", %{event_consumer: consumer} do
@@ -366,6 +376,7 @@ defmodule Sequin.SlotMessageStoreTest do
       meta = %{
         ack_id: delivered.ack_id,
         deliver_count: 1,
+        group_id: delivered.group_id,
         last_delivered_at: DateTime.utc_now(),
         not_visible_until: DateTime.add(DateTime.utc_now(), 60)
       }
@@ -376,10 +387,10 @@ defmodule Sequin.SlotMessageStoreTest do
       :ok = SlotMessageStore.put_messages(consumer.id, [message2])
 
       # Verify only messages with non-nil group_ids are blocked
-      state = SlotMessageStore.peek(consumer.id)
-      {blocked_messages, _state} = State.pop_blocked_messages(state)
-
-      assert length(blocked_messages) == 0
+      Enum.each(SlotMessageStore.peek(consumer.id), fn state ->
+        {blocked_messages, _state} = State.pop_blocked_messages(state)
+        assert length(blocked_messages) == 0
+      end)
     end
 
     test "persists all messages when consumer is disabled", %{consumer: consumer} do
@@ -448,8 +459,9 @@ defmodule Sequin.SlotMessageStoreTest do
       {:ok, 1} = SlotMessageStore.messages_succeeded(consumer.id, [delivered.ack_id])
 
       # Verify no bytes are accumulated
-      state = SlotMessageStore.peek(consumer.id)
-      assert state.payload_size_bytes == 0
+      Enum.each(SlotMessageStore.peek(consumer.id), fn state ->
+        assert state.payload_size_bytes == 0
+      end)
     end
 
     test "messages_succeeded_returning_messages returns the acked messages", %{consumer: consumer} do
@@ -472,7 +484,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Verify returned messages match what was delivered
       assert length(returned_messages) == 2
-      assert Enum.map(returned_messages, & &1.ack_id) == ack_ids
+      assert_lists_equal(Enum.map(returned_messages, & &1.ack_id), ack_ids)
 
       # Verify messages were removed from store
       {:ok, []} = SlotMessageStore.produce(consumer.id, 2, self())
@@ -483,7 +495,7 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
-      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
 
       %{consumer: consumer}
     end
@@ -527,21 +539,20 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
-      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
 
       %{consumer: consumer}
     end
 
     @tag :capture_log
     test "min_wal_cursor raises on ref mismatch", %{consumer: consumer} do
-      pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer.id))
       ref = make_ref()
-      :ok = SlotMessageStore.set_monitor_ref(pid, ref)
+      :ok = SlotMessageStore.set_monitor_ref(consumer.id, ref)
 
-      assert SlotMessageStore.min_unpersisted_wal_cursor(consumer.id, ref) == nil
+      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer.id, ref) == []
 
       assert_raise(InvariantError, fn ->
-        SlotMessageStore.min_unpersisted_wal_cursor(consumer.id, make_ref())
+        SlotMessageStore.min_unpersisted_wal_cursors(consumer.id, make_ref())
       end)
     end
   end

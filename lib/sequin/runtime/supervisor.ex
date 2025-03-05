@@ -38,12 +38,12 @@ defmodule Sequin.Runtime.Supervisor do
     sink_consumer = Repo.preload(consumer, :replication_slot)
 
     with {:ok, _} <- start_replication(slot_supervisor(), sink_consumer.replication_slot, opts) do
-      SlotSupervisor.start_store_and_pipeline!(consumer, opts)
+      SlotSupervisor.start_stores_and_pipeline!(consumer, opts)
     end
   end
 
   def restart_for_sink_consumer(%SinkConsumer{} = consumer) do
-    SlotSupervisor.restart_store_and_pipeline(consumer)
+    SlotSupervisor.restart_stores_and_pipeline(consumer)
   end
 
   def stop_for_sink_consumer(%SinkConsumer{} = consumer) do
@@ -51,7 +51,7 @@ defmodule Sequin.Runtime.Supervisor do
   end
 
   def stop_for_sink_consumer(replication_slot_id, id) do
-    SlotSupervisor.stop_store_and_pipeline(replication_slot_id, id)
+    SlotSupervisor.stop_stores_and_pipeline(replication_slot_id, id)
   end
 
   def start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do

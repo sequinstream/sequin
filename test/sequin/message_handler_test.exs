@@ -9,10 +9,10 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
   alias Sequin.Replication
+  alias Sequin.Runtime.MessageHandler
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotMessageStoreSupervisor
-  alias Sequin.Runtime.SlotProcessor.MessageHandler
   alias Sequin.Runtime.TableReaderServerMock
   alias Sequin.TestSupport
 

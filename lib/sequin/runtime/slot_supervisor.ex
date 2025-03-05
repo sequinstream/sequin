@@ -4,13 +4,12 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.Runtime.SlotProcessor
-  alias Sequin.Runtime.SlotProcessor.MessageHandler
+  alias Sequin.Runtime.SlotProcessorSupervisor
 
   require Logger
 
@@ -42,7 +41,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
   def stop_slot_processor(id) do
     sup_via = via_tuple(id)
-    Sequin.DynamicSupervisor.stop_child(sup_via, SlotProcessor.via_tuple(id))
+    Sequin.DynamicSupervisor.stop_child(sup_via, SlotProcessorSupervisor.via_tuple(id))
   end
 
   def start_children(%PostgresReplicationSlot{} = pg_replication, opts) do
@@ -53,7 +52,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
         not_disabled_sink_consumers: [:sequence]
       ])
 
-    slot_processor_spec = slot_processor_child_spec(pg_replication, opts)
+    slot_processor_spec = SlotProcessorSupervisor.child_tuple(pg_replication, opts)
     sup = via_tuple(pg_replication.id)
 
     # First start all message stores for consumers
@@ -126,23 +125,6 @@ defmodule Sequin.Runtime.SlotSupervisor do
   defp slot_message_store_supervisor_child_spec(%SinkConsumer{} = sink_consumer, opts) do
     opts = Keyword.put(opts, :consumer, sink_consumer)
     {SlotMessageStoreSupervisor, opts}
-  end
-
-  defp slot_processor_child_spec(%PostgresReplicationSlot{} = pg_replication, opts) do
-    default_opts = [
-      id: pg_replication.id,
-      slot_name: pg_replication.slot_name,
-      publication: pg_replication.publication_name,
-      postgres_database: pg_replication.postgres_database,
-      replication_slot: pg_replication,
-      message_handler_ctx: MessageHandler.context(pg_replication),
-      message_handler_module: MessageHandler,
-      connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database),
-      ipv6: pg_replication.postgres_database.ipv6
-    ]
-
-    opts = Keyword.merge(default_opts, opts)
-    {Sequin.Runtime.SlotProcessor, opts}
   end
 
   defp maybe_start_consumer_pipeline(%SinkConsumer{} = sink_consumer, opts) do

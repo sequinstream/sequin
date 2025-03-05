@@ -8,8 +8,8 @@ defmodule Sequin.Runtime.Supervisor do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
+  alias Sequin.Runtime.MessageHandler
   alias Sequin.Runtime.SlotProcessor
-  alias Sequin.Runtime.SlotProcessor.MessageHandler
   alias Sequin.Runtime.SlotSupervisor
   alias Sequin.Runtime.SlotSupervisorSupervisor
   alias Sequin.Runtime.TableReaderServer

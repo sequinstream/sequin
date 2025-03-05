@@ -65,4 +65,27 @@ defmodule Sequin.Enum do
     |> elem(0)
     |> Enum.reverse()
   end
+
+  @doc """
+  Reduces the `enumerable` as long as the accumulating function returns `:ok` or `{:ok, _}`.
+  x
+  If all elements are processed successfully, the function returns `:ok`.
+  ## Examples
+      iex> Sequin.Enum.reduce_while_ok(1..3, fn x -> if x < 3, do: :ok, else: {:error, "too large"} end)
+      {:error, "too large"}
+      iex> Sequin.Enum.reduce_while_ok(1..3, fn x -> if x > 3, do: {:error, "too large"}, else: :ok end)
+      :ok
+      iex> Sequin.Enum.reduce_while_ok(1..3, fn x -> if x > 3, do: {:error, "too large"}, else: {:ok, x} end)
+      :ok
+  """
+  @spec reduce_while_ok(Enumerable.t(), (any() -> :ok | {:ok, any()} | any())) :: :ok | any()
+  def reduce_while_ok(enumerable, fun) do
+    Enum.reduce_while(enumerable, :ok, fn elem, _acc ->
+      case fun.(elem) do
+        :ok -> {:cont, :ok}
+        {:ok, _} -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  end
 end

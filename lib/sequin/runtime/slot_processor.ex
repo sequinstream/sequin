@@ -139,7 +139,7 @@ defmodule Sequin.Runtime.SlotProcessor do
     postgres_database = Keyword.fetch!(opts, :postgres_database)
     replication_slot = Keyword.fetch!(opts, :replication_slot)
     test_pid = Keyword.get(opts, :test_pid)
-    message_handler_ctx = Keyword.get(opts, :message_handler_ctx)
+    message_handler_ctx = Keyword.fetch!(opts, :message_handler_ctx)
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
     max_memory_bytes = Keyword.get_lazy(opts, :max_memory_bytes, &default_max_memory_bytes/0)
     bytes_between_limit_checks = Keyword.get(opts, :bytes_between_limit_checks, div(max_memory_bytes, 100))

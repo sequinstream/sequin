@@ -9,6 +9,8 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
 
+  @type id :: String.t()
+
   defmodule Info do
     @moduledoc false
     use TypedStruct
@@ -33,6 +35,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     field :slot_name, :string
     field :status, Ecto.Enum, values: [:active, :disabled], read_after_writes: true
     field :annotations, :map, default: %{}
+    field :partition_count, :integer, default: 1
 
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase
@@ -53,7 +56,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
 
   def create_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:publication_name, :slot_name, :postgres_database_id, :status, :annotations])
+    |> cast(attrs, [:publication_name, :slot_name, :postgres_database_id, :status, :annotations, :partition_count])
     |> cast_assoc(:postgres_database,
       with: fn _struct, attrs ->
         PostgresDatabase.changeset(%PostgresDatabase{account_id: replication.account_id}, attrs)
@@ -66,7 +69,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
 
   def update_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:publication_name, :slot_name, :status, :annotations])
+    |> cast(attrs, [:publication_name, :slot_name, :status, :annotations, :partition_count])
     |> validate_required([:publication_name, :slot_name])
     |> unique_constraint([:slot_name, :postgres_database_id])
   end

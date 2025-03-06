@@ -233,7 +233,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     GenServer.reply(from, :ok)
 
     # Process messages asynchronously
-    Logger.info("[SlotMessageHandler] Handling #{length(messages)} message(s) in partition #{state.processor_idx}")
+    Logger.debug("[SlotMessageHandler] Handling #{length(messages)} message(s) in partition #{state.processor_idx}")
 
     case state.message_handler.handle_messages(context(state), messages) do
       {:ok, _count} ->

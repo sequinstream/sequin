@@ -2,6 +2,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Databases.ConnectionCache
@@ -143,6 +144,78 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       ref = send_test_event(consumer, event)
       assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
       assert_receive :sent, 1_000
+    end
+
+    test "when all messages are rejected due to idempotency, the pipeline does not invoke the adapter", %{
+      consumer: consumer
+    } do
+      test_pid = self()
+      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+
+      # Mark the message as already delivered
+      wal_cursor = %{commit_lsn: event.commit_lsn, commit_idx: event.commit_idx, commit_timestamp: event.commit_timestamp}
+      MessageLedgers.wal_cursors_delivered(consumer.id, [wal_cursor])
+
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:http_request, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      event = %ConsumerEvent{event | payload_size_bytes: 1000}
+      SlotMessageStore.put_messages(consumer, [event])
+
+      # Start the pipeline
+      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+
+      # Verify that no HTTP request was made since the message was rejected
+      refute_receive {:http_request, _req}, 200
+
+      # Verify that the ack handler is never called
+      refute_receive {SinkPipeline, :ack_finished, [], []}, 200
+
+      # Verify that the consumer record has been processed (deleted on ack)
+      assert [] == SlotMessageStore.peek_messages(consumer, 10)
+    end
+
+    test "when some messages are rejected due to idempotency, the pipeline invokes the adapter for the remaining messages",
+         %{
+           consumer: consumer
+         } do
+      test_pid = self()
+      event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+      event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :update)
+
+      # Mark the first message as already delivered
+      wal_cursor = %{
+        commit_lsn: event1.commit_lsn,
+        commit_idx: event1.commit_idx,
+        commit_timestamp: event1.commit_timestamp
+      }
+
+      MessageLedgers.wal_cursors_delivered(consumer.id, [wal_cursor])
+
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:http_request, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      event1 = %ConsumerEvent{event1 | payload_size_bytes: 1000}
+      event2 = %ConsumerEvent{event2 | payload_size_bytes: 1000}
+      SlotMessageStore.put_messages(consumer, [event1, event2])
+
+      # Start the pipeline
+      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+
+      # Verify that the second message was sent
+      assert_receive {:http_request, _req}, 1_000
+
+      # Verify that the message was marked as already succeeded
+      assert_receive {SinkPipeline, :ack_finished, [_ack_id], []}, 1_000
+
+      # Verify that the consumer record has been processed (deleted on ack)
+      assert [] == SlotMessageStore.peek_messages(consumer, 10)
     end
 
     @tag capture_log: true

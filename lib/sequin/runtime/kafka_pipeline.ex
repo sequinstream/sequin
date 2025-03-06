@@ -30,7 +30,7 @@ defmodule Sequin.Runtime.KafkaPipeline do
   def batchers_config(%SinkConsumer{batch_size: batch_size}) do
     [
       default: [
-        concurrency: 80,
+        concurrency: 160,
         batch_size: batch_size,
         batch_timeout: 50
       ]

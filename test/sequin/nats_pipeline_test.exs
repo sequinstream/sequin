@@ -61,7 +61,7 @@ defmodule Sequin.Runtime.NatsPipelineTest do
           action: :insert
         )
 
-      ref = send_test_event(consumer, [event])
+      ref = send_test_event(consumer, event)
 
       # Verify failed acknowledgment
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000

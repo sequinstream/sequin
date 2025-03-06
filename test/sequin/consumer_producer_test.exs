@@ -3,7 +3,6 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
 
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Runtime.ConsumerProducer
-  alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotMessageStoreMock
   alias Sequin.TestSupport.DateTimeMock
 
@@ -95,32 +94,6 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
 
       # No message received since it failed
       assert_receive {:messages_failed, _messages}, 1_000
-
-      stop_broadway()
-    end
-
-    test "produced messages are rejected due to idempotency", %{consumer: consumer} do
-      test_pid = self()
-      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
-
-      wal_cursor = %{commit_lsn: msg.commit_lsn, commit_idx: msg.commit_idx, commit_timestamp: msg.commit_timestamp}
-      MessageLedgers.wal_cursors_delivered(consumer.id, [wal_cursor])
-
-      expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg]} end)
-      stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)
-
-      expect(SlotMessageStoreMock, :messages_already_succeeded, fn _consumer, ack_ids ->
-        send(test_pid, {:ack_ids, ack_ids})
-        {:ok, 0}
-      end)
-
-      start_broadway(consumer: consumer)
-
-      assert_receive {:ack_ids, ack_ids}, 1_000
-      assert length(ack_ids) == 1
-
-      # No message received since it was rejected
-      refute_receive {:messages_succeeded, []}, 200
 
       stop_broadway()
     end

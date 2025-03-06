@@ -183,7 +183,7 @@ defmodule Sequin.Runtime.SlotProcessor do
 
     # Eventually, we can wrap this in a Supervisor, to get faster retries on restarts before "giving up"
     # The Starter will eventually restart this SlotProcessor GenServer.
-    Supervisor.child_spec(spec, restart: :temporary)
+    Supervisor.child_spec(spec, restart: :permanent)
   end
 
   @spec update_message_handler_ctx(id :: String.t(), ctx :: any()) :: :ok | {:error, :not_running}

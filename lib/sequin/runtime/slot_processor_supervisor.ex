@@ -12,10 +12,15 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
   alias Sequin.Runtime.SlotMessageHandler
   alias Sequin.Runtime.SlotProcessor
 
-  def child_tuple(%PostgresReplicationSlot{} = slot, opts \\ []) do
-    opts = Keyword.put(opts, :replication_slot, slot)
+  def child_spec(opts) do
+    %PostgresReplicationSlot{} = slot = Keyword.fetch!(opts, :replication_slot)
 
-    {__MODULE__, opts}
+    spec = %{
+      id: via_tuple(slot.id),
+      start: {__MODULE__, :start_link, [opts]}
+    }
+
+    Supervisor.child_spec(spec, restart: :temporary)
   end
 
   def start_link(opts) do

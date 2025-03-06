@@ -62,7 +62,7 @@ defmodule Sequin.MessageHandlerTest do
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
-      [event] = list_messages(consumer.id)
+      [event] = list_messages(consumer)
       assert event.consumer_id == consumer.id
       assert event.table_oid == 123
       assert event.commit_lsn == message.commit_lsn
@@ -126,7 +126,7 @@ defmodule Sequin.MessageHandlerTest do
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
-      [record] = list_messages(consumer.id)
+      [record] = list_messages(consumer)
       assert record.consumer_id == consumer.id
       assert record.table_oid == 456
       assert record.commit_lsn == message.commit_lsn
@@ -221,8 +221,8 @@ defmodule Sequin.MessageHandlerTest do
 
       {:ok, 4} = MessageHandler.handle_messages(context, [message1, message2])
 
-      consumer1_messages = list_messages(consumer1.id)
-      consumer2_messages = list_messages(consumer2.id)
+      consumer1_messages = list_messages(consumer1)
+      consumer2_messages = list_messages(consumer2)
       wal_events = Replication.list_wal_events(wal_pipeline.id)
 
       assert length(consumer1_messages) == 1
@@ -281,8 +281,8 @@ defmodule Sequin.MessageHandlerTest do
 
       {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2])
 
-      consumer1_messages = list_messages(consumer1.id)
-      consumer2_messages = list_messages(consumer2.id)
+      consumer1_messages = list_messages(consumer1)
+      consumer2_messages = list_messages(consumer2)
       wal_events = Replication.list_wal_events(wal_pipeline.id)
 
       assert length(consumer1_messages) == 2
@@ -335,7 +335,7 @@ defmodule Sequin.MessageHandlerTest do
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
-      messages = list_messages(consumer.id)
+      messages = list_messages(consumer)
       assert length(messages) == 1
       assert hd(messages).table_oid == 123
       assert hd(messages).consumer_id == consumer.id
@@ -352,7 +352,7 @@ defmodule Sequin.MessageHandlerTest do
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
-      messages = list_messages(consumer.id)
+      messages = list_messages(consumer)
       assert Enum.empty?(messages)
     end
 
@@ -401,7 +401,7 @@ defmodule Sequin.MessageHandlerTest do
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
-      messages = list_messages(consumer.id)
+      messages = list_messages(consumer)
       assert length(messages) == 1
       assert hd(messages).table_oid == 123
       assert hd(messages).consumer_id == consumer.id
@@ -430,7 +430,7 @@ defmodule Sequin.MessageHandlerTest do
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
-      messages = list_messages(consumer.id)
+      messages = list_messages(consumer)
       assert Enum.empty?(messages)
     end
 
@@ -590,7 +590,7 @@ defmodule Sequin.MessageHandlerTest do
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
-      [record] = list_messages(consumer.id)
+      [record] = list_messages(consumer)
       assert record.group_id == "A"
     end
   end
@@ -801,7 +801,7 @@ defmodule Sequin.MessageHandlerTest do
         ReplicationFactory.postgres_message(action: :update, table_oid: 123, fields: fields, old_fields: old_fields)
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
-      [message] = list_messages(consumer.id)
+      [message] = list_messages(consumer)
 
       assert message.data.record["name"] == "Harry"
       assert message.data.record["house"] == "Gryffindor"
@@ -820,7 +820,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(action: :update, table_oid: 123, fields: fields, old_fields: nil)
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
-      [message] = list_messages(consumer.id)
+      [message] = list_messages(consumer)
 
       # unchanged_toast values are not loaded
       assert message.data.record["name"] == :unchanged_toast
@@ -836,7 +836,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(action: :insert, table_oid: 123, fields: [field])
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
-      assert [_] = list_messages(consumer.id)
+      assert [_] = list_messages(consumer)
     end
 
     test "deletes are ignored", %{context: context, consumer: consumer} do
@@ -848,19 +848,19 @@ defmodule Sequin.MessageHandlerTest do
       case consumer.message_kind do
         :record ->
           assert count == 0
-          records = list_messages(consumer.id)
+          records = list_messages(consumer)
           assert length(records) == 0
 
         :event ->
           assert count == 1
-          events = list_messages(consumer.id)
+          events = list_messages(consumer)
           assert length(events) == 1
       end
     end
   end
 
-  defp list_messages(consumer_id) do
-    SlotMessageStore.peek_messages(consumer_id, 1000)
+  defp list_messages(consumer) do
+    SlotMessageStore.peek_messages(consumer, 1000)
   end
 
   defp fields_to_map(fields) do

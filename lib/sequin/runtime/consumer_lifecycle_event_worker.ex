@@ -15,7 +15,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   alias Sequin.Repo
   alias Sequin.Runtime.InitBackfillStatsWorker
   alias Sequin.Runtime.MessageLedgers
-  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
 
   require Logger
@@ -67,31 +67,16 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
         with {:ok, consumer} <- Consumers.get_consumer(id) do
           consumer = Repo.preload(consumer, :replication_slot)
           CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
-          :ok = SlotMessageStore.consumer_updated(consumer)
 
-          case consumer.status do
-            :active ->
-              # We have to restart the ConsumerProducer. Because the ConsumerProducer and SMS are
-              # merging soon, we need to start the SMS as well. Therefore, we need to restart the
-              # SlotProcessor.
-              RuntimeSupervisor.restart_replication(consumer.replication_slot)
-              :ok
-
-            :paused ->
-              :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-              :ok
-
-            :disabled ->
-              :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-              RuntimeSupervisor.stop_for_sink_consumer(consumer)
-              :ok
-          end
+          # Restart the entire supervision tree for replication, including slot processor, smss, etc.
+          # This is safest- later we can be a bit more intelligent about when to restart (ie. when name changes we don't have to restart)
+          {:ok, _} = RuntimeSupervisor.restart_replication(consumer.replication_slot)
         end
 
       "delete" ->
         replication_slot_id = Map.fetch!(data, "replication_slot_id")
 
-        :ok = RuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id)
+        :ok = SlotProcessor.demonitor_message_store(replication_slot_id, id)
         :ok = RuntimeSupervisor.stop_for_sink_consumer(replication_slot_id, id)
         :ok = MessageLedgers.drop_for_consumer(id)
     end

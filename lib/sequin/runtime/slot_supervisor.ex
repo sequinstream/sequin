@@ -66,7 +66,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
         # Register all active message stores after processor is started
         Enum.each(
           pg_replication.not_disabled_sink_consumers,
-          &SlotProcessor.monitor_message_store(pg_replication.id, &1.id)
+          &SlotProcessor.monitor_message_store(pg_replication.id, &1)
         )
 
         {:ok, slot_processor_pid}
@@ -85,7 +85,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
     with {:ok, _store_sup_pid} <- Sequin.DynamicSupervisor.maybe_start_child(supervisor, store_sup_child_spec),
          :ok <- maybe_start_consumer_pipeline(sink_consumer, opts) do
       unless Keyword.get(opts, :skip_monitor, false) do
-        :ok = SlotProcessor.monitor_message_store(sink_consumer.replication_slot_id, sink_consumer.id)
+        :ok = SlotProcessor.monitor_message_store(sink_consumer.replication_slot_id, sink_consumer)
       end
 
       :ok
@@ -113,8 +113,6 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
     sup_via = via_tuple(replication_slot_id)
     store_sup_via = SlotMessageStoreSupervisor.via_tuple(id)
-
-    SlotProcessor.demonitor_message_store(replication_slot_id, id)
 
     Sequin.DynamicSupervisor.stop_child(sup_via, store_sup_via)
     Sequin.DynamicSupervisor.stop_child(sup_via, SinkPipeline.via_tuple(id))

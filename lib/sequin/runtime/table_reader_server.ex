@@ -667,7 +667,7 @@ defmodule Sequin.Runtime.TableReaderServer do
         {:stop, :normal}
 
       %SinkConsumer{} = consumer ->
-        {:ok, message_count} = SlotMessageStore.count_messages(consumer.id)
+        {:ok, message_count} = SlotMessageStore.count_messages(consumer)
         state = %{state | count_pending_messages: message_count, consumer: consumer}
         current_slot_lsn = fetch_slot_lsn(state)
 
@@ -841,7 +841,7 @@ defmodule Sequin.Runtime.TableReaderServer do
 
   def handle_event({:timeout, :check_sms}, _, _state_name, %State{} = state) do
     execute_timed(:check_sms, fn ->
-      case SlotMessageStore.unpersisted_table_reader_batch_ids(state.consumer.id) do
+      case SlotMessageStore.unpersisted_table_reader_batch_ids(state.consumer) do
         {:ok, unpersisted_batch_ids} ->
           # Find completed batches (those no longer in unpersisted_batch_ids)
           {completed_batches, remaining_batches} =
@@ -986,7 +986,7 @@ defmodule Sequin.Runtime.TableReaderServer do
        ) do
     elapsed = System.monotonic_time(:millisecond) - first_attempt_at
 
-    case SlotMessageStore.put_table_reader_batch(state.consumer.id, messages, batch_id) do
+    case SlotMessageStore.put_table_reader_batch(state.consumer, messages, batch_id) do
       :ok ->
         :ok
 

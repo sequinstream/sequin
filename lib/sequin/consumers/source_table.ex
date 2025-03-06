@@ -11,8 +11,8 @@ defmodule Sequin.Consumers.SourceTable do
 
   @type t :: %__MODULE__{
           oid: integer,
-          schema_name: String.t(),
-          table_name: String.t(),
+          schema_name: String.t() | nil,
+          table_name: String.t() | nil,
           actions: [atom()],
           column_filters: [ColumnFilter.t()],
           sort_column_attnum: integer() | nil,

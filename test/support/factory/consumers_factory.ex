@@ -101,6 +101,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         message_kind: message_kind,
         name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,
+        partition_count: Enum.random(1..10),
         source_tables: source_tables,
         status: :active,
         sequence_id: sequence_id,

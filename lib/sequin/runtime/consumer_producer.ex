@@ -6,10 +6,6 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -200,16 +196,6 @@ defmodule Sequin.Runtime.ConsumerProducer do
         )
       end
 
-      {time, messages} = :timer.tc(fn -> reject_delivered_messages(state, messages) end)
-
-      if div(time, 1000) > @min_log_time_ms do
-        Logger.warning(
-          "[ConsumerProducer] reject_delivered_messages took longer than expected",
-          duration_ms: div(time, 1000),
-          message_count: length(messages)
-        )
-      end
-
       # Cut this struct down as it will be passed to each process
       # Processes already have the consumer in context, but this is for the acknowledger. When we
       # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
@@ -261,53 +247,6 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
         {:error, _error} ->
           []
-      end
-    end)
-  end
-
-  defp reject_delivered_messages(state, messages) do
-    execute_timed(:reject_delivered_messages, fn ->
-      wal_cursors_to_deliver =
-        messages
-        |> Stream.reject(fn
-          # We don't enforce idempotency for read actions
-          %ConsumerEvent{data: %ConsumerEventData{action: :read}} -> true
-          %ConsumerRecord{data: %ConsumerRecordData{action: :read}} -> true
-          # We only recently added :action to ConsumerRecordData, so we need to ignore
-          # any messages that don't have it for backwards compatibility
-          %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
-          _ -> false
-        end)
-        |> Enum.map(fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
-
-      {:ok, delivered_wal_cursors} =
-        MessageLedgers.filter_delivered_wal_cursors(state.consumer.id, wal_cursors_to_deliver)
-
-      :ok = MessageLedgers.wal_cursors_delivered(state.consumer.id, delivered_wal_cursors)
-
-      delivered_cursor_set = MapSet.new(delivered_wal_cursors)
-
-      {delivered_messages, filtered_messages} =
-        Enum.split_with(messages, fn message ->
-          MapSet.member?(delivered_cursor_set, %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx})
-        end)
-
-      if delivered_messages == [] do
-        filtered_messages
-      else
-        Logger.info(
-          "[ConsumerProducer] Rejected messages for idempotency",
-          rejected_message_count: length(delivered_messages),
-          commits: delivered_wal_cursors,
-          message_count: length(filtered_messages)
-        )
-
-        state.slot_message_store_mod.messages_already_succeeded(
-          state.consumer.id,
-          Enum.map(delivered_messages, & &1.ack_id)
-        )
-
-        filtered_messages
       end
     end)
   end

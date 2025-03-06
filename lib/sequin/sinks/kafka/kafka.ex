@@ -24,7 +24,8 @@ defmodule Sequin.Sinks.Kafka do
   end
 
   def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, partition, messages) when is_list(messages) do
-    impl().publish(consumer, partition, messages)
+    # impl().publish(consumer, partition, messages)
+    :ok
   end
 
   @spec test_connection(KafkaSink.t()) :: :ok | {:error, Error.t()}

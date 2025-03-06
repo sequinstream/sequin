@@ -11,6 +11,10 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   alias Broadway.Message
   alias Sequin.Consumers
+  alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
+  alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
@@ -90,6 +94,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       |> Keyword.fetch!(:consumer)
       |> Repo.lazy_preload([:sequence, :postgres_database])
 
+    slot_message_store_mod = Keyword.get(opts, :slot_message_store_mod, Sequin.Runtime.SlotMessageStore)
     producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
     pipeline_mod = Keyword.get(opts, :pipeline_mod, pipeline_mod_for_consumer(consumer))
     test_pid = Keyword.get(opts, :test_pid)
@@ -97,6 +102,7 @@ defmodule Sequin.Runtime.SinkPipeline do
     context = %{
       pipeline_mod: pipeline_mod,
       consumer: consumer,
+      slot_message_store_mod: slot_message_store_mod,
       test_pid: test_pid
     }
 
@@ -160,6 +166,8 @@ defmodule Sequin.Runtime.SinkPipeline do
     )
 
     context = context(context)
+
+    messages = reject_delivered_messages(context, messages)
 
     case pipeline_mod.handle_batch(batch_name, messages, batch_info, context) do
       {:ok, messages, next_context} ->
@@ -275,7 +283,7 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   defp ack_failed(_consumer, _sms, []), do: :ok
 
-  defp ack_failed(consumer, slot_message_store_mod, failed) do
+  defp ack_failed(%SinkConsumer{} = consumer, slot_message_store_mod, failed) do
     failed_message_datas = Enum.map(failed, & &1.data)
 
     failed_message_metadatas =
@@ -308,5 +316,51 @@ defmodule Sequin.Runtime.SinkPipeline do
     end)
 
     :ok = slot_message_store_mod.messages_failed(consumer.id, failed_message_metadatas)
+  end
+
+  defp reject_delivered_messages(context, messages) do
+    consumer = context.consumer
+    slot_message_store_mod = context.slot_message_store_mod
+    consumer_messages = Enum.map(messages, & &1.data)
+
+    wal_cursors_to_deliver =
+      consumer_messages
+      |> Stream.reject(fn
+        # We don't enforce idempotency for read actions
+        %ConsumerEvent{data: %ConsumerEventData{action: :read}} -> true
+        %ConsumerRecord{data: %ConsumerRecordData{action: :read}} -> true
+        # We only recently added :action to ConsumerRecordData, so we need to ignore
+        # any messages that don't have it for backwards compatibility
+        %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
+        _ -> false
+      end)
+      |> Enum.map(fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
+
+    {:ok, delivered_wal_cursors} =
+      MessageLedgers.filter_delivered_wal_cursors(consumer.id, wal_cursors_to_deliver)
+
+    :ok = MessageLedgers.wal_cursors_delivered(consumer.id, delivered_wal_cursors)
+
+    delivered_cursor_set = MapSet.new(delivered_wal_cursors)
+
+    {delivered_messages, filtered_messages} =
+      Enum.split_with(messages, fn message ->
+        MapSet.member?(delivered_cursor_set, %{commit_lsn: message.data.commit_lsn, commit_idx: message.data.commit_idx})
+      end)
+
+    if delivered_messages == [] do
+      filtered_messages
+    else
+      Logger.info(
+        "[SinkPipeline] Rejected messages for idempotency",
+        rejected_message_count: length(delivered_messages),
+        commits: delivered_wal_cursors,
+        message_count: length(filtered_messages)
+      )
+
+      slot_message_store_mod.messages_already_succeeded(consumer, Enum.map(delivered_messages, & &1.ack_id))
+
+      filtered_messages
+    end
   end
 end

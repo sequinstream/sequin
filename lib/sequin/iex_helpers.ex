@@ -27,6 +27,10 @@ defmodule Sequin.IexHelpers do
     end
   end
 
+  def via(:slot_store_sup, id) do
+    Sequin.Runtime.SlotMessageStoreSupervisor.via_tuple(id)
+  end
+
   def via(:sink, id) do
     Sequin.Runtime.SinkPipeline.via_tuple(id)
   end
@@ -72,11 +76,10 @@ defmodule Sequin.IexHelpers do
   end
 
   def whereis(:slot_stores, consumer_id) do
-    {sup_via, store_vias} = via(:slot_stores, consumer_id)
-    sup_pid = GenServer.whereis(sup_via)
-    store_pids = Enum.map(store_vias, &GenServer.whereis/1)
-
-    {sup_pid, store_pids}
+    :slot_store_sup
+    |> via(consumer_id)
+    |> Supervisor.which_children()
+    |> Enum.map(fn {_registered_name, pid, _type, _modules} -> pid end)
   end
 
   def whereis(:sink, id) do

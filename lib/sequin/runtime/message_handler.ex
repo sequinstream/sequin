@@ -44,6 +44,8 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
+  @callback handle_messages(Context.t(), [Message.t()]) :: {:ok, non_neg_integer()} | {:error, Sequin.Error.t()}
+
   def context(%PostgresReplicationSlot{} = pr) do
     pr =
       Repo.preload(pr, [:wal_pipelines, :postgres_database, not_disabled_sink_consumers: [:sequence, :postgres_database]])

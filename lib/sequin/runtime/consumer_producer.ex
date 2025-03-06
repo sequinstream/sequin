@@ -214,14 +214,14 @@ defmodule Sequin.Runtime.ConsumerProducer do
       # Processes already have the consumer in context, but this is for the acknowledger. When we
       # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
       bare_consumer =
-        Map.drop(state.consumer, [
-          :source_tables,
-          :active_backfill,
-          :sequence,
-          :postgres_database,
-          :replication_slot,
-          :account
-        ])
+        Map.merge(state.consumer, %{
+          source_tables: [],
+          active_backfill: nil,
+          sequence: nil,
+          postgres_database: nil,
+          replication_slot: nil,
+          account: nil
+        })
 
       broadway_messages =
         Enum.map(messages, fn message ->

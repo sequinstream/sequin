@@ -2,15 +2,13 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   @moduledoc """
   A GenServer implementation of the MessageHandler that processes messages in partitions.
 
-  This module implements the MessageHandlerBehaviour interface and is designed to be
+  This GenServer/module wraps MessageHandlera and is designed to be
   started in multiple partitions to distribute the processing load.
-
-  TODO:
-  - Needs to be able to enter a "back off" state where you can't push any more messages to it.
   """
 
   use GenServer
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Replication
@@ -62,7 +60,8 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       field :wal_pipelines, [WalPipeline.t()], default: []
       field :postgres_database, PostgresDatabase.t()
 
-      field :table_reader_mod, module()
+      field :table_reader, module()
+      field :message_handler, module()
     end
   end
 
@@ -89,11 +88,11 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   Returns a child specification for starting a SlotMessageHandler under a supervisor.
   """
   def child_spec(opts) do
-    _id = Keyword.fetch!(opts, :replication_slot_id)
+    slot_id = Keyword.fetch!(opts, :replication_slot_id)
     processor_idx = Keyword.fetch!(opts, :processor_idx)
 
     %{
-      id: {__MODULE__, processor_idx},
+      id: {__MODULE__, slot_id, processor_idx},
       start: {__MODULE__, :start_link, [opts]},
       restart: :permanent,
       shutdown: 5000,
@@ -153,6 +152,30 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     end)
   end
 
+  @doc """
+  Determines which partition a message should be routed to.
+
+  Uses a consistent hash of the message's table_oid and ids to ensure that
+  related messages (those affecting the same table and records) are always
+  routed to the same partition. This ensures ordering and consistency when
+  processing related database changes.
+
+  ## Parameters
+
+    * `message` - The message to determine partition for
+    * `partition_count` - The total number of available partitions
+
+  ## Returns
+
+    A zero-based partition index between 0 and partition_count-1
+  """
+  def message_partition_idx(%Message{} = message, partition_count) do
+    # Use table_oid and ids to determine partition
+    # This ensures related messages go to the same partition
+    hash_input = {message.table_oid, message.ids}
+    :erlang.phash2(hash_input, partition_count)
+  end
+
   # Server callbacks
 
   @impl GenServer
@@ -167,6 +190,8 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
     if test_pid = Keyword.get(opts, :test_pid) do
       Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+      Mox.allow(Sequin.Runtime.MessageHandlerMock, test_pid, self())
+      Sandbox.allow(Sequin.Repo, test_pid, self())
     end
 
     Logger.info("[SlotMessageHandler] Starting partition #{processor_idx} for slot #{replication_slot_id}")
@@ -174,7 +199,8 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     state = %State{
       id: replication_slot_id,
       processor_idx: processor_idx,
-      table_reader_mod: Keyword.get(opts, :table_reader_mod, TableReaderServer)
+      table_reader: Keyword.get(opts, :table_reader, TableReaderServer),
+      message_handler: Keyword.get(opts, :message_handler, MessageHandler)
     }
 
     schedule_process_logging(0)
@@ -209,7 +235,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     # Process messages asynchronously
     Logger.info("[SlotMessageHandler] Handling #{length(messages)} message(s) in partition #{state.processor_idx}")
 
-    case MessageHandler.handle_messages(context(state), messages) do
+    case state.message_handler.handle_messages(context(state), messages) do
       {:ok, _count} ->
         {:noreply, state}
 
@@ -322,14 +348,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   end
 
   defp partition_messages(messages, partition_count) do
-    Enum.group_by(messages, &message_to_processor_idx(&1, partition_count))
-  end
-
-  defp message_to_processor_idx(%Message{} = message, partition_count) do
-    # Use table_oid and ids to determine partition
-    # This ensures related messages go to the same partition
-    hash_input = {message.table_oid, message.ids}
-    :erlang.phash2(hash_input, partition_count)
+    Enum.group_by(messages, &message_partition_idx(&1, partition_count))
   end
 
   defp load_entities(%State{} = state) do
@@ -347,7 +366,8 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       | postgres_database: db,
         consumers: consumers,
         wal_pipelines: pipelines,
-        partition_count: slot.partition_count
+        partition_count: slot.partition_count,
+        replication_slot: slot
     }
   end
 
@@ -357,7 +377,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       wal_pipelines: state.wal_pipelines,
       postgres_database: state.postgres_database,
       replication_slot_id: state.id,
-      table_reader_mod: state.table_reader_mod
+      table_reader_mod: state.table_reader
     }
   end
 

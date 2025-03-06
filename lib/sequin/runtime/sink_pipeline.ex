@@ -284,13 +284,19 @@ defmodule Sequin.Runtime.SinkPipeline do
       |> Enum.map(&%{&1 | data: nil})
 
     Enum.map(failed, fn %Message{} = message ->
-      {:failed, error} = message.status
-
       error =
-        if is_exception(error) do
-          error
-        else
-          Error.service(service: "sink_pipeline", code: :unknown_error, message: error)
+        case message.status do
+          {:failed, error} when is_exception(error) ->
+            error
+
+          {:failed, error} ->
+            Error.service(service: "sink_pipeline", code: :unknown_error, message: error)
+
+          {:error, error, _stacktrace} when is_exception(error) ->
+            Error.service(service: "sink_pipeline", code: :unknown_error, message: Exception.message(error))
+
+          {:error, error} ->
+            Error.service(service: "sink_pipeline", code: :unknown_error, message: error)
         end
 
       error_message = Exception.message(error)

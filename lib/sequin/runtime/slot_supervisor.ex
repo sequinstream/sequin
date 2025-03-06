@@ -31,6 +31,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
       {:error, error} ->
         Logger.error("[SlotSupervisor] Failed to start: #{inspect(error)}")
+        {:error, error}
     end
   end
 
@@ -52,7 +53,8 @@ defmodule Sequin.Runtime.SlotSupervisor do
         not_disabled_sink_consumers: [:sequence]
       ])
 
-    slot_processor_spec = SlotProcessorSupervisor.child_tuple(pg_replication, opts)
+    opts = Keyword.put(opts, :replication_slot, pg_replication)
+    slot_processor_spec = SlotProcessorSupervisor.child_spec(opts)
     sup = via_tuple(pg_replication.id)
 
     # First start all message stores for consumers
@@ -61,14 +63,14 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
     # Then start the slot processor
     case Sequin.DynamicSupervisor.maybe_start_child(sup, slot_processor_spec) do
-      {:ok, slot_processor_pid} ->
+      {:ok, slot_processor_sup_pid} ->
         # Register all active message stores after processor is started
         Enum.each(
           pg_replication.not_disabled_sink_consumers,
           &SlotProcessor.monitor_message_store(pg_replication.id, &1)
         )
 
-        {:ok, slot_processor_pid}
+        {:ok, slot_processor_sup_pid}
 
       {:error, error} ->
         Logger.error("[SlotSupervisor] Failed to start SlotProcessor: #{inspect(error)}", error: error)

@@ -26,28 +26,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   end
 
   @impl SinkPipeline
-  def processors_config(%SinkConsumer{max_waiting: max_waiting}) do
-    [
-      default: [
-        concurrency: max_waiting,
-        max_demand: 10,
-        min_demand: 5
-      ]
-    ]
-  end
-
-  @impl SinkPipeline
-  def batchers_config(%SinkConsumer{batch_size: batch_size}) do
-    [
-      default: [
-        concurrency: 1,
-        batch_size: batch_size,
-        batch_timeout: 50
-      ]
-    ]
-  end
-
-  @impl SinkPipeline
   def handle_batch(:default, messages, _batch_info, context) do
     %{
       consumer: consumer,

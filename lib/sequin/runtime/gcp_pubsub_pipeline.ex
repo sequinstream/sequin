@@ -16,21 +16,13 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
   end
 
   @impl SinkPipeline
-  def processors_config(%SinkConsumer{max_waiting: max_waiting}) do
-    [
-      default: [
-        concurrency: max_waiting,
-        max_demand: 100
-      ]
-    ]
-  end
-
-  @impl SinkPipeline
   def batchers_config(_consumer) do
+    concurrency = min(System.schedulers_online() * 2, 80)
+
     [
       default: [
-        concurrency: 100,
-        batch_size: 100,
+        concurrency: concurrency,
+        batch_size: 10,
         batch_timeout: 50
       ]
     ]

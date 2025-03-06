@@ -16,21 +16,13 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
   end
 
   @impl SinkPipeline
-  def processors_config(%SinkConsumer{max_waiting: max_waiting}) do
-    [
-      default: [
-        concurrency: max_waiting,
-        max_demand: 100
-      ]
-    ]
-  end
+  def batchers_config(_consumer) do
+    concurrency = min(System.schedulers_online() * 2, 80)
 
-  @impl SinkPipeline
-  def batchers_config(%SinkConsumer{batch_size: batch_size}) do
     [
       default: [
-        concurrency: 1,
-        batch_size: batch_size,
+        concurrency: concurrency,
+        batch_size: 10,
         batch_timeout: 50
       ]
     ]

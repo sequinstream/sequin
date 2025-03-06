@@ -7,8 +7,6 @@ defmodule Sequin.Runtime.SlotMessageStoreSupervisor do
 
   alias Sequin.Runtime.SlotMessageStore
 
-  def partition_count, do: 3
-
   def child_spec(opts) do
     consumer = Keyword.fetch!(opts, :consumer)
 
@@ -28,19 +26,17 @@ defmodule Sequin.Runtime.SlotMessageStoreSupervisor do
   end
 
   def init(opts) do
-    opts = Keyword.put(opts, :consumer_id, opts[:consumer].id)
+    consumer = Keyword.fetch!(opts, :consumer)
+    opts = Keyword.put(opts, :consumer_id, consumer.id)
+    partition_count = consumer.partition_count
 
     children =
-      Enum.map(0..(partition_count() - 1), fn idx ->
+      Enum.map(0..(partition_count - 1), fn idx ->
         opts = Keyword.put(opts, :partition, idx)
 
         {SlotMessageStore, opts}
       end)
 
     Supervisor.init(children, strategy: :one_for_all)
-  end
-
-  def partitions do
-    Enum.to_list(0..(partition_count() - 1))
   end
 end

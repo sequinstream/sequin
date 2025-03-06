@@ -251,7 +251,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
     execute_timed(:produce_messages, fn ->
       consumer = state.consumer
 
-      case state.slot_message_store_mod.produce(consumer.id, count, self()) do
+      case state.slot_message_store_mod.produce(consumer, count, self()) do
         {:ok, messages} ->
           unless messages == [] do
             Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
@@ -303,7 +303,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
         )
 
         state.slot_message_store_mod.messages_already_succeeded(
-          state.consumer.id,
+          state.consumer,
           Enum.map(delivered_messages, & &1.ack_id)
         )
 

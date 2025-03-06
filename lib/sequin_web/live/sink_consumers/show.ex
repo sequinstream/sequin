@@ -437,7 +437,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def handle_event("reset_all_visibility", _params, socket) do
     consumer = socket.assigns.consumer
 
-    case SlotMessageStore.reset_all_message_visibilities(consumer.id) do
+    case SlotMessageStore.reset_all_message_visibilities(consumer) do
       :ok ->
         {:reply, %{ok: true},
          socket
@@ -549,7 +549,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 1)
 
     messages_pending_count =
-      case SlotMessageStore.count_messages(consumer.id) do
+      case SlotMessageStore.count_messages(consumer) do
         {:ok, count} -> count
         {:error, _} -> 0
       end
@@ -866,7 +866,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer_messages_from_store(consumer, limit) do
-    case SlotMessageStore.peek_messages(consumer.id, limit) do
+    case SlotMessageStore.peek_messages(consumer, limit) do
       messages when is_list(messages) ->
         messages
 

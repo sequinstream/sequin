@@ -45,11 +45,11 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
-      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid ->
+      stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid ->
         {:ok, []}
       end)
 
-      stub(SlotMessageStoreMock, :messages_succeeded, fn _consumer_id, ack_ids ->
+      stub(SlotMessageStoreMock, :messages_succeeded, fn _consumer, ack_ids ->
         {:ok, length(ack_ids)}
       end)
 
@@ -61,10 +61,10 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
       msg2 = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
       # only the first call produces messages
-      expect(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, [msg1, msg2]} end)
-      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, []} end)
+      expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg1, msg2]} end)
+      stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)
 
-      expect(SlotMessageStoreMock, :messages_succeeded, fn _consumer_id, ack_ids ->
+      expect(SlotMessageStoreMock, :messages_succeeded, fn _consumer, ack_ids ->
         assert length(ack_ids) == 2
         {:ok, 2}
       end)
@@ -82,10 +82,10 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
     test "failed messages are failed to sms", %{consumer: consumer} do
       msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      expect(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, [msg]} end)
-      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, []} end)
+      expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg]} end)
+      stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)
 
-      expect(SlotMessageStoreMock, :messages_failed, fn _consumer_id, message_metas ->
+      expect(SlotMessageStoreMock, :messages_failed, fn _consumer, message_metas ->
         assert length(message_metas) == 1
         assert Enum.all?(message_metas, &is_map/1)
         :ok
@@ -106,10 +106,10 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
       wal_cursor = %{commit_lsn: msg.commit_lsn, commit_idx: msg.commit_idx, commit_timestamp: msg.commit_timestamp}
       MessageLedgers.wal_cursors_delivered(consumer.id, [wal_cursor])
 
-      expect(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, [msg]} end)
-      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, []} end)
+      expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg]} end)
+      stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)
 
-      expect(SlotMessageStoreMock, :messages_already_succeeded, fn _consumer_id, ack_ids ->
+      expect(SlotMessageStoreMock, :messages_already_succeeded, fn _consumer, ack_ids ->
         send(test_pid, {:ack_ids, ack_ids})
         {:ok, 0}
       end)

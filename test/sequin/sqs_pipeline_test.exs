@@ -176,7 +176,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
       consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
 
       start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_record])
+      SlotMessageStore.put_messages(consumer, [consumer_record])
 
       start_supervised!({SinkPipeline, [consumer: consumer, test_pid: test_pid]})
 

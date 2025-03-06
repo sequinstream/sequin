@@ -16,19 +16,19 @@ help: ## Prints target: [dep1 dep1 ...]  and what it does
 	@grep -E '^[a-zA-Z_-]+.*## .*$$' $(MAKEFILE_LIST) |  sed 's/^Makefile://' | column -t -s"##"
 
 dev: ## Run the app locally
-	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
+	elixir --name sequin-stream-dev@127.0.0.1 --cookie sequin-stream-dev -S mix phx.server
 
 dev2: ## Run a second node locally
-	SERVER_PORT=4001 elixir --sname sequin-stream-dev2 --cookie sequin-stream-dev -S mix phx.server
+	SERVER_PORT=4001 elixir --name sequin-stream-dev2@127.0.0.1 --cookie sequin-stream-dev -S mix phx.server
 
 deviex: ## Open an IEx session on the running local app. If entr is installed, also watch files and auto-recompile on changes.
-	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev --cookie sequin-stream-dev
+	iex --name console-$$(openssl rand -hex 4)@127.0.0.1 --remsh sequin-stream-dev@127.0.0.1 --cookie sequin-stream-dev
 
 watch: ## Watch files and auto-recompile on changes using entr
 	git ls-files | entr mix compile
 
 deviex2: ## Open a second IEx session on the running local app
-	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev2 --cookie sequin-stream-dev
+	iex --name console-$$(openssl rand -hex 4)@127.0.0.1 --remsh sequin-stream-dev2@127.0.0.1 --cookie sequin-stream-dev
 
 signoff: ## Run the signoff script
 	@./scripts/signoff.sh

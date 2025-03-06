@@ -219,7 +219,7 @@ defmodule Sequin.Runtime.SlotProcessor do
     )
 
     if state.test_pid do
-      Mox.allow(Sequin.Runtime.MessageHandlerMock, state.test_pid, self())
+      Mox.allow(Sequin.Runtime.SlotMessageHandlerMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.EnumMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())

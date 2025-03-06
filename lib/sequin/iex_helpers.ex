@@ -15,14 +15,16 @@ defmodule Sequin.IexHelpers do
   end
 
   def via(:slot_stores, id) do
-    sup_via = SlotMessageStoreSupervisor.via_tuple(id)
+    with {:ok, consumer} <- Consumers.get_consumer(id) do
+      sup_via = SlotMessageStoreSupervisor.via_tuple(consumer.id)
 
-    store_vias =
-      Enum.map(0..(SlotMessageStoreSupervisor.partition_count() - 1), fn partition ->
-        Sequin.Runtime.SlotMessageStore.via_tuple(id, partition)
-      end)
+      store_vias =
+        Enum.map(0..(consumer.partition_count - 1), fn partition ->
+          Sequin.Runtime.SlotMessageStore.via_tuple(consumer.id, partition)
+        end)
 
-    {sup_via, store_vias}
+      {sup_via, store_vias}
+    end
   end
 
   def via(:sink, id) do

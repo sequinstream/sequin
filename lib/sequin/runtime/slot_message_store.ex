@@ -32,6 +32,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -39,13 +40,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotMessageStore.State
   alias Sequin.Runtime.SlotMessageStoreBehaviour
-  alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.Runtime.TableReader
 
   require Logger
 
   @min_log_time_ms 200
-  @partition_count SlotMessageStoreSupervisor.partition_count()
 
   @type consumer_id :: String.t()
   @type ack_id :: String.t()
@@ -70,12 +69,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   Should raise so SlotProcessor cannot continue if this fails.
   """
 
-  @spec put_messages(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok | {:error, Error.t()}
-  def put_messages(consumer_id, messages) do
+  @spec put_messages(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok | {:error, Error.t()}
+  def put_messages(consumer, messages) do
     messages
-    |> Enum.group_by(&message_partition(&1, @partition_count))
+    |> Enum.group_by(&message_partition(&1, consumer.partition_count))
     |> Sequin.Enum.reduce_while_ok(fn {partition, messages} ->
-      GenServer.call(via_tuple(consumer_id, partition), {:put_messages, messages})
+      GenServer.call(via_tuple(consumer.id, partition), {:put_messages, messages})
     end)
   catch
     :exit, e ->
@@ -90,13 +89,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   Should raise so TableReaderServer cannot continue if this fails.
   """
-  @spec put_table_reader_batch(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t()), TableReader.batch_id()) ::
+  @spec put_table_reader_batch(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t()), TableReader.batch_id()) ::
           :ok | {:error, Error.t()}
-  def put_table_reader_batch(consumer_id, messages, batch_id) do
+  def put_table_reader_batch(consumer, messages, batch_id) do
     messages
-    |> Enum.group_by(&message_partition(&1, @partition_count))
+    |> Enum.group_by(&message_partition(&1, consumer.partition_count))
     |> Sequin.Enum.reduce_while_ok(fn {partition, messages} ->
-      GenServer.call(via_tuple(consumer_id, partition), {:put_table_reader_batch, messages, batch_id})
+      GenServer.call(via_tuple(consumer.id, partition), {:put_table_reader_batch, messages, batch_id})
     end)
   catch
     :exit, e ->
@@ -108,10 +107,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Should raise so TableReaderServer cannot continue if this fails.
   """
-  @spec unpersisted_table_reader_batch_ids(consumer_id()) :: {:ok, [TableReader.batch_id()]}
-  def unpersisted_table_reader_batch_ids(consumer_id) do
-    Enum.reduce_while(partitions(), {:ok, []}, fn partition, {:ok, acc_batch_ids} ->
-      case GenServer.call(via_tuple(consumer_id, partition), :unpersisted_table_reader_batch_ids) do
+  @spec unpersisted_table_reader_batch_ids(SinkConsumer.t()) :: {:ok, [TableReader.batch_id()]}
+  def unpersisted_table_reader_batch_ids(consumer) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while({:ok, []}, fn partition, {:ok, acc_batch_ids} ->
+      case GenServer.call(via_tuple(consumer.id, partition), :unpersisted_table_reader_batch_ids) do
         {:ok, ids} -> {:cont, {:ok, Enum.uniq(acc_batch_ids ++ ids)}}
         error -> {:halt, error}
       end
@@ -128,11 +129,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   Returns `{:ok, messages}` where messages is a list of deliverable messages.
   """
   @impl SlotMessageStoreBehaviour
-  def produce(consumer_id, count, producer_pid) do
-    partitions()
+  def produce(consumer, count, producer_pid) do
+    consumer
+    |> partitions()
     |> Enum.shuffle()
     |> Enum.reduce_while({:ok, []}, fn partition, {:ok, acc_messages} ->
-      case GenServer.call(via_tuple(consumer_id, partition), {:produce, count - length(acc_messages), producer_pid}) do
+      case GenServer.call(via_tuple(consumer.id, partition), {:produce, count - length(acc_messages), producer_pid}) do
         {:ok, messages} ->
           messages = messages ++ acc_messages
 
@@ -155,11 +157,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
   Acknowledges messages as successfully processed using their ack_ids.
   """
   @impl SlotMessageStoreBehaviour
-  def messages_succeeded_returning_messages(_consumer_id, []), do: {:ok, []}
+  def messages_succeeded_returning_messages(_consumer, []), do: {:ok, []}
 
-  def messages_succeeded_returning_messages(consumer_id, ack_ids) do
-    Enum.reduce_while(partitions(), {:ok, []}, fn partition, {:ok, acc_messages} ->
-      case GenServer.call(via_tuple(consumer_id, partition), {:messages_succeeded, ack_ids, true}) do
+  def messages_succeeded_returning_messages(consumer, ack_ids) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while({:ok, []}, fn partition, {:ok, acc_messages} ->
+      case GenServer.call(via_tuple(consumer.id, partition), {:messages_succeeded, ack_ids, true}) do
         {:ok, messages} -> {:cont, {:ok, acc_messages ++ messages}}
         error -> {:halt, error}
       end
@@ -170,11 +174,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @impl SlotMessageStoreBehaviour
-  def messages_succeeded(_consumer_id, []), do: {:ok, 0}
+  def messages_succeeded(_consumer, []), do: {:ok, 0}
 
-  def messages_succeeded(consumer_id, ack_ids) do
-    Enum.reduce_while(partitions(), {:ok, 0}, fn partition, {:ok, acc_count} ->
-      case GenServer.call(via_tuple(consumer_id, partition), {:messages_succeeded, ack_ids, false}) do
+  def messages_succeeded(consumer, ack_ids) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while({:ok, 0}, fn partition, {:ok, acc_count} ->
+      case GenServer.call(via_tuple(consumer.id, partition), {:messages_succeeded, ack_ids, false}) do
         {:ok, count} -> {:cont, {:ok, acc_count + count}}
         error -> {:halt, error}
       end
@@ -188,11 +194,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
   Acknowledges messages as already succeeded, likely due to idempotency checks.
   """
   @impl SlotMessageStoreBehaviour
-  def messages_already_succeeded(_consumer_id, []), do: :ok
+  def messages_already_succeeded(_consumer, []), do: :ok
 
-  def messages_already_succeeded(consumer_id, ack_ids) do
-    Enum.reduce_while(partitions(), {:ok, 0}, fn partition, {:ok, acc_count} ->
-      case GenServer.call(via_tuple(consumer_id, partition), {:messages_already_succeeded, ack_ids}) do
+  def messages_already_succeeded(consumer, ack_ids) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while({:ok, 0}, fn partition, {:ok, acc_count} ->
+      case GenServer.call(via_tuple(consumer.id, partition), {:messages_already_succeeded, ack_ids}) do
         {:ok, count} -> {:cont, {:ok, count + acc_count}}
         error -> {:halt, error}
       end
@@ -203,40 +211,46 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @impl SlotMessageStoreBehaviour
-  def messages_failed(_consumer_id, []), do: :ok
+  def messages_failed(_consumer, []), do: :ok
 
-  def messages_failed(consumer_id, message_metadatas) do
+  def messages_failed(consumer, message_metadatas) do
     message_metadatas
-    |> Enum.group_by(&message_partition(&1, @partition_count))
+    |> Enum.group_by(&message_partition(&1, consumer.partition_count))
     |> Sequin.Enum.reduce_while_ok(fn {partition, message_metadatas} ->
-      GenServer.call(via_tuple(consumer_id, partition), {:messages_failed, message_metadatas})
+      GenServer.call(via_tuple(consumer.id, partition), {:messages_failed, message_metadatas})
     end)
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
   end
 
-  def nack_stale_produced_messages(consumer_id) do
-    Sequin.Enum.reduce_while_ok(partitions(), fn partition ->
-      GenServer.call(via_tuple(consumer_id, partition), :nack_stale_produced_messages)
+  def nack_stale_produced_messages(consumer) do
+    consumer
+    |> partitions()
+    |> Sequin.Enum.reduce_while_ok(fn partition ->
+      GenServer.call(via_tuple(consumer.id, partition), :nack_stale_produced_messages)
     end)
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
   end
 
-  def reset_message_visibilities(consumer_id, ack_ids) do
-    Sequin.Enum.reduce_while_ok(partitions(), fn partition ->
-      GenServer.call(via_tuple(consumer_id, partition), {:reset_message_visibilities, ack_ids})
+  def reset_message_visibilities(consumer, ack_ids) do
+    consumer
+    |> partitions()
+    |> Sequin.Enum.reduce_while_ok(fn partition ->
+      GenServer.call(via_tuple(consumer.id, partition), {:reset_message_visibilities, ack_ids})
     end)
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
   end
 
-  def reset_all_message_visibilities(consumer_id) do
-    Sequin.Enum.reduce_while_ok(partitions(), fn partition ->
-      GenServer.call(via_tuple(consumer_id, partition), :reset_all_message_visibilities)
+  def reset_all_message_visibilities(consumer) do
+    consumer
+    |> partitions()
+    |> Sequin.Enum.reduce_while_ok(fn partition ->
+      GenServer.call(via_tuple(consumer.id, partition), :reset_all_message_visibilities)
     end)
   catch
     :exit, e ->
@@ -246,10 +260,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Should raise so SlotProcessor cannot continue if this fails.
   """
-  @spec min_unpersisted_wal_cursors(consumer_id(), reference()) :: list(Replication.wal_cursor())
-  def min_unpersisted_wal_cursors(consumer_id, monitor_ref) do
-    Enum.reduce_while(partitions(), [], fn partition, min_wal_cursors ->
-      case GenServer.call(via_tuple(consumer_id, partition), {:min_unpersisted_wal_cursor, monitor_ref}) do
+  @spec min_unpersisted_wal_cursors(SinkConsumer.t(), reference()) :: list(Replication.wal_cursor())
+  def min_unpersisted_wal_cursors(consumer, monitor_ref) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while([], fn partition, min_wal_cursors ->
+      case GenServer.call(via_tuple(consumer.id, partition), {:min_unpersisted_wal_cursor, monitor_ref}) do
         {:ok, nil} -> {:cont, min_wal_cursors}
         {:ok, min_wal_cursor} -> {:cont, [min_wal_cursor | min_wal_cursors]}
         error -> {:halt, error}
@@ -265,10 +281,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Counts the number of messages in the message store.
   """
-  @spec count_messages(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
-  def count_messages(consumer_id) do
-    Enum.reduce_while(partitions(), {:ok, 0}, fn partition, {:ok, acc_count} ->
-      case GenServer.call(via_tuple(consumer_id, partition), :count_messages) do
+  @spec count_messages(SinkConsumer.t()) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
+  def count_messages(consumer) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while({:ok, 0}, fn partition, {:ok, acc_count} ->
+      case GenServer.call(via_tuple(consumer.id, partition), :count_messages) do
         {:ok, count} -> {:cont, {:ok, acc_count + count}}
         error -> {:halt, error}
       end
@@ -281,10 +299,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Peek at SlotMessageStore state. For use in dev/test only.
   """
-  @spec peek(consumer_id()) :: [State.t()] | {:error, Exception.t()}
-  def peek(consumer_id) do
-    Enum.reduce_while(partitions(), [], fn partition, acc_states ->
-      case GenServer.call(via_tuple(consumer_id, partition), :peek) do
+  @spec peek(SinkConsumer.t()) :: [State.t()] | {:error, Exception.t()}
+  def peek(consumer) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while([], fn partition, acc_states ->
+      case GenServer.call(via_tuple(consumer.id, partition), :peek) do
         {:ok, state} -> {:cont, [state | acc_states]}
         error -> {:halt, error}
       end
@@ -294,12 +314,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
-  @spec peek_messages(consumer_id(), pos_integer()) ::
+  @spec peek_messages(SinkConsumer.t(), pos_integer()) ::
           list(ConsumerRecord.t() | ConsumerEvent.t()) | {:error, Exception.t()}
-  def peek_messages(consumer_id, count) do
-    partitions()
+  def peek_messages(consumer, count) do
+    consumer
+    |> partitions()
     |> Enum.reduce_while({:ok, []}, fn partition, {:ok, acc_messages} ->
-      case GenServer.call(via_tuple(consumer_id, partition), {:peek_messages, count}) do
+      case GenServer.call(via_tuple(consumer.id, partition), {:peek_messages, count}) do
         {:ok, messages} -> {:cont, {:ok, acc_messages ++ messages}}
         error -> {:halt, error}
       end
@@ -319,22 +340,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @doc """
-  Updates the consumer in state when its configuration changes.
-  """
-  @spec consumer_updated(SinkConsumer.t()) :: :ok | {:error, Error.t()}
-  def consumer_updated(consumer) do
-    Sequin.Enum.reduce_while_ok(partitions(), fn partition ->
-      GenServer.call(via_tuple(consumer.id, partition), {:consumer_updated, consumer})
-    end)
-  end
-
-  @doc """
   Set the monitor reference for the SlotMessageStore into State
   """
-  @spec set_monitor_ref(consumer_id(), reference()) :: :ok
-  def set_monitor_ref(consumer_id, ref) do
-    Sequin.Enum.reduce_while_ok(partitions(), fn partition ->
-      GenServer.call(via_tuple(consumer_id, partition), {:set_monitor_ref, ref}, :timer.seconds(120))
+  @spec set_monitor_ref(SinkConsumer.t(), reference()) :: :ok
+  def set_monitor_ref(consumer, ref) do
+    consumer
+    |> partitions()
+    |> Sequin.Enum.reduce_while_ok(fn partition ->
+      GenServer.call(via_tuple(consumer.id, partition), {:set_monitor_ref, ref}, :timer.seconds(120))
     end)
   end
 
@@ -401,7 +414,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     persisted_messages =
       consumer
       |> Consumers.list_consumer_messages_for_consumer()
-      |> Stream.filter(&(message_partition(&1, @partition_count) == state.partition))
+      |> Stream.filter(&(message_partition(&1, consumer.partition_count) == state.partition))
       |> Enum.map(fn msg ->
         %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
       end)
@@ -674,34 +687,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end)
   end
 
-  def handle_call({:consumer_updated, consumer}, from, state) do
-    old_consumer = state.consumer
-    state = %{state | consumer: consumer}
-
-    # Reply early as to not block. Could take a moment to upsert messages
-    GenServer.reply(from, :ok)
-
-    cond do
-      old_consumer.status == :active and consumer.status == :disabled ->
-        # Get all messages from memory
-        {messages, state} = State.pop_all_messages(state)
-
-        # Persist them all to disk
-        with :ok <- upsert_messages(state, messages),
-             {:ok, state} <- State.put_persisted_messages(state, messages) do
-          {:noreply, state}
-        end
-
-      old_consumer.status != :active and consumer.status == :active ->
-        # Give the ConsumerProducer a kick to come fetch messages
-        :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
-        {:noreply, state}
-
-      true ->
-        {:noreply, state}
-    end
-  end
-
   def handle_call(:payload_size_bytes, _from, state) do
     {:reply, {:ok, state.payload_size_bytes}, state}
   end
@@ -817,7 +802,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
         Consumers.max_memory_bytes_for_consumer(consumer)
       end
 
-    %{state | max_memory_bytes: div(max_memory_bytes, @partition_count)}
+    %{state | max_memory_bytes: div(max_memory_bytes, consumer.partition_count)}
   end
 
   defp exit_to_sequin_error({:timeout, {GenServer, :call, [_, _, timeout]}}) do
@@ -884,8 +869,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
     result
   end
 
-  defp partitions do
-    Enum.to_list(0..(@partition_count - 1))
+  defp partitions(%SinkConsumer{partition_count: partition_count}) do
+    Enum.to_list(0..(partition_count - 1))
   end
 
   defp message_partition(message, partition_count) do

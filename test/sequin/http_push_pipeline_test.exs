@@ -243,7 +243,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         )
 
       start_supervised({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_event])
+      SlotMessageStore.put_messages(consumer, [consumer_event])
 
       # Start the pipeline
       start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -262,7 +262,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      assert [] == SlotMessageStore.peek_messages(consumer.id, 10)
+      assert [] == SlotMessageStore.peek_messages(consumer, 10)
     end
 
     @tag capture_log: true
@@ -302,7 +302,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       expect_uuid4(fn -> event1.ack_id end)
       expect_uuid4(fn -> event2.ack_id end)
 
-      SlotMessageStore.put_messages(consumer.id, [event1, event2])
+      SlotMessageStore.put_messages(consumer, [event1, event2])
 
       # Start the pipeline with the failing adapter
       start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -314,7 +314,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {SinkPipeline, :ack_finished, [], [_failed2]}, 2_000
 
       # Reload the events from the database to check not_visible_until
-      messages = SlotMessageStore.peek_messages(consumer.id, 10)
+      messages = SlotMessageStore.peek_messages(consumer, 10)
 
       updated_event1 =
         Sequin.Enum.find!(messages, &(&1.commit_lsn == event1.commit_lsn and &1.commit_idx == event1.commit_idx))
@@ -351,7 +351,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
 
       start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [event])
+      SlotMessageStore.put_messages(consumer, [event])
 
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
       start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: self()]})
@@ -419,7 +419,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         )
 
       start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_record])
+      SlotMessageStore.put_messages(consumer, [consumer_record])
 
       # Start the pipeline
       start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -441,7 +441,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      assert [] == SlotMessageStore.peek_messages(consumer.id, 10)
+      assert [] == SlotMessageStore.peek_messages(consumer, 10)
     end
 
     test "legacy event transform is applied when feature flag is enabled", %{consumer: consumer} do
@@ -473,7 +473,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         )
 
       start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [record])
+      SlotMessageStore.put_messages(consumer, [record])
 
       # Start the pipeline with legacy_event_transform feature enabled
       start_supervised!(
@@ -509,7 +509,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      assert [] == SlotMessageStore.peek_messages(consumer.id, 10)
+      assert [] == SlotMessageStore.peek_messages(consumer, 10)
     end
   end
 

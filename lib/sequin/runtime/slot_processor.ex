@@ -24,6 +24,7 @@ defmodule Sequin.Runtime.SlotProcessor do
   alias Sequin.Postgres
   alias Sequin.Postgres.ReplicationConnection
   alias Sequin.Replication
+  alias Sequin.Repo
   alias Sequin.Runtime
   alias Sequin.Runtime.PostgresAdapter.Decoder
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
@@ -193,8 +194,8 @@ defmodule Sequin.Runtime.SlotProcessor do
       {:error, :not_running}
   end
 
-  def monitor_message_store(id, consumer_id) do
-    GenServer.call(via_tuple(id), {:monitor_message_store, consumer_id}, :timer.seconds(120))
+  def monitor_message_store(id, consumer) do
+    GenServer.call(via_tuple(id), {:monitor_message_store, consumer}, :timer.seconds(120))
   end
 
   def demonitor_message_store(id, consumer_id) do
@@ -448,20 +449,20 @@ defmodule Sequin.Runtime.SlotProcessor do
   end
 
   @impl ReplicationConnection
-  def handle_call({:monitor_message_store, consumer_id}, from, state) do
+  def handle_call({:monitor_message_store, consumer}, from, state) do
     execute_timed(:monitor_message_store, fn ->
-      if Map.has_key?(state.message_store_refs, consumer_id) do
+      if Map.has_key?(state.message_store_refs, consumer.id) do
         GenServer.reply(from, :ok)
         {:noreply, state}
       else
         # Monitor just the first partition (there's always at least one) and if any crash they will all restart
         # due to supervisor setting of :one_for_all
-        pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer_id, 0))
+        pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer.id, 0))
         ref = Process.monitor(pid)
-        :ok = SlotMessageStore.set_monitor_ref(consumer_id, ref)
-        Logger.info("Monitoring message store for consumer #{consumer_id}")
+        :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
+        Logger.info("Monitoring message store for consumer #{consumer.id}")
         GenServer.reply(from, :ok)
-        {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer_id, ref)}}
+        {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer.id, ref)}}
       end
     end)
   end
@@ -1105,12 +1106,16 @@ defmodule Sequin.Runtime.SlotProcessor do
     do: raise("Unsafe to call safe_wal_cursor when last_commit_lsn is nil")
 
   defp safe_wal_cursor(%State{} = state) do
+    consumers =
+      Repo.preload(state.replication_slot, :not_disabled_sink_consumers, force: true).not_disabled_sink_consumers
+
     case verify_monitor_refs(state) do
       :ok ->
         low_for_message_stores =
           state.message_store_refs
           |> Enum.flat_map(fn {consumer_id, ref} ->
-            SlotMessageStore.min_unpersisted_wal_cursors(consumer_id, ref)
+            consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
+            SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
           end)
           |> Enum.filter(& &1)
           |> case do

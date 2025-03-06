@@ -16,7 +16,6 @@ defmodule Sequin.PostgresReplicationTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.SequenceFilter
-  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -262,7 +261,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      [consumer_event] = list_messages(consumer.id)
+      [consumer_event] = list_messages(consumer)
 
       # Assert the consumer event details
       assert consumer_event.consumer_id == consumer.id
@@ -294,7 +293,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 1000
 
       # Fetch consumer records
-      [consumer_record] = list_messages(consumer.id)
+      [consumer_record] = list_messages(consumer)
 
       # Assert the consumer record details
       assert consumer_record.consumer_id == consumer.id
@@ -320,7 +319,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      events = list_messages(consumer.id)
+      events = list_messages(consumer)
       update_event = Enum.find(events, &(&1.data.action == :update))
 
       # Assert the consumer event details
@@ -364,7 +363,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Wait for the message to be handled
       assert_receive {SlotProcessor, :flush_messages}, 500
 
-      [_insert_record] = list_messages(consumer.id)
+      [_insert_record] = list_messages(consumer)
 
       # Update the character
       UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
@@ -373,7 +372,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer records
-      records = list_messages(consumer.id)
+      records = list_messages(consumer)
 
       # Assert the consumer record details
       Enum.each(records, fn record ->
@@ -416,7 +415,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      events = list_messages(consumer.id)
+      events = list_messages(consumer)
       update_event = Enum.find(events, &(&1.data.action == :update))
 
       # Assert the consumer event details
@@ -444,7 +443,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.delete!(character)
       assert_receive {SlotProcessor, :flush_messages}, 500
 
-      events = list_messages(consumer.id)
+      events = list_messages(consumer)
       delete_event = Enum.find(events, &(&1.data.action == :delete))
 
       %{data: data} = delete_event
@@ -474,12 +473,12 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert_receive {SlotProcessor, :flush_messages}, 500
 
-      [_insert_record] = list_messages(consumer.id)
+      [_insert_record] = list_messages(consumer)
 
       UnboxedRepo.delete!(character)
       assert_receive {SlotProcessor, :flush_messages}, 500
 
-      records = list_messages(consumer.id)
+      records = list_messages(consumer)
       assert length(records) == 1
       refute Enum.any?(records, & &1.deleted)
     end
@@ -494,7 +493,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.delete!(character)
       assert_receive {SlotProcessor, :flush_messages}, 500
 
-      events = list_messages(consumer.id)
+      events = list_messages(consumer)
       delete_event = Enum.find(events, &(&1.data.action == :delete))
 
       %{data: data} = delete_event
@@ -604,10 +603,10 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      [consumer_event] = list_messages(event_consumer.id)
+      [consumer_event] = list_messages(event_consumer)
 
       # Fetch consumer records
-      [consumer_record] = list_messages(record_consumer.id)
+      [consumer_record] = list_messages(record_consumer)
 
       # Assert both event and record were created
       assert consumer_event.consumer_id == event_consumer.id
@@ -626,7 +625,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      [consumer_event] = list_messages(consumer.id)
+      [consumer_event] = list_messages(consumer)
 
       # Assert the consumer event details
       assert consumer_event.consumer_id == consumer.id
@@ -648,7 +647,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      [consumer_event] = list_messages(consumer.id)
+      [consumer_event] = list_messages(consumer)
 
       # Assert the consumer event details
       %{data: data} = consumer_event
@@ -672,7 +671,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      events = list_messages(consumer.id)
+      events = list_messages(consumer)
       update_event = Enum.find(events, &(&1.data.action == :update))
 
       # Assert the consumer event details
@@ -702,7 +701,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      [consumer_event] = list_messages(consumer.id)
+      [consumer_event] = list_messages(consumer)
 
       # Assert the consumer event details
       assert consumer_event.consumer_id == consumer.id
@@ -1075,7 +1074,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      [consumer_event] = list_messages(consumer.id)
+      [consumer_event] = list_messages(consumer)
 
       # Assert the consumer event details
       assert consumer_event.consumer_id == consumer.id
@@ -1101,7 +1100,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer records
-      [consumer_record] = list_messages(consumer.id)
+      [consumer_record] = list_messages(consumer)
 
       # Assert the consumer record details
       assert consumer_record.consumer_id == consumer.id
@@ -1127,7 +1126,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      events = list_messages(consumer.id)
+      events = list_messages(consumer)
       update_event = Enum.find(events, &(&1.data.action == :update))
 
       # Assert the consumer event details
@@ -1163,7 +1162,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Wait for the message to be handled
       assert_receive {SlotProcessor, :flush_messages}, 500
 
-      [_insert_record] = list_messages(consumer.id)
+      [_insert_record] = list_messages(consumer)
 
       # Update the character
       UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
@@ -1172,7 +1171,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer records
-      records = list_messages(consumer.id)
+      records = list_messages(consumer)
 
       # Assert the consumer record details
       Enum.each(records, fn record ->
@@ -1190,7 +1189,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.delete!(character)
       assert_receive {SlotProcessor, :flush_messages}, 500
 
-      events = list_messages(consumer.id)
+      events = list_messages(consumer)
       delete_event = Enum.find(events, &(&1.data.action == :delete))
 
       %{data: data} = delete_event
@@ -1218,12 +1217,12 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert_receive {SlotProcessor, :flush_messages}, 500
 
-      [_insert_record] = list_messages(consumer.id)
+      [_insert_record] = list_messages(consumer)
 
       UnboxedRepo.delete!(character)
       assert_receive {SlotProcessor, :flush_messages}, 500
 
-      records = list_messages(consumer.id)
+      records = list_messages(consumer)
       refute Enum.any?(records, & &1.deleted)
     end
 
@@ -1300,10 +1299,10 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      [consumer_event] = list_messages(event_consumer.id)
+      [consumer_event] = list_messages(event_consumer)
 
       # Fetch consumer records
-      [consumer_record] = list_messages(record_consumer.id)
+      [consumer_record] = list_messages(record_consumer)
 
       # Assert both event and record were created
       assert consumer_event.consumer_id == event_consumer.id
@@ -1322,7 +1321,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      [consumer_event] = list_messages(consumer.id)
+      [consumer_event] = list_messages(consumer)
 
       # Assert the consumer event details
       assert consumer_event.consumer_id == consumer.id
@@ -1344,7 +1343,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
-      [consumer_event] = list_messages(consumer.id)
+      [consumer_event] = list_messages(consumer)
 
       # Assert the consumer event details
       %{data: data} = consumer_event
@@ -1619,9 +1618,7 @@ defmodule Sequin.PostgresReplicationTest do
     end)
   end
 
-  defp list_messages(%SinkConsumer{id: id}), do: list_messages(id)
-
-  defp list_messages(id) do
-    SlotMessageStore.peek_messages(id, 1000)
+  defp list_messages(consumer) do
+    SlotMessageStore.peek_messages(consumer, 1000)
   end
 end

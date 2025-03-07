@@ -2,24 +2,24 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @moduledoc """
   A GenServer that manages an in-memory message buffer for sink consumers.
 
-  The SlotMessageStore serves as a central buffer between the SlotProcessor and ConsumerProcessor. It maintains an in-memory buffer for never-delivered messages for a SinkConsumer.
+  The SlotMessageStore serves as a central buffer between the SlotProcessorServer and ConsumerProcessor. It maintains an in-memory buffer for never-delivered messages for a SinkConsumer.
 
   Message Lifecycle:
-  1. SlotProcessor pushes messages to SlotMessageStore
+  1. SlotProcessorServer pushes messages to SlotMessageStore
   2. ConsumerProcessor pulls messages for delivery to consumers
   3. On success/failure, ConsumerProcessor acknowledges messages which removes them from SlotMessageStore buffer
   4. If ConsumerProcessor crashes, SlotMessageStore finds out by changing pid in the next pull
 
   Backpressure:
   - SlotMessageStore buffers grow if ConsumerProcessors slow down or stop consuming
-  - When buffers reach configured limits, SlotMessageStore signals SlotProcessor to pause replication
-  - SlotProcessor resumes when buffer space becomes available
+  - When buffers reach configured limits, SlotMessageStore signals SlotProcessorServer to pause replication
+  - SlotProcessorServer resumes when buffer space becomes available
 
   Integration Points:
-  - Receives messages from SlotProcessor
+  - Receives messages from SlotProcessorServer
   - Serves messages to ConsumerProcessors
 
-  The SlotMessageStore is designed to be ephemeral - if it crashes, SlotProcessor will need to reconnect and replay
+  The SlotMessageStore is designed to be ephemeral - if it crashes, SlotProcessorServer will need to reconnect and replay
   messages. This is handled automatically by the supervision tree.
 
   Note: Failed message handling is managed by ConsumerProducer, not SlotMessageStore. ConsumerProducer writes failed
@@ -66,7 +66,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Stores new messages in the message store.
 
-  Should raise so SlotProcessor cannot continue if this fails.
+  Should raise so SlotProcessorServer cannot continue if this fails.
   """
 
   @spec put_messages(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok | {:error, Error.t()}
@@ -258,7 +258,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @doc """
-  Should raise so SlotProcessor cannot continue if this fails.
+  Should raise so SlotProcessorServer cannot continue if this fails.
   """
   @spec min_unpersisted_wal_cursors(SinkConsumer.t(), reference()) :: list(Replication.wal_cursor())
   def min_unpersisted_wal_cursors(consumer, monitor_ref) do
@@ -435,7 +435,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       # Validate first
       case State.validate_put_messages(state, messages) do
         {:ok, _incoming_payload_size_bytes} ->
-          # Reply early since validation passed. This frees up the SlotProcessor to continue
+          # Reply early since validation passed. This frees up the SlotProcessorServer to continue
           # calling other SMSs, accumulating messages, etc.
           GenServer.reply(from, :ok)
 

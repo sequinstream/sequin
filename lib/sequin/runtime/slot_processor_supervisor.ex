@@ -10,7 +10,7 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
   alias Sequin.Repo
   alias Sequin.Runtime.MessageHandler
   alias Sequin.Runtime.SlotMessageHandler
-  alias Sequin.Runtime.SlotProcessor
+  alias Sequin.Runtime.SlotProcessorServer
 
   def child_spec(opts) do
     %PostgresReplicationSlot{} = slot = Keyword.fetch!(opts, :replication_slot)
@@ -63,7 +63,7 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
       end)
 
     children = [
-      {SlotProcessor, slot_opts}
+      {SlotProcessorServer, slot_opts}
       | message_handlers
     ]
 

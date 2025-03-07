@@ -7,7 +7,7 @@ defmodule Sequin.IexHelpers do
   alias Sequin.Runtime.SlotMessageStoreSupervisor
 
   def via(:slot, id) do
-    Sequin.Runtime.SlotProcessor.via_tuple(id)
+    Sequin.Runtime.SlotProcessorServer.via_tuple(id)
   end
 
   def via(:table_reader, id) do

@@ -15,7 +15,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   alias Sequin.Repo
   alias Sequin.Runtime.InitBackfillStatsWorker
   alias Sequin.Runtime.MessageLedgers
-  alias Sequin.Runtime.SlotProcessor
+  alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
 
   require Logger
@@ -77,7 +77,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
         replication_slot_id = Map.fetch!(data, "replication_slot_id")
 
         :ok = RuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id)
-        :ok = SlotProcessor.demonitor_message_store(replication_slot_id, id)
+        :ok = SlotProcessorServer.demonitor_message_store(replication_slot_id, id)
         :ok = RuntimeSupervisor.stop_for_sink_consumer(replication_slot_id, id)
         :ok = MessageLedgers.drop_for_consumer(id)
     end

@@ -106,6 +106,11 @@ defmodule Sequin.Runtime.KafkaPipeline do
       {:ok, partition_count} ->
         partition_count
 
+      {:error, error} when is_atom(error) ->
+        error = Error.invariant(message: "Failed to get partition count for Kafka sink: #{inspect(error)}")
+        Logger.warning("[KafkaPipeline] #{Exception.message(error)}")
+        raise error
+
       {:error, error} ->
         error = Error.invariant(message: "Failed to get partition count for Kafka sink: #{Exception.message(error)}")
         Logger.warning("[KafkaPipeline] #{Exception.message(error)}")

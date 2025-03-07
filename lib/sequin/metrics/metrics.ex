@@ -41,12 +41,32 @@ defmodule Sequin.Metrics do
     Store.get_throughput_timeseries("consumer_messages_processed_throughput:#{id}", window_count)
   end
 
+  def get_consumer_messages_processed_throughput_timeseries_smoothed(%{id: id}, window_count \\ 60, smoothing_window \\ 5) do
+    with {:ok, timeseries} <-
+           Store.get_throughput_timeseries(
+             "consumer_messages_processed_throughput:#{id}",
+             window_count + smoothing_window
+           ) do
+      {:ok, smooth_timeseries(timeseries, window_count, smoothing_window)}
+    end
+  end
+
   def get_consumer_messages_processed_bytes_timeseries(%{id: id}, window_count \\ 60) do
     Store.get_throughput_timeseries("consumer_messages_processed_bytes:#{id}", window_count)
   end
 
   def get_consumer_messages_processed_throughput(consumer_id) when is_binary(consumer_id) do
     Store.get_throughput("consumer_messages_processed_throughput:#{consumer_id}")
+  end
+
+  def get_consumer_messages_processed_bytes_timeseries_smoothed(%{id: id}, window_count \\ 60, smoothing_window \\ 5) do
+    with {:ok, timeseries} <-
+           Store.get_throughput_timeseries(
+             "consumer_messages_processed_bytes:#{id}",
+             window_count + smoothing_window
+           ) do
+      {:ok, smooth_timeseries(timeseries, window_count, smoothing_window)}
+    end
   end
 
   def get_consumer_messages_processed_bytes(consumer_id) when is_binary(consumer_id) do
@@ -86,5 +106,18 @@ defmodule Sequin.Metrics do
 
   def get_postgres_replication_slot_lag(%PostgresReplicationSlot{id: id}) do
     Store.get_gauge("postgres_replication_slot_lag:#{id}")
+  end
+
+  defp smooth_timeseries(timeseries, window_count, smoothing_window) do
+    {smoothed_timeseries, _} =
+      Enum.reduce(timeseries, {[], []}, fn throughput, {smoothed_acc, rolling_acc} ->
+        rolling_acc = Enum.take([throughput | rolling_acc], smoothing_window)
+        smoothed = Enum.sum(rolling_acc) / length(rolling_acc)
+        {[smoothed | smoothed_acc], rolling_acc}
+      end)
+
+    smoothed_timeseries
+    |> Enum.take(window_count)
+    |> Enum.reverse()
   end
 end

@@ -12,7 +12,7 @@ alias Sequin.Runtime.ConsumerProducer
 alias Sequin.Runtime.MessageLedgers
 alias Sequin.Runtime.SinkPipeline
 alias Sequin.Runtime.SlotMessageStore
-alias Sequin.Runtime.SlotProcessor
+alias Sequin.Runtime.SlotProcessorServer
 alias Sequin.Runtime.SlotSupervisor
 alias Sequin.Runtime.TableReaderServer
 

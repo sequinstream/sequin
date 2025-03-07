@@ -1,10 +1,7 @@
-defmodule Sequin.Runtime.SlotProcessor do
+defmodule Sequin.Runtime.SlotProcessorServer do
   @moduledoc """
   Subscribes to the Postgres replication slot, decodes write ahead log binary messages
   and publishes them to a stream.
-
-  Forked from https://github.com/supabase/realtime/blob/main/lib/extensions/postgres_cdc_stream/replication.ex
-  with many modifications.
   """
 
   # See below, where we set restart: :temporary
@@ -169,7 +166,7 @@ defmodule Sequin.Runtime.SlotProcessor do
       check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0)
     }
 
-    ReplicationConnection.start_link(SlotProcessor, init, rep_conn_opts)
+    ReplicationConnection.start_link(SlotProcessorServer, init, rep_conn_opts)
   end
 
   def child_spec(opts) do
@@ -182,7 +179,7 @@ defmodule Sequin.Runtime.SlotProcessor do
     }
 
     # Eventually, we can wrap this in a Supervisor, to get faster retries on restarts before "giving up"
-    # The Starter will eventually restart this SlotProcessor GenServer.
+    # The Starter will eventually restart this SlotProcessorServer GenServer.
     Supervisor.child_spec(spec, restart: :permanent)
   end
 
@@ -215,7 +212,7 @@ defmodule Sequin.Runtime.SlotProcessor do
     )
 
     Logger.info(
-      "[SlotProcessor] Initialized with opts: #{inspect(Keyword.delete(state.connection, :password), pretty: true)}"
+      "[SlotProcessorServer] Initialized with opts: #{inspect(Keyword.delete(state.connection, :password), pretty: true)}"
     )
 
     if state.test_pid do
@@ -233,7 +230,7 @@ defmodule Sequin.Runtime.SlotProcessor do
 
   @impl ReplicationConnection
   def handle_connect(%State{connect_attempts: attempts} = state) when attempts >= 5 do
-    Logger.error("[SlotProcessor] Failed to connect to replication slot after 5 attempts")
+    Logger.error("[SlotProcessorServer] Failed to connect to replication slot after 5 attempts")
 
     conn = get_cached_conn(state)
 
@@ -264,7 +261,7 @@ defmodule Sequin.Runtime.SlotProcessor do
   end
 
   def handle_connect(state) do
-    Logger.debug("[SlotProcessor] Handling connect (attempt #{state.connect_attempts + 1})")
+    Logger.debug("[SlotProcessorServer] Handling connect (attempt #{state.connect_attempts + 1})")
 
     {:ok, low_watermark_wal_cursor} = Sequin.Replication.low_watermark_wal_cursor(state.id)
 
@@ -278,7 +275,7 @@ defmodule Sequin.Runtime.SlotProcessor do
     current_memory = state.check_memory_fn.()
 
     if current_memory > state.max_memory_bytes do
-      Logger.warning("[SlotProcessor] System at memory limit, shutting down",
+      Logger.warning("[SlotProcessorServer] System at memory limit, shutting down",
         limit: state.max_memory_bytes,
         current_memory: current_memory
       )
@@ -343,7 +340,7 @@ defmodule Sequin.Runtime.SlotProcessor do
             %Event{slug: :replication_memory_limit_exceeded, status: :info}
           )
 
-          Logger.warning("[SlotProcessor] System hit memory limit, shutting down",
+          Logger.warning("[SlotProcessorServer] System hit memory limit, shutting down",
             limit: next_state.max_memory_bytes,
             current_memory: next_state.check_memory_fn.()
           )
@@ -503,7 +500,7 @@ defmodule Sequin.Runtime.SlotProcessor do
       {consumer_id, ^ref} = Enum.find(state.message_store_refs, fn {_, r} -> r == ref end)
 
       Logger.error(
-        "[SlotProcessor] SlotMessageStore died. Shutting down.",
+        "[SlotProcessorServer] SlotMessageStore died. Shutting down.",
         consumer_id: consumer_id,
         reason: reason
       )
@@ -582,7 +579,7 @@ defmodule Sequin.Runtime.SlotProcessor do
       end
 
     Logger.info(
-      "[SlotProcessor] #{Float.round(messages_per_second, 1)} messages/s, #{Sequin.String.format_bytes(raw_bytes_per_second)}/s"
+      "[SlotProcessorServer] #{Float.round(messages_per_second, 1)} messages/s, #{Sequin.String.format_bytes(raw_bytes_per_second)}/s"
     )
 
     # Get all timing metrics from process dictionary
@@ -664,7 +661,7 @@ defmodule Sequin.Runtime.SlotProcessor do
       |> Keyword.merge(count_metrics)
       |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
 
-    Logger.info("[SlotProcessor] Process metrics", metadata)
+    Logger.info("[SlotProcessorServer] Process metrics", metadata)
 
     # Clear timing metrics after logging
     timing_metrics
@@ -895,7 +892,7 @@ defmodule Sequin.Runtime.SlotProcessor do
   end
 
   defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
-    Logger.info("[SlotProcessor] Heartbeat received", emitted_at: emitted_at)
+    Logger.info("[SlotProcessorServer] Heartbeat received", emitted_at: emitted_at)
     Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
 
     state = schedule_heartbeat(state)
@@ -1068,7 +1065,7 @@ defmodule Sequin.Runtime.SlotProcessor do
       time_ms = time / 1000
 
       if time_ms > 100 do
-        Logger.warning("[SlotProcessor] Flushed messages took longer than 100ms",
+        Logger.warning("[SlotProcessorServer] Flushed messages took longer than 100ms",
           duration_ms: time_ms,
           message_count: count
         )
@@ -1117,21 +1114,24 @@ defmodule Sequin.Runtime.SlotProcessor do
       cond do
         not is_nil(low_for_message_stores) ->
           # Use the minimum unpersisted WAL cursor from the message stores.
-          Logger.info("[SlotProcessor] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}")
+          Logger.info(
+            "[SlotProcessorServer] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}"
+          )
+
           low_for_message_stores
 
         accumulated_messages?(state) ->
-          # When there are messages that the SlotProcessor has not flushed yet,
+          # When there are messages that the SlotProcessorServer has not flushed yet,
           # we need to fallback on the last low_watermark_wal_cursor (not safe to use
           # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
           Logger.info(
-            "[SlotProcessor] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
+            "[SlotProcessorServer] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
           )
 
           state.low_watermark_wal_cursor
 
         true ->
-          # The SlotProcessor has processed messages beyond what the message stores have.
+          # The SlotProcessorServer has processed messages beyond what the message stores have.
           # This might be due to health messages or messages for tables that do not belong
           # to any sinks.
           # We want to advance the slot to the last_commit_lsn in that case because:
@@ -1139,28 +1139,31 @@ defmodule Sequin.Runtime.SlotProcessor do
           # 2. If the tables in this slot are dormant, the slot will continue to accumulate
           # WAL unless we advance it. (This is the secondary purpose of the health message,
           # to allow us to advance the slot even if tables are dormant.)
-          Logger.info("[SlotProcessor] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
+          Logger.info("[SlotProcessorServer] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
           %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
       end
 
       cond do
         not is_nil(low_for_message_stores) ->
           # Use the minimum unpersisted WAL cursor from the message stores.
-          Logger.info("[SlotProcessor] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}")
+          Logger.info(
+            "[SlotProcessorServer] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}"
+          )
+
           low_for_message_stores
 
         accumulated_messages?(state) ->
-          # When there are messages that the SlotProcessor has not flushed yet,
+          # When there are messages that the SlotProcessorServer has not flushed yet,
           # we need to fallback on the last low_watermark_wal_cursor (not safe to use
           # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
           Logger.info(
-            "[SlotProcessor] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
+            "[SlotProcessorServer] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
           )
 
           state.low_watermark_wal_cursor
 
         true ->
-          # The SlotProcessor has processed messages beyond what the message stores have.
+          # The SlotProcessorServer has processed messages beyond what the message stores have.
           # This might be due to health messages or messages for tables that do not belong
           # to any sinks.
           # We want to advance the slot to the last_commit_lsn in that case because:
@@ -1168,7 +1171,7 @@ defmodule Sequin.Runtime.SlotProcessor do
           # 2. If the tables in this slot are dormant, the slot will continue to accumulate
           # WAL unless we advance it. (This is the secondary purpose of the health message,
           # to allow us to advance the slot even if tables are dormant.)
-          Logger.info("[SlotProcessor] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
+          Logger.info("[SlotProcessorServer] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
           %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
       end
     else
@@ -1462,7 +1465,7 @@ defmodule Sequin.Runtime.SlotProcessor do
     task =
       Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
         Logger.metadata(replication_id: state.id, database_id: state.postgres_database.id)
-        Logger.info("[SlotProcessor] Stopping replication for #{state.id}")
+        Logger.info("[SlotProcessorServer] Stopping replication for #{state.id}")
 
         if Application.get_env(:sequin, :env) == :test and not is_nil(state.test_pid) do
           send(state.test_pid, {:stop_replication, state.id})

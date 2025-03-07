@@ -20,7 +20,6 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.SlotMessageStore
-  alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.TableReaderServer
 
@@ -474,17 +473,17 @@ defmodule Sequin.Runtime.MessageHandler do
   defp load_unchanged_toasts_from_old(%Context{} = ctx, messages) do
     messages =
       Enum.reduce(messages, [], fn
-        %SlotProcessor.Message{action: :update, old_fields: nil} = message, messages_acc ->
+        %Message{action: :update, old_fields: nil} = message, messages_acc ->
           if has_unchanged_toast?(message) do
             put_unchanged_toast_health_event(ctx, message)
           end
 
           [message | messages_acc]
 
-        %SlotProcessor.Message{action: :update, fields: fields, old_fields: old_fields} = message, messages_acc ->
+        %Message{action: :update, fields: fields, old_fields: old_fields} = message, messages_acc ->
           updated_fields =
             Enum.map(fields, fn
-              %SlotProcessor.Message.Field{value: :unchanged_toast} = field ->
+              %Message.Field{value: :unchanged_toast} = field ->
                 old_field = Sequin.Enum.find!(old_fields, &(&1.column_attnum == field.column_attnum))
                 %{field | value: old_field.value}
 
@@ -494,7 +493,7 @@ defmodule Sequin.Runtime.MessageHandler do
 
           [%{message | fields: updated_fields} | messages_acc]
 
-        %SlotProcessor.Message{} = message, messages_acc ->
+        %Message{} = message, messages_acc ->
           [message | messages_acc]
       end)
 

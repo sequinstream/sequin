@@ -9,7 +9,7 @@ defmodule Sequin.Runtime.Supervisor do
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Runtime.MessageHandler
-  alias Sequin.Runtime.SlotProcessor
+  alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.SlotSupervisor
   alias Sequin.Runtime.SlotSupervisorSupervisor
   alias Sequin.Runtime.TableReaderServer
@@ -135,7 +135,7 @@ defmodule Sequin.Runtime.Supervisor do
           fn ->
             new_ctx = MessageHandler.context(pg_replication)
 
-            case SlotProcessor.update_message_handler_ctx(id, new_ctx) do
+            case SlotProcessorServer.update_message_handler_ctx(id, new_ctx) do
               :ok -> :ok
               {:error, :not_running} -> :ok
             end

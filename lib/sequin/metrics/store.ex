@@ -64,6 +64,7 @@ defmodule Sequin.Metrics.Store do
     end
   end
 
+  @spec get_throughput_timeseries(String.t(), non_neg_integer()) :: {:ok, [non_neg_integer()]} | {:error, any()}
   def get_throughput_timeseries(key, window_count \\ @timeseries_windows)
 
   def get_throughput_timeseries(_key, window_count) when window_count > @timeseries_windows do

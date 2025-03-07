@@ -16,8 +16,12 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   alias Sequin.Databases
   alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Health
+  alias Sequin.Metrics
   alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
+
+  @smoothing_window 5
+  @timeseries_window_count 60
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -27,10 +31,12 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
     has_sequences? = account.id |> Databases.list_sequences_for_account() |> Enum.any?()
     consumers = load_consumer_health(consumers)
+    consumers = load_consumer_metrics(consumers)
 
     socket =
       if connected?(socket) do
         Process.send_after(self(), :update_health, 1000)
+        Process.send_after(self(), :update_metrics, 1000)
 
         push_event(socket, "ph-identify", %{
           userId: user.id,
@@ -239,6 +245,11 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     {:noreply, assign(socket, :consumers, load_consumer_health(socket.assigns.consumers))}
   end
 
+  def handle_info(:update_metrics, socket) do
+    Process.send_after(self(), :update_metrics, 1000)
+    {:noreply, assign(socket, :consumers, load_consumer_metrics(socket.assigns.consumers))}
+  end
+
   def handle_info({:database_tables_updated, _updated_database}, socket) do
     # Proxy down to ConsumerForm
     send_update(ConsumerForm, id: "new-consumer", event: :database_tables_updated)
@@ -258,6 +269,21 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     end)
   end
 
+  defp load_consumer_metrics(consumers) do
+    Enum.map(consumers, fn consumer ->
+      {:ok, messages_processed_throughput_timeseries} =
+        Metrics.get_consumer_messages_processed_throughput_timeseries_smoothed(
+          consumer,
+          @timeseries_window_count,
+          @smoothing_window
+        )
+
+      Map.put(consumer, :metrics, %{
+        messages_processed_throughput_timeseries: messages_processed_throughput_timeseries
+      })
+    end)
+  end
+
   defp encode_consumer(consumer) do
     %{
       id: consumer.id,
@@ -267,7 +293,10 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       status: consumer.status,
       database_name: consumer.postgres_database.name,
       health: Health.to_external(consumer.health),
-      href: RouteHelpers.consumer_path(consumer)
+      href: RouteHelpers.consumer_path(consumer),
+      metrics: %{
+        messages_processed_throughput_timeseries: consumer.metrics.messages_processed_throughput_timeseries
+      }
     }
   end
 end

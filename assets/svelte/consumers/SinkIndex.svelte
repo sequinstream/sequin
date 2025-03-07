@@ -26,6 +26,8 @@
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
   import { Badge } from "$lib/components/ui/badge";
+  import * as d3 from "d3";
+  import { onMount } from "svelte";
 
   export let consumers: Array<{
     id: string;
@@ -44,6 +46,9 @@
     database_name: string;
     health: {
       status: "healthy" | "warning" | "error" | "initializing";
+    };
+    metrics: {
+      messages_processed_throughput_timeseries: number[];
     };
   }>;
   export let live: any;
@@ -105,6 +110,120 @@
   function handleConsumerClick(id: string, type: string) {
     live.pushEvent("consumer_clicked", { id, type });
   }
+
+  function createMiniChart(element, data, options = {}) {
+    const config = {
+      width: element.clientWidth,
+      height: element.clientHeight,
+      margin: { top: 2, right: 2, bottom: 2, left: 2 },
+      lineColor: "#3b82f6",
+      areaColor: "#3b82f6",
+      areaOpacity: 0.1,
+      ...options,
+    };
+
+    // Clear existing SVG
+    d3.select(element).selectAll("svg").remove();
+
+    const svg = d3
+      .select(element)
+      .append("svg")
+      .attr("width", config.width)
+      .attr("height", config.height)
+      .style("overflow", "visible");
+
+    const chartWidth = config.width - config.margin.left - config.margin.right;
+    const chartHeight =
+      config.height - config.margin.top - config.margin.bottom;
+
+    const x = d3
+      .scaleLinear()
+      .domain([0, data.length - 1])
+      .range([0, chartWidth]);
+
+    const y = d3
+      .scaleLinear()
+      .domain([0, d3.max(data) * 1.1 || 1])
+      .range([chartHeight, 0]);
+
+    const chartGroup = svg
+      .append("g")
+      .attr(
+        "transform",
+        `translate(${config.margin.left},${config.margin.top})`,
+      );
+
+    const line = d3
+      .line()
+      .x((d, i) => x(i))
+      .y((d) => y(d));
+
+    const area = d3
+      .area()
+      .x((d, i) => x(i))
+      .y0(chartHeight)
+      .y1((d) => y(d));
+
+    chartGroup
+      .append("path")
+      .datum(data)
+      .attr("fill", config.areaColor)
+      .attr("fill-opacity", config.areaOpacity)
+      .attr("d", area);
+
+    chartGroup
+      .append("path")
+      .datum(data)
+      .attr("fill", "none")
+      .attr("stroke", config.lineColor)
+      .attr("stroke-width", 1)
+      .attr("d", line);
+
+    return svg;
+  }
+
+  let chartElements = {};
+
+  function bindChartElement(node, consumerId) {
+    chartElements[consumerId] = node;
+    return {
+      destroy() {
+        delete chartElements[consumerId];
+      },
+    };
+  }
+
+  onMount(() => {
+    // Create charts for each consumer
+    consumers.forEach((consumer) => {
+      const element = chartElements[consumer.id];
+      if (
+        element &&
+        consumer.metrics.messages_processed_throughput_timeseries.length > 0
+      ) {
+        createMiniChart(
+          element,
+          consumer.metrics.messages_processed_throughput_timeseries,
+        );
+      }
+    });
+  });
+
+  $: if (consumers) {
+    // Update charts when consumers data changes
+    consumers.forEach((consumer) => {
+      const element = chartElements[consumer.id];
+      if (
+        element &&
+        consumer.metrics.messages_processed_throughput_timeseries.length > 0
+      ) {
+        createMiniChart(
+          element,
+          consumer.metrics.messages_processed_throughput_timeseries,
+        );
+      }
+    });
+  }
 </script>
 
 <div class="container mx-auto py-10">
@@ -158,6 +277,7 @@
               <span>Database</span>
             </div>
           </Table.Head>
+          <Table.Head>Throughput</Table.Head>
           <Table.Head>Created</Table.Head>
         </Table.Row>
       </Table.Header>
@@ -191,6 +311,9 @@
               </div>
             </Table.Cell>
             <Table.Cell>{consumer.database_name}</Table.Cell>
+            <Table.Cell>
+              <div use:bindChartElement={consumer.id} class="w-48 h-8" />
+            </Table.Cell>
             <Table.Cell
               >{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
             >

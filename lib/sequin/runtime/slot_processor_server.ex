@@ -24,17 +24,15 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Runtime
   alias Sequin.Runtime.MessageHandler
   alias Sequin.Runtime.PostgresAdapter.Decoder
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Delete
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Insert
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.SlotProcessor.State
+  alias Sequin.Runtime.SlotProcessor.UndecodedMessage
   alias Sequin.Workers.CreateReplicationSlotWorker
 
   require Logger
@@ -260,6 +258,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   def stop(pid), do: GenServer.stop(pid)
 
   @impl ReplicationConnection
+
+  def handle_data(<<?w, _header::192, ?M, _rest::binary>> = bin, %State{} = state) do
+    <<?w, _header::192, msg::binary>> = bin
+    msg = Decoder.decode_message(msg)
+    state = handle_logical_message(state, msg)
+    {:noreply, state}
+  end
+
   def handle_data(data, %State{} = state) do
     execute_timed(:handle_data_sequin, fn ->
       # TODO: Move to better spot by having ReplicationConnection callback when it connects
@@ -570,6 +576,29 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:noreply, state}
   end
 
+  defp handle_logical_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
+    Logger.info("[SlotProcessorServer] Heartbeat received", emitted_at: emitted_at)
+    Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
+
+    state = schedule_heartbeat(state)
+
+    if state.test_pid do
+      # TODO: Decouple
+      send(state.test_pid, {__MODULE__, :heartbeat_received})
+    end
+
+    state
+  end
+
+  defp handle_logical_message(%State{} = state, %LogicalMessage{prefix: @backfill_batch_high_watermark} = msg) do
+    %State{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}
+  end
+
+  # Ignore other logical messages
+  defp handle_logical_message(%State{} = state, %LogicalMessage{}) do
+    state
+  end
+
   defp maybe_schedule_flush(%State{flush_timer: nil} = state) do
     ref = Process.send_after(self(), :flush_messages, max_accumulated_messages_time_ms())
     %{state | flush_timer: ref}
@@ -603,8 +632,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  defp skip_message?(%Message{} = msg, %State{} = state) do
-    %{commit_lsn: low_watermark_lsn, commit_idx: low_watermark_idx} = state.low_watermark_wal_cursor
+  defp skip_message?(%Message{} = msg, low_watermark_wal_cursor) do
+    %{commit_lsn: low_watermark_lsn, commit_idx: low_watermark_idx} = low_watermark_wal_cursor
     {message_lsn, message_idx} = {msg.commit_lsn, msg.commit_idx}
 
     lte_watermark? =
@@ -613,109 +642,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     lte_watermark? or (msg.table_schema in [@config_schema, @stream_schema] and msg.table_schema != "public")
   end
 
-  @spec process_message(State.t(), map()) :: {State.t(), map() | nil}
-  defp process_message(
-         %State{last_commit_lsn: last_commit_lsn} = state,
-         %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid} = msg
-       ) do
-    begin_lsn = Postgres.lsn_to_int(lsn)
-
-    state =
-      if not is_nil(last_commit_lsn) and begin_lsn < last_commit_lsn do
-        Logger.error(
-          "Received a Begin message with an LSN that is less than the last commit LSN (#{begin_lsn} < #{last_commit_lsn})"
-        )
-
-        %{state | dirty: true}
-      else
-        state
-      end
-
-    {%State{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: begin_lsn, current_xid: xid}, msg}
-  end
-
-  # Ensure we do not have an out-of-order bug by asserting equality
-  defp process_message(
-         %State{current_xaction_lsn: current_lsn, current_commit_ts: ts, id: id} = state,
-         %Commit{lsn: lsn, commit_timestamp: ts} = msg
-       ) do
-    lsn = Postgres.lsn_to_int(lsn)
-
-    unless current_lsn == lsn do
-      raise "Unexpectedly received a commit LSN that does not match current LSN (#{current_lsn} != #{lsn})"
-    end
-
-    :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
-
-    {%State{
-       state
-       | last_commit_lsn: lsn,
-         current_xaction_lsn: nil,
-         current_xid: nil,
-         current_commit_ts: nil,
-         current_commit_idx: 0,
-         dirty: false
-     }, msg}
-  end
-
-  defp process_message(%State{} = state, %Message{} = msg) do
-    msg = %Message{
-      msg
-      | commit_lsn: state.current_xaction_lsn,
-        commit_idx: state.current_commit_idx,
-        commit_timestamp: state.current_commit_ts
-    }
-
-    # TracerServer.message_replicated(state.postgres_database, msg)
-
-    Health.put_event(
-      state.replication_slot,
-      %Event{slug: :replication_message_processed, status: :success}
-    )
-
-    {%State{state | current_commit_idx: state.current_commit_idx + 1}, msg}
-  end
-
-  # Ignore type messages, we receive them before type columns:
-  # %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Type{id: 551312, namespace: "public", name: "citext"}
-  # Custom enum:
-  # %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Type{id: 3577319, namespace: "public", name: "character_status"}
-  defp process_message(%State{} = state, %Decoder.Messages.Type{}) do
-    {state, nil}
-  end
-
-  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
-    Logger.info("[SlotProcessorServer] Heartbeat received", emitted_at: emitted_at)
-    Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
-
-    state = schedule_heartbeat(state)
-
-    if state.test_pid do
-      # TODO: Decouple
-      send(state.test_pid, {__MODULE__, :heartbeat_received})
-    end
-
-    {state, nil}
-  end
-
-  defp process_message(%State{} = state, %LogicalMessage{prefix: @backfill_batch_high_watermark} = msg) do
-    {%State{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}, nil}
-  end
-
-  # Ignore other logical messages
-  defp process_message(%State{} = state, %LogicalMessage{}) do
-    {state, nil}
-  end
-
-  # It's important we assert this message is not a message that we *should* have a handler for
-  defp process_message(%State{} = state, %struct{} = msg)
-       when struct not in [Begin, Commit, Message, LogicalMessage, Relation] do
-    Logger.error("Unknown message: #{inspect(msg)}")
-    {state, nil}
-  end
-
-  @spec maybe_cast_message(decoded_message :: map(), schemas :: map()) :: Message.t() | map()
-  defp maybe_cast_message(%Insert{} = msg, schemas) do
+  @spec cast_message(decoded_message :: map(), schemas :: map()) :: Message.t() | map()
+  defp cast_message(%Insert{} = msg, schemas) do
     %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
       Map.get(schemas, msg.relation_id)
 
@@ -733,7 +661,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     }
   end
 
-  defp maybe_cast_message(%Update{} = msg, schemas) do
+  defp cast_message(%Update{} = msg, schemas) do
     %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
       Map.get(schemas, msg.relation_id)
 
@@ -757,7 +685,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     }
   end
 
-  defp maybe_cast_message(%Delete{} = msg, schemas) do
+  defp cast_message(%Delete{} = msg, schemas) do
     %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
       Map.get(schemas, msg.relation_id)
 
@@ -782,8 +710,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     }
   end
 
-  defp maybe_cast_message(msg, _schemas), do: msg
-
   defp flush_messages(%State{accumulated_msg_binaries: %{count: 0}} = state), do: state
 
   defp flush_messages(%State{} = state) do
@@ -792,55 +718,51 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         Process.cancel_timer(ref)
       end
 
+      Health.put_event(
+        state.replication_slot,
+        %Event{slug: :replication_message_processed, status: :success}
+      )
+
       accumulated_binares = state.accumulated_msg_binaries.binaries
+      # Don't pass State down to Flow processes
       schemas = state.schemas
+      low_watermark_wal_cursor = state.low_watermark_wal_cursor
 
       messages =
         accumulated_binares
-        |> Enum.reverse()
-        |> Enum.with_index()
         |> Flow.from_enumerable(max_demand: 50, min_demand: 25)
-        |> Flow.map(fn {msg, idx} ->
-          {msg |> Decoder.decode_message() |> maybe_cast_message(schemas), idx}
-        end)
-        # Merge back to single partition - always use 1 stage to ensure ordering
-        |> Flow.partition(stages: 1)
-        # Sort by original index
-        |> Enum.sort_by(&elem(&1, 1))
-        # Extract just the messages
-        |> Enum.map(&elem(&1, 0))
+        |> Flow.map(fn %UndecodedMessage{} = msg ->
+          case Decoder.decode_message(msg.bin) do
+            %type{} = decoded_msg when type in [Insert, Update, Delete] ->
+              casted_msg =
+                decoded_msg
+                |> cast_message(schemas)
+                |> Map.merge(%{
+                  commit_lsn: msg.commit_lsn,
+                  commit_idx: msg.commit_idx,
+                  commit_timestamp: msg.commit_timestamp
+                })
 
-      if Enum.any?(messages, &(not match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, &1))) do
-        # A replication message is *their* message(s), not our message.
-        Health.put_event(
-          state.replication_slot,
-          %Event{slug: :replication_message_processed, status: :success}
-        )
-      end
-
-      {state, messages} =
-        Enum.reduce(messages, {state, []}, fn msg, {state, messages} ->
-          case process_message(state, msg) do
-            {%State{} = state, %Message{} = message} ->
-              if skip_message?(message, state) do
-                {state, messages}
-              else
-                {state, [message | messages]}
+              unless skip_message?(casted_msg, low_watermark_wal_cursor) do
+                casted_msg
               end
 
-            {%State{} = state, _} ->
-              {state, messages}
+            msg ->
+              Logger.warning("Unknown message: #{inspect(msg)}")
+              nil
           end
         end)
-
-      messages = Enum.reverse(messages)
+        |> Flow.filter(& &1)
+        # Merge back to single partition - always use 1 stage to ensure ordering
+        |> Flow.partition(stages: 1)
+        # Sort by {commit_lsn, commit_idx}
+        |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx})
 
       count = length(messages)
       incr_counter(:messages_processed, count)
       incr_counter(:messages_processed_since_last_log, count)
 
       # Flush accumulated messages
-      # Temp: Do this here, as handle_messages call is going to become async
       state.message_handler_module.before_handle_messages(state.message_handler_ctx, messages)
 
       {time, res} =
@@ -1210,14 +1132,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     Map.get(@postgres_to_ecto_type_mapping, type, :string)
   end
 
-  # Add this function to get the last committed timestamp
-  def get_last_committed_at(id) do
-    case :ets.lookup(ets_table(), {id, :last_committed_at}) do
-      [{{^id, :last_committed_at}, ts}] -> ts
-      [] -> nil
-    end
-  end
-
   defp get_cached_conn(%State{} = state) do
     {:ok, conn} = ConnectionCache.connection(state.postgres_database)
     conn
@@ -1233,19 +1147,19 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp launch_stop(state) do
     # Returning :stop tuple results in an error that looks like a crash
-    task =
-      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-        Logger.metadata(replication_id: state.id, database_id: state.postgres_database.id)
-        Logger.info("[SlotProcessorServer] Stopping replication for #{state.id}")
+    Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+      Logger.metadata(replication_id: state.id, database_id: state.postgres_database.id)
+      Logger.info("[SlotProcessorServer] Stopping replication for #{state.id}")
 
-        if Application.get_env(:sequin, :env) == :test and not is_nil(state.test_pid) do
-          send(state.test_pid, {:stop_replication, state.id})
-        else
-          :ok = Runtime.Supervisor.stop_replication(state.id)
-        end
-      end)
-
-    Process.demonitor(task.ref, [:flush])
+      if Application.get_env(:sequin, :env) == :test and not is_nil(state.test_pid) do
+        send(state.test_pid, {:stop_replication, state.id})
+        # Hacky way to avoid the race condition where the task returns
+        # to SlotProcessorServer before the test ends
+        Process.sleep(1000)
+      else
+        :ok = Runtime.Supervisor.stop_replication(state.id)
+      end
+    end)
   end
 
   defp incr_counter(name, amount \\ 1) do

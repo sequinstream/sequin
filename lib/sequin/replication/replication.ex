@@ -15,7 +15,6 @@ defmodule Sequin.Replication do
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
   alias Sequin.Runtime.DatabaseLifecycleEventWorker
-  alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
 
   require Logger
@@ -106,23 +105,6 @@ defmodule Sequin.Replication do
         {:ok, deleted_pg_replication}
       end
     end)
-  end
-
-  def add_info(%PostgresReplicationSlot{} = pg_replication) do
-    pg_replication = Repo.preload(pg_replication, [:postgres_database])
-
-    last_committed_at = SlotProcessorServer.get_last_committed_at(pg_replication.id)
-    # key_pattern = "#{pg_replication.postgres_database.name}.>"
-
-    # total_ingested_messages =
-    #   Streams.fast_count_messages_for_stream(pg_replication.stream_id, key_pattern: key_pattern)
-
-    info = %PostgresReplicationSlot.Info{
-      last_committed_at: last_committed_at,
-      total_ingested_messages: nil
-    }
-
-    %{pg_replication | info: info}
   end
 
   # Helper Functions

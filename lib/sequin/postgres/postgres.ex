@@ -553,8 +553,14 @@ defmodule Sequin.Postgres do
 
   def fetch_table_oid(conn, schema, table) do
     case query(conn, "SELECT '#{quote_name(schema)}.#{quote_name(table)}'::regclass::oid") do
-      {:ok, %{rows: [[oid]]}} -> oid
-      _ -> nil
+      {:ok, %{rows: [[oid]]}} ->
+        {:ok, oid}
+
+      {:error, %Postgrex.Error{postgres: %{code: :undefined_table}}} ->
+        {:error, Error.not_found(entity: :table_oid, params: %{schema: schema, table: table})}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 

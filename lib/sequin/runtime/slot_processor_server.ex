@@ -319,7 +319,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   def handle_data(<<?w, _header::192, ?R, _::binary>> = binary, %State{} = state) do
     <<?w, _header::192, msg::binary>> = binary
     relation_msg = Decoder.decode_message(msg)
-    state = process_relation_message(relation_msg, state)
+    state = put_relation_message(relation_msg, state)
     {:noreply, state}
   end
 
@@ -745,19 +745,21 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     lte_watermark? or (msg.table_schema in [@config_schema, @stream_schema] and msg.table_schema != "public")
   end
 
-  @spec process_relation_message(map(), State.t()) :: State.t()
-  defp process_relation_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
+  @spec put_relation_message(Relation.t(), State.t()) :: State.t()
+  defp put_relation_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
     conn = get_cached_conn(state)
 
     # First, determine if this is a partition and get its parent table info
     partition_query = """
     SELECT
       p.inhparent as parent_id,
-      n.nspname as parent_schema,
-      c.relname as parent_name
+      pn.nspname as parent_schema,
+      pc.relname as parent_name
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     JOIN pg_inherits p ON p.inhrelid = c.oid
+    JOIN pg_class pc ON pc.oid = p.inhparent
+    JOIN pg_namespace pn ON pn.oid = pc.relnamespace
     WHERE c.oid = $1;
     """
 

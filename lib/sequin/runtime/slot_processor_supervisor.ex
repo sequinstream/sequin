@@ -35,6 +35,7 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
   def init(opts) do
     {slot, opts} = Keyword.pop!(opts, :replication_slot)
     slot = Repo.preload(slot, :postgres_database)
+    message_handler_module = Keyword.get_lazy(opts, :message_handler_module, &default_message_handler_module/0)
 
     default_opts =
       [
@@ -44,7 +45,7 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
         postgres_database: slot.postgres_database,
         replication_slot: slot,
         message_handler_ctx: MessageHandler.context(slot),
-        message_handler_module: SlotMessageHandler,
+        message_handler_module: message_handler_module,
         connection: PostgresDatabase.to_postgrex_opts(slot.postgres_database),
         ipv6: slot.postgres_database.ipv6
       ]
@@ -68,5 +69,9 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
     ]
 
     Supervisor.init(children, strategy: :one_for_all)
+  end
+
+  defp default_message_handler_module do
+    Application.get_env(:sequin, :message_handler_module)
   end
 end

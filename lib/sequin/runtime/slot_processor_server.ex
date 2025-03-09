@@ -324,12 +324,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, binaries: [msg | acc.binaries]}
         end)
 
-      # TODO: Move to better spot after we vendor ReplicationConnection
-      Health.put_event(
-        state.replication_slot,
-        %Event{slug: :replication_connected, status: :success}
-      )
-
       # Update bytes processed and check limits
       {limit_status, next_state} = handle_limit_check(state, raw_bytes_received)
 
@@ -875,11 +869,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     # TracerServer.message_replicated(state.postgres_database, msg)
 
-    Health.put_event(
-      state.replication_slot,
-      %Event{slug: :replication_message_processed, status: :success}
-    )
-
     {%State{state | current_commit_idx: state.current_commit_idx + 1}, msg}
   end
 
@@ -1001,6 +990,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       accumulated_binares = state.accumulated_msg_binaries.binaries
       schemas = state.schemas
+
+      # TODO: Move to an after_connect callback after we augment ReplicationConnection
+      Health.put_event(
+        state.replication_slot,
+        %Event{slug: :replication_connected, status: :success}
+      )
 
       messages =
         accumulated_binares

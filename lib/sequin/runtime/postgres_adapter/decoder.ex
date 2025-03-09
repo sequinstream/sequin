@@ -243,17 +243,6 @@ defmodule Sequin.Runtime.PostgresAdapter.Decoder do
   end
 
   @pg_epoch DateTime.from_iso8601("2000-01-01T00:00:00Z")
-  @type message ::
-          Messages.Relation.t()
-          | Messages.Commit.t()
-          | Messages.Origin.t()
-          | Messages.Insert.t()
-          | Messages.Update.t()
-          | Messages.Delete.t()
-          | Messages.Truncate.t()
-          | Messages.Type.t()
-          | Messages.LogicalMessage.t()
-          | Messages.Unsupported.t()
 
   @doc """
   Parses logical replication messages from Postgres

@@ -33,12 +33,13 @@ defmodule Sequin.PostgresTest do
 
   describe "fetch_table_oid/3" do
     test "returns the OID for a known table", %{conn: conn} do
-      {:ok, oid} = Postgres.fetch_table_oid(conn, "public", "schema_migrations")
+      oid = Postgres.fetch_table_oid(conn, "public", "schema_migrations")
       assert is_integer(oid)
     end
 
-    test "returns error for an unknown table", %{conn: conn} do
-      assert {:error, %NotFoundError{}} = Postgres.fetch_table_oid(conn, "public", "non_existent_table")
+    test "returns nil for an unknown table", %{conn: conn} do
+      oid = Postgres.fetch_table_oid(conn, "public", "non_existent_table")
+      assert is_nil(oid)
     end
   end
 
@@ -137,35 +138,31 @@ defmodule Sequin.PostgresTest do
   describe "verify_table_in_publication/3" do
     test "correctly identifies tables in and out of the publication", %{conn: conn} do
       # Tables that should be in the publication
-      {:ok, table_oid} = Postgres.fetch_table_oid(conn, "public", "Characters")
-
       assert :ok ==
                Postgres.verify_table_in_publication(
                  conn,
                  "characters_publication",
-                 table_oid
+                 Postgres.fetch_table_oid(conn, "public", "Characters")
                )
 
-      {:ok, table_oid} = Postgres.fetch_table_oid(conn, "public", "test_event_logs")
       # Tables that should not be in the publication
       assert {:error, %NotFoundError{}} =
                Postgres.verify_table_in_publication(
                  conn,
                  "characters_publication",
-                 table_oid
+                 Postgres.fetch_table_oid(conn, "public", "test_event_logs")
                )
 
       # Non-existent table
       assert {:error, %NotFoundError{}} =
                Postgres.verify_table_in_publication(conn, "characters_publication", 4_294_967_295)
 
-      {:ok, table_oid} = Postgres.fetch_table_oid(conn, "public", "Characters")
       # Non-existent publication
       assert {:error, %NotFoundError{}} =
                Postgres.verify_table_in_publication(
                  conn,
                  "non_existent_publication",
-                 table_oid
+                 Postgres.fetch_table_oid(conn, "public", "Characters")
                )
     end
   end

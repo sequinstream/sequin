@@ -6,25 +6,11 @@ defmodule Sequin.Runtime.SlotProcessor do
   alias Sequin.Postgres
   alias Sequin.Replication
   alias Sequin.Runtime.PostgresAdapter.Decoder
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
 
   require Logger
 
   @type reply :: String.t()
-
-  defmodule UndecodedMessage do
-    @moduledoc false
-    use TypedStruct
-
-    typedstruct do
-      field :bin, binary()
-      field :commit_lsn, integer()
-      field :commit_idx, integer()
-      field :commit_timestamp, integer()
-    end
-  end
 
   defmodule State do
     @moduledoc false
@@ -59,9 +45,8 @@ defmodule Sequin.Runtime.SlotProcessor do
       field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
 
       # Buffers
-      field :accumulated_msg_binaries,
-            %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [UndecodedMessage.t()]},
-            default: %{count: 0, bytes: 0, binaries: []}
+      field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
+        default: %{count: 0, bytes: 0, binaries: []}
 
       field :backfill_watermark_messages, [LogicalMessage.t()], default: []
       field :flush_timer, nil | reference()
@@ -84,35 +69,12 @@ defmodule Sequin.Runtime.SlotProcessor do
     end
   end
 
-  @ignore_msg_kinds [
-    # Type messages
-    # Ignore type messages, we receive them before type columns:
-    # %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Type{id: 551312, namespace: "public", name: "citext"}
-    # Custom enum:
-    # %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Type{id: 3577319, namespace: "public", name: "character_status"}
-    ?Y
-  ]
-
   @eager_decode_msg_kinds [
     # Relation
-    ?R,
-    # Begin
-    ?B,
-    # Commit
-    ?C
-  ]
-
-  @change_msg_kinds [
-    ?I,
-    ?U,
-    ?D
+    ?R
   ]
 
   @spec handle_data(binary() | Decoder.message(), State.t()) :: {:ok, [reply()], State.t()} | {:error, Error.t()}
-  def handle_data(<<?w, _header::192, msg_kind::8, _::binary>>, %State{} = state) when msg_kind in @ignore_msg_kinds do
-    {:ok, [], state}
-  end
-
   def handle_data(<<?w, _header::192, msg_kind::8, _::binary>> = bin, %State{} = state)
       when msg_kind in @eager_decode_msg_kinds do
     <<?w, _header::192, msg::binary>> = bin
@@ -120,25 +82,14 @@ defmodule Sequin.Runtime.SlotProcessor do
     handle_data(msg, state)
   end
 
-  def handle_data(<<?w, _header::192, msg_kind::8, _::binary>> = bin, %State{} = state)
-      when msg_kind in @change_msg_kinds do
-    <<?w, _header::192, msg::binary>> = bin
+  def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
     raw_bytes_received = byte_size(msg)
     incr_counter(:raw_bytes_received, raw_bytes_received)
     incr_counter(:raw_bytes_received_since_last_log, raw_bytes_received)
 
-    envelope = %UndecodedMessage{
-      bin: msg,
-      commit_lsn: state.current_xaction_lsn,
-      commit_idx: state.current_commit_idx,
-      commit_timestamp: state.current_commit_ts
-    }
-
-    state = %{state | current_commit_idx: state.current_commit_idx + 1}
-
     state =
       Map.update!(state, :accumulated_msg_binaries, fn acc ->
-        %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, binaries: [envelope | acc.binaries]}
+        %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, binaries: [msg | acc.binaries]}
       end)
 
     # Update bytes processed and check limits
@@ -186,57 +137,13 @@ defmodule Sequin.Runtime.SlotProcessor do
     {:ok, reply, state}
   end
 
-  def handle_data(%Relation{} = relation, %State{} = state) do
-    state = put_relation_message(relation, state)
-    {:ok, [], state}
-  end
-
-  def handle_data(
-        %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid},
-        %State{last_commit_lsn: last_commit_lsn} = state
-      ) do
-    begin_lsn = Postgres.lsn_to_int(lsn)
-
-    state =
-      if not is_nil(last_commit_lsn) and begin_lsn < last_commit_lsn do
-        Logger.error(
-          "Received a Begin message with an LSN that is less than the last commit LSN (#{begin_lsn} < #{last_commit_lsn})"
-        )
-
-        %{state | dirty: true}
-      else
-        state
-      end
-
-    state = %State{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: begin_lsn, current_xid: xid}
-    {:ok, [], state}
-  end
-
-  def handle_data(
-        %Commit{lsn: lsn, commit_timestamp: ts},
-        %State{current_xaction_lsn: current_lsn, current_commit_ts: ts} = state
-      ) do
-    lsn = Postgres.lsn_to_int(lsn)
-
-    unless current_lsn == lsn do
-      raise "Unexpectedly received a commit LSN that does not match current LSN (#{current_lsn} != #{lsn})"
-    end
-
-    state = %State{
-      state
-      | last_commit_lsn: lsn,
-        current_xaction_lsn: nil,
-        current_xid: nil,
-        current_commit_ts: nil,
-        current_commit_idx: 0,
-        dirty: false
-    }
-
-    {:ok, [], state}
-  end
-
   def handle_data(data, %State{} = state) when is_binary(data) do
     Logger.error("Unknown data: #{inspect(data)}")
+    {:ok, [], state}
+  end
+
+  def handle_data(%Relation{} = relation, %State{} = state) do
+    state = put_relation_message(relation, state)
     {:ok, [], state}
   end
 

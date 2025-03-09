@@ -5,7 +5,6 @@ defmodule Sequin.Runtime.SlotProcessorTest do
 
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Error
-  alias Sequin.Factory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Postgres
   alias Sequin.Replication
@@ -85,30 +84,28 @@ defmodule Sequin.Runtime.SlotProcessorTest do
   describe "handle_data/2 with binary messages" do
     test "accumulates binary messages correctly", %{state: state} do
       # Create a binary message (WAL data)
-      # Format: <<?w, _header::192, msg_kind::8, msg::binary>>
-      # Use ?I (Insert) as the message kind
-      msg_kind = <<?I>>
+      # Format: <<?w, _header::192, msg::binary>>
+      header = <<0::192>>
       msg_content = "test message content"
-      binary_msg = <<?w, 0::192, ?I, msg_content::binary>>
+      binary_msg = <<?w>> <> header <> msg_content
 
       # Process the binary message
       {:ok, [], updated_state} = SlotProcessor.handle_data(binary_msg, state)
 
       # Verify that the message was accumulated correctly
       assert updated_state.accumulated_msg_binaries.count == 1
-      assert updated_state.accumulated_msg_binaries.bytes == byte_size(msg_kind <> msg_content)
+      assert updated_state.accumulated_msg_binaries.bytes == byte_size(msg_content)
       assert length(updated_state.accumulated_msg_binaries.binaries) == 1
-      assert hd(updated_state.accumulated_msg_binaries.binaries).bin == msg_kind <> msg_content
+      assert hd(updated_state.accumulated_msg_binaries.binaries) == msg_content
     end
 
     test "accumulates multiple binary messages", %{state: state} do
-      # Use ?I (Insert) and ?U (Update) as message kinds
-      msg_kind1 = <<?I>>
-      msg_kind2 = <<?U>>
+      # Create multiple binary messages
+      header = <<0::192>>
       msg_content1 = "test message content 1"
       msg_content2 = "test message content 2"
-      binary_msg1 = <<?w, 0::192>> <> msg_kind1 <> msg_content1
-      binary_msg2 = <<?w, 0::192>> <> msg_kind2 <> msg_content2
+      binary_msg1 = <<?w>> <> header <> msg_content1
+      binary_msg2 = <<?w>> <> header <> msg_content2
 
       # Process the first binary message
       {:ok, [], state_after_first} = SlotProcessor.handle_data(binary_msg1, state)
@@ -118,152 +115,13 @@ defmodule Sequin.Runtime.SlotProcessorTest do
 
       # Verify that both messages were accumulated correctly
       assert state_after_second.accumulated_msg_binaries.count == 2
-
-      assert state_after_second.accumulated_msg_binaries.bytes ==
-               byte_size(msg_kind1 <> msg_content1) + byte_size(msg_kind2 <> msg_content2)
-
+      assert state_after_second.accumulated_msg_binaries.bytes == byte_size(msg_content1) + byte_size(msg_content2)
       assert length(state_after_second.accumulated_msg_binaries.binaries) == 2
 
       # The binaries are stored in reverse order (newest first)
       [second, first] = state_after_second.accumulated_msg_binaries.binaries
-      assert first.bin == msg_kind1 <> msg_content1
-      assert second.bin == msg_kind2 <> msg_content2
-    end
-
-    test "increments commit_idx for each message and stores it in the envelope", %{state: state} do
-      # Set a specific initial commit_idx for clarity
-      initial_commit_idx = 100
-      state = %{state | current_commit_idx: initial_commit_idx}
-
-      # Create three different messages
-      msg_kinds = [<<?I>>, <<?U>>, <<?D>>]
-      msg_contents = ["insert content", "update content", "delete content"]
-
-      binary_msgs =
-        Enum.map(0..2, fn i ->
-          <<?w, 0::192>> <> Enum.at(msg_kinds, i) <> Enum.at(msg_contents, i)
-        end)
-
-      # Process each message and collect the resulting states
-      {final_state, states} =
-        Enum.reduce(binary_msgs, {state, []}, fn msg, {current_state, acc_states} ->
-          {:ok, [], updated_state} = SlotProcessor.handle_data(msg, current_state)
-          {updated_state, [updated_state | acc_states]}
-        end)
-
-      # Reverse states to get them in processing order
-      states = Enum.reverse(states)
-
-      # Verify that commit_idx was incremented correctly for each message
-      Enum.each(0..2, fn i ->
-        state = Enum.at(states, i)
-        assert state.current_commit_idx == initial_commit_idx + i + 1
-      end)
-
-      # Verify that the final state has all messages with correct commit_idx values
-      assert final_state.accumulated_msg_binaries.count == 3
-
-      # Messages are stored in reverse order (newest first)
-      [msg3, msg2, msg1] = final_state.accumulated_msg_binaries.binaries
-
-      assert msg1.commit_idx == initial_commit_idx
-      assert msg2.commit_idx == initial_commit_idx + 1
-      assert msg3.commit_idx == initial_commit_idx + 2
-
-      # Verify the message contents
-      assert msg1.bin == Enum.at(msg_kinds, 0) <> Enum.at(msg_contents, 0)
-      assert msg2.bin == Enum.at(msg_kinds, 1) <> Enum.at(msg_contents, 1)
-      assert msg3.bin == Enum.at(msg_kinds, 2) <> Enum.at(msg_contents, 2)
-    end
-
-    test "resets commit_idx to 0 after Commit followed by Begin", %{state: state} do
-      alias Sequin.Postgres
-      alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
-      alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
-
-      # Set initial state with a specific commit_idx
-      initial_commit_idx = 100
-      initial_lsn = 1000
-      initial_timestamp = 1_234_567_890
-
-      state = %{
-        state
-        | current_commit_idx: initial_commit_idx,
-          current_xaction_lsn: initial_lsn,
-          current_commit_ts: initial_timestamp
-      }
-
-      # Create some change messages (Insert, Update)
-      msg_kind1 = <<?I>>
-      msg_kind2 = <<?U>>
-      msg_content1 = "first transaction message"
-      msg_content2 = "second transaction message"
-      binary_msg1 = <<?w, 0::192>> <> msg_kind1 <> msg_content1
-      binary_msg2 = <<?w, 0::192>> <> msg_kind2 <> msg_content2
-
-      # Process the first two messages in the first transaction
-      {:ok, [], state_after_first} = SlotProcessor.handle_data(binary_msg1, state)
-      {:ok, [], state_after_second} = SlotProcessor.handle_data(binary_msg2, state_after_first)
-
-      # Verify that commit_idx was incremented correctly
-      assert state_after_first.current_commit_idx == initial_commit_idx + 1
-      assert state_after_second.current_commit_idx == initial_commit_idx + 2
-
-      {:ok, lsn} = Postgres.ReplicationConnection.encode_lsn(initial_lsn)
-      # Create a Commit message for the first transaction
-      commit_msg = %Commit{
-        lsn: lsn,
-        commit_timestamp: initial_timestamp
-      }
-
-      # Process the Commit message
-      {:ok, [], state_after_commit} = SlotProcessor.handle_data(commit_msg, state_after_second)
-
-      # Verify that commit_idx was reset to 0 after Commit
-      assert state_after_commit.current_commit_idx == 0
-      assert state_after_commit.current_xaction_lsn == nil
-      assert state_after_commit.current_commit_ts == nil
-      assert state_after_commit.last_commit_lsn == initial_lsn
-
-      # Create a Begin message for a new transaction
-      new_lsn = 2000
-      new_timestamp = 1_234_568_000
-      new_xid = 12_345
-
-      {:ok, final_lsn} = Postgres.ReplicationConnection.encode_lsn(new_lsn)
-
-      begin_msg = %Begin{
-        final_lsn: final_lsn,
-        commit_timestamp: new_timestamp,
-        xid: new_xid
-      }
-
-      # Process the Begin message
-      {:ok, [], state_after_begin} = SlotProcessor.handle_data(begin_msg, state_after_commit)
-
-      # Verify that commit_idx is still 0 after Begin
-      assert state_after_begin.current_commit_idx == 0
-      assert state_after_begin.current_xaction_lsn == new_lsn
-      assert state_after_begin.current_commit_ts == new_timestamp
-      assert state_after_begin.current_xid == new_xid
-
-      # Create a new message for the second transaction
-      msg_kind3 = <<?I>>
-      msg_content3 = "new transaction message"
-      binary_msg3 = <<?w, 0::192>> <> msg_kind3 <> msg_content3
-
-      # Process the message in the second transaction
-      {:ok, [], state_after_new_msg} = SlotProcessor.handle_data(binary_msg3, state_after_begin)
-
-      # Verify that commit_idx starts from 0 and increments correctly in the new transaction
-      assert state_after_new_msg.current_commit_idx == 1
-
-      # Verify that the message envelope contains the correct transaction info
-      [envelope | _rest] = state_after_new_msg.accumulated_msg_binaries.binaries
-      assert envelope.commit_idx == 0
-      assert envelope.commit_lsn == new_lsn
-      assert envelope.commit_timestamp == new_timestamp
-      assert envelope.bin == msg_kind3 <> msg_content3
+      assert first == msg_content1
+      assert second == msg_content2
     end
 
     test "checks memory limit on an interval, returns error when memory limit is exceeded" do
@@ -278,12 +136,14 @@ defmodule Sequin.Runtime.SlotProcessorTest do
           check_memory_fn: fn -> 1000 end
         })
 
+      # Create two binary messages
+      header = <<0::192>>
       # 5 bytes
       small_msg = "small"
       # 24 bytes
       large_msg = "this is a larger message"
-      binary_msg1 = <<?w, 0::192, ?I, small_msg::binary>>
-      binary_msg2 = <<?w, 0::192, ?I, large_msg::binary>>
+      binary_msg1 = <<?w>> <> header <> small_msg
+      binary_msg2 = <<?w>> <> header <> large_msg
 
       # First message should succeed because we don't check the limit yet
       # (bytes received < bytes_between_limit_checks)
@@ -297,7 +157,6 @@ defmodule Sequin.Runtime.SlotProcessorTest do
   end
 
   describe "handle_data/2 with keepalive messages" do
-    @describetag capture_log: true
     setup %{state: state} do
       # Set up the low watermark in Redis
       Replication.put_low_watermark_wal_cursor!(state.id, %{commit_lsn: 789, commit_idx: 101})
@@ -327,18 +186,8 @@ defmodule Sequin.Runtime.SlotProcessorTest do
       # Process the keepalive message
       {:ok, [reply], _updated_state} = SlotProcessor.handle_data(keepalive_msg, state)
 
-      # Extract the LSN values from the reply
-      <<114, lsn1::64, lsn2::64, lsn3::64, _timestamp::64, 0>> = reply
-
-      # Verify that all three LSN values in the reply are the same
-      assert lsn1 == lsn2
-      assert lsn2 == lsn3
-
-      # Get the low watermark value that was set in the setup
-      {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
-
-      # Verify that the LSN in the reply matches the low watermark
-      assert lsn1 == low_watermark.commit_lsn
+      # Verify that a reply was generated with the safe_wal_cursor value
+      assert <<?r, 123::64, 123::64, 123::64, _timestamp::64, 0>> = reply
     end
 
     test "handles keepalive with reply=1 and existing last_commit_lsn", %{state: state} do
@@ -379,15 +228,12 @@ defmodule Sequin.Runtime.SlotProcessorTest do
     base_state = %State{
       postgres_database: db,
       schemas: %{},
-      id: "test-slot-id-#{Factory.uuid()}",
+      id: "test-slot-id",
       check_memory_fn: fn -> 0 end,
-      bytes_between_limit_checks: Factory.integer(),
-      max_memory_bytes: Factory.integer(),
-      safe_wal_cursor_fn: fn _state -> %{commit_lsn: Factory.integer(), commit_idx: Factory.integer()} end,
-      accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []},
-      low_watermark_wal_cursor: %{commit_lsn: Factory.integer(), commit_idx: Factory.integer()},
-      current_xaction_lsn: Factory.integer(),
-      current_commit_idx: Factory.integer()
+      bytes_between_limit_checks: 1_000_000,
+      max_memory_bytes: 100_000_000,
+      safe_wal_cursor_fn: fn _state -> %{commit_lsn: 123, commit_idx: 456} end,
+      accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []}
     }
 
     Map.merge(base_state, overrides)

@@ -9,8 +9,6 @@ defmodule Sequin.Runtime.SlotProcessorTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Postgres
   alias Sequin.Replication
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.State
@@ -86,47 +84,50 @@ defmodule Sequin.Runtime.SlotProcessorTest do
 
   describe "handle_data/2 with binary messages" do
     test "accumulates binary messages correctly", %{state: state} do
-      # Create a binary message with insert action
-      content = "test message content"
-      binary_msg = message(content, :insert)
+      # Create a binary message (WAL data)
+      # Format: <<?w, _header::192, msg_kind::8, msg::binary>>
+      # Use ?I (Insert) as the message kind
       msg_kind = <<?I>>
+      msg_content = "test message content"
+      binary_msg = <<?w, 0::192, ?I, msg_content::binary>>
 
       # Process the binary message
       {:ok, [], updated_state} = SlotProcessor.handle_data(binary_msg, state)
 
       # Verify that the message was accumulated correctly
       assert updated_state.accumulated_msg_binaries.count == 1
-      assert updated_state.accumulated_msg_binaries.bytes == byte_size(msg_kind <> content)
+      assert updated_state.accumulated_msg_binaries.bytes == byte_size(msg_kind <> msg_content)
       assert length(updated_state.accumulated_msg_binaries.binaries) == 1
-      assert hd(updated_state.accumulated_msg_binaries.binaries).bin == msg_kind <> content
+      assert hd(updated_state.accumulated_msg_binaries.binaries).bin == msg_kind <> msg_content
     end
 
     test "accumulates multiple binary messages", %{state: state} do
-      # Create two messages with different actions
-      content1 = "test message content 1"
-      content2 = "test message content 2"
-      binary_msg1 = message(content1, :insert)
-      binary_msg2 = message(content2, :update)
-
+      # Use ?I (Insert) and ?U (Update) as message kinds
       msg_kind1 = <<?I>>
       msg_kind2 = <<?U>>
+      msg_content1 = "test message content 1"
+      msg_content2 = "test message content 2"
+      binary_msg1 = <<?w, 0::192>> <> msg_kind1 <> msg_content1
+      binary_msg2 = <<?w, 0::192>> <> msg_kind2 <> msg_content2
 
-      # Process the messages
+      # Process the first binary message
       {:ok, [], state_after_first} = SlotProcessor.handle_data(binary_msg1, state)
+
+      # Process the second binary message
       {:ok, [], state_after_second} = SlotProcessor.handle_data(binary_msg2, state_after_first)
 
       # Verify that both messages were accumulated correctly
       assert state_after_second.accumulated_msg_binaries.count == 2
 
       assert state_after_second.accumulated_msg_binaries.bytes ==
-               byte_size(msg_kind1 <> content1) + byte_size(msg_kind2 <> content2)
+               byte_size(msg_kind1 <> msg_content1) + byte_size(msg_kind2 <> msg_content2)
 
       assert length(state_after_second.accumulated_msg_binaries.binaries) == 2
 
       # The binaries are stored in reverse order (newest first)
       [second, first] = state_after_second.accumulated_msg_binaries.binaries
-      assert first.bin == msg_kind1 <> content1
-      assert second.bin == msg_kind2 <> content2
+      assert first.bin == msg_kind1 <> msg_content1
+      assert second.bin == msg_kind2 <> msg_content2
     end
 
     test "increments commit_idx for each message and stores it in the envelope", %{state: state} do
@@ -134,15 +135,13 @@ defmodule Sequin.Runtime.SlotProcessorTest do
       initial_commit_idx = 100
       state = %{state | current_commit_idx: initial_commit_idx}
 
-      # Create three different messages with different actions
-      contents = ["insert content", "update content", "delete content"]
-      actions = [:insert, :update, :delete]
+      # Create three different messages
+      msg_kinds = [<<?I>>, <<?U>>, <<?D>>]
+      msg_contents = ["insert content", "update content", "delete content"]
 
       binary_msgs =
-        contents
-        |> Enum.zip(actions)
-        |> Enum.map(fn {content, action} ->
-          message(content, action)
+        Enum.map(0..2, fn i ->
+          <<?w, 0::192>> <> Enum.at(msg_kinds, i) <> Enum.at(msg_contents, i)
         end)
 
       # Process each message and collect the resulting states
@@ -170,9 +169,18 @@ defmodule Sequin.Runtime.SlotProcessorTest do
       assert msg1.commit_idx == initial_commit_idx
       assert msg2.commit_idx == initial_commit_idx + 1
       assert msg3.commit_idx == initial_commit_idx + 2
+
+      # Verify the message contents
+      assert msg1.bin == Enum.at(msg_kinds, 0) <> Enum.at(msg_contents, 0)
+      assert msg2.bin == Enum.at(msg_kinds, 1) <> Enum.at(msg_contents, 1)
+      assert msg3.bin == Enum.at(msg_kinds, 2) <> Enum.at(msg_contents, 2)
     end
 
     test "resets commit_idx to 0 after Commit followed by Begin", %{state: state} do
+      alias Sequin.Postgres
+      alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
+      alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
+
       # Set initial state with a specific commit_idx
       initial_commit_idx = 100
       initial_lsn = 1000
@@ -185,11 +193,13 @@ defmodule Sequin.Runtime.SlotProcessorTest do
           current_commit_ts: initial_timestamp
       }
 
-      # Create messages for the first transaction
-      content1 = "first transaction message"
-      content2 = "second transaction message"
-      binary_msg1 = message(content1, :insert)
-      binary_msg2 = message(content2, :update)
+      # Create some change messages (Insert, Update)
+      msg_kind1 = <<?I>>
+      msg_kind2 = <<?U>>
+      msg_content1 = "first transaction message"
+      msg_content2 = "second transaction message"
+      binary_msg1 = <<?w, 0::192>> <> msg_kind1 <> msg_content1
+      binary_msg2 = <<?w, 0::192>> <> msg_kind2 <> msg_content2
 
       # Process the first two messages in the first transaction
       {:ok, [], state_after_first} = SlotProcessor.handle_data(binary_msg1, state)
@@ -238,9 +248,9 @@ defmodule Sequin.Runtime.SlotProcessorTest do
       assert state_after_begin.current_xid == new_xid
 
       # Create a new message for the second transaction
-      content3 = "new transaction message"
-      binary_msg3 = message(content3, :insert)
       msg_kind3 = <<?I>>
+      msg_content3 = "new transaction message"
+      binary_msg3 = <<?w, 0::192>> <> msg_kind3 <> msg_content3
 
       # Process the message in the second transaction
       {:ok, [], state_after_new_msg} = SlotProcessor.handle_data(binary_msg3, state_after_begin)
@@ -253,7 +263,7 @@ defmodule Sequin.Runtime.SlotProcessorTest do
       assert envelope.commit_idx == 0
       assert envelope.commit_lsn == new_lsn
       assert envelope.commit_timestamp == new_timestamp
-      assert envelope.bin == msg_kind3 <> content3
+      assert envelope.bin == msg_kind3 <> msg_content3
     end
 
     test "checks memory limit on an interval, returns error when memory limit is exceeded" do
@@ -268,11 +278,12 @@ defmodule Sequin.Runtime.SlotProcessorTest do
           check_memory_fn: fn -> 1000 end
         })
 
-      # Create two messages of different sizes
-      small_content = "small"
-      large_content = "this is a larger message"
-      binary_msg1 = message(small_content, :insert)
-      binary_msg2 = message(large_content, :insert)
+      # 5 bytes
+      small_msg = "small"
+      # 24 bytes
+      large_msg = "this is a larger message"
+      binary_msg1 = <<?w, 0::192, ?I, small_msg::binary>>
+      binary_msg2 = <<?w, 0::192, ?I, large_msg::binary>>
 
       # First message should succeed because we don't check the limit yet
       # (bytes received < bytes_between_limit_checks)
@@ -296,7 +307,9 @@ defmodule Sequin.Runtime.SlotProcessorTest do
 
     test "handles keepalive with reply=0 correctly", %{state: state} do
       # Create a keepalive message with reply=0
-      keepalive_msg = keepalive_message(0)
+      wal_end = 1000
+      clock = 1_234_567_890
+      keepalive_msg = <<?k, wal_end::64, clock::64, 0>>
 
       # Process the keepalive message
       {:ok, [], updated_state} = SlotProcessor.handle_data(keepalive_msg, state)
@@ -307,7 +320,9 @@ defmodule Sequin.Runtime.SlotProcessorTest do
 
     test "handles keepalive with reply=1 and nil last_commit_lsn", %{state: state} do
       # Create a keepalive message with reply=1
-      keepalive_msg = keepalive_message(1)
+      wal_end = 1000
+      clock = 1_234_567_890
+      keepalive_msg = <<?k, wal_end::64, clock::64, 1>>
 
       # Process the keepalive message
       {:ok, [reply], _updated_state} = SlotProcessor.handle_data(keepalive_msg, state)
@@ -327,18 +342,19 @@ defmodule Sequin.Runtime.SlotProcessorTest do
     end
 
     test "handles keepalive with reply=1 and existing last_commit_lsn", %{state: state} do
-      expected_lsn = 555
-      safe_wal_cursor_fn = fn _state -> %{commit_lsn: expected_lsn, commit_idx: 42} end
-      state = %{state | safe_wal_cursor_fn: safe_wal_cursor_fn, last_commit_lsn: 456}
+      # Set last_commit_lsn in the state
+      state = %{state | last_commit_lsn: 456}
 
       # Create a keepalive message with reply=1
-      keepalive_msg = keepalive_message(1)
+      wal_end = 1000
+      clock = 1_234_567_890
+      keepalive_msg = <<?k, wal_end::64, clock::64, 1>>
 
       # Process the keepalive message
       {:ok, [reply], _updated_state} = SlotProcessor.handle_data(keepalive_msg, state)
 
-      # Verify that a reply was generated with the LSN from safe_wal_cursor_fn
-      assert <<?r, ^expected_lsn::64, ^expected_lsn::64, ^expected_lsn::64, _timestamp::64, 0>> = reply
+      # Verify that a reply was generated with the low_watermark value
+      assert <<?r, 789::64, 789::64, 789::64, _timestamp::64, 0>> = reply
     end
   end
 
@@ -375,23 +391,5 @@ defmodule Sequin.Runtime.SlotProcessorTest do
     }
 
     Map.merge(base_state, overrides)
-  end
-
-  # Message factory functions
-  defp message(content, action) do
-    msg_kind =
-      case action do
-        :insert -> <<?I>>
-        :update -> <<?U>>
-        :delete -> <<?D>>
-      end
-
-    <<?w, 0::192>> <> msg_kind <> content
-  end
-
-  defp keepalive_message(reply) do
-    wal_end = 1000
-    clock = 1_234_567_890
-    <<?k, wal_end::64, clock::64, reply>>
   end
 end

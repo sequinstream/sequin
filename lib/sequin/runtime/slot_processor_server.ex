@@ -93,39 +93,51 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     alias Sequin.Replication.PostgresReplicationSlot
 
     typedstruct do
-      field :current_commit_ts, nil | integer()
+      # Replication slot info
+      field :connection, map()
+      field :id, String.t()
+      field :postgres_database, PostgresDatabase.t()
+      field :publication, String.t()
+      field :replication_slot, PostgresReplicationSlot.t()
+      field :schemas, %{}, default: %{}
+      field :slot_name, String.t()
+      field :test_pid, pid()
+
+      # Current state tracking
+      field :connect_attempts, non_neg_integer(), default: 0
       field :current_commit_idx, nil | integer()
+      field :current_commit_ts, nil | integer()
       field :current_xaction_lsn, nil | integer()
       field :current_xid, nil | integer()
-      field :message_handler_ctx, any()
-      field :message_handler_module, atom()
-      field :id, String.t()
       field :last_commit_lsn, integer()
-      field :low_watermark_wal_cursor, Replication.wal_cursor()
-      field :publication, String.t()
-      field :slot_name, String.t()
-      field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
-      field :postgres_database, PostgresDatabase.t()
-      field :replication_slot, PostgresReplicationSlot.t()
       field :step, :disconnected | :streaming
-      field :test_pid, pid()
-      field :connection, map()
-      field :schemas, %{}, default: %{}
 
+      # Wal cursors
+      field :low_watermark_wal_cursor, Replication.wal_cursor()
+      field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
+
+      # Buffers
       field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
         default: %{count: 0, bytes: 0, binaries: []}
 
       field :backfill_watermark_messages, [LogicalMessage.t()], default: []
+      field :flush_timer, nil | reference()
 
-      field :connect_attempts, non_neg_integer(), default: 0
-      field :dirty, boolean(), default: false
-      field :heartbeat_interval, non_neg_integer()
-      field :max_memory_bytes, non_neg_integer()
-      field :bytes_between_limit_checks, non_neg_integer()
+      # Message handlers
+      field :message_handler_ctx, any()
+      field :message_handler_module, atom()
+      field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
+
+      # Health and monitoring
       field :bytes_received_since_last_limit_check, non_neg_integer(), default: 0
       field :check_memory_fn, nil | (-> non_neg_integer())
+      field :dirty, boolean(), default: false
       field :heartbeat_timer, nil | reference()
-      field :flush_timer, nil | reference()
+
+      # Settings
+      field :bytes_between_limit_checks, non_neg_integer()
+      field :heartbeat_interval, non_neg_integer()
+      field :max_memory_bytes, non_neg_integer()
     end
   end
 
@@ -910,8 +922,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {state, nil}
   end
 
-  @spec maybe_cast_message(decoded_message :: map(), schemas :: map()) :: Message.t() | map()
-  defp maybe_cast_message(%Insert{} = msg, schemas) do
+  @spec cast_message(decoded_message :: map(), schemas :: map()) :: Message.t() | map()
+  defp cast_message(%Insert{} = msg, schemas) do
     %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
       Map.get(schemas, msg.relation_id)
 
@@ -929,7 +941,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     }
   end
 
-  defp maybe_cast_message(%Update{} = msg, schemas) do
+  defp cast_message(%Update{} = msg, schemas) do
     %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
       Map.get(schemas, msg.relation_id)
 
@@ -953,7 +965,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     }
   end
 
-  defp maybe_cast_message(%Delete{} = msg, schemas) do
+  defp cast_message(%Delete{} = msg, schemas) do
     %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
       Map.get(schemas, msg.relation_id)
 
@@ -978,8 +990,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     }
   end
 
-  defp maybe_cast_message(msg, _schemas), do: msg
-
   defp flush_messages(%State{accumulated_msg_binaries: %{count: 0}} = state), do: state
 
   defp flush_messages(%State{} = state) do
@@ -1003,7 +1013,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         |> Enum.with_index()
         |> Flow.from_enumerable(max_demand: 50, min_demand: 25)
         |> Flow.map(fn {msg, idx} ->
-          {msg |> Decoder.decode_message() |> maybe_cast_message(schemas), idx}
+          case Decoder.decode_message(msg) do
+            %type{} = msg when type in [Insert, Update, Delete] ->
+              msg = cast_message(msg, schemas)
+              {msg, idx}
+
+            msg ->
+              {msg, idx}
+          end
         end)
         # Merge back to single partition - always use 1 stage to ensure ordering
         |> Flow.partition(stages: 1)

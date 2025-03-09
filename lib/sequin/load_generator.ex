@@ -61,8 +61,8 @@ defmodule Sequin.LoadGenerator do
     workload = Keyword.get(opts, :workload, [:inserts, :updates, :deletes])
 
     # Calculate timing
-    batches_per_second = div(throughput_per_second, batch_size)
-    total_batches = batches_per_second * div(duration_ms, 1000)
+    batches_per_second = throughput_per_second / batch_size
+    total_batches = max(1, round(batches_per_second * (duration_ms / 1000)))
 
     now = System.system_time(:millisecond)
     interval = 1000 / batches_per_second

@@ -15,6 +15,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
+  alias Sequin.Error.InvariantError
   alias Sequin.Error.ServiceError
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -175,7 +176,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.minutes(1)),
       max_memory_bytes: max_memory_bytes,
       bytes_between_limit_checks: bytes_between_limit_checks,
-      check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0)
+      check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
+      safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1)
     }
 
     ReplicationConnection.start_link(SlotProcessorServer, init, rep_conn_opts)
@@ -337,31 +339,29 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         end)
 
       # Update bytes processed and check limits
-      {limit_status, next_state} = handle_limit_check(state, raw_bytes_received)
+      case check_limit(state, raw_bytes_received) do
+        {:ok, state} ->
+          should_flush? =
+            state.accumulated_msg_binaries.count > max_accumulated_messages() or
+              state.accumulated_msg_binaries.bytes > max_accumulated_bytes()
 
-      cond do
-        limit_status == :over_limit ->
+          state = if should_flush?, do: flush_messages(state), else: state
+          {:noreply, state}
+
+        {:error, %InvariantError{code: :over_system_memory_limit}} ->
           Health.put_event(
             state.replication_slot,
             %Event{slug: :replication_memory_limit_exceeded, status: :info}
           )
 
           Logger.warning("[SlotProcessorServer] System hit memory limit, shutting down",
-            limit: next_state.max_memory_bytes,
-            current_memory: next_state.check_memory_fn.()
+            limit: state.max_memory_bytes,
+            current_memory: state.check_memory_fn.()
           )
 
-          next_state = flush_messages(next_state)
-          launch_stop(next_state)
-          {:noreply, next_state}
-
-        next_state.accumulated_msg_binaries.count > max_accumulated_messages() or
-            next_state.accumulated_msg_binaries.bytes > max_accumulated_bytes() ->
-          next_state = flush_messages(next_state)
-          {:noreply, next_state}
-
-        true ->
-          {:noreply, next_state}
+          state = flush_messages(state)
+          launch_stop(state)
+          {:noreply, state}
       end
     end)
   rescue
@@ -385,50 +385,53 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   # Int64           - Current end of WAL on the server
   # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
-  def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
+  # The server is not asking for a reply
+  def handle_data(<<?k, _wal_end::64, _clock::64, 0>>, %State{} = state) do
+    # Because these are <14 Postgres databases, they will not receive heartbeat messages
+    # temporarily mark them as healthy if we receive a keepalive message
+    if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
+      Health.put_event(
+        state.replication_slot,
+        %Health.Event{slug: :replication_heartbeat_received, status: :success}
+      )
+    end
+
+    {:noreply, state}
+  end
+
+  # The server is asking for a reply
+  def handle_data(<<?k, wal_end::64, _clock::64, 1>>, %State{} = state) do
     execute_timed(:handle_data_keepalive, fn ->
-      # Because these are <14 Postgres databases, they will not receive heartbeat messages
-      # temporarily mark them as healthy if we receive a keepalive message
-      if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
-        Health.put_event(
-          state.replication_slot,
-          %Event{slug: :replication_heartbeat_received, status: :success}
-        )
-      end
+      commit_lsn =
+        if is_nil(state.last_commit_lsn) do
+          # If we don't have a last_commit_lsn, we're still processing the first xaction
+          # we received on boot. This can happen if we're processing a very large xaction.
+          # It is therefore safe to send an ack with the last LSN we processed.
+          {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
 
-      messages =
-        cond do
-          reply == 1 and not is_nil(state.last_commit_lsn) ->
-            # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
-            # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
-            wal_cursor = safe_wal_cursor(state)
-            Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
+          if low_watermark.commit_lsn > wal_end do
+            Logger.warning("Server LSN #{wal_end} is behind our LSN #{low_watermark.commit_lsn}")
+          end
 
-            Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
+          low_watermark.commit_lsn
+        else
+          # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
+          # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
+          wal_cursor = state.safe_wal_cursor_fn.(state)
+          Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
 
-            if wal_cursor.commit_lsn > wal_end do
-              Logger.warning("Server LSN #{wal_end} is behind our LSN #{wal_cursor.commit_lsn}")
-            end
+          Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
 
-            ack_message(wal_cursor.commit_lsn)
+          if wal_cursor.commit_lsn > wal_end do
+            Logger.warning("Server LSN #{wal_end} is behind our LSN #{wal_cursor.commit_lsn}")
+          end
 
-          reply == 1 ->
-            # If we don't have a last_commit_lsn, we're still processing the first xaction
-            # we received on boot. This can happen if we're processing a very large xaction.
-            # It is therefore safe to send an ack with the last LSN we processed.
-            {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
-
-            if low_watermark.commit_lsn > wal_end do
-              Logger.warning("Server LSN #{wal_end} is behind our LSN #{low_watermark.commit_lsn}")
-            end
-
-            ack_message(low_watermark.commit_lsn)
-
-          true ->
-            []
+          wal_cursor.commit_lsn
         end
 
-      {:noreply, messages, state}
+      reply = ack_message(commit_lsn)
+
+      {:noreply, reply, state}
     end)
   end
 
@@ -1105,10 +1108,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end)
   end
 
-  defp safe_wal_cursor(%State{last_commit_lsn: nil}),
+  defp default_safe_wal_cursor_fn(%State{last_commit_lsn: nil}),
     do: raise("Unsafe to call safe_wal_cursor when last_commit_lsn is nil")
 
-  defp safe_wal_cursor(%State{} = state) do
+  defp default_safe_wal_cursor_fn(%State{} = state) do
     consumers =
       Repo.preload(state.replication_slot, :not_disabled_sink_consumers, force: true).not_disabled_sink_consumers
 
@@ -1448,19 +1451,16 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     conn
   end
 
-  defp handle_limit_check(%State{} = state, raw_bytes_received) do
+  defp check_limit(%State{} = state, raw_bytes_received) do
     # Check if it's been a while since we last checked the limit
     if state.bytes_received_since_last_limit_check + raw_bytes_received >= state.bytes_between_limit_checks do
       current_memory = state.check_memory_fn.()
 
-      status =
-        if current_memory >= state.max_memory_bytes do
-          :over_limit
-        else
-          :ok
-        end
-
-      {status, %{state | bytes_received_since_last_limit_check: 0}}
+      if current_memory >= state.max_memory_bytes do
+        {:error, Error.invariant(message: "Memory limit exceeded", code: :over_system_memory_limit)}
+      else
+        {:ok, %{state | bytes_received_since_last_limit_check: 0}}
+      end
     else
       new_bytes = state.bytes_received_since_last_limit_check + raw_bytes_received
       {:ok, %{state | bytes_received_since_last_limit_check: new_bytes}}

@@ -165,6 +165,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
   @type ack :: iodata
   @type query :: iodata
   @type reason :: String.t()
+  @type actions :: [term()]
 
   @typedoc """
   The following options configure streaming:
@@ -192,8 +193,9 @@ defmodule Sequin.Postgres.ReplicationConnection do
   This may be invoked multiple times if `:auto_reconnect` is set to true.
   """
   @callback handle_connect(state) ::
-              {:noreply, state}
-              | {:noreply, ack, state}
+              {:keep_state, state}
+              | {:keep_state, state, actions}
+              | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
               | {:disconnect, reason}
@@ -203,7 +205,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
 
   This is only invoked if `:auto_reconnect` is set to true.
   """
-  @callback handle_disconnect(state) :: {:noreply, state}
+  @callback handle_disconnect(state) :: {:keep_state, state}
 
   @doc """
   Callback for `:stream` outputs.
@@ -220,8 +222,9 @@ defmodule Sequin.Postgres.ReplicationConnection do
   protocol.
   """
   @callback handle_data(binary | :done, state) ::
-              {:noreply, state}
-              | {:noreply, ack, state}
+              {:keep_state, state}
+              | {:keep_state, state, actions}
+              | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
               | {:disconnect, reason}
@@ -230,8 +233,9 @@ defmodule Sequin.Postgres.ReplicationConnection do
   Callback for `Kernel.send/2`.
   """
   @callback handle_info(term, state) ::
-              {:noreply, state}
-              | {:noreply, ack, state}
+              {:keep_state, state}
+              | {:keep_state, state, actions}
+              | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
               | {:disconnect, reason}
@@ -249,8 +253,9 @@ defmodule Sequin.Postgres.ReplicationConnection do
   reply to any pending commands on `c:handle_disconnect/1`.
   """
   @callback handle_call(term, :gen_statem.from(), state) ::
-              {:noreply, state}
-              | {:noreply, ack, state}
+              {:keep_state, state}
+              | {:keep_state, state, actions}
+              | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
               | {:disconnect, reason}
@@ -268,8 +273,9 @@ defmodule Sequin.Postgres.ReplicationConnection do
   an error.
   """
   @callback handle_result([Postgrex.Result.t()] | Postgrex.Error.t(), state) ::
-              {:noreply, state}
-              | {:noreply, ack, state}
+              {:keep_state, state}
+              | {:keep_state, state, actions}
+              | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
               | {:disconnect, reason}
@@ -554,10 +560,13 @@ defmodule Sequin.Postgres.ReplicationConnection do
 
   defp handle(mod, fun, args, from, %{streaming: streaming} = s) do
     case apply(mod, fun, args) do
-      {:noreply, mod_state} ->
+      {:keep_state, mod_state} ->
         {:keep_state, %{s | state: {mod, mod_state}}}
 
-      {:noreply, replies, mod_state} ->
+      {:keep_state, mod_state, actions} ->
+        {:keep_state, %{s | state: {mod, mod_state}}, actions}
+
+      {:keep_state_and_ack, replies, mod_state} ->
         s = %{s | state: {mod, mod_state}}
 
         case Protocol.handle_copy_send(replies, s.protocol) do

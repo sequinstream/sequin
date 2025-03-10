@@ -812,7 +812,6 @@ defmodule Sequin.YamlLoader do
        %{
          name: name,
          status: parse_status(consumer_attrs["status"]),
-         size: Map.get(consumer_attrs, "batch_size", 1),
          sequence_id: sequence.id,
          replication_slot_id: database.replication_slot.id,
          sequence_filter: %{
@@ -820,6 +819,7 @@ defmodule Sequin.YamlLoader do
            group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
            column_filters: column_filters(consumer_attrs["filters"], table)
          },
+         batch_size: Map.get(consumer_attrs, "batch_size", 1),
          sink: sink
        }}
     end
@@ -881,6 +881,31 @@ defmodule Sequin.YamlLoader do
        tls: attrs["tls"] || false,
        username: attrs["username"],
        password: attrs["password"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "azure_event_hub"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :azure_event_hub,
+       namespace: attrs["namespace"],
+       event_hub_name: attrs["event_hub_name"],
+       shared_access_key_name: attrs["shared_access_key_name"],
+       shared_access_key: attrs["shared_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "nats"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :nats,
+       host: attrs["host"],
+       port: attrs["port"],
+       username: attrs["username"],
+       password: attrs["password"],
+       jwt: attrs["jwt"],
+       nkey_seed: attrs["nkey_seed"],
+       tls: attrs["tls"] || false
      }}
   end
 

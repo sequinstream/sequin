@@ -126,7 +126,8 @@ defmodule Sequin.Transforms do
       filters: Enum.map(filters, &format_filter(&1, table)),
       consumer_start: %{
         position: "beginning | end | from with value"
-      }
+      },
+      batch_size: consumer.batch_size
     }
   end
 
@@ -179,35 +180,6 @@ defmodule Sequin.Transforms do
     })
   end
 
-  def to_external(%ColumnFilter{} = column_filter, _show_sensitive) do
-    %{
-      column_name: column_filter.column_name,
-      operator: column_filter.operator,
-      comparison_value: column_filter.value.value
-    }
-  end
-
-  def to_external(%WalPipeline{} = wal_pipeline, _show_sensitive) do
-    wal_pipeline = Repo.preload(wal_pipeline, [:source_database, :destination_database])
-    [source_table] = Consumers.enrich_source_tables(wal_pipeline.source_tables, wal_pipeline.source_database)
-
-    destination_table =
-      Sequin.Enum.find!(wal_pipeline.destination_database.tables, &(&1.oid == wal_pipeline.destination_oid))
-
-    %{
-      id: wal_pipeline.id,
-      name: wal_pipeline.name,
-      source_database: wal_pipeline.source_database.name,
-      source_table_schema: source_table.schema_name,
-      source_table_name: source_table.table_name,
-      destination_database: wal_pipeline.destination_database.name,
-      destination_table_schema: destination_table.schema,
-      destination_table_name: destination_table.name,
-      filters: Enum.map(source_table.column_filters, &to_external/1),
-      actions: source_table.actions
-    }
-  end
-
   def to_external(%GcpPubsubSink{} = sink, _show_sensitive) do
     Sequin.Map.reject_nil_values(%{
       type: "gcp_pubsub",
@@ -240,6 +212,35 @@ defmodule Sequin.Transforms do
       shared_access_key_name: sink.shared_access_key_name,
       shared_access_key: maybe_obfuscate(sink.shared_access_key, show_sensitive)
     })
+  end
+
+  def to_external(%ColumnFilter{} = column_filter, _show_sensitive) do
+    %{
+      column_name: column_filter.column_name,
+      operator: column_filter.operator,
+      comparison_value: column_filter.value.value
+    }
+  end
+
+  def to_external(%WalPipeline{} = wal_pipeline, _show_sensitive) do
+    wal_pipeline = Repo.preload(wal_pipeline, [:source_database, :destination_database])
+    [source_table] = Consumers.enrich_source_tables(wal_pipeline.source_tables, wal_pipeline.source_database)
+
+    destination_table =
+      Sequin.Enum.find!(wal_pipeline.destination_database.tables, &(&1.oid == wal_pipeline.destination_oid))
+
+    %{
+      id: wal_pipeline.id,
+      name: wal_pipeline.name,
+      source_database: wal_pipeline.source_database.name,
+      source_table_schema: source_table.schema_name,
+      source_table_name: source_table.table_name,
+      destination_database: wal_pipeline.destination_database.name,
+      destination_table_schema: destination_table.schema,
+      destination_table_name: destination_table.name,
+      filters: Enum.map(source_table.column_filters, &to_external/1),
+      actions: source_table.actions
+    }
   end
 
   def group_column_names(nil, _table), do: []

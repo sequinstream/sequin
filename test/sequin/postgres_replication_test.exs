@@ -921,6 +921,55 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     @tag capture_log: true
+    test "disconnects and reconnects when payload size limit exceeded" do
+      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(SlotMessageHandlerMock, :flush_messages, fn _ctx -> :ok end)
+
+      test_pid = self()
+      # First call succeeds, updating the last_flushed_wal_cursor
+      expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
+        :ok
+      end)
+
+      # Second call will fail with payload_size_limit_exceeded
+      expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
+        # Return the error that should trigger disconnection
+        {:error, Sequin.Error.invariant(code: :payload_size_limit_exceeded, message: "Payload size limit exceeded")}
+      end)
+
+      # Last call succeeds
+      expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, messages ->
+        assert length(messages) == 1
+        message = List.first(messages)
+        send(test_pid, {:changes, [message]})
+        :ok
+      end)
+
+      # Start replication with our custom reconnect interval
+      pid =
+        start_replication!(
+          message_handler_module: SlotMessageHandlerMock,
+          reconnect_interval: 5
+        )
+
+      Process.link(pid)
+
+      # Insert a character to generate a message
+      _character1 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      assert_receive {SlotProcessorServer, :flush_messages}, 1000
+
+      # Insert another character to trigger the disconnect
+      character2 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      assert_receive {SlotProcessorServer, :disconnected}, 1000
+
+      # Should reconnect, then process ONLY the second message
+      assert_receive {:changes, [change]}, :timer.seconds(1)
+      assert get_field_value(change.fields, "id") == character2.id
+    end
+
+    @tag capture_log: true
     test "fails to start when replication slot does not exist" do
       # Use a non-existent slot name
       non_existent_slot = "non_existent_slot"

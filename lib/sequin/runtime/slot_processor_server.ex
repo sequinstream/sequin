@@ -105,17 +105,17 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :test_pid, pid()
 
       # Current state tracking
-      field :connect_attempts, non_neg_integer(), default: 0
       field :current_commit_idx, nil | integer()
       field :current_commit_ts, nil | integer()
       field :current_xaction_lsn, nil | integer()
       field :current_xid, nil | integer()
       field :last_commit_lsn, integer()
-      field :step, :disconnected | :streaming
+      field :connection_state, :disconnected | :streaming
 
       # Wal cursors
       field :low_watermark_wal_cursor, Replication.wal_cursor()
       field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
+      field :last_flushed_wal_cursor, Replication.wal_cursor()
 
       # Buffers
       field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
@@ -139,6 +139,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :bytes_between_limit_checks, non_neg_integer()
       field :heartbeat_interval, non_neg_integer()
       field :max_memory_bytes, non_neg_integer()
+      field :setting_reconnect_interval, non_neg_integer()
     end
   end
 
@@ -156,7 +157,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     bytes_between_limit_checks = Keyword.get(opts, :bytes_between_limit_checks, div(max_memory_bytes, 100))
 
     rep_conn_opts =
-      [auto_reconnect: true, name: via_tuple(id)]
+      [name: via_tuple(id)]
       |> Keyword.merge(connection)
       # Very important. If we don't add this, ReplicationConnection will block start_link (and the
       # calling process!) while it connects.
@@ -177,7 +178,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       max_memory_bytes: max_memory_bytes,
       bytes_between_limit_checks: bytes_between_limit_checks,
       check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
-      safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1)
+      safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
+      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10))
     }
 
     ReplicationConnection.start_link(SlotProcessorServer, init, rep_conn_opts)
@@ -239,43 +241,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     state = schedule_heartbeat(state, 0)
     schedule_process_logging(0)
 
-    {:ok, %{state | step: :disconnected}}
+    {:ok, %{state | connection_state: :disconnected}}
   end
 
   @impl ReplicationConnection
-  def handle_connect(%State{connect_attempts: attempts} = state) when attempts >= 5 do
-    Logger.error("[SlotProcessorServer] Failed to connect to replication slot after 5 attempts")
-
-    conn = get_cached_conn(state)
-
-    error_msg =
-      case Postgres.fetch_replication_slot(conn, state.slot_name) do
-        {:ok, %{"active" => false}} ->
-          "Failed to connect to replication slot after 5 attempts"
-
-        {:ok, %{"active" => true}} ->
-          "Replication slot '#{state.slot_name}' is currently in use by another connection"
-
-        {:error, %Error.NotFoundError{}} ->
-          maybe_recreate_slot(state)
-          "Replication slot '#{state.slot_name}' does not exist"
-
-        {:error, error} ->
-          Exception.message(error)
-      end
-
-    Health.put_event(
-      state.replication_slot,
-      %Event{slug: :replication_connected, status: :fail, error: Error.service(service: :replication, message: error_msg)}
-    )
-
-    launch_stop(state)
+  def handle_connect_failed(reason, %State{} = state) do
+    Logger.error("[SlotProcessorServer] Failed to connect to replication slot: #{inspect(reason)}", reason: reason)
+    on_connect_failure(state, reason)
 
     {:keep_state, state}
   end
 
+  @impl ReplicationConnection
   def handle_connect(state) do
-    Logger.debug("[SlotProcessorServer] Handling connect (attempt #{state.connect_attempts + 1})")
+    Logger.debug("[SlotProcessorServer] Handling connect")
 
     {:ok, low_watermark_wal_cursor} = Sequin.Replication.low_watermark_wal_cursor(state.id)
 
@@ -300,10 +279,46 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:stream, query, [],
      %{
        state
-       | step: :streaming,
-         connect_attempts: state.connect_attempts + 1,
+       | connection_state: :streaming,
          low_watermark_wal_cursor: low_watermark_wal_cursor
      }}
+  end
+
+  @impl ReplicationConnection
+  def handle_disconnect(error, reason, %State{} = state) do
+    Logger.warning("[SlotProcessorServer] Disconnected from replication slot: #{inspect(error)}",
+      error: error,
+      reason: reason
+    )
+
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :disconnected})
+    end
+
+    case reason do
+      :payload_size_limit_exceeded ->
+        actions = [
+          {{:timeout, :reconnect}, state.setting_reconnect_interval, nil}
+        ]
+
+        state = %{
+          state
+          | current_commit_idx: nil,
+            current_commit_ts: nil,
+            current_xaction_lsn: nil,
+            current_xid: nil,
+            last_commit_lsn: nil,
+            connection_state: :disconnected,
+            accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []},
+            backfill_watermark_messages: []
+        }
+
+        {:keep_state, state, actions}
+
+      reason ->
+        on_connect_failure(state, reason)
+        {:keep_state, state}
+    end
   end
 
   @impl ReplicationConnection
@@ -339,14 +354,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         end)
 
       # Update bytes processed and check limits
-      case check_limit(state, raw_bytes_received) do
-        {:ok, state} ->
-          should_flush? =
-            state.accumulated_msg_binaries.count > max_accumulated_messages() or
-              state.accumulated_msg_binaries.bytes > max_accumulated_bytes()
-
-          state = if should_flush?, do: flush_messages(state), else: state
-          {:keep_state, state}
+      with {:ok, state} <- check_limit(state, raw_bytes_received),
+           {:ok, state} <- maybe_flush_messages(state) do
+        {:keep_state, state}
+      else
+        {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
+          Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
+          {:disconnect, :payload_size_limit_exceeded}
 
         {:error, %InvariantError{code: :over_system_memory_limit}} ->
           Health.put_event(
@@ -359,7 +373,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             current_memory: state.check_memory_fn.()
           )
 
-          state = flush_messages(state)
+          {:ok, state} = flush_messages(state)
           launch_stop(state)
           {:keep_state, state}
       end
@@ -491,13 +505,28 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   @impl ReplicationConnection
   def handle_info(:flush_messages, %State{} = state) do
     execute_timed(:handle_info_flush_messages, fn ->
-      {:keep_state, flush_messages(%{state | flush_timer: nil})}
+      case flush_messages(state) do
+        {:ok, state} ->
+          {:keep_state, %{state | flush_timer: nil}}
+
+        {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
+          Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
+          {:disconnect, :payload_size_limit_exceeded, %{state | flush_timer: nil}}
+
+        {:error, error} ->
+          raise error
+      end
     end)
   end
 
   @impl ReplicationConnection
   def handle_info({:EXIT, _pid, :normal}, %State{} = state) do
     # Probably a Flow process
+    {:keep_state, state}
+  end
+
+  def handle_info({:EXIT, _pid, :shutdown}, %State{} = state) do
+    # We'll get this when we disconnect from the replication slot
     {:keep_state, state}
   end
 
@@ -692,6 +721,38 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:keep_state, state}
   end
 
+  defp on_connect_failure(%State{} = state, error) do
+    conn = get_cached_conn(state)
+
+    error_msg =
+      case Postgres.fetch_replication_slot(conn, state.slot_name) do
+        {:ok, %{"active" => false}} ->
+          if is_exception(error) do
+            Exception.message(error)
+          else
+            inspect(error)
+          end
+
+        {:ok, %{"active" => true}} ->
+          "Replication slot '#{state.slot_name}' is currently in use by another connection"
+
+        {:error, %Error.NotFoundError{}} ->
+          maybe_recreate_slot(state)
+          "Replication slot '#{state.slot_name}' does not exist"
+
+        {:error, error} ->
+          Exception.message(error)
+      end
+
+    Health.put_event(
+      state.replication_slot,
+      %Event{slug: :replication_connected, status: :fail, error: Error.service(service: :replication, message: error_msg)}
+    )
+
+    launch_stop(state)
+    :ok
+  end
+
   defp maybe_schedule_flush(%State{flush_timer: nil} = state) do
     ref = Process.send_after(self(), :flush_messages, max_accumulated_messages_time_ms())
     %{state | flush_timer: ref}
@@ -745,7 +806,17 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     lte_watermark? =
       message_lsn < low_watermark_lsn or (message_lsn == low_watermark_lsn and message_idx <= low_watermark_idx)
 
-    lte_watermark? or (msg.table_schema in [@config_schema, @stream_schema] and msg.table_schema != "public")
+    # We'll re-receive already-flushed messages if we reconnect to the replication slot (without killing the GenServer) but haven't advanced the slot's cursor yet
+    lte_flushed? =
+      if state.last_flushed_wal_cursor do
+        %{commit_lsn: last_flushed_lsn, commit_idx: last_flushed_idx} = state.last_flushed_wal_cursor
+        message_lsn < last_flushed_lsn or (message_lsn == last_flushed_lsn and message_idx <= last_flushed_idx)
+      else
+        false
+      end
+
+    lte_watermark? or lte_flushed? or
+      (msg.table_schema in [@config_schema, @stream_schema] and msg.table_schema != "public")
   end
 
   @spec put_relation_message(Relation.t(), State.t()) :: State.t()
@@ -996,13 +1067,26 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     }
   end
 
-  defp flush_messages(%State{accumulated_msg_binaries: %{count: 0}} = state), do: state
+  defp maybe_flush_messages(%State{} = state) do
+    should_flush? =
+      state.accumulated_msg_binaries.count > max_accumulated_messages() or
+        state.accumulated_msg_binaries.bytes > max_accumulated_bytes()
 
+    if should_flush? do
+      flush_messages(state)
+    else
+      {:ok, state}
+    end
+  end
+
+  @spec flush_messages(State.t()) :: {:ok, State.t()} | {:error, Error.t()}
   defp flush_messages(%State{} = state) do
     execute_timed(:flush_messages, fn ->
       if ref = state.flush_timer do
         Process.cancel_timer(ref)
       end
+
+      state = %{state | flush_timer: nil}
 
       accumulated_binares = state.accumulated_msg_binaries.binaries
       schemas = state.schemas
@@ -1058,6 +1142,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           end
         end)
 
+      last_message = List.first(messages)
       messages = Enum.reverse(messages)
 
       count = length(messages)
@@ -1096,11 +1181,26 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             send(state.test_pid, {__MODULE__, :flush_messages})
           end
 
-          %{
+          last_flushed_wal_cursor =
+            if last_message do
+              %Message{commit_lsn: commit_lsn, commit_idx: commit_idx} = last_message
+
+              %{commit_lsn: commit_lsn, commit_idx: commit_idx}
+            else
+              state.last_flushed_wal_cursor
+            end
+
+          state = %{
             state
             | accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []},
+              last_flushed_wal_cursor: last_flushed_wal_cursor,
               backfill_watermark_messages: []
           }
+
+          {:ok, state}
+
+        {:error, %InvariantError{code: :payload_size_limit_exceeded} = error} ->
+          {:error, error}
 
         {:error, error} ->
           raise error

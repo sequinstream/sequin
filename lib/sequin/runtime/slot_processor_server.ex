@@ -13,7 +13,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Constants
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Error.ServiceError
@@ -21,7 +20,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Health.Event
   alias Sequin.Postgres
   alias Sequin.Postgres.ReplicationConnection
-  alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Runtime
   alias Sequin.Runtime.MessageHandler
@@ -34,7 +32,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.Runtime.SlotProcessor.State
   alias Sequin.Workers.CreateReplicationSlotWorker
 
   require Logger
@@ -85,62 +85,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   def ets_table, do: __MODULE__
-
-  defmodule State do
-    @moduledoc false
-    use TypedStruct
-
-    alias Sequin.Consumers.SinkConsumer
-    alias Sequin.Replication.PostgresReplicationSlot
-
-    typedstruct do
-      # Replication slot info
-      field :connection, map()
-      field :id, String.t()
-      field :postgres_database, PostgresDatabase.t()
-      field :publication, String.t()
-      field :replication_slot, PostgresReplicationSlot.t()
-      field :schemas, %{}, default: %{}
-      field :slot_name, String.t()
-      field :test_pid, pid()
-
-      # Current state tracking
-      field :connect_attempts, non_neg_integer(), default: 0
-      field :current_commit_idx, nil | integer()
-      field :current_commit_ts, nil | integer()
-      field :current_xaction_lsn, nil | integer()
-      field :current_xid, nil | integer()
-      field :last_commit_lsn, integer()
-      field :step, :disconnected | :streaming
-
-      # Wal cursors
-      field :low_watermark_wal_cursor, Replication.wal_cursor()
-      field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
-
-      # Buffers
-      field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
-        default: %{count: 0, bytes: 0, binaries: []}
-
-      field :backfill_watermark_messages, [LogicalMessage.t()], default: []
-      field :flush_timer, nil | reference()
-
-      # Message handlers
-      field :message_handler_ctx, any()
-      field :message_handler_module, atom()
-      field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
-
-      # Health and monitoring
-      field :bytes_received_since_last_limit_check, non_neg_integer(), default: 0
-      field :check_memory_fn, nil | (-> non_neg_integer())
-      field :dirty, boolean(), default: false
-      field :heartbeat_timer, nil | reference()
-
-      # Settings
-      field :bytes_between_limit_checks, non_neg_integer()
-      field :heartbeat_interval, non_neg_integer()
-      field :max_memory_bytes, non_neg_integer()
-    end
-  end
 
   def start_link(opts) do
     id = Keyword.fetch!(opts, :id)
@@ -316,37 +260,19 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   def stop(pid), do: GenServer.stop(pid)
 
   @impl ReplicationConnection
-  # Handle relation messages synchronously because we update state.schemas and there are dependencies
-  # on the state.schemas in maybe_cast_message/2 which occurs async.
-  def handle_data(<<?w, _header::192, ?R, _::binary>> = binary, %State{} = state) do
-    <<?w, _header::192, msg::binary>> = binary
-    relation_msg = Decoder.decode_message(msg)
-    state = put_relation_message(relation_msg, state)
-    {:noreply, state}
-  end
-
-  def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
+  def handle_data(data, %State{} = state) do
     execute_timed(:handle_data_sequin, fn ->
-      raw_bytes_received = byte_size(msg)
-      incr_counter(:raw_bytes_received, raw_bytes_received)
-      incr_counter(:raw_bytes_received_since_last_log, raw_bytes_received)
+      case SlotProcessor.handle_data(data, state) do
+        {:ok, replies, state} ->
+          maybe_schedule_flush(state)
 
-      state = maybe_schedule_flush(state)
-
-      state =
-        Map.update!(state, :accumulated_msg_binaries, fn acc ->
-          %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, binaries: [msg | acc.binaries]}
-        end)
-
-      # Update bytes processed and check limits
-      case check_limit(state, raw_bytes_received) do
-        {:ok, state} ->
           should_flush? =
             state.accumulated_msg_binaries.count > max_accumulated_messages() or
               state.accumulated_msg_binaries.bytes > max_accumulated_bytes()
 
           state = if should_flush?, do: flush_messages(state), else: state
-          {:noreply, state}
+
+          {:noreply, replies, state}
 
         {:error, %InvariantError{code: :over_system_memory_limit}} ->
           Health.put_event(
@@ -376,68 +302,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       )
 
       reraise e, __STACKTRACE__
-  end
-
-  # Primary keepalive message from server:
-  # https://www.postgresql.org/docs/current/protocol-replication.html#PROTOCOL-REPLICATION-PRIMARY-KEEPALIVE-MESSAGE
-  #
-  # Byte1('k')      - Identifies message as a sender keepalive
-  # Int64           - Current end of WAL on the server
-  # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
-  # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
-  # The server is not asking for a reply
-  def handle_data(<<?k, _wal_end::64, _clock::64, 0>>, %State{} = state) do
-    # Because these are <14 Postgres databases, they will not receive heartbeat messages
-    # temporarily mark them as healthy if we receive a keepalive message
-    if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
-      Health.put_event(
-        state.replication_slot,
-        %Health.Event{slug: :replication_heartbeat_received, status: :success}
-      )
-    end
-
-    {:noreply, state}
-  end
-
-  # The server is asking for a reply
-  def handle_data(<<?k, wal_end::64, _clock::64, 1>>, %State{} = state) do
-    execute_timed(:handle_data_keepalive, fn ->
-      commit_lsn =
-        if is_nil(state.last_commit_lsn) do
-          # If we don't have a last_commit_lsn, we're still processing the first xaction
-          # we received on boot. This can happen if we're processing a very large xaction.
-          # It is therefore safe to send an ack with the last LSN we processed.
-          {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
-
-          if low_watermark.commit_lsn > wal_end do
-            Logger.warning("Server LSN #{wal_end} is behind our LSN #{low_watermark.commit_lsn}")
-          end
-
-          low_watermark.commit_lsn
-        else
-          # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
-          # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
-          wal_cursor = state.safe_wal_cursor_fn.(state)
-          Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
-
-          Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
-
-          if wal_cursor.commit_lsn > wal_end do
-            Logger.warning("Server LSN #{wal_end} is behind our LSN #{wal_cursor.commit_lsn}")
-          end
-
-          wal_cursor.commit_lsn
-        end
-
-      reply = ack_message(commit_lsn)
-
-      {:noreply, reply, state}
-    end)
-  end
-
-  def handle_data(data, %State{} = state) do
-    Logger.error("Unknown data: #{inspect(data)}")
-    {:noreply, state}
   end
 
   @impl ReplicationConnection
@@ -725,19 +589,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  # The receiving process can send replies back to the sender at any time, using one of the following message formats (also in the payload of a CopyData message):
-  # https://www.postgresql.org/docs/current/protocol-replication.html#PROTOCOL-REPLICATION-STANDBY-STATUS-UPDATE
-  #
-  # Byte1('r')      - Identifies message as receiver status update
-  # Int64           - Last WAL byte + 1 received and written to disk
-  # Int64           - Last WAL byte + 1 flushed to disk
-  # Int64           - Last WAL byte + 1 applied in standby
-  # Int64           - Client timestamp
-  # Byte1           - 1 if reply requested immediately, 0 otherwise
-  defp ack_message(lsn) when is_integer(lsn) do
-    [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
-  end
-
   defp skip_message?(%Message{} = msg, %State{} = state) do
     %{commit_lsn: low_watermark_lsn, commit_idx: low_watermark_idx} = state.low_watermark_wal_cursor
     {message_lsn, message_idx} = {msg.commit_lsn, msg.commit_idx}
@@ -746,89 +597,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       message_lsn < low_watermark_lsn or (message_lsn == low_watermark_lsn and message_idx <= low_watermark_idx)
 
     lte_watermark? or (msg.table_schema in [@config_schema, @stream_schema] and msg.table_schema != "public")
-  end
-
-  @spec put_relation_message(Relation.t(), State.t()) :: State.t()
-  defp put_relation_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
-    conn = get_cached_conn(state)
-
-    # First, determine if this is a partition and get its parent table info
-    partition_query = """
-    SELECT
-      p.inhparent as parent_id,
-      pn.nspname as parent_schema,
-      pc.relname as parent_name
-    FROM pg_class c
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    JOIN pg_inherits p ON p.inhrelid = c.oid
-    JOIN pg_class pc ON pc.oid = p.inhparent
-    JOIN pg_namespace pn ON pn.oid = pc.relnamespace
-    WHERE c.oid = $1;
-    """
-
-    parent_info =
-      case Postgres.query(conn, partition_query, [id]) do
-        {:ok, %{rows: [[parent_id, parent_schema, parent_name]]}} ->
-          # It's a partition, use the parent info
-          %{id: parent_id, schema: parent_schema, name: parent_name}
-
-        {:ok, %{rows: []}} ->
-          # Not a partition, use its own info
-          %{id: id, schema: schema, name: table}
-      end
-
-    # Get attnums for the actual table
-    attnum_query = """
-    with pk_columns as (
-      select a.attname
-      from pg_index i
-      join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey)
-      where i.indrelid = $1
-      and i.indisprimary
-    ),
-    column_info as (
-      select a.attname, a.attnum,
-             (select typname
-              from pg_type
-              where oid = case when t.typtype = 'd'
-                              then t.typbasetype
-                              else t.oid
-                         end) as base_type
-      from pg_attribute a
-      join pg_type t on t.oid = a.atttypid
-      where a.attrelid = $1
-      and a.attnum > 0
-      and not a.attisdropped
-    )
-    select c.attname, c.attnum, c.base_type, (pk.attname is not null) as is_pk
-    from column_info c
-    left join pk_columns pk on pk.attname = c.attname;
-    """
-
-    {:ok, %{rows: attnum_rows}} = Postgres.query(conn, attnum_query, [parent_info.id])
-
-    # Enrich columns with primary key information and attnums
-    enriched_columns =
-      Enum.map(columns, fn %{name: name} = column ->
-        case Enum.find(attnum_rows, fn [col_name, _, _, _] -> col_name == name end) do
-          [_, attnum, base_type, is_pk] ->
-            %{column | pk?: is_pk, attnum: attnum, type: base_type}
-
-          nil ->
-            column
-        end
-      end)
-
-    # Store using the actual relation_id but with parent table info
-    updated_schemas =
-      Map.put(state.schemas, id, %{
-        columns: enriched_columns,
-        schema: parent_info.schema,
-        table: parent_info.name,
-        parent_table_id: parent_info.id
-      })
-
-    %{state | schemas: updated_schemas}
   end
 
   @spec process_message(State.t(), map()) :: State.t() | {State.t(), Message.t()}
@@ -1435,9 +1203,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     Map.get(@postgres_to_ecto_type_mapping, type, :string)
   end
 
-  @epoch DateTime.to_unix(~U[2000-01-01 00:00:00Z], :microsecond)
-  defp current_time, do: System.os_time(:microsecond) - @epoch
-
   # Add this function to get the last committed timestamp
   def get_last_committed_at(id) do
     case :ets.lookup(ets_table(), {id, :last_committed_at}) do
@@ -1449,22 +1214,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp get_cached_conn(%State{} = state) do
     {:ok, conn} = ConnectionCache.connection(state.postgres_database)
     conn
-  end
-
-  defp check_limit(%State{} = state, raw_bytes_received) do
-    # Check if it's been a while since we last checked the limit
-    if state.bytes_received_since_last_limit_check + raw_bytes_received >= state.bytes_between_limit_checks do
-      current_memory = state.check_memory_fn.()
-
-      if current_memory >= state.max_memory_bytes do
-        {:error, Error.invariant(message: "Memory limit exceeded", code: :over_system_memory_limit)}
-      else
-        {:ok, %{state | bytes_received_since_last_limit_check: 0}}
-      end
-    else
-      new_bytes = state.bytes_received_since_last_limit_check + raw_bytes_received
-      {:ok, %{state | bytes_received_since_last_limit_check: new_bytes}}
-    end
   end
 
   defp default_check_memory_fn do

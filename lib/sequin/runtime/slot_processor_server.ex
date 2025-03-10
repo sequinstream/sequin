@@ -64,7 +64,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           # regular messages get a chance to come through and be part of the batch.
           30
         else
-          100
+          10
         end
 
       value ->

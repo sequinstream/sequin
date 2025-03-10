@@ -62,11 +62,6 @@ defmodule Sequin.Postgres.ReplicationConnection do
         use Postgrex.ReplicationConnection
 
         def start_link(opts) do
-          # Automatically reconnect if we lose connection.
-          extra_opts = [
-            auto_reconnect: true
-          ]
-
           Postgrex.ReplicationConnection.start_link(__MODULE__, :ok, extra_opts ++ opts)
         end
 
@@ -154,7 +149,6 @@ defmodule Sequin.Postgres.ReplicationConnection do
   @doc false
   defstruct protocol: nil,
             state: nil,
-            auto_reconnect: false,
             reconnect_backoff: 500,
             streaming: nil
 
@@ -165,8 +159,8 @@ defmodule Sequin.Postgres.ReplicationConnection do
   @type ack :: iodata
   @type query :: iodata
   @type reason :: String.t()
-  @type actions :: [term()]
-
+  @type error :: term()
+  @type actions :: [tuple()]
   @typedoc """
   The following options configure streaming:
 
@@ -189,8 +183,6 @@ defmodule Sequin.Postgres.ReplicationConnection do
 
   @doc """
   Invoked after connecting.
-
-  This may be invoked multiple times if `:auto_reconnect` is set to true.
   """
   @callback handle_connect(state) ::
               {:keep_state, state}
@@ -198,14 +190,18 @@ defmodule Sequin.Postgres.ReplicationConnection do
               | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
-              | {:disconnect, reason}
+              | {:disconnect, reason, state}
+
+  @doc """
+  Invoked if connection fails.
+  """
+  @callback handle_connect_failed(reason, state) ::
+              {:keep_state, state} | {:keep_state, state, actions} | {:stop, reason, state}
 
   @doc """
   Invoked after disconnecting.
-
-  This is only invoked if `:auto_reconnect` is set to true.
   """
-  @callback handle_disconnect(state) :: {:keep_state, state}
+  @callback handle_disconnect(error, reason, state) :: {:keep_state, state} | {:keep_state, state, actions}
 
   @doc """
   Callback for `:stream` outputs.
@@ -227,7 +223,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
               | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
-              | {:disconnect, reason}
+              | {:disconnect, reason, state}
 
   @doc """
   Callback for `Kernel.send/2`.
@@ -238,19 +234,12 @@ defmodule Sequin.Postgres.ReplicationConnection do
               | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
-              | {:disconnect, reason}
+              | {:disconnect, reason, state}
 
   @doc """
   Callback for `call/3`.
 
   Replies must be sent with `reply/2`.
-
-  If `auto_reconnect: false` (the default) and there is a disconnection,
-  the process will terminate and the caller will exit even if no reply is
-  sent. However, if `auto_reconnect` is set to true, a disconnection will
-  keep the process alive, which means that any command that has not yet
-  been replied to should eventually do so. One simple approach is to
-  reply to any pending commands on `c:handle_disconnect/1`.
   """
   @callback handle_call(term, :gen_statem.from(), state) ::
               {:keep_state, state}
@@ -258,7 +247,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
               | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
-              | {:disconnect, reason}
+              | {:disconnect, reason, state}
 
   @doc """
   Callback for `:query` outputs.
@@ -278,12 +267,11 @@ defmodule Sequin.Postgres.ReplicationConnection do
               | {:keep_state_and_ack, ack, state}
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
-              | {:disconnect, reason}
+              | {:disconnect, reason, state}
 
   @optional_callbacks handle_call: 3,
                       handle_connect: 1,
                       handle_data: 2,
-                      handle_disconnect: 1,
                       handle_info: 2,
                       handle_result: 2
 
@@ -343,14 +331,6 @@ defmodule Sequin.Postgres.ReplicationConnection do
 
     * `:sync_connect` - controls if the connection should be established on boot
       or asynchronously right after boot. Defaults to `true`.
-
-    * `:auto_reconnect` - automatically attempt to reconnect to the database
-      in event of a disconnection. See the
-      [note about async connect and auto-reconnects](#module-async-connect-and-auto-reconnects)
-      above. Defaults to `false`, which means the process terminates.
-
-    * `:reconnect_backoff` - time (in ms) between reconnection attempts when
-      `:auto_reconnect` is enabled. Defaults to `500`.
   """
   @spec start_link(module(), term(), Keyword.t()) ::
           {:ok, pid} | {:error, Postgrex.Error.t() | term}
@@ -468,11 +448,9 @@ defmodule Sequin.Postgres.ReplicationConnection do
             &Keyword.put_new(&1, :replication, "database")
           )
 
-        {auto_reconnect, opts} = Keyword.pop(opts, :auto_reconnect, false)
         {reconnect_backoff, opts} = Keyword.pop(opts, :reconnect_backoff, 500)
 
         state = %__MODULE__{
-          auto_reconnect: auto_reconnect,
           reconnect_backoff: reconnect_backoff,
           state: {mod, mod_state}
         }
@@ -505,11 +483,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
         maybe_handle(mod, :handle_connect, [mod_state], %{s | protocol: protocol})
 
       {:error, reason} ->
-        if s.auto_reconnect do
-          {:keep_state, s, {{:timeout, :backoff}, s.reconnect_backoff, nil}}
-        else
-          {:stop, reason, s}
-        end
+        maybe_handle(mod, :handle_connect_failed, [reason, mod_state], s)
     end
   end
 
@@ -531,6 +505,11 @@ defmodule Sequin.Postgres.ReplicationConnection do
           reconnect_or_stop(error, reason, protocol, s)
       end
     end)
+  end
+
+  def handle_event({:timeout, :reconnect}, nil, @state, s) do
+    Logger.info("Reconnecting to replication slot")
+    {:keep_state, s, {:next_event, :internal, {:connect, :reconnect}}}
   end
 
   ## Helpers
@@ -604,8 +583,8 @@ defmodule Sequin.Postgres.ReplicationConnection do
       {:query, _query, mod_state} ->
         stream_in_progress(:query, mod, mod_state, from, s)
 
-      {:disconnect, reason} ->
-        reconnect_or_stop(:disconnect, reason, s.protocol, s)
+      {:disconnect, reason, mod_state} ->
+        reconnect_or_stop(:disconnect, reason, s.protocol, %{s | state: {mod, mod_state}})
     end
   end
 
@@ -615,32 +594,32 @@ defmodule Sequin.Postgres.ReplicationConnection do
     {:keep_state, %{s | state: {mod, mod_state}}}
   end
 
-  defp reconnect_or_stop(error, reason, protocol, %{auto_reconnect: false} = s) when error in [:error, :disconnect] do
+  defp reconnect_or_stop(error, reason, protocol, s) when error in [:error, :disconnect] do
     %{state: {mod, mod_state}} = s
 
-    {:keep_state, s} =
-      maybe_handle(mod, :handle_disconnect, [mod_state], %{s | protocol: protocol})
+    # Exception is unused
+    Protocol.disconnect(%RuntimeError{}, protocol)
 
-    {:stop, reason, s}
+    maybe_handle(mod, :handle_disconnect, [error, reason, mod_state], %{s | protocol: nil, streaming: nil})
   end
 
-  defp reconnect_or_stop(error, reason, _protocol, %{auto_reconnect: true} = s) when error in [:error, :disconnect] do
-    %{state: {mod, mod_state}} = s
+  # defp reconnect_or_stop(error, reason, _protocol, %{auto_reconnect: true} = s) when error in [:error, :disconnect] do
+  #   %{state: {mod, mod_state}} = s
 
-    Logger.error(
-      "#{inspect(pid_or_name())} (#{inspect(mod)}) is reconnecting due to reason: #{Exception.format(:error, reason)}"
-    )
+  #   Logger.error(
+  #     "#{inspect(pid_or_name())} (#{inspect(mod)}) is reconnecting due to reason: #{Exception.format(:error, reason)}"
+  #   )
 
-    {:keep_state, s} = maybe_handle(mod, :handle_disconnect, [mod_state], s)
-    {:keep_state, %{s | streaming: nil}, {:next_event, :internal, {:connect, :reconnect}}}
-  end
+  #   {:keep_state, s} = maybe_handle(mod, :handle_disconnect, [mod_state], s)
+  #   {:keep_state, %{s | streaming: nil}, {:next_event, :internal, {:connect, :reconnect}}}
+  # end
 
-  defp pid_or_name do
-    case Process.info(self(), :registered_name) do
-      {:registered_name, atom} when is_atom(atom) -> atom
-      _ -> self()
-    end
-  end
+  # defp pid_or_name do
+  #   case Process.info(self(), :registered_name) do
+  #     {:registered_name, atom} when is_atom(atom) -> atom
+  #     _ -> self()
+  #   end
+  # end
 
   defp opts, do: Process.get(__MODULE__)
   defp put_opts(opts), do: Process.put(__MODULE__, opts)

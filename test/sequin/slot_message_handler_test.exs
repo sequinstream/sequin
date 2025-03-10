@@ -171,31 +171,82 @@ defmodule Sequin.SlotMessageHandlerTest do
     end
   end
 
-  describe "handle_call/3 for :handle_messages" do
-    @tag capture_log: true
-    # This test still logs a Postgrex.Protocol error, so we skip it
-    test "raises payload_size_limit_exceeded error when message handler returns the error", %{
+  describe "outbox_messages functionality" do
+    test "stores messages in outbox when payload_size_limit_exceeded error occurs", %{
       context: context
     } do
       # Create a test message
       message = ReplicationFactory.postgres_message()
 
       # Mock the MessageHandler to return a payload_size_limit_exceeded error
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
+        {:error, %Error.InvariantError{code: :payload_size_limit_exceeded, message: "payload_size_limit_exceeded"}}
+      end)
+
+      # Call handle_messages - this should store the message in outbox_messages
+      assert :ok = SlotMessageHandler.handle_messages(context, [message])
+
+      # This should return an error because we still have messages in the outbox
+      assert {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} =
+               SlotMessageHandler.handle_messages(context, [message])
+    end
+
+    test "retries delivery of outbox messages", %{context: context} do
+      # Create a test message
+      message = ReplicationFactory.postgres_message()
+      test_pid = self()
+
+      # First call will fail with payload_size_limit_exceeded
       expect(MessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
         {:error, %Error.InvariantError{code: :payload_size_limit_exceeded, message: "payload_size_limit_exceeded"}}
       end)
 
-      # Send a :handle_messages call to the GenServer
-      # This should raise an error, so we need to catch it
+      # Second call (retry) will succeed
+      expect(MessageHandlerMock, :handle_messages, 2, fn _ctx, msgs ->
+        # Verify it's the same message being retried
+        assert length(msgs) == 1
+        assert hd(msgs) == message
+        send(test_pid, :handled_message)
+        {:ok, 1}
+      end)
 
-      try do
-        SlotMessageHandler.handle_messages(context, [message])
-        SlotMessageHandler.flush_messages(context)
-        raise "should not get here, should have exited first"
-      catch
-        :exit, error ->
-          assert match?({{%Sequin.Error.ServiceError{code: :payload_size_limit_exceeded}, _}, _}, error)
-      end
+      # Call handle_messages - this should store the message in outbox_messages
+      assert :ok = SlotMessageHandler.handle_messages(context, [message])
+
+      # Wait for the retry to happen
+      assert_receive :handled_message, 1000
+
+      # Now try to send another message - this should succeed because the retry worked
+      assert :ok = SlotMessageHandler.handle_messages(context, [message])
+    end
+
+    test "continues to retry delivery until successful", %{context: context} do
+      # Create a test message
+      message = ReplicationFactory.postgres_message()
+      test_pid = self()
+
+      # First two calls will fail with payload_size_limit_exceeded
+      expect(MessageHandlerMock, :handle_messages, 2, fn _ctx, _msgs ->
+        {:error, %Error.InvariantError{code: :payload_size_limit_exceeded, message: "payload_size_limit_exceeded"}}
+      end)
+
+      # Third call (second retry) will succeed
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, :handled_message)
+        # Verify it's the same message being retried
+        assert length(msgs) == 1
+        assert hd(msgs) == message
+        {:ok, 1}
+      end)
+
+      # Call handle_messages - this should store the message in outbox_messages
+      assert :ok = SlotMessageHandler.handle_messages(context, [message])
+
+      # Wait for the first successful delivery to happen
+      assert_receive :handled_message, 1000
+
+      # Now try to send another message - this should succeed because the retry worked
+      assert :ok = SlotMessageHandler.handle_messages(context, [message])
     end
   end
 
@@ -206,7 +257,8 @@ defmodule Sequin.SlotMessageHandlerTest do
           replication_slot_id: slot.id,
           processor_idx: idx,
           test_pid: self(),
-          message_handler: MessageHandlerMock
+          message_handler: MessageHandlerMock,
+          setting_retry_deliver_interval: 1
         )
       )
     end

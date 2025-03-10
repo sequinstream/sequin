@@ -10,7 +10,6 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Error
-  alias Sequin.Health
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Runtime.MessageHandler
@@ -53,6 +52,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       field :processor_idx, non_neg_integer()
       field :partition_count, non_neg_integer()
       field :last_logged_stats_at, non_neg_integer()
+      field :outbox_messages, [Message.t()], default: nil
 
       # Entities
       field :replication_slot, PostgresReplicationSlot.t()
@@ -62,6 +62,8 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
       field :table_reader, module()
       field :message_handler, module()
+
+      field :setting_retry_deliver_interval, :timer.seconds(1)
     end
   end
 
@@ -182,6 +184,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   def init(opts) do
     replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
     processor_idx = Keyword.fetch!(opts, :processor_idx)
+    retry_deliver_interval = Keyword.get(opts, :setting_retry_deliver_interval, :timer.seconds(1))
 
     Logger.metadata(
       replication_slot_id: replication_slot_id,
@@ -200,7 +203,8 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       id: replication_slot_id,
       processor_idx: processor_idx,
       table_reader: Keyword.get(opts, :table_reader, TableReaderServer),
-      message_handler: Keyword.get(opts, :message_handler, MessageHandler)
+      message_handler: Keyword.get(opts, :message_handler, MessageHandler),
+      setting_retry_deliver_interval: retry_deliver_interval
     }
 
     schedule_process_logging(0)
@@ -227,40 +231,25 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   end
 
   @impl GenServer
+  def handle_call({:handle_messages, _messages}, _from, %State{outbox_messages: messages} = state)
+      when is_list(messages) do
+    # We're still trying to deliver outbox messages.
+    {:reply, {:error, Error.invariant(code: :payload_size_limit_exceeded, message: "Payload size limit exceeded")}, state}
+  end
+
   def handle_call({:handle_messages, messages}, from, %State{} = state) do
     # Reply immediately with a placeholder result
     # This allows the caller to continue without waiting for processing
     GenServer.reply(from, :ok)
 
-    # Process messages asynchronously
-    Logger.debug("[SlotMessageHandler] Handling #{length(messages)} message(s) in partition #{state.processor_idx}")
+    state = deliver_messages(state, messages)
+    {:noreply, state}
+  end
 
-    case state.message_handler.handle_messages(context(state), messages) do
-      {:ok, _count} ->
-        {:noreply, state}
-
-      {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} ->
-        error =
-          Error.service(
-            message:
-              "One or more of your sinks has exceeded memory limitations for buffered messages. Sequin has stopped processing new messages from your replication slot until the sink(s) drain messages.",
-            service: :postgres_replication_slot,
-            code: :payload_size_limit_exceeded
-          )
-
-        Logger.warning(Exception.message(error))
-
-        Health.put_event(
-          state.replication_slot,
-          %Health.Event{slug: :replication_message_processed, status: :fail, error: error}
-        )
-
-        raise error
-
-      error ->
-        Logger.error("[SlotMessageHandler] Error handling messages: #{inspect(error)}", error: error)
-        raise error
-    end
+  @impl GenServer
+  def handle_info(:retry_deliver, %State{} = state) do
+    state = deliver_messages(state, state.outbox_messages)
+    {:noreply, state}
   end
 
   @impl GenServer
@@ -343,8 +332,33 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
   # Private functions
 
+  defp deliver_messages(%State{} = state, messages) do
+    # Process messages asynchronously
+    Logger.debug("[SlotMessageHandler] Handling #{length(messages)} message(s) in partition #{state.processor_idx}")
+
+    case state.message_handler.handle_messages(context(state), messages) do
+      {:ok, _count} ->
+        %{state | outbox_messages: nil}
+
+      {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} ->
+        # We've already replied to the caller. We'll put the messages in the outbox
+        # and schedule a retry delivery.
+        state = %{state | outbox_messages: messages}
+        schedule_retry_deliver(state)
+        state
+
+      error ->
+        Logger.error("[SlotMessageHandler] Error handling messages: #{inspect(error)}", error: error)
+        raise error
+    end
+  end
+
   defp schedule_process_logging(interval \\ :timer.seconds(30)) do
     Process.send_after(self(), :process_logging, interval)
+  end
+
+  defp schedule_retry_deliver(%State{} = state) do
+    Process.send_after(self(), :retry_deliver, state.setting_retry_deliver_interval)
   end
 
   defp partition_messages(messages, partition_count) do

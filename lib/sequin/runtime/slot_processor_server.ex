@@ -271,7 +271,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     launch_stop(state)
 
-    {:noreply, state}
+    {:keep_state, state}
   end
 
   def handle_connect(state) do
@@ -309,7 +309,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   @impl ReplicationConnection
   def handle_result(result, state) do
     Logger.warning("Unknown result: #{inspect(result)}")
-    {:noreply, state}
+    {:keep_state, state}
   end
 
   @spec stop(pid) :: :ok
@@ -322,7 +322,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     <<?w, _header::192, msg::binary>> = binary
     relation_msg = Decoder.decode_message(msg)
     state = put_relation_message(relation_msg, state)
-    {:noreply, state}
+    {:keep_state, state}
   end
 
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
@@ -346,7 +346,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
               state.accumulated_msg_binaries.bytes > max_accumulated_bytes()
 
           state = if should_flush?, do: flush_messages(state), else: state
-          {:noreply, state}
+          {:keep_state, state}
 
         {:error, %InvariantError{code: :over_system_memory_limit}} ->
           Health.put_event(
@@ -361,7 +361,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
           state = flush_messages(state)
           launch_stop(state)
-          {:noreply, state}
+          {:keep_state, state}
       end
     end)
   rescue
@@ -396,7 +396,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       )
     end
 
-    {:noreply, state}
+    {:keep_state, state}
   end
 
   # The server is asking for a reply
@@ -431,13 +431,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       reply = ack_message(commit_lsn)
 
-      {:noreply, reply, state}
+      {:keep_state_and_ack, reply, state}
     end)
   end
 
   def handle_data(data, %State{} = state) do
     Logger.error("Unknown data: #{inspect(data)}")
-    {:noreply, state}
+    {:keep_state, state}
   end
 
   @impl ReplicationConnection
@@ -447,7 +447,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       state = %{state | message_handler_ctx: ctx}
       # Need to manually send reply
       GenServer.reply(from, :ok)
-      {:noreply, state}
+      {:keep_state, state}
     end)
   end
 
@@ -456,7 +456,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     execute_timed(:monitor_message_store, fn ->
       if Map.has_key?(state.message_store_refs, consumer.id) do
         GenServer.reply(from, :ok)
-        {:noreply, state}
+        {:keep_state, state}
       else
         # Monitor just the first partition (there's always at least one) and if any crash they will all restart
         # due to supervisor setting of :one_for_all
@@ -465,7 +465,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
         Logger.info("Monitoring message store for consumer #{consumer.id}")
         GenServer.reply(from, :ok)
-        {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer.id, ref)}}
+        {:keep_state, %{state | message_store_refs: Map.put(state.message_store_refs, consumer.id, ref)}}
       end
     end)
   end
@@ -477,13 +477,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         nil ->
           Logger.warning("No monitor found for consumer #{consumer_id}")
           GenServer.reply(from, :ok)
-          {:noreply, state}
+          {:keep_state, state}
 
         ref ->
           res = Process.demonitor(ref)
           Logger.info("Demonitored message store for consumer #{consumer_id}: (res=#{inspect(res)})")
           GenServer.reply(from, :ok)
-          {:noreply, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
+          {:keep_state, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
       end
     end)
   end
@@ -491,20 +491,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   @impl ReplicationConnection
   def handle_info(:flush_messages, %State{} = state) do
     execute_timed(:handle_info_flush_messages, fn ->
-      {:noreply, flush_messages(%{state | flush_timer: nil})}
+      {:keep_state, flush_messages(%{state | flush_timer: nil})}
     end)
   end
 
   @impl ReplicationConnection
   def handle_info({:EXIT, _pid, :normal}, %State{} = state) do
     # Probably a Flow process
-    {:noreply, state}
+    {:keep_state, state}
   end
 
   @impl ReplicationConnection
   def handle_info({:DOWN, ref, :process, _pid, reason}, %State{} = state) do
     if Application.get_env(:sequin, :env) == :test and reason == :shutdown do
-      {:noreply, state}
+      {:keep_state, state}
     else
       {consumer_id, ^ref} = Enum.find(state.message_store_refs, fn {_, r} -> r == ref end)
 
@@ -539,7 +539,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           Logger.error("Error emitting heartbeat: #{inspect(error)}")
       end
 
-      {:noreply, state}
+      {:keep_state, state}
     end)
   end
 
@@ -557,7 +557,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           Logger.error("Error emitting heartbeat: #{inspect(error)}")
       end
 
-      {:noreply, %{state | heartbeat_timer: nil}}
+      {:keep_state, %{state | heartbeat_timer: nil}}
     end)
   end
 
@@ -689,7 +689,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     Process.put(:last_logged_at, Sequin.utc_now())
     schedule_process_logging()
 
-    {:noreply, state}
+    {:keep_state, state}
   end
 
   defp maybe_schedule_flush(%State{flush_timer: nil} = state) do

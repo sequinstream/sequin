@@ -52,6 +52,7 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 ## Killer features
 
 - **Never miss a change:** Sequin ensures all database changes are delivered to sinks.
+- **The fastest CDC:** Sequin delivers industry-leading performance for change data capture (CDC), sustaining [40k operations per second with 55ms average latency](https://sequinstream.com/docs/performance).
 - **SQL-based routing:** Filter and route messages to sinks using SQL `where` conditions.
 - **Backfills:** Backfill existing rows from your tables to sinks.
 - **Bring your database:** Sequin is not an extension. It works with any Postgres database version 14\+.
@@ -90,20 +91,20 @@ You can also configure Sequin as code using YAML config files.
 
 ## Benchmarks
 
-Sequin delivers industry-leading performance for change data capture (CDC), sustaining **10k operations per second** with **33.9ms 99th percentile latency**.
+Sequin delivers industry-leading performance for change data capture (CDC), sustaining **40k operations per second** with **55ms average latency**.
 
-| Tool | Latency at 10k ops/s |
+| Tool | Latency at 40k ops/s |
 |------|-------------------|
-| **Sequin** | **34ms** |
-| AWS MSK Debezium | 499ms |
+| **Sequin** | **55ms** |
+| AWS MSK Debezium | 258ms |
 | Fivetran | 5 minutes |
 | Airbyte | 1+ hours |
 
 In our production benchmarks with AWS RDS Postgres and MSK Kafka, Sequin maintains consistent performance under sustained load:
 
-- Average throughput: 10,000 ops/sec
-- Average latency: 22.3ms
-- 99th percentile latency: 33.9ms
+- Average throughput: 40,000 ops/sec
+- Average latency: 55ms
+- 99th percentile latency: 253ms
 
 [Learn more](https://sequinstream.com/docs/performance) about Sequin's current performance in our docs.
 

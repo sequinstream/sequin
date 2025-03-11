@@ -69,6 +69,18 @@ defmodule Sequin.Time do
     DateTime.before?(timestamp, DateTime.add(Sequin.utc_now(), -minutes, :minute))
   end
 
+  def after_ms_ago?(timestamp, ms) do
+    DateTime.after?(timestamp, DateTime.add(Sequin.utc_now(), -ms, :millisecond))
+  end
+
+  def after_sec_ago?(timestamp, seconds) do
+    DateTime.after?(timestamp, DateTime.add(Sequin.utc_now(), -seconds, :second))
+  end
+
+  def after_min_ago?(timestamp, minutes) do
+    DateTime.after?(timestamp, DateTime.add(Sequin.utc_now(), -minutes, :minute))
+  end
+
   @doc """
   Calculates exponential backoff time in milliseconds.
 

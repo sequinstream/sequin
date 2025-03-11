@@ -23,7 +23,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Postgres.ReplicationConnection
   alias Sequin.Replication
   alias Sequin.Repo
-  alias Sequin.Runtime
   alias Sequin.Runtime.MessageHandler
   alias Sequin.Runtime.PostgresAdapter.Decoder
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
@@ -273,7 +272,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         current_memory: current_memory
       )
 
-      launch_stop(state)
+      {:disconnect, :over_system_memory_limit}
     end
 
     {:stream, query, [],
@@ -317,7 +316,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       reason ->
         on_connect_failure(state, reason)
-        {:keep_state, state}
+
+        if state.test_pid do
+          send(state.test_pid, {:stop_replication, state.id})
+        end
+
+        {:stop, :replication_connection_failed, state}
     end
   end
 
@@ -374,8 +378,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           )
 
           {:ok, state} = flush_messages(state)
-          launch_stop(state)
-          {:keep_state, state}
+
+          if state.test_pid do
+            send(state.test_pid, {:stop_replication, state.id})
+          end
+
+          {:stop, :over_system_memory_limit, state}
       end
     end)
   rescue
@@ -749,7 +757,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       %Event{slug: :replication_connected, status: :fail, error: Error.service(service: :replication, message: error_msg)}
     )
 
-    launch_stop(state)
     :ok
   end
 
@@ -1541,22 +1548,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp default_max_memory_bytes do
     Application.get_env(:sequin, :max_memory_bytes)
-  end
-
-  defp launch_stop(state) do
-    # Returning :stop tuple results in an error that looks like a crash
-    Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-      Logger.metadata(replication_id: state.id, database_id: state.postgres_database.id)
-      Logger.info("[SlotProcessorServer] Stopping replication for #{state.id}")
-
-      if Application.get_env(:sequin, :env) == :test and not is_nil(state.test_pid) do
-        send(state.test_pid, {:stop_replication, state.id})
-        # Hack: Prevent this Task from sending a DOWN signal to the test process
-        Process.sleep(1000)
-      else
-        :ok = Runtime.Supervisor.stop_replication(state.id)
-      end
-    end)
   end
 
   defp incr_counter(name, amount \\ 1) do

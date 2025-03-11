@@ -585,6 +585,9 @@ defmodule Sequin.Postgres.ReplicationConnection do
 
       {:disconnect, reason, mod_state} ->
         reconnect_or_stop(:disconnect, reason, s.protocol, %{s | state: {mod, mod_state}})
+
+      {:stop, reason, mod_state} ->
+        {:stop, reason, %{s | state: {mod, mod_state}}}
     end
   end
 

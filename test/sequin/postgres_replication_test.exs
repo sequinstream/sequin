@@ -986,6 +986,8 @@ defmodule Sequin.PostgresReplicationTest do
       check = Enum.find(health.checks, &(&1.slug == :replication_connected))
       assert check.status == :error
       assert check.error.message =~ "Replication slot '#{non_existent_slot}' does not exist"
+
+      stop_replication!()
     end
 
     test "emits heartbeat messages" do
@@ -1043,6 +1045,8 @@ defmodule Sequin.PostgresReplicationTest do
 
           # Process should shut down due to memory limit
           assert_receive {:stop_replication, _}, 1000
+
+          stop_replication!()
         end)
 
       assert log =~ "[SlotProcessorServer] System at memory limit"
@@ -1542,6 +1546,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Wait for the messages to be handled
       assert_receive {SlotProcessorServer, :flush_messages}, 500
+
+      # Wait for SlotMessageHandler to deliver_messages
+      Process.sleep(100)
 
       # Fetch consumer messages
       messages = list_messages(consumer)

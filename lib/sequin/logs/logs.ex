@@ -208,6 +208,10 @@ defmodule Sequin.Logs do
         Logger.info("Cleared consumer messages log file: #{log_file}")
         :ok
 
+      {:error, :enoent} ->
+        Logger.info("Consumer messages log file does not exist: #{log_file}")
+        :ok
+
       {:error, reason} ->
         Logger.error("Failed to clear consumer messages log file: #{log_file}, reason: #{inspect(reason)}")
         {:error, reason}

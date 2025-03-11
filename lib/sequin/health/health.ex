@@ -486,6 +486,7 @@ defmodule Sequin.Health do
   defp check(:replication_connected, %PostgresReplicationSlot{} = slot, events) do
     base_check = %Check{slug: :replication_connected, status: :initializing}
     connected_event = find_event(events, :replication_connected)
+    heartbeat_verification_event = find_event(events, :replication_heartbeat_verification)
     memory_limit_exceeded_event = find_event(events, :replication_memory_limit_exceeded)
 
     cond do
@@ -505,6 +506,16 @@ defmodule Sequin.Health do
         put_check_timestamps(%{base_check | status: :error, error: connected_event.error}, [
           connected_event
         ])
+
+      not is_nil(heartbeat_verification_event) and heartbeat_verification_event.status == :fail ->
+        error =
+          Error.service(
+            message:
+              "Sequin is connected, but has not received a heartbeat from the database's replication slot. Either Sequin is crashing or the replication process has stalled for some reason.",
+            service: :postgres_replication_slot
+          )
+
+        put_check_timestamps(%{base_check | status: :error, error: error}, [heartbeat_verification_event])
 
       not is_nil(memory_limit_exceeded_event) and
           DateTime.after?(memory_limit_exceeded_event.last_event_at, connected_event.last_event_at) ->

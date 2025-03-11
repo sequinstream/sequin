@@ -31,6 +31,7 @@ defmodule Sequin.Health.Event do
     :replication_connected,
     :replication_message_processed,
     :replication_heartbeat_received,
+    :replication_heartbeat_verification,
     :replication_memory_limit_exceeded,
     :replication_lag_checked
   ]

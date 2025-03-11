@@ -132,13 +132,19 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :bytes_received_since_last_limit_check, non_neg_integer(), default: 0
       field :check_memory_fn, nil | (-> non_neg_integer())
       field :dirty, boolean(), default: false
-      field :heartbeat_timer, nil | reference()
 
       # Settings
       field :bytes_between_limit_checks, non_neg_integer()
       field :heartbeat_interval, non_neg_integer()
       field :max_memory_bytes, non_neg_integer()
       field :setting_reconnect_interval, non_neg_integer()
+
+      # Heartbeats
+      field :current_heartbeat_id, nil | String.t()
+      field :heartbeat_emitted_at, nil | DateTime.t()
+      field :heartbeat_timer, nil | reference()
+      field :heartbeat_verification_timer, nil | reference()
+      field :message_received_since_last_heartbeat, boolean(), default: false
     end
   end
 
@@ -238,6 +244,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
 
     state = schedule_heartbeat(state, 0)
+    state = schedule_heartbeat_verification(state)
     schedule_process_logging(0)
 
     {:ok, %{state | connection_state: :disconnected}}
@@ -570,10 +577,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       case Postgres.query(conn, q) do
         {:ok, _res} ->
-          Logger.info("Emitted heartbeat", emitted_at: Sequin.utc_now())
+          Logger.info("Emitted legacy heartbeat", emitted_at: Sequin.utc_now())
 
         {:error, error} ->
-          Logger.error("Error emitting heartbeat: #{inspect(error)}")
+          Logger.error("Error emitting legacy heartbeat: #{inspect(error)}")
       end
 
       {:keep_state, state}
@@ -583,19 +590,125 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   def handle_info(:emit_heartbeat, %State{} = state) do
     execute_timed(:emit_heartbeat, fn ->
       conn = get_cached_conn(state)
-
+      heartbeat_id = UUID.uuid4()
       emitted_at = Sequin.utc_now()
 
-      case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.0', '#{emitted_at}')") do
+      payload =
+        Jason.encode!(%{
+          id: heartbeat_id,
+          emitted_at: DateTime.to_iso8601(emitted_at),
+          version: "1.0"
+        })
+
+      case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.1', $1)", [payload]) do
         {:ok, _res} ->
-          Logger.info("Emitted heartbeat", emitted_at: emitted_at)
+          Logger.info("Emitted heartbeat", heartbeat_id: heartbeat_id, emitted_at: emitted_at)
+
+          {:keep_state,
+           %{
+             state
+             | heartbeat_timer: nil,
+               current_heartbeat_id: heartbeat_id,
+               heartbeat_emitted_at: emitted_at,
+               message_received_since_last_heartbeat: false
+           }}
 
         {:error, error} ->
           Logger.error("Error emitting heartbeat: #{inspect(error)}")
+          {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil})}
       end
-
-      {:keep_state, %{state | heartbeat_timer: nil}}
     end)
+  end
+
+  def handle_info(:verify_heartbeat, %State{} = state) do
+    next_state = schedule_heartbeat_verification(state)
+
+    cond do
+      # No outstanding heartbeat but we have emitted one in the last 2m
+      # This is the most likely clause we hit because we usually receive the heartbeat message
+      # pretty quickly after emitting it
+      is_nil(state.current_heartbeat_id) and not is_nil(state.heartbeat_emitted_at) and
+          Sequin.Time.after_min_ago?(state.heartbeat_emitted_at, 2) ->
+        Logger.info("[SlotProcessorServer] Heartbeat verification successful (no outstanding heartbeat)",
+          heartbeat_id: state.current_heartbeat_id
+        )
+
+        Health.put_event(
+          state.replication_slot,
+          %Event{slug: :replication_heartbeat_verification, status: :success}
+        )
+
+        {:keep_state, next_state}
+
+      # We have no outstanding heartbeat and it has been more than 2m since we emitted one !
+      # This is a bug, as we should always either be regularly emitting heartbeats or have one outstanding
+      is_nil(state.current_heartbeat_id) ->
+        Logger.error(
+          "[SlotProcessorServer] Heartbeat verification failed (no heartbeat emitted in last 2m)",
+          heartbeat_id: state.current_heartbeat_id
+        )
+
+        Health.put_event(
+          state.replication_slot,
+          %Event{
+            slug: :replication_heartbeat_verification,
+            status: :fail,
+            error:
+              Error.service(
+                service: :replication,
+                message: "Replication slot connection is stale - no heartbeat emitted in last 2m"
+              )
+          }
+        )
+
+        {:stop, :heartbeat_verification_failed, next_state}
+
+      # We have an outstanding heartbeat and we have received a message since it was emitted
+      # This occurs when there is significant replication lag
+      not is_nil(state.current_heartbeat_id) and state.message_received_since_last_heartbeat ->
+        Logger.info("[SlotProcessorServer] Heartbeat verification successful (messages received since last heartbeat)",
+          heartbeat_id: state.current_heartbeat_id
+        )
+
+        Health.put_event(
+          state.replication_slot,
+          %Event{slug: :replication_heartbeat_verification, status: :success}
+        )
+
+        {:keep_state, next_state}
+
+      # We have an outstanding heartbeat but it was emitted less than 5s ago (too recent to verify)
+      # This should only occur when latency between Sequin and the Postgres is high
+      not is_nil(state.current_heartbeat_id) and Sequin.Time.after_sec_ago?(state.heartbeat_emitted_at, 5) ->
+        Logger.info("[SlotProcessorServer] Heartbeat verification indeterminate (outstanding heartbeat recently emitted)",
+          heartbeat_id: state.current_heartbeat_id
+        )
+
+        {:keep_state, next_state}
+
+      # We have an outstanding heartbeat but have not received the heartbeat or any other messages recently
+      # This means the replication slot is somehow disconnected
+      not is_nil(state.current_heartbeat_id) ->
+        Logger.error(
+          "[SlotProcessorServer] Heartbeat verification failed (no messages or heartbeat received in last 10s)",
+          heartbeat_id: state.current_heartbeat_id
+        )
+
+        Health.put_event(
+          state.replication_slot,
+          %Event{
+            slug: :replication_heartbeat_verification,
+            status: :fail,
+            error:
+              Error.service(
+                service: :replication,
+                message: "Replication slot connection is stale - no messages or heartbeat received in last 10s"
+              )
+          }
+        )
+
+        {:stop, :heartbeat_verification_failed, next_state}
+    end
   end
 
   @impl ReplicationConnection
@@ -782,6 +895,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp schedule_heartbeat(%State{heartbeat_timer: ref} = state, _interval) when is_reference(ref) do
     state
+  end
+
+  defp schedule_heartbeat_verification(%State{} = state) do
+    verification_ref = Process.send_after(self(), :verify_heartbeat, :timer.seconds(10))
+    %{state | heartbeat_verification_timer: verification_ref}
   end
 
   defp maybe_recreate_slot(%State{connection: connection} = state) do
@@ -976,17 +1094,45 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     state
   end
 
-  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
-    Logger.info("[SlotProcessorServer] Heartbeat received", emitted_at: emitted_at)
-    Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
+  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.1", content: content}) do
+    case Jason.decode(content) do
+      {:ok, %{"id" => heartbeat_id, "emitted_at" => emitted_at, "version" => "1.0"}} ->
+        # Only log if this is the current heartbeat we're waiting for
+        if heartbeat_id == state.current_heartbeat_id do
+          Logger.info("[SlotProcessorServer] Current heartbeat received",
+            heartbeat_id: heartbeat_id,
+            emitted_at: emitted_at
+          )
 
-    state = schedule_heartbeat(state)
+          Health.put_event(
+            state.replication_slot,
+            %Event{slug: :replication_heartbeat_received, status: :success}
+          )
 
-    if state.test_pid do
-      # TODO: Decouple
-      send(state.test_pid, {__MODULE__, :heartbeat_received})
+          if state.test_pid do
+            send(state.test_pid, {__MODULE__, :heartbeat_received})
+          end
+
+          state = schedule_heartbeat(state)
+          %{state | current_heartbeat_id: nil, message_received_since_last_heartbeat: false}
+        else
+          Logger.debug("[SlotProcessorServer] Received stale heartbeat",
+            received_id: heartbeat_id,
+            current_id: state.current_heartbeat_id,
+            emitted_at: emitted_at
+          )
+
+          state
+        end
+
+      {:error, error} ->
+        Logger.error("Error decoding heartbeat message: #{inspect(error)}")
+        state
     end
+  end
 
+  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
+    Logger.info("[SlotProcessorServer] Legacy heartbeat received", emitted_at: emitted_at)
     state
   end
 

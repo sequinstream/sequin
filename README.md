@@ -194,7 +194,11 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed instructions on how to con
    # Install frontend dependencies
    cd assets && npm install
    ```
-3. Start the development server from the top-level directory:
+3. Start PostgreSQL and Redis services:
+   ```bash
+   docker-compose up -d
+   ```
+4. Start the development server from the top-level directory:
    ```bash
    make dev
    ```

@@ -1153,10 +1153,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       # Temp: Do this here, as handle_messages call is going to become async
       state.message_handler_module.before_handle_messages(state.message_handler_ctx, messages)
 
-      {time, res} =
-        :timer.tc(fn ->
-          state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
-        end)
+      {time_ms, res} =
+        :timer.tc(
+          fn ->
+            state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+          end,
+          :millisecond
+        )
 
       state.backfill_watermark_messages
       |> Enum.reverse()
@@ -1164,8 +1167,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         lsn = Postgres.lsn_to_int(msg.lsn)
         state.message_handler_module.handle_logical_message(state.message_handler_ctx, lsn, msg)
       end)
-
-      time_ms = time / 1000
 
       if time_ms > 100 do
         Logger.warning("[SlotProcessorServer] Flushed messages took longer than 100ms",
@@ -1601,9 +1602,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun)
-    # Convert microseconds to milliseconds
-    incr_counter(:"#{name}_total_ms", time / 1000)
+    {time, result} = :timer.tc(fun, :millisecond)
+    incr_counter(:"#{name}_total_ms", time)
     incr_counter(:"#{name}_count")
     result
   end

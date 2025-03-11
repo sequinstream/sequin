@@ -184,15 +184,15 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
     execute_timed(:handle_receive_messages, fn ->
-      {time, messages} = :timer.tc(fn -> produce_messages(state, demand) end)
+      {time, messages} = :timer.tc(fn -> produce_messages(state, demand) end, :millisecond)
       more_upstream_messages? = length(messages) == demand
 
-      if div(time, 1000) > @min_log_time_ms do
+      if time > @min_log_time_ms do
         Logger.warning(
           "[ConsumerProducer] produce_messages took longer than expected",
           count: length(messages),
           demand: demand,
-          duration_ms: div(time, 1000)
+          duration_ms: time
         )
       end
 
@@ -289,9 +289,8 @@ defmodule Sequin.Runtime.ConsumerProducer do
   end
 
   defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun)
-    # Convert microseconds to milliseconds
-    incr_counter(:"#{name}_total_ms", div(time, 1000))
+    {time, result} = :timer.tc(fun, :millisecond)
+    incr_counter(:"#{name}_total_ms", time)
     result
   end
 end

@@ -289,15 +289,13 @@ defmodule SequinWeb.PullControllerTest do
   end
 
   defp assert_elapsed_under(elapsed, fun, fun_desc \\ "function") do
-    {time_us, value} = :timer.tc(fun)
-    time = time_us / 1000
+    {time, value} = :timer.tc(fun, :millisecond)
     assert time < elapsed, "Expected #{fun_desc} to complete in #{elapsed}ms, but it took #{time}ms"
     value
   end
 
   defp assert_elapsed_at_least(elapsed, fun, fun_desc \\ "function") do
-    {time_us, value} = :timer.tc(fun)
-    time = time_us / 1000
+    {time, value} = :timer.tc(fun, :millisecond)
     assert time >= elapsed, "Expected #{fun_desc} to complete in at least #{elapsed}ms, but it took #{time}ms"
     value
   end

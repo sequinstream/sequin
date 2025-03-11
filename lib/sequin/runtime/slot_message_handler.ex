@@ -8,8 +8,15 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
   use GenServer
 
+  use Sequin.ProcessMetrics,
+    metric_prefix: "sequin.slot_message_handler",
+    interval: :timer.seconds(30)
+
+  use Sequin.ProcessMetrics.Decorator
+
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Error
+  alias Sequin.ProcessMetrics
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Runtime.MessageHandler
@@ -51,7 +58,6 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       field :id, PostgresReplicationSlot.id()
       field :processor_idx, non_neg_integer()
       field :partition_count, non_neg_integer()
-      field :last_logged_stats_at, non_neg_integer()
       field :outbox_messages, [Message.t()], default: nil
 
       # Entities
@@ -207,7 +213,13 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       setting_retry_deliver_interval: retry_deliver_interval
     }
 
-    schedule_process_logging(0)
+    # Add dynamic tags for metrics
+    ProcessMetrics.metadata(%{
+      replication_slot_id: replication_slot_id,
+      processor_idx: processor_idx
+    })
+
+    ProcessMetrics.start()
 
     {:ok, state, {:continue, :load_entities}}
   end
@@ -252,92 +264,17 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     {:noreply, state}
   end
 
-  @impl GenServer
-  def handle_info(:process_logging, %State{} = state) do
-    now = System.monotonic_time(:millisecond)
-    interval_ms = if state.last_logged_stats_at, do: now - state.last_logged_stats_at
-
-    info =
-      Process.info(self(), [
-        # Total memory used by process in bytes
-        :memory,
-        # Number of messages in queue
-        :message_queue_len
-      ])
-
-    metadata = [
-      memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
-      message_queue_len: info[:message_queue_len],
-      processor_idx: state.processor_idx,
-      partition_count: state.partition_count,
-      replication_slot_id: state.id
-    ]
-
-    # Get all timing metrics from process dictionary
-    timing_metrics =
-      Process.get()
-      |> Enum.filter(fn {key, _} ->
-        key |> to_string() |> String.ends_with?("_total_ms")
-      end)
-      |> Keyword.new()
-
-    # Log all timing metrics as histograms with operation tag
-    Enum.each(timing_metrics, fn {key, value} ->
-      operation = key |> to_string() |> String.replace("_total_ms", "")
-
-      Sequin.Statsd.histogram("sequin.slot_message_handler.operation_time_ms", value,
-        tags: %{
-          replication_slot_id: state.id,
-          processor_idx: state.processor_idx,
-          operation: operation
-        }
-      )
-    end)
-
-    unaccounted_ms =
-      if interval_ms do
-        # Calculate total accounted time
-        total_accounted_ms = Enum.reduce(timing_metrics, 0, fn {_key, value}, acc -> acc + value end)
-
-        # Calculate unaccounted time
-        max(0, interval_ms - total_accounted_ms)
-      end
-
-    if unaccounted_ms do
-      # Log unaccounted time with same metric but different operation tag
-      Sequin.Statsd.histogram("sequin.slot_message_handler.operation_time_ms", unaccounted_ms,
-        tags: %{
-          replication_slot_id: state.id,
-          processor_idx: state.processor_idx,
-          operation: "unaccounted"
-        }
-      )
-    end
-
-    metadata =
-      metadata
-      |> Keyword.merge(timing_metrics)
-      |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
-
-    Logger.info("[SlotMessageHandler] Process metrics", metadata)
-
-    # Clear timing metrics after logging
-    timing_metrics
-    |> Keyword.keys()
-    |> Enum.each(&clear_counter/1)
-
-    schedule_process_logging()
-    {:noreply, %{state | last_logged_stats_at: now}}
-  end
-
   # Private functions
 
+  @decorate track_metrics("deliver_messages")
   defp deliver_messages(%State{} = state, messages) do
     # Process messages asynchronously
     Logger.debug("[SlotMessageHandler] Handling #{length(messages)} message(s) in partition #{state.processor_idx}")
 
     case state.message_handler.handle_messages(context(state), messages) do
-      {:ok, _count} ->
+      {:ok, count} ->
+        # Track the number of messages processed
+        ProcessMetrics.increment_throughput("messages_processed", count)
         %{state | outbox_messages: nil}
 
       {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} ->
@@ -353,10 +290,6 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     end
   end
 
-  defp schedule_process_logging(interval \\ :timer.seconds(30)) do
-    Process.send_after(self(), :process_logging, interval)
-  end
-
   defp schedule_retry_deliver(%State{} = state) do
     Process.send_after(self(), :retry_deliver, state.setting_retry_deliver_interval)
   end
@@ -365,8 +298,10 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     Enum.group_by(messages, &message_partition_idx(&1, partition_count))
   end
 
+  @decorate track_metrics("load_entities")
   defp load_entities(%State{} = state) do
     slot = Replication.get_pg_replication!(state.id)
+    Logger.metadata(partition_count: slot.partition_count)
 
     %{postgres_database: db, not_disabled_sink_consumers: consumers, wal_pipelines: pipelines} =
       Repo.preload(slot, [
@@ -394,20 +329,4 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       table_reader_mod: state.table_reader
     }
   end
-
-  defp clear_counter(name) do
-    Process.delete(name)
-  end
-
-  # defp incr_counter(name, amount \\ 1) do
-  #   current = Process.get(name, 0)
-  #   Process.put(name, current + amount)
-  # end
-
-  # defp execute_timed(name, fun) do
-  #   {time, result} = :timer.tc(fun)
-  #   # Convert microseconds to milliseconds
-  #   incr_counter(:"#{name}_total_ms", div(time, 1000))
-  #   result
-  # end
 end

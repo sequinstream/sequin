@@ -517,19 +517,22 @@ defmodule Sequin.Runtime.SlotMessageStore do
   def handle_call({:produce, count, producer_pid}, _from, %State{} = state) do
     execute_timed(:produce, fn ->
       {time, {messages, state}} =
-        :timer.tc(fn ->
-          {_messages, _state} = State.produce_messages(state, count)
-        end)
+        :timer.tc(
+          fn ->
+            {_messages, _state} = State.produce_messages(state, count)
+          end,
+          :millisecond
+        )
 
       messages
       |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
       |> then(&MessageLedgers.wal_cursors_reached_checkpoint(state.consumer_id, "slot_message_store.produce", &1))
 
-      if div(time, 1000) > @min_log_time_ms do
+      if time > @min_log_time_ms do
         Logger.warning(
           "[SlotMessageStore] Produce messages took longer than expected",
           count: length(messages),
-          duration_ms: div(time, 1000),
+          duration_ms: time,
           message_count: map_size(state.messages)
         )
       end
@@ -863,9 +866,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun)
-    # Convert microseconds to milliseconds
-    incr_counter(:"#{name}_total_ms", div(time, 1000))
+    {time, result} = :timer.tc(fun, :millisecond)
+    incr_counter(:"#{name}_total_ms", time)
     result
   end
 

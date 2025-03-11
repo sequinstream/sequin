@@ -633,9 +633,8 @@ defmodule Sequin.Postgres.ReplicationConnection do
   end
 
   defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun)
-    # Convert microseconds to milliseconds
-    incr_counter(:"#{name}_total_ms", time / 1000)
+    {time, result} = :timer.tc(fun, :millisecond)
+    incr_counter(:"#{name}_total_ms", time)
     incr_counter(:"#{name}_count")
     result
   end

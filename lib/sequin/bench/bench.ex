@@ -196,8 +196,8 @@ defmodule Sequin.Bench do
   end
 
   defp exec_fun(scenario_fun, input_args) do
-    {execution_time, _result} = :timer.tc(fn -> apply(scenario_fun, input_args) end)
-    execution_time / 1000
+    {execution_time, _result} = :timer.tc(fn -> apply(scenario_fun, input_args) end, :millisecond)
+    execution_time
   end
 
   defp format_stats(test_name, stats) do

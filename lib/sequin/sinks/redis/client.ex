@@ -44,8 +44,7 @@ defmodule Sequin.Sinks.Redis.Client do
             ]
         end)
 
-      {time, res} = :timer.tc(fn -> qp(connection, commands) end)
-      time = round(time / 1000)
+      {time, res} = :timer.tc(fn -> qp(connection, commands) end, :millisecond)
 
       if time > 200 do
         Logger.warning("[Sequin.Sinks.Redis] Slow command execution", duration_ms: time)

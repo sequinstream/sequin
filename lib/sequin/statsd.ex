@@ -16,8 +16,8 @@ defmodule Sequin.Statsd do
   @spec measure(key(), fun()) :: on_send() | term()
   @spec measure(key(), options(), fun()) :: on_send() | term()
   def measure(key, options \\ [], fun) when is_function(fun, 0) do
-    {elapsed, result} = :timer.tc(fun)
-    timing(key, div(elapsed, 1000), options)
+    {elapsed, result} = :timer.tc(fun, :millisecond)
+    timing(key, elapsed, options)
     result
   end
 

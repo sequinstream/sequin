@@ -1060,9 +1060,8 @@ defmodule Sequin.Runtime.TableReaderServer do
   # Private helper functions for timing metrics
 
   defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun)
-    # Convert microseconds to milliseconds
-    incr_counter(:"#{name}_total_ms", div(time, 1000))
+    {time, result} = :timer.tc(fun, :millisecond)
+    incr_counter(:"#{name}_total_ms", time)
     result
   end
 

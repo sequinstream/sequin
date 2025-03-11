@@ -93,7 +93,8 @@ defmodule Sequin.MixProject do
       {:benchee, "~> 1.0", only: :dev},
       {:pgvector, "~> 0.3.0"},
       {:broadway_dashboard, "~> 0.4.0"},
-      {:rexbug, "~> 1.0"}
+      {:rexbug, "~> 1.0"},
+      {:decorator, "~> 1.4"}
     ]
   end
 

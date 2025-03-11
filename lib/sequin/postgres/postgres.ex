@@ -975,7 +975,7 @@ defmodule Sequin.Postgres do
 
     case query(conn, query, [slot_name]) do
       {:ok, %{rows: [[bytes]]}} -> {:ok, Decimal.to_integer(bytes)}
-      {:ok, %{rows: []}} -> {:error, Error.not_found(entity: :replication_slot)}
+      {:ok, %{rows: []}} -> {:error, Error.not_found(entity: :replication_slot, params: %{slot_name: slot_name})}
       {:error, error} -> {:error, error}
     end
   end

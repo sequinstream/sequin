@@ -241,6 +241,10 @@ if config_env() == :prod do
       default: {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: Base.decode64!(vault_key), iv_length: 12}
     ]
 
+  config :sequin, SequinWeb.Router,
+    admin_user: System.get_env("ADMIN_USER"),
+    admin_password: System.get_env("ADMIN_PASSWORD")
+
   config :sequin, SequinWeb.UserSessionController,
     github: [
       redirect_uri: "https://console.sequinstream.com/auth/github/callback",

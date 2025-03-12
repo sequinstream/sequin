@@ -198,8 +198,13 @@ defmodule SequinWeb.Router do
   end
 
   defp admin_basic_auth(conn, _opts) do
-    username = System.fetch_env!("ADMIN_USER")
-    password = System.fetch_env!("ADMIN_PASSWORD")
-    Plug.BasicAuth.basic_auth(conn, username: username, password: password)
+    username = Application.get_env(:sequin, SequinWeb.Router)[:admin_user]
+    password = Application.get_env(:sequin, SequinWeb.Router)[:admin_password]
+
+    if is_binary(username) and is_binary(password) do
+      Plug.BasicAuth.basic_auth(conn, username: username, password: password)
+    else
+      raise "Admin credentials not set. Please set ADMIN_USER and ADMIN_PASSWORD in your environment."
+    end
   end
 end

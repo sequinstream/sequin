@@ -71,6 +71,10 @@ config :sequin, SequinWeb.Endpoint,
     ]
   ]
 
+config :sequin, SequinWeb.Router,
+  admin_user: "admin",
+  admin_password: "admin"
+
 config :sequin,
   api_base_url: "http://localhost:4000",
   features: [

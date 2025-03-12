@@ -621,11 +621,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
         {:error, error} ->
           Logger.error("Error emitting heartbeat: #{inspect(error)}")
-          {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil})}
+          {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(10))}
       end
     end)
   end
 
+  @max_time_between_heartbeat_emissions_min 5
+  @max_time_between_heartbeat_emit_and_receive_min 10
   def handle_info(:verify_heartbeat, %State{} = state) do
     next_state = schedule_heartbeat_verification(state)
 
@@ -639,11 +641,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
         {:keep_state, next_state}
 
-      # No outstanding heartbeat but we have emitted one in the last 2m
+      # No outstanding heartbeat but we have emitted one in the last few minutes
       # This is the most likely clause we hit because we usually receive the heartbeat message
       # pretty quickly after emitting it
       is_nil(state.current_heartbeat_id) and not is_nil(state.heartbeat_emitted_at) and
-          Sequin.Time.after_min_ago?(state.heartbeat_emitted_at, 2) ->
+          Sequin.Time.after_min_ago?(state.heartbeat_emitted_at, @max_time_between_heartbeat_emissions_min) ->
         Logger.info("[SlotProcessorServer] Heartbeat verification successful (no outstanding heartbeat)",
           heartbeat_id: state.current_heartbeat_id
         )
@@ -655,11 +657,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
         {:keep_state, next_state}
 
-      # We have no outstanding heartbeat and it has been more than 2m since we emitted one !
+      # We have no outstanding heartbeat and it has been too long since we emitted one !
       # This is a bug, as we should always either be regularly emitting heartbeats or have one outstanding
       is_nil(state.current_heartbeat_id) ->
         Logger.error(
-          "[SlotProcessorServer] Heartbeat verification failed (no heartbeat emitted in last 2m)",
+          "[SlotProcessorServer] Heartbeat verification failed (no heartbeat emitted in last #{@max_time_between_heartbeat_emissions_min} min)",
           heartbeat_id: state.current_heartbeat_id
         )
 
@@ -671,7 +673,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             error:
               Error.service(
                 service: :replication,
-                message: "Replication slot connection is stale - no heartbeat emitted in last 2m"
+                message:
+                  "Replication slot connection is stale - no heartbeat emitted in last #{@max_time_between_heartbeat_emissions_min} min"
               )
           }
         )
@@ -692,9 +695,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
         {:keep_state, next_state}
 
-      # We have an outstanding heartbeat but it was emitted less than 5s ago (too recent to verify)
+      # We have an outstanding heartbeat but it was emitted less than 20s ago (too recent to verify)
       # This should only occur when latency between Sequin and the Postgres is high
-      not is_nil(state.current_heartbeat_id) and Sequin.Time.after_sec_ago?(state.heartbeat_emitted_at, 5) ->
+      not is_nil(state.current_heartbeat_id) and
+          Sequin.Time.after_min_ago?(state.heartbeat_emitted_at, @max_time_between_heartbeat_emit_and_receive_min) ->
         Logger.info("[SlotProcessorServer] Heartbeat verification indeterminate (outstanding heartbeat recently emitted)",
           heartbeat_id: state.current_heartbeat_id
         )
@@ -705,7 +709,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       # This means the replication slot is somehow disconnected
       not is_nil(state.current_heartbeat_id) ->
         Logger.error(
-          "[SlotProcessorServer] Heartbeat verification failed (no messages or heartbeat received in last 10s)",
+          "[SlotProcessorServer] Heartbeat verification failed (no messages or heartbeat received in last #{@max_time_between_heartbeat_emit_and_receive_min} min)",
           heartbeat_id: state.current_heartbeat_id
         )
 
@@ -717,7 +721,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             error:
               Error.service(
                 service: :replication,
-                message: "Replication slot connection is stale - no messages or heartbeat received in last 10s"
+                message:
+                  "Replication slot connection is stale - no messages or heartbeat received in last #{@max_time_between_heartbeat_emit_and_receive_min} min"
               )
           }
         )
@@ -913,7 +918,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp schedule_heartbeat_verification(%State{} = state) do
-    verification_ref = Process.send_after(self(), :verify_heartbeat, :timer.seconds(10))
+    verification_ref = Process.send_after(self(), :verify_heartbeat, :timer.seconds(30))
     %{state | heartbeat_verification_timer: verification_ref}
   end
 

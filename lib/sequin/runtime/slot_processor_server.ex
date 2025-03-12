@@ -363,6 +363,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       incr_counter(:raw_bytes_received_since_last_log, raw_bytes_received)
 
       state = maybe_schedule_flush(state)
+      state = %{state | message_received_since_last_heartbeat: true}
 
       state =
         Map.update!(state, :accumulated_msg_binaries, fn acc ->

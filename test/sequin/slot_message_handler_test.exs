@@ -202,7 +202,7 @@ defmodule Sequin.SlotMessageHandlerTest do
       end)
 
       # Second call (retry) will succeed
-      expect(MessageHandlerMock, :handle_messages, 2, fn _ctx, msgs ->
+      expect(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         # Verify it's the same message being retried
         assert length(msgs) == 1
         assert hd(msgs) == message

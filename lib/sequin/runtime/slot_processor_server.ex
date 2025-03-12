@@ -46,6 +46,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
 
+  @slots_ids_with_old_postgres [
+    "59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1",
+    "dcfba45f-d503-4fef-bb11-9221b9efa70a"
+  ]
+
   def max_accumulated_bytes do
     Application.get_env(:sequin, :slot_processor_max_accumulated_bytes) || @max_accumulated_bytes
   end
@@ -265,7 +270,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:ok, low_watermark_wal_cursor} = Sequin.Replication.low_watermark_wal_cursor(state.id)
 
     query =
-      if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
+      if state.id in @slots_ids_with_old_postgres do
         "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
       else
         "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}', messages 'true')"
@@ -418,7 +423,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   def handle_data(<<?k, _wal_end::64, _clock::64, 0>>, %State{} = state) do
     # Because these are <14 Postgres databases, they will not receive heartbeat messages
     # temporarily mark them as healthy if we receive a keepalive message
-    if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
+    if state.id in @slots_ids_with_old_postgres do
       Health.put_event(
         state.replication_slot,
         %Health.Event{slug: :replication_heartbeat_received, status: :success}
@@ -563,7 +568,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   @impl ReplicationConnection
-  def handle_info(:emit_heartbeat, %State{id: "dcfba45f-d503-4fef-bb11-9221b9efa70a"} = state) do
+  def handle_info(:emit_heartbeat, %State{id: id} = state) when id in @slots_ids_with_old_postgres do
     execute_timed(:handle_info_emit_heartbeat, fn ->
       # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
       # This heartbeat is not used for health, but rather to advance the slot even if tables are dormant.
@@ -624,6 +629,15 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     next_state = schedule_heartbeat_verification(state)
 
     cond do
+      # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
+      state.id in @slots_ids_with_old_postgres ->
+        Health.put_event(
+          state.replication_slot,
+          %Event{slug: :replication_heartbeat_verification, status: :success}
+        )
+
+        {:keep_state, next_state}
+
       # No outstanding heartbeat but we have emitted one in the last 2m
       # This is the most likely clause we hit because we usually receive the heartbeat message
       # pretty quickly after emitting it

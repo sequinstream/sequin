@@ -187,7 +187,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     retry_deliver_interval = Keyword.get(opts, :setting_retry_deliver_interval, :timer.seconds(1))
 
     Logger.metadata(
-      replication_slot_id: replication_slot_id,
+      replication_id: replication_slot_id,
       processor_idx: processor_idx
     )
 

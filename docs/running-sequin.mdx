@@ -62,6 +62,53 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
         All three containers should be up and running (status: `Up`).
       </Check>
     </Step>
+    <Step title="Login to Sequin">
+      Open your browser and navigate to [`http://localhost:7376`](http://localhost:7376). 
+
+      Sign in with the default credentials:
+
+      - Username: `admin@sequinstream.com`
+      - Password: `sequinpassword!`
+
+    </Step>
+    <Step title="Create a sync">
+      <Check>
+        You're in! Create a sync by following one of the following guides:
+      </Check>
+
+      <CardGroup cols={2}>
+        <Card title="Webhooks" icon="webhook" href="/quickstart/webhooks">
+          Get started with real-time updates via webhooks.
+        </Card>
+        <Card title="Kafka" icon="bolt" href="/quickstart/kafka">
+          Set up CDC streaming with Apache Kafka.
+        </Card>
+        <Card title="Redis" icon="database" href="/quickstart/redis">
+          Stream changes using Redis pub/sub.
+        </Card>
+        <Card title="RabbitMQ" icon="rabbit" href="/quickstart/rabbitmq">
+          Get started with RabbitMQ messaging.
+        </Card>
+        <Card title="NATS" icon="network-wired" href="/quickstart/nats">
+          Stream changes using NATS messaging.
+        </Card>
+        <Card title="Redpanda" icon="paw" href="/quickstart/redpanda">
+          Set up CDC with Redpanda streaming.
+        </Card>
+        <Card title="Azure Event Hubs" icon="microsoft" href="/quickstart/azure-event-hubs">
+          Stream changes using Azure Event Hubs.
+        </Card>
+        <Card title="GCP Pub/Sub" icon="google" href="/quickstart/gcp-pubsub">
+          Get started with Google Cloud Pub/Sub.
+        </Card>
+        <Card title="AWS SQS" icon="aws" href="/quickstart/sqs">
+          Stream changes using AWS Simple Queue Service.
+        </Card>
+        <Card title="Sequin Stream" icon="signal-stream" href="/quickstart/sequin-stream">
+          Use Sequin's native streaming protocol.
+        </Card>
+      </CardGroup>
+    </Step>
   </Steps>
 
 ## Using your own database

@@ -898,6 +898,15 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_action(change, :insert)
       assert get_field_value(change.fields, "id") == character1.id
 
+      # Insert another record
+      character2 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {:changes, [change]}, :timer.seconds(1)
+      assert is_action(change, :insert)
+      assert get_field_value(change.fields, "id") == character2.id
+
+      # write the low watermark for character2
       Replication.put_low_watermark_wal_cursor!(server_id(), %{
         commit_lsn: change.commit_lsn,
         commit_idx: change.commit_idx
@@ -910,14 +919,17 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: SlotMessageHandlerMock)
 
       # Insert another record to verify replication is working
-      character2 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+      character3 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the new message to be handled
-      assert_receive {:changes, [change]}, :timer.seconds(1)
+      assert_receive {:changes, [change2, change3]}, :timer.seconds(1)
 
-      # Verify we only get the new record
-      assert is_action(change, :insert)
-      assert get_field_value(change.fields, "id") == character2.id
+      # Verify we only get the records >= low watermark
+      assert is_action(change2, :insert)
+      assert get_field_value(change2.fields, "id") == character2.id
+
+      assert is_action(change3, :insert)
+      assert get_field_value(change3.fields, "id") == character3.id
     end
 
     @tag capture_log: true

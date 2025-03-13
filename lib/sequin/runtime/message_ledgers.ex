@@ -217,6 +217,26 @@ defmodule Sequin.Runtime.MessageLedgers do
     end
   end
 
+  @doc """
+  Audits and trims the undelivered cursors set.
+  """
+  @spec audit_and_trim_undelivered_cursors(consumer_id(), DateTime.t()) :: :ok | {:error, Error.t()}
+  def audit_and_trim_undelivered_cursors(consumer_id, older_than_timestamp) do
+    case list_undelivered_wal_cursors(consumer_id, older_than_timestamp) do
+      {:ok, []} ->
+        :ok
+
+      {:ok, undelivered_cursors} ->
+        Logger.warning("[MessageLedgers] Found undelivered cursors (count=#{length(undelivered_cursors)})",
+          consumer_id: consumer_id,
+          count: length(undelivered_cursors),
+          undelivered_cursors: inspect(undelivered_cursors)
+        )
+
+        trim_stale_undelivered_wal_cursors(consumer_id, older_than_timestamp)
+    end
+  end
+
   @spec count_delivered_cursors_set(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   def count_delivered_cursors_set(consumer_id) do
     key = delivered_cursors_key(consumer_id)

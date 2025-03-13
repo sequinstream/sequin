@@ -1,6 +1,8 @@
 defmodule Sequin.Runtime.MessageLedgersTest do
   use Sequin.Case, async: true
 
+  import ExUnit.CaptureLog, only: [capture_log: 1]
+
   alias Sequin.Factory
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.TestSupport
@@ -191,6 +193,50 @@ defmodule Sequin.Runtime.MessageLedgersTest do
 
       {:ok, unverified} = MessageLedgers.list_undelivered_wal_cursors(consumer_id, datetime(now, 100))
       assert unverified == []
+    end
+  end
+
+  describe "audit_and_trim_undelivered_cursors/2" do
+    test "logs warning and trims when undelivered cursors exist", %{consumer_id: consumer_id} do
+      now = DateTime.utc_now()
+
+      old_cursors = [
+        %{commit_lsn: 100, commit_idx: 200},
+        %{commit_lsn: 101, commit_idx: 201}
+      ]
+
+      new_cursor = %{commit_lsn: 102, commit_idx: 202}
+
+      # Record old cursors
+      expect_utc_now(fn -> datetime(now, -100) end)
+      :ok = MessageLedgers.wal_cursors_ingested(consumer_id, old_cursors)
+
+      expect_utc_now(fn -> now end)
+      :ok = MessageLedgers.wal_cursors_ingested(consumer_id, [new_cursor])
+
+      log =
+        capture_log(fn ->
+          assert :ok = MessageLedgers.audit_and_trim_undelivered_cursors(consumer_id, datetime(now, -25))
+        end)
+
+      assert log =~ "Found undelivered cursors (count=2)"
+      assert log =~ "consumer_id=#{consumer_id}"
+      assert log =~ "count=2"
+      assert log =~ "undelivered_cursors="
+
+      # Verify cursors were trimmed
+      {:ok, remaining} = MessageLedgers.list_undelivered_wal_cursors(consumer_id, datetime(now, 200))
+      assert length(remaining) == 1
+      assert remaining == [Map.put(new_cursor, :ingested_at, DateTime.truncate(now, :second))]
+    end
+
+    test "handles empty set gracefully", %{consumer_id: consumer_id} do
+      log =
+        capture_log(fn ->
+          assert :ok = MessageLedgers.audit_and_trim_undelivered_cursors(consumer_id, DateTime.utc_now())
+        end)
+
+      refute log =~ "Found undelivered cursors"
     end
   end
 

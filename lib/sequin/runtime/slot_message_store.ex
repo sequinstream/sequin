@@ -377,7 +377,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
       test_pid: Keyword.get(opts, :test_pid),
       setting_system_max_memory_bytes:
         Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
-      partition: partition
+      partition: partition,
+      flush_interval: Keyword.get(opts, :flush_interval, :timer.minutes(10)),
+      message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2))
     }
 
     {:ok, state, {:continue, :init}}
@@ -419,13 +421,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
         %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
       end)
 
-    {:ok, state} =
+    state =
       state
       |> put_max_memory_bytes()
       |> State.put_persisted_messages(persisted_messages)
 
     schedule_process_logging(0)
     schedule_max_memory_check()
+    schedule_flush_check(state.flush_interval)
     {:noreply, state}
   end
 
@@ -458,7 +461,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
             {:ok, state} = State.put_messages(state, to_put)
 
             :ok = upsert_messages(state, to_persist)
-            {:ok, state} = State.put_persisted_messages(state, to_persist)
+            state = State.put_persisted_messages(state, to_persist)
 
             Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
             :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
@@ -487,8 +490,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
       {to_persist, to_put} = Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
 
       with {:ok, state} <- State.put_table_reader_batch(state, to_put, batch_id),
-           :ok <- upsert_messages(state, to_persist),
-           {:ok, state} <- State.put_persisted_messages(state, to_persist) do
+           :ok <- upsert_messages(state, to_persist) do
+        state = State.put_persisted_messages(state, to_persist)
         Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
         :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
 
@@ -622,10 +625,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
           }
         end)
 
-      with {:ok, state} <- State.put_persisted_messages(state, messages),
-           {newly_blocked_messages, state} <- State.pop_blocked_messages(state),
+      state = State.put_persisted_messages(state, messages)
+
+      with {newly_blocked_messages, state} <- State.pop_blocked_messages(state),
            # Now put the blocked messages into persisted_messages
-           {:ok, state} <- State.put_persisted_messages(state, newly_blocked_messages),
+           state = State.put_persisted_messages(state, newly_blocked_messages),
            :ok <- upsert_messages(state, messages ++ newly_blocked_messages) do
         maybe_finish_table_reader_batch(prev_state, state)
         {:reply, :ok, state}
@@ -783,6 +787,42 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {:noreply, state}
   end
 
+  def handle_info(:flush_messages, %State{} = state) do
+    Logger.info("[SlotMessageStore] Checking for messages to flush")
+
+    messages = State.messages_to_flush(state)
+
+    state =
+      if length(messages) > 0 do
+        Logger.warning(
+          "[SlotMessageStore] Flushing #{length(messages)} old messages to allow slot advancement",
+          consumer_id: state.consumer_id,
+          partition: state.partition
+        )
+
+        upsert_messages(state, messages)
+
+        state = State.put_persisted_messages(state, messages)
+
+        if state.test_pid do
+          send(state.test_pid, {:flush_messages_done, state.consumer_id})
+        end
+
+        Logger.info(
+          "[SlotMessageStore] Flushed #{length(messages)} old messages to allow slot advancement",
+          consumer_id: state.consumer_id,
+          partition: state.partition
+        )
+
+        state
+      else
+        state
+      end
+
+    schedule_flush_check(state.flush_interval)
+    {:noreply, state}
+  end
+
   defp schedule_process_logging(interval \\ :timer.seconds(30)) do
     Process.send_after(self(), :process_logging, interval)
   end
@@ -790,6 +830,10 @@ defmodule Sequin.Runtime.SlotMessageStore do
   # Can be very infrequent, as we use :syn to learn about changes to consumer count
   defp schedule_max_memory_check(interval \\ :timer.minutes(5)) do
     Process.send_after(self(), :max_memory_check, interval)
+  end
+
+  defp schedule_flush_check(interval) do
+    Process.send_after(self(), :flush_messages, interval)
   end
 
   defp put_max_memory_bytes(%State{} = state) do
@@ -871,7 +915,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     result
   end
 
-  defp partitions(%SinkConsumer{partition_count: partition_count}) do
+  def partitions(%SinkConsumer{partition_count: partition_count}) do
     Enum.to_list(0..(partition_count - 1))
   end
 

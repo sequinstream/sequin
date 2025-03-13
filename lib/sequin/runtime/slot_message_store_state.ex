@@ -36,6 +36,8 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :table_reader_batch_id, String.t() | nil
     field :test_pid, pid() | nil
     field :last_logged_stats_at, non_neg_integer() | nil
+    field :flush_interval, non_neg_integer()
+    field :message_age_before_flush_ms, non_neg_integer()
   end
 
   @spec setup_ets(State.t()) :: :ok
@@ -106,14 +108,18 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     Map.has_key?(state.messages, {message.commit_lsn, message.commit_idx})
   end
 
-  @spec put_persisted_messages(State.t(), list(message()) | Enumerable.t()) :: {:ok, State.t()} | {:error, Error.t()}
+  @spec put_persisted_messages(State.t(), list(message()) | Enumerable.t()) :: State.t()
   def put_persisted_messages(%State{} = state, messages) do
     persisted_message_groups =
       Enum.reduce(messages, state.persisted_message_groups, fn msg, acc ->
         Multiset.put(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
       end)
 
-    put_messages(%{state | persisted_message_groups: persisted_message_groups}, messages, skip_limit_check?: true)
+    # This cannot fail because we `skip_limit_check?`
+    {:ok, state} =
+      put_messages(%{state | persisted_message_groups: persisted_message_groups}, messages, skip_limit_check?: true)
+
+    state
   end
 
   @spec put_table_reader_batch(State.t(), list(message()), String.t()) ::
@@ -457,5 +463,28 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       )
 
     messages_not_in_ets + ets_not_in_messages
+  end
+
+  @doc """
+  Returns messages that are older than the configured age threshold and not yet persisted.
+  This helps prevent slot advancement from being blocked by slow message processing (often
+  due to slow group processing or sequin stream syncs.)
+  """
+  @spec messages_to_flush(State.t()) :: list(message())
+  def messages_to_flush(%State{} = state) do
+    now = Sequin.utc_now()
+    age_threshold = DateTime.add(now, -state.message_age_before_flush_ms, :millisecond)
+
+    # Find messages that are older than threshold and not persisted
+    old_messages_to_flush =
+      state.messages
+      |> Stream.filter(fn {_cursor_tuple, msg} ->
+        DateTime.before?(msg.ingested_at, age_threshold) and
+          not is_message_persisted?(state, msg)
+      end)
+      |> Stream.map(fn {_cursor_tuple, msg} -> msg end)
+      |> Enum.to_list()
+
+    old_messages_to_flush
   end
 end

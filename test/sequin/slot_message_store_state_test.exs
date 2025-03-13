@@ -92,7 +92,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       msg1 = ConsumersFactory.consumer_message(group_id: "group1")
       msg2 = ConsumersFactory.consumer_message(group_id: "group1")
 
-      {:ok, state} = State.put_persisted_messages(state, [msg1, msg2])
+      state = State.put_persisted_messages(state, [msg1, msg2])
 
       assert_message_in_state(msg1, state)
       assert_message_in_state(msg2, state)
@@ -110,7 +110,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
       # Add persisted message
       msg2 = ConsumersFactory.consumer_message(group_id: "group2")
-      {:ok, state} = State.put_persisted_messages(state, [msg2])
+      state = State.put_persisted_messages(state, [msg2])
 
       # Verify both messages exist
       assert map_size(state.messages) == 2
@@ -127,7 +127,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       msg2 = ConsumersFactory.consumer_message(group_id: "group2")
       msg3 = ConsumersFactory.consumer_message(group_id: "group1")
 
-      {:ok, state} = State.put_persisted_messages(state, [msg1, msg2, msg3])
+      state = State.put_persisted_messages(state, [msg1, msg2, msg3])
 
       assert Multiset.count(state.persisted_message_groups, "group1") == 2
       assert Multiset.count(state.persisted_message_groups, "group2") == 1
@@ -180,7 +180,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
     test "when a persisted message is popped, its group_id is removed from persisted_message_groups", %{state: state} do
       msg = ConsumersFactory.consumer_message(group_id: "group1")
-      {:ok, state} = State.put_persisted_messages(state, [msg])
+      state = State.put_persisted_messages(state, [msg])
 
       # Verify message is in persisted_message_groups
       assert Multiset.count(state.persisted_message_groups, "group1") == 1
@@ -201,7 +201,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
       # Add a persisted message that shares group_id with msg1
       persisted_msg = ConsumersFactory.consumer_message(group_id: "group1")
-      {:ok, state} = State.put_persisted_messages(state, [persisted_msg])
+      state = State.put_persisted_messages(state, [persisted_msg])
 
       # Call pop_blocked_messages/2
       {popped_messages, updated_state} = State.pop_blocked_messages(state)
@@ -310,7 +310,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       # Add a persisted message to establish a blocked group
       persisted_msg = ConsumersFactory.consumer_message(group_id: "group1")
       other_msg = ConsumersFactory.consumer_message(group_id: "group2")
-      {:ok, state} = State.put_persisted_messages(state, [persisted_msg])
+      state = State.put_persisted_messages(state, [persisted_msg])
       {:ok, state} = State.put_messages(state, [other_msg])
 
       assert State.is_message_group_persisted?(state, "group1")
@@ -375,7 +375,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     test "ignores persisted messages when calculating min_unpersisted_wal_cursor", %{state: state} do
       # Add a persisted message with lower LSN/idx
       persisted_msg = ConsumersFactory.consumer_message(commit_lsn: 50, commit_idx: 1)
-      {:ok, state} = State.put_persisted_messages(state, [persisted_msg])
+      state = State.put_persisted_messages(state, [persisted_msg])
 
       # Add regular messages with higher LSN/idx
       messages = [
@@ -671,7 +671,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
       # Pop and put persisted the other message
       {[msg1], state} = State.pop_messages(state, [{msg1.commit_lsn, msg1.commit_idx}])
-      {:ok, state} = State.put_persisted_messages(state, [msg1])
+      state = State.put_persisted_messages(state, [msg1])
       assert State.unpersisted_table_reader_batch_ids(state) == []
     end
 
@@ -752,7 +752,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert batch_id3 in batch_ids
 
       # Persist all messages from batch1
-      {:ok, state} = State.put_persisted_messages(state, msgs_batch1)
+      state = State.put_persisted_messages(state, msgs_batch1)
 
       # Pop the persisted messages
       cursor_tuples = Enum.map(msgs_batch1, &{&1.commit_lsn, &1.commit_idx})
@@ -767,7 +767,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
       # Persist one message from batch3
       [msg_batch3 | _] = msgs_batch3
-      {:ok, state} = State.put_persisted_messages(state, [msg_batch3])
+      state = State.put_persisted_messages(state, [msg_batch3])
       {_popped, state} = State.pop_messages(state, [{msg_batch3.commit_lsn, msg_batch3.commit_idx}])
 
       # batch3 should still be present as it has unpersisted messages
@@ -778,12 +778,63 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
       # Persist and pop remaining messages
       remaining_messages = [List.last(msgs_batch3) | msgs_batch2]
-      {:ok, state} = State.put_persisted_messages(state, remaining_messages)
+      state = State.put_persisted_messages(state, remaining_messages)
       cursor_tuples = Enum.map(remaining_messages, &{&1.commit_lsn, &1.commit_idx})
       {_popped, state} = State.pop_messages(state, cursor_tuples)
 
       # No batches should remain unpersisted
       assert State.unpersisted_table_reader_batch_ids(state) == []
+    end
+  end
+
+  describe "messages_to_flush/1" do
+    test "returns old unpersisted messages", %{state: state} do
+      now = DateTime.utc_now()
+      past = DateTime.add(now, -2000, :millisecond)
+
+      # Configure flush threshold to 1000ms
+      state = %{state | message_age_before_flush_ms: 1000}
+
+      # Create one old message and one new message
+      old_msg = ConsumersFactory.consumer_message(ingested_at: past)
+      new_msg = ConsumersFactory.consumer_message(ingested_at: now)
+
+      {:ok, state} = State.put_messages(state, [old_msg, new_msg])
+
+      # Stub current time
+      stub_utc_now(fn -> now end)
+
+      # Only old message should be returned
+      messages_to_flush = State.messages_to_flush(state)
+      assert length(messages_to_flush) == 1
+      [msg] = messages_to_flush
+      assert {msg.commit_lsn, msg.commit_idx} == {old_msg.commit_lsn, old_msg.commit_idx}
+    end
+
+    test "excludes persisted messages regardless of age", %{state: state} do
+      now = DateTime.utc_now()
+      past = DateTime.add(now, -2000, :millisecond)
+
+      # Configure flush threshold to 1000ms
+      state = %{state | message_age_before_flush_ms: 1000}
+
+      # Create old messages, one persisted and one unpersisted
+      old_persisted_msg = ConsumersFactory.consumer_message(ingested_at: past)
+      old_unpersisted_msg = ConsumersFactory.consumer_message(ingested_at: past)
+
+      # Put the persisted message through persisted path
+      state = State.put_persisted_messages(state, [old_persisted_msg])
+      # Put unpersisted message normally
+      {:ok, state} = State.put_messages(state, [old_unpersisted_msg])
+
+      # Stub current time
+      stub_utc_now(fn -> now end)
+
+      # Only unpersisted old message should be returned
+      messages_to_flush = State.messages_to_flush(state)
+      assert length(messages_to_flush) == 1
+      [msg] = messages_to_flush
+      assert {msg.commit_lsn, msg.commit_idx} == {old_unpersisted_msg.commit_lsn, old_unpersisted_msg.commit_idx}
     end
   end
 

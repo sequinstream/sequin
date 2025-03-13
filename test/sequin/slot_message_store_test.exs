@@ -9,6 +9,8 @@ defmodule Sequin.SlotMessageStoreTest do
   alias Sequin.Runtime.SlotMessageStore.State
   alias Sequin.Runtime.SlotMessageStoreSupervisor
 
+  @moduletag :capture_log
+
   describe "SlotMessageStore with persisted messages" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
@@ -503,7 +505,6 @@ defmodule Sequin.SlotMessageStoreTest do
       %{consumer: consumer}
     end
 
-    @tag :capture_log
     test "min_wal_cursor raises on ref mismatch", %{consumer: consumer} do
       ref = make_ref()
       :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
@@ -513,6 +514,75 @@ defmodule Sequin.SlotMessageStoreTest do
       assert_raise(InvariantError, fn ->
         SlotMessageStore.min_unpersisted_wal_cursors(consumer, make_ref())
       end)
+    end
+  end
+
+  describe "SlotMessageStore flush behavior" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor,
+         consumer: consumer, test_pid: self(), flush_interval: 100, message_age_before_flush_ms: 100}
+      )
+
+      %{consumer: consumer}
+    end
+
+    test "identifies messages for flushing after age threshold", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      ref = make_ref()
+      :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
+
+      # Create a message that will be old enough to flush
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      # Put message in store
+      :ok = SlotMessageStore.put_messages(consumer, [message])
+
+      # Initially we have one unpersisted commit tuple
+      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref) == [
+               %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx}
+             ]
+
+      # Verify we receive flush_messages_done
+      assert_receive {:flush_messages_done, ^consumer_id}, 1000
+
+      persisted_messages = Consumers.list_consumer_messages_for_consumer(consumer)
+      assert length(persisted_messages) == 1
+
+      # This is the point- the wal cursor is now persisted!
+      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref) == []
+    end
+
+    test "persisted messages are not identified for flushing regardless of age", %{consumer: consumer} do
+      # Create a message that will be persisted
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      # Put message and fail it to persist it
+      :ok = SlotMessageStore.put_messages(consumer, [message])
+      {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
+
+      meta = %{
+        ack_id: delivered.ack_id,
+        deliver_count: 1,
+        group_id: delivered.group_id,
+        last_delivered_at: DateTime.utc_now(),
+        not_visible_until: DateTime.add(DateTime.utc_now(), 60)
+      }
+
+      :ok = SlotMessageStore.messages_failed(consumer, [meta])
+
+      refute_receive {:flush_messages_done, _}, 100
     end
   end
 end

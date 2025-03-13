@@ -57,3 +57,10 @@ services:
 volumes:
   sequin_postgres_data:
   sequin_redis_data:
+
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: "2001:db8:1::/64"

@@ -478,11 +478,9 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     # Find messages that are older than threshold and not persisted
     old_messages_to_flush =
       state.messages
-      |> Stream.filter(fn {_cursor_tuple, msg} ->
-        DateTime.before?(msg.ingested_at, age_threshold) and
-          not is_message_persisted?(state, msg)
-      end)
       |> Stream.map(fn {_cursor_tuple, msg} -> msg end)
+      |> Stream.reject(&is_message_persisted?(state, &1))
+      |> Stream.filter(&DateTime.before?(&1.ingested_at, age_threshold))
       |> Enum.to_list()
 
     old_messages_to_flush

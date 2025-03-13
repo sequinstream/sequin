@@ -379,7 +379,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
         Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
       partition: partition,
       flush_interval: Keyword.get(opts, :flush_interval, :timer.minutes(10)),
-      message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2))
+      message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2)),
+      visibility_check_interval: Keyword.get(opts, :visibility_check_interval, :timer.minutes(5)),
+      max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2))
     }
 
     {:ok, state, {:continue, :init}}
@@ -429,6 +431,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     schedule_process_logging(0)
     schedule_max_memory_check()
     schedule_flush_check(state.flush_interval)
+    schedule_visibility_check(state.visibility_check_interval)
     {:noreply, state}
   end
 
@@ -823,6 +826,41 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {:noreply, state}
   end
 
+  def handle_info(:check_visibility, %State{} = state) do
+    Logger.info("[SlotMessageStore] Checking for messages to make visible")
+
+    messages = State.messages_to_make_visible(state)
+
+    state =
+      if length(messages) > 0 do
+        Logger.info(
+          "[SlotMessageStore] Making #{length(messages)} messages visible for delivery",
+          consumer_id: state.consumer_id,
+          partition: state.partition
+        )
+
+        # Reset visibility for all messages that are no longer not visible
+        state = State.reset_message_visibilities(state, Enum.map(messages, &{&1.commit_lsn, &1.commit_idx}))
+
+        if state.test_pid do
+          send(state.test_pid, {:visibility_check_done, state.consumer_id})
+        end
+
+        Logger.info(
+          "[SlotMessageStore] Made #{length(messages)} messages visible for delivery",
+          consumer_id: state.consumer_id,
+          partition: state.partition
+        )
+
+        state
+      else
+        state
+      end
+
+    schedule_visibility_check(state.visibility_check_interval)
+    {:noreply, state}
+  end
+
   defp schedule_process_logging(interval \\ :timer.seconds(30)) do
     Process.send_after(self(), :process_logging, interval)
   end
@@ -834,6 +872,10 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   defp schedule_flush_check(interval) do
     Process.send_after(self(), :flush_messages, interval)
+  end
+
+  defp schedule_visibility_check(interval) do
+    Process.send_after(self(), :check_visibility, interval)
   end
 
   defp put_max_memory_bytes(%State{} = state) do

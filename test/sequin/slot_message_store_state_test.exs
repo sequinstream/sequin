@@ -10,7 +10,12 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
   alias Sequin.Size
 
   setup do
-    state = %State{consumer: %SinkConsumer{seq: Factory.unique_integer()}, partition: 0}
+    state = %State{
+      consumer: %SinkConsumer{seq: Factory.unique_integer()},
+      partition: 0,
+      max_time_since_delivered_ms: 1000
+    }
+
     State.setup_ets(state)
     {:ok, %{state: state}}
   end
@@ -835,6 +840,58 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert length(messages_to_flush) == 1
       [msg] = messages_to_flush
       assert {msg.commit_lsn, msg.commit_idx} == {old_unpersisted_msg.commit_lsn, old_unpersisted_msg.commit_idx}
+    end
+  end
+
+  describe "messages_to_make_visible/1" do
+    test "returns messages that are stuck in produced_message_groups", %{state: state} do
+      state = %{state | max_time_since_delivered_ms: 200}
+
+      now = DateTime.utc_now()
+      past = DateTime.add(now, -2000, :millisecond)
+
+      # Create messages with different states
+      msg1 = ConsumersFactory.consumer_message()
+      msg2 = ConsumersFactory.consumer_message()
+      msg3 = ConsumersFactory.consumer_message()
+
+      {:ok, state} = State.put_messages(state, [msg1, msg2, msg3])
+
+      # Produce messages with different timestamps
+      expect_utc_now(2, fn -> past end)
+      assert {[produced1], state} = State.produce_messages(state, 1)
+
+      stub_utc_now(fn -> now end)
+      assert {[_produced2, _produced3], state} = State.produce_messages(state, 2)
+
+      # Only message with old last_delivered_at should be returned
+      messages_to_make_visible = State.messages_to_make_visible(state)
+      assert length(messages_to_make_visible) == 1
+      [msg] = messages_to_make_visible
+      assert {msg.commit_lsn, msg.commit_idx} == {produced1.commit_lsn, produced1.commit_idx}
+    end
+
+    test "returns empty list when no messages are stuck", %{state: state} do
+      # Create messages
+      msg1 = ConsumersFactory.consumer_message()
+      msg2 = ConsumersFactory.consumer_message()
+
+      {:ok, state} = State.put_messages(state, [msg1, msg2])
+
+      # Produce messages with current timestamp
+      assert {[_produced1, _produced2], state} = State.produce_messages(state, 2)
+
+      # No messages should be returned as they were just delivered
+      assert State.messages_to_make_visible(state) == []
+    end
+
+    test "handles messages without last_delivered_at", %{state: state} do
+      # Create message
+      msg = ConsumersFactory.consumer_message()
+      {:ok, state} = State.put_messages(state, [msg])
+
+      # Message should not be returned as it hasn't been delivered
+      assert State.messages_to_make_visible(state) == []
     end
   end
 

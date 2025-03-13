@@ -949,7 +949,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {message_lsn, message_idx} = {msg.commit_lsn, msg.commit_idx}
 
     lte_watermark? =
-      message_lsn < low_watermark_lsn or (message_lsn == low_watermark_lsn and message_idx <= low_watermark_idx)
+      message_lsn < low_watermark_lsn or (message_lsn == low_watermark_lsn and message_idx < low_watermark_idx)
 
     # We'll re-receive already-flushed messages if we reconnect to the replication slot (without killing the GenServer) but haven't advanced the slot's cursor yet
     lte_flushed? =

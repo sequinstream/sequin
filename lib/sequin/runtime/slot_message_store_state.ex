@@ -38,6 +38,10 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :last_logged_stats_at, non_neg_integer() | nil
     field :flush_interval, non_neg_integer()
     field :message_age_before_flush_ms, non_neg_integer()
+
+    # Rescue messages stuck in produced state
+    field :visibility_check_interval, non_neg_integer()
+    field :max_time_since_delivered_ms, non_neg_integer()
   end
 
   @spec setup_ets(State.t()) :: :ok
@@ -484,5 +488,24 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       |> Enum.to_list()
 
     old_messages_to_flush
+  end
+
+  @doc """
+  Returns messages that are stuck in a delivering state - they are in produced_message_groups
+  but were delivered over 1 minute ago. This helps recover messages that may have been
+  stuck due to crashes or other issues.
+  """
+  @spec messages_to_make_visible(State.t()) :: list(message())
+  def messages_to_make_visible(%State{} = state) do
+    max_time_since_delivered = DateTime.add(Sequin.utc_now(), -state.max_time_since_delivered_ms, :millisecond)
+
+    state.produced_message_groups
+    |> Multiset.values()
+    |> Stream.map(fn commit_tuple -> Map.get(state.messages, commit_tuple) end)
+    |> Stream.filter(fn
+      nil -> false
+      msg -> not is_nil(msg.last_delivered_at) and DateTime.before?(msg.last_delivered_at, max_time_since_delivered)
+    end)
+    |> Enum.to_list()
   end
 end

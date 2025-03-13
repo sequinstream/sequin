@@ -585,4 +585,58 @@ defmodule Sequin.SlotMessageStoreTest do
       refute_receive {:flush_messages_done, _}, 100
     end
   end
+
+  describe "SlotMessageStore visibility check behavior" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor,
+         consumer: consumer, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
+      )
+
+      %{consumer: consumer}
+    end
+
+    test "makes messages visible after being stuck in produced_message_groups", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      # Create a message
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      # Put message in store and produce it
+      :ok = SlotMessageStore.put_messages(consumer, [message])
+      {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
+
+      # Wait for visibility check
+      assert_receive {:visibility_check_done, ^consumer_id}, 1000
+
+      # Message should now be visible and available for delivery again
+      {:ok, [redelivered]} = SlotMessageStore.produce(consumer, 1, self())
+      assert redelivered.ack_id == delivered.ack_id
+    end
+
+    test "does not make messages visible before they are stuck", %{consumer: consumer} do
+      # Create a message
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      # Put message in store and produce it
+      :ok = SlotMessageStore.put_messages(consumer, [message])
+      {:ok, [_delivered]} = SlotMessageStore.produce(consumer, 1, self())
+
+      # Wait for visibility check
+      refute_receive {:visibility_check_done, _}, 100
+
+      # Message should still not be visible as it hasn't been stuck long enough
+      {:ok, []} = SlotMessageStore.produce(consumer, 1, self())
+    end
+  end
 end

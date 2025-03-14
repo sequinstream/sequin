@@ -21,6 +21,7 @@ defmodule Sequin.Runtime.MessageConsistencyCheckWorker do
 
     Consumers.list_active_sink_consumers()
     |> Enum.filter(&(&1.replication_slot_id in active_replication_ids))
+    |> Enum.map(& &1.id)
     |> Enum.each(&MessageLedgers.audit_and_trim_undelivered_cursors(&1, two_minutes_ago))
 
     Logger.info("[MessageConsistencyCheckWorker] Completed consistency check")

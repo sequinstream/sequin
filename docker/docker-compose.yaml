@@ -58,9 +58,14 @@ volumes:
   sequin_postgres_data:
   sequin_redis_data:
 
-networks:
-  default:
-    enable_ipv6: true
-    ipam:
-      config:
-        - subnet: "2001:db8:1::/64"
+# Un-comment this to enable IPv6
+# You may need to run
+# `docker compose down --volumes --remove-orphans`
+# to remove the existing network and start fresh
+#
+# networks:
+#   default:
+#     enable_ipv6: true
+#     ipam:
+#       config:
+#         - subnet: "2001:db8:1::/64"

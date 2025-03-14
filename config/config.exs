@@ -57,7 +57,7 @@ config :sequin, Oban,
        # Runs every 5 minutes
        {"*/5 * * * *", Sequin.Health.KickoffCheckSinkConfigurationWorker},
        # Runs every 5 minutes
-       {"* * * * *", Sequin.Runtime.MessageConsistencyCheckWorker}
+       {"*/5 * * * *", Sequin.Runtime.MessageConsistencyCheckWorker}
      ]}
   ]
 

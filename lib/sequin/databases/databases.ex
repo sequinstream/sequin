@@ -258,21 +258,16 @@ defmodule Sequin.Databases do
   def update_sequence_from_db(%Sequence{} = sequence, %PostgresDatabase{} = db) do
     with {:ok, tables} <- tables(db) do
       table = Enum.find(tables, fn t -> t.oid == sequence.table_oid end)
-      column = table && Enum.find(table.columns, fn c -> c.attnum == sequence.sort_column_attnum end)
 
-      case {table, column} do
-        {nil, _} ->
+      case table do
+        nil ->
           {:error, Error.not_found(entity: :table, params: %{oid: sequence.table_oid})}
 
-        {_, nil} ->
-          {:error, Error.not_found(entity: :column, params: %{attnum: sequence.sort_column_attnum})}
-
-        {table, column} ->
+        table ->
           sequence
           |> Sequence.changeset(%{
             table_schema: table.schema,
-            table_name: table.name,
-            sort_column_name: column.name
+            table_name: table.name
           })
           |> Repo.update()
       end

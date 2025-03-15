@@ -77,9 +77,7 @@ defmodule Sequin.DatabasesTest do
           postgres_database_id: db.id,
           table_oid: Character.table_oid(),
           table_schema: "wrong_schema",
-          table_name: "wrong_table",
-          sort_column_attnum: Character.column_attnum("id"),
-          sort_column_name: "wrong_column"
+          table_name: "wrong_table"
         )
 
       assert {:ok, _updated_db} = Databases.update_tables(db)
@@ -88,8 +86,6 @@ defmodule Sequin.DatabasesTest do
       assert updated_sequence.table_oid == Character.table_oid()
       assert updated_sequence.table_schema == "public"
       assert updated_sequence.table_name == "Characters"
-      assert updated_sequence.sort_column_attnum == Character.column_attnum("id")
-      assert updated_sequence.sort_column_name == "id"
     end
   end
 

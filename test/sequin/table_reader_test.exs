@@ -213,6 +213,30 @@ defmodule Sequin.TableReaderTest do
       assert next_cursor[table.sort_column_attnum] == char3.updated_at
     end
 
+    test "works with nil sort column", %{
+      db: db,
+      characters_table: table,
+      character_consumer: consumer
+    } do
+      # Create a table with nil sort_column_attnum
+      table_with_nil_sort = %{table | sort_column_attnum: nil}
+
+      now = NaiveDateTime.utc_now()
+      CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -3, :second))
+      CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -2, :second))
+      CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -1, :second))
+
+      {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table_with_nil_sort)
+
+      {:ok, %{messages: messages, next_cursor: next_cursor}} =
+        TableReader.fetch_batch(db, consumer, table_with_nil_sort, initial_cursor, include_min: true)
+
+      assert length(messages) == 3
+
+      # Verify next cursor only contains primary key columns
+      refute Map.has_key?(next_cursor, table.sort_column_attnum)
+    end
+
     test "correctly handles nil and populated UUID, UUID[] and bytea fields", %{
       db: db,
       characters_detailed_table: table,
@@ -338,6 +362,29 @@ defmodule Sequin.TableReaderTest do
       assert length(primary_keys) == 2
       assert primary_keys == [[to_string(char2.id)], [to_string(char3.id)]]
       assert next_cursor[table.sort_column_attnum] == char3.updated_at
+    end
+
+    test "works with nil sort column", %{
+      db: db,
+      characters_table: table
+    } do
+      # Create a table with nil sort_column_attnum
+      table_with_nil_sort = %{table | sort_column_attnum: nil}
+
+      CharacterFactory.insert_character!()
+      CharacterFactory.insert_character!()
+      CharacterFactory.insert_character!()
+
+      {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table_with_nil_sort)
+
+      # Fetch primary keys
+      {:ok, %{pks: primary_keys, next_cursor: next_cursor}} =
+        TableReader.fetch_batch_pks(db, table_with_nil_sort, initial_cursor, include_min: true)
+
+      assert length(primary_keys) == 3
+
+      # Verify next cursor only contains primary key columns
+      refute Map.has_key?(next_cursor, table.sort_column_attnum)
     end
 
     test "fetches primary keys for multi PK table", %{

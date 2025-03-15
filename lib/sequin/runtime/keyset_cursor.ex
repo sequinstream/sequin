@@ -18,7 +18,13 @@ defmodule Sequin.Runtime.KeysetCursor do
   end
 
   @spec cursor_columns(Table.t()) :: [Table.Column.t()]
-  def cursor_columns(%Table{sort_column_attnum: sort_column_attnum} = table) when not is_nil(sort_column_attnum) do
+  def cursor_columns(%Table{sort_column_attnum: nil} = table) do
+    # When sort_column_attnum is nil, just use primary keys in order of attnum
+    table.columns |> Enum.filter(& &1.is_pk?) |> Enum.sort_by(& &1.attnum)
+  end
+
+  @spec cursor_columns(Table.t()) :: [Table.Column.t()]
+  def cursor_columns(%Table{sort_column_attnum: sort_column_attnum} = table) do
     sort_column = Sequin.Enum.find!(table.columns, fn column -> column.attnum == sort_column_attnum end)
     sorted_pks = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.sort_by(& &1.attnum)
 
@@ -32,6 +38,16 @@ defmodule Sequin.Runtime.KeysetCursor do
   @doc """
   Given a table and a minimum sort column value, return a cursor with the minimum values for all columns
   """
+  @spec min_cursor(%Table{}, any()) :: map()
+  def min_cursor(%Table{sort_column_attnum: nil} = table, nil) do
+    # When there's no sort column, we just use minimum values for all primary keys
+    pk_columns = cursor_columns(table)
+
+    Map.new(pk_columns, fn column ->
+      {column.attnum, min_for_type(column.type)}
+    end)
+  end
+
   @spec min_cursor(%Table{}, any()) :: map()
   def min_cursor(%Table{} = table, sort_col_value) do
     [sort_column | pk_columns] = cursor_columns(table)
@@ -47,6 +63,12 @@ defmodule Sequin.Runtime.KeysetCursor do
   @doc """
   Given a table, return a cursor with the minimum values for all columns
   """
+
+  def min_cursor(%Table{sort_column_attnum: nil} = table) do
+    # When there's no sort column, we just use minimum values for all primary keys
+    min_cursor(table, nil)
+  end
+
   def min_cursor(%Table{} = table) do
     [sort_column | _pk_columns] = cursor_columns(table)
     sort_col_value = min_for_type(sort_column.type)

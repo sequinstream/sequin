@@ -131,3 +131,18 @@ export function formatNumberWithCommas(number: number | null): string {
   }
   return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
+
+/**
+ * Conditionally applies a style class based on a condition
+ * @param condition Boolean condition to evaluate
+ * @param trueClass Class to apply if condition is true
+ * @param falseClass Optional class to apply if condition is false
+ * @returns The class to apply based on the condition
+ */
+export function conditionalClass(
+  condition: boolean,
+  trueClass: string,
+  falseClass: string = "",
+): string {
+  return condition ? trueClass : falseClass;
+}

@@ -4,6 +4,7 @@ defmodule Sequin.Runtime.TableReaderServer do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
@@ -968,13 +969,12 @@ defmodule Sequin.Runtime.TableReaderServer do
   defp table_oid(%{sequence: %Sequence{table_oid: table_oid}}), do: table_oid
   defp table_oid(%{source_tables: [source_table | _]}), do: source_table.table_oid
 
-  defp sort_column_attnum(%{sequence: %Sequence{sort_column_attnum: sort_column_attnum}}), do: sort_column_attnum
-  defp sort_column_attnum(%{source_tables: [source_table | _]}), do: source_table.sort_column_attnum
-
   defp table(%State{} = state) do
     database = database(state)
+    %{backfill: %Backfill{} = backfill} = state
+
     db_table = Sequin.Enum.find!(database.tables, &(&1.oid == state.table_oid))
-    %{db_table | sort_column_attnum: sort_column_attnum(state.consumer)}
+    %{db_table | sort_column_attnum: backfill.sort_column_attnum}
   end
 
   defp push_messages_with_retry(

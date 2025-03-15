@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CheckCircle2, HelpCircle, XCircle, RotateCw } from "lucide-svelte";
+  import { CheckCircle2, HelpCircle, XCircle, Loader2 } from "lucide-svelte";
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatNumberWithCommas } from "../utils";
@@ -16,7 +16,7 @@
     GcpPubsubConsumer,
     NatsConsumer,
     RabbitMqConsumer,
-  } from "../types/consumer";
+  } from "./types";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
   import RedisSinkCard from "../sinks/redis/RedisSinkCard.svelte";
@@ -28,6 +28,9 @@
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
+  import BackfillForm from "../components/BackfillForm.svelte";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import { Button } from "$lib/components/ui/button";
 
   export let live;
   export let parent;
@@ -117,6 +120,15 @@
   let hovered_messages_processed_throughput: number | null = null;
   let hovered_messages_processed_bytes: number | null = null;
   let hoveredXValue: number | null = null;
+
+  let showBackfillDialog = false;
+  let backfillForm = {
+    startPosition: "beginning" as "beginning" | "specific",
+    sortColumnAttnum: null,
+    initialSortColumnValue: null,
+  };
+  let backfillFormErrors: Record<string, string> = {};
+  let isSubmittingBackfill = false;
 
   onMount(() => {
     // Initial chart creation
@@ -703,6 +715,59 @@
       unit: units[unitIndex],
     };
   }
+
+  // Function to handle backfill form submission
+  function handleBackfillSubmit() {
+    isSubmittingBackfill = true;
+    let position;
+
+    if (backfillForm.startPosition === "beginning") {
+      position = null;
+    } else {
+      if (
+        backfillForm.sortColumnAttnum &&
+        backfillForm.initialSortColumnValue
+      ) {
+        // If it's a timestamp and the value is a Date object, convert to ISO string
+        if (
+          typeof backfillForm.initialSortColumnValue === "object" &&
+          backfillForm.initialSortColumnValue instanceof Date
+        ) {
+          position = backfillForm.initialSortColumnValue.toISOString();
+        } else {
+          position = backfillForm.initialSortColumnValue;
+        }
+      } else {
+        // Handle validation error
+        backfillFormErrors = {
+          initialSortColumnValue: "Please select a valid position value",
+        };
+        isSubmittingBackfill = false;
+        return;
+      }
+    }
+
+    showBackfillDialog = false;
+
+    live.pushEventTo("#" + parent, "run-backfill", backfillForm, (reply) => {
+      isSubmittingBackfill = false;
+      if (!reply.ok) {
+        // Handle error
+        backfillFormErrors = reply.errors || {};
+      }
+    });
+  }
+
+  function openBackfillDialog() {
+    // Reset form state
+    backfillForm = {
+      startPosition: "beginning",
+      sortColumnAttnum: null,
+      initialSortColumnValue: null,
+    };
+    backfillFormErrors = {};
+    showBackfillDialog = true;
+  }
 </script>
 
 <div class="flex flex-col flex-1">
@@ -923,14 +988,7 @@
 
       <Backfill
         {cursor_position}
-        onRun={(newCursorPosition, callback) => {
-          live.pushEventTo(
-            "#" + parent,
-            "run-backfill",
-            { new_cursor_position: newCursorPosition },
-            (reply) => callback(reply),
-          );
-        }}
+        onRun={() => openBackfillDialog()}
         onCancel={(callback) => {
           live.pushEventTo("#" + parent, "cancel-backfill", {}, (reply) =>
             callback(reply),
@@ -960,3 +1018,39 @@
     </div>
   </div>
 </div>
+
+<Dialog.Root bind:open={showBackfillDialog}>
+  <Dialog.Content class="md:max-w-4xl overflow-visible">
+    <Dialog.Header>
+      <Dialog.Title>Start backfill</Dialog.Title>
+      <Dialog.Description>
+        Choose where you want to start the backfill from.
+      </Dialog.Description>
+    </Dialog.Header>
+    <div class="grid gap-4 py-4">
+      {#if consumer.table}
+        <BackfillForm
+          table={consumer.table}
+          form={backfillForm}
+          formErrors={backfillFormErrors}
+        />
+      {:else}
+        <p class="text-sm text-muted-foreground">
+          Table information is not available.
+        </p>
+      {/if}
+    </div>
+    <Dialog.Footer>
+      <Button
+        type="submit"
+        on:click={handleBackfillSubmit}
+        disabled={isSubmittingBackfill}
+      >
+        {#if isSubmittingBackfill}
+          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+        {/if}
+        Start Backfill
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>

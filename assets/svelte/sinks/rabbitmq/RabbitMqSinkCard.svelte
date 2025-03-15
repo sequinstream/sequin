@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Card, CardContent } from "$lib/components/ui/card";
-  import type { RabbitMqConsumer } from "../../types/consumer";
+  import type { RabbitMqConsumer } from "../../consumers/types";
 
   export let consumer: RabbitMqConsumer;
 </script>

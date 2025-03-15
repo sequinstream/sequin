@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Card, CardContent } from "$lib/components/ui/card";
-  import type { NatsConsumer } from "../../types/consumer";
+  import type { NatsConsumer } from "../../consumers/types";
 
   export let consumer: NatsConsumer;
 </script>

@@ -47,7 +47,6 @@ databases:
     tables:                     # Optional, list of tables to track
       - table_name: "users"     # Required
         table_schema: "public"  # Default: public
-        sort_column_name: "updated_at" # Required
 ```
 
 ### HTTP endpoint configuration
@@ -274,7 +273,6 @@ databases:
     publication_name: "sequin_pub"
     tables:
       - table_name: "users"
-        sort_column_name: "updated_at"
 
 http_endpoints:
   - name: "webhook-endpoint"

@@ -438,26 +438,25 @@ defmodule SequinWeb.Components.ConsumerForm do
         "name" => form["name"],
         "postgres_database_id" => form["postgresDatabaseId"],
         "table_oid" => form["tableOid"],
-        "sort_column_attnum" => form["sortColumnAttnum"],
         "sequence_filter" => %{
           "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
           "actions" => form["sourceTableActions"],
           "group_column_attnums" => form["groupColumnAttnums"]
         },
         "batch_size" => form["batchSize"],
-        "initial_backfill" => decode_initial_backfill(form["initialBackfill"])
+        "initial_backfill" => decode_initial_backfill(form)
       }
 
     maybe_put_replication_slot_id(params, socket)
   end
 
-  defp decode_initial_backfill(nil), do: nil
-  defp decode_initial_backfill(%{"enabled" => false}), do: nil
+  defp decode_initial_backfill(%{"runInitialBackfill" => false}), do: nil
 
-  defp decode_initial_backfill(%{"enabled" => true} = backfill) do
+  defp decode_initial_backfill(%{"backfill" => backfill}) do
     %{
       "start_position" => backfill["startPosition"],
-      "initial_min_sort_col" => backfill["initialMinSortCol"]
+      "initial_min_sort_col" => backfill["initialSortColumnValue"],
+      "sort_column_attnum" => backfill["sortColumnAttnum"]
     }
   end
 
@@ -603,7 +602,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter),
       "sequence_id" => consumer.sequence_id,
       "sink" => encode_sink(consumer.sink),
-      "sort_column_attnum" => source_table && source_table.sort_column_attnum,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete],
       "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
       "status" => consumer.status,
@@ -750,43 +748,31 @@ defmodule SequinWeb.Components.ConsumerForm do
       "name" => database.name,
       "tables" =>
         database.tables
-        |> Enum.map(fn %PostgresDatabaseTable{} = table ->
-          sequence = Enum.find(database.sequences, &(&1.table_oid == table.oid))
-          default_group_columns = PostgresDatabaseTable.default_group_column_attnums(table)
+        |> Enum.map(&encode_table/1)
+        |> Enum.sort_by(&{&1["schema"], &1["name"]}, :asc)
+    }
+  end
 
-          sort_column =
-            cond do
-              not is_nil(sequence) -> Sequin.Enum.find!(table.columns, &(&1.attnum == sequence.sort_column_attnum))
-              Postgres.is_event_table?(table) -> Sequin.Enum.find!(table.columns, &(&1.name == "seq"))
-              true -> nil
-            end
+  defp encode_table(%PostgresDatabaseTable{} = table) do
+    default_group_columns = PostgresDatabaseTable.default_group_column_attnums(table)
 
-          %{
-            "oid" => table.oid,
-            "schema" => table.schema,
-            "name" => table.name,
-            "default_group_columns" => default_group_columns,
-            "is_event_table" => Postgres.is_event_table?(table),
-            "sort_column" =>
-              sort_column &&
-                %{
-                  "name" => sort_column.name,
-                  "type" => sort_column.type,
-                  "attnum" => sort_column.attnum
-                },
-            "columns" =>
-              Enum.map(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
-                %{
-                  "attnum" => column.attnum,
-                  "isPk?" => column.is_pk?,
-                  "name" => column.name,
-                  "type" => column.type,
-                  "filterType" => Postgres.pg_simple_type_to_filter_type(column.type)
-                }
-              end)
-          }
-        end)
-        |> Enum.sort_by(&{is_nil(&1["sort_column"]), &1["schema"], &1["name"]}, :asc)
+    %{
+      "oid" => table.oid,
+      "schema" => table.schema,
+      "name" => table.name,
+      "default_group_columns" => default_group_columns,
+      "is_event_table" => Postgres.is_event_table?(table),
+      "columns" => Enum.map(table.columns, &encode_column/1)
+    }
+  end
+
+  defp encode_column(%PostgresDatabaseTable.Column{} = column) do
+    %{
+      "attnum" => column.attnum,
+      "isPk?" => column.is_pk?,
+      "name" => column.name,
+      "type" => column.type,
+      "filterType" => Postgres.pg_simple_type_to_filter_type(column.type)
     }
   end
 
@@ -883,7 +869,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         socket.assigns.databases,
         params["postgres_database_id"],
         params["table_oid"],
-        params["sort_column_attnum"]
+        backfill_params["sort_column_attnum"]
       )
 
     initial_min_cursor =
@@ -900,18 +886,14 @@ defmodule SequinWeb.Components.ConsumerForm do
       "account_id" => consumer.account_id,
       "sink_consumer_id" => consumer.id,
       "initial_min_cursor" => initial_min_cursor,
+      "sort_column_attnum" => backfill_params["sort_column_attnum"],
       "state" => :active
     }
 
     Consumers.create_backfill(backfill_attrs)
   end
 
-  defp find_or_create_sequence(
-         account_id,
-         %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id} = params
-       ) do
-    sort_column_attnum = params["sort_column_attnum"]
-
+  defp find_or_create_sequence(account_id, %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id}) do
     case Databases.find_sequence_for_account(account_id, postgres_database_id: postgres_database_id, table_oid: table_oid) do
       {:ok, sequence} ->
         {:ok, sequence}
@@ -922,7 +904,6 @@ defmodule SequinWeb.Components.ConsumerForm do
         case Databases.create_sequence(account_id, %{
                name: Ecto.UUID.generate(),
                table_oid: table_oid,
-               sort_column_attnum: sort_column_attnum,
                postgres_database_id: postgres_database_id
              }) do
           {:ok, sequence} -> {:ok, sequence}

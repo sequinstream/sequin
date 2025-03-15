@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Card, CardContent } from "$lib/components/ui/card";
-  import type { KafkaConsumer } from "../../types/consumer";
+  import type { KafkaConsumer } from "../../consumers/types";
 
   export let consumer: KafkaConsumer;
 </script>

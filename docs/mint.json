@@ -70,7 +70,8 @@
         "compare",
         "running-sequin",
         "connect-postgres",
-        "performance"
+        "performance",
+        "plans"
       ]
     },
     {
@@ -141,7 +142,7 @@
         }
       ]
     },
-  
+
     {
       "group": "Database setup guides",
       "pages": [

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Card, CardContent } from "$lib/components/ui/card";
-  import type { AzureEventHubConsumer } from "../../types/consumer";
+  import type { AzureEventHubConsumer } from "../../consumers/types";
 
   export let consumer: AzureEventHubConsumer;
 </script>

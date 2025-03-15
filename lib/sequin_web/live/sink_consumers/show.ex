@@ -234,15 +234,22 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("run-backfill", %{"new_cursor_position" => new_cursor_position}, socket)
-      when is_nil(new_cursor_position) or is_binary(new_cursor_position) or is_integer(new_cursor_position) do
+  def handle_event(
+        "run-backfill",
+        %{
+          "startPosition" => start_position,
+          "sortColumnAttnum" => sort_column_attnum,
+          "initialSortColumnValue" => initial_sort_column_value
+        },
+        socket
+      ) do
     consumer = socket.assigns.consumer
     table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
-    table = %PostgresDatabaseTable{table | sort_column_attnum: consumer.sequence.sort_column_attnum}
+    table = %PostgresDatabaseTable{table | sort_column_attnum: sort_column_attnum}
 
     initial_min_cursor =
-      if new_cursor_position do
-        KeysetCursor.min_cursor(table, new_cursor_position)
+      if start_position == "specific" do
+        KeysetCursor.min_cursor(table, initial_sort_column_value)
       else
         KeysetCursor.min_cursor(table)
       end
@@ -251,6 +258,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       account_id: current_account_id(socket),
       sink_consumer_id: consumer.id,
       initial_min_cursor: initial_min_cursor,
+      sort_column_attnum: sort_column_attnum,
       state: :active
     }
 
@@ -588,6 +596,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp encode_consumer(%SinkConsumer{type: _} = consumer) do
+    table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
+
     %{
       id: consumer.id,
       name: consumer.name,
@@ -608,7 +618,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       health: encode_health(consumer),
       href: RouteHelpers.consumer_path(consumer),
       group_column_names: encode_group_column_names(consumer),
-      batch_size: consumer.batch_size
+      batch_size: consumer.batch_size,
+      table: encode_table(table)
     }
   end
 
@@ -768,6 +779,33 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     %{
       id: postgres_database.id,
       name: postgres_database.name
+    }
+  end
+
+  defp encode_table(nil) do
+    %{
+      oid: nil,
+      schema: nil,
+      name: nil,
+      columns: []
+    }
+  end
+
+  defp encode_table(%PostgresDatabaseTable{} = table) do
+    %{
+      oid: table.oid,
+      schema: table.schema,
+      name: table.name,
+      columns: Enum.map(table.columns, &encode_column/1)
+    }
+  end
+
+  defp encode_column(%PostgresDatabaseTable.Column{} = column) do
+    %{
+      attnum: column.attnum,
+      isPk?: column.is_pk?,
+      name: column.name,
+      type: column.type
     }
   end
 
@@ -978,13 +1016,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp encode_backfill(consumer, last_completed_backfill) do
-    sort_column_attnum = consumer.sequence.sort_column_attnum
     table = Enum.find(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-    column = if table, do: Enum.find(table.columns, &(&1.attnum == sort_column_attnum))
-    column_type = if column, do: column.type
 
     case consumer.active_backfill do
       %Backfill{state: :active} = backfill ->
+        column = if table, do: Enum.find(table.columns, &(&1.attnum == backfill.sort_column_attnum))
+        column_type = if column, do: column.type
+
         %{
           is_backfilling: true,
           cursor_type: column_type,
@@ -1009,6 +1047,12 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         }
 
       _ ->
+        column_type =
+          if table && last_completed_backfill do
+            column = Enum.find(table.columns, &(&1.attnum == last_completed_backfill.sort_column_attnum))
+            if column, do: column.type
+          end
+
         %{
           is_backfilling: false,
           cursor_type: column_type,

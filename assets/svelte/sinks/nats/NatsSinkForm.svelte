@@ -8,7 +8,7 @@
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import { EyeIcon, EyeOffIcon } from "lucide-svelte";
-  import type { NatsConsumer } from "$lib/types/consumer";
+  import type { NatsConsumer } from "$lib/consumers/types";
   import FormItem from "$lib/components/ui/form-item.svelte";
   import FormErrorMessage from "$lib/components/ui/form-error-message.svelte";
   import FormToggleVisibilityButton from "$lib/components/ui/form-toggle-visibility-button.svelte";

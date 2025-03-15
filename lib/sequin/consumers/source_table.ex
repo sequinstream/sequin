@@ -41,9 +41,7 @@ defmodule Sequin.Consumers.SourceTable do
   end
 
   def record_changeset(source_table, attrs) do
-    source_table
-    |> changeset(attrs)
-    |> validate_required([:sort_column_attnum])
+    changeset(source_table, attrs)
   end
 
   def event_changeset(source_table, attrs) do

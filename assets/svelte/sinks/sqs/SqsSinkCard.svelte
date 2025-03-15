@@ -2,7 +2,7 @@
   import { ExternalLink } from "lucide-svelte";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
-  import type { SqsConsumer } from "../../types/consumer";
+  import type { SqsConsumer } from "../../consumers/types";
 
   export let consumer: SqsConsumer;
 </script>

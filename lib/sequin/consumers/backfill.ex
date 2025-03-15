@@ -21,7 +21,8 @@ defmodule Sequin.Consumers.Backfill do
              :completed_at,
              :canceled_at,
              :inserted_at,
-             :updated_at
+             :updated_at,
+             :sort_column_attnum
            ]}
   typed_schema "backfills" do
     belongs_to :account, Account
@@ -38,6 +39,7 @@ defmodule Sequin.Consumers.Backfill do
     field :rows_ingested_count, :integer, default: 0
     field :completed_at, :utc_datetime_usec, read_after_writes: true
     field :canceled_at, :utc_datetime_usec, read_after_writes: true
+    field :sort_column_attnum, :integer
 
     timestamps()
   end
@@ -49,7 +51,8 @@ defmodule Sequin.Consumers.Backfill do
       :sink_consumer_id,
       :state,
       :rows_initial_count,
-      :initial_min_cursor
+      :initial_min_cursor,
+      :sort_column_attnum
     ])
     |> validate_required([:account_id, :sink_consumer_id, :state, :initial_min_cursor])
     |> foreign_key_constraint(:sink_consumer_id)

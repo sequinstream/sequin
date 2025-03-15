@@ -24,7 +24,7 @@ defmodule Sequin.Runtime.InitBackfillStatsWorker do
       table =
         database.tables
         |> Sequin.Enum.find!(&(&1.oid == backfill.sink_consumer.sequence.table_oid))
-        |> Map.put(:sort_column_attnum, backfill.sink_consumer.sequence.sort_column_attnum)
+        |> Map.put(:sort_column_attnum, backfill.sort_column_attnum)
 
       case TableReader.fast_count_estimate(database, table, backfill.initial_min_cursor, timeout: :infinity) do
         {:ok, count} ->

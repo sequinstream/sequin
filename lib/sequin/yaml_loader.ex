@@ -430,7 +430,7 @@ defmodule Sequin.YamlLoader do
   end
 
   defp sort_column_attnum_for_sequence(_, %{}) do
-    {:error, Error.bad_request(message: "`sort_column_name` is required for each stream")}
+    {:ok, nil}
   end
 
   ##############################

@@ -54,6 +54,16 @@ defmodule Sequin.Runtime.Supervisor do
     SlotSupervisor.stop_stores_and_pipeline(replication_slot_id, id)
   end
 
+  def maybe_start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
+    consumer = Repo.preload(consumer, [:active_backfill, :sequence])
+
+    if is_nil(consumer.active_backfill) do
+      :ok
+    else
+      start_table_reader(supervisor, consumer, opts)
+    end
+  end
+
   def start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
     consumer = Repo.preload(consumer, [:active_backfill, :sequence])
 

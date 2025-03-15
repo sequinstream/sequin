@@ -7,7 +7,7 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
-  import type { AzureEventHubConsumer } from "$lib/types/consumer";
+  import type { AzureEventHubConsumer } from "$lib/consumers/types";
   import FormItem from "$lib/components/ui/form-item.svelte";
   import FormErrorMessage from "$lib/components/ui/form-error-message.svelte";
   import FormToggleVisibilityButton from "$lib/components/ui/form-toggle-visibility-button.svelte";

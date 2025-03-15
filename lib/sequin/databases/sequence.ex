@@ -40,7 +40,6 @@ defmodule Sequin.Databases.Sequence do
     |> validate_required([
       :name,
       :table_oid,
-      :sort_column_attnum,
       :postgres_database_id
     ])
     |> unique_constraint([:account_id, :name], error_key: :name)

@@ -43,28 +43,8 @@
     AccordionItem,
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
-
-  type Column = {
-    attnum: number;
-    isPk?: boolean;
-    name: string;
-    type: string;
-    filterType: string;
-  };
-
-  type Table = {
-    oid: number;
-    schema: string;
-    name: string;
-    default_group_columns: number[];
-    is_event_table: boolean;
-    sort_column?: {
-      name: string;
-      type: string;
-      attnum: number;
-    };
-    columns: Column[];
-  };
+  import type { Table } from "$lib/databases/types";
+  import BackfillForm from "$lib/components/BackfillForm.svelte";
 
   type Database = {
     id: string;
@@ -81,6 +61,7 @@
   export let errors: {
     consumer: Record<string, string>;
     sequence: Record<string, string>;
+    backfill: Record<string, string>;
   };
   export let isSelfHosted: boolean;
 
@@ -90,7 +71,6 @@
     maxMemoryMb: consumer.max_memory_mb || 1024,
     postgresDatabaseId: consumer.postgres_database_id,
     tableOid: consumer.table_oid,
-    sortColumnAttnum: null,
     sourceTableFilters: consumer.source_table_filters || [],
     sourceTableActions: consumer.source_table_actions || [],
     name: consumer.name || "",
@@ -98,10 +78,11 @@
     maxAckPending: consumer.max_ack_pending || 10000,
     maxWaiting: consumer.max_waiting || 20,
     sink: consumer.sink,
-    initialBackfill: {
-      enabled: false,
-      startPosition: "beginning",
-      initialMinSortCol: null,
+    runInitialBackfill: false,
+    backfill: {
+      startPosition: "beginning" as "beginning" | "specific",
+      sortColumnAttnum: null,
+      initialSortColumnValue: null,
     },
     groupColumnAttnums: consumer.group_column_attnums || [],
     batchSize: consumer.batch_size || 1,
@@ -111,7 +92,6 @@
   let lastPushedFormJSON = null;
   let isDirty = false;
   let isSubmitting = false;
-  let sortColumnName = null;
 
   type TestConnectionState = {
     status: "initial" | "loading" | "success" | "error";
@@ -198,23 +178,14 @@
 
   $: {
     if (!enableBackfill) {
-      form.initialBackfill = {
-        enabled: false,
+      form.runInitialBackfill = false;
+      form.backfill = {
         startPosition: "beginning",
-        initialMinSortCol: null,
+        sortColumnAttnum: null,
+        initialSortColumnValue: null,
       };
-    } else if (startPosition === "beginning") {
-      form.initialBackfill = {
-        enabled: true,
-        startPosition: "beginning",
-        initialMinSortCol: null,
-      };
-    } else if (startPosition === "specific") {
-      form.initialBackfill = {
-        enabled: true,
-        startPosition: "specific",
-        initialMinSortCol: form.initialBackfill.initialMinSortCol,
-      };
+    } else {
+      form.runInitialBackfill = true;
     }
 
     if (form.postgresDatabaseId) {
@@ -230,25 +201,6 @@
     }
 
     if (selectedTable) {
-      form.sortColumnAttnum =
-        selectedTable.sort_column?.attnum || form.sortColumnAttnum;
-
-      if (!form.sortColumnAttnum) {
-        // Look for a matching column name in the default list, in order
-        let sortColumnName = defaultSortColumnNames.find((name) =>
-          selectedTable.columns.find((column) => column.name === name),
-        );
-        if (sortColumnName) {
-          form.sortColumnAttnum = selectedTable.columns.find(
-            (column) => column.name === sortColumnName,
-          )?.attnum;
-        }
-      }
-
-      sortColumnName = selectedTable.columns.find(
-        (column) => column.attnum === form.sortColumnAttnum,
-      )?.name;
-
       // Force message kind to "record" for event tables
       if (selectedTable.is_event_table) {
         form.messageKind = "record";
@@ -273,7 +225,6 @@
 
   function handleTableSelect(event: { databaseId: string; tableOid: number }) {
     if (form.tableOid !== event.tableOid) {
-      form.sortColumnAttnum = null;
       form.groupColumnAttnums = [];
       form.messageKind = "event";
     }
@@ -427,7 +378,6 @@
               {pushEvent}
               selectedDatabaseId={form.postgresDatabaseId}
               selectedTableOid={form.tableOid}
-              showSortColumn={true}
             />
 
             {#if errors.consumer.postgres_database_id}
@@ -440,50 +390,6 @@
               <p class="text-destructive text-sm">
                 {errors.consumer.table_oid}
               </p>
-            {/if}
-
-            {#if selectedTable && selectedTable.sort_column === null}
-              <div class="space-y-2">
-                <Label for="sort_column_attnum">Sort and start</Label>
-                <p class="text-sm text-muted-foreground mt-1 mb-2">
-                  Select a sort column for the table to use during backfills. A
-                  good example of a sort column is <code>updated_at</code>.
-                  <a
-                    href="https://sequinstream.com/docs/reference/backfills#backfill-ordering"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center text-link hover:underline"
-                  >
-                    Learn more
-                    <ExternalLinkIcon class="w-3 h-3 ml-1" />
-                  </a>
-                </p>
-                <Select
-                  selected={{
-                    value: form.sortColumnAttnum,
-                    label: sortColumnName || "Select a sort column",
-                  }}
-                  onSelectedChange={(event) => {
-                    form.sortColumnAttnum = event.value;
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a sort column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {#each selectedTable.columns as column}
-                      <SelectItem value={column.attnum}
-                        >{column.name}</SelectItem
-                      >
-                    {/each}
-                  </SelectContent>
-                </Select>
-                {#if errors.sequence.sort_column_attnum}
-                  <p class="text-destructive text-sm">
-                    {errors.sequence.sort_column_attnum}
-                  </p>
-                {/if}
-              </div>
             {/if}
           {/if}
           {#if selectedTable}
@@ -606,62 +512,21 @@
         </CardHeader>
         <CardContent>
           <div class="space-y-2">
-            <div class="text-sm text-muted-foreground">
-              {#if !enableBackfill}
+            {#if !enableBackfill}
+              <p class="text-sm text-muted-foreground">
                 No initial backfill. You can run backfills at any time in the
                 future.
-              {/if}
-            </div>
-
-            {#if enableBackfill}
-              <RadioGroup
-                bind:value={startPosition}
-                disabled={isEditMode || !selectedTable}
-              >
-                <div class="flex items-center space-x-2">
-                  <RadioGroupItem value="beginning" id="beginning" />
-                  <Label for="beginning">From the beginning</Label>
-                </div>
-                <div class="flex items-center space-x-2">
-                  <RadioGroupItem value="specific" id="specific" />
-                  <Label for="specific">From a specific point</Label>
-                </div>
-              </RadioGroup>
-
-              {#if startPosition === "specific"}
-                <div
-                  class="grid grid-cols-[auto_1fr] gap-4 content-center mt-4"
-                >
-                  <div class="flex items-center space-x-2 text-sm font-mono">
-                    <span class="bg-secondary-2xSubtle px-2 py-1 rounded"
-                      >{selectedTable?.sort_column?.name}</span
-                    >
-                    <span class="bg-secondary-2xSubtle px-2 py-1 rounded"
-                      >&gt;=</span
-                    >
-                  </div>
-
-                  {#if selectedTable?.sort_column?.type.startsWith("timestamp")}
-                    <Datetime
-                      bind:value={form.initialBackfill.initialMinSortCol}
-                      bind:error={minSortColError}
-                    />
-                    {#if minSortColError}
-                      <p class="text-sm text-red-500 mt-2">{minSortColError}</p>
-                    {/if}
-                  {:else if ["integer", "bigint", "smallint", "serial"].includes(selectedTable?.sort_column?.type)}
-                    <Input
-                      type="number"
-                      bind:value={form.initialBackfill.initialMinSortCol}
-                    />
-                  {:else}
-                    <Input
-                      type="text"
-                      bind:value={form.initialBackfill.initialMinSortCol}
-                    />
-                  {/if}
-                </div>
-              {/if}
+              </p>
+            {:else if !selectedTable}
+              <p class="text-sm text-muted-foreground">
+                Please select a table first.
+              </p>
+            {:else}
+              <BackfillForm
+                table={selectedTable}
+                form={form.backfill}
+                formErrors={errors.backfill}
+              />
             {/if}
           </div>
         </CardContent>

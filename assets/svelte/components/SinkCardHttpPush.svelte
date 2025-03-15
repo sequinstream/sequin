@@ -3,7 +3,7 @@
   import { Card, CardContent } from "$lib/components/ui/card";
   import { concatenateUrl } from "../databases/utils";
   import { Button } from "$lib/components/ui/button";
-  import type { HttpPushConsumer } from "../types/consumer";
+  import type { HttpPushConsumer } from "../consumers/types";
 
   export let consumer: HttpPushConsumer;
 

@@ -1,3 +1,5 @@
+import type { Table } from "../databases/types";
+
 // Base consumer type with shared properties
 export type BaseConsumer = {
   id: string;
@@ -12,7 +14,7 @@ export type BaseConsumer = {
     | "rabbitmq";
   name: string;
   annotations: Record<string, boolean>;
-  status: string;
+  status: "active" | "paused" | "disabled";
   message_kind: string;
   ack_wait_ms: number;
   max_ack_pending: number;
@@ -31,6 +33,7 @@ export type BaseConsumer = {
       jsonb_path: string;
     }>;
   };
+  table: Table;
   postgres_database: {
     id: string;
     name: string;

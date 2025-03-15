@@ -39,6 +39,19 @@ defmodule Sequin.Runtime.KeysetCursorTest do
 
       assert result == ~s{("id1", "id2") > (?, ?)}
     end
+
+    test "handles nil sort column by using only primary keys" do
+      table =
+        create_test_table_with_nil_sort_column([
+          {"id1", "bigint", 2, true},
+          {"id2", "uuid", 3, true},
+          {"updated_at", "timestamp", 1, false}
+        ])
+
+      result = KeysetCursor.where_sql(table, ">")
+
+      assert result == ~s{("id1", "id2") > (?, ?)}
+    end
   end
 
   describe "order_by_sql/2" do
@@ -67,6 +80,19 @@ defmodule Sequin.Runtime.KeysetCursorTest do
 
       assert result == ~s("id1" asc, "id2" asc)
     end
+
+    test "handles nil sort column by using only primary keys" do
+      table =
+        create_test_table_with_nil_sort_column([
+          {"id1", "bigint", 2, true},
+          {"id2", "uuid", 3, true},
+          {"updated_at", "timestamp", 1, false}
+        ])
+
+      result = KeysetCursor.order_by_sql(table)
+
+      assert result == ~s("id1" asc, "id2" asc)
+    end
   end
 
   describe "casted_cursor_values/2" do
@@ -83,6 +109,26 @@ defmodule Sequin.Runtime.KeysetCursorTest do
 
       assert result == [
                ~N[2023-01-01 00:00:00],
+               123,
+               Sequin.String.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")
+             ]
+    end
+
+    test "works with nil sort column" do
+      table =
+        create_test_table_with_nil_sort_column([
+          {"id1", "bigint", 2, true},
+          {"id2", "uuid", 3, true}
+        ])
+
+      cursor = %{
+        2 => 123,
+        3 => "550e8400-e29b-41d4-a716-446655440000"
+      }
+
+      result = KeysetCursor.casted_cursor_values(table, cursor)
+
+      assert result == [
                123,
                Sequin.String.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")
              ]
@@ -137,6 +183,21 @@ defmodule Sequin.Runtime.KeysetCursorTest do
                3 => ""
              }
     end
+
+    test "handles nil sort column" do
+      table =
+        create_test_table_with_nil_sort_column([
+          {"id1", "bigint", 2, true},
+          {"id2", "uuid", 3, true}
+        ])
+
+      result = KeysetCursor.min_cursor(table)
+
+      assert result == %{
+               2 => 0,
+               3 => "00000000-0000-0000-0000-000000000000"
+             }
+    end
   end
 
   describe "min_cursor/2" do
@@ -147,6 +208,22 @@ defmodule Sequin.Runtime.KeysetCursorTest do
 
       assert result == %{
                1 => ~N[2023-01-01 00:00:00],
+               2 => 0,
+               3 => "00000000-0000-0000-0000-000000000000"
+             }
+    end
+
+    test "ignores sort column value when sort column is nil" do
+      table =
+        create_test_table_with_nil_sort_column([
+          {"id1", "bigint", 2, true},
+          {"id2", "uuid", 3, true}
+        ])
+
+      min_sort_value = ~N[2023-01-01 00:00:00]
+      result = KeysetCursor.min_cursor(table, min_sort_value)
+
+      assert result == %{
                2 => 0,
                3 => "00000000-0000-0000-0000-000000000000"
              }
@@ -189,6 +266,27 @@ defmodule Sequin.Runtime.KeysetCursorTest do
                3 => nil
              }
     end
+
+    test "handles nil sort column" do
+      table =
+        create_test_table_with_nil_sort_column([
+          {"id1", "bigint", 2, true},
+          {"id2", "uuid", 3, true}
+        ])
+
+      row = %{
+        "updated_at" => ~N[2023-01-01 00:00:00],
+        "id1" => 123,
+        "id2" => "550e8400-e29b-41d4-a716-446655440000"
+      }
+
+      result = KeysetCursor.cursor_from_row(table, row)
+
+      assert result == %{
+               2 => 123,
+               3 => "550e8400-e29b-41d4-a716-446655440000"
+             }
+    end
   end
 
   defp create_test_table(
@@ -209,5 +307,21 @@ defmodule Sequin.Runtime.KeysetCursorTest do
       end)
 
     DatabasesFactory.table(%{columns: columns, sort_column_attnum: @sort_column_attnum})
+  end
+
+  defp create_test_table_with_nil_sort_column(
+         columns \\ [{"id1", "bigint", 2, true}, {"id2", "uuid", 3, true}, {"updated_at", "timestamp", 1, false}]
+       ) do
+    columns =
+      Enum.map(columns, fn {name, type, attnum, is_pk?} ->
+        DatabasesFactory.column(%{
+          name: name,
+          type: type,
+          attnum: attnum,
+          is_pk?: is_pk?
+        })
+      end)
+
+    DatabasesFactory.table(%{columns: columns, sort_column_attnum: nil})
   end
 end

@@ -878,6 +878,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert delete_change.action == :delete
     end
 
+    @tag capture_log: true
     test "messages are processed exactly once, even after crash and reboot" do
       test_pid = self()
 

@@ -35,7 +35,7 @@ config :sentry,
 config :sequin, Oban,
   prefix: sequin_config_schema,
   queues: [
-    default: 10,
+    default: 20,
     health_checks: 20
   ],
   repo: Sequin.Repo,

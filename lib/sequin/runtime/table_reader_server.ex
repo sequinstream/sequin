@@ -308,7 +308,18 @@ defmodule Sequin.Runtime.TableReaderServer do
     :syn.join(:consumers, {:table_reader_batches_changed, consumer.id}, self())
 
     cursor = TableReader.cursor(backfill.id)
-    cursor = cursor || backfill.initial_min_cursor
+
+    cursor =
+      if cursor do
+        Logger.info("[TableReaderServer] Found cursor for backfill #{backfill.id}", cursor: cursor)
+        cursor
+      else
+        Logger.info("[TableReaderServer] No cursor found for backfill #{backfill.id}. Using initial min cursor.",
+          cursor: backfill.initial_min_cursor
+        )
+
+        backfill.initial_min_cursor
+      end
 
     state = %{
       state
@@ -410,7 +421,11 @@ defmodule Sequin.Runtime.TableReaderServer do
         if state.unflushed_batches == [] and state.flushed_batches == [] do
           Consumers.table_reader_finished(state.consumer.id)
           TableReader.delete_cursor(state.consumer.active_backfill.id)
-          Logger.info("[TableReaderServer] ID fetch returned no records. No batches to flush. Table pagination complete.")
+
+          Logger.info("[TableReaderServer] ID fetch returned no records. No batches to flush. Table pagination complete.",
+            cursor: state.cursor
+          )
+
           {:stop, :normal}
         else
           Logger.info("[TableReaderServer] ID fetch returned no records. Table pagination complete. Awaiting flush.")

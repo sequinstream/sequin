@@ -120,6 +120,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :low_watermark_wal_cursor, Replication.wal_cursor()
       field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
       field :last_flushed_wal_cursor, Replication.wal_cursor()
+      field :last_lsn_acked_at, DateTime.t() | nil
 
       # Buffers
       field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
@@ -421,51 +422,35 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   # The server is not asking for a reply
-  def handle_data(<<?k, _wal_end::64, _clock::64, 0>>, %State{} = state) do
-    # Because these are <14 Postgres databases, they will not receive heartbeat messages
-    # temporarily mark them as healthy if we receive a keepalive message
-    if state.id in @slots_ids_with_old_postgres do
-      Health.put_event(
-        state.replication_slot,
-        %Health.Event{slug: :replication_heartbeat_received, status: :success}
-      )
-    end
+  def handle_data(<<?k, wal_end::64, _clock::64, 0>>, %State{} = state) do
+    execute_timed(:handle_data_keepalive, fn ->
+      # Because these are <14 Postgres databases, they will not receive heartbeat messages
+      # temporarily mark them as healthy if we receive a keepalive message
+      if state.id in @slots_ids_with_old_postgres do
+        Health.put_event(
+          state.replication_slot,
+          %Health.Event{slug: :replication_heartbeat_received, status: :success}
+        )
+      end
 
-    {:keep_state, state}
+      # Check if we should send an ack even though not requested
+      if should_send_ack?(state) do
+        commit_lsn = get_commit_lsn(state, wal_end)
+        reply = ack_message(commit_lsn)
+        state = %{state | last_lsn_acked_at: Sequin.utc_now()}
+        {:keep_state_and_ack, reply, state}
+      else
+        {:keep_state, state}
+      end
+    end)
   end
 
   # The server is asking for a reply
   def handle_data(<<?k, wal_end::64, _clock::64, 1>>, %State{} = state) do
     execute_timed(:handle_data_keepalive, fn ->
-      commit_lsn =
-        if is_nil(state.last_commit_lsn) do
-          # If we don't have a last_commit_lsn, we're still processing the first xaction
-          # we received on boot. This can happen if we're processing a very large xaction.
-          # It is therefore safe to send an ack with the last LSN we processed.
-          {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
-
-          if low_watermark.commit_lsn > wal_end do
-            Logger.warning("Server LSN #{wal_end} is behind our LSN #{low_watermark.commit_lsn}")
-          end
-
-          low_watermark.commit_lsn
-        else
-          # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
-          # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
-          wal_cursor = state.safe_wal_cursor_fn.(state)
-          Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
-
-          Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
-
-          if wal_cursor.commit_lsn > wal_end do
-            Logger.warning("Server LSN #{wal_end} is behind our LSN #{wal_cursor.commit_lsn}")
-          end
-
-          wal_cursor.commit_lsn
-        end
-
+      commit_lsn = get_commit_lsn(state, wal_end)
       reply = ack_message(commit_lsn)
-
+      state = %{state | last_lsn_acked_at: Sequin.utc_now()}
       {:keep_state_and_ack, reply, state}
     end)
   end
@@ -1731,5 +1716,45 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     incr_counter(:"#{name}_total_ms", time)
     incr_counter(:"#{name}_count")
     result
+  end
+
+  # Helper function to determine if we should send an ack
+  defp should_send_ack?(%State{last_lsn_acked_at: nil}), do: true
+
+  defp should_send_ack?(%State{last_lsn_acked_at: last_acked_at}) do
+    DateTime.diff(Sequin.utc_now(), last_acked_at, :second) > 60
+  end
+
+  # Encapsulate commit LSN logic
+  defp get_commit_lsn(%State{last_commit_lsn: nil} = state, wal_end) do
+    # If we don't have a last_commit_lsn, we're still processing the first xaction
+    # we received on boot. This can happen if we're processing a very large xaction.
+    # It is therefore safe to send an ack with the last LSN we processed.
+    {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
+
+    if low_watermark.commit_lsn > wal_end do
+      Logger.warning("Server LSN #{wal_end} is behind our LSN #{low_watermark.commit_lsn}")
+    end
+
+    Logger.info(
+      "Acking LSN #{inspect(low_watermark.commit_lsn)} (last_commit_lsn is nil) (current server LSN: #{wal_end})"
+    )
+
+    low_watermark.commit_lsn
+  end
+
+  defp get_commit_lsn(%State{} = state, wal_end) do
+    # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
+    # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
+    wal_cursor = state.safe_wal_cursor_fn.(state)
+    Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
+
+    Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
+
+    if wal_cursor.commit_lsn > wal_end do
+      Logger.warning("Server LSN #{wal_end} is behind our LSN #{wal_cursor.commit_lsn}")
+    end
+
+    wal_cursor.commit_lsn
   end
 end

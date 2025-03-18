@@ -88,7 +88,7 @@ defmodule Sequin.MixProject do
       {:amqp, "~> 4.0"},
       {:recon, "~> 2.5.6"},
       {:aws_signature, "~> 0.3.2"},
-      {:eredis_cluster, "~> 0.9"},
+      {:eredis_cluster, github: "Nordix/eredis_cluster", override: true},
       {:eredis, github: "acco/eredis", override: true},
       {:benchee, "~> 1.0", only: :dev},
       {:pgvector, "~> 0.3.0"},

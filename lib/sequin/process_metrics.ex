@@ -126,7 +126,7 @@ defmodule Sequin.ProcessMetrics do
 
       def handle_info(:start, state) do
         Process.send_after(self(), :process_logging, process_metrics_interval())
-        {:noreply, state}
+        Sequin.ProcessMetrics.no_reply(state)
       end
 
       # Add the handle_info callback for process_logging
@@ -143,8 +143,22 @@ defmodule Sequin.ProcessMetrics do
           tags: tags
         )
 
-        {:noreply, state}
+        Sequin.ProcessMetrics.no_reply(state)
       end
+    end
+  end
+
+  # Adds compatibility with GenStage processes
+  # GenStage processes use a special noreply format
+  def no_reply(state) do
+    {:dictionary, dictionary} = Process.info(self(), :dictionary)
+
+    case Keyword.fetch!(dictionary, :"$initial_call") do
+      {GenStage, :init, 1} ->
+        {:noreply, [], state}
+
+      _ ->
+        {:noreply, state}
     end
   end
 

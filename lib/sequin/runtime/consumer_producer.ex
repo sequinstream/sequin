@@ -4,12 +4,19 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   use GenStage
 
+  use Sequin.ProcessMetrics,
+    metric_prefix: "sequin.consumer_producer",
+    interval: :timer.seconds(30)
+
+  use Sequin.ProcessMetrics.Decorator
+
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
+  alias Sequin.ProcessMetrics
   alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SinkPipeline
@@ -42,12 +49,17 @@ defmodule Sequin.Runtime.ConsumerProducer do
       batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
       test_pid: test_pid,
       scheduled_handle_demand: false,
-      slot_message_store_mod: slot_message_store_mod,
-      last_logged_stats_at: nil
+      slot_message_store_mod: slot_message_store_mod
     }
 
+    # Add dynamic tags for metrics
+    ProcessMetrics.metadata(%{
+      consumer_id: consumer.id
+    })
+
+    ProcessMetrics.start()
+
     Process.send_after(self(), :init, 0)
-    schedule_process_logging(0)
 
     {:producer, state}
   end
@@ -110,145 +122,73 @@ defmodule Sequin.Runtime.ConsumerProducer do
     {:noreply, [], schedule_trim_idempotency(state)}
   end
 
-  @impl GenStage
-  def handle_info(:process_logging, state) do
-    now = System.monotonic_time(:millisecond)
-    interval_ms = if state.last_logged_stats_at, do: now - state.last_logged_stats_at
+  defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
+    {time, messages} = :timer.tc(fn -> produce_messages(state, demand) end, :millisecond)
+    more_upstream_messages? = length(messages) == demand
 
-    info =
-      Process.info(self(), [
-        :memory,
-        :message_queue_len
-      ])
-
-    metadata = [
-      memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
-      message_queue_len: info[:message_queue_len],
-      demand: state.demand
-    ]
-
-    # Get all timing metrics from process dictionary
-    timing_metrics =
-      Process.get()
-      |> Enum.filter(fn {key, _} ->
-        key |> to_string() |> String.ends_with?("_total_ms")
-      end)
-      |> Keyword.new()
-
-    # Log all timing metrics as histograms with operation tag
-    Enum.each(timing_metrics, fn {key, value} ->
-      operation = key |> to_string() |> String.replace("_total_ms", "")
-
-      Sequin.Statsd.histogram("sequin.consumer_producer.operation_time_ms", value,
-        tags: %{
-          consumer_id: state.consumer.id,
-          operation: operation
-        }
-      )
-    end)
-
-    unaccounted_ms =
-      if interval_ms do
-        # Calculate total accounted time
-        total_accounted_ms = Enum.reduce(timing_metrics, 0, fn {_key, value}, acc -> acc + value end)
-
-        # Calculate unaccounted time
-        max(0, interval_ms - total_accounted_ms)
-      end
-
-    if unaccounted_ms do
-      # Log unaccounted time with same metric but different operation tag
-      Sequin.Statsd.histogram("sequin.consumer_producer.operation_time_ms", unaccounted_ms,
-        tags: %{
-          consumer_id: state.consumer.id,
-          operation: "unaccounted"
-        }
+    if time > @min_log_time_ms do
+      Logger.warning(
+        "[ConsumerProducer] produce_messages took longer than expected",
+        count: length(messages),
+        demand: demand,
+        duration_ms: time
       )
     end
 
-    metadata =
-      metadata
-      |> Keyword.merge(timing_metrics)
-      |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
+    # Track message processing metrics
+    ProcessMetrics.increment_throughput("messages_produced", length(messages))
 
-    Logger.info("[ConsumerProducer] Process metrics", metadata)
+    # Cut this struct down as it will be passed to each process
+    # Processes already have the consumer in context, but this is for the acknowledger. When we
+    # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
+    bare_consumer =
+      Map.merge(state.consumer, %{
+        source_tables: [],
+        active_backfill: nil,
+        sequence: nil,
+        postgres_database: nil,
+        replication_slot: nil,
+        account: nil
+      })
 
-    # Clear timing metrics after logging
-    timing_metrics
-    |> Keyword.keys()
-    |> Enum.each(&clear_counter/1)
+    broadway_messages =
+      Enum.map(messages, fn message ->
+        %Message{
+          data: message,
+          acknowledger: {SinkPipeline, {bare_consumer, state.test_pid, state.slot_message_store_mod}, nil}
+        }
+      end)
 
-    schedule_process_logging()
-    {:noreply, [], %{state | last_logged_stats_at: now}}
-  end
+    new_demand = demand - length(broadway_messages)
+    new_demand = if new_demand < 0, do: 0, else: new_demand
+    state = %{state | demand: new_demand}
 
-  defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    execute_timed(:handle_receive_messages, fn ->
-      {time, messages} = :timer.tc(fn -> produce_messages(state, demand) end, :millisecond)
-      more_upstream_messages? = length(messages) == demand
-
-      if time > @min_log_time_ms do
-        Logger.warning(
-          "[ConsumerProducer] produce_messages took longer than expected",
-          count: length(messages),
-          demand: demand,
-          duration_ms: time
-        )
-      end
-
-      # Cut this struct down as it will be passed to each process
-      # Processes already have the consumer in context, but this is for the acknowledger. When we
-      # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
-      bare_consumer =
-        Map.merge(state.consumer, %{
-          source_tables: [],
-          active_backfill: nil,
-          sequence: nil,
-          postgres_database: nil,
-          replication_slot: nil,
-          account: nil
-        })
-
-      broadway_messages =
-        Enum.map(messages, fn message ->
-          %Message{
-            data: message,
-            acknowledger: {SinkPipeline, {bare_consumer, state.test_pid, state.slot_message_store_mod}, nil}
-          }
-        end)
-
-      new_demand = demand - length(broadway_messages)
-      new_demand = if new_demand < 0, do: 0, else: new_demand
-      state = %{state | demand: new_demand}
-
-      if new_demand > 0 and more_upstream_messages? do
-        {:noreply, broadway_messages, maybe_schedule_demand(state)}
-      else
-        {:noreply, broadway_messages, state}
-      end
-    end)
+    if new_demand > 0 and more_upstream_messages? do
+      {:noreply, broadway_messages, maybe_schedule_demand(state)}
+    else
+      {:noreply, broadway_messages, state}
+    end
   end
 
   defp handle_receive_messages(state) do
     {:noreply, [], state}
   end
 
+  @decorate track_metrics("produce_messages")
   defp produce_messages(state, count) do
-    execute_timed(:produce_messages, fn ->
-      consumer = state.consumer
+    consumer = state.consumer
 
-      case state.slot_message_store_mod.produce(consumer, count, self()) do
-        {:ok, messages} ->
-          unless messages == [] do
-            Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
-          end
+    case state.slot_message_store_mod.produce(consumer, count, self()) do
+      {:ok, messages} ->
+        unless messages == [] do
+          Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
+        end
 
-          messages
+        messages
 
-        {:error, _error} ->
-          []
-      end
-    end)
+      {:error, _error} ->
+        []
+    end
   end
 
   defp schedule_receive_messages(state) do
@@ -274,23 +214,4 @@ defmodule Sequin.Runtime.ConsumerProducer do
   end
 
   defp maybe_schedule_demand(state), do: state
-
-  defp schedule_process_logging(interval \\ :timer.seconds(30)) do
-    Process.send_after(self(), :process_logging, interval)
-  end
-
-  defp incr_counter(name, amount) do
-    current = Process.get(name, 0)
-    Process.put(name, current + amount)
-  end
-
-  defp clear_counter(name) do
-    Process.delete(name)
-  end
-
-  defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun, :millisecond)
-    incr_counter(:"#{name}_total_ms", time)
-    result
-  end
 end

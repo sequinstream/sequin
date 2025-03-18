@@ -58,6 +58,8 @@ defmodule Sequin.Health do
   alias Sequin.Repo
   alias Sequin.Time
 
+  require Logger
+
   @type status :: :healthy | :warning | :error | :initializing | :waiting | :paused
   @type entity_kind :: :http_endpoint | :sink_consumer | :postgres_replication_slot | :wal_pipeline
   @type redis_error :: {:error, Error.ServiceError.t()}
@@ -787,36 +789,63 @@ defmodule Sequin.Health do
 
     unless entity.annotations["ignore_health"] || entity.account.annotations["ignore_health"] do
       dedup_key = get_dedup_key(entity)
-
-      name =
-        case entity do
-          %PostgresDatabase{} ->
-            "Database #{entity.name}"
-
-          %PostgresReplicationSlot{} ->
-            entity = Repo.preload(entity, [:postgres_database])
-            "Replication slot #{entity.postgres_database.name}"
-
-          %SinkConsumer{} ->
-            "Consumer #{entity.name}"
-
-          %HttpEndpoint{} ->
-            "Endpoint #{entity.name}"
-
-          %WalPipeline{} ->
-            "Pipeline #{entity.name}"
-        end
+      name = entity_with_name(entity)
+      metadata = entity_metadata(entity)
 
       case new_status do
         status when status in [:error] ->
           summary = build_error_summary(name, entity)
+          Logger.warning("[Health] #{name} is experiencing issues: #{summary}", metadata)
 
           Pagerduty.alert(dedup_key, summary, severity: :warning)
 
         _ ->
+          Logger.info("[Health] #{name} is healthy", metadata)
           Pagerduty.resolve(dedup_key, "#{name} is healthy")
       end
     end
+  end
+
+  defp entity_with_name(entity) do
+    case entity do
+      %PostgresDatabase{} ->
+        "Database #{entity.name}"
+
+      %PostgresReplicationSlot{} ->
+        entity = Repo.preload(entity, [:postgres_database])
+        "Replication slot #{entity.postgres_database.name}"
+
+      %SinkConsumer{} ->
+        "Consumer #{entity.name}"
+
+      %HttpEndpoint{} ->
+        "Endpoint #{entity.name}"
+
+      %WalPipeline{} ->
+        "Pipeline #{entity.name}"
+    end
+  end
+
+  defp entity_metadata(entity) do
+    meta =
+      case entity do
+        %PostgresDatabase{} ->
+          [database_id: entity.id]
+
+        %PostgresReplicationSlot{} ->
+          [database_id: entity.postgres_database_id, replication_id: entity.id]
+
+        %SinkConsumer{} ->
+          [consumer_id: entity.id]
+
+        %HttpEndpoint{} ->
+          [endpoint_id: entity.id]
+
+        %WalPipeline{} ->
+          [wal_pipeline_id: entity.id]
+      end
+
+    meta ++ [account_id: entity.account_id]
   end
 
   def resolve_and_ignore(entity) do

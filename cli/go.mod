@@ -1,8 +1,8 @@
 module github.com/sequinstream/sequin/cli
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.22.5
+toolchain go1.24.1
 
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
@@ -18,9 +18,9 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/jpillora/sizestr v1.0.0
 	github.com/r3labs/diff/v3 v3.0.1
-	golang.org/x/crypto v0.31.0
-	golang.org/x/net v0.33.0
-	golang.org/x/sync v0.10.0
+	golang.org/x/crypto v0.35.0
+	golang.org/x/net v0.36.0
+	golang.org/x/sync v0.11.0
 	moul.io/http2curl v1.0.0
 )
 
@@ -43,7 +43,7 @@ require (
 	github.com/smartystreets/goconvey v1.8.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
-	golang.org/x/term v0.27.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 )

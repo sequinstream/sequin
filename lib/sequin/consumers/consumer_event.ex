@@ -149,6 +149,20 @@ defmodule Sequin.Consumers.ConsumerEvent do
     from([consumer_event: ce] in query, where: ce.id in ^ids)
   end
 
+  def where_wal_cursor_in(query \\ base_query(), wal_cursors) do
+    conditions =
+      Enum.map(wal_cursors, fn %{commit_lsn: commit_lsn, commit_idx: commit_idx} ->
+        dynamic([ce], ce.commit_lsn == ^commit_lsn and ce.commit_idx == ^commit_idx)
+      end)
+
+    combined_condition =
+      Enum.reduce(conditions, fn condition, acc ->
+        dynamic([ce], ^acc or ^condition)
+      end)
+
+    from([consumer_event: ce] in query, where: ^combined_condition)
+  end
+
   def where_deliverable(query \\ base_query()) do
     now = DateTime.utc_now()
 

@@ -417,6 +417,9 @@ defmodule Sequin.Consumers do
 
         {:ids, ids}, query ->
           ConsumerEvent.where_ids(query, ids)
+
+        {:wal_cursor_in, wal_cursors}, query ->
+          ConsumerEvent.where_wal_cursor_in(query, wal_cursors)
       end)
 
     Repo.all(query, opts)
@@ -527,6 +530,9 @@ defmodule Sequin.Consumers do
 
       {:ids, ids}, query ->
         ConsumerRecord.where_ids(query, ids)
+
+      {:wal_cursor_in, wal_cursors}, query ->
+        ConsumerRecord.where_wal_cursor_in(query, wal_cursors)
     end)
   end
 

@@ -148,6 +148,20 @@ defmodule Sequin.Consumers.ConsumerRecord do
     from([consumer_record: cr] in query, where: cr.id in ^ids)
   end
 
+  def where_wal_cursor_in(query \\ base_query(), wal_cursors) do
+    conditions =
+      Enum.map(wal_cursors, fn %{commit_lsn: commit_lsn, commit_idx: commit_idx} ->
+        dynamic([cr], cr.commit_lsn == ^commit_lsn and cr.commit_idx == ^commit_idx)
+      end)
+
+    combined_condition =
+      Enum.reduce(conditions, fn condition, acc ->
+        dynamic([cr], ^acc or ^condition)
+      end)
+
+    from([consumer_record: cr] in query, where: ^combined_condition)
+  end
+
   def where_group_ids(query \\ base_query(), group_ids) do
     from([consumer_record: cr] in query, where: cr.group_id in ^group_ids)
   end

@@ -2275,4 +2275,60 @@ defmodule Sequin.ConsumersTest do
       end)
     end
   end
+
+  describe "where_wal_cursor_in/2" do
+    test "finds events matching WAL cursors for a specific consumer" do
+      # Create two consumers
+      consumer1 = ConsumersFactory.insert_sink_consumer!()
+      consumer2 = ConsumersFactory.insert_sink_consumer!()
+
+      # Create events for consumer1 with different WAL cursors
+      message1 =
+        ConsumersFactory.insert_consumer_message!(
+          message_kind: consumer1.message_kind,
+          consumer_id: consumer1.id,
+          commit_lsn: 100,
+          commit_idx: 1
+        )
+
+      message2 =
+        ConsumersFactory.insert_consumer_message!(
+          message_kind: consumer1.message_kind,
+          consumer_id: consumer1.id,
+          commit_lsn: 200,
+          commit_idx: 2
+        )
+
+      # Create events for consumer2 with different WAL cursors
+      ConsumersFactory.insert_consumer_message!(
+        message_kind: consumer2.message_kind,
+        consumer_id: consumer2.id,
+        commit_lsn: 100,
+        commit_idx: 1
+      )
+
+      ConsumersFactory.insert_consumer_message!(
+        message_kind: consumer2.message_kind,
+        consumer_id: consumer2.id,
+        commit_lsn: 200,
+        commit_idx: 2
+      )
+
+      # Define WAL cursors to search for
+      wal_cursors = [
+        %{commit_lsn: 100, commit_idx: 1},
+        %{commit_lsn: 200, commit_idx: 2}
+      ]
+
+      # Query for events matching the WAL cursors for consumer1
+      messages = Consumers.list_consumer_messages_for_consumer(consumer1, wal_cursor_in: wal_cursors)
+
+      # Verify results
+      assert length(messages) == 2
+      assert [found_message1, found_message2] = Enum.sort_by(messages, & &1.id)
+      assert found_message1.id == message1.id
+      assert found_message2.id == message2.id
+      assert Enum.all?(messages, &(&1.consumer_id == consumer1.id))
+    end
+  end
 end

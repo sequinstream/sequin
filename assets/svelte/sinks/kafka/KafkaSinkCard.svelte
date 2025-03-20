@@ -11,14 +11,15 @@
       <h2 class="text-lg font-semibold">Kafka Configuration</h2>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="grid gap-4">
       <div>
         <span class="text-sm text-gray-500">Hosts</span>
         <div class="mt-2">
-          <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-            >{consumer.sink.hosts}</span
+          <div
+            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md break-all w-fit"
           >
+            <span>{consumer.sink.hosts}</span>
+          </div>
         </div>
       </div>
 
@@ -41,6 +42,6 @@
           >
         </div>
       </div>
-    </div>
-  </CardContent>
+    </div></CardContent
+  >
 </Card>

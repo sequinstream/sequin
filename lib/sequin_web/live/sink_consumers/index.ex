@@ -27,16 +27,14 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   def mount(_params, _session, socket) do
     user = current_user(socket)
     account = current_account(socket)
-    consumers = Consumers.list_consumers_for_account(account.id, [:postgres_database, :replication_slot])
+
+    consumers = load_consumers(socket)
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
     has_sequences? = account.id |> Databases.list_sequences_for_account() |> Enum.any?()
-    consumers = load_consumer_health(consumers)
-    consumers = load_consumer_metrics(consumers)
 
     socket =
       if connected?(socket) do
-        Process.send_after(self(), :update_health, 1000)
-        Process.send_after(self(), :update_metrics, 1000)
+        Process.send_after(self(), :update_consumers, 1000)
 
         push_event(socket, "ph-identify", %{
           userId: user.id,
@@ -240,14 +238,9 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   end
 
   @impl Phoenix.LiveView
-  def handle_info(:update_health, socket) do
-    Process.send_after(self(), :update_health, 1000)
-    {:noreply, assign(socket, :consumers, load_consumer_health(socket.assigns.consumers))}
-  end
-
-  def handle_info(:update_metrics, socket) do
-    Process.send_after(self(), :update_metrics, 1000)
-    {:noreply, assign(socket, :consumers, load_consumer_metrics(socket.assigns.consumers))}
+  def handle_info(:update_consumers, socket) do
+    Process.send_after(self(), :update_consumers, 1000)
+    {:noreply, assign(socket, :consumers, load_consumers(socket))}
   end
 
   def handle_info({:database_tables_updated, _updated_database}, socket) do
@@ -255,6 +248,14 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     send_update(ConsumerForm, id: "new-consumer", event: :database_tables_updated)
 
     {:noreply, socket}
+  end
+
+  defp load_consumers(socket) do
+    socket
+    |> current_account_id()
+    |> Consumers.list_consumers_for_account([:postgres_database, :replication_slot, :active_backfill])
+    |> load_consumer_health()
+    |> load_consumer_metrics()
   end
 
   defp load_consumer_health(consumers) do
@@ -294,6 +295,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       database_name: consumer.postgres_database.name,
       health: Health.to_external(consumer.health),
       href: RouteHelpers.consumer_path(consumer),
+      active_backfill: not is_nil(consumer.active_backfill),
       metrics: %{
         messages_processed_throughput_timeseries: consumer.metrics.messages_processed_throughput_timeseries
       }

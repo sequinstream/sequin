@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { CheckCircle2, HelpCircle, XCircle, Loader2 } from "lucide-svelte";
+  import {
+    CheckCircle2,
+    HelpCircle,
+    XCircle,
+    Loader2,
+    ArrowDownSquare,
+  } from "lucide-svelte";
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatNumberWithCommas } from "../utils";
@@ -1049,6 +1055,7 @@
         {#if isSubmittingBackfill}
           <Loader2 class="mr-2 h-4 w-4 animate-spin" />
         {/if}
+        <ArrowDownSquare class="mr-2 h-4 w-4" />
         Start Backfill
       </Button>
     </Dialog.Footer>

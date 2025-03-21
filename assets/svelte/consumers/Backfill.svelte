@@ -7,6 +7,7 @@
   import { CheckCircle2 } from "lucide-svelte";
   import * as Popover from "$lib/components/ui/popover";
   import { Info } from "lucide-svelte";
+  import { ArrowDownSquare } from "lucide-svelte";
 
   // Simplified props interface
   interface BackfillProps {
@@ -134,7 +135,10 @@
           Cancel Backfill
         </Button>
       {:else}
-        <Button on:click={handleRun}>Run Backfill</Button>
+        <Button variant="outline" size="sm" on:click={handleRun}>
+          <ArrowDownSquare class="mr-2 h-4 w-4" />
+          Run Backfill
+        </Button>
       {/if}
     </div>
 

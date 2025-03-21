@@ -13,6 +13,7 @@
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
   import { ChevronRight } from "lucide-svelte";
   import { Database, Plug, Webhook, Pause, StopCircle } from "lucide-svelte";
+  import { ArrowDownSquare } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
   import HealthPill from "../health/HealthPill.svelte";
   import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
@@ -44,6 +45,7 @@
       | "rabbitmq";
     status: "active" | "disabled" | "paused";
     database_name: string;
+    active_backfill: boolean;
     health: {
       status: "healthy" | "warning" | "error" | "initializing";
     };
@@ -307,6 +309,12 @@
                   </Badge>
                 {:else}
                   <HealthPill status={consumer.health.status} />
+                {/if}
+                {#if consumer.active_backfill}
+                  <Badge variant="secondary">
+                    <ArrowDownSquare class="h-4 w-4 mr-1" />
+                    <span>Backfilling</span>
+                  </Badge>
                 {/if}
               </div>
             </Table.Cell>

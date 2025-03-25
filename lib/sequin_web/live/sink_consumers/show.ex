@@ -359,18 +359,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
      |> push_patch(to: RouteHelpers.consumer_path(socket.assigns.consumer, "/messages?showAcked=#{show_acked}"))}
   end
 
-  def handle_event("reset_message_visibility", %{"ack_id" => _ack_id}, socket) do
-    # consumer = socket.assigns.consumer
+  def handle_event("reset_message_visibility", %{"ack_id" => ack_id}, socket) do
+    case SlotMessageStore.reset_message_visibilities(socket.assigns.consumer, [ack_id]) do
+      {:ok, []} ->
+        Logger.error("Failed to reset message visibility: Message not found", ack_id: ack_id)
+        {:reply, %{error: "Message not found"}, load_consumer_messages(socket)}
 
-    # TODO
-    # case Consumers.reset_message_visibility(consumer, ack_id) do
-    #   {:ok, updated_message} ->
-    #     {:reply, %{updated_message: encode_message(consumer, updated_message)}, load_consumer_messages(socket)}
+      {:ok, [updated_message]} ->
+        encoded_message = encode_message(socket.assigns.consumer, updated_message)
+        {:reply, %{updated_message: encoded_message}, load_consumer_messages(socket)}
 
-    #   {:error, reason} ->
-    #     {:reply, %{error: reason}, socket}
-    # end
-    {:reply, %{ok: true}, socket}
+      {:error, reason} ->
+        Logger.error("Failed to reset message visibility: #{inspect(reason)}", error: reason, ack_id: ack_id)
+        {:reply, %{error: reason}, socket}
+    end
   end
 
   def handle_event("disable", _params, socket) do

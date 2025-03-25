@@ -278,33 +278,58 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     %{state | produced_message_groups: produced_message_groups}
   end
 
-  @spec reset_message_visibilities(State.t(), list(cursor_tuple())) :: State.t()
-  def reset_message_visibilities(%State{} = state, []) do
-    state
-  end
-
-  def reset_message_visibilities(%State{} = state, [cursor_tuple | cursor_tuples]) do
-    case Map.get(state.messages, cursor_tuple) do
-      nil ->
-        reset_message_visibilities(state, cursor_tuples)
-
-      msg ->
-        msg = %{msg | not_visible_until: nil}
-
-        state = %{
-          state
-          | messages: Map.put(state.messages, cursor_tuple, msg),
-            produced_message_groups: Multiset.delete(state.produced_message_groups, msg.group_id, cursor_tuple)
-        }
-
-        reset_message_visibilities(state, cursor_tuples)
-    end
+  @spec reset_message_visibilities(State.t(), list(SinkConsumer.ack_id())) :: {State.t(), list(message())}
+  def reset_message_visibilities(%State{} = state, ack_ids) do
+    cursor_tuples = state.ack_ids_to_cursor_tuples |> Map.take(ack_ids) |> Map.values()
+    do_reset_message_visibilities(state, cursor_tuples, [])
   end
 
   @spec reset_all_message_visibilities(State.t()) :: State.t()
   def reset_all_message_visibilities(%State{} = state) do
     cursor_tuples = Map.keys(state.messages)
-    reset_message_visibilities(state, cursor_tuples)
+    do_reset_all_message_visibilities(state, cursor_tuples)
+  end
+
+  defp do_reset_message_visibilities(%State{} = state, [], accumulated_messages) do
+    {state, accumulated_messages}
+  end
+
+  defp do_reset_message_visibilities(%State{} = state, [cursor_tuple | cursor_tuples], accumulated_messages) do
+    case Map.get(state.messages, cursor_tuple) do
+      nil ->
+        do_reset_message_visibilities(state, cursor_tuples, accumulated_messages)
+
+      msg ->
+        {state, reset_msg} = do_reset_message_visibility(state, msg)
+        do_reset_message_visibilities(state, cursor_tuples, [reset_msg | accumulated_messages])
+    end
+  end
+
+  defp do_reset_all_message_visibilities(%State{} = state, []), do: state
+
+  defp do_reset_all_message_visibilities(%State{} = state, [cursor_tuple | cursor_tuples]) do
+    case Map.get(state.messages, cursor_tuple) do
+      nil ->
+        do_reset_all_message_visibilities(state, cursor_tuples)
+
+      msg ->
+        {state, _} = do_reset_message_visibility(state, msg)
+        do_reset_all_message_visibilities(state, cursor_tuples)
+    end
+  end
+
+  defp do_reset_message_visibility(%State{} = state, msg) do
+    msg = %{msg | not_visible_until: nil}
+    cursor_tuple = {msg.commit_lsn, msg.commit_idx}
+
+    state =
+      %{
+        state
+        | messages: Map.put(state.messages, cursor_tuple, msg),
+          produced_message_groups: Multiset.delete(state.produced_message_groups, msg.group_id, cursor_tuple)
+      }
+
+    {state, msg}
   end
 
   @spec min_unpersisted_wal_cursor(State.t()) :: Replication.wal_cursor() | nil

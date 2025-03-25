@@ -284,7 +284,7 @@
 
       if (reply.error) {
         // Handle error (e.g., show a toast notification)
-        toast.error("Failed to reset message visibility:", reply.error);
+        toast.error(`Failed to reset message visibility: ${reply.error}`);
       } else {
         // Optionally, update the message state locally or refresh the drawer
         selectedMessage = reply.updated_message;

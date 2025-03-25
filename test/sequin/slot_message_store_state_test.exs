@@ -570,11 +570,12 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert {[], state} = State.produce_messages(state, 2)
 
       # Reset visibility
-      state =
-        State.reset_message_visibilities(state, [
-          {produced1.commit_lsn, produced1.commit_idx},
-          {produced2.commit_lsn, produced2.commit_idx}
-        ])
+      {state, reset_messages} = State.reset_message_visibilities(state, [produced1.ack_id, produced2.ack_id])
+
+      # Verify reset messages
+      assert length(reset_messages) == 2
+      assert Enum.all?(reset_messages, &(&1.not_visible_until == nil))
+      assert Enum.all?(reset_messages, &(&1.id in [msg1.id, msg2.id]))
 
       # Messages should be available for delivery again
       assert {[redelivered1, redelivered2], _state} = State.produce_messages(state, 2)
@@ -594,11 +595,12 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert {[], state} = State.produce_messages(state, 3)
 
       # Reset visibility only for msg1 and msg2
-      state =
-        State.reset_message_visibilities(state, [
-          {produced1.commit_lsn, produced1.commit_idx},
-          {produced2.commit_lsn, produced2.commit_idx}
-        ])
+      {state, reset_messages} = State.reset_message_visibilities(state, [produced1.ack_id, produced2.ack_id])
+
+      # Verify reset messages
+      assert length(reset_messages) == 2
+      assert Enum.all?(reset_messages, &(&1.not_visible_until == nil))
+      assert Enum.all?(reset_messages, &(&1.id in [msg1.id, msg2.id]))
 
       # Only msg1 and msg2 should be available for redelivery
       assert {[redelivered1, redelivered2], state} = State.produce_messages(state, 3)
@@ -619,11 +621,12 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert {[], state} = State.produce_messages(state, 1)
 
       # Reset visibility with mix of valid and invalid ack_ids
-      state =
-        State.reset_message_visibilities(state, [
-          {produced1.commit_lsn, produced1.commit_idx},
-          {Factory.uuid(), Factory.uuid()}
-        ])
+      {state, reset_messages} = State.reset_message_visibilities(state, [produced1.ack_id, Factory.uuid()])
+
+      # Verify reset messages
+      assert length(reset_messages) == 1
+      assert hd(reset_messages).id == msg1.id
+      assert hd(reset_messages).not_visible_until == nil
 
       # Should still work for the valid message
       assert {[redelivered1], _state} = State.produce_messages(state, 1)

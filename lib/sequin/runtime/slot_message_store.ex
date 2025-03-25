@@ -235,17 +235,23 @@ defmodule Sequin.Runtime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
+  @spec reset_message_visibilities(SinkConsumer.t(), list(SinkConsumer.ack_id())) ::
+          {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())} | {:error, Exception.t()}
   def reset_message_visibilities(consumer, ack_ids) do
     consumer
     |> partitions()
-    |> Sequin.Enum.reduce_while_ok(fn partition ->
-      GenServer.call(via_tuple(consumer.id, partition), {:reset_message_visibilities, ack_ids})
+    |> Enum.reduce_while({:ok, []}, fn partition, {:ok, acc_reset_messages} ->
+      case GenServer.call(via_tuple(consumer.id, partition), {:reset_message_visibilities, ack_ids}) do
+        {:ok, reset_messages} -> {:cont, {:ok, acc_reset_messages ++ reset_messages}}
+        error -> {:halt, error}
+      end
     end)
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
   end
 
+  @spec reset_all_message_visibilities(SinkConsumer.t()) :: :ok | {:error, Exception.t()}
   def reset_all_message_visibilities(consumer) do
     consumer
     |> partitions()
@@ -652,7 +658,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   def handle_call({:reset_message_visibilities, ack_ids}, _from, state) do
     execute_timed(:reset_message_visibilities, fn ->
       :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
-      {:reply, :ok, State.reset_message_visibilities(state, ack_ids)}
+      {state, reset_messages} = State.reset_message_visibilities(state, ack_ids)
+      {:reply, {:ok, reset_messages}, state}
     end)
   end
 
@@ -840,7 +847,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
         )
 
         # Reset visibility for all messages that are no longer not visible
-        state = State.reset_message_visibilities(state, Enum.map(messages, &{&1.commit_lsn, &1.commit_idx}))
+        {state, _reset_messages} = State.reset_message_visibilities(state, Enum.map(messages, & &1.ack_id))
 
         if state.test_pid do
           send(state.test_pid, {:visibility_check_done, state.consumer_id})

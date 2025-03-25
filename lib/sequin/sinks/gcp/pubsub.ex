@@ -227,8 +227,21 @@ defmodule Sequin.Sinks.Gcp.PubSub do
            details: res
          )}
 
+      {:error, error} when is_exception(error) ->
+        {:error,
+         Error.service(
+           service: :gcp_pubsub,
+           message: "Request failed: #{req_desc} with error: #{Exception.message(error)}",
+           details: error
+         )}
+
       {:error, error} ->
-        {:error, Error.service(service: :gcp_pubsub, message: "Failed to get topic metadata", details: error)}
+        {:error,
+         Error.service(
+           service: :gcp_pubsub,
+           message: "Request failed: #{req_desc} with error: #{inspect(error)}",
+           details: error
+         )}
     end
   end
 

@@ -69,7 +69,7 @@
         <Input
           id="emulator-url"
           bind:value={form.sink.emulator_base_url}
-          placeholder="localhost:8085"
+          placeholder="http://localhost:8085"
         />
         {#if errors.sink?.emulator_base_url}
           <p class="text-destructive text-sm">

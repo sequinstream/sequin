@@ -56,6 +56,11 @@
   let messageShapeOpen = false;
   let logsOpen = true;
 
+  // Add computed property for message delivery state
+  $: isMessageDelivered =
+    selectedMessage?.state === "delivered" ||
+    selectedMessage?.state === "acknowledged";
+
   onMount(() => {
     // Calculate row height after the component is mounted
     const sampleRow = document.querySelector("tr.sample-row");
@@ -715,18 +720,31 @@
                   <!-- Message Shape Accordion -->
                   <div class="border rounded-lg">
                     <button
-                      class="w-full px-4 py-2 flex justify-between items-center"
-                      on:click={() => (messageShapeOpen = !messageShapeOpen)}
+                      class="w-full px-4 py-2 flex flex-col items-start"
+                      on:click={() =>
+                        !isMessageDelivered &&
+                        (messageShapeOpen = !messageShapeOpen)}
+                      class:opacity-50={isMessageDelivered}
+                      class:cursor-not-allowed={isMessageDelivered}
                     >
-                      <span class="font-medium">Message Shape</span>
-                      <div class:rotate-180={messageShapeOpen}>
-                        <ChevronDown
-                          class="h-4 w-4 transform transition-transform"
-                        />
+                      <div class="w-full flex justify-between items-center">
+                        <span class="font-medium">Message Shape</span>
+                        {#if !isMessageDelivered}
+                          <div class:rotate-180={messageShapeOpen}>
+                            <ChevronDown
+                              class="h-4 w-4 transform transition-transform"
+                            />
+                          </div>
+                        {/if}
                       </div>
+                      {#if isMessageDelivered}
+                        <span class="text-sm text-gray-500 mt-1"
+                          >Message payloads are not retained after delivery</span
+                        >
+                      {/if}
                     </button>
 
-                    {#if messageShapeOpen}
+                    {#if messageShapeOpen && !isMessageDelivered}
                       <div class="px-4 pb-4">
                         {#if isLoadingMessageData}
                           <div class="flex justify-center items-center h-32">

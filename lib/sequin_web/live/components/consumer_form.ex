@@ -444,7 +444,8 @@ defmodule SequinWeb.Components.ConsumerForm do
           "group_column_attnums" => form["groupColumnAttnums"]
         },
         "batch_size" => form["batchSize"],
-        "initial_backfill" => decode_initial_backfill(form)
+        "initial_backfill" => decode_initial_backfill(form),
+        "transform" => form["transform"]
       }
 
     maybe_put_replication_slot_id(params, socket)
@@ -606,7 +607,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
       "status" => consumer.status,
       "table_oid" => source_table && source_table.oid,
-      "type" => consumer.type
+      "type" => consumer.type,
+      "transform" => consumer.transform
     }
   end
 

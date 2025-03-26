@@ -8,6 +8,7 @@ defmodule Sequin.Sinks.RabbitMq.Client do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.RabbitMqSink
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.NetworkUtils
   alias Sequin.Sinks.RabbitMq
@@ -16,10 +17,10 @@ defmodule Sequin.Sinks.RabbitMq.Client do
   require Logger
 
   @impl RabbitMq
-  def send_messages(%RabbitMqSink{} = sink, messages) when is_list(messages) do
+  def send_messages(%SinkConsumer{sink: %RabbitMqSink{} = sink} = consumer, messages) when is_list(messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       Enum.reduce_while(messages, :ok, fn message, :ok ->
-        case publish_message(message, connection, sink) do
+        case publish_message(consumer, message, connection) do
           :ok ->
             {:cont, :ok}
 
@@ -46,10 +47,10 @@ defmodule Sequin.Sinks.RabbitMq.Client do
       {:error, to_sequin_error(error)}
   end
 
-  defp publish_message(message, %AMQP.Channel{} = channel, sink) do
+  defp publish_message(%SinkConsumer{sink: %RabbitMqSink{} = sink} = consumer, message, %AMQP.Channel{} = channel) do
     # https://hexdocs.pm/amqp/AMQP.Basic.html#publish/5-options
     opts = [message_id: to_string(message.id), content_type: "application/json"]
-    payload = to_payload(message)
+    payload = to_payload(consumer, message)
     routing_key = routing_key(message)
 
     try do
@@ -87,20 +88,8 @@ defmodule Sequin.Sinks.RabbitMq.Client do
     end
   end
 
-  defp to_payload(%ConsumerEvent{} = message) do
-    %{
-      record: message.data.record,
-      action: message.data.action,
-      changes: message.data.changes,
-      metadata: message.data.metadata
-    }
-  end
-
-  defp to_payload(%ConsumerRecord{} = message) do
-    %{
-      record: message.data.record,
-      metadata: message.data.metadata
-    }
+  defp to_payload(%SinkConsumer{} = consumer, message) do
+    Sequin.Transforms.Message.to_external(consumer, message)
   end
 
   defp routing_key(%ConsumerEvent{data: %ConsumerEventData{} = data}) do

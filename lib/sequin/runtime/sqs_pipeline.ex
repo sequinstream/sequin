@@ -40,7 +40,7 @@ defmodule Sequin.Runtime.SqsPipeline do
 
     sqs_messages =
       Enum.map(messages, fn %{data: data} ->
-        build_sqs_message(consumer, data.data)
+        build_sqs_message(consumer, data)
       end)
 
     case SQS.send_messages(sqs_client, sink.queue_url, sqs_messages) do
@@ -53,16 +53,16 @@ defmodule Sequin.Runtime.SqsPipeline do
   end
 
   @spec build_sqs_message(SinkConsumer.t(), term()) :: map()
-  defp build_sqs_message(consumer, record_or_event_data) do
+  defp build_sqs_message(consumer, record_or_event) do
     message = %{
-      message_body: record_or_event_data,
+      message_body: Sequin.Transforms.Message.to_external(consumer, record_or_event),
       id: UUID.uuid4()
     }
 
     if consumer.sink.is_fifo do
       group_id =
         consumer
-        |> Sequin.Consumers.group_column_values(record_or_event_data)
+        |> Sequin.Consumers.group_column_values(record_or_event.data)
         |> Enum.join(",")
 
       Map.put(message, :message_group_id, group_id)

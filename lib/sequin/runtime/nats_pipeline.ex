@@ -34,7 +34,7 @@ defmodule Sequin.Runtime.NatsPipeline do
     # Flatten the messages from each Broadway.Message
     nats_messages = Enum.map(messages, & &1.data)
 
-    case Nats.send_messages(consumer.sink, nats_messages) do
+    case Nats.send_messages(consumer, nats_messages) do
       :ok ->
         {:ok, messages, context}
 

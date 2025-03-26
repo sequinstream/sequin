@@ -21,6 +21,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
       field :table_schema, :string
       field :table_name, :string
       field :commit_timestamp, :utc_datetime_usec
+      field :commit_lsn, :integer
       field :consumer, :map
       field :database_name, :string
     end
@@ -35,7 +36,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
 
   def metadata_changeset(metadata, attrs) do
     metadata
-    |> cast(attrs, [:table_schema, :table_name, :commit_timestamp, :database_name])
-    |> validate_required([:table_schema, :table_name, :commit_timestamp])
+    |> cast(attrs, [:table_schema, :table_name, :commit_timestamp, :commit_lsn, :database_name])
+    |> validate_required([:table_schema, :table_name, :commit_timestamp, :commit_lsn])
   end
 end

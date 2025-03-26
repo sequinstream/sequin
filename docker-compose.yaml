@@ -20,5 +20,27 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
 
+  nats:
+    image: nats:2.10-alpine
+    ports:
+      - "127.0.0.1:4222:4222"  # Client connections
+      - "127.0.0.1:8222:8222"  # HTTP management port
+    command: "-js"  # Enable JetStream
+    volumes:
+      - sequin_dev_nats:/root/.local/share/nats
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    ports:
+      - "127.0.0.1:5672:5672"  # AMQP protocol port
+      - "127.0.0.1:15672:15672"  # Management UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - sequin_dev_rabbitmq:/var/lib/rabbitmq
+
 volumes:
   sequin_dev_postgres:
+  sequin_dev_nats:
+  sequin_dev_rabbitmq:

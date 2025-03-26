@@ -63,7 +63,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
         message.data
 
       true ->
-        %{data: Enum.map(messages, & &1.data)}
+        %{data: Enum.map(messages, &Sequin.Transforms.Message.to_external(consumer, &1))}
     end
   end
 

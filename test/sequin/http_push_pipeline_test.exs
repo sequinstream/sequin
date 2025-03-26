@@ -6,6 +6,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
@@ -18,7 +19,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   alias Sequin.TestSupport.Models.CharacterDetailed
 
   describe "events are sent to the HTTP endpoint" do
-    setup do
+    setup ctx do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
 
@@ -27,13 +28,15 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           account_id: account.id,
           type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
-          message_kind: :event
+          message_kind: :event,
+          transform: ctx[:transform] || :none
         )
 
       {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
     end
 
-    test "events are sent to the HTTP endpoint", %{consumer: consumer, http_endpoint: http_endpoint} do
+    @tag transform: :none
+    test "events are sent to the HTTP endpoint without transforms", %{consumer: consumer, http_endpoint: http_endpoint} do
       test_pid = self()
       event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
 
@@ -72,6 +75,31 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive :sent, 1_000
     end
 
+    @tag transform: :record_only
+    test "events are sent to the HTTP endpoint with record-only transform", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
+      test_pid = self()
+      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+
+      adapter = fn %Req.Request{} = req ->
+        assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
+        %{"data" => [event_json]} = Jason.decode!(req.body)
+
+        assert event_json == event.data.record
+
+        send(test_pid, :sent)
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
+      assert_receive :sent, 1_000
+    end
+
     test "batched messages are processed together", %{consumer: consumer, http_endpoint: http_endpoint} do
       test_pid = self()
 
@@ -84,10 +112,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       adapter = fn %Req.Request{} = req ->
         assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
-        %{"data" => [json1, json2]} = Jason.decode!(req.body)
-
-        assert json1["action"] == "insert"
-        assert json2["action"] == "update"
+        %{"data" => data_list} = Jason.decode!(req.body)
+        assert length(data_list) == 2
 
         send(test_pid, :sent)
         {req, Req.Response.new(status: 200)}
@@ -260,7 +286,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   end
 
   describe "messages flow from SlotMessageStore to http end-to-end" do
-    setup do
+    setup ctx do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
 
@@ -276,7 +302,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id, http_endpoint: http_endpoint},
           replication_slot_id: replication.id,
           sequence_id: sequence.id,
-          message_kind: :event
+          message_kind: :event,
+          transform: ctx[:transform] || :none
         )
 
       :ok = Consumers.create_consumer_partition(consumer)
@@ -284,7 +311,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       {:ok, %{consumer: consumer}}
     end
 
-    test "messages are sent from postgres to http endpoint", %{consumer: consumer} do
+    @tag transform: :none
+    test "messages are sent from postgres to http endpoint without transforms", %{consumer: consumer} do
       test_pid = self()
 
       # Mock the HTTP adapter
@@ -305,12 +333,18 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           consumer_id: consumer.id,
           record_pks: [record["id"]],
           data:
-            ConsumersFactory.consumer_record_data(
+            ConsumersFactory.consumer_event_data(
               record: record,
               metadata: %{
+                database_name: "postgres",
                 table_schema: "public",
                 table_name: "users",
-                commit_timestamp: DateTime.utc_now()
+                commit_timestamp: DateTime.utc_now(),
+                commit_lsn: Factory.unique_integer(),
+                consumer: %{
+                  id: consumer.id,
+                  name: consumer.name
+                }
               }
             )
         )
@@ -331,6 +365,65 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert json["record"] == record
       assert json["metadata"]["table_name"] == "users"
       assert json["metadata"]["table_schema"] == "public"
+
+      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
+
+      # Verify that the consumer record has been processed (deleted on ack)
+      assert [] == SlotMessageStore.peek_messages(consumer, 10)
+    end
+
+    @tag transform: :record_only
+    test "messages are sent from postgres to http endpoint with record-only transform", %{consumer: consumer} do
+      test_pid = self()
+
+      # Mock the HTTP adapter
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:http_request, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      # Insert a consumer record
+      record = %{
+        "id" => Faker.UUID.v4(),
+        "name" => "John Doe",
+        "email" => "john@example.com"
+      }
+
+      consumer_event =
+        ConsumersFactory.consumer_event(
+          consumer_id: consumer.id,
+          record_pks: [record["id"]],
+          data:
+            ConsumersFactory.consumer_event_data(
+              record: record,
+              metadata: %{
+                database_name: "postgres",
+                table_schema: "public",
+                table_name: "users",
+                commit_timestamp: DateTime.utc_now(),
+                consumer: %{
+                  id: consumer.id,
+                  name: consumer.name
+                }
+              }
+            )
+        )
+
+      start_supervised({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      SlotMessageStore.put_messages(consumer, [consumer_event])
+
+      # Start the pipeline
+      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+
+      # Wait for the message to be processed
+      assert_receive {:http_request, req}, 1_000
+
+      # Assert the request details
+      assert to_string(req.url) == HttpEndpoint.url(consumer.sink.http_endpoint)
+      %{"data" => [json]} = Jason.decode!(req.body)
+
+      assert json["name"] == "John Doe"
+      refute json["metadata"]
 
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
@@ -436,7 +529,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   end
 
   describe "messages flow from SlotMessageStore to http end-to-end for message_kind=record" do
-    setup do
+    setup ctx do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
 
@@ -454,7 +547,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           replication_slot_id: replication.id,
           postgres_database: database,
           sequence_id: sequence.id,
-          message_kind: :record
+          message_kind: :record,
+          transform: ctx[:transform] || :none
         )
 
       :ok = Consumers.create_consumer_partition(consumer)
@@ -462,7 +556,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       {:ok, %{consumer: consumer}}
     end
 
-    test "messages are sent from postgres to http endpoint", %{consumer: consumer} do
+    @tag transform: :none
+    test "messages are sent from postgres to http endpoint without transforms", %{consumer: consumer} do
       test_pid = self()
 
       # Mock the HTTP adapter
@@ -484,9 +579,15 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           data: %ConsumerRecordData{
             record: %{name: "character_name"},
             metadata: %{
+              database_name: "postgres",
               table_schema: "public",
               table_name: "characters_detailed",
-              commit_timestamp: DateTime.utc_now()
+              commit_timestamp: DateTime.utc_now(),
+              commit_lsn: Factory.unique_integer(),
+              consumer: %{
+                id: consumer.id,
+                name: consumer.name
+              }
             }
           }
         )
@@ -504,12 +605,68 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert to_string(req.url) == HttpEndpoint.url(consumer.sink.http_endpoint)
       %{"data" => [json]} = Jason.decode!(req.body)
 
-      # Assert the record data matches
       assert json["record"]["name"] == "character_name"
 
       # Assert metadata
       assert json["metadata"]["table_name"] == "characters_detailed"
       assert json["metadata"]["table_schema"] == "public"
+
+      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
+
+      # Verify that the consumer record has been processed (deleted on ack)
+      assert [] == SlotMessageStore.peek_messages(consumer, 10)
+    end
+
+    @tag transform: :record_only
+    test "messages are sent from postgres to http endpoint with record-only transform", %{consumer: consumer} do
+      test_pid = self()
+
+      # Mock the HTTP adapter
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:http_request, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      # Insert a detailed character record
+      character = CharacterFactory.insert_character_detailed!()
+
+      # Insert a consumer record referencing the character
+      consumer_record =
+        ConsumersFactory.consumer_record(
+          consumer_id: consumer.id,
+          record_pks: [character.id],
+          table_oid: CharacterDetailed.table_oid(),
+          state: :available,
+          data: %ConsumerRecordData{
+            record: %{name: "character_name"},
+            metadata: %{
+              database_name: "postgres",
+              table_schema: "public",
+              table_name: "characters_detailed",
+              commit_timestamp: DateTime.utc_now(),
+              consumer: %{
+                id: consumer.id,
+                name: consumer.name
+              }
+            }
+          }
+        )
+
+      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      SlotMessageStore.put_messages(consumer, [consumer_record])
+
+      # Start the pipeline
+      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+
+      # Wait for the message to be processed
+      assert_receive {:http_request, req}, 5_000
+
+      # Assert the request details
+      assert to_string(req.url) == HttpEndpoint.url(consumer.sink.http_endpoint)
+      %{"data" => [json]} = Jason.decode!(req.body)
+
+      assert json["name"] == "character_name"
+      refute json["metadata"]
 
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 

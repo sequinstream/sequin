@@ -37,6 +37,7 @@
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
   import MessageExamples from "$lib/components/MessageExamples.svelte";
+  import TransformExamples from "$lib/components/TransformExamples.svelte";
   import {
     Accordion,
     AccordionContent,
@@ -45,6 +46,7 @@
   } from "$lib/components/ui/accordion";
   import type { Table } from "$lib/databases/types";
   import BackfillForm from "$lib/components/BackfillForm.svelte";
+  import * as Tabs from "$lib/components/ui/tabs";
 
   type Database = {
     id: string;
@@ -86,6 +88,7 @@
     },
     groupColumnAttnums: consumer.group_column_attnums || [],
     batchSize: consumer.batch_size || 1,
+    transform: consumer.transform || "none",
   };
 
   let form = { ...initialForm };
@@ -313,12 +316,24 @@
     });
   }
 
-  let startPosition = "beginning";
-  let minSortColError: string = "";
   let enableBackfill = false;
-
-  let showExampleModal = false;
+  let showMessageTypeExampleModal = false;
   let selectedExampleType: "change" | "record" = "change";
+
+  let showTransformExampleModal = false;
+  let selectedTransformExampleType: "none" | "record_only" | "code" = "none";
+  let selectedTransformMessageType: "insert" | "update" | "delete" | "read" =
+    "insert";
+
+  let enableTransform = form.transform !== "none";
+
+  $: {
+    if (!enableTransform) {
+      form.transform = "none";
+    } else {
+      form.transform = "record_only";
+    }
+  }
 </script>
 
 <FullPageModal
@@ -397,19 +412,10 @@
               <Label for="message_kind">Message type</Label>
               <p class="text-sm text-muted-foreground mt-1 mb-2">
                 Select the kind of messages you want to process.
-                <!-- <a
-                  href="https://sequinstream.com/docs/reference/messages"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center text-link hover:underline"
-                >
-                  Learn more
-                  <ExternalLinkIcon class="w-3 h-3 ml-1" />
-                </a> -->
                 <button
                   type="button"
                   class="text-muted-foreground underline decoration-dotted"
-                  on:click={() => (showExampleModal = true)}
+                  on:click={() => (showMessageTypeExampleModal = true)}
                 >
                   See examples
                 </button>
@@ -469,6 +475,92 @@
           showTitle={false}
           isEdit={isEditMode}
         />
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader class="flex flex-row items-center justify-between">
+        <CardTitle class="flex items-center gap-2">
+          Transforms
+          <Popover.Root>
+            <Popover.Trigger asChild let:builder>
+              <Button
+                builders={[builder]}
+                variant="link"
+                class="text-muted-foreground hover:text-foreground p-0"
+              >
+                <Info class="h-4 w-4" />
+              </Button>
+            </Popover.Trigger>
+            <Popover.Content class="w-80">
+              <div class="grid gap-4">
+                <div class="space-y-2">
+                  <p class="text-sm text-muted-foreground font-normal">
+                    Transform your messages before they are sent to the sink
+                    destination.
+                  </p>
+                </div>
+              </div>
+            </Popover.Content>
+          </Popover.Root>
+        </CardTitle>
+        <Switch bind:checked={enableTransform} disabled={!selectedTable} />
+      </CardHeader>
+      <CardContent>
+        <div class="space-y-2">
+          {#if !enableTransform}
+            <p class="text-sm text-muted-foreground">
+              No transform. Messages will be sent as-is to the sink destination.
+            </p>
+          {:else if !selectedTable}
+            <p class="text-sm text-muted-foreground">
+              Please select a table first.
+            </p>
+          {:else}
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <Label for="transform">Transform type</Label>
+                <p class="text-sm text-muted-foreground mt-1 mb-2">
+                  Select how you want to transform your messages.
+                  <button
+                    type="button"
+                    class="text-muted-foreground underline decoration-dotted"
+                    on:click={() => (showTransformExampleModal = true)}
+                  >
+                    See examples
+                  </button>
+                </p>
+                <Select
+                  selected={{
+                    value: form.transform,
+                    label:
+                      form.transform === "record_only"
+                        ? "Record only"
+                        : "Code transform (coming soon)",
+                  }}
+                  onSelectedChange={(event) => {
+                    form.transform = event.value;
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a transform type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="record_only">Record only</SelectItem>
+                    <SelectItem value="code" disabled
+                      >Code transform (coming soon)</SelectItem
+                    >
+                  </SelectContent>
+                </Select>
+                {#if errors.consumer.transform}
+                  <p class="text-destructive text-sm">
+                    {errors.consumer.transform}
+                  </p>
+                {/if}
+              </div>
+            </div>
+          {/if}
+        </div>
       </CardContent>
     </Card>
 
@@ -747,7 +839,7 @@
   </form>
 </FullPageModal>
 
-<Dialog.Root bind:open={showExampleModal}>
+<Dialog.Root bind:open={showMessageTypeExampleModal}>
   <Dialog.Portal>
     <Dialog.Overlay />
     <Dialog.Content class="lg:max-w-5xl md:max-w-3xl p-4">
@@ -796,7 +888,116 @@
       </div>
 
       <Dialog.Footer class="mt-4">
-        <Button on:click={() => (showExampleModal = false)}>Close</Button>
+        <Button on:click={() => (showMessageTypeExampleModal = false)}
+          >Close</Button
+        >
+      </Dialog.Footer>
+      <Dialog.Close />
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showTransformExampleModal}>
+  <Dialog.Portal>
+    <Dialog.Overlay />
+    <Dialog.Content class="lg:max-w-5xl md:max-w-3xl p-4">
+      <Dialog.Header class="mb-4">
+        <Dialog.Title>Transform examples</Dialog.Title>
+      </Dialog.Header>
+
+      {#if form.messageKind === "event"}
+        <div class="mb-4">
+          <Tabs.Root
+            value={selectedTransformMessageType}
+            class="w-full"
+            onValueChange={(value) => (selectedTransformMessageType = value)}
+          >
+            <Tabs.List class="grid grid-cols-4 mb-4">
+              <Tabs.Trigger value="insert" class="w-full">Insert</Tabs.Trigger>
+              <Tabs.Trigger value="update" class="w-full">Update</Tabs.Trigger>
+              <Tabs.Trigger value="delete" class="w-full">Delete</Tabs.Trigger>
+              <Tabs.Trigger value="read" class="w-full">Read</Tabs.Trigger>
+            </Tabs.List>
+          </Tabs.Root>
+        </div>
+      {/if}
+
+      <!-- Mobile view -->
+      <div class="lg:hidden space-y-2">
+        <div class="mb-4">
+          <Select
+            selected={{
+              value: selectedTransformExampleType,
+              label:
+                selectedTransformExampleType === "none"
+                  ? "No transform"
+                  : selectedTransformExampleType === "record_only"
+                    ? "Record only"
+                    : "Code transform (coming soon)",
+            }}
+            onSelectedChange={(event) => {
+              selectedTransformExampleType = event.value;
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select transform type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No transform</SelectItem>
+              <SelectItem value="record_only">Record only</SelectItem>
+              <SelectItem value="code" disabled
+                >Code transform (coming soon)</SelectItem
+              >
+            </SelectContent>
+          </Select>
+        </div>
+
+        <TransformExamples
+          type={form.messageKind === "record" ? "record" : "change"}
+          transform={selectedTransformExampleType}
+          operation={selectedTransformMessageType}
+        />
+      </div>
+
+      <!-- Desktop view -->
+      <div class="hidden lg:grid">
+        <div>
+          <h3 class="text-lg font-semibold mb-4">
+            {form.messageKind === "record" ? "Row" : "Change"} Messages
+          </h3>
+          <div class="space-y-4">
+            <div>
+              <h4 class="font-medium mb-2">No transform</h4>
+              <TransformExamples
+                type={form.messageKind === "record" ? "record" : "change"}
+                transform="none"
+                operation={selectedTransformMessageType}
+              />
+            </div>
+            <div>
+              <h4 class="font-medium mb-2">Record only</h4>
+              <TransformExamples
+                type={form.messageKind === "record" ? "record" : "change"}
+                transform="record_only"
+                operation={selectedTransformMessageType}
+              />
+            </div>
+            <div>
+              <h4 class="font-medium mb-2">Code transform (coming soon)</h4>
+              <TransformExamples
+                type={form.messageKind === "record" ? "record" : "change"}
+                transform="code"
+                operation={selectedTransformMessageType}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Dialog.Footer class="mt-4">
+        <Button on:click={() => (showTransformExampleModal = false)}
+          >Close</Button
+        >
       </Dialog.Footer>
       <Dialog.Close />
     </Dialog.Content>

@@ -16,7 +16,8 @@ set_agent_address() {
   if [ -n "${STATSD_HOST:-}" ]; then
     AGENT_ADDRESS="$STATSD_HOST"
   else
-    AGENT_ADDRESS=$(curl -s -S http://169.254.169.254/latest/meta-data/local-ipv4 || echo "meta-data curl failed")
+    TOKEN=$(curl -s -S -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+    AGENT_ADDRESS=$(curl -s -S -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4 || echo "meta-data curl failed")
   fi
 
   echo "Datadog Agent Address: $AGENT_ADDRESS"

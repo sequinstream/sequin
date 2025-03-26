@@ -105,7 +105,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         source_tables: source_tables,
         status: :active,
         sequence_id: sequence_id,
-        sequence_filter: sequence_filter
+        sequence_filter: sequence_filter,
+        transform: Enum.random([:none, :record_only])
       },
       attrs
     )

@@ -1,40 +1,32 @@
 defmodule SequinWeb.PullJSON do
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Transforms.Message
 
-  def render("receive.json", %{messages: messages}) do
-    %{data: Enum.map(messages, &render_message/1)}
+  def render("receive.json", %{consumer: consumer, messages: messages}) do
+    %{data: Enum.map(messages, &render_message(consumer, &1))}
   end
 
-  defp render_message(%ConsumerEvent{} = event) do
+  defp render_message(%SinkConsumer{message_kind: :event} = consumer, %ConsumerEvent{} = event) do
     %{
       ack_id: event.ack_id,
-      data: render_data(event.data)
+      data: render_data(consumer, event)
     }
   end
 
-  defp render_message(%ConsumerRecord{} = record) do
+  defp render_message(%SinkConsumer{message_kind: :record} = consumer, %ConsumerRecord{} = record) do
     %{
       ack_id: record.ack_id,
-      data: render_data(record.data)
+      data: render_data(consumer, record)
     }
   end
 
-  defp render_data(%ConsumerEventData{action: action, record: record, changes: changes, metadata: metadata}) do
-    %{
-      action: action,
-      record: record,
-      changes: changes,
-      metadata: metadata
-    }
+  defp render_data(%SinkConsumer{} = consumer, %ConsumerEvent{} = event) do
+    Message.to_external(consumer, event)
   end
 
-  defp render_data(%ConsumerRecordData{record: record, metadata: metadata}) do
-    %{
-      record: record,
-      metadata: metadata
-    }
+  defp render_data(%SinkConsumer{} = consumer, %ConsumerRecord{} = record) do
+    Message.to_external(consumer, record)
   end
 end

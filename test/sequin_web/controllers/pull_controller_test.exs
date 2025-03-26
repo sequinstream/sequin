@@ -14,7 +14,7 @@ defmodule SequinWeb.PullControllerTest do
 
   @one_day_ago DateTime.add(DateTime.utc_now(), -24, :hour)
 
-  setup %{account: account} do
+  setup %{account: account} = ctx do
     other_account = AccountsFactory.insert_account!()
     db = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: :character_tables)
     ConnectionCache.cache_connection(db, Sequin.Repo)
@@ -26,14 +26,16 @@ defmodule SequinWeb.PullControllerTest do
         account_id: account.id,
         backfill_completed_at: @one_day_ago,
         replication_slot_id: rep_slot.id,
-        sink: %{type: :sequin_stream}
+        sink: %{type: :sequin_stream},
+        transform: ctx[:transform] || :none
       )
 
     other_consumer =
       ConsumersFactory.insert_sink_consumer!(
         message_kind: :record,
         account_id: other_account.id,
-        sink: %{type: :sequin_stream}
+        sink: %{type: :sequin_stream},
+        transform: ctx[:transform] || :none
       )
 
     start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
@@ -56,7 +58,11 @@ defmodule SequinWeb.PullControllerTest do
       assert %{"data" => []} = json_response(conn, 200)
     end
 
-    test "returns available messages if mix of available and delivered", %{conn: conn, consumer: consumer} do
+    @tag transform: :none
+    test "returns available messages if mix of available and delivered (no transform)", %{
+      conn: conn,
+      consumer: consumer
+    } do
       record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
 
       delivered_record =
@@ -70,6 +76,26 @@ defmodule SequinWeb.PullControllerTest do
       conn = get(conn, ~p"/api/sequin_streams/#{consumer.id}/receive")
       assert %{"data" => [message]} = json_response(conn, 200)
       assert message["data"]["record"]["column"] == record.data.record["column"]
+    end
+
+    @tag transform: :record_only
+    test "returns available messages if mix of available and delivered (record-only transform)", %{
+      conn: conn,
+      consumer: consumer
+    } do
+      record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+
+      delivered_record =
+        ConsumersFactory.consumer_record(
+          consumer_id: consumer.id,
+          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+        )
+
+      SlotMessageStore.put_messages(consumer, [record, delivered_record])
+
+      conn = get(conn, ~p"/api/sequin_streams/#{consumer.id}/receive")
+      assert %{"data" => [message]} = json_response(conn, 200)
+      assert message["data"]["column"] == record.data.record["column"]
     end
 
     test "returns an available message by consumer name", %{conn: conn, consumer: consumer} do

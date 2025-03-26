@@ -45,7 +45,8 @@ defmodule Sequin.Runtime.KafkaPipeline do
 
     # Only prepare the message with its partition information
     msg = message.data
-    encoded_data = Jason.encode!(msg.data)
+    data = Sequin.Transforms.Message.to_external(consumer, msg)
+    encoded_data = Jason.encode!(data)
     msg = %{msg | encoded_data: encoded_data, encoded_data_size_bytes: byte_size(encoded_data)}
 
     partition = partition_from_message(consumer, msg, context.partition_count)

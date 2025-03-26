@@ -3,17 +3,19 @@ defmodule Sequin.Sinks.Redis do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
 
-  @callback send_messages(RedisSink.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
+  @callback send_messages(SinkConsumer.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
               :ok | {:error, Error.t()}
   @callback message_count(RedisSink.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   @callback client_info(RedisSink.t()) :: {:ok, String.t()} | {:error, Error.t()}
   @callback test_connection(RedisSink.t()) :: :ok | {:error, Error.t()}
 
-  @spec send_messages(RedisSink.t(), [any()]) :: :ok | {:error, Error.t()}
-  def send_messages(%RedisSink{} = sink, messages) do
-    impl().send_messages(sink, messages)
+  @spec send_messages(SinkConsumer.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
+          :ok | {:error, Error.t()}
+  def send_messages(%SinkConsumer{} = consumer, messages) do
+    impl().send_messages(consumer, messages)
   end
 
   @spec message_count(RedisSink.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}

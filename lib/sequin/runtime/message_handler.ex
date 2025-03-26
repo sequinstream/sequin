@@ -280,7 +280,11 @@ defmodule Sequin.Runtime.MessageHandler do
       table_name: message.table_name,
       table_schema: message.table_schema,
       commit_timestamp: message.commit_timestamp,
-      consumer: %{id: consumer.id, name: consumer.name}
+      commit_lsn: message.commit_lsn,
+      consumer: %{
+        id: consumer.id,
+        name: consumer.name
+      }
     }
 
     maybe_put_transaction_annotations(metadata, consumer, message.transaction_annotations)

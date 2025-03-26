@@ -7,16 +7,17 @@ defmodule Sequin.Sinks.Nats.Client do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.NetworkUtils
   alias Sequin.Sinks.Nats
   alias Sequin.Sinks.Nats.ConnectionCache
 
   @impl Nats
-  def send_messages(%NatsSink{} = sink, messages) when is_list(messages) do
+  def send_messages(%SinkConsumer{sink: %NatsSink{} = sink} = consumer, messages) when is_list(messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       Enum.reduce_while(messages, :ok, fn message, :ok ->
-        case publish_message(message, connection) do
+        case publish_message(consumer, message, connection) do
           :ok ->
             {:cont, :ok}
 
@@ -76,9 +77,9 @@ defmodule Sequin.Sinks.Nats.Client do
       {:error, to_sequin_error(error)}
   end
 
-  defp publish_message(message, connection) do
+  defp publish_message(%SinkConsumer{} = consumer, message, connection) do
     opts = [headers: get_headers(message)]
-    payload = to_payload(message)
+    payload = Sequin.Transforms.Message.to_external(consumer, message)
     subject = subject(message)
 
     try do
@@ -107,22 +108,6 @@ defmodule Sequin.Sinks.Nats.Client do
       _ ->
         Error.service(service: :nats, message: "Unknown NATS error")
     end
-  end
-
-  defp to_payload(%ConsumerEvent{} = message) do
-    %{
-      record: message.data.record,
-      metadata: message.data.metadata
-    }
-  end
-
-  defp to_payload(%ConsumerRecord{} = message) do
-    %{
-      record: message.data.record,
-      changes: message.data.changes,
-      action: message.data.action,
-      metadata: message.data.metadata
-    }
   end
 
   defp get_headers(%ConsumerEvent{} = message) do

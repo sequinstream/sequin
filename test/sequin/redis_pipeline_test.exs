@@ -3,8 +3,8 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -73,7 +73,8 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
       ref = send_test_event(consumer, record)
       assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
-      assert_receive {:redis_request, %RedisSink{}, [%ConsumerRecordData{}]}, 1_000
+      assert_receive {:redis_request, %SinkConsumer{sink: %RedisSink{}}, [data]}, 1_000
+      assert is_map(data)
     end
 
     test "batched messages are processed together", %{consumer: consumer} do

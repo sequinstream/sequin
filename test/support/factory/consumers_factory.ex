@@ -82,7 +82,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     {sequence_filter, attrs} =
       Map.pop_lazy(attrs, :sequence_filter, fn ->
-        if sequence_id, do: sequence_filter_attrs()
+        if sequence_id, do: sequence_filter()
       end)
 
     {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
@@ -125,6 +125,15 @@ defmodule Sequin.Factory.ConsumersFactory do
           Enum.map(column_filters, &Sequin.Map.from_ecto/1)
         end)
       end)
+    end)
+    |> Map.update!(:sequence_filter, fn sequence_filter ->
+      if sequence_filter do
+        sequence_filter
+        |> Sequin.Map.from_ecto()
+        |> Map.update!(:column_filters, fn column_filters ->
+          Enum.map(column_filters, &Sequin.Map.from_ecto/1)
+        end)
+      end
     end)
   end
 
@@ -416,6 +425,7 @@ defmodule Sequin.Factory.ConsumersFactory do
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
+          commit_lsn: Factory.unique_integer(),
           consumer: %{}
         }
       },
@@ -597,6 +607,7 @@ defmodule Sequin.Factory.ConsumersFactory do
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
+          commit_lsn: Factory.unique_integer(),
           consumer: %{}
         }
       },

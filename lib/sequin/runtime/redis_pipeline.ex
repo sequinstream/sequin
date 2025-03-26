@@ -16,12 +16,12 @@ defmodule Sequin.Runtime.RedisPipeline do
 
   @impl SinkPipeline
   def handle_batch(:default, messages, _batch_info, context) do
-    %{consumer: %SinkConsumer{sink: %RedisSink{} = sink}, test_pid: test_pid} = context
+    %{consumer: %SinkConsumer{sink: %RedisSink{}} = consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    redis_messages = Enum.map(messages, & &1.data.data)
+    redis_messages = Enum.map(messages, fn %{data: data} -> data end)
 
-    case Redis.send_messages(sink, redis_messages) do
+    case Redis.send_messages(consumer, redis_messages) do
       :ok ->
         {:ok, messages, context}
 

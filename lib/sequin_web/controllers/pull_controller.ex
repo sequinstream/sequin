@@ -23,7 +23,7 @@ defmodule SequinWeb.PullController do
          {:ok, messages} <- SlotMessageStore.produce(consumer, batch_size, :consistent_pid) do
       Logger.metadata(batch_size: batch_size)
       Tracer.Server.messages_received(consumer, messages)
-      render(conn, "receive.json", messages: messages)
+      render(conn, "receive.json", consumer: consumer, messages: messages)
     end
   end
 

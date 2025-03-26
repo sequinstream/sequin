@@ -272,7 +272,7 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
           column_attnum: integer,
           column_name: String.t() | nil,
           operator: atom(),
-          value: %{value: any()}
+          value: map()
         }
 
   embedded_schema do

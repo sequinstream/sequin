@@ -2,9 +2,10 @@ defmodule Sequin.Sinks.Redis.Client do
   @moduledoc false
   @behaviour Sequin.Sinks.Redis
 
-  alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.NetworkUtils
   alias Sequin.Sinks.Redis
@@ -13,36 +14,9 @@ defmodule Sequin.Sinks.Redis.Client do
   require Logger
 
   @impl Redis
-  def send_messages(%RedisSink{} = sink, messages) do
+  def send_messages(%SinkConsumer{sink: %RedisSink{} = sink} = consumer, messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
-      commands =
-        Enum.map(messages, fn
-          %ConsumerRecordData{} = message ->
-            [
-              "XADD",
-              sink.stream_key,
-              "*",
-              "record",
-              Jason.encode!(message.record),
-              "metadata",
-              Jason.encode!(message.metadata)
-            ]
-
-          %ConsumerEventData{} = message ->
-            [
-              "XADD",
-              sink.stream_key,
-              "*",
-              "record",
-              Jason.encode!(message.record),
-              "changes",
-              Jason.encode!(message.changes),
-              "action",
-              message.action,
-              "metadata",
-              Jason.encode!(message.metadata)
-            ]
-        end)
+      commands = xadd_commands(consumer, messages)
 
       {time, res} = :timer.tc(fn -> qp(connection, commands) end, :millisecond)
 
@@ -107,6 +81,49 @@ defmodule Sequin.Sinks.Redis.Client do
   catch
     :exit, {error, _} ->
       {:error, handle_error(error)}
+  end
+
+  defp xadd_commands(%SinkConsumer{transform: :none, sink: %RedisSink{} = sink}, messages) do
+    Enum.map(messages, fn
+      %ConsumerRecord{} = message ->
+        [
+          "XADD",
+          sink.stream_key,
+          "*",
+          "record",
+          Jason.encode!(message.data.record),
+          "metadata",
+          Jason.encode!(message.data.metadata)
+        ]
+
+      %ConsumerEvent{} = message ->
+        [
+          "XADD",
+          sink.stream_key,
+          "*",
+          "record",
+          Jason.encode!(message.data.record),
+          "changes",
+          Jason.encode!(message.data.changes),
+          "action",
+          message.data.action,
+          "metadata",
+          Jason.encode!(message.data.metadata)
+        ]
+    end)
+  end
+
+  defp xadd_commands(%SinkConsumer{transform: :record_only, sink: %RedisSink{} = sink} = consumer, messages) do
+    Enum.map(messages, fn
+      message ->
+        [
+          "XADD",
+          sink.stream_key,
+          "*",
+          "record",
+          Jason.encode!(Sequin.Transforms.Message.to_external(consumer, message))
+        ]
+    end)
   end
 
   defp handle_error(:no_connection) do

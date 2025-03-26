@@ -6,6 +6,7 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Gcp.PubSub
+  alias Sequin.Transforms.Message
 
   require Logger
 
@@ -62,16 +63,7 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
 
   defp build_pubsub_message(consumer, %Sequin.Consumers.ConsumerRecord{} = record) do
     %{
-      data: %{
-        record: record.data.record,
-        metadata: %{
-          table_schema: record.data.metadata.table_schema,
-          table_name: record.data.metadata.table_name,
-          consumer: record.data.metadata.consumer,
-          commit_lsn: record.commit_lsn,
-          record_pks: record.record_pks
-        }
-      },
+      data: Message.to_external(consumer, record),
       attributes: %{
         "trace_id" => record.replication_message_trace_id,
         "type" => "record",
@@ -83,19 +75,7 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
 
   defp build_pubsub_message(consumer, %Sequin.Consumers.ConsumerEvent{} = event) do
     %{
-      data: %{
-        record: event.data.record,
-        changes: event.data.changes,
-        action: to_string(event.data.action),
-        metadata: %{
-          table_schema: event.data.metadata.table_schema,
-          table_name: event.data.metadata.table_name,
-          consumer: event.data.metadata.consumer,
-          commit_timestamp: event.data.metadata.commit_timestamp,
-          commit_lsn: event.commit_lsn,
-          record_pks: event.record_pks
-        }
-      },
+      data: Message.to_external(consumer, event),
       attributes: %{
         "trace_id" => event.replication_message_trace_id,
         "type" => "event",

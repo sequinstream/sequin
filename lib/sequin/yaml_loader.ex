@@ -915,7 +915,9 @@ defmodule Sequin.YamlLoader do
        type: :gcp_pubsub,
        project_id: attrs["project_id"],
        topic_id: attrs["topic_id"],
-       credentials: attrs["credentials"]
+       credentials: attrs["credentials"],
+       use_emulator: attrs["use_emulator"] || false,
+       emulator_base_url: attrs["emulator_base_url"]
      }}
   end
 

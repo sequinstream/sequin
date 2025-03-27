@@ -647,6 +647,30 @@ defmodule Sequin.Health do
     ingested_event = find_event(events, :messages_ingested)
     backfill_fetch_batch_event = find_event(events, :backfill_fetch_batch)
 
+    invalid_transaction_annotation_received = find_event(events, :invalid_transaction_annotation_received)
+
+    invalid_transaction_annotation_received_dismissed =
+      find_event(events, :invalid_transaction_annotation_received_dismissed)
+
+    invalid_transaction_annotation_received =
+      cond do
+        is_nil(invalid_transaction_annotation_received) ->
+          nil
+
+        is_nil(invalid_transaction_annotation_received_dismissed) ->
+          invalid_transaction_annotation_received
+
+        # After dismissal, 24 hours before showing the alert again
+        DateTime.after?(
+          DateTime.add(invalid_transaction_annotation_received.last_event_at, 24, :hour),
+          invalid_transaction_annotation_received_dismissed.last_event_at
+        ) ->
+          nil
+
+        true ->
+          invalid_transaction_annotation_received
+      end
+
     cond do
       is_nil(ingested_event) ->
         base_check
@@ -663,6 +687,17 @@ defmodule Sequin.Health do
           [
             backfill_fetch_batch_event
           ]
+        )
+
+      not is_nil(invalid_transaction_annotation_received) ->
+        put_check_timestamps(
+          %{
+            base_check
+            | status: :warning,
+              error: invalid_transaction_annotation_received.error,
+              error_slug: :invalid_transaction_annotation_received
+          },
+          [invalid_transaction_annotation_received]
         )
 
       true ->

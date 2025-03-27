@@ -9,6 +9,7 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -289,13 +290,21 @@ defmodule Sequin.Runtime.MessageHandler do
 
   defp maybe_put_transaction_annotations(metadata, _consumer, nil), do: metadata
 
-  defp maybe_put_transaction_annotations(metadata, _consumer, annotations) when is_binary(annotations) do
+  defp maybe_put_transaction_annotations(metadata, consumer, annotations) when is_binary(annotations) do
     case Jason.decode(annotations) do
       {:ok, json} ->
         Map.put(metadata, :transaction_annotations, json)
 
       {:error, error} ->
-        # FIXME: Use Health Events to surface this log line to the user
+        Logger.error("Error parsing transaction annotations: #{inspect(error)}", error: error)
+        error = Error.invariant(message: "Invalid JSON given to `transaction_annotations.set`")
+
+        Health.put_event(:sink_consumer, consumer.id, %Event{
+          slug: :invalid_transaction_annotation_received,
+          status: :warning,
+          error: error
+        })
+
         Logger.error("Error parsing transaction annotations: #{inspect(error)}")
         metadata
     end

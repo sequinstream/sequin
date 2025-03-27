@@ -46,7 +46,9 @@ defmodule Sequin.Health.Event do
     :alert_toast_columns_detected_dismissed,
     :toast_columns_detected,
     :backfill_fetch_batch,
-    :backfill_finished
+    :backfill_finished,
+    :invalid_transaction_annotation_received,
+    :invalid_transaction_annotation_received_dismissed
   ]
 
   @http_endpoint_event_slugs [

@@ -429,13 +429,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     {:noreply, socket}
   end
 
-  def handle_event("dismiss_check", %{"slug" => "sink_configuration", "error_slug" => error_slug}, socket) do
+  def handle_event("dismiss_check", %{"error_slug" => error_slug}, socket) do
     consumer = socket.assigns.consumer
 
     event_slug =
       case String.to_existing_atom(error_slug) do
         :replica_identity_not_full -> :alert_replica_identity_not_full_dismissed
         :toast_columns_detected -> :alert_toast_columns_detected_dismissed
+        :invalid_transaction_annotation_received -> :invalid_transaction_annotation_received_dismissed
       end
 
     Health.put_event(consumer, %Health.Event{slug: event_slug})
@@ -1215,6 +1216,24 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       refreshable: false,
       dismissable: false
     })
+  end
+
+  defp maybe_augment_alert(%{error_slug: :invalid_transaction_annotation_received} = check, _consumer) do
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Notice: Invalid transaction annotation received",
+        alertMessage: """
+        Sequin was unable to parse the content of one or more transaction annotation messages. The content of these messages should be valid JSON.
+
+        Transaction annotations were not included on these messages.
+
+        Please check your application code to ensure that transaction annotations are being set correctly. See the [docs on annotations](https://sequinstream.com/docs/reference/annotations) for more information.
+        """,
+        refreshable: false,
+        dismissable: true
+      }
+    )
   end
 
   defp maybe_augment_alert(check, _consumer), do: check

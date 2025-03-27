@@ -274,30 +274,30 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   defp metadata(%Message{} = message, consumer) do
-    %{
+    metadata = %{
       database_name: consumer.postgres_database.name,
       table_name: message.table_name,
       table_schema: message.table_schema,
       commit_timestamp: message.commit_timestamp,
-      consumer: %{
-        id: consumer.id,
-        name: consumer.name
-      },
-      transaction_annotations: maybe_parse_transaction_annotations(message.transaction_annotations)
+      consumer: %{id: consumer.id, name: consumer.name}
     }
+
+    maybe_put_transaction_annotations(metadata, consumer, message.transaction_annotations)
   end
 
-  defp maybe_parse_transaction_annotations(nil), do: nil
+  defp maybe_put_transaction_annotations(metadata, %SinkConsumer{message_kind: :record}, _annotations), do: metadata
 
-  defp maybe_parse_transaction_annotations(content) when is_binary(content) do
-    case Jason.decode(content) do
+  defp maybe_put_transaction_annotations(metadata, _consumer, nil), do: metadata
+
+  defp maybe_put_transaction_annotations(metadata, _consumer, annotations) when is_binary(annotations) do
+    case Jason.decode(annotations) do
       {:ok, json} ->
-        json
+        Map.put(metadata, :transaction_annotations, json)
 
       {:error, error} ->
         # FIXME: Use Health Events to surface this log line to the user
         Logger.error("Error parsing transaction annotations: #{inspect(error)}")
-        nil
+        metadata
     end
   end
 

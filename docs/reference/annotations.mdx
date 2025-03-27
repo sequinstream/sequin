@@ -1,0 +1,100 @@
+---
+title: 'Transaction Annotations'
+sidebarTitle: 'Annotations'
+description: 'Reference for Sequin transaction annotations'
+---
+
+Transaction annotations allow you to attach metadata to database changes. When you set annotations, all change messages following the annotation will include the annotations [in their metadata](/reference/messages#change-messages).
+
+## Protocol
+
+Set annotations inside a transaction using the function `pg_logical_emit_message`:
+
+```sql
+select pg_logical_emit_message(true, prefix, content);
+```
+
+### Message prefixes
+
+| Prefix | Description |
+|--------|-------------|
+| `sequin:transaction_annotations.set` | Sets annotations for all following changes in the current transaction |
+| `sequin:transaction_annotations.clear` | Clears annotations for all following changes in the current transaction |
+
+## Behavior
+
+### Scope
+
+- Annotations are transaction-scoped
+- They apply to all changes _following the annotation_ within the transaction
+- Setting new annotations overwrites previous annotations in the same transaction
+
+### Limitations
+
+- Must be valid JSON
+- Cannot be set outside a transaction
+- Annotations are only supported for [change messages](/reference/messages#change-messages). They are not supported for [row messages](/reference/messages#row-messages).
+
+## Message format
+
+Annotations appear in the `metadata.transaction_annotations` field of [change messages](/reference/messages#change-messages):
+
+```json
+{
+  "metadata": {
+    "transaction_annotations": {
+      // Your annotation fields
+    }
+  }
+}
+```
+
+If no annotations are set, the field will be `null`.
+
+## Examples
+
+### Setting annotations
+
+```sql
+select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
+  "username": "paul.atreides",
+  "source": "web_ui",
+  "request_id": "req_123"
+}');
+```
+
+### Clearing annotations
+
+```sql
+select pg_logical_emit_message(true, 'sequin:transaction_annotations.clear', '');
+```
+
+### Overwriting annotations
+
+```sql
+begin;
+  -- Set initial annotations
+  select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
+    "username": "paul.atreides"
+  }');
+
+  -- These annotations replace the previous ones for all following changes in the transaction
+  select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
+    "username": "gurney.halleck"
+  }');
+commit;
+```
+
+## Related
+
+<CardGroup>
+  <Card title="Messages reference" icon="message-dots" href="/reference/messages">
+    Learn about message shapes and how annotations appear in change messages.
+  </Card>
+  <Card title="How to annotate changes" icon="pencil" href="/how-to/annotate-changes">
+    Step-by-step guide on adding annotations to your database changes.
+  </Card>
+  <Card title="Create audit logs" icon="list-check" href="/how-to/create-audit-logs">
+    Learn how to use annotations to create rich audit logs.
+  </Card>
+</CardGroup>

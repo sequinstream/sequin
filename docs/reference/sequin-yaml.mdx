@@ -102,6 +102,7 @@ sinks:
     batch_size: 1                  # Optional, messages per batch, default: 1
     status: "active"               # Optional: active or disabled, default: active
     group_column_names: ["id"]   # Optional, columns to group messages by
+    transform: "none"              # Optional, transform: none or record_only (more coming soon!)
     filters:                       # Optional, filter which rows to consume with `where` clause
       - column_name: "status"      
         operator: "="

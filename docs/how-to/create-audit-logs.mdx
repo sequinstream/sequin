@@ -1,7 +1,7 @@
 ---
 title: "How to create audit logs with Sequin"
 sidebarTitle: "Create audit logs"
-description: "Create a reliable log of all changes in your database"
+description: "Create a reliable log of all changes in your database with rich contextual information"
 ---
 
 Audit logs are an essential tool for tracking and recording changes in your database. With Sequin, you can create comprehensive audit logs of changes in your Postgres database to:
@@ -9,6 +9,7 @@ Audit logs are an essential tool for tracking and recording changes in your data
 - **Track compliance and security**: Meet regulatory requirements by monitoring sensitive data modifications
 - **Debug and recover**: Trace change history to investigate issues and recover from unwanted changes
 - **Build user features**: Create activity feeds, change history views, and undo/redo functionality
+- **Capture context**: Use [transaction annotations](/reference/annotations) to record who made changes and why
 
 ## Prerequisites
 
@@ -37,6 +38,7 @@ Your audit logging pipeline will have these components:
 1. **Source table(s)**: The table(s) in Postgres that you want to audit
 2. **Destination sink**: The message queue or webhook endpoint that delivers changes to your processing system (e.g. SQS, Kafka, or HTTP endpoint)
 3. **Processor**: An application or service you write that receives changes and writes to your audit tables
+4. **Transaction annotations**: Metadata added to your transactions to provide context (who, why, where)
 
 ## Create a sink
 
@@ -70,6 +72,37 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
   </Step>
 </Steps>
 
+## Annotate your transactions
+
+To make your audit logs more valuable, use transaction annotations to add context to your changes. For example, you can record who made the change or from where.
+
+<Steps>
+  <Step title="Update your application code">
+    Modify your database transaction code to include annotations:
+
+    ```sql
+    BEGIN;
+      -- Set annotations for this transaction
+      SELECT pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
+        "username": "paul.atreides",
+        "source": "web_ui",
+        "request_id": "req_123",
+        "metadata": {
+          "reason": "Customer requested update",
+          "client_ip": "192.168.1.100"
+        }
+      }');
+
+      -- Your database operations
+      UPDATE users SET email = 'new@example.com' WHERE id = 'user_123';
+
+    COMMIT;
+    ```
+
+    These annotations will be included in the change messages for all operations following the annotation statement in this transaction.
+  </Step>
+</Steps>
+
 ## Process changes
 
 Once your sink is configured, changes from your source table will flow to your message queue or HTTP endpoint. Before implementing your audit processor, consider these key requirements for reliable audit logging:
@@ -97,9 +130,9 @@ Once your sink is configured, changes from your source table will flow to your m
 
     Consider your message queue's batching capabilities (e.g., SQS batch size).
 
-### Example: Basic audit table
+### Example: Enhanced audit table with annotations
 
-First, create an audit table to store your change history:
+First, create an audit table to store your change history, including fields for transaction annotations:
 
 ```sql create_table.sql
 create table audit_logs (
@@ -111,7 +144,12 @@ create table audit_logs (
   old_values jsonb,
   new_values jsonb,
   created_at timestamp not null default now(),
-  updated_at timestamp
+  updated_at timestamp,
+  -- Fields for transaction annotations
+  username text,
+  source text,
+  request_id text,
+  metadata jsonb
 );
 
 create unique index on audit_logs(event_id);
@@ -119,18 +157,19 @@ create unique index on audit_logs(event_id);
 -- Optional: Add indexes for common queries
 create index on audit_logs(table_name, record_id);
 create index on audit_logs(created_at);
+create index on audit_logs(username);
+create index on audit_logs(request_id);
 ```
 
-### Process changes
+### Process changes with annotations
 
-Map changes to your audit log table and perform an upsert operation. We recommend using a `do update` clause rather than `do nothing` to handle duplicates.
-
-<Info>
-  Using `do update` instead of `do nothing` gives you more flexibility when maintaining your audit logs. If you discover bugs in your processing logic, you can fix them and replay the events - the `do update` clause will overwrite any incorrect values with the corrected data.
-</Info>
+Map changes and their annotations to your audit log table and perform an upsert operation:
 
 ```python process_change.py
 def process_change(change):
+    # Extract transaction annotations
+    annotations = change.metadata.get('transaction_annotations', {})
+
     record = {
         'event_id': uuid.UUID(change.id),
         'table_name': change.metadata.table_name,
@@ -139,18 +178,26 @@ def process_change(change):
         'old_values': json.dumps(change.changes) if change.changes else None,
         'new_values': json.dumps(change.record),
         'created_at': datetime.now(),
-        'updated_at': datetime.now()
+        'updated_at': datetime.now(),
+        # Transaction annotation fields
+        'username': annotations.get('username'),
+        'source': annotations.get('source'),
+        'request_id': annotations.get('request_id'),
+        'metadata': json.dumps(annotations.get('metadata', {}))
     }
 
     db.execute("""
         insert into audit_logs (
             event_id, table_name, record_id,
-            action, old_values, new_values, created_at, updated_at
+            action, old_values, new_values,
+            created_at, updated_at,
+            username, source, request_id, metadata
         )
         values (
             %(event_id)s, %(table_name)s, %(record_id)s,
             %(action)s, %(old_values)s, %(new_values)s,
-            %(created_at)s, %(updated_at)s
+            %(created_at)s, %(updated_at)s,
+            %(username)s, %(source)s, %(request_id)s, %(metadata)s
         )
         on conflict (event_id) do update set
             table_name = excluded.table_name,
@@ -158,7 +205,11 @@ def process_change(change):
             action = excluded.action,
             old_values = excluded.old_values,
             new_values = excluded.new_values,
-            updated_at = excluded.updated_at
+            updated_at = excluded.updated_at,
+            username = excluded.username,
+            source = excluded.source,
+            request_id = excluded.request_id,
+            metadata = excluded.metadata
     """, record)
 ```
 
@@ -166,13 +217,11 @@ def process_change(change):
   For better performance, consider batching multiple changes into a single database operation. Batching increases throughput while still maintaining transactional guarantees.
 </Note>
 
-Your audit log table will now be populated with old and new values for each change that occurs in your source table(s).
+Your audit log table will now be populated with old and new values for each change, along with rich contextual information about who made the change and why.
 
-### Example: Activity feed
+### Example: Enhanced Activity feed with annotations
 
-There may be times when you want to transform the audit data before writing it to your audit table.  For example, you might want to transform the audit data into a more readable format to power a user activity feed.
-
-Create an activity feed table to store your transformed audit data:
+With transaction annotations, you can create more informative activity feeds that show not just what changed, but who changed it and why:
 
 ```sql
 create table activity_feed (
@@ -181,21 +230,30 @@ create table activity_feed (
     user_id uuid not null,
     action text not null,
     description text not null,
+    actor text not null,
+    source text not null,
+    request_id text,
+    reason text,
     metadata jsonb,
     created_at timestamp not null default now()
 );
 
 create index on activity_feed(user_id, created_at);
+create index on activity_feed(actor, created_at);
 ```
 
-Map changes to the updated `activity_feed` table schema and perform a batch insert operation:
+Process the annotated changes:
 
 ```python process_change.py
 def process_change(change):
+    # Extract transaction annotations
+    annotations = change.metadata.get('transaction_annotations', {})
+
     description = generate_activity_description(
         change.metadata.table_name,
         change.action,
-        change.record
+        change.record,
+        annotations
     )
 
     activity = {
@@ -203,6 +261,10 @@ def process_change(change):
         'user_id': uuid.UUID(change.record['user_id']),
         'action': change.action,
         'description': description,
+        'actor': annotations.get('username', 'system'),
+        'source': annotations.get('source', 'unknown'),
+        'request_id': annotations.get('request_id'),
+        'reason': annotations.get('metadata', {}).get('reason'),
         'metadata': json.dumps(change.record),
         'created_at': datetime.now()
     }
@@ -210,26 +272,67 @@ def process_change(change):
     db.execute("""
         insert into activity_feed (
             event_id, user_id, action,
-            description, metadata, created_at
+            description, actor, source,
+            request_id, reason, metadata, created_at
         )
         values (
             %(event_id)s, %(user_id)s, %(action)s,
-            %(description)s, %(metadata)s, %(created_at)s
+            %(description)s, %(actor)s, %(source)s,
+            %(request_id)s, %(reason)s, %(metadata)s, %(created_at)s
         )
         on conflict (event_id) do update set
             user_id = excluded.user_id,
             action = excluded.action,
             description = excluded.description,
+            actor = excluded.actor,
+            source = excluded.source,
+            request_id = excluded.request_id,
+            reason = excluded.reason,
             metadata = excluded.metadata
     """, activity)
 
-def generate_activity_description(table, action, record):
+def generate_activity_description(table, action, record, annotations):
+    actor = annotations.get('username', 'System')
+
     if table == 'orders':
         if action == 'insert':
-            return f"Created order #{record['order_number']}"
+            return f"{actor} created order #{record['order_number']}"
         elif action == 'update':
-            return f"Updated order #{record['order_number']}"
+            return f"{actor} updated order #{record['order_number']}"
     # ... etc
+```
+
+## Compliance reporting
+
+For regulated industries, you can use annotations to simplify compliance reporting:
+
+```python
+def process_compliance_event(change):
+    annotations = change.metadata.get('transaction_annotations', {})
+
+    # Track data access for GDPR/HIPAA
+    compliance_event = {
+        'event_id': uuid.UUID(change.id),
+        'timestamp': datetime.now(),
+        'data_category': determine_data_category(change.metadata.table_name, change.record),
+        'operation_type': change.action,
+        'user_id': annotations.get('username'),
+        'purpose': annotations.get('metadata', {}).get('reason'),
+        'lawful_basis': annotations.get('metadata', {}).get('lawful_basis'),
+        'record_id': change.record.get('id'),
+        'system_source': annotations.get('source')
+    }
+
+    # Insert into compliance log
+    db.execute("""
+        insert into compliance_log (
+            event_id, timestamp, data_category, operation_type,
+            user_id, purpose, lawful_basis, record_id, system_source
+        ) values (
+            %(event_id)s, %(timestamp)s, %(data_category)s, %(operation_type)s,
+            %(user_id)s, %(purpose)s, %(lawful_basis)s, %(record_id)s, %(system_source)s
+        )
+    """, compliance_event)
 ```
 
 ## Verify your pipeline is working
@@ -238,6 +341,7 @@ If you specified a backfill, there should be messages in your sink ready for you
 
 1. On the sink overview page, click the "Messages" tab. You should see messages flowing to your sink.
 2. Check your audit tables to ensure changes are being recorded as expected.
+3. Verify that transaction annotations are being correctly captured in your audit logs.
 
 ## Maintenance
 
@@ -253,9 +357,21 @@ Streaming `changes`, by default, does not include retention. This means that a `
 
 When streaming `changes` without retention, you can [backfill](/reference/backfills) from the source table. The change messages will be of action `read` and will only include the value currently in the database. Old values and deleted rows are not included.
 
+<Note>
+  Note that backfilled records will not include transaction annotations.
+</Note>
+
 If you need the ability to re-sync your audit logs with full history of changes, you can use a [Change retention](/reference/change-retention).
 
 ## Next steps
 
 See "[Deploy to production](/how-to/deploy-to-production)" for guidance on copying your local sink configuration to your production environment.
 
+<CardGroup>
+  <Card title="Annotations" icon="pencil" href="/reference/annotations">
+    Learn more about how to use transaction annotations.
+  </Card>
+  <Card title="How to annotate changes" icon="pencil" href="/how-to/annotate-changes">
+    Step-by-step guide on adding annotations to your database changes.
+  </Card>
+</CardGroup>

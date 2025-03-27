@@ -27,6 +27,9 @@ A change message has this shape:
     table_schema: string;
     table_name: string;
     commit_timestamp: string;  // ISO timestamp
+    transaction_annotations: null | {
+      [key: string]: any;  // User-provided transaction context
+    };
     sink: {
       id: string;
       name: string;
@@ -35,7 +38,55 @@ A change message has this shape:
 }
 ```
 
-A `read` operation occurs during [backfills](#backfills) when Sequin reads existing rows from your table. Unlike `insert`, `update`, or `delete` operations which happen in real-time, `read` operations represent historical data being loaded into your sink.
+### Change message fields
+
+<ResponseField name="record" type="object">
+  The current state of the row. Contains all column values.
+</ResponseField>
+
+<ResponseField name="changes" type="object">
+  For update operations, contains the previous values of changed fields. For insert and delete operations, this field is null.
+</ResponseField>
+
+<ResponseField name="action" type="string">
+  The type of change that occurred. One of:
+  - `insert`: A new row was created
+  - `update`: An existing row was modified
+  - `delete`: A row was deleted
+  - `read`: A row was read during a [backfill](#backfills)
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Additional context about the change.
+</ResponseField>
+
+<ResponseField name="metadata.table_schema" type="string">
+  The Postgres schema containing the table (e.g., "public").
+</ResponseField>
+
+<ResponseField name="metadata.table_name" type="string">
+  The name of the table that was changed.
+</ResponseField>
+
+<ResponseField name="metadata.commit_timestamp" type="string">
+  ISO 8601 timestamp when the change was committed to the database.
+</ResponseField>
+
+<ResponseField name="metadata.transaction_annotations" type="object">
+  User-provided context about the transaction. Contains arbitrary JSON data set via `pg_logical_emit_message`. See [Transaction annotations](/reference/annotations) for details.
+</ResponseField>
+
+<ResponseField name="metadata.sink" type="object">
+  Information about the sink receiving this message.
+</ResponseField>
+
+<ResponseField name="metadata.sink.id" type="string">
+  Unique identifier for the sink.
+</ResponseField>
+
+<ResponseField name="metadata.sink.name" type="string">
+  Name of the sink.
+</ResponseField>
 
 <AccordionGroup>
   <Accordion title="Insert Example" defaultOpen>
@@ -60,6 +111,11 @@ A `read` operation occurs during [backfills](#backfills) when Sequin reads exist
         "sink": {
           "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "name": "orders_kafka"
+        },
+        "transaction_annotations": {
+          "username": "paul.atreides",
+          "source": "web_ui",
+          "request_id": "req_123"
         }
       }
     }
@@ -175,6 +231,36 @@ A row message has this shape:
   };
 }
 ```
+
+### Row message fields
+
+<ResponseField name="record" type="object">
+  The current state of the row. Contains all column values.
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Additional context about the row.
+</ResponseField>
+
+<ResponseField name="metadata.table_schema" type="string">
+  The Postgres schema containing the table (e.g., "public").
+</ResponseField>
+
+<ResponseField name="metadata.table_name" type="string">
+  The name of the table.
+</ResponseField>
+
+<ResponseField name="metadata.sink" type="object">
+  Information about the sink receiving this message.
+</ResponseField>
+
+<ResponseField name="metadata.sink.id" type="string">
+  Unique identifier for the sink.
+</ResponseField>
+
+<ResponseField name="metadata.sink.name" type="string">
+  Name of the sink.
+</ResponseField>
 
 For example:
 

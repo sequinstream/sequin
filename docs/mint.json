@@ -103,7 +103,8 @@
         "how-to/create-audit-logs",
         "how-to/replicate-tables",
         "how-to/maintain-caches",
-        "how-to/deploy-to-production"
+        "how-to/deploy-to-production",
+        "how-to/annotate-changes"
       ]
     },
     {
@@ -115,6 +116,7 @@
         "reference/filters",
         "reference/backfills",
         "reference/change-retention",
+        "reference/annotations",
         "reference/sequin-yaml",
         "reference/cli/overview"
       ]

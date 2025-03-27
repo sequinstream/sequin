@@ -40,7 +40,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
 
   def metadata_changeset(metadata, attrs) do
     metadata
-    |> cast(attrs, [:table_schema, :table_name, :commit_timestamp, :database_name])
+    |> cast(attrs, [:table_schema, :table_name, :commit_timestamp, :database_name, :transaction_annotations])
     |> validate_required([:table_schema, :table_name, :commit_timestamp])
   end
 end

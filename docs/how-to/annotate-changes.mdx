@@ -1,0 +1,141 @@
+---
+title: "How to annotate database changes"
+sidebarTitle: "Annotate changes"
+description: "Add contextual metadata to your database changes"
+---
+
+Sequin allows you to annotate database changes with additional context using [annotations](/reference/annotations). This is useful for:
+
+- **Audit trails**: Track who made changes and from where
+- **Debugging**: Add request IDs and other debugging context
+- **Business context**: Include business-specific metadata about changes
+- **Change grouping**: Group related changes across tables
+
+## How it works
+
+Transaction annotations are JSON objects that you attach to a transaction. Any changes that occur within that transaction following the annotation statement will include the annotations in their metadata.
+
+To set annotations:
+
+```sql
+select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{ 
+  "username": "paul.atreides",
+  "source": "web_ui",
+  "request_id": "req_123"
+}');
+```
+
+The annotations will be included in the `metadata.transaction_annotations` field of all [change messages](/reference/messages#change-messages) in that transaction:
+
+```json
+{
+  "record": { /* ... */ },
+  "changes": null,
+  "action": "insert",
+  "metadata": {
+    "table_schema": "public",
+    "table_name": "orders",
+    "commit_timestamp": "2024-10-28T21:37:53Z",
+    "sink": {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "name": "orders_kafka"
+    },
+    "transaction_annotations": {
+      "username": "paul.atreides",
+      "source": "web_ui",
+      "request_id": "req_123"
+    }
+  }
+}
+```
+
+## Usage
+
+### Setting annotations
+
+Annotations must be set within the transaction they're annotating, before changes are made:
+
+```sql
+begin;
+  -- Set annotations for this transaction
+  select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
+    "username": "paul.atreides",
+    "source": "web_ui",
+    "request_id": "req_123"
+  }');
+
+  -- All changes in this transaction will include the annotations
+  insert into orders (customer_id, product, quantity) 
+  values (789, 'Wireless Headphones', 1);
+
+  update customers 
+  set last_order_at = now() 
+  where id = 789;
+commit;
+```
+
+### Clearing annotations
+
+Annotations are automatically cleared at the end of each transaction. You can also explicitly clear them, ensuring they will not be included in any changes following the clear statement:
+
+```sql
+select pg_logical_emit_message(true, 'sequin:transaction_annotations.clear', '');
+```
+
+## Common use cases
+
+### Audit logs
+
+Transaction annotations are particularly useful for audit logs. They allow you to capture who made changes and why:
+
+```sql
+begin;
+  select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
+    "username": "paul.atreides",
+    "action_type": "refund_order",
+    "reason": "customer_request",
+    "ticket_id": "TICKET-123"
+  }');
+
+  update orders set status = 'refunded' where id = 456;
+  insert into refunds (order_id, amount) values (456, 99.99);
+commit;
+```
+
+See [Create audit logs](/how-to/create-audit-logs) for a complete guide.
+
+### Request tracing
+
+Add request context to help with debugging:
+
+```sql
+begin;
+  select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
+    "request_id": "req_123",
+    "trace_id": "trace_456",
+    "user_agent": "Mozilla/5.0...",
+    "ip_address": "1.2.3.4"
+  }');
+
+  -- Make changes
+commit;
+```
+
+### Business workflows
+
+Group related changes with workflow context:
+
+```sql
+begin;
+  select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
+    "workflow": "new_subscription",
+    "plan_id": "pro_monthly",
+    "payment_id": "py_789",
+    "coupon_code": "WELCOME"
+  }');
+
+  insert into subscriptions (...);
+  insert into subscription_items (...);
+  update customer_metrics (...);
+commit;
+```

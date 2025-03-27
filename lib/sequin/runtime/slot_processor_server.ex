@@ -115,6 +115,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :current_xid, nil | integer()
       field :last_commit_lsn, integer()
       field :connection_state, :disconnected | :streaming
+      field :transaction_annotations, nil | String.t()
 
       # Wal cursors
       field :low_watermark_wal_cursor, Replication.wal_cursor()
@@ -1074,8 +1075,17 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         current_xid: nil,
         current_commit_ts: nil,
         current_commit_idx: 0,
-        dirty: false
+        dirty: false,
+        transaction_annotations: nil
     }
+  end
+
+  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin:transaction_annotations.set", content: content}) do
+    %{state | transaction_annotations: content}
+  end
+
+  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin:transaction_annotations.clear"}) do
+    %{state | transaction_annotations: nil}
   end
 
   defp process_message(%State{} = state, %Message{} = msg) do
@@ -1083,7 +1093,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       msg
       | commit_lsn: state.current_xaction_lsn,
         commit_idx: state.current_commit_idx,
-        commit_timestamp: state.current_commit_ts
+        commit_timestamp: state.current_commit_ts,
+        transaction_annotations: state.transaction_annotations
     }
 
     # TracerServer.message_replicated(state.postgres_database, msg)

@@ -638,6 +638,110 @@ defmodule Sequin.PostgresReplicationTest do
       assert data.record["tags"] == [], "Expected empty array, got: #{inspect(data.record["tags"])}"
     end
 
+    test "transaction annotations are propagated correctly", %{event_character_consumer: consumer} do
+      # Insert two characters in the same transaction with annotations
+      {:ok, {character1, character2}} =
+        UnboxedRepo.transaction(fn ->
+          # Set initial transaction annotations
+          {:ok, _} =
+            UnboxedRepo.query(
+              ~s|select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{ "username": "yahya" }')|
+            )
+
+          c1 = CharacterFactory.insert_character!([name: "Paul"], repo: UnboxedRepo)
+          c2 = CharacterFactory.insert_character!([name: "Leto"], repo: UnboxedRepo)
+          {c1, c2}
+        end)
+
+      # Wait for the messages to be handled
+      assert_receive {SlotProcessorServer, :flush_messages}, 500
+
+      # Insert a character without annotations
+      character3 = CharacterFactory.insert_character!([name: "Duncan"], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {SlotProcessorServer, :flush_messages}, 500
+
+      # Insert final character with new annotations
+      {:ok, character4} =
+        UnboxedRepo.transaction(fn ->
+          {:ok, _} =
+            UnboxedRepo.query(
+              ~s|select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{ "username": "leto" }')|
+            )
+
+          CharacterFactory.insert_character!([name: "Chani"], repo: UnboxedRepo)
+        end)
+
+      # Wait for the message to be handled
+      assert_receive {SlotProcessorServer, :flush_messages}, 500
+
+      # Fetch all consumer events
+      events = list_messages(consumer)
+
+      # Find events for each character
+      event1 = Enum.find(events, &(hd(&1.record_pks) == to_string(character1.id)))
+      event2 = Enum.find(events, &(hd(&1.record_pks) == to_string(character2.id)))
+      event3 = Enum.find(events, &(hd(&1.record_pks) == to_string(character3.id)))
+      event4 = Enum.find(events, &(hd(&1.record_pks) == to_string(character4.id)))
+
+      # First two events should have the same annotations
+      assert event1.data.metadata.transaction_annotations == %{"username" => "yahya"}
+      assert event2.data.metadata.transaction_annotations == %{"username" => "yahya"}
+
+      # Third event should have no annotations
+      assert event3.data.metadata.transaction_annotations == nil
+
+      # Fourth event should have new annotations
+      assert event4.data.metadata.transaction_annotations == %{"username" => "leto"}
+    end
+
+    @tag capture_log: true
+    test "invalid transaction annotations are ignored", %{event_character_consumer: consumer} do
+      # Insert a character with invalid JSON annotations
+      {:ok, character1} =
+        UnboxedRepo.transaction(fn ->
+          # Set invalid JSON as transaction annotations
+          {:ok, _} =
+            UnboxedRepo.query(
+              "select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{ invalid json }')"
+            )
+
+          CharacterFactory.insert_character!([name: "Paul"], repo: UnboxedRepo)
+        end)
+
+      # Wait for the message to be handled
+      assert_receive {SlotProcessorServer, :flush_messages}, 500
+
+      # Insert another character with valid annotations
+      {:ok, character2} =
+        UnboxedRepo.transaction(fn ->
+          # Set valid annotations
+          {:ok, _} =
+            UnboxedRepo.query(
+              ~s|select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{ "username": "leto" }')|
+            )
+
+          CharacterFactory.insert_character!([name: "Leto"], repo: UnboxedRepo)
+        end)
+
+      # Wait for the message to be handled
+      assert_receive {SlotProcessorServer, :flush_messages}, 500
+
+      # Fetch all consumer events
+      events = list_messages(consumer)
+
+      # Find events for each character
+      event1 = Enum.find(events, &(hd(&1.record_pks) == to_string(character1.id)))
+      event2 = Enum.find(events, &(hd(&1.record_pks) == to_string(character2.id)))
+
+      # First event should have no annotations due to parse error
+      assert event1.data.metadata.transaction_annotations == nil
+
+      # Second event should have valid annotations
+      assert event2.data.metadata.transaction_annotations == %{"username" => "leto"}
+    end
+
     # Postgres quirk - the logical decoding process does not distinguish between an empty array and an array with an empty string.
     # https://chatgpt.com/share/6707334f-0978-8006-8358-ec2300d759a4
     test "array fields with empty string are returned as empty list", %{event_character_consumer: consumer} do

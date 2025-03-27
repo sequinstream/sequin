@@ -21,6 +21,7 @@
     Logs,
     ChevronsLeftRightEllipsis,
     ArrowUpCircle,
+    UserCog,
   } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
 
@@ -313,7 +314,7 @@
                 data-phx-link-state="push"
               >
                 <Command.Item class="cursor-pointer">
-                  <Cog class="mr-2 h-4 w-4" />
+                  <UserCog class="mr-2 h-4 w-4" />
                   <span>Manage user</span>
                 </Command.Item>
               </a>

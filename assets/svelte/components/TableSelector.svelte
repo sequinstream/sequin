@@ -261,21 +261,35 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
         {/each}
       </SelectContent>
     </Select>
-    <Button
-      variant="outline"
-      size="sm"
-      on:click={refreshDatabases}
-      disabled={databaseRefreshState === "refreshing"}
-    >
-      {#if databaseRefreshState === "refreshing"}
-        <RotateCwIcon class="h-4 w-4 mr-2 animate-spin" />
-      {:else if databaseRefreshState === "done"}
-        <CheckIcon class="h-4 w-4 mr-2 text-green-500" />
-      {:else}
-        <RotateCwIcon class="h-4 w-4 mr-2" />
-      {/if}
-      Refresh
-    </Button>
+    <Tooltip.Root>
+      <Tooltip.Trigger>
+        <Button
+          variant="outline"
+          size="sm"
+          on:click={refreshDatabases}
+          disabled={databaseRefreshState === "refreshing"}
+          class="p-2"
+          aria-label="Refresh Databases"
+        >
+          {#if databaseRefreshState === "refreshing"}
+            <RotateCwIcon class="h-5 w-5 animate-spin" />
+          {:else if databaseRefreshState === "done"}
+            <CheckIcon class="h-5 w-5 text-green-500" />
+          {:else}
+            <RotateCwIcon class="h-5 w-5" />
+          {/if}
+        </Button>
+      </Tooltip.Trigger>
+      <Tooltip.Content>
+        <p class="text-xs">Refresh databases</p>
+      </Tooltip.Content>
+    </Tooltip.Root>
+    <a href="/databases/new" target="_blank">
+      <Button variant="outline" size="sm">
+        <Plus class="h-4 w-4 mr-2" />
+        Connect new database
+      </Button>
+    </a>
   </div>
 
   {#if selectedDatabaseId}
@@ -299,21 +313,29 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
               bind:value={searchQuery}
             />
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            on:click={refreshTables}
-            disabled={tableRefreshState === "refreshing"}
-          >
-            {#if tableRefreshState === "refreshing"}
-              <RotateCwIcon class="h-4 w-4 mr-2 animate-spin" />
-            {:else if tableRefreshState === "done"}
-              <CheckIcon class="h-4 w-4 mr-2 text-green-500" />
-            {:else}
-              <RotateCwIcon class="h-4 w-4 mr-2" />
-            {/if}
-            Refresh
-          </Button>
+          <Tooltip.Root>
+            <Tooltip.Trigger>
+              <Button
+                variant="outline"
+                size="sm"
+                on:click={refreshTables}
+                disabled={tableRefreshState === "refreshing"}
+                class="p-2"
+                aria-label="Refresh Tables"
+              >
+                {#if tableRefreshState === "refreshing"}
+                  <RotateCwIcon class="h-5 w-5 animate-spin" />
+                {:else if tableRefreshState === "done"}
+                  <CheckIcon class="h-5 w-5 text-green-500" />
+                {:else}
+                  <RotateCwIcon class="h-5 w-5" />
+                {/if}
+              </Button>
+            </Tooltip.Trigger>
+            <Tooltip.Content>
+              <p class="text-xs">Refresh tables</p>
+            </Tooltip.Content>
+          </Tooltip.Root>
         </div>
       </div>
 

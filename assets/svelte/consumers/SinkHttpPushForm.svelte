@@ -38,6 +38,7 @@
     DropdownMenuContent,
     DropdownMenuItem,
   } from "$lib/components/ui/dropdown-menu";
+  import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let live;
   export let form;
@@ -223,22 +224,29 @@
         </SelectContent>
       </Select>
       <div class="flex items-center">
-        <Button
-          variant="outline"
-          size="sm"
-          on:click={refreshHttpEndpoints}
-          disabled={httpEndpointsRefreshState === "refreshing"}
-          class="p-2"
-          aria-label="Refresh HTTP Endpoints"
-        >
-          {#if httpEndpointsRefreshState === "refreshing"}
-            <RotateCwIcon class="h-5 w-5 animate-spin" />
-          {:else if httpEndpointsRefreshState === "done"}
-            <CheckIcon class="h-5 w-5 text-green-500" />
-          {:else}
-            <RotateCwIcon class="h-5 w-5" />
-          {/if}
-        </Button>
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={refreshHttpEndpoints}
+              disabled={httpEndpointsRefreshState === "refreshing"}
+              class="p-2"
+              aria-label="Refresh HTTP Endpoints"
+            >
+              {#if httpEndpointsRefreshState === "refreshing"}
+                <RotateCwIcon class="h-5 w-5 animate-spin" />
+              {:else if httpEndpointsRefreshState === "done"}
+                <CheckIcon class="h-5 w-5 text-green-500" />
+              {:else}
+                <RotateCwIcon class="h-5 w-5" />
+              {/if}
+            </Button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>
+            <p class="text-xs">Refresh HTTP endpoints</p>
+          </Tooltip.Content>
+        </Tooltip.Root>
         <DropdownMenu>
           <DropdownMenuTrigger asChild let:builder>
             <Button

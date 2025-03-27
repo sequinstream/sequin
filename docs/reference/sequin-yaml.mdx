@@ -255,7 +255,7 @@ change_retentions:
 
 ## Example configuration
 
-Here's a complete example combining multiple resource:
+Here's a complete example combining multiple resources:
 
 ```yaml
 account:
@@ -298,3 +298,47 @@ change_retentions:
     destination_table_schema: "audit"
     destination_table_name: "user_events"
 ```
+
+## YAML Anchors
+
+YAML anchors allow you to reuse YAML configuration across multiple resources. For instance, you may want to create a sink for each table in a database. You can use anchors to avoid duplicating the sink configuration for each table.
+
+
+```yaml
+# This database has three tables we want to sink from
+databases:
+  - name: "production-db"
+    tables:
+      - table_name: "users"
+        ...
+      - table_name: "accounts"
+        ...
+      - table_name: "documents"
+        ...
+
+# Create a re-usable sink template- in this case a GCP PubSub topic
+gcp_pubsub_sink_template: &gcp_pubsub_sink_template
+  destination:
+    type: gcp_pubsub
+    project_id: my-project-id
+    topic_id: my-topic
+    credentials:
+      type: service_account
+      private_key_id: "key123"
+      ...
+  database: "production-db"
+
+# Use the sink template to create a sink for each table
+sinks:
+  - <<: *gcp_pubsub_sink_template
+    name: "user-changes"
+    table: "users"
+  - <<: *gcp_pubsub_sink_template
+    name: "account-changes"
+    table: "accounts"
+  - <<: *gcp_pubsub_sink_template
+    name: "document-changes"
+    table: "documents"
+```
+
+This setup will fan-in changes from all three tables into a single sink destination, all using the same YAML block for each table.

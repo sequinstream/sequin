@@ -830,12 +830,12 @@ defmodule Sequin.Health do
       case new_status do
         status when status in [:error] ->
           summary = build_error_summary(name, entity)
-          Logger.warning("[Health] #{name} is experiencing issues: #{summary}", metadata)
+          Logger.warning("[Health] #{name} is experiencing issues: #{summary}", Keyword.put(metadata, :status, status))
 
           Pagerduty.alert(dedup_key, summary, severity: :warning)
 
         _ ->
-          Logger.info("[Health] #{name} is healthy", metadata)
+          Logger.info("[Health] #{name} is healthy", Keyword.put(metadata, :status, :healthy))
           Pagerduty.resolve(dedup_key, "#{name} is healthy")
       end
     end

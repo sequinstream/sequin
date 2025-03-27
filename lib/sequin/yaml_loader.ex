@@ -820,7 +820,8 @@ defmodule Sequin.YamlLoader do
            column_filters: column_filters(consumer_attrs["filters"], table)
          },
          batch_size: Map.get(consumer_attrs, "batch_size", 1),
-         sink: sink
+         sink: sink,
+         transform: consumer_attrs["transform"] || "none"
        }}
     end
   end

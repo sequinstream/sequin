@@ -420,6 +420,7 @@ defmodule Sequin.YamlLoaderTest do
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
+                   transform: "record_only"
                    consumer_start:
                      position: "beginning"
                """)
@@ -429,6 +430,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "test-db.public.Characters"
+      assert consumer.transform == :record_only
 
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
@@ -619,6 +621,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "sequin-playground-consumer"
       assert consumer.sequence.name == "test-db.public.Characters"
+      assert consumer.transform == :none
 
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
@@ -638,6 +641,7 @@ defmodule Sequin.YamlLoaderTest do
                  - name: "kafka-consumer"
                    database: "test-db"
                    table: "Characters"
+                   transform: "record_only"
                    destination:
                      type: "kafka"
                      hosts: "localhost:9092"
@@ -653,6 +657,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "kafka-consumer"
       assert consumer.sequence.name == "test-db.public.Characters"
+      assert consumer.transform == :record_only
 
       assert %KafkaSink{
                type: :kafka,
@@ -852,6 +857,7 @@ defmodule Sequin.YamlLoaderTest do
 
                sink_template: &sink_template
                  status: active
+                 transform: "none"
                  destination:
                    type: gcp_pubsub
                    emulator_base_url: http://localhost:8085
@@ -871,6 +877,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "gcp-events-characters"
       assert consumer.status == :active
+      assert consumer.transform == :none
       assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %GcpPubsubSink{
@@ -889,6 +896,7 @@ defmodule Sequin.YamlLoaderTest do
 
                sink_template: &sink_template
                  status: active
+                 transform: "none"
                  destination:
                    type: gcp_pubsub
                    emulator_base_url: http://localhost:8085
@@ -916,6 +924,7 @@ defmodule Sequin.YamlLoaderTest do
       for consumer <- consumers do
         consumer = Repo.preload(consumer, :sequence)
         assert consumer.status == :active
+        assert consumer.transform == :none
         assert consumer.sequence.name == "test-db.public.Characters"
 
         assert %GcpPubsubSink{

@@ -235,7 +235,6 @@ defmodule Sequin.TransformsTest do
           name: "pubsub-consumer",
           account_id: account.id,
           status: :active,
-          max_deliver: 5,
           sink: %{
             type: :gcp_pubsub,
             project_id: "my-project",
@@ -261,7 +260,6 @@ defmodule Sequin.TransformsTest do
       assert %{
                name: name,
                status: status,
-               max_deliver: max_deliver,
                database: database_name,
                table: schema_and_table,
                destination: %{
@@ -283,7 +281,6 @@ defmodule Sequin.TransformsTest do
       assert database_name == database.name
       assert schema_and_table == "#{table.schema}.#{table.name}"
       assert status == :active
-      assert max_deliver == 5
       assert group_column_names == [column.name]
       assert length(filters) == 1
 
@@ -318,7 +315,6 @@ defmodule Sequin.TransformsTest do
         account_id: account.id,
         status: :active,
         max_ack_pending: 1000,
-        max_deliver: 5,
         sink: %{type: :http_push, http_endpoint_id: endpoint.id},
         sequence_id: sequence.id,
         sequence_filter: %{
@@ -340,7 +336,6 @@ defmodule Sequin.TransformsTest do
     assert %{
              name: name,
              status: status,
-             max_deliver: max_deliver,
              database: database_name,
              table: schema_and_table,
              destination: %{
@@ -359,7 +354,6 @@ defmodule Sequin.TransformsTest do
     assert database_name == database.name
     assert schema_and_table == "#{table.schema}.#{table.name}"
     assert status == :active
-    assert max_deliver == 5
     assert group_column_names == [column.name]
     assert length(filters) == 1
     [filter] = filters

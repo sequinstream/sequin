@@ -9,6 +9,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -106,7 +107,7 @@ defmodule Sequin.Transforms do
     }
   end
 
-  def to_external(%SinkConsumer{sink: sink} = consumer, _show_sensitive) do
+  def to_external(%SinkConsumer{sink: sink} = consumer, show_sensitive) do
     consumer =
       consumer
       |> Repo.preload(sequence: [:postgres_database])
@@ -119,15 +120,15 @@ defmodule Sequin.Transforms do
       name: consumer.name,
       database: consumer.sequence.postgres_database.name,
       status: consumer.status,
-      max_deliver: consumer.max_deliver,
       group_column_names: group_column_names(consumer.sequence_filter.group_column_attnums, table),
       table: "#{table.schema}.#{table.name}",
-      destination: to_external(sink),
+      destination: to_external(sink, show_sensitive),
       filters: Enum.map(filters, &format_filter(&1, table)),
       consumer_start: %{
         position: "beginning | end | from with value"
       },
-      batch_size: consumer.batch_size
+      batch_size: consumer.batch_size,
+      transform: consumer.transform
     }
   end
 
@@ -153,6 +154,20 @@ defmodule Sequin.Transforms do
       username: sink.username,
       password: maybe_obfuscate(sink.password, show_sensitive),
       sasl_mechanism: sink.sasl_mechanism
+    })
+  end
+
+  def to_external(%RabbitMqSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "rabbitmq",
+      host: sink.host,
+      port: sink.port,
+      username: sink.username,
+      password: maybe_obfuscate(sink.password, show_sensitive),
+      virtual_host: sink.virtual_host,
+      tls: sink.tls,
+      exchange: sink.exchange,
+      connection_id: sink.connection_id
     })
   end
 

@@ -282,8 +282,23 @@ defmodule Sequin.Runtime.MessageHandler do
       consumer: %{
         id: consumer.id,
         name: consumer.name
-      }
+      },
+      transaction_annotations: maybe_parse_transaction_annotations(message.transaction_annotations)
     }
+  end
+
+  defp maybe_parse_transaction_annotations(nil), do: nil
+
+  defp maybe_parse_transaction_annotations(content) when is_binary(content) do
+    case Jason.decode(content) do
+      {:ok, json} ->
+        json
+
+      {:error, error} ->
+        # FIXME: Use Health Events to surface this log line to the user
+        Logger.error("Error parsing transaction annotations: #{inspect(error)}")
+        nil
+    end
   end
 
   defp fields_to_map(fields) do

@@ -27,6 +27,7 @@ defmodule Sequin.Runtime.SlotProcessor.Message do
     field :commit_timestamp, DateTime.t()
     field :commit_lsn, integer()
     field :commit_idx, integer()
+    field :transaction_annotations, String.t()
     field :errors, any()
     field :ids, list()
     field :table_schema, String.t()

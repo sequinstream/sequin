@@ -23,6 +23,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
       field :commit_timestamp, :utc_datetime_usec
       field :consumer, :map
       field :database_name, :string
+      field :transaction_annotations, :map
     end
   end
 

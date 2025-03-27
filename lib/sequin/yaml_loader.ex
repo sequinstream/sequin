@@ -56,7 +56,7 @@ defmodule Sequin.YamlLoader do
   end
 
   def apply_from_yml(account_id \\ nil, yml) do
-    case YamlElixir.read_from_string(yml) do
+    case YamlElixir.read_from_string(yml, merge_anchors: true) do
       {:ok, config} ->
         Repo.transaction(fn ->
           case apply_config(account_id, config) do
@@ -76,7 +76,7 @@ defmodule Sequin.YamlLoader do
 
   def plan_from_yml(account_id \\ nil, yml) do
     ## return a list of changesets
-    case YamlElixir.read_from_string(yml) do
+    case YamlElixir.read_from_string(yml, merge_anchors: true) do
       {:ok, config} ->
         result =
           Repo.transaction(fn ->
@@ -760,7 +760,7 @@ defmodule Sequin.YamlLoader do
   #########################
 
   defp upsert_sink_consumers(account_id, %{"sinks" => consumers}, databases, http_endpoints) do
-    Logger.info("Upserting HTTP push consumers: #{inspect(consumers, pretty: true)}")
+    Logger.info("Upserting sink consumers: #{inspect(consumers, pretty: true)}")
 
     Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
       case upsert_sink_consumer(account_id, consumer, databases, http_endpoints) do

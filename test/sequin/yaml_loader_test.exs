@@ -844,5 +844,88 @@ defmodule Sequin.YamlLoaderTest do
       assert final_sequence.id == initial_sequence.id
       assert final_consumer.sequence_id == final_sequence.id
     end
+
+    test "creates multiple sinks using YAML anchors" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sink_template: &sink_template
+                 status: active
+                 destination:
+                   type: gcp_pubsub
+                   emulator_base_url: http://localhost:8085
+                   project_id: my-project-id
+                   topic_id: my-topic
+                   use_emulator: true
+                 database: test-db
+
+               sinks:
+                 - <<: *sink_template
+                   name: gcp-events-characters
+                   table: public.Characters
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "gcp-events-characters"
+      assert consumer.status == :active
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      assert %GcpPubsubSink{
+               type: :gcp_pubsub,
+               project_id: "my-project-id",
+               topic_id: "my-topic",
+               use_emulator: true,
+               emulator_base_url: "http://localhost:8085"
+             } = consumer.sink
+    end
+
+    test "creates multiple sinks with different names using YAML anchors" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sink_template: &sink_template
+                 status: active
+                 destination:
+                   type: gcp_pubsub
+                   emulator_base_url: http://localhost:8085
+                   project_id: my-project-id
+                   topic_id: my-topic
+                   use_emulator: true
+                 database: test-db
+
+               sinks:
+                 - <<: *sink_template
+                   name: gcp-events-characters-1
+                   table: public.Characters
+                 - <<: *sink_template
+                   name: gcp-events-characters-2
+                   table: public.Characters
+               """)
+
+      assert consumers = Repo.all(SinkConsumer)
+      assert length(consumers) == 2
+
+      consumer_names = Enum.map(consumers, & &1.name)
+      assert "gcp-events-characters-1" in consumer_names
+      assert "gcp-events-characters-2" in consumer_names
+
+      for consumer <- consumers do
+        consumer = Repo.preload(consumer, :sequence)
+        assert consumer.status == :active
+        assert consumer.sequence.name == "test-db.public.Characters"
+
+        assert %GcpPubsubSink{
+                 type: :gcp_pubsub,
+                 project_id: "my-project-id",
+                 topic_id: "my-topic",
+                 use_emulator: true,
+                 emulator_base_url: "http://localhost:8085"
+               } = consumer.sink
+      end
+    end
   end
 end

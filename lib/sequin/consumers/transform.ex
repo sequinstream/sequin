@@ -1,4 +1,4 @@
-defmodule Sequin.Transforms.Transform do
+defmodule Sequin.Consumers.Transform do
   @moduledoc false
   use Sequin.ConfigSchema
 

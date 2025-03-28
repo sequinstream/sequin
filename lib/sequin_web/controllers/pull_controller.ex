@@ -16,7 +16,8 @@ defmodule SequinWeb.PullController do
     account_id = conn.assigns.account_id
 
     # TODO: Cache this
-    with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
+    with {:ok, consumer} <-
+           Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream, preload: [:transform]),
          {:ok, batch_size} <- parse_batch_size(params),
          :ok <- maybe_wait(params, consumer),
          :ok <- SlotMessageStore.nack_stale_produced_messages(consumer),

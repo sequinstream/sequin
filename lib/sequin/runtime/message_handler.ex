@@ -281,7 +281,7 @@ defmodule Sequin.Runtime.MessageHandler do
       table_schema: message.table_schema,
       commit_timestamp: message.commit_timestamp,
       commit_lsn: message.commit_lsn,
-      consumer: %{
+      sink: %{
         id: consumer.id,
         name: consumer.name
       }

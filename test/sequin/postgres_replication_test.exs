@@ -39,6 +39,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.TestSupport.Models.CharacterMultiPK
   alias Sequin.TestSupport.Models.TestEventLogPartitioned
   alias Sequin.TestSupport.ReplicationSlots
+  alias Sequin.Transforms.TestMessages
 
   @moduletag :unboxed
 
@@ -49,6 +50,7 @@ defmodule Sequin.PostgresReplicationTest do
   setup do
     # Fast-forward the replication slot to the current WAL position
     :ok = ReplicationSlots.reset_slot(UnboxedRepo, replication_slot())
+    TestMessages.create_ets_table()
     stub(SlotMessageHandlerMock, :flush_messages, fn _ctx -> :ok end)
 
     :ok

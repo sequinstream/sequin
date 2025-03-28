@@ -24,6 +24,8 @@ defmodule Sequin.Application do
 
     :syn.add_node_to_scopes([:account, :replication, :consumers])
 
+    Sequin.Transforms.TestMessages.create_ets_table()
+
     Sequin.Sentry.init()
 
     # See https://hexdocs.pm/elixir/Supervisor.html

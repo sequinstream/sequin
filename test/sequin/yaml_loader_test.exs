@@ -971,4 +971,87 @@ defmodule Sequin.YamlLoaderTest do
       end
     end
   end
+
+  describe "await_database" do
+    test "retries with default values when db not immediately available" do
+      # Connection attempt counter using atomics
+      counter = :atomics.new(1, [])
+
+      # Mock test_connect that fails first time, succeeds second time
+      test_connect_fun = fn _db ->
+        count = :atomics.add_get(counter, 1, 1)
+
+        if count == 1 do
+          {:error, "Connection refused"}
+        else
+          :ok
+        end
+      end
+
+      result =
+        YamlLoader.apply_from_yml(
+          nil,
+          """
+          account:
+            name: "Test Account"
+
+          databases:
+            - name: "test-db"
+              username: "postgres"
+              password: "postgres"
+              hostname: "localhost"
+              database: "sequin_test"
+              slot_name: "#{replication_slot()}"
+              publication_name: "#{@publication}"
+          """,
+          test_connect_fun: test_connect_fun
+        )
+
+      assert {:ok, {:ok, _resources}} = result
+
+      # Should have attempted exactly twice
+      assert :atomics.get(counter, 1) == 2
+    end
+
+    test "returns error when timeout is reached" do
+      # Track attempts using atomics
+      counter = :atomics.new(1, [])
+      test_pid = self()
+
+      # Mock test_connect that always fails
+      test_connect_fun = fn _db ->
+        :atomics.add_get(counter, 1, 1)
+        send(test_pid, :test_connect_called)
+        {:error, "Connection refused"}
+      end
+
+      result =
+        YamlLoader.apply_from_yml(
+          nil,
+          """
+          account:
+            name: "Test Account"
+
+          databases:
+            - name: "test-db"
+              username: "postgres"
+              password: "postgres"
+              hostname: "localhost"
+              database: "sequin_test"
+              slot_name: "#{replication_slot()}"
+              publication_name: "#{@publication}"
+              await_database:
+                timeout_ms: 5
+                interval_ms: 2
+          """,
+          test_connect_fun: test_connect_fun
+        )
+
+      assert {:error, error} = result
+      assert error.message =~ "Failed to connect to database 'test-db' after 5ms"
+
+      # Verify we attempted at least once
+      assert_received :test_connect_called
+    end
+  end
 end

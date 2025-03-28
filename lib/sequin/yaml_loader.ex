@@ -55,11 +55,11 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  def apply_from_yml(account_id \\ nil, yml) do
+  def apply_from_yml(account_id \\ nil, yml, opts \\ []) do
     case YamlElixir.read_from_string(yml, merge_anchors: true) do
       {:ok, config} ->
         Repo.transaction(fn ->
-          case apply_config(account_id, config) do
+          case apply_config(account_id, config, opts) do
             {:ok, resources} -> {:ok, resources}
             {:error, error} -> Repo.rollback(error)
           end
@@ -74,14 +74,14 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  def plan_from_yml(account_id \\ nil, yml) do
+  def plan_from_yml(account_id \\ nil, yml, opts \\ []) do
     ## return a list of changesets
     case YamlElixir.read_from_string(yml, merge_anchors: true) do
       {:ok, config} ->
         result =
           Repo.transaction(fn ->
             account_id
-            |> apply_config(config)
+            |> apply_config(config, opts)
             |> Repo.rollback()
           end)
 
@@ -112,10 +112,10 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  defp apply_config(account_id, config) do
+  defp apply_config(account_id, config, opts) do
     with {:ok, account} <- find_or_create_account(account_id, config),
          {:ok, _users} <- find_or_create_users(account, config),
-         {:ok, _databases} <- upsert_databases(account.id, config),
+         {:ok, _databases} <- upsert_databases(account.id, config, opts),
          databases = Databases.list_dbs_for_account(account.id),
          {:ok, _sequences} <- find_or_create_sequences(account.id, config, databases),
          databases = Databases.list_dbs_for_account(account.id, [:sequences, :replication_slot]),
@@ -236,25 +236,27 @@ defmodule Sequin.YamlLoader do
     "port" => 5432
   }
 
-  defp upsert_databases(account_id, %{"databases" => databases}) do
+  defp upsert_databases(account_id, %{"databases" => databases}, opts) do
     Logger.info("Upserting databases: #{inspect(databases, pretty: true)}")
 
     Enum.reduce_while(databases, {:ok, []}, fn database_attrs, {:ok, acc} ->
       database_attrs = Map.delete(database_attrs, "tables")
 
-      case upsert_database(account_id, database_attrs) do
+      case upsert_database(account_id, database_attrs, opts) do
         {:ok, database} -> {:cont, {:ok, [database | acc]}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
   end
 
-  defp upsert_databases(_account_id, %{}) do
+  defp upsert_databases(_account_id, %{}, _opts) do
     Logger.info("No databases found in config")
     {:ok, []}
   end
 
-  defp upsert_database(account_id, %{"name" => name} = database_attrs) do
+  defp upsert_database(account_id, %{"name" => name} = database_attrs, opts) do
+    test_connect_fun = Keyword.get(opts, :test_connect_fun, &Databases.test_connect/1)
+
     account_id
     |> Databases.get_db_for_account(name)
     |> case do
@@ -263,13 +265,71 @@ defmodule Sequin.YamlLoader do
         update_database(database, database_attrs)
 
       {:error, %NotFoundError{}} ->
-        create_database_with_replication(account_id, database_attrs)
+        database_attrs = Map.merge(@database_defaults, database_attrs)
+
+        with %Ecto.Changeset{valid?: true} <-
+               Databases.create_db_changeset(account_id, database_attrs),
+             :ok <- await_database(database_attrs, test_connect_fun) do
+          create_database_with_replication(account_id, database_attrs)
+        else
+          %Ecto.Changeset{valid?: false} = changeset ->
+            # To get well-formatted errors, convert to ValidationError first
+            error = Error.validation(changeset: changeset)
+
+            {:error,
+             Error.bad_request(
+               message: "Error creating database '#{database_attrs["name"]}': #{Exception.message(error)}"
+             )}
+
+          error ->
+            error
+        end
+    end
+  end
+
+  defp await_database(database_attrs, test_connect_fun, started_at \\ nil) do
+    now = :erlang.system_time(:millisecond)
+    started_at = started_at || now
+
+    name = database_attrs["name"]
+    await_database = database_attrs["await_database"] || %{}
+    max_wait = await_database["timeout_ms"] || default_await_database_opts()[:timeout_ms]
+    interval = await_database["interval_ms"] || default_await_database_opts()[:interval_ms]
+
+    timeout_at = started_at + max_wait
+
+    valid_keys = %PostgresDatabase{} |> Map.keys() |> Enum.map(&Atom.to_string/1)
+
+    attrs =
+      database_attrs
+      |> Map.take(valid_keys)
+      |> Map.new(fn {k, v} -> {String.to_existing_atom(k), v} end)
+
+    pd = struct(PostgresDatabase, attrs)
+
+    case test_connect_fun.(pd) do
+      :ok ->
+        :ok
+
+      {:error, _error} ->
+        if now < timeout_at do
+          Logger.info("Waiting for external database (#{name}) to be ready...")
+          remaining_time = timeout_at - now
+          sleep_time = min(interval, remaining_time)
+          Process.sleep(sleep_time)
+          await_database(database_attrs, test_connect_fun, started_at)
+        else
+          {:error,
+           Error.service(
+             message:
+               "Failed to connect to database '#{name}' after #{max_wait}ms. Please check your database credentials.",
+             service: :customer_postgres
+           )}
+        end
     end
   end
 
   defp create_database_with_replication(account_id, database) do
-    database = Map.merge(@database_defaults, database)
-
     account_id
     |> Databases.create_db(database)
     |> case do
@@ -1090,4 +1150,18 @@ defmodule Sequin.YamlLoader do
        Error.validation(
          summary: "Invalid SASL mechanism '#{invalid}'. Must be one of: plain, scram_sha_256, scram_sha_512"
        )}
+
+  defp default_await_database_opts do
+    if env() == :test do
+      %{
+        timeout_ms: 5000,
+        interval_ms: 1
+      }
+    else
+      %{
+        timeout_ms: :timer.seconds(30),
+        interval_ms: :timer.seconds(3)
+      }
+    end
+  end
 end

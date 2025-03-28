@@ -67,8 +67,8 @@ defmodule Sequin.Databases do
   def create_db(account_id, attrs) do
     Repo.transact(fn ->
       res =
-        %PostgresDatabase{account_id: account_id}
-        |> PostgresDatabase.changeset(attrs)
+        account_id
+        |> create_db_changeset(attrs)
         |> Repo.insert()
 
       with {:ok, db} <- res,
@@ -86,11 +86,15 @@ defmodule Sequin.Databases do
     end)
   end
 
+  def create_db_changeset(account_id, attrs) do
+    PostgresDatabase.create_changeset(%PostgresDatabase{account_id: account_id}, attrs)
+  end
+
   def update_db(%PostgresDatabase{} = db, attrs) do
     Repo.transact(fn ->
       res =
         db
-        |> PostgresDatabase.changeset(attrs)
+        |> PostgresDatabase.update_changeset(attrs)
         |> Repo.update()
 
       case res do

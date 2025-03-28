@@ -44,10 +44,19 @@ databases:
     pool_size: 10               # Default: 3
     slot_name: "sequin_slot"    # Required
     publication_name: "sequin_pub" # Required
+    await_database:             # Optional, configuration for database connection retry behavior
+      timeout_ms: 30000         # Default: 30000 (30 seconds)
+      interval_ms: 3000         # Default: 3000 (3 seconds)
     tables:                     # Optional, list of tables to track
       - table_name: "users"     # Required
         table_schema: "public"  # Default: public
 ```
+
+#### Database connection retry
+
+When creating a database, Sequin needs to be able to connect to the database in order to read the database's schema. The `await_database` configuration allows you to control how Sequin attempts to connect to your database during startup. This option is most relevant in development environments, where you might be provisioning Sequin and your database at the same time.
+
+By default, Sequin will wait up to 30 seconds for the database to be ready and will retry every 3 seconds. You can customize this behavior by setting the `timeout_ms` and `interval_ms` options.
 
 ### HTTP endpoint configuration
 

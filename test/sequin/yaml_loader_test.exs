@@ -889,6 +889,40 @@ defmodule Sequin.YamlLoaderTest do
              } = consumer.sink
     end
 
+    test "creates sink with custom actions" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               http_endpoints:
+                - name: "sequin-playground-http"
+                  url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "custom-actions-sink"
+                   database: "test-db"
+                   table: "Characters"
+                   actions:
+                     - insert
+                     - delete
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "custom-actions-sink"
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      assert consumer.sequence_filter == %SequenceFilter{
+               actions: [:insert, :delete],
+               column_filters: [],
+               group_column_attnums: [1]
+             }
+    end
+
     test "creates multiple sinks with different names using YAML anchors" do
       assert :ok =
                YamlLoader.apply_from_yml!("""

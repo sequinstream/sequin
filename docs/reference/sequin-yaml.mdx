@@ -103,6 +103,10 @@ sinks:
     status: "active"               # Optional: active or disabled, default: active
     group_column_names: ["id"]   # Optional, columns to group messages by
     transform: "none"              # Optional, transform: none or record_only (more coming soon!)
+    actions:                       # Optional, defaults to all
+      - insert
+      - update
+      - delete
     filters:                       # Optional, filter which rows to consume with `where` clause
       - column_name: "status"      
         operator: "="
@@ -227,6 +231,15 @@ filters:
     operator: "="                   # =, !=, >, >=, <, <=
     comparison_value: "dark"
     field_type: "string"           # string, number, boolean, null, list
+```
+
+Additioanlly, you can specify actions to consume. By default, all actions are consumed.
+
+```yaml
+sinks:
+  - name: "my-sink"
+    actions: ["insert", "update", "delete"]
+    ...
 ```
 
 ### Change retention configuration

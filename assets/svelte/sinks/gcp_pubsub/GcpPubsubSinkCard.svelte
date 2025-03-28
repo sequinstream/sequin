@@ -6,7 +6,7 @@
 
   export let consumer: GcpPubsubConsumer;
 
-  // Construct Gcp Cloud Console URL for the topic
+  // Construct GCP Console URL for the topic
   $: consoleUrl = `https://console.cloud.google.com/cloudpubsub/topic/detail/${consumer.sink.topic_id}?project=${consumer.sink.project_id}`;
 </script>
 
@@ -18,7 +18,7 @@
         <a href={consoleUrl} target="_blank" rel="noopener noreferrer">
           <Button variant="outline" size="sm">
             <ExternalLink class="h-4 w-4 mr-2" />
-            View in Gcp Cloud Console
+            View in GCP Console
           </Button>
         </a>
       </div>

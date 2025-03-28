@@ -815,7 +815,7 @@ defmodule Sequin.YamlLoader do
          sequence_id: sequence.id,
          replication_slot_id: database.replication_slot.id,
          sequence_filter: %{
-           actions: ["insert", "update", "delete"],
+           actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
            group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
            column_filters: column_filters(consumer_attrs["filters"], table)
          },

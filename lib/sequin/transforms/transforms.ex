@@ -122,6 +122,7 @@ defmodule Sequin.Transforms do
       status: consumer.status,
       group_column_names: group_column_names(consumer.sequence_filter.group_column_attnums, table),
       table: "#{table.schema}.#{table.name}",
+      actions: consumer.sequence_filter.actions,
       destination: to_external(sink, show_sensitive),
       filters: Enum.map(filters, &format_filter(&1, table)),
       consumer_start: %{

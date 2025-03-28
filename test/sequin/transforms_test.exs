@@ -458,6 +458,15 @@ defmodule Sequin.TransformsTest do
       assert result == nil
     end
 
+    test "handles non-existent deeply nested field gracefully" do
+      message = ConsumersFactory.consumer_message(message_kind: :record)
+      path_transform = ConsumersFactory.path_transform(path: "record.nonexistent_field.nonexistent_field")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == nil
+    end
+
     test "handles non-existent metadata field gracefully" do
       message = ConsumersFactory.consumer_message(message_kind: :record)
       path_transform = ConsumersFactory.path_transform(path: "metadata.nonexistent_field")

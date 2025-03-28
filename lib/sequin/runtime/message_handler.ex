@@ -7,6 +7,8 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.ConsumerRecordData.Metadata.Sink
+  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -230,11 +232,15 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   defp event_data_from_message(%Message{action: :insert} = message, consumer) do
+    metadata = metadata(message, consumer)
+    metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
+    metadata = struct(ConsumerEventData.Metadata, metadata)
+
     %ConsumerEventData{
       record: fields_to_map(message.fields),
       changes: nil,
       action: :insert,
-      metadata: struct(ConsumerEventData.Metadata, metadata(message, consumer))
+      metadata: metadata
     }
   end
 
@@ -248,36 +254,52 @@ defmodule Sequin.Runtime.MessageHandler do
         %{}
       end
 
+    metadata = metadata(message, consumer)
+    metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
+    metadata = struct(ConsumerEventData.Metadata, metadata)
+
     %ConsumerEventData{
       record: new_fields,
       changes: changes,
       action: :update,
-      metadata: struct(ConsumerEventData.Metadata, metadata(message, consumer))
+      metadata: metadata
     }
   end
 
   defp event_data_from_message(%Message{action: :delete} = message, consumer) do
+    metadata = metadata(message, consumer)
+    metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
+    metadata = struct(ConsumerEventData.Metadata, metadata)
+
     %ConsumerEventData{
       record: fields_to_map(message.old_fields),
       changes: nil,
       action: :delete,
-      metadata: struct(ConsumerEventData.Metadata, metadata(message, consumer))
+      metadata: metadata
     }
   end
 
   defp record_data_from_message(%Message{action: action} = message, consumer) when action in [:insert, :update] do
+    metadata = metadata(message, consumer)
+    metadata = Map.update!(metadata, :consumer, &struct(Sink, &1))
+    metadata = struct(ConsumerRecordData.Metadata, metadata)
+
     %ConsumerRecordData{
       record: fields_to_map(message.fields),
       action: action,
-      metadata: struct(ConsumerRecordData.Metadata, metadata(message, consumer))
+      metadata: metadata
     }
   end
 
   defp record_data_from_message(%Message{action: :delete} = message, consumer) do
+    metadata = metadata(message, consumer)
+    metadata = Map.update!(metadata, :consumer, &struct(Sink, &1))
+    metadata = struct(ConsumerRecordData.Metadata, metadata)
+
     %ConsumerRecordData{
       record: fields_to_map(message.old_fields),
       action: :delete,
-      metadata: struct(ConsumerRecordData.Metadata, metadata(message, consumer))
+      metadata: metadata
     }
   end
 
@@ -583,6 +605,14 @@ defmodule Sequin.Runtime.MessageHandler do
 
         # Add message to each matching sequence's test messages
         Enum.each(matching_sequences, fn sequence ->
+          test_consumer = %SinkConsumer{
+            message_kind: :event,
+            name: "test-consumer",
+            postgres_database: ctx.postgres_database,
+            sequence_filter: %SequenceFilter{}
+          }
+
+          message = consumer_event(test_consumer, message)
           TestMessages.add_test_message(sequence.id, message)
         end)
       end)

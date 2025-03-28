@@ -1,7 +1,9 @@
 defmodule Sequin.Transforms.Message do
   @moduledoc false
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Transform
@@ -32,19 +34,43 @@ defmodule Sequin.Transforms.Message do
 
   def to_external(%SinkConsumer{transform: %Transform{transform: %PathTransform{path: path}}}, %ConsumerEvent{} = event) do
     keys = String.split(path, ".")
-
-    event.data
-    |> Sequin.Map.from_struct_deep()
-    |> Sequin.Map.deep_stringify_keys()
-    |> get_in(keys)
+    traverse_path(event.data, keys)
   end
 
   def to_external(%SinkConsumer{transform: %Transform{transform: %PathTransform{path: path}}}, %ConsumerRecord{} = record) do
     keys = String.split(path, ".")
+    traverse_path(record.data, keys)
+  end
 
-    record.data
-    |> Sequin.Map.from_struct_deep()
-    |> Sequin.Map.deep_stringify_keys()
-    |> get_in(keys)
+  # Carve out known structs that we can traverse
+  defp traverse_path(%ConsumerEventData{} = data, keys), do: mapify_struct_and_traverse(data, keys)
+  defp traverse_path(%ConsumerRecordData{} = data, keys), do: mapify_struct_and_traverse(data, keys)
+  defp traverse_path(%ConsumerEventData.Metadata{} = data, keys), do: mapify_struct_and_traverse(data, keys)
+  defp traverse_path(%ConsumerRecordData.Metadata{} = data, keys), do: mapify_struct_and_traverse(data, keys)
+  defp traverse_path(%ConsumerEventData.Metadata.Sink{} = data, keys), do: mapify_struct_and_traverse(data, keys)
+  defp traverse_path(%ConsumerRecordData.Metadata.Sink{} = data, keys), do: mapify_struct_and_traverse(data, keys)
+
+  # Base case
+  defp traverse_path(value, []), do: value
+
+  # Traverse a map
+  defp traverse_path(data, [key | rest]) when is_map(data) do
+    case Map.get(data, key) do
+      nil -> nil
+      value when is_struct(value) -> traverse_path(value, rest)
+      value when is_map(value) -> traverse_path(value, rest)
+      value -> traverse_path(value, rest)
+    end
+  end
+
+  # Traverse a list - we don't support this
+  defp traverse_path(data, _keys) when is_list(data), do: nil
+
+  # Traverse a struct
+  defp mapify_struct_and_traverse(struct, keys) do
+    struct
+    |> Map.from_struct()
+    |> Sequin.Map.stringify_keys()
+    |> traverse_path(keys)
   end
 end

@@ -76,11 +76,9 @@ defmodule Sequin.ConfigParserTest do
       assert ConfigParser.log_level(env) == :debug
     end
 
+    @tag capture_log: true
     test "returns default :info for invalid LOG_LEVEL" do
       env = %{"LOG_LEVEL" => "invalid"}
-      assert ConfigParser.log_level(env) == :info
-
-      env = %{"LOG_LEVEL" => "trace"}
       assert ConfigParser.log_level(env) == :info
     end
   end

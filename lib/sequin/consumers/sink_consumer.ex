@@ -43,7 +43,7 @@ defmodule Sequin.Consumers.SinkConsumer do
              :status,
              :health,
              :max_memory_mb,
-             :transform
+             :legacy_transform
            ]}
   typed_schema "sink_consumers" do
     field :name, :string
@@ -59,7 +59,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :annotations, :map, default: %{}
     field :max_memory_mb, :integer, default: 1024
     field :partition_count, :integer, default: 1
-    field :transform, Ecto.Enum, values: [:none, :record_only], default: :none
+    field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
 
     field :type, Ecto.Enum,
       values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
@@ -134,7 +134,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       :annotations,
       :max_memory_mb,
       :partition_count,
-      :transform
+      :legacy_transform
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)
@@ -144,7 +144,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:batch_size, less_than_or_equal_to: 1_000)
     |> validate_number(:max_memory_mb, greater_than_or_equal_to: 128)
     |> validate_number(:partition_count, greater_than_or_equal_to: 1)
-    |> validate_inclusion(:transform, [:none, :record_only])
+    |> validate_inclusion(:legacy_transform, [:none, :record_only])
   end
 
   def where_account_id(query \\ base_query(), account_id) do

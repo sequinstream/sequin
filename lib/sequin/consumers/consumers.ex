@@ -1287,4 +1287,12 @@ defmodule Sequin.Consumers do
       :deleted
     ])
   end
+
+  @doc """
+  Checks if a message matches a sequence's table.
+  """
+  @spec matches_sequence?(Sequence.t(), ConsumerRecord.t() | ConsumerEvent.t()) :: boolean()
+  def matches_sequence?(%Sequence{} = sequence, message) do
+    sequence.table_oid == message.table_oid
+  end
 end

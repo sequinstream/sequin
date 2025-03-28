@@ -47,11 +47,11 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
   def start_children(%PostgresReplicationSlot{} = pg_replication, opts) do
     pg_replication =
-      Repo.preload(pg_replication, [
-        :postgres_database,
+      Repo.preload(pg_replication,
+        postgres_database: :sequences,
         sink_consumers: [:sequence],
         not_disabled_sink_consumers: [:sequence]
-      ])
+      )
 
     opts = Keyword.put(opts, :replication_slot, pg_replication)
     slot_processor_spec = SlotProcessorSupervisor.child_spec(opts)

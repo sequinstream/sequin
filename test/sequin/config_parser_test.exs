@@ -55,6 +55,36 @@ defmodule Sequin.ConfigParserTest do
     end
   end
 
+  describe "log_level/1" do
+    test "returns default :info when LOG_LEVEL is not set" do
+      assert ConfigParser.log_level(%{}) == :info
+    end
+
+    test "returns atom level when valid LOG_LEVEL is set" do
+      for level <- ["error", "warning", "notice", "info", "debug"] do
+        env = %{"LOG_LEVEL" => level}
+        expected_atom = String.to_atom(level)
+        assert ConfigParser.log_level(env) == expected_atom
+      end
+    end
+
+    test "returns uppercase variants" do
+      env = %{"LOG_LEVEL" => "ERROR"}
+      assert ConfigParser.log_level(env) == :error
+
+      env = %{"LOG_LEVEL" => "Debug"}
+      assert ConfigParser.log_level(env) == :debug
+    end
+
+    test "returns default :info for invalid LOG_LEVEL" do
+      env = %{"LOG_LEVEL" => "invalid"}
+      assert ConfigParser.log_level(env) == :info
+
+      env = %{"LOG_LEVEL" => "trace"}
+      assert ConfigParser.log_level(env) == :info
+    end
+  end
+
   defp valid_redis_config(attrs \\ %{}) do
     Map.merge(%{"REDIS_URL" => "redis://localhost:6379"}, attrs)
   end

@@ -344,7 +344,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
                 consumer: %{
                   id: consumer.id,
                   name: consumer.name
-                }
+                },
+                transaction_annotations: nil
               }
             )
         )

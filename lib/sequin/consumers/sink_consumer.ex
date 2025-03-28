@@ -23,6 +23,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.SqsSink
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Transforms.Transform
 
   @type id :: String.t()
   @type ack_id :: String.t()
@@ -77,6 +78,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
+    belongs_to :transform, Transform
 
     polymorphic_embeds_one(:sink,
       types: [
@@ -104,11 +106,13 @@ defmodule Sequin.Consumers.SinkConsumer do
       :status,
       :sequence_id,
       :message_kind,
-      :max_memory_mb
+      :max_memory_mb,
+      :transform_id
     ])
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
     |> foreign_key_constraint(:sequence_id)
+    |> foreign_key_constraint(:transform_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:sequence_filter, name: "sequence_filter_check")
     |> Sequin.Changeset.validate_name()
@@ -134,7 +138,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :annotations,
       :max_memory_mb,
       :partition_count,
-      :legacy_transform
+      :legacy_transform,
+      :transform_id
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)

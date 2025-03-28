@@ -430,7 +430,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "test-db.public.Characters"
-      assert consumer.transform == :record_only
+      assert consumer.legacy_transform == :record_only
 
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
@@ -621,7 +621,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "sequin-playground-consumer"
       assert consumer.sequence.name == "test-db.public.Characters"
-      assert consumer.transform == :none
+      assert consumer.legacy_transform == :none
 
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
@@ -657,7 +657,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "kafka-consumer"
       assert consumer.sequence.name == "test-db.public.Characters"
-      assert consumer.transform == :record_only
+      assert consumer.legacy_transform == :record_only
 
       assert %KafkaSink{
                type: :kafka,
@@ -877,7 +877,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "gcp-events-characters"
       assert consumer.status == :active
-      assert consumer.transform == :none
+      assert consumer.legacy_transform == :none
       assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %GcpPubsubSink{
@@ -958,7 +958,7 @@ defmodule Sequin.YamlLoaderTest do
       for consumer <- consumers do
         consumer = Repo.preload(consumer, :sequence)
         assert consumer.status == :active
-        assert consumer.transform == :none
+        assert consumer.legacy_transform == :none
         assert consumer.sequence.name == "test-db.public.Characters"
 
         assert %GcpPubsubSink{

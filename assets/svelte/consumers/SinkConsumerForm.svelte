@@ -88,7 +88,7 @@
     },
     groupColumnAttnums: consumer.group_column_attnums || [],
     batchSize: consumer.batch_size || 1,
-    transform: consumer.transform || "none",
+    transform: consumer.legacy_transform || "none",
   };
 
   let form = { ...initialForm };
@@ -552,9 +552,9 @@
                     >
                   </SelectContent>
                 </Select>
-                {#if errors.consumer.transform}
+                {#if errors.consumer.legacy_transform}
                   <p class="text-destructive text-sm">
-                    {errors.consumer.transform}
+                    {errors.consumer.legacy_transform}
                   </p>
                 {/if}
               </div>

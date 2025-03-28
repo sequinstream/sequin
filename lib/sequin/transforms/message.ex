@@ -15,7 +15,8 @@ defmodule Sequin.Transforms.Message do
         table_name: event.data.metadata.table_name,
         consumer: event.data.metadata.consumer,
         commit_timestamp: event.data.metadata.commit_timestamp,
-        commit_lsn: event.data.metadata.commit_lsn
+        commit_lsn: event.data.metadata.commit_lsn,
+        transaction_annotations: event.data.metadata.transaction_annotations
       }
     }
   end

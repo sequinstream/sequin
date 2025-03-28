@@ -21,9 +21,9 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.Transform
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
-  alias Sequin.Transforms.Transform
 
   @type id :: String.t()
   @type ack_id :: String.t()

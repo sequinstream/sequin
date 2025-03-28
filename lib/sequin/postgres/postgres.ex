@@ -48,6 +48,23 @@ defmodule Sequin.Postgres do
   end
 
   @doc """
+  Determines the version of an event table based on its structure.
+
+  Returns:
+  - `:"v0"` if it's a basic event table without the 'transaction_annotations' column
+  - `:"v3.28.25"` if it's an event table with the 'transaction_annotations' column
+  """
+  @spec event_table_version(PostgresDatabaseTable.t()) :: {:ok, :v0 | :"v3.28.25"} | {:error, Error.t()}
+  def event_table_version(%PostgresDatabaseTable{} = table) do
+    if is_event_table?(table) do
+      has_transaction_annotations = Enum.any?(table.columns, &(&1.name == "transaction_annotations"))
+      if has_transaction_annotations, do: {:ok, :"v3.28.25"}, else: {:ok, :v0}
+    else
+      {:error, Error.invariant(message: "Table is not an event table")}
+    end
+  end
+
+  @doc """
   Compares the given table with the expected event table structure and returns a list of errors.
   """
   @spec event_table_errors(PostgresDatabaseTable.t()) :: [String.t()]

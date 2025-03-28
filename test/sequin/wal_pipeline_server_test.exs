@@ -15,6 +15,7 @@ defmodule Sequin.Runtime.WalPipelineServerTest do
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterMultiPK
   alias Sequin.TestSupport.Models.TestEventLog
+  alias Sequin.TestSupport.Models.TestEventLogV0
 
   setup do
     account = AccountsFactory.insert_account!()
@@ -39,12 +40,22 @@ defmodule Sequin.Runtime.WalPipelineServerTest do
         destination_oid: TestEventLog.table_oid()
       )
 
+    wal_pipeline_v0 =
+      ReplicationFactory.insert_wal_pipeline!(
+        status: :active,
+        account_id: account.id,
+        replication_slot_id: replication_slot.id,
+        destination_database_id: destination_database.id,
+        destination_oid: TestEventLogV0.table_oid()
+      )
+
     {:ok,
      %{
        source_database: source_database,
        destination_database: destination_database,
        replication_slot: replication_slot,
-       wal_pipeline: wal_pipeline
+       wal_pipeline: wal_pipeline,
+       wal_pipeline_v0: wal_pipeline_v0
      }}
   end
 
@@ -183,6 +194,37 @@ defmodule Sequin.Runtime.WalPipelineServerTest do
 
       # Verify that the WAL event was deleted after processing
       assert Replication.list_wal_events(wal_pipeline.id) == []
+    end
+
+    test "processes WAL events for v0 event log table", %{
+      wal_pipeline_v0: wal_pipeline_v0
+    } do
+      # Insert a couple WAL events
+      wal_event = ReplicationFactory.insert_wal_event!(wal_pipeline_id: wal_pipeline_v0.id)
+
+      start_supervised!(
+        {WalPipelineServer,
+         [
+           replication_slot_id: wal_pipeline_v0.replication_slot_id,
+           destination_oid: wal_pipeline_v0.destination_oid,
+           destination_database_id: wal_pipeline_v0.destination_database_id,
+           wal_pipeline_ids: [wal_pipeline_v0.id],
+           test_pid: self()
+         ]}
+      )
+
+      # Wait for processing
+      assert_receive {WalPipelineServer, :wrote_events, 1}, 1000
+
+      # Verify events were written to the v0 table
+      logs = Repo.all(TestEventLogV0)
+      assert length(logs) == 1
+      log = hd(logs)
+
+      # Verify basic fields match
+      assert log.seq == wal_event.commit_lsn
+      assert log.record_pk == hd(wal_event.record_pks)
+      assert log.action == to_string(wal_event.action)
     end
   end
 

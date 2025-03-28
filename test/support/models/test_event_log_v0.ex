@@ -1,5 +1,9 @@
-defmodule Sequin.TestSupport.Models.TestEventLog do
-  @moduledoc false
+defmodule Sequin.TestSupport.Models.TestEventLogV0 do
+  @moduledoc """
+  This test_event_log_v0 table is used to test the WAL pipeline server when the event table is at version v0.
+
+  This version does not have transaction_annotations, which is present in the next version.
+  """
   use Ecto.Schema
 
   import Ecto.Query
@@ -7,7 +11,7 @@ defmodule Sequin.TestSupport.Models.TestEventLog do
   alias Sequin.Postgres
 
   @primary_key false
-  schema "test_event_logs" do
+  schema "test_event_logs_v0" do
     field :id, :integer, primary_key: true, read_after_writes: true
     field :seq, :integer
     field :source_database_id, Ecto.UUID
@@ -18,7 +22,6 @@ defmodule Sequin.TestSupport.Models.TestEventLog do
     field :record, :map
     field :changes, :map
     field :action, :string
-    field :transaction_annotations, :map
     field :committed_at, :utc_datetime
     field :inserted_at, :utc_datetime
   end
@@ -32,7 +35,7 @@ defmodule Sequin.TestSupport.Models.TestEventLog do
   end
 
   def table_name do
-    "test_event_logs"
+    "test_event_logs_v0"
   end
 
   def record_pks(test_event_log) do
@@ -71,7 +74,6 @@ defmodule Sequin.TestSupport.Models.TestEventLog do
       :record,
       :changes,
       :action,
-      :transaction_annotations,
       :committed_at
     ])
   end

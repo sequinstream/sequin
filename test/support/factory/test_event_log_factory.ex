@@ -28,6 +28,7 @@ if Mix.env() == :test do
             "field2" => Faker.Lorem.sentence()
           },
           action: Factory.one_of(["insert", "update", "delete"]),
+          transaction_annotations: Enum.random([nil, %{"user_id" => Faker.UUID.v4()}]),
           committed_at: Factory.utc_datetime(),
           inserted_at: Factory.utc_datetime()
         },

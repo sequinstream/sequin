@@ -284,33 +284,28 @@ defmodule Sequin.Runtime.MessageHandler do
       consumer: %{
         id: consumer.id,
         name: consumer.name
-      }
+      },
+      transaction_annotations: nil
     }
 
-    maybe_put_transaction_annotations(metadata, consumer, message.transaction_annotations)
-  end
+    if consumer.message_kind == :event do
+      case decode_transaction_annotations(message.transaction_annotations) do
+        {:ok, annotations} ->
+          Map.put(metadata, :transaction_annotations, annotations)
 
-  defp maybe_put_transaction_annotations(metadata, %SinkConsumer{message_kind: :record}, _annotations), do: metadata
+        _ ->
+          error = Error.invariant(message: "Invalid JSON given to `transaction_annotations.set`")
 
-  defp maybe_put_transaction_annotations(metadata, _consumer, nil), do: metadata
+          Health.put_event(:sink_consumer, consumer.id, %Event{
+            slug: :invalid_transaction_annotation_received,
+            status: :warning,
+            error: error
+          })
 
-  defp maybe_put_transaction_annotations(metadata, consumer, annotations) when is_binary(annotations) do
-    case Jason.decode(annotations) do
-      {:ok, json} ->
-        Map.put(metadata, :transaction_annotations, json)
-
-      {:error, error} ->
-        Logger.error("Error parsing transaction annotations: #{inspect(error)}", error: error)
-        error = Error.invariant(message: "Invalid JSON given to `transaction_annotations.set`")
-
-        Health.put_event(:sink_consumer, consumer.id, %Event{
-          slug: :invalid_transaction_annotation_received,
-          status: :warning,
-          error: error
-        })
-
-        Logger.error("Error parsing transaction annotations: #{inspect(error)}")
-        metadata
+          metadata
+      end
+    else
+      metadata
     end
   end
 
@@ -439,7 +434,7 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   defp wal_event(pipeline, message) do
-    %WalEvent{
+    wal_event = %WalEvent{
       wal_pipeline_id: pipeline.id,
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,
@@ -451,8 +446,27 @@ defmodule Sequin.Runtime.MessageHandler do
       replication_message_trace_id: message.trace_id,
       source_table_oid: message.table_oid,
       source_table_schema: message.table_schema,
-      source_table_name: message.table_name
+      source_table_name: message.table_name,
+      transaction_annotations: nil
     }
+
+    case decode_transaction_annotations(message.transaction_annotations) do
+      {:ok, annotations} -> Map.put(wal_event, :transaction_annotations, annotations)
+      _ -> wal_event
+    end
+  end
+
+  defp decode_transaction_annotations(nil), do: {:ok, nil}
+
+  defp decode_transaction_annotations(annotations) when is_binary(annotations) do
+    case Jason.decode(annotations) do
+      {:ok, json} ->
+        {:ok, json}
+
+      {:error, error} ->
+        Logger.error("Error parsing transaction annotations: #{inspect(error)}", error: error)
+        {:error, error}
+    end
   end
 
   defp get_changes(%Message{action: :update} = message) do

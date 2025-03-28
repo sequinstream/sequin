@@ -871,6 +871,20 @@ defmodule Sequin.YamlLoader do
      }}
   end
 
+  defp parse_sink(%{"type" => "rabbitmq"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :rabbitmq,
+       host: attrs["host"],
+       port: attrs["port"],
+       username: attrs["username"],
+       password: attrs["password"],
+       virtual_host: attrs["virtual_host"] || "/",
+       tls: attrs["tls"] || false,
+       exchange: attrs["exchange"]
+     }}
+  end
+
   defp parse_sink(%{"type" => "redis"} = attrs, _resources) do
     {:ok,
      %{

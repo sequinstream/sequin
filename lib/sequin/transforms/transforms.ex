@@ -135,7 +135,8 @@ defmodule Sequin.Transforms do
   def to_external(%HttpPushSink{} = sink, _show_sensitive) do
     %{
       type: "webhook",
-      http_endpoint: sink.http_endpoint.name
+      http_endpoint: sink.http_endpoint.name,
+      http_endpoint_path: sink.http_endpoint_path
     }
   end
 

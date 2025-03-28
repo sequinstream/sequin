@@ -3,6 +3,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Databases.ConnectionCache
@@ -335,13 +336,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           data:
             ConsumersFactory.consumer_event_data(
               record: record,
-              metadata: %{
+              metadata: %ConsumerEventData.Metadata{
                 database_name: "postgres",
                 table_schema: "public",
                 table_name: "users",
                 commit_timestamp: DateTime.utc_now(),
                 commit_lsn: Factory.unique_integer(),
-                consumer: %{
+                consumer: %ConsumerEventData.Metadata.Sink{
                   id: consumer.id,
                   name: consumer.name
                 },
@@ -579,13 +580,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           state: :available,
           data: %ConsumerRecordData{
             record: %{name: "character_name"},
-            metadata: %{
+            metadata: %ConsumerRecordData.Metadata{
               database_name: "postgres",
               table_schema: "public",
               table_name: "characters_detailed",
               commit_timestamp: DateTime.utc_now(),
               commit_lsn: Factory.unique_integer(),
-              consumer: %{
+              consumer: %ConsumerRecordData.Metadata.Sink{
                 id: consumer.id,
                 name: consumer.name
               }

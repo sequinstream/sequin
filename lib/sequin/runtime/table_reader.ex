@@ -403,11 +403,9 @@ defmodule Sequin.Runtime.TableReader do
         database_name: consumer.replication_slot.postgres_database.name,
         table_name: table.name,
         table_schema: table.schema,
-        consumer: %{
+        consumer: %ConsumerRecordData.Metadata.Sink{
           id: consumer.id,
-          name: consumer.name,
-          inserted_at: consumer.inserted_at,
-          updated_at: consumer.updated_at
+          name: consumer.name
         },
         commit_timestamp: DateTime.utc_now()
       }
@@ -422,11 +420,9 @@ defmodule Sequin.Runtime.TableReader do
         database_name: consumer.replication_slot.postgres_database.name,
         table_name: table.name,
         table_schema: table.schema,
-        consumer: %{
+        consumer: %ConsumerEventData.Metadata.Sink{
           id: consumer.id,
-          name: consumer.name,
-          inserted_at: consumer.inserted_at,
-          updated_at: consumer.updated_at
+          name: consumer.name
         },
         commit_timestamp: DateTime.utc_now()
       }

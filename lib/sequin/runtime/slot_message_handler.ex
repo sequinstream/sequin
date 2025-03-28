@@ -305,8 +305,8 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
     %{postgres_database: db, not_disabled_sink_consumers: consumers, wal_pipelines: pipelines} =
       Repo.preload(slot, [
-        :postgres_database,
         :wal_pipelines,
+        [postgres_database: :sequences],
         not_disabled_sink_consumers: [:sequence, :postgres_database]
       ])
 

@@ -23,6 +23,7 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.TableReaderServer
+  alias Sequin.Transforms.TestMessages
 
   require Logger
 
@@ -48,7 +49,11 @@ defmodule Sequin.Runtime.MessageHandler do
 
   def context(%PostgresReplicationSlot{} = pr) do
     pr =
-      Repo.preload(pr, [:wal_pipelines, :postgres_database, not_disabled_sink_consumers: [:sequence, :postgres_database]])
+      Repo.preload(pr, [
+        :wal_pipelines,
+        [postgres_database: :sequences],
+        [not_disabled_sink_consumers: [:sequence, :postgres_database]]
+      ])
 
     %Context{
       consumers: pr.not_disabled_sink_consumers,
@@ -102,6 +107,8 @@ defmodule Sequin.Runtime.MessageHandler do
       Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
 
       messages = load_unchanged_toasts(ctx, messages)
+
+      save_test_messages(ctx, messages)
 
       messages_by_consumer =
         execute_timed(:messages_by_consumer, fn ->
@@ -548,6 +555,38 @@ defmodule Sequin.Runtime.MessageHandler do
         Health.put_event(consumer, %Event{slug: :toast_columns_detected, status: :warning})
       end
     end)
+  end
+
+  defp save_test_messages(%Context{}, []), do: :ok
+
+  defp save_test_messages(%Context{} = ctx, messages) do
+    # Get all sequences that need test messages
+    sequences_needing_messages =
+      ctx.postgres_database.sequences
+      |> Enum.filter(&TestMessages.needs_test_messages?(&1.id))
+      |> Enum.with_index()
+      |> Map.new(fn {seq, idx} -> {seq.id, {seq, idx}} end)
+
+    # Early out if no sequences need messages
+    if map_size(sequences_needing_messages) == 0 do
+      :ok
+    else
+      # Process each message once
+      Enum.each(messages, fn message ->
+        # Find matching sequences for this message
+        matching_sequences =
+          sequences_needing_messages
+          |> Enum.filter(fn {_id, {sequence, _idx}} ->
+            Consumers.matches_sequence?(sequence, message)
+          end)
+          |> Enum.map(fn {_id, {sequence, _idx}} -> sequence end)
+
+        # Add message to each matching sequence's test messages
+        Enum.each(matching_sequences, fn sequence ->
+          TestMessages.add_test_message(sequence.id, message)
+        end)
+      end)
+    end
   end
 
   defp execute_timed(name, fun) do

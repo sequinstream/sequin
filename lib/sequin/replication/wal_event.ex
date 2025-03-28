@@ -18,7 +18,8 @@ defmodule Sequin.Replication.WalEvent do
              :changes,
              :action,
              :committed_at,
-             :inserted_at
+             :inserted_at,
+             :transaction_annotations
            ]}
   schema "wal_events" do
     field :action, Ecto.Enum, values: [:insert, :update, :delete]
@@ -32,7 +33,7 @@ defmodule Sequin.Replication.WalEvent do
     field :source_table_oid, :integer
     field :source_table_schema, :string
     field :source_table_name, :string
-
+    field :transaction_annotations, :map
     belongs_to :wal_pipeline, WalPipeline
 
     timestamps()
@@ -54,7 +55,8 @@ defmodule Sequin.Replication.WalEvent do
       :record,
       :changes,
       :action,
-      :committed_at
+      :committed_at,
+      :transaction_annotations
     ])
     |> validate_required([
       :wal_pipeline_id,

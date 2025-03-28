@@ -72,7 +72,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       timestamps()
     end
 
-    create table(:test_event_logs, primary_key: false) do
+    # Older version without transaction_annotations
+    create table(:test_event_logs_v0, primary_key: false) do
       add :id, :serial, primary_key: true
       add :seq, :bigint, null: false
       add :source_database_id, :uuid, null: false
@@ -87,7 +88,29 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :inserted_at, :utc_datetime, null: false, default: fragment("NOW()")
     end
 
-    create unique_index(:test_event_logs, [:source_database_id, :seq, :record_pk])
+    create unique_index(:test_event_logs_v0, [:source_database_id, :committed_at, :seq, :record_pk])
+
+    create index(:test_event_logs_v0, [:seq])
+    create index(:test_event_logs_v0, [:source_table_oid])
+    create index(:test_event_logs_v0, [:committed_at])
+
+    create table(:test_event_logs, primary_key: false) do
+      add :id, :serial, primary_key: true
+      add :seq, :bigint, null: false
+      add :source_database_id, :uuid, null: false
+      add :source_table_oid, :bigint, null: false
+      add :source_table_schema, :text, null: false
+      add :source_table_name, :text, null: false
+      add :record_pk, :text, null: false
+      add :record, :map, null: false
+      add :changes, :map
+      add :action, :string, null: false
+      add :transaction_annotations, :map
+      add :committed_at, :utc_datetime, null: false
+      add :inserted_at, :utc_datetime, null: false, default: fragment("NOW()")
+    end
+
+    create unique_index(:test_event_logs, [:source_database_id, :committed_at, :seq, :record_pk])
     create index(:test_event_logs, [:seq])
     create index(:test_event_logs, [:source_table_oid])
     create index(:test_event_logs, [:committed_at])
@@ -133,5 +156,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :committed_at, :utc_datetime, null: false
       add :inserted_at, :utc_datetime, null: false, default: fragment("NOW()")
     end
+
+    create unique_index(:sequin_events, [:source_database_id, :committed_at, :seq, :record_pk])
   end
 end

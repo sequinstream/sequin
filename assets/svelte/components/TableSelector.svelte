@@ -189,6 +189,7 @@
   record jsonb not null,
   changes jsonb,
   action text not null,
+  transaction_annotations jsonb,
   committed_at timestamp with time zone not null,
   inserted_at timestamp with time zone not null default now()
 );`;

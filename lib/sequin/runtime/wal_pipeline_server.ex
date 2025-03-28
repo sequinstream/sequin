@@ -73,6 +73,7 @@ defmodule Sequin.Runtime.WalPipelineServer do
       field :interval_ms, integer()
       field :wal_events, list()
       field :events_pending?, boolean(), default: false
+      field :event_table_version, atom()
     end
   end
 
@@ -128,8 +129,9 @@ defmodule Sequin.Runtime.WalPipelineServer do
   end
 
   @impl GenStateMachine
-  def handle_event(:enter, _, :idle, _) do
-    :keep_state_and_data
+  def handle_event(:enter, _, :idle, %State{} = state) do
+    state = maybe_put_event_table_version(state)
+    {:keep_state, state}
   end
 
   def handle_event(:enter, _, :awaiting_retry, _) do
@@ -322,6 +324,19 @@ defmodule Sequin.Runtime.WalPipelineServer do
     {:keep_state, %{data | events_pending?: true}}
   end
 
+  defp maybe_put_event_table_version(%State{event_table_version: nil} = state) do
+    case Postgres.event_table_version(state.destination_table) do
+      {:ok, version} ->
+        %{state | event_table_version: version}
+
+      {:error, error} ->
+        Logger.error("Unable to connect to Postgres to check event table version")
+        raise error
+    end
+  end
+
+  defp maybe_put_event_table_version(%State{} = state), do: state
+
   defp fetch_timeout(%State{events_pending?: true}), do: {:state_timeout, 0, :fetch_wal_events}
 
   defp fetch_timeout(%State{} = state) do
@@ -334,39 +349,11 @@ defmodule Sequin.Runtime.WalPipelineServer do
     Logger.info("[WalPipelineServer] Writing #{length(wal_events)} events to destination")
     wal_events = Enum.sort_by(wal_events, & &1.commit_lsn)
 
-    table = Postgres.quote_name(state.destination_table.schema, state.destination_table.name)
-
     # Prepare the data for insertion
     {columns, values} = prepare_insert_data(wal_events, state)
 
     # Craft the SQL query with explicit type casts
-    sql = """
-    INSERT INTO #{table} (#{Enum.join(columns, ", ")})
-    SELECT *
-    FROM unnest(
-      $1::bigint[],
-      $2::uuid[],
-      $3::bigint[],
-      $4::text[],
-      $5::text[],
-      $6::text[],
-      $7::jsonb[],
-      $8::jsonb[],
-      $9::text[],
-      $10::timestamp with time zone[],
-      $11::timestamp with time zone[]
-    ) AS t(#{Enum.join(columns, ", ")})
-    ON CONFLICT (seq, committed_at, source_database_id, record_pk)
-      DO UPDATE SET
-        source_table_oid = EXCLUDED.source_table_oid,
-        source_table_schema = EXCLUDED.source_table_schema,
-        source_table_name = EXCLUDED.source_table_name,
-        record = EXCLUDED.record,
-        changes = EXCLUDED.changes,
-        action = EXCLUDED.action,
-        committed_at = EXCLUDED.committed_at,
-        inserted_at = EXCLUDED.inserted_at
-    """
+    sql = insert_sql(state, columns)
 
     dest =
       if env() == :test do
@@ -399,7 +386,77 @@ defmodule Sequin.Runtime.WalPipelineServer do
     end
   end
 
+  defp insert_sql(%{event_table_version: :v0} = state, columns) do
+    table = Postgres.quote_name(state.destination_table.schema, state.destination_table.name)
+
+    """
+    INSERT INTO #{table} (#{Enum.join(columns, ", ")})
+    SELECT *
+    FROM unnest(
+      $1::bigint[],
+      $2::uuid[],
+      $3::bigint[],
+      $4::text[],
+      $5::text[],
+      $6::text[],
+      $7::jsonb[],
+      $8::jsonb[],
+      $9::text[],
+      $10::timestamp with time zone[],
+      $11::timestamp with time zone[]
+    ) AS t(#{Enum.join(columns, ", ")})
+    ON CONFLICT (seq, committed_at, source_database_id, record_pk)
+      DO UPDATE SET
+        source_table_oid = EXCLUDED.source_table_oid,
+        source_table_schema = EXCLUDED.source_table_schema,
+        source_table_name = EXCLUDED.source_table_name,
+        record = EXCLUDED.record,
+        changes = EXCLUDED.changes,
+        action = EXCLUDED.action,
+        committed_at = EXCLUDED.committed_at,
+        inserted_at = EXCLUDED.inserted_at
+    """
+  end
+
+  defp insert_sql(%{event_table_version: :"v3.28.25"} = state, columns) do
+    table = Postgres.quote_name(state.destination_table.schema, state.destination_table.name)
+
+    """
+    INSERT INTO #{table} (#{Enum.join(columns, ", ")})
+    SELECT *
+    FROM unnest(
+      $1::bigint[],
+      $2::uuid[],
+      $3::bigint[],
+      $4::text[],
+      $5::text[],
+      $6::text[],
+      $7::jsonb[],
+      $8::jsonb[],
+      $9::text[],
+      $10::timestamp with time zone[],
+      $11::timestamp with time zone[],
+      -- adds transaction_annotations column
+      $12::jsonb[]
+    ) AS t(#{Enum.join(columns, ", ")})
+    ON CONFLICT (seq, committed_at, source_database_id, record_pk)
+      DO UPDATE SET
+        source_table_oid = EXCLUDED.source_table_oid,
+        source_table_schema = EXCLUDED.source_table_schema,
+        source_table_name = EXCLUDED.source_table_name,
+        record = EXCLUDED.record,
+        changes = EXCLUDED.changes,
+        action = EXCLUDED.action,
+        committed_at = EXCLUDED.committed_at,
+        inserted_at = EXCLUDED.inserted_at,
+        -- adds transaction_annotations column
+        transaction_annotations = EXCLUDED.transaction_annotations
+    """
+  end
+
   defp prepare_insert_data(wal_events, state) do
+    include_transaction_annotations = state.event_table_version == :"v3.28.25"
+
     columns = [
       "seq",
       "source_database_id",
@@ -414,28 +471,36 @@ defmodule Sequin.Runtime.WalPipelineServer do
       "inserted_at"
     ]
 
+    columns = maybe_push(columns, include_transaction_annotations, "transaction_annotations")
+
     values =
       wal_events
       |> Enum.map(fn wal_event ->
-        [
-          wal_event.commit_lsn,
-          Sequin.String.string_to_binary!(state.replication_slot.postgres_database_id),
-          wal_event.source_table_oid,
-          wal_event.source_table_schema,
-          wal_event.source_table_name,
-          Enum.join(wal_event.record_pks, ","),
-          wal_event.record,
-          wal_event.changes,
-          Atom.to_string(wal_event.action),
-          wal_event.committed_at,
-          DateTime.utc_now()
-        ]
+        values =
+          [
+            wal_event.commit_lsn,
+            Sequin.String.string_to_binary!(state.replication_slot.postgres_database_id),
+            wal_event.source_table_oid,
+            wal_event.source_table_schema,
+            wal_event.source_table_name,
+            Enum.join(wal_event.record_pks, ","),
+            wal_event.record,
+            wal_event.changes,
+            Atom.to_string(wal_event.action),
+            wal_event.committed_at,
+            DateTime.utc_now()
+          ]
+
+        maybe_push(values, include_transaction_annotations, wal_event.transaction_annotations)
       end)
       |> Enum.zip()
       |> Enum.map(&Tuple.to_list/1)
 
     {columns, values}
   end
+
+  defp maybe_push(list, false, _element), do: list
+  defp maybe_push(list, true, element), do: list ++ [element]
 
   defp maybe_setup_allowances(nil), do: :ok
 

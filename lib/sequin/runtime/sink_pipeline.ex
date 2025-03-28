@@ -92,7 +92,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       consumer =
       opts
       |> Keyword.fetch!(:consumer)
-      |> Repo.lazy_preload([:sequence, :postgres_database])
+      |> Repo.lazy_preload([:sequence, :postgres_database, :transform])
 
     slot_message_store_mod = Keyword.get(opts, :slot_message_store_mod, Sequin.Runtime.SlotMessageStore)
     producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)

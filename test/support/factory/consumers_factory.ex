@@ -20,6 +20,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.Transform
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -426,7 +427,10 @@ defmodule Sequin.Factory.ConsumersFactory do
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
           commit_lsn: Factory.unique_integer(),
-          consumer: %{}
+          consumer: %ConsumerEventData.Metadata.Sink{
+            id: Factory.uuid(),
+            name: Factory.word()
+          }
         }
       },
       attrs
@@ -439,7 +443,11 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> consumer_event_data()
     |> Sequin.Map.from_ecto(keep_nils: true)
     |> Map.update!(:metadata, fn metadata ->
-      Sequin.Map.from_ecto(metadata)
+      metadata
+      |> Sequin.Map.from_ecto()
+      |> Map.update!(:consumer, fn consumer ->
+        Sequin.Map.from_ecto(consumer)
+      end)
     end)
   end
 
@@ -608,7 +616,10 @@ defmodule Sequin.Factory.ConsumersFactory do
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
           commit_lsn: Factory.unique_integer(),
-          consumer: %{}
+          consumer: %ConsumerRecordData.Metadata.Sink{
+            id: Factory.uuid(),
+            name: Factory.word()
+          }
         }
       },
       attrs
@@ -621,7 +632,11 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> consumer_record_data()
     |> Sequin.Map.from_ecto(keep_nils: true)
     |> Map.update!(:metadata, fn metadata ->
-      Sequin.Map.from_ecto(metadata)
+      metadata
+      |> Sequin.Map.from_ecto()
+      |> Map.update!(:consumer, fn consumer ->
+        Sequin.Map.from_ecto(consumer)
+      end)
     end)
   end
 
@@ -780,5 +795,83 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.put(:state, :cancelled)
     |> Map.put(:canceled_at, DateTime.utc_now())
     |> insert_backfill!()
+  end
+
+  # Transform
+  def transform(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {transform_type, attrs} = Map.pop_lazy(attrs, :transform_type, fn -> :path end)
+
+    transform_attrs =
+      case transform_type do
+        :path -> path_transform()
+      end
+
+    merge_attributes(
+      %Transform{
+        id: Factory.uuid(),
+        account_id: Factory.uuid(),
+        sequence_id: Factory.uuid(),
+        name: Factory.unique_word(),
+        type: to_string(transform_type),
+        config: %{}
+      },
+      Map.put(attrs, :transform, transform_attrs)
+    )
+  end
+
+  def transform_attrs(attrs \\ []) do
+    attrs
+    |> transform()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_transform!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    attrs
+    |> Map.put(:account_id, account_id)
+    |> transform_attrs()
+    |> then(&Transform.create_changeset(%Transform{}, &1))
+    |> Repo.insert!()
+  end
+
+  # PathTransform
+  def path_transform(attrs \\ []) do
+    valid_paths = [
+      "record",
+      "changes",
+      "action",
+      "metadata",
+      "record.id",
+      "changes.name",
+      "metadata.table_schema",
+      "metadata.table_name",
+      "metadata.commit_timestamp",
+      "metadata.commit_lsn",
+      "metadata.transaction_annotations",
+      "metadata.sink",
+      "metadata.transaction_annotations.user_id",
+      "metadata.sink.id",
+      "metadata.sink.name"
+    ]
+
+    merge_attributes(
+      %Sequin.Consumers.PathTransform{
+        type: :path,
+        path: Enum.random(valid_paths)
+      },
+      attrs
+    )
+  end
+
+  def path_transform_attrs(attrs \\ []) do
+    attrs
+    |> path_transform()
+    |> Sequin.Map.from_ecto()
   end
 end

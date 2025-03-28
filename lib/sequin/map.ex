@@ -12,6 +12,16 @@ defmodule Sequin.Map do
     Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
 
+  def deep_stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {to_string(k), deep_stringify_keys(v)} end)
+  end
+
+  def deep_stringify_keys(list) when is_list(list) do
+    Enum.map(list, &deep_stringify_keys/1)
+  end
+
+  def deep_stringify_keys(value), do: value
+
   def atomize_keys(map) do
     Map.new(map, fn
       {k, v} when is_binary(k) ->

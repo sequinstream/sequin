@@ -1,4 +1,4 @@
-defmodule Sequin.Transforms.PathTransform do
+defmodule Sequin.Consumers.PathTransform do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema
@@ -25,6 +25,11 @@ defmodule Sequin.Transforms.PathTransform do
       :path,
       ~r/^[a-zA-Z0-9\-._~!$&'()*+,;=:@%\/]+$/,
       message: "must be a valid URL path"
+    )
+    |> validate_format(
+      :path,
+      ~r/^(record|changes|action|metadata)$|^(record|changes|metadata)\.([a-zA-Z0-9_]+)$|^metadata\.(table_schema|table_name|commit_timestamp|commit_lsn|transaction_annotations|consumer)$|^metadata\.transaction_annotations\.[a-zA-Z0-9_]+$|^metadata\.consumer\.(id|name)$/,
+      message: "must be a valid path into the record structure"
     )
     |> validate_length(:path, max: 2000)
   end

@@ -129,7 +129,7 @@ defmodule Sequin.Transforms do
         position: "beginning | end | from with value"
       },
       batch_size: consumer.batch_size,
-      transform: consumer.transform
+      transform: consumer.legacy_transform
     }
   end
 

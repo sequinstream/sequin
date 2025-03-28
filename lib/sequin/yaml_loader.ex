@@ -881,7 +881,7 @@ defmodule Sequin.YamlLoader do
          },
          batch_size: Map.get(consumer_attrs, "batch_size", 1),
          sink: sink,
-         transform: consumer_attrs["transform"] || "none"
+         legacy_transform: consumer_attrs["transform"] || "none"
        }}
     end
   end

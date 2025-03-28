@@ -106,7 +106,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         status: :active,
         sequence_id: sequence_id,
         sequence_filter: sequence_filter,
-        transform: Enum.random([:none, :record_only])
+        legacy_transform: Enum.random([:none, :record_only])
       },
       attrs
     )

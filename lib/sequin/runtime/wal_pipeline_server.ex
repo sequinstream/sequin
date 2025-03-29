@@ -121,8 +121,7 @@ defmodule Sequin.Runtime.WalPipelineServer do
 
     actions = [
       {:state_timeout, 0, :fetch_wal_events},
-      {:next_event, :internal, :subscribe_to_pubsub},
-      {:next_event, :internal, :check_index_migration}
+      {:next_event, :internal, :subscribe_to_pubsub}
     ]
 
     {:ok, :idle, state, actions}
@@ -321,47 +320,6 @@ defmodule Sequin.Runtime.WalPipelineServer do
 
   def handle_event(:info, :wal_event_inserted, _state, data) do
     {:keep_state, %{data | events_pending?: true}}
-  end
-
-  def handle_event(:internal, :check_index_migration, _state, %State{} = state) do
-    case fetch_stale_index(state.destination_database, state.destination_table) do
-      {:ok, nil} ->
-        :keep_state_and_data
-
-      {:ok, %{name: index_name}} ->
-        Logger.info(
-          "[WalPipelineServer] Migrating unique index for #{state.destination_table.schema}.#{state.destination_table.name}"
-        )
-
-        migrate_unique_index!(index_name, state.destination_database, state.destination_table)
-        :keep_state_and_data
-    end
-  end
-
-  defp fetch_stale_index(db, table) do
-    with {:ok, indexes} <- Postgres.fetch_unique_indexes(db, table.schema, table.name) do
-      {:ok, Enum.find(indexes, &(Enum.sort(&1.columns) == ["record_pk", "seq", "source_database_id"]))}
-    end
-  end
-
-  defp migrate_unique_index!(index_name, db, table) do
-    table_name = Postgres.quote_name(table.schema, table.name)
-
-    # Drop the old index
-    drop_sql = """
-    drop index if exists #{index_name}
-    """
-
-    # Create the new index
-    create_sql = """
-    create unique index if not exists sequin_events_source_database_id_committed_at_seq_record_pk_idx
-    on #{table_name} (source_database_id, committed_at, seq, record_pk)
-    """
-
-    Postgres.transaction(db, fn conn ->
-      Postgres.query!(conn, drop_sql)
-      Postgres.query!(conn, create_sql)
-    end)
   end
 
   defp fetch_timeout(%State{events_pending?: true}), do: {:state_timeout, 0, :fetch_wal_events}

@@ -132,6 +132,7 @@ defmodule Sequin.Databases do
           replication_slot_id: db.replication_slot.id
         })
 
+        ConnectionCache.invalidate_connection(db)
         :ok
       end
     end)

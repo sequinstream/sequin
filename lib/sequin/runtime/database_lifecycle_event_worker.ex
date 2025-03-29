@@ -8,6 +8,7 @@ defmodule Sequin.Runtime.DatabaseLifecycleEventWorker do
     max_attempts: 3
 
   alias Sequin.Databases
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication
   alias Sequin.Repo
@@ -53,6 +54,10 @@ defmodule Sequin.Runtime.DatabaseLifecycleEventWorker do
       "delete" ->
         replication_slot_id = Map.fetch!(data, "replication_slot_id")
         Runtime.Supervisor.stop_replication(replication_slot_id)
+
+        with {:ok, %PostgresDatabase{} = db} <- Databases.get_db(id) do
+          ConnectionCache.invalidate_connection(db)
+        end
     end
   end
 

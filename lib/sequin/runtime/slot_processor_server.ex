@@ -13,6 +13,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Constants
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.InvariantError
@@ -1020,6 +1021,18 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             column
         end
       end)
+
+    # Check if we already have a schema for this relation ID
+    # If so, enqueue a database update worker as the schema may have changed
+    if Map.has_key?(state.schemas, id) do
+      Logger.info("[SlotProcessorServer] Received relation message for existing relation, enqueueing database update",
+        relation_id: id,
+        schema: parent_info.schema,
+        table: parent_info.name
+      )
+
+      DatabaseUpdateWorker.enqueue(state.postgres_database.id)
+    end
 
     # Store using the actual relation_id but with parent table info
     updated_schemas =

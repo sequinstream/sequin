@@ -32,19 +32,41 @@ defmodule Sequin.Transforms.Message do
 
   def to_external(%SinkConsumer{transform: %Transform{transform: %PathTransform{path: path}}}, %ConsumerEvent{} = event) do
     keys = String.split(path, ".")
-
-    event.data
-    |> Sequin.Map.from_struct_deep()
-    |> Sequin.Map.deep_stringify_keys()
-    |> get_in(keys)
+    traverse_path(event.data, keys)
   end
 
   def to_external(%SinkConsumer{transform: %Transform{transform: %PathTransform{path: path}}}, %ConsumerRecord{} = record) do
     keys = String.split(path, ".")
+    traverse_path(record.data, keys)
+  end
 
-    record.data
-    |> Sequin.Map.from_struct_deep()
-    |> Sequin.Map.deep_stringify_keys()
-    |> get_in(keys)
+  defp traverse_path(data, [key | rest]) when is_struct(data) do
+    case struct_field(data, key) do
+      nil -> nil
+      value when is_struct(value) -> traverse_path(value, rest)
+      value when is_map(value) -> traverse_path(value, rest)
+      value when rest == [] -> value
+      _ -> nil
+    end
+  end
+
+  defp traverse_path(data, [key | rest]) when is_map(data) do
+    case Map.get(data, key) do
+      nil -> nil
+      value when is_struct(value) -> traverse_path(value, rest)
+      value when is_map(value) -> traverse_path(value, rest)
+      value when rest == [] -> value
+      _ -> nil
+    end
+  end
+
+  defp traverse_path(value, []) do
+    value
+  end
+
+  defp struct_field(struct, field) when is_struct(struct) do
+    Map.get(struct, String.to_existing_atom(field))
+  rescue
+    _ -> nil
   end
 end

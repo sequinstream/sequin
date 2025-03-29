@@ -4,7 +4,7 @@ defmodule Sequin.Transforms.Message do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
 
-  def to_external(%SinkConsumer{transform: :none}, %ConsumerEvent{} = event) do
+  def to_external(%SinkConsumer{legacy_transform: :none}, %ConsumerEvent{} = event) do
     %{
       record: event.data.record,
       changes: event.data.changes,
@@ -21,11 +21,11 @@ defmodule Sequin.Transforms.Message do
     }
   end
 
-  def to_external(%SinkConsumer{transform: :record_only}, %ConsumerEvent{} = event) do
+  def to_external(%SinkConsumer{legacy_transform: :record_only}, %ConsumerEvent{} = event) do
     event.data.record
   end
 
-  def to_external(%SinkConsumer{transform: :none}, %ConsumerRecord{} = record) do
+  def to_external(%SinkConsumer{legacy_transform: :none}, %ConsumerRecord{} = record) do
     %{
       record: record.data.record,
       metadata: %{
@@ -38,7 +38,7 @@ defmodule Sequin.Transforms.Message do
     }
   end
 
-  def to_external(%SinkConsumer{transform: :record_only}, %ConsumerRecord{} = record) do
+  def to_external(%SinkConsumer{legacy_transform: :record_only}, %ConsumerRecord{} = record) do
     record.data.record
   end
 end

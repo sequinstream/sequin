@@ -608,7 +608,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "status" => consumer.status,
       "table_oid" => source_table && source_table.oid,
       "type" => consumer.type,
-      "transform" => consumer.transform
+      "transform" => consumer.legacy_transform
     }
   end
 

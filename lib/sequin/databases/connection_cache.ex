@@ -126,7 +126,7 @@ defmodule Sequin.Databases.ConnectionCache do
           {:ok, conn, state}
 
         {:error, :stale} ->
-          invalidate_connection(state, db)
+          invalidate_connection(state, db.id)
           {:error, :not_found}
 
         {:error, :not_found} ->
@@ -147,9 +147,9 @@ defmodule Sequin.Databases.ConnectionCache do
       %{state | cache: Cache.new()}
     end
 
-    @spec invalidate_connection(t(), database()) :: t()
-    def invalidate_connection(%__MODULE__{} = state, db) do
-      {conn, new_cache} = Cache.pop(state.cache, db.id)
+    @spec invalidate_connection(t(), PostgresDatabase.id()) :: t()
+    def invalidate_connection(%__MODULE__{} = state, db_id) do
+      {conn, new_cache} = Cache.pop(state.cache, db_id)
 
       # We don't want to accidentally kill the Sequin.Repo connection, which we can store in the
       # ConnectionCache during test. Leads to very hard to debug error!
@@ -242,9 +242,9 @@ defmodule Sequin.Databases.ConnectionCache do
     GenServer.call(server, {:connection, db, false})
   end
 
-  @spec invalidate_connection(GenServer.server(), database()) :: :ok
-  def invalidate_connection(server \\ __MODULE__, %PostgresDatabase{} = db) do
-    GenServer.cast(server, {:invalidate_connection, db})
+  @spec invalidate_connection(GenServer.server(), PostgresDatabase.id()) :: :ok
+  def invalidate_connection(server \\ __MODULE__, db_id) do
+    GenServer.cast(server, {:invalidate_connection, db_id})
   end
 
   # This function is intended for test purposes only
@@ -302,8 +302,8 @@ defmodule Sequin.Databases.ConnectionCache do
   end
 
   @impl GenServer
-  def handle_cast({:invalidate_connection, %PostgresDatabase{} = db}, %State{} = state) do
-    new_state = State.invalidate_connection(state, db)
+  def handle_cast({:invalidate_connection, db_id}, %State{} = state) do
+    new_state = State.invalidate_connection(state, db_id)
     {:noreply, new_state}
   end
 

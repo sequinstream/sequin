@@ -92,7 +92,7 @@ Once your sink is configured, changes from your source table will flow to your m
    - Consider your message queue's batching capabilities (e.g., SQS batch size)
    - Group similar operations (inserts/updates vs deletes) and perform them in a single database operation
 
-3. **Idempotency**: Always use `ON CONFLICT` clauses to handle duplicate messages safely
+3. **Idempotency**: Always use `ON CONFLICT` clauses to handle duplicate messages safely. Most likely, your destination table will have the same primary key(s) as your source table. Make sure to include the primary key(s) in your `ON CONFLICT` clause. That will ensure that writes to the destination table are idempotent.
 
 ### Example: Basic 1-to-1 replication
 

@@ -16,7 +16,6 @@ defmodule Sequin.Transforms.TestMessagesTest do
 
   describe "initialization" do
     test "new/0 creates an empty ETS table" do
-      assert TestMessages.needs_test_messages?("sequence1")
       assert TestMessages.get_test_messages("sequence1") == []
     end
   end
@@ -107,8 +106,38 @@ defmodule Sequin.Transforms.TestMessagesTest do
       assert stored_messages == Enum.reverse(Enum.take(messages, 10))
     end
 
-    test "needs_test_messages?/1 returns true for empty sequence" do
-      assert TestMessages.needs_test_messages?("sequence1")
+    test "needs_test_messages?/1 returns false for empty sequence before test messages are requested" do
+      sequence_id = Factory.uuid()
+      refute TestMessages.needs_test_messages?(sequence_id)
+    end
+
+    test "needs_test_messages?/1 returns true for empty sequence after test messages are requested" do
+      sequence_id = Factory.uuid()
+      TestMessages.register_needs_messages(sequence_id)
+      assert TestMessages.needs_test_messages?(sequence_id)
+    end
+
+    test "needs_test_messages?/1 returns true only while a registered process is alive" do
+      test_pid = self()
+      sequence_id = Factory.uuid()
+
+      refute TestMessages.needs_test_messages?(sequence_id)
+
+      Task.async(fn ->
+        TestMessages.register_needs_messages(sequence_id)
+        send(test_pid, :registered)
+
+        Process.sleep(100)
+
+        send(test_pid, :dying)
+      end)
+
+      assert_receive :registered
+      assert TestMessages.needs_test_messages?(sequence_id)
+
+      assert_receive :dying, 200
+      Process.sleep(50)
+      refute TestMessages.needs_test_messages?(sequence_id)
     end
 
     test "needs_test_messages?/1 returns true when under limit" do
@@ -132,7 +161,6 @@ defmodule Sequin.Transforms.TestMessagesTest do
       }
 
       TestMessages.add_test_message(sequence_id, message)
-      assert TestMessages.needs_test_messages?(sequence_id)
     end
 
     test "needs_test_messages?/1 returns false when at limit" do
@@ -226,7 +254,7 @@ defmodule Sequin.Transforms.TestMessagesTest do
 
       TestMessages.delete_sequence(sequence_id)
       assert TestMessages.get_test_messages(sequence_id) == []
-      assert TestMessages.needs_test_messages?(sequence_id)
+      refute TestMessages.needs_test_messages?(sequence_id)
     end
 
     test "destroy/0 removes the entire ETS table" do

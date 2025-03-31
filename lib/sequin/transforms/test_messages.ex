@@ -5,6 +5,10 @@ defmodule Sequin.Transforms.TestMessages do
   Users use these messages to see the before/after when writing ie. PathTransforms in the console.
   """
 
+  alias Sequin.Transforms.TestMessagesRegistry
+
+  def registry, do: TestMessagesRegistry
+
   @type sequence_id :: String.t()
   @type consumer_message :: Sequin.Consumers.ConsumerRecord.t() | Sequin.Consumers.ConsumerEvent.t()
   @type t :: :ets.tid()
@@ -21,13 +25,29 @@ defmodule Sequin.Transforms.TestMessages do
   end
 
   @doc """
+  Registers that a process needs test messages for a sequence.
+  """
+  @spec register_needs_messages(sequence_id()) :: {:ok, any()} | {:error, any()}
+  def register_needs_messages(sequence_id) do
+    Registry.register(TestMessagesRegistry, sequence_id, :ok)
+  end
+
+  @doc """
   Checks if a sequence needs more test messages (has less than 10).
   """
   @spec needs_test_messages?(sequence_id()) :: boolean()
   def needs_test_messages?(sequence_id) do
-    case :ets.lookup(:test_messages, sequence_id) do
-      [{^sequence_id, messages}] -> length(messages) < 10
-      [] -> true
+    # First check if any process is registered as needing messages
+    case Registry.lookup(TestMessagesRegistry, sequence_id) do
+      [] ->
+        false
+
+      _ ->
+        # Then check if we have less than 10 messages
+        case :ets.lookup(:test_messages, sequence_id) do
+          [{^sequence_id, messages}] -> length(messages) < 10
+          [] -> true
+        end
     end
   end
 

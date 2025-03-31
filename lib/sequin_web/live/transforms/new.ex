@@ -14,6 +14,7 @@ defmodule SequinWeb.TransformsLive.New do
   def mount(%{"sequin_id" => sequence_id}, _session, socket) do
     if connected?(socket) do
       :timer.send_interval(1000, self(), :poll_test_messages)
+      TestMessages.register_needs_messages(sequence_id)
     end
 
     sequence = sequence_id |> Sequence.where_id() |> Sequin.Repo.one()

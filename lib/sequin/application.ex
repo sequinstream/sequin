@@ -8,6 +8,7 @@ defmodule Sequin.Application do
   alias Sequin.Health.KickoffCheckPostgresReplicationSlotWorker
   alias Sequin.Health.KickoffCheckSinkConfigurationWorker
   alias Sequin.MutexedSupervisor
+  alias Sequin.Transforms.TestMessages
 
   require Logger
 
@@ -24,7 +25,7 @@ defmodule Sequin.Application do
 
     :syn.add_node_to_scopes([:account, :replication, :consumers])
 
-    Sequin.Transforms.TestMessages.create_ets_table()
+    TestMessages.create_ets_table()
 
     Sequin.Sentry.init()
 
@@ -66,6 +67,7 @@ defmodule Sequin.Application do
       Sequin.TaskSupervisor.child_spec(),
       Sequin.Cache.child_spec(),
       {Oban, Application.fetch_env!(:sequin, Oban)},
+      {Registry, keys: :duplicate, name: TestMessages.registry()},
       Sequin.Databases.ConnectionCache,
       Sequin.Sinks.Redis.ConnectionCache,
       Sequin.Sinks.Kafka.ConnectionCache,

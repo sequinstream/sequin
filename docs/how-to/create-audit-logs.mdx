@@ -74,7 +74,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
 ## Annotate your transactions
 
-To make your audit logs more valuable, use transaction annotations to add context to your changes. For example, you can record who made the change or from where.
+To make your audit logs more valuable, use [transaction annotations](/reference/annotations) to add context to your changes. For example, you can record who made the change or from where.
 
 <Steps>
   <Step title="Update your application code">
@@ -110,8 +110,10 @@ Once your sink is configured, changes from your source table will flow to your m
 ### Important considerations
 
 1. **Idempotency**: Implement idempotent processing to handle edge cases safely
-   - Your target table should have a unique constraint on the `event_id` column
-   - Use upsert operations (`ON CONFLICT` clauses) to handle potential duplicate messages
+
+Messages don't have a unique identifier. Instead, you can use a combination of the message's `metadata.commit_lsn` and the message's primary key(s) to uniquely identify a message. While many messages may share a `metadata.commit_lsn` (as it corresponds to the LSN of the transaction), your system should only care about capturing a single message per row per transaction.
+
+So, if your table's primary key is `id`, your audit table should have the columns `id` and `commit_lsn`. Then, you can create a unique index on `(id, commit_lsn)` to ensure that each row is only written once per transaction. Finally, your processor should use an `ON CONFLICT (id, commit_lsn)` clause to update the row if it already exists.
 
   <Info>
     Duplicates are rare and only occur if your processor successfully writes to the database but fails to acknowledge messages from the queue (SQS/Kafka) or return a 200 status code (HTTP endpoints). In these cases, the message will be redelivered to ensure at-least-once delivery.
@@ -137,9 +139,9 @@ First, create an audit table to store your change history, including fields for 
 ```sql create_table.sql
 create table audit_logs (
   id serial primary key,
-  event_id uuid unique not null,
   table_name text not null,
   record_id uuid not null,
+  commit_lsn bigint not null,
   action text not null,
   old_values jsonb,
   new_values jsonb,
@@ -152,7 +154,7 @@ create table audit_logs (
   metadata jsonb
 );
 
-create unique index on audit_logs(event_id);
+create unique index on audit_logs(commit_lsn, record_id);
 
 -- Optional: Add indexes for common queries
 create index on audit_logs(table_name, record_id);
@@ -171,9 +173,9 @@ def process_change(change):
     annotations = change.metadata.get('transaction_annotations', {})
 
     record = {
-        'event_id': uuid.UUID(change.id),
-        'table_name': change.metadata.table_name,
         'record_id': uuid.UUID(change.record['id']),
+        'commit_lsn': change.metadata.commit_lsn,
+        'table_name': change.metadata.table_name,
         'action': change.action,
         'old_values': json.dumps(change.changes) if change.changes else None,
         'new_values': json.dumps(change.record),
@@ -188,20 +190,19 @@ def process_change(change):
 
     db.execute("""
         insert into audit_logs (
-            event_id, table_name, record_id,
+            record_id, commit_lsn, table_name,
             action, old_values, new_values,
             created_at, updated_at,
             username, source, request_id, metadata
         )
         values (
-            %(event_id)s, %(table_name)s, %(record_id)s,
+            %(record_id)s, %(commit_lsn)s, %(table_name)s,
             %(action)s, %(old_values)s, %(new_values)s,
             %(created_at)s, %(updated_at)s,
             %(username)s, %(source)s, %(request_id)s, %(metadata)s
         )
-        on conflict (event_id) do update set
+        on conflict (record_id, commit_lsn) do update set
             table_name = excluded.table_name,
-            record_id = excluded.record_id,
             action = excluded.action,
             old_values = excluded.old_values,
             new_values = excluded.new_values,
@@ -226,10 +227,11 @@ With transaction annotations, you can create more informative activity feeds tha
 ```sql
 create table activity_feed (
     id serial primary key,
-    event_id uuid unique not null,
-    user_id uuid not null,
+    record_id uuid not null,
+    commit_lsn bigint not null,
     action text not null,
     description text not null,
+    user_id uuid not null,
     actor text not null,
     source text not null,
     request_id text,
@@ -238,6 +240,7 @@ create table activity_feed (
     created_at timestamp not null default now()
 );
 
+create unique index on activity_feed(commit_lsn, record_id);
 create index on activity_feed(user_id, created_at);
 create index on activity_feed(actor, created_at);
 ```
@@ -257,10 +260,11 @@ def process_change(change):
     )
 
     activity = {
-        'event_id': uuid.UUID(change.id),
-        'user_id': uuid.UUID(change.record['user_id']),
+        'record_id': uuid.UUID(change.record['id']),
+        'commit_lsn': change.metadata.commit_lsn,
         'action': change.action,
         'description': description,
+        'user_id': uuid.UUID(change.record['user_id']),
         'actor': annotations.get('username', 'system'),
         'source': annotations.get('source', 'unknown'),
         'request_id': annotations.get('request_id'),
@@ -271,17 +275,16 @@ def process_change(change):
 
     db.execute("""
         insert into activity_feed (
-            event_id, user_id, action,
+            record_id, commit_lsn, action,
             description, actor, source,
             request_id, reason, metadata, created_at
         )
         values (
-            %(event_id)s, %(user_id)s, %(action)s,
+            %(record_id)s, %(commit_lsn)s, %(action)s,
             %(description)s, %(actor)s, %(source)s,
             %(request_id)s, %(reason)s, %(metadata)s, %(created_at)s
         )
-        on conflict (event_id) do update set
-            user_id = excluded.user_id,
+        on conflict (record_id, commit_lsn) do update set
             action = excluded.action,
             description = excluded.description,
             actor = excluded.actor,
@@ -312,25 +315,25 @@ def process_compliance_event(change):
 
     # Track data access for GDPR/HIPAA
     compliance_event = {
-        'event_id': uuid.UUID(change.id),
+        'record_id': uuid.UUID(change.record['id']),
+        'commit_lsn': change.metadata.commit_lsn,
         'timestamp': datetime.now(),
         'data_category': determine_data_category(change.metadata.table_name, change.record),
         'operation_type': change.action,
         'user_id': annotations.get('username'),
         'purpose': annotations.get('metadata', {}).get('reason'),
         'lawful_basis': annotations.get('metadata', {}).get('lawful_basis'),
-        'record_id': change.record.get('id'),
         'system_source': annotations.get('source')
     }
 
     # Insert into compliance log
     db.execute("""
         insert into compliance_log (
-            event_id, timestamp, data_category, operation_type,
-            user_id, purpose, lawful_basis, record_id, system_source
+            record_id, commit_lsn, timestamp, data_category, operation_type,
+            user_id, purpose, lawful_basis, system_source
         ) values (
-            %(event_id)s, %(timestamp)s, %(data_category)s, %(operation_type)s,
-            %(user_id)s, %(purpose)s, %(lawful_basis)s, %(record_id)s, %(system_source)s
+            %(record_id)s, %(commit_lsn)s, %(timestamp)s, %(data_category)s, %(operation_type)s,
+            %(user_id)s, %(purpose)s, %(lawful_basis)s, %(system_source)s
         )
     """, compliance_event)
 ```

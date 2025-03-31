@@ -83,7 +83,7 @@ defmodule Sequin.Sinks.Redis.Client do
       {:error, handle_error(error)}
   end
 
-  defp xadd_commands(%SinkConsumer{transform: :none, sink: %RedisSink{} = sink}, messages) do
+  defp xadd_commands(%SinkConsumer{legacy_transform: :none, sink: %RedisSink{} = sink}, messages) do
     Enum.map(messages, fn
       %ConsumerRecord{} = message ->
         [
@@ -113,7 +113,7 @@ defmodule Sequin.Sinks.Redis.Client do
     end)
   end
 
-  defp xadd_commands(%SinkConsumer{transform: :record_only, sink: %RedisSink{} = sink} = consumer, messages) do
+  defp xadd_commands(%SinkConsumer{legacy_transform: :record_only, sink: %RedisSink{} = sink} = consumer, messages) do
     Enum.map(messages, fn
       message ->
         [

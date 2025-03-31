@@ -3,6 +3,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Databases.ConnectionCache
@@ -29,13 +30,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           message_kind: :event,
-          transform: ctx[:transform] || :none
+          legacy_transform: ctx[:legacy_transform] || :none
         )
 
       {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
     end
 
-    @tag transform: :none
+    @tag legacy_transform: :none
     test "events are sent to the HTTP endpoint without transforms", %{consumer: consumer, http_endpoint: http_endpoint} do
       test_pid = self()
       event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
@@ -75,7 +76,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive :sent, 1_000
     end
 
-    @tag transform: :record_only
+    @tag legacy_transform: :record_only
     test "events are sent to the HTTP endpoint with record-only transform", %{
       consumer: consumer,
       http_endpoint: http_endpoint
@@ -303,7 +304,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           replication_slot_id: replication.id,
           sequence_id: sequence.id,
           message_kind: :event,
-          transform: ctx[:transform] || :none
+          legacy_transform: ctx[:legacy_transform] || :none
         )
 
       :ok = Consumers.create_consumer_partition(consumer)
@@ -311,7 +312,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       {:ok, %{consumer: consumer}}
     end
 
-    @tag transform: :none
+    @tag legacy_transform: :none
     test "messages are sent from postgres to http endpoint without transforms", %{consumer: consumer} do
       test_pid = self()
 
@@ -335,13 +336,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           data:
             ConsumersFactory.consumer_event_data(
               record: record,
-              metadata: %{
+              metadata: %ConsumerEventData.Metadata{
                 database_name: "postgres",
                 table_schema: "public",
                 table_name: "users",
                 commit_timestamp: DateTime.utc_now(),
                 commit_lsn: Factory.unique_integer(),
-                consumer: %{
+                consumer: %ConsumerEventData.Metadata.Sink{
                   id: consumer.id,
                   name: consumer.name
                 },
@@ -373,7 +374,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert [] == SlotMessageStore.peek_messages(consumer, 10)
     end
 
-    @tag transform: :record_only
+    @tag legacy_transform: :record_only
     test "messages are sent from postgres to http endpoint with record-only transform", %{consumer: consumer} do
       test_pid = self()
 
@@ -549,7 +550,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           postgres_database: database,
           sequence_id: sequence.id,
           message_kind: :record,
-          transform: ctx[:transform] || :none
+          legacy_transform: ctx[:legacy_transform] || :none
         )
 
       :ok = Consumers.create_consumer_partition(consumer)
@@ -557,7 +558,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       {:ok, %{consumer: consumer}}
     end
 
-    @tag transform: :none
+    @tag legacy_transform: :none
     test "messages are sent from postgres to http endpoint without transforms", %{consumer: consumer} do
       test_pid = self()
 
@@ -579,13 +580,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           state: :available,
           data: %ConsumerRecordData{
             record: %{name: "character_name"},
-            metadata: %{
+            metadata: %ConsumerRecordData.Metadata{
               database_name: "postgres",
               table_schema: "public",
               table_name: "characters_detailed",
               commit_timestamp: DateTime.utc_now(),
               commit_lsn: Factory.unique_integer(),
-              consumer: %{
+              consumer: %ConsumerRecordData.Metadata.Sink{
                 id: consumer.id,
                 name: consumer.name
               }
@@ -618,7 +619,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert [] == SlotMessageStore.peek_messages(consumer, 10)
     end
 
-    @tag transform: :record_only
+    @tag legacy_transform: :record_only
     test "messages are sent from postgres to http endpoint with record-only transform", %{consumer: consumer} do
       test_pid = self()
 

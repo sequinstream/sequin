@@ -1,6 +1,8 @@
 defmodule Sequin.TransformsTest do
   use Sequin.DataCase
 
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.Transform
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -363,5 +365,133 @@ defmodule Sequin.TransformsTest do
              operator: "==",
              comparison_value: "test"
            } = filter
+  end
+
+  describe "path_transform/1" do
+    test "transforms a consumer message with a top-level field path" do
+      message = ConsumersFactory.consumer_message()
+      path_transform = ConsumersFactory.path_transform(path: "record")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == message.data.record
+    end
+
+    test "transforms a consumer message with a nested field path" do
+      message = ConsumersFactory.consumer_message()
+      path_transform = ConsumersFactory.path_transform(path: "record.id")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == get_in(message.data.record, ["id"])
+    end
+
+    test "transforms a consumer message with metadata path" do
+      message = ConsumersFactory.consumer_message()
+      path_transform = ConsumersFactory.path_transform(path: "metadata.table_schema")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == message.data.metadata.table_schema
+    end
+
+    test "transforms a consumer message with changes path" do
+      message = ConsumersFactory.consumer_message(message_kind: :event)
+      path_transform = ConsumersFactory.path_transform(path: "changes")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == message.data.changes
+    end
+
+    test "transforms a consumer record .changes to null" do
+      message = ConsumersFactory.consumer_message(message_kind: :record)
+      path_transform = ConsumersFactory.path_transform(path: "changes")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == nil
+    end
+
+    test "transforms a consumer message with action path" do
+      message = ConsumersFactory.consumer_message(message_kind: :event)
+      path_transform = ConsumersFactory.path_transform(path: "action")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == message.data.action
+    end
+
+    test "transforms a consumer message with transaction annotations path" do
+      message = ConsumersFactory.consumer_message(message_kind: :event)
+      path_transform = ConsumersFactory.path_transform(path: "metadata.transaction_annotations")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == message.data.metadata.transaction_annotations
+    end
+
+    test "transforms a consumer message with consumer path" do
+      message = ConsumersFactory.consumer_message()
+      path_transform = ConsumersFactory.path_transform(path: "metadata.consumer")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == message.data.metadata.consumer |> Map.from_struct() |> Sequin.Map.stringify_keys()
+    end
+
+    test "transforms a consumer message with consumer name path" do
+      message = ConsumersFactory.consumer_message()
+      path_transform = ConsumersFactory.path_transform(path: "metadata.consumer.name")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == message.data.metadata.consumer.name
+    end
+
+    test "handles non-existent nested field gracefully" do
+      message = ConsumersFactory.consumer_message(message_kind: :record)
+      path_transform = ConsumersFactory.path_transform(path: "record.nonexistent_field")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == nil
+    end
+
+    test "handles non-existent deeply nested field gracefully" do
+      message = ConsumersFactory.consumer_message(message_kind: :record)
+      path_transform = ConsumersFactory.path_transform(path: "record.nonexistent_field.nonexistent_field")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == nil
+    end
+
+    test "handles non-existent metadata field gracefully" do
+      message = ConsumersFactory.consumer_message(message_kind: :record)
+      path_transform = ConsumersFactory.path_transform(path: "metadata.nonexistent_field")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == nil
+    end
+
+    test "handles non-existent transaction annotation field gracefully" do
+      message = ConsumersFactory.consumer_message(message_kind: :record)
+      path_transform = ConsumersFactory.path_transform(path: "metadata.transaction_annotations.nonexistent_field")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == nil
+    end
+
+    test "handles non-existent sink field gracefully" do
+      message = ConsumersFactory.consumer_message(message_kind: :record)
+      path_transform = ConsumersFactory.path_transform(path: "metadata.sink.nonexistent_field")
+      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      result = Transforms.Message.to_external(consumer, message)
+      assert result == nil
+    end
   end
 end

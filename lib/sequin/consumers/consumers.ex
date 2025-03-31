@@ -317,6 +317,7 @@ defmodule Sequin.Consumers do
       {:id_or_name, id_or_name}, query -> SinkConsumer.where_id_or_name(query, id_or_name)
       {:type, type}, query -> SinkConsumer.where_type(query, type)
       {:sequence_id, sequence_id}, query -> SinkConsumer.where_sequence_id(query, sequence_id)
+      {:preload, preload}, query -> preload(query, ^preload)
     end)
     |> Repo.one()
     |> case do
@@ -1285,5 +1286,13 @@ defmodule Sequin.Consumers do
       :payload_size_bytes,
       :deleted
     ])
+  end
+
+  @doc """
+  Checks if a message matches a sequence's table.
+  """
+  @spec matches_sequence?(Sequence.t(), ConsumerRecord.t() | ConsumerEvent.t()) :: boolean()
+  def matches_sequence?(%Sequence{} = sequence, message) do
+    sequence.table_oid == message.table_oid
   end
 end

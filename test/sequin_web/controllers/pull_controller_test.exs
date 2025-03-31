@@ -27,7 +27,7 @@ defmodule SequinWeb.PullControllerTest do
         backfill_completed_at: @one_day_ago,
         replication_slot_id: rep_slot.id,
         sink: %{type: :sequin_stream},
-        transform: ctx[:transform] || :none
+        legacy_transform: ctx[:legacy_transform] || :none
       )
 
     other_consumer =
@@ -35,7 +35,7 @@ defmodule SequinWeb.PullControllerTest do
         message_kind: :record,
         account_id: other_account.id,
         sink: %{type: :sequin_stream},
-        transform: ctx[:transform] || :none
+        legacy_transform: ctx[:legacy_transform] || :none
       )
 
     start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
@@ -58,7 +58,7 @@ defmodule SequinWeb.PullControllerTest do
       assert %{"data" => []} = json_response(conn, 200)
     end
 
-    @tag transform: :none
+    @tag legacy_transform: :none
     test "returns available messages if mix of available and delivered (no transform)", %{
       conn: conn,
       consumer: consumer
@@ -78,7 +78,7 @@ defmodule SequinWeb.PullControllerTest do
       assert message["data"]["record"]["column"] == record.data.record["column"]
     end
 
-    @tag transform: :record_only
+    @tag legacy_transform: :record_only
     test "returns available messages if mix of available and delivered (record-only transform)", %{
       conn: conn,
       consumer: consumer

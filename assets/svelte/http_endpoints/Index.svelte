@@ -2,7 +2,7 @@
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
-  import { ChevronsLeftRightEllipsis, Webhook } from "lucide-svelte";
+  import { Globe, Webhook } from "lucide-svelte";
   import HealthPill from "../health/HealthPill.svelte";
 
   export let httpEndpoints: Array<{
@@ -47,7 +47,7 @@
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
-      <ChevronsLeftRightEllipsis class="h-6 w-6 mr-2" />
+      <Globe class="h-6 w-6 mr-2" />
       <h1 class="text-2xl font-bold">HTTP Endpoints</h1>
     </div>
     {#if httpEndpoints.length > 0}

@@ -55,6 +55,7 @@
   // Add these new state variables
   let messageShapeOpen = false;
   let logsOpen = true;
+  let transformedMessageOpen = false;
 
   // Add computed property for message delivery state
   $: isMessageDelivered =
@@ -763,10 +764,35 @@
                             >
                           </div>
                         {:else if messageData}
+                          {#if selectedMessage.transformed_message}
+                            <span class="text-sm font-medium"
+                              >Original Message</span
+                            >
+                          {/if}
                           <pre
                             class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code
                               >{JSON.stringify(messageData, null, 2)}</code
                             ></pre>
+                        {/if}
+
+                        <!-- Transformed Message Section -->
+                        {#if selectedMessage.transformed_message}
+                          <div class="mt-4">
+                            <span class="text-sm font-medium"
+                              >Transformed Message</span
+                            >
+
+                            <div class="mt-2">
+                              <pre
+                                class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code
+                                  >{JSON.stringify(
+                                    selectedMessage.transformed_message,
+                                    null,
+                                    2,
+                                  )}</code
+                                ></pre>
+                            </div>
+                          </div>
                         {/if}
                       </div>
                     {/if}

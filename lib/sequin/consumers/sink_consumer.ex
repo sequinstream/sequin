@@ -166,6 +166,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: fragment("?->>'http_endpoint_id' = ?", c.sink, ^http_endpoint_id))
   end
 
+  def where_transform_id(query \\ base_query(), transform_id) do
+    from([consumer: c] in query, where: c.transform_id == ^transform_id)
+  end
+
   def where_type(query \\ base_query(), type) do
     from([consumer: c] in query, where: c.type == ^type)
   end

@@ -33,6 +33,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Repo
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Transforms.Message
   alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
 
@@ -984,7 +985,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           state: state,
           state_color: get_message_state_color(consumer, state),
           table_oid: message.table_oid,
-          trace_id: message.replication_message_trace_id
+          trace_id: message.replication_message_trace_id,
+          transformed_message: maybe_transform_message(consumer, message)
         }
 
       %ConsumerEvent{} = message ->
@@ -1005,7 +1007,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           state: state,
           state_color: get_message_state_color(consumer, state),
           table_oid: message.table_oid,
-          trace_id: message.replication_message_trace_id
+          trace_id: message.replication_message_trace_id,
+          transformed_message: maybe_transform_message(consumer, message)
         }
 
       %AcknowledgedMessage{} = message ->
@@ -1029,6 +1032,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           table_oid: message.table_oid,
           trace_id: message.trace_id
         }
+    end
+  end
+
+  defp maybe_transform_message(consumer, message) do
+    case consumer.transform do
+      nil -> nil
+      _ -> Message.to_external(consumer, message)
     end
   end
 

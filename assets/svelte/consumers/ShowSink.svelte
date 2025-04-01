@@ -5,6 +5,7 @@
     XCircle,
     Loader2,
     ArrowDownSquare,
+    ExternalLink,
   } from "lucide-svelte";
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -1009,8 +1010,18 @@
       {#if transform}
         <Card>
           <CardContent class="p-6">
-            <div class="flex items-center space-x-4 mb-4">
+            <div class="flex justify-between items-center mb-4">
               <h2 class="text-lg font-semibold">Transform</h2>
+              <a
+                href="/transforms/{transform.id}"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <Button variant="outline" size="sm">
+                  <ExternalLink class="h-4 w-4 mr-2" />
+                  View Transform
+                </Button>
+              </a>
             </div>
             <div class="grid lg:grid-cols-3 gap-4">
               <div>

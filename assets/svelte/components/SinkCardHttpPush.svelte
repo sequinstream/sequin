@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronsLeftRightEllipsis, ExternalLink } from "lucide-svelte";
+  import { ExternalLink } from "lucide-svelte";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { concatenateUrl } from "../databases/utils";
   import { Button } from "$lib/components/ui/button";

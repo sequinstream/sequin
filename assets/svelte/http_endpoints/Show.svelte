@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     ArrowLeft,
-    ChevronsLeftRightEllipsis,
+    Globe,
     Braces,
     Clock,
     RotateCw,
@@ -111,7 +111,7 @@
             </Button>
           </LinkPushNavigate>
           <div class="flex items-center">
-            <ChevronsLeftRightEllipsis class="h-6 w-6 mr-2" />
+            <Globe class="h-6 w-6 mr-2" />
             <h1 class="text-xl font-semibold">{http_endpoint.name}</h1>
           </div>
         </div>

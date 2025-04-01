@@ -146,10 +146,43 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
+  def get_transform(account_id, id) do
+    account_id
+    |> Transform.where_account_id()
+    |> Transform.where_id(id)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :transform, params: %{id: id, account_id: account_id})}
+      transform -> {:ok, transform}
+    end
+  end
+
+  def get_transform!(account_id, id) do
+    case get_transform(account_id, id) do
+      {:ok, transform} -> transform
+      {:error, error} -> raise error
+    end
+  end
+
   def create_transform(account_id, params) do
     %Transform{account_id: account_id}
     |> Transform.create_changeset(params)
     |> Repo.insert()
+  end
+
+  def update_transform(account_id, id, params) do
+    %Transform{id: id, account_id: account_id}
+    |> Transform.update_changeset(params)
+    |> Repo.update()
+  end
+
+  def delete_transform(account_id, id) do
+    with {:ok, transform} <- get_transform(account_id, id) do
+      transform
+      |> Transform.changeset(%{})
+      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_transform_id_fkey")
+      |> Repo.delete()
+    end
   end
 
   @doc """
@@ -204,6 +237,14 @@ defmodule Sequin.Consumers do
   def list_consumers_for_sequence(sequence_id) do
     sequence_id
     |> SinkConsumer.where_sequence_id()
+    |> Repo.all()
+  end
+
+  def list_consumers_for_transform(account_id, transform_id, preload \\ []) do
+    account_id
+    |> SinkConsumer.where_account_id()
+    |> SinkConsumer.where_transform_id(transform_id)
+    |> preload(^preload)
     |> Repo.all()
   end
 

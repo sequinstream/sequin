@@ -19,9 +19,10 @@
     Cog,
     Plug,
     Logs,
-    ChevronsLeftRightEllipsis,
+    Globe,
     ArrowUpCircle,
     UserCog,
+    Code,
   } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
 
@@ -61,9 +62,14 @@
           icon: Logs,
         },
         {
+          path: "/transforms",
+          text: "Transforms",
+          icon: Code,
+        },
+        {
           path: "/http-endpoints",
           text: "HTTP Endpoints",
-          icon: ChevronsLeftRightEllipsis,
+          icon: Globe,
         },
       ],
     },

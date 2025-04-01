@@ -4,28 +4,26 @@ defmodule SequinWeb.TransformsLive.New do
 
   import LiveSvelte
 
+  alias Sequin.Consumers
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Transform
-  alias Sequin.Databases.Sequence
   alias Sequin.Transforms.Message
   alias Sequin.Transforms.TestMessages
 
-  def mount(%{"sequin_id" => sequence_id}, _session, socket) do
+  def mount(_params, _session, socket) do
     if connected?(socket) do
       :timer.send_interval(1000, self(), :poll_test_messages)
-      TestMessages.register_needs_messages(sequence_id)
+      dbg(current_account_id(socket))
+      TestMessages.register_needs_messages(current_account_id(socket))
     end
 
-    sequence = sequence_id |> Sequence.where_id() |> Sequin.Repo.one()
     changeset = PathTransform.changeset(%PathTransform{}, %{"path" => ""})
 
-    test_messages =
-      TestMessages.get_test_messages(sequence_id)
+    test_messages = TestMessages.get_test_messages(current_account_id(socket))
 
     {:ok,
      assign(socket,
-       sequence: sequence,
        changeset: changeset,
        form_data: changeset_to_form_data(changeset),
        form_errors: %{},
@@ -42,7 +40,6 @@ defmodule SequinWeb.TransformsLive.New do
         name="transforms/NewTransform"
         props={
           %{
-            sequence: @sequence,
             formData: @form_data,
             formErrors: if(@show_errors?, do: @form_errors, else: %{}),
             testMessages: encode_test_messages(@test_messages, @form_data[:path]),
@@ -57,7 +54,7 @@ defmodule SequinWeb.TransformsLive.New do
   end
 
   def handle_info(:poll_test_messages, socket) do
-    test_messages = TestMessages.get_test_messages(socket.assigns.sequence.id)
+    test_messages = TestMessages.get_test_messages(current_account_id(socket))
     {:noreply, assign(socket, test_messages: test_messages)}
   end
 
@@ -78,16 +75,19 @@ defmodule SequinWeb.TransformsLive.New do
   end
 
   def handle_event("save", %{"path_transform" => params}, socket) do
-    case PathTransform.changeset(%PathTransform{}, params) do
-      %Ecto.Changeset{valid?: true} ->
+    params = decode_params(params)
+
+    case Consumers.create_transform(current_account_id(socket), params) do
+      {:ok, _transform} ->
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :info, title: "Transform created successfully"})
          |> push_navigate(to: ~p"/")}
 
-      %Ecto.Changeset{} = changeset ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         form_data = changeset_to_form_data(changeset)
         form_errors = errors_on(changeset)
+        dbg(form_errors)
 
         {:noreply,
          socket
@@ -123,6 +123,16 @@ defmodule SequinWeb.TransformsLive.New do
     Enum.map(test_messages, fn message ->
       %{original: Message.to_external(original_consumer, message), transformed: Message.to_external(consumer, message)}
     end)
+  end
+
+  defp decode_params(params) do
+    %{
+      "name" => params["name"],
+      "transform" => %{
+        "type" => "path",
+        "path" => params["path"]
+      }
+    }
   end
 
   defp errors_on(changeset) do

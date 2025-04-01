@@ -15,7 +15,7 @@
   import { conditionalClass } from "$lib/utils";
 
   export let form: {
-    startPosition: "beginning" | "specific";
+    startPosition: "beginning" | "specific" | "none";
     sortColumnAttnum: number | null;
     initialSortColumnValue: any | null;
   };
@@ -101,8 +101,12 @@
 <div class="space-y-4">
   <RadioGroup bind:value={form.startPosition}>
     <div class="flex items-center space-x-2">
+      <RadioGroupItem value="none" id="none" />
+      <Label for="none">No backfill</Label>
+    </div>
+    <div class="flex items-center space-x-2">
       <RadioGroupItem value="beginning" id="beginning" />
-      <Label for="beginning">Backfill from the beginning</Label>
+      <Label for="beginning">Backfill all rows</Label>
     </div>
     <div class="flex items-center space-x-2">
       <RadioGroupItem value="specific" id="specific" />
@@ -110,7 +114,16 @@
     </div>
   </RadioGroup>
 
-  {#if form.startPosition === "specific"}
+  {#if form.startPosition === "none"}
+    <p class="text-sm text-muted-foreground">
+      No initial backfill will be performed. You can run backfills at any time
+      in the future.
+    </p>
+  {:else if form.startPosition === "beginning"}
+    <p class="text-sm text-muted-foreground">
+      Sequin will backfill all rows in the table.
+    </p>
+  {:else if form.startPosition === "specific"}
     <div class="space-y-4">
       <!-- Integrated SortColumnSelector functionality -->
       <div class="space-y-2">

@@ -41,6 +41,10 @@
   export let live;
   export let parent;
   export let consumer: Consumer;
+  export let transform: {
+    id: string;
+    name: string;
+  } | null;
 
   function pushEvent(event: string, data: any, cb: (val: any) => void) {
     live.pushEventTo(`#${parent}`, event, data, cb);
@@ -1001,6 +1005,23 @@
           );
         }}
       />
+
+      {#if transform}
+        <Card>
+          <CardContent class="p-6">
+            <div class="flex items-center space-x-4 mb-4">
+              <h2 class="text-lg font-semibold">Transform</h2>
+            </div>
+            <div class="grid lg:grid-cols-3 gap-4">
+              <div>
+                <p class="">
+                  {transform.name}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      {/if}
 
       {#if isHttpPushConsumer(consumer)}
         <SinkCardHttpPush {consumer} />

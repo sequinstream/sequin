@@ -8,16 +8,13 @@ defmodule Sequin.Consumers.Transform do
 
   alias Sequin.Accounts.Account
   alias Sequin.Consumers.PathTransform
-  alias Sequin.Databases.Sequence
 
-  @derive {Jason.Encoder, only: [:id, :name, :type, :config, :account_id, :sequence_id]}
+  @derive Jason.Encoder
   schema "transforms" do
     field :name, :string
     field :type, :string, read_after_writes: true
-    field :config, :map, default: %{}
 
     belongs_to :account, Account
-    belongs_to :sequence, Sequence
 
     polymorphic_embeds_one(:transform,
       types: [
@@ -32,9 +29,8 @@ defmodule Sequin.Consumers.Transform do
 
   def create_changeset(transform, attrs) do
     transform
-    |> cast(attrs, [:name, :sequence_id])
+    |> cast(attrs, [:name])
     |> changeset(attrs)
-    |> foreign_key_constraint(:sequence_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> Sequin.Changeset.validate_name()
   end
@@ -45,9 +41,9 @@ defmodule Sequin.Consumers.Transform do
 
   def changeset(transform, attrs) do
     transform
-    |> cast(attrs, [:name, :sequence_id])
+    |> cast(attrs, [:name])
     |> cast_polymorphic_embed(:transform, required: true)
-    |> validate_required([:name, :sequence_id])
+    |> validate_required([:name])
   end
 
   def where_account_id(query \\ base_query(), account_id) do

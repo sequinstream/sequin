@@ -23,6 +23,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.Transform
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
@@ -63,6 +64,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:last_completed_backfill, last_completed_backfill)
           |> assign(:api_tokens, ApiTokens.list_tokens_for_account(current_account.id))
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
+          |> assign(:transforms, Consumers.list_transforms_for_account(current_account.id))
           |> assign_metrics()
           |> assign(:paused, false)
           |> assign(:show_acked, params["showAcked"] == "true")
@@ -89,7 +91,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
-        |> Repo.preload([:postgres_database, :sequence, :active_backfill, :replication_slot], force: true)
+        |> Repo.preload([:postgres_database, :sequence, :active_backfill, :replication_slot, :transform], force: true)
         |> SinkConsumer.preload_http_endpoint()
         |> put_health()
 
@@ -153,6 +155,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
               consumer={@consumer}
               on_finish={&handle_edit_finish/1}
               current_user={@current_user}
+              transforms={Enum.map(@transforms, &encode_transform/1)}
             />
           <% {:show, %SinkConsumer{}} -> %>
             <!-- ShowHttpPush component -->
@@ -166,7 +169,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   metrics_loading: @metrics_loading,
                   cursor_position: encode_backfill(@consumer, @last_completed_backfill),
                   apiBaseUrl: @api_base_url,
-                  apiTokens: encode_api_tokens(@api_tokens)
+                  apiTokens: encode_api_tokens(@api_tokens),
+                  transform: encode_transform(@consumer.transform)
                 }
               }
             />
@@ -622,7 +626,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       href: RouteHelpers.consumer_path(consumer),
       group_column_names: encode_group_column_names(consumer),
       batch_size: consumer.batch_size,
-      table: encode_table(table)
+      table: encode_table(table),
+      transform_id: consumer.transform_id
     }
   end
 
@@ -775,6 +780,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       value: column_filter.value.value,
       is_jsonb: column_filter.is_jsonb,
       jsonb_path: column_filter.jsonb_path
+    }
+  end
+
+  defp encode_transform(nil), do: nil
+
+  defp encode_transform(%Transform{} = transform) do
+    %{
+      id: transform.id,
+      name: transform.name
     }
   end
 

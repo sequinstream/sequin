@@ -5,7 +5,7 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
-  import { Switch } from "$lib/components/ui/switch";
+  import ChevronDown from "lucide-svelte/icons/chevron-down";
   import ColumnList from "./ColumnList.svelte";
   export let errors: any;
   export let isEditMode: boolean;
@@ -42,8 +42,8 @@
     }
   }
 
-  function toggleGroupingMode(checked: boolean) {
-    useCustomGrouping = checked;
+  function toggleGroupingMode() {
+    useCustomGrouping = !useCustomGrouping;
     useCustomGroupingChanged = true;
   }
 
@@ -64,14 +64,6 @@
     <CardHeader>
       <div class="flex items-center justify-between">
         <CardTitle>Message grouping</CardTitle>
-        <div class="flex items-center space-x-2">
-          <Switch
-            id="use-custom-grouping"
-            checked={useCustomGrouping}
-            disabled={true}
-          />
-          <span class="text-sm">Custom</span>
-        </div>
       </div>
     </CardHeader>
     <CardContent>
@@ -116,15 +108,19 @@
     <CardHeader>
       <div class="flex items-center justify-between">
         <CardTitle>Message grouping</CardTitle>
-        <div class="flex items-center space-x-2">
-          <Switch
-            id="use-custom-grouping"
-            checked={useCustomGrouping}
-            onCheckedChange={toggleGroupingMode}
-            disabled={!selectedTable}
-          />
-          <span class="text-sm">Custom</span>
-        </div>
+        <button
+          type="button"
+          class="flex items-center space-x-2 text-sm hover:text-primary transition-colors"
+          on:click={toggleGroupingMode}
+          disabled={!selectedTable}
+        >
+          <div
+            class="transition-transform duration-200"
+            class:rotate-180={useCustomGrouping}
+          >
+            <ChevronDown class="h-4 w-4" />
+          </div>
+        </button>
       </div>
     </CardHeader>
     <CardContent>

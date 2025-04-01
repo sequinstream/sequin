@@ -9,7 +9,7 @@ defmodule Sequin.Transforms.TestMessages do
 
   def registry, do: TestMessagesRegistry
 
-  @type sequence_id :: String.t()
+  @type account_id :: String.t()
   @type consumer_message :: Sequin.Consumers.ConsumerRecord.t() | Sequin.Consumers.ConsumerEvent.t()
   @type t :: :ets.tid()
 
@@ -27,25 +27,25 @@ defmodule Sequin.Transforms.TestMessages do
   @doc """
   Registers that a process needs test messages for a sequence.
   """
-  @spec register_needs_messages(sequence_id()) :: {:ok, any()} | {:error, any()}
-  def register_needs_messages(sequence_id) do
-    Registry.register(TestMessagesRegistry, sequence_id, :ok)
+  @spec register_needs_messages(account_id()) :: {:ok, any()} | {:error, any()}
+  def register_needs_messages(account_id) do
+    Registry.register(TestMessagesRegistry, account_id, :ok)
   end
 
   @doc """
   Checks if a sequence needs more test messages (has less than 10).
   """
-  @spec needs_test_messages?(sequence_id()) :: boolean()
-  def needs_test_messages?(sequence_id) do
+  @spec needs_test_messages?(account_id()) :: boolean()
+  def needs_test_messages?(account_id) do
     # First check if any process is registered as needing messages
-    case Registry.lookup(TestMessagesRegistry, sequence_id) do
+    case Registry.lookup(TestMessagesRegistry, account_id) do
       [] ->
         false
 
       _ ->
         # Then check if we have less than 10 messages
-        case :ets.lookup(:test_messages, sequence_id) do
-          [{^sequence_id, messages}] -> length(messages) < 10
+        case :ets.lookup(:test_messages, account_id) do
+          [{^account_id, messages}] -> length(messages) < 10
           [] -> true
         end
     end
@@ -55,19 +55,19 @@ defmodule Sequin.Transforms.TestMessages do
   Adds a test message to the sequence's list if there are less than 10 messages.
   Returns true if the message was added, false otherwise.
   """
-  @spec add_test_message(sequence_id(), consumer_message()) :: boolean()
-  def add_test_message(sequence_id, message) do
-    case :ets.lookup(:test_messages, sequence_id) do
-      [{^sequence_id, messages}] ->
+  @spec add_test_message(account_id(), consumer_message()) :: boolean()
+  def add_test_message(account_id, message) do
+    case :ets.lookup(:test_messages, account_id) do
+      [{^account_id, messages}] ->
         if length(messages) < 10 do
-          :ets.insert(:test_messages, {sequence_id, [message | messages]})
+          :ets.insert(:test_messages, {account_id, [message | messages]})
           true
         else
           false
         end
 
       [] ->
-        :ets.insert(:test_messages, {sequence_id, [message]})
+        :ets.insert(:test_messages, {account_id, [message]})
         true
     end
   end
@@ -76,10 +76,10 @@ defmodule Sequin.Transforms.TestMessages do
   Returns the list of test messages for a sequence.
   Returns an empty list if no messages exist for the sequence.
   """
-  @spec get_test_messages(sequence_id()) :: [consumer_message()]
-  def get_test_messages(sequence_id) do
-    case :ets.lookup(:test_messages, sequence_id) do
-      [{^sequence_id, messages}] -> messages
+  @spec get_test_messages(account_id()) :: [consumer_message()]
+  def get_test_messages(account_id) do
+    case :ets.lookup(:test_messages, account_id) do
+      [{^account_id, messages}] -> messages
       [] -> []
     end
   end
@@ -87,9 +87,9 @@ defmodule Sequin.Transforms.TestMessages do
   @doc """
   Deletes all test messages for a sequence.
   """
-  @spec delete_sequence(sequence_id()) :: true
-  def delete_sequence(sequence_id) do
-    :ets.delete(:test_messages, sequence_id)
+  @spec delete_sequence(account_id()) :: true
+  def delete_sequence(account_id) do
+    :ets.delete(:test_messages, account_id)
   end
 
   @doc """

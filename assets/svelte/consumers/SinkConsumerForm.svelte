@@ -28,12 +28,9 @@
   import NatsSinkForm from "$lib/sinks/nats/NatsSinkForm.svelte";
   import RabbitMqSinkForm from "$lib/sinks/rabbitmq/RabbitMqSinkForm.svelte";
   import AzureEventHubSinkForm from "$lib/sinks/azure_event_hub/AzureEventHubSinkForm.svelte";
-  import { CircleAlert, ExternalLinkIcon, Info } from "lucide-svelte";
+  import { CircleAlert, Info, ChevronDown } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import TableSelector from "../components/TableSelector.svelte";
-  import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
-  import Datetime from "../components/Datetime.svelte";
-  import { Switch } from "$lib/components/ui/switch";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
   import MessageExamples from "$lib/components/MessageExamples.svelte";
@@ -46,7 +43,8 @@
   } from "$lib/components/ui/accordion";
   import type { Table } from "$lib/databases/types";
   import BackfillForm from "$lib/components/BackfillForm.svelte";
-  import * as Tabs from "$lib/components/ui/tabs";
+  import * as Tooltip from "$lib/components/ui/tooltip";
+  import { RotateCwIcon, CheckIcon } from "lucide-svelte";
 
   type Database = {
     id: string;
@@ -60,6 +58,11 @@
   export let consumerTitle;
   export let httpEndpoints;
   export let databases: Database[];
+  export let transforms: Array<{
+    id: string;
+    name: string;
+    type: string;
+  }>;
   export let errors: {
     consumer: Record<string, string>;
     sequence: Record<string, string>;
@@ -67,31 +70,59 @@
   };
   export let isSelfHosted: boolean;
 
-  let initialForm = {
+  type TransformType = "none" | "path";
+  type MessageType = "insert" | "update" | "delete" | "read";
+  type MessageKind = "event" | "record";
+
+  interface FormState {
+    type: string;
+    messageKind: MessageKind;
+    maxMemoryMb: number;
+    postgresDatabaseId: string | null;
+    tableOid: number | null;
+    sourceTableFilters: any[];
+    sourceTableActions: string[];
+    name: string;
+    ackWaitMs: number;
+    maxAckPending: number;
+    maxWaiting: number;
+    sink: any;
+    runInitialBackfill: boolean;
+    backfill: {
+      startPosition: "beginning" | "specific" | "none";
+      sortColumnAttnum: number | null;
+      initialSortColumnValue: string | null;
+    };
+    groupColumnAttnums: number[];
+    batchSize: number;
+    transform: string;
+  }
+
+  let initialForm: FormState = {
     type: consumer.type,
-    messageKind: consumer.message_kind || "event",
-    maxMemoryMb: consumer.max_memory_mb || 1024,
+    messageKind: (consumer.message_kind || "event") as MessageKind,
+    maxMemoryMb: Number(consumer.max_memory_mb) || 1024,
     postgresDatabaseId: consumer.postgres_database_id,
     tableOid: consumer.table_oid,
     sourceTableFilters: consumer.source_table_filters || [],
     sourceTableActions: consumer.source_table_actions || [],
     name: consumer.name || "",
-    ackWaitMs: consumer.ack_wait_ms || 30000,
-    maxAckPending: consumer.max_ack_pending || 10000,
-    maxWaiting: consumer.max_waiting || 20,
+    ackWaitMs: Number(consumer.ack_wait_ms) || 30000,
+    maxAckPending: Number(consumer.max_ack_pending) || 10000,
+    maxWaiting: Number(consumer.max_waiting) || 20,
     sink: consumer.sink,
     runInitialBackfill: false,
     backfill: {
-      startPosition: "beginning" as "beginning" | "specific",
+      startPosition: "none",
       sortColumnAttnum: null,
       initialSortColumnValue: null,
     },
     groupColumnAttnums: consumer.group_column_attnums || [],
-    batchSize: consumer.batch_size || 1,
-    transform: consumer.legacy_transform || "none",
+    batchSize: Number(consumer.batch_size) || 1,
+    transform: consumer.transform_id || "none",
   };
 
-  let form = { ...initialForm };
+  let form: FormState = { ...initialForm };
   let lastPushedFormJSON = null;
   let isDirty = false;
   let isSubmitting = false;
@@ -110,7 +141,6 @@
 
   $: {
     isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
-
     // Only push the form if it has changed since the last push
     // Prevents infinite loop of pushing the same form over and over
     if (JSON.stringify(form) !== lastPushedFormJSON) {
@@ -180,17 +210,6 @@
   ];
 
   $: {
-    if (!enableBackfill) {
-      form.runInitialBackfill = false;
-      form.backfill = {
-        startPosition: "beginning",
-        sortColumnAttnum: null,
-        initialSortColumnValue: null,
-      };
-    } else {
-      form.runInitialBackfill = true;
-    }
-
     if (form.postgresDatabaseId) {
       selectedDatabase = databases.find(
         (db) => db.id === form.postgresDatabaseId,
@@ -316,23 +335,25 @@
     });
   }
 
-  let enableBackfill = false;
+  let backfillSectionExpanded = false;
   let showMessageTypeExampleModal = false;
   let selectedExampleType: "change" | "record" = "change";
 
-  let showTransformExampleModal = false;
-  let selectedTransformExampleType: "none" | "record_only" | "code" = "none";
-  let selectedTransformMessageType: "insert" | "update" | "delete" | "read" =
-    "insert";
+  let transformSectionExpanded = form.transform !== "none";
+  let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
-  let enableTransform = form.transform !== "none";
+  function handleTransformChange(event: { value: string }) {
+    form.transform = event.value;
+  }
 
-  $: {
-    if (!enableTransform) {
-      form.transform = "none";
-    } else {
-      form.transform = "record_only";
-    }
+  function refreshTransforms() {
+    transformRefreshState = "refreshing";
+    pushEvent("refresh_transforms", {}, () => {
+      transformRefreshState = "done";
+      setTimeout(() => {
+        transformRefreshState = "idle";
+      }, 2000);
+    });
   }
 </script>
 
@@ -504,13 +525,34 @@
             </Popover.Content>
           </Popover.Root>
         </CardTitle>
-        <Switch bind:checked={enableTransform} disabled={!selectedTable} />
+        <button
+          type="button"
+          class="flex items-center space-x-2 text-sm hover:text-primary transition-colors disabled:opacity-50"
+          on:click={() =>
+            (transformSectionExpanded = !transformSectionExpanded)}
+          disabled={!selectedTable}
+        >
+          <div
+            class="transition-transform duration-200"
+            class:rotate-180={transformSectionExpanded}
+          >
+            <ChevronDown class="h-4 w-4" />
+          </div>
+        </button>
       </CardHeader>
       <CardContent>
         <div class="space-y-2">
-          {#if !enableTransform}
+          {#if !transformSectionExpanded}
             <p class="text-sm text-muted-foreground">
-              No transform. Messages will be sent as-is to the sink destination.
+              {#if form.transform === "none"}
+                No transform. Messages will be sent as-is to the sink
+                destination.
+              {:else}
+                Using transform: <code
+                  >{transforms.find((t) => t.id === form.transform)?.name ||
+                    form.transform}</code
+                >
+              {/if}
             </p>
           {:else if !selectedTable}
             <p class="text-sm text-muted-foreground">
@@ -522,39 +564,65 @@
                 <Label for="transform">Transform type</Label>
                 <p class="text-sm text-muted-foreground mt-1 mb-2">
                   Select how you want to transform your messages.
-                  <button
-                    type="button"
-                    class="text-muted-foreground underline decoration-dotted"
-                    on:click={() => (showTransformExampleModal = true)}
-                  >
-                    See examples
-                  </button>
                 </p>
-                <Select
-                  selected={{
-                    value: form.transform,
-                    label:
-                      form.transform === "record_only"
-                        ? "Record only"
-                        : "Code transform (coming soon)",
-                  }}
-                  onSelectedChange={(event) => {
-                    form.transform = event.value;
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a transform type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="record_only">Record only</SelectItem>
-                    <SelectItem value="code" disabled
-                      >Code transform (coming soon)</SelectItem
-                    >
-                  </SelectContent>
-                </Select>
-                {#if errors.consumer.legacy_transform}
+                <div class="flex gap-2">
+                  <Select
+                    selected={{
+                      value: form.transform,
+                      label:
+                        form.transform === "none"
+                          ? "None"
+                          : transforms.find((t) => t.id === form.transform)
+                              ?.name || form.transform,
+                    }}
+                    onSelectedChange={handleTransformChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a transform type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {#each transforms as transform}
+                        <SelectItem value={transform.id}
+                          >{transform.name}</SelectItem
+                        >
+                      {/each}
+                    </SelectContent>
+                  </Select>
+                  <Tooltip.Root>
+                    <Tooltip.Trigger>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        on:click={refreshTransforms}
+                        disabled={transformRefreshState === "refreshing"}
+                        class="p-2"
+                        aria-label="Refresh Transforms"
+                      >
+                        {#if transformRefreshState === "refreshing"}
+                          <RotateCwIcon class="h-5 w-5 animate-spin" />
+                        {:else if transformRefreshState === "done"}
+                          <CheckIcon class="h-5 w-5 text-green-500" />
+                        {:else}
+                          <RotateCwIcon class="h-5 w-5" />
+                        {/if}
+                      </Button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Content>
+                      <p class="text-xs">Refresh transforms</p>
+                    </Tooltip.Content>
+                  </Tooltip.Root>
+                  <Button
+                    variant="outline"
+                    class="whitespace-nowrap"
+                    on:click={() => window.open("/transforms/new", "_blank")}
+                  >
+                    Create new Transform
+                  </Button>
+                </div>
+                {#if errors.consumer.transform_id}
                   <p class="text-destructive text-sm">
-                    {errors.consumer.legacy_transform}
+                    {errors.consumer.transform_id}
                   </p>
                 {/if}
               </div>
@@ -597,17 +665,36 @@
               </Popover.Content>
             </Popover.Root>
           </CardTitle>
-          <Switch
-            bind:checked={enableBackfill}
+          <button
+            type="button"
+            class="flex items-center space-x-2 text-sm hover:text-primary transition-colors disabled:opacity-50"
+            on:click={() =>
+              (backfillSectionExpanded = !backfillSectionExpanded)}
             disabled={isEditMode || !selectedTable}
-          />
+          >
+            <div
+              class="transition-transform duration-200"
+              class:rotate-180={backfillSectionExpanded}
+            >
+              <ChevronDown class="h-4 w-4" />
+            </div>
+          </button>
         </CardHeader>
         <CardContent>
           <div class="space-y-2">
-            {#if !enableBackfill}
+            {#if !backfillSectionExpanded}
               <p class="text-sm text-muted-foreground">
-                No initial backfill. You can run backfills at any time in the
-                future.
+                {#if form.backfill.startPosition === "none"}
+                  No initial backfill. You can run backfills at any time in the
+                  future.
+                {:else if form.backfill.startPosition === "beginning"}
+                  Backfilling all rows in the table.
+                {:else if form.backfill.startPosition === "specific"}
+                  Backfilling from:
+                  <div class="mt-2">
+                    <code>{form.backfill.initialSortColumnValue}</code>
+                  </div>
+                {/if}
               </p>
             {:else if !selectedTable}
               <p class="text-sm text-muted-foreground">
@@ -889,113 +976,6 @@
 
       <Dialog.Footer class="mt-4">
         <Button on:click={() => (showMessageTypeExampleModal = false)}
-          >Close</Button
-        >
-      </Dialog.Footer>
-      <Dialog.Close />
-    </Dialog.Content>
-  </Dialog.Portal>
-</Dialog.Root>
-
-<Dialog.Root bind:open={showTransformExampleModal}>
-  <Dialog.Portal>
-    <Dialog.Overlay />
-    <Dialog.Content class="lg:max-w-5xl md:max-w-3xl p-4">
-      <Dialog.Header class="mb-4">
-        <Dialog.Title>Transform examples</Dialog.Title>
-      </Dialog.Header>
-
-      {#if form.messageKind === "event"}
-        <div class="mb-4">
-          <Tabs.Root
-            value={selectedTransformMessageType}
-            class="w-full"
-            onValueChange={(value) => (selectedTransformMessageType = value)}
-          >
-            <Tabs.List class="grid grid-cols-4 mb-4">
-              <Tabs.Trigger value="insert" class="w-full">Insert</Tabs.Trigger>
-              <Tabs.Trigger value="update" class="w-full">Update</Tabs.Trigger>
-              <Tabs.Trigger value="delete" class="w-full">Delete</Tabs.Trigger>
-              <Tabs.Trigger value="read" class="w-full">Read</Tabs.Trigger>
-            </Tabs.List>
-          </Tabs.Root>
-        </div>
-      {/if}
-
-      <!-- Mobile view -->
-      <div class="lg:hidden space-y-2">
-        <div class="mb-4">
-          <Select
-            selected={{
-              value: selectedTransformExampleType,
-              label:
-                selectedTransformExampleType === "none"
-                  ? "No transform"
-                  : selectedTransformExampleType === "record_only"
-                    ? "Record only"
-                    : "Code transform (coming soon)",
-            }}
-            onSelectedChange={(event) => {
-              selectedTransformExampleType = event.value;
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select transform type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No transform</SelectItem>
-              <SelectItem value="record_only">Record only</SelectItem>
-              <SelectItem value="code" disabled
-                >Code transform (coming soon)</SelectItem
-              >
-            </SelectContent>
-          </Select>
-        </div>
-
-        <TransformExamples
-          type={form.messageKind === "record" ? "record" : "change"}
-          transform={selectedTransformExampleType}
-          operation={selectedTransformMessageType}
-        />
-      </div>
-
-      <!-- Desktop view -->
-      <div class="hidden lg:grid">
-        <div>
-          <h3 class="text-lg font-semibold mb-4">
-            {form.messageKind === "record" ? "Row" : "Change"} Messages
-          </h3>
-          <div class="space-y-4">
-            <div>
-              <h4 class="font-medium mb-2">No transform</h4>
-              <TransformExamples
-                type={form.messageKind === "record" ? "record" : "change"}
-                transform="none"
-                operation={selectedTransformMessageType}
-              />
-            </div>
-            <div>
-              <h4 class="font-medium mb-2">Record only</h4>
-              <TransformExamples
-                type={form.messageKind === "record" ? "record" : "change"}
-                transform="record_only"
-                operation={selectedTransformMessageType}
-              />
-            </div>
-            <div>
-              <h4 class="font-medium mb-2">Code transform (coming soon)</h4>
-              <TransformExamples
-                type={form.messageKind === "record" ? "record" : "change"}
-                transform="code"
-                operation={selectedTransformMessageType}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <Dialog.Footer class="mt-4">
-        <Button on:click={() => (showTransformExampleModal = false)}
           >Close</Button
         >
       </Dialog.Footer>

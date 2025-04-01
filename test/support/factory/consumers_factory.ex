@@ -812,12 +812,11 @@ defmodule Sequin.Factory.ConsumersFactory do
       %Transform{
         id: Factory.uuid(),
         account_id: Factory.uuid(),
-        sequence_id: Factory.uuid(),
         name: Factory.unique_word(),
         type: to_string(transform_type),
-        config: %{}
+        transform: transform_attrs
       },
-      Map.put(attrs, :transform, transform_attrs)
+      attrs
     )
   end
 

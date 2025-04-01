@@ -15,6 +15,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
+  alias Sequin.Consumers.Transform
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
@@ -137,6 +138,18 @@ defmodule Sequin.Consumers do
     :disabled
     |> SinkConsumer.where_status_not()
     |> Repo.aggregate(:count, :id)
+  end
+
+  def list_transforms_for_account(account_id) do
+    account_id
+    |> Transform.where_account_id()
+    |> Repo.all()
+  end
+
+  def create_transform(account_id, params) do
+    %Transform{account_id: account_id}
+    |> Transform.create_changeset(params)
+    |> Repo.insert()
   end
 
   @doc """

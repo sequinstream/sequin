@@ -582,39 +582,20 @@ defmodule Sequin.Runtime.MessageHandler do
   defp save_test_messages(%Context{}, []), do: :ok
 
   defp save_test_messages(%Context{} = ctx, messages) do
-    # Get all sequences that need test messages
-    sequences_needing_messages =
-      ctx.postgres_database.sequences
-      |> Enum.filter(&TestMessages.needs_test_messages?(&1.id))
-      |> Enum.with_index()
-      |> Map.new(fn {seq, idx} -> {seq.id, {seq, idx}} end)
-
     # Early out if no sequences need messages
-    if map_size(sequences_needing_messages) == 0 do
-      :ok
-    else
+    if TestMessages.needs_test_messages?(ctx.postgres_database.account_id) do
       # Process each message once
       Enum.each(messages, fn message ->
-        # Find matching sequences for this message
-        matching_sequences =
-          sequences_needing_messages
-          |> Enum.filter(fn {_id, {sequence, _idx}} ->
-            Consumers.matches_sequence?(sequence, message)
-          end)
-          |> Enum.map(fn {_id, {sequence, _idx}} -> sequence end)
-
         # Add message to each matching sequence's test messages
-        Enum.each(matching_sequences, fn sequence ->
-          test_consumer = %SinkConsumer{
-            message_kind: :event,
-            name: "test-consumer",
-            postgres_database: ctx.postgres_database,
-            sequence_filter: %SequenceFilter{}
-          }
+        test_consumer = %SinkConsumer{
+          message_kind: :event,
+          name: "test-consumer",
+          postgres_database: ctx.postgres_database,
+          sequence_filter: %SequenceFilter{}
+        }
 
-          message = consumer_event(test_consumer, message)
-          TestMessages.add_test_message(sequence.id, message)
-        end)
+        message = consumer_event(test_consumer, message)
+        TestMessages.add_test_message(ctx.postgres_database.account_id, message)
       end)
     end
   end

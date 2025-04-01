@@ -17,6 +17,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.Transform
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -58,6 +59,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> assign(:encoded_errors, encoded_errors)
       |> assign(:encoded_databases, Enum.map(assigns.databases, &encode_database/1))
       |> assign(:encoded_http_endpoints, Enum.map(assigns.http_endpoints, &encode_http_endpoint/1))
+      |> assign(:encoded_transforms, Enum.map(assigns.transforms, &encode_transform/1))
       |> assign(:consumer_title, consumer_title(assigns.consumer))
       |> assign(:self_hosted, self_hosted?())
 
@@ -75,6 +77,7 @@ defmodule SequinWeb.Components.ConsumerForm do
             parent: @id,
             databases: @encoded_databases,
             httpEndpoints: @encoded_http_endpoints,
+            transforms: @encoded_transforms,
             isSelfHosted: @self_hosted
           }
         }
@@ -117,6 +120,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       )
       |> assign_databases()
       |> assign_http_endpoints()
+      |> assign_transforms()
       |> reset_changeset()
 
     :syn.join(:account, {:database_tables_updated, current_account_id(socket)}, self())
@@ -148,7 +152,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       form
       |> decode_params(socket)
       |> maybe_put_replication_slot_id(socket)
-      |> Sequin.Map.reject_nil_values()
 
     res =
       if is_edit?(socket) do
@@ -220,6 +223,10 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   def handle_event("refresh_http_endpoints", _params, socket) do
     {:noreply, assign_http_endpoints(socket)}
+  end
+
+  def handle_event("refresh_transforms", _params, socket) do
+    {:noreply, assign_transforms(socket)}
   end
 
   def handle_event("test_connection", _params, socket) do
@@ -445,13 +452,13 @@ defmodule SequinWeb.Components.ConsumerForm do
         },
         "batch_size" => form["batchSize"],
         "initial_backfill" => decode_initial_backfill(form),
-        "transform" => form["transform"]
+        "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"])
       }
 
     maybe_put_replication_slot_id(params, socket)
   end
 
-  defp decode_initial_backfill(%{"runInitialBackfill" => false}), do: nil
+  defp decode_initial_backfill(%{"backfill" => %{"startPosition" => "none"}}), do: nil
 
   defp decode_initial_backfill(%{"backfill" => backfill}) do
     %{
@@ -608,7 +615,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "status" => consumer.status,
       "table_oid" => source_table && source_table.oid,
       "type" => consumer.type,
-      "transform" => consumer.legacy_transform
+      "transform_id" => consumer.transform_id
     }
   end
 
@@ -775,6 +782,14 @@ defmodule SequinWeb.Components.ConsumerForm do
       "name" => column.name,
       "type" => column.type,
       "filterType" => Postgres.pg_simple_type_to_filter_type(column.type)
+    }
+  end
+
+  defp encode_transform(%Transform{} = transform) do
+    %{
+      "id" => transform.id,
+      "name" => transform.name,
+      "type" => transform.type
     }
   end
 
@@ -954,6 +969,12 @@ defmodule SequinWeb.Components.ConsumerForm do
     account_id = current_account_id(socket)
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
     assign(socket, :http_endpoints, http_endpoints)
+  end
+
+  defp assign_transforms(socket) do
+    account_id = current_account_id(socket)
+    transforms = Consumers.list_transforms_for_account(account_id)
+    assign(socket, :transforms, transforms)
   end
 
   defp maybe_put_replication_slot_id(%{"postgres_database_id" => nil} = params, _socket) do

@@ -11,10 +11,12 @@
   } from "$lib/components/ui/popover";
 
   interface FormData {
+    name: string;
     path: string;
   }
 
   interface FormErrors {
+    name?: string[];
     path?: string[];
   }
 
@@ -146,6 +148,38 @@
     </div>
     <div class="p-4">
       <form on:submit={handleSubmit} class="space-y-4">
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <Label for="name" class="font-mono">Transform Name</Label>
+            <Popover>
+              <PopoverTrigger>
+                <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              </PopoverTrigger>
+              <PopoverContent
+                class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+              >
+                <div class="text-sm space-y-2">
+                  <p class="text-slate-500 dark:text-slate-400">
+                    Give your transform a descriptive name to help identify its
+                    purpose.
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <Input
+            id="name"
+            bind:value={form.name}
+            placeholder="e.g. id-only-transform"
+            class="font-mono bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
+          />
+          {#if formErrors.name}
+            <p class="text-sm text-red-500 dark:text-red-400 font-mono">
+              {formErrors.name[0]}
+            </p>
+          {/if}
+        </div>
+
         <div class="space-y-2">
           <div class="flex items-center gap-2">
             <Label for="path" class="font-mono">Transform Path</Label>

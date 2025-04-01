@@ -1,4 +1,4 @@
-defmodule Sequin.Repo.Migrations.AddTransformToSinkConsumers do
+defmodule Sequin.Repo.Migrations.AddTransformTypeToSinkConsumers do
   use Ecto.Migration
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])

@@ -254,7 +254,7 @@ defmodule Sequin.YamlLoader do
     {:ok, []}
   end
 
-  defp upsert_database(account_id, %{"name" => name} = database_attrs, opts) do
+  defp upsert_database(account_id, %{"name" => name} = database_attrs, opts) when is_binary(name) do
     test_connect_fun = Keyword.get(opts, :test_connect_fun, &Databases.test_connect/1)
 
     account_id
@@ -285,6 +285,10 @@ defmodule Sequin.YamlLoader do
             error
         end
     end
+  end
+
+  defp upsert_database(_account_id, _, _opts) do
+    {:error, Error.bad_request(message: "Database name is required for each database")}
   end
 
   defp await_database(database_attrs, test_connect_fun, started_at \\ nil) do

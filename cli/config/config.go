@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 
 	"github.com/sequinstream/sequin/cli/context"
 )
@@ -30,12 +31,36 @@ type ExportResponse struct {
 	YAML string `json:"yaml"`
 }
 
+// processEnvVars replaces environment variables in the YAML content using the ${VAR_NAME:-default} syntax
+func processEnvVars(yamlContent []byte) []byte {
+	// Regex to match ${VAR_NAME:-default} pattern
+	pattern := regexp.MustCompile(`\${([^{}:]+)(?::-([^{}]*))?}`)
+
+	return pattern.ReplaceAllFunc(yamlContent, func(match []byte) []byte {
+		parts := pattern.FindSubmatch(match)
+
+		// parts[1] is the variable name
+		envVarName := string(parts[1])
+		envValue := os.Getenv(envVarName)
+
+		// If environment variable is not set and we have a default value (parts[2])
+		if envValue == "" && len(parts) > 2 && parts[2] != nil {
+			envValue = string(parts[2])
+		}
+
+		return []byte(envValue)
+	})
+}
+
 func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 	// Read YAML file
 	yamlContent, err := os.ReadFile(yamlPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read YAML file: %w", err)
 	}
+
+	// Process environment variables
+	yamlContent = processEnvVars(yamlContent)
 
 	// Get server URL
 	serverURL, err := context.GetServerURL(ctx)
@@ -98,6 +123,9 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read YAML file: %w", err)
 	}
+
+	// Process environment variables
+	yamlContent = processEnvVars(yamlContent)
 
 	// Get server URL
 	serverURL, err := context.GetServerURL(ctx)

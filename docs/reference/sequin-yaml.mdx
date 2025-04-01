@@ -276,6 +276,44 @@ change_retentions:
         field_type: "string"
 ```
 
+## Environment variable substitution
+
+Sequin supports environment variable substitution in your YAML configuration files using the following syntax:
+
+```yaml
+${VARIABLE_NAME:-default_value}
+```
+
+This allows you to:
+
+- Reference environment variables in your configuration
+- Provide default values when the environment variable is not set
+
+For example:
+
+```yaml
+databases:
+  - name: "production-db"
+    hostname: "${DB_HOST:-localhost}"
+    password: "${DB_PASSWORD:-postgres}"
+    database: "${DB_NAME:-app_production}"
+```
+
+### Using with dotenv
+
+You can use tools like `dotenv` to load environment variables from a `.env` file before running Sequin commands:
+
+```bash
+# Load environment variables from .env file and apply configuration
+dotenv -- sequin config apply
+```
+
+This is particularly useful for:
+
+- Managing environment-specific configurations
+- Keeping sensitive values out of your YAML files
+- Simplifying deployment across different environments
+
 ## Example configuration
 
 Here's a complete example combining multiple resources:

@@ -3,6 +3,7 @@
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
   import { Code } from "lucide-svelte";
+  import Beta from "$lib/components/Beta.svelte";
 
   export let transforms: Array<{
     id: string;
@@ -19,6 +20,9 @@
     <div class="flex items-center">
       <Code class="h-6 w-6 mr-2" />
       <h1 class="text-2xl font-bold">Transforms</h1>
+      <div class="ml-2">
+        <Beta size="lg" variant="subtle" />
+      </div>
     </div>
     {#if transforms.length > 0}
       <a

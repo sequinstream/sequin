@@ -38,6 +38,7 @@
   import BackfillForm from "../components/BackfillForm.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
+  import Beta from "../components/Beta.svelte";
 
   export let live;
   export let parent;
@@ -1011,7 +1012,10 @@
         <Card>
           <CardContent class="p-6">
             <div class="flex justify-between items-center mb-4">
-              <h2 class="text-lg font-semibold">Transform</h2>
+              <h2 class="text-lg font-semibold flex items-center gap-2">
+                Transform
+                <Beta size="sm" variant="subtle" />
+              </h2>
               <a
                 href="/transforms/{transform.id}"
                 data-phx-link="redirect"

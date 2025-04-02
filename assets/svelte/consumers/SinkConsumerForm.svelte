@@ -45,6 +45,7 @@
   import BackfillForm from "$lib/components/BackfillForm.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { RotateCwIcon, CheckIcon } from "lucide-svelte";
+  import Beta from "../components/Beta.svelte";
 
   type Database = {
     id: string;
@@ -524,6 +525,7 @@
               </div>
             </Popover.Content>
           </Popover.Root>
+          <Beta size="sm" variant="subtle" />
         </CardTitle>
         <button
           type="button"

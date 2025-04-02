@@ -35,6 +35,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage do
     |> Jason.decode!()
     |> JSON.decode_struct_with_type()
     |> migrate_from_seq()
+    |> ensure_delivered()
   end
 
   def from_json(json) do
@@ -54,5 +55,16 @@ defmodule Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage do
         commit_idx
       end
     end)
+  end
+
+  # Previously, if messages were delivered successfully on first attempt, the deliver_count was 0. It should show as `1` to avoid confusion.
+  # Because we're now setting this to `1` on the way in to the AcknowledgedMessage store,
+  # It should be safe to remove this line in the future.
+  defp ensure_delivered(%__MODULE__{} = message) do
+    if message.deliver_count == 0 do
+      %{message | deliver_count: 1}
+    else
+      message
+    end
   end
 end

@@ -67,6 +67,8 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   end
 
   def to_acknowledged_message(%ConsumerRecord{} = record) do
+    deliver_count = if record.deliver_count == 0, do: 1, else: record.deliver_count
+
     %AcknowledgedMessage{
       id: record.id,
       consumer_id: record.consumer_id,
@@ -75,7 +77,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
       commit_idx: record.commit_idx,
       commit_timestamp: record.data.metadata.commit_timestamp,
       ack_id: record.ack_id,
-      deliver_count: record.deliver_count,
+      deliver_count: deliver_count,
       last_delivered_at: record.last_delivered_at,
       record_pks: record.record_pks,
       table_oid: record.table_oid,
@@ -86,6 +88,8 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   end
 
   def to_acknowledged_message(%ConsumerEvent{} = event) do
+    deliver_count = if event.deliver_count == 0, do: 1, else: event.deliver_count
+
     %AcknowledgedMessage{
       id: event.id,
       consumer_id: event.consumer_id,
@@ -94,7 +98,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
       commit_idx: event.commit_idx,
       commit_timestamp: event.data.metadata.commit_timestamp,
       ack_id: event.ack_id,
-      deliver_count: event.deliver_count,
+      deliver_count: deliver_count,
       last_delivered_at: event.last_delivered_at,
       record_pks: event.record_pks,
       table_oid: event.table_oid,

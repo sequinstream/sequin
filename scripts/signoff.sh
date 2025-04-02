@@ -75,7 +75,7 @@ run_step "mix format --check-formatted"
 run_step "MIX_ENV=prod mix compile --warnings-as-errors"
 # Pass max cases if asked to do so
 MIX_TEST_CMD="mix test --max-failures 1"
-if [[ -v MIX_MAX_CASES ]]; then
+if [ -n "${MIX_MAX_CASES+x}" ]; then
    MIX_TEST_CMD="$MIX_TEST_CMD --max-cases $MIX_MAX_CASES"
 fi
 run_step "$MIX_TEST_CMD"

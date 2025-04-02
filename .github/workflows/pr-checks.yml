@@ -1,0 +1,122 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  signoff-checks:
+    name: Signoff Checks
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sequin_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:6
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c "ALTER SYSTEM SET wal_level = 'logical';"
+          psql -h localhost -U postgres -c "ALTER SYSTEM SET max_connections = '200';"
+          docker restart $(docker ps -q --filter "ancestor=pgvector/pgvector:0.8.0-pg17")
+          until pg_isready -h localhost -U postgres; do
+            echo "Waiting for PostgreSQL to be ready..."
+            sleep 1
+          done
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.18.x'
+          otp-version: '27.x'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.11.0'
+          cache: 'npm'
+          cache-dependency-path: 'assets/package-lock.json'
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          check-latest: true
+
+      - name: Cache Elixir deps
+        uses: actions/cache@v3
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - name: Cache build artifacts
+        uses: actions/cache@v3
+        with:
+          path: _build
+          key: ${{ runner.os }}-build-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-build-
+
+      - name: Install Elixir dependencies
+        run: mix deps.get
+
+      - name: Check formatting
+        run: mix format --check-formatted
+
+      - name: Compile with warnings as errors
+        run: MIX_ENV=prod mix compile --warnings-as-errors
+
+      - name: Run Elixir tests
+        run: mix test
+
+      - name: Run CLI tests
+        run: |
+          cd cli
+          go test ./cli
+          go fmt ./...
+          go vet ./...
+          go build -o /dev/null ./...
+
+      - name: Install cspell
+        run: npm install -g cspell
+
+      - name: Run spellcheck
+        run: make spellcheck
+
+      - name: Run Mintlify broken-links check
+        run: make check-links
+
+      - name: Install assets dependencies
+        run: cd assets && npm ci
+
+      - name: Run Prettier check
+        run: cd assets && npm run format:check
+
+      - name: Run TypeScript check
+        run: cd assets && npm run tsc

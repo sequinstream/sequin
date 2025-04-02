@@ -1,6 +1,6 @@
 # Contributing to Sequin
 
-Thank you for your interest in contributing to Sequin! This document outlines the process for contributing and getting your changes merged.
+Thank you for your interest in contributing to Sequin! This document provides guidelines for contributing to the project.
 
 ## Development setup
 
@@ -52,17 +52,36 @@ Sequin uses LiveView + LiveSvelte for its frontend. As a monolith, the entire ap
 
 ### Signoff process
 
-Before merging, all PRs must be signed off using `make signoff`. This runs:
+#### For external contributors
 
-- Code formatting checks
-- Compilation with warnings as errors
-- Test suite
-- Spell checking
-- Link checking
-- TypeScript checks
-- Frontend formatting checks
+When you submit a pull request, GitHub Actions will automatically run a series of checks. The automated checks include:
 
-If you can't run the signoff locally, mention this in your PR and a maintainer can run it for you.
+1. Elixir formatting verification
+2. Compilation with warnings as errors
+3. Elixir test suite
+4. CLI tests
+5. Spellcheck and link verification
+6. Frontend formatting and type checks
+
+The PR cannot be merged until all these checks pass.
+
+After your PR passes the automated checks, a core maintainer will review your changes and manually sign off on them before merging.
+
+#### For core contributors
+
+Core contributors with repository access should run the signoff script before merging:
+
+```bash
+# From the project root
+./scripts/signoff.sh
+```
+
+This script:
+1. Checks code formatting
+2. Performs compilation with warnings as errors
+3. Runs all tests
+4. Performs linting and other checks
+5. Updates the GitHub commit status with a signoff
 
 ## Code style
 

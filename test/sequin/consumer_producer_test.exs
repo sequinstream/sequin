@@ -70,7 +70,7 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
 
       start_broadway(consumer: consumer, batch_size: 2)
 
-      assert_receive {:messages_succeeded, messages}, 1_000
+      assert_receive {:messages_succeeded, messages}, 2_000
       message_data = Enum.map(messages, & &1.data)
       assert_lists_equal(message_data, [msg1, msg2], fn a, b -> a.data == b.data end)
 

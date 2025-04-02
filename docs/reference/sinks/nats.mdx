@@ -16,9 +16,25 @@ The NATS sink publishes messages to NATS subjects.
 
     The port number for your NATS server (default: `4222`).
 
-<Info>
-  Support for authenticated connections is coming soon. Upvote or comment on [this issue](https://github.com/sequin-io/sequin/issues/731) and we'll prioritize it.
-</Info>
+- **Username** (optional)
+
+    Username for authentication with the NATS server.
+
+- **Password** (optional)
+
+    Password for authentication with the NATS server.
+
+- **JWT** (optional)
+
+    JSON Web Token for authentication with the NATS server.
+
+- **NKey Seed** (optional)
+
+    NKey seed for authentication with the NATS server.
+
+- **TLS** (optional)
+
+    Enable TLS/SSL for secure connections to the NATS server (default: `false`).
 
 ## Message format
 

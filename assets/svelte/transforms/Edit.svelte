@@ -279,11 +279,11 @@
   </div>
 
   <div
-    class="flex h-full gap-4 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50"
+    class="grid grid-cols-1 xl:grid-cols-2 h-full gap-4 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50"
   >
     <!-- Left Rail: Test Messages and Original Message -->
     <div
-      class="w-1/2 border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900"
+      class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900"
     >
       <div class="p-4 border-b border-slate-200 dark:border-slate-800">
         <div class="flex items-center justify-between">
@@ -350,7 +350,7 @@
 
     <!-- Right Rail: Transformed Output -->
     <div
-      class="w-1/2 border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900"
+      class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900"
     >
       <div class="p-4 border-b border-slate-200 dark:border-slate-800">
         <h2 class="text-lg font-semibold tracking-tight">Transformed Output</h2>

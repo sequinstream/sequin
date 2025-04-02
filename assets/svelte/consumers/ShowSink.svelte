@@ -46,6 +46,9 @@
   export let transform: {
     id: string;
     name: string;
+    transform: {
+      path: string;
+    };
   } | null;
 
   function pushEvent(event: string, data: any, cb: (val: any) => void) {
@@ -1008,14 +1011,14 @@
         }}
       />
 
-      {#if transform}
-        <Card>
-          <CardContent class="p-6">
-            <div class="flex justify-between items-center mb-4">
-              <h2 class="text-lg font-semibold flex items-center gap-2">
-                Transform
-                <Beta size="sm" variant="subtle" />
-              </h2>
+      <Card>
+        <CardContent class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
+              Transform
+              <Beta size="sm" variant="subtle" />
+            </h2>
+            {#if transform && !isRedisConsumer(consumer)}
               <a
                 href="/transforms/{transform.id}"
                 data-phx-link="redirect"
@@ -1026,17 +1029,47 @@
                   View Transform
                 </Button>
               </a>
-            </div>
-            <div class="grid lg:grid-cols-3 gap-4">
+            {/if}
+          </div>
+          {#if isRedisConsumer(consumer)}
+            <p class="text-sm text-muted-foreground">
+              Transforms are coming soon for Redis sinks. <a
+                href="https://github.com/sequinstream/sequin/issues/1186"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-primary underline">Let us know</a
+              > if you want this.
+            </p>
+          {:else if transform}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
-                <p class="">
-                  {transform.name}
-                </p>
+                <span class="text-sm text-gray-500">Name</span>
+                <div class="mt-2">
+                  <span
+                    class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+                    >{transform.name}</span
+                  >
+                </div>
+              </div>
+
+              <div>
+                <span class="text-sm text-gray-500">Path</span>
+                <div class="mt-2">
+                  <span
+                    class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+                    >{transform.transform.path}</span
+                  >
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      {/if}
+          {:else}
+            <p class="text-sm text-muted-foreground">
+              No transform in use. Messages will be sent as-is to the sink
+              destination.
+            </p>
+          {/if}
+        </CardContent>
+      </Card>
 
       {#if isHttpPushConsumer(consumer)}
         <SinkCardHttpPush {consumer} />

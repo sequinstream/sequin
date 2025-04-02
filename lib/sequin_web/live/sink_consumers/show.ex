@@ -16,6 +16,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
@@ -786,10 +787,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_transform(nil), do: nil
 
-  defp encode_transform(%Transform{} = transform) do
+  defp encode_transform(%Transform{transform: %PathTransform{path: path}} = transform) do
     %{
       id: transform.id,
-      name: transform.name
+      name: transform.name,
+      transform: %{
+        path: path
+      }
     }
   end
 

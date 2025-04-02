@@ -16,7 +16,7 @@
   let defaultGroupColumns = selectedTable?.default_group_columns || [];
   let groupColumnError: string | null = null;
   let useCustomGrouping = false;
-  let useCustomGroupingChanged = false;
+  let isExpanded = false;
 
   $: groupColumnError = errors.sequence_filter?.group_column_attnums?.[0];
   $: defaultGroupColumns = selectedTable?.default_group_columns || [];
@@ -27,24 +27,17 @@
       groupColumnAttnums.length === 0 &&
       defaultGroupColumns.length > 0
     ) {
+      // Set initial group columns if not set
       groupColumnAttnums = defaultGroupColumns;
-      if (!useCustomGroupingChanged) {
-        useCustomGrouping = false;
-        useCustomGroupingChanged = true;
-      }
     }
 
     if (
-      isEditMode &&
       groupColumnAttnums.sort().join() !== defaultGroupColumns.sort().join()
     ) {
       useCustomGrouping = true;
+    } else {
+      useCustomGrouping = false;
     }
-  }
-
-  function toggleGroupingMode() {
-    useCustomGrouping = !useCustomGrouping;
-    useCustomGroupingChanged = true;
   }
 
   function toggleColumnGrouping(attnum: number) {
@@ -56,6 +49,17 @@
       groupColumnAttnums = groupColumnAttnums.filter((num) => num !== attnum);
     }
   }
+
+  $: summaryText = useCustomGrouping
+    ? `Using these columns for grouping: ${groupColumnAttnums
+        .map(
+          (attnum) =>
+            selectedTable?.columns.find((col) => col.attnum === attnum)?.name,
+        )
+        .join(", ")}`
+    : selectedTable?.is_event_table
+      ? "Using source_database_id, source_table_oid, and record_pk for grouping, which is the default"
+      : "Using primary keys for grouping, which is the default";
 </script>
 
 <!-- Edit Mode Card -->
@@ -111,12 +115,12 @@
         <button
           type="button"
           class="flex items-center space-x-2 text-sm hover:text-primary transition-colors"
-          on:click={toggleGroupingMode}
+          on:click={() => (isExpanded = !isExpanded)}
           disabled={!selectedTable}
         >
           <div
             class="transition-transform duration-200"
-            class:rotate-180={useCustomGrouping}
+            class:rotate-180={isExpanded}
           >
             <ChevronDown class="h-4 w-4" />
           </div>
@@ -125,35 +129,36 @@
     </CardHeader>
     <CardContent>
       <div class="space-y-4">
-        {#if !useCustomGrouping && !selectedTable.is_event_table}
+        {#if !isExpanded}
           <p class="text-sm text-muted-foreground">
-            By default, Sequin uses primary keys to group messages. This ensures
-            that records are processed serially for each individual record.
-          </p>
-        {:else if !useCustomGrouping && selectedTable.is_event_table}
-          <p class="text-sm text-muted-foreground">
-            By default, Sequin uses these columns to group event table messages:
-            <code>source_database_id</code>, <code>source_table_oid</code>, and
-            <code>record_pk</code>. This ensures that records are processed
-            serially.
+            {summaryText}
           </p>
         {:else}
-          <p class="text-sm text-muted-foreground mb-4">
-            Select the columns to use for custom grouping.
+          <p class="text-sm text-muted-foreground">
+            {selectedTable.is_event_table
+              ? "By default, Sequin uses these columns to group event table messages: source_database_id, source_table_oid, and record_pk. This ensures that records are processed serially."
+              : "By default, Sequin uses primary keys to group messages. This ensures that records are processed serially for each individual record."}
           </p>
+          <p class="text-sm text-muted-foreground">
+            Alternatively, select custom columns to use for grouping.
+          </p>
+
           <ColumnList
             columns={selectedTable.columns}
             selectedAttnums={groupColumnAttnums}
             onToggle={toggleColumnGrouping}
+            readonly={isEditMode}
           />
-        {/if}
-        {#if infoText}
-          <p class="text-sm text-muted-foreground mb-4">
-            {infoText}
-          </p>
-        {/if}
-        {#if groupColumnError}
-          <p class="text-destructive text-sm mt-2">{groupColumnError}</p>
+
+          {#if infoText}
+            <p class="text-sm text-muted-foreground">
+              {infoText}
+            </p>
+          {/if}
+
+          {#if groupColumnError}
+            <p class="text-destructive text-sm">{groupColumnError}</p>
+          {/if}
         {/if}
       </div>
     </CardContent>

@@ -34,7 +34,6 @@
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
   import MessageExamples from "$lib/components/MessageExamples.svelte";
-  import TransformExamples from "$lib/components/TransformExamples.svelte";
   import {
     Accordion,
     AccordionContent,
@@ -71,8 +70,6 @@
   };
   export let isSelfHosted: boolean;
 
-  type TransformType = "none" | "path";
-  type MessageType = "insert" | "update" | "delete" | "read";
   type MessageKind = "event" | "record";
 
   interface FormState {
@@ -527,24 +524,35 @@
           </Popover.Root>
           <Beta size="sm" variant="subtle" />
         </CardTitle>
-        <button
-          type="button"
-          class="flex items-center space-x-2 text-sm hover:text-primary transition-colors disabled:opacity-50"
-          on:click={() =>
-            (transformSectionExpanded = !transformSectionExpanded)}
-          disabled={!selectedTable}
-        >
-          <div
-            class="transition-transform duration-200"
-            class:rotate-180={transformSectionExpanded}
+        {#if consumer.type !== "redis"}
+          <button
+            type="button"
+            class="flex items-center space-x-2 text-sm hover:text-primary transition-colors disabled:opacity-50"
+            on:click={() =>
+              (transformSectionExpanded = !transformSectionExpanded)}
+            disabled={!selectedTable}
           >
-            <ChevronDown class="h-4 w-4" />
-          </div>
-        </button>
+            <div
+              class="transition-transform duration-200"
+              class:rotate-180={transformSectionExpanded}
+            >
+              <ChevronDown class="h-4 w-4" />
+            </div>
+          </button>
+        {/if}
       </CardHeader>
       <CardContent>
         <div class="space-y-2">
-          {#if !transformSectionExpanded}
+          {#if consumer.type === "redis"}
+            <p class="text-sm text-muted-foreground">
+              Transforms are coming soon for Redis sinks. <a
+                href="https://github.com/sequinstream/sequin/issues/1186"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-primary underline">Let us know</a
+              > if you want this.
+            </p>
+          {:else if !transformSectionExpanded}
             <p class="text-sm text-muted-foreground">
               {#if form.transform === "none"}
                 No transform. Messages will be sent as-is to the sink
@@ -563,7 +571,7 @@
           {:else}
             <div class="space-y-4">
               <div class="space-y-2">
-                <Label for="transform">Transform type</Label>
+                <Label for="transform">Transform</Label>
                 <p class="text-sm text-muted-foreground mt-1 mb-2">
                   Select how you want to transform your messages.
                 </p>
@@ -580,7 +588,7 @@
                     onSelectedChange={handleTransformChange}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a transform type" />
+                      <SelectValue placeholder="Select a transform" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>

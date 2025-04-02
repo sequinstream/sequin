@@ -106,7 +106,7 @@ jobs:
         run: MIX_ENV=prod mix compile --warnings-as-errors
 
       - name: Run Elixir tests
-        run: mix test --max-cases 4
+        run: mix test --max-cases 2 # slow actions runner
 
       - name: Run CLI tests
         run: |

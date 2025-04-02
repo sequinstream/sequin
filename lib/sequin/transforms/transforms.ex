@@ -15,6 +15,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.Transform
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
@@ -110,7 +111,7 @@ defmodule Sequin.Transforms do
   def to_external(%SinkConsumer{sink: sink} = consumer, show_sensitive) do
     consumer =
       consumer
-      |> Repo.preload(sequence: [:postgres_database])
+      |> Repo.preload([:transform, sequence: [:postgres_database]])
       |> SinkConsumer.preload_http_endpoint()
 
     table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
@@ -129,7 +130,7 @@ defmodule Sequin.Transforms do
         position: "beginning | end | from with value"
       },
       batch_size: consumer.batch_size,
-      transform: consumer.legacy_transform
+      transform: if(consumer.transform, do: consumer.transform.name, else: "none")
     }
   end
 
@@ -229,6 +230,17 @@ defmodule Sequin.Transforms do
       shared_access_key_name: sink.shared_access_key_name,
       shared_access_key: maybe_obfuscate(sink.shared_access_key, show_sensitive)
     })
+  end
+
+  def to_external(%Transform{} = transform, _show_sensitive) do
+    %{
+      name: transform.name,
+      description: transform.description,
+      transform: %{
+        type: transform.type,
+        path: transform.transform.path
+      }
+    }
   end
 
   def to_external(%ColumnFilter{} = column_filter, _show_sensitive) do

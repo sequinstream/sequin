@@ -110,8 +110,8 @@ sinks:
     table: "public.users"          # Required, [schema.]table to consume
     batch_size: 1                  # Optional, messages per batch, default: 1
     status: "active"               # Optional: active or disabled, default: active
-    group_column_names: ["id"]   # Optional, columns to group messages by
-    transform: "none"              # Optional, transform: none or record_only (more coming soon!)
+    group_column_names: ["id"]     # Optional, columns to group messages by
+    transform: "my-transform"       # Optional, reference to a transform name or "none"
     actions:                       # Optional, defaults to all
       - insert
       - update
@@ -125,9 +125,9 @@ sinks:
         operator: "="
         comparison_value: "premium"
         field_type: "string"
-    destination:                 # Required, sink-specific configuration
-      type: "..."                # Required, sink type
-      ...                        # Additional sink-specific options
+    destination:                   # Required, sink-specific configuration
+      type: "..."                  # Required, sink type
+      ...                          # Additional sink-specific options
 ```
 
 The `destination` configuration varies by sink type. Below are the configurations for each sink type:
@@ -249,6 +249,58 @@ sinks:
   - name: "my-sink"
     actions: ["insert", "update", "delete"]
     ...
+```
+
+
+### Sink transforms
+
+[Transforms](/reference/transforms) allow you to modify the structure of [messages](/reference/messages) before they are sent to a sink. You can define transforms at the top level of your configuration and reference them in your sinks.
+
+```yaml
+transforms:
+  - name: "my-transform"          # Required, unique name for this transform
+    transform:                    # Required, transform configuration
+      type: "path"                # Required, currently only "path" is supported
+      path: "record"              # Required, path to extract from the message
+```
+
+The `path` field supports the following paths:
+- `record` - The entire record object
+- `changes` - The changes object (only available for event messages)
+- `action` - The action type (insert, update, delete) (only available for event messages)
+- `metadata` - The metadata object
+
+You can also use dot notation to access nested fields within these objects, for example:
+- `record.id` - The ID field from the record
+- `changes.name` - The name field from the changes
+- `metadata.transaction_annotations.user_id` - A custom transaction annotation
+
+Example usage:
+```yaml
+transforms:
+  - name: "record-only"
+    transform:
+      type: "path"
+      path: "record"
+
+  - name: "id-only"
+    transform:
+      type: "path"
+      path: "record.id"
+
+  - name: "metadata-only"
+    transform:
+      type: "path"
+      path: "metadata"
+
+sinks:
+  - name: "user-changes"
+    database: "my-database"
+    table: "users"
+    transform: "record-only"      # Reference the transform by name
+    destination:
+      type: "webhook"
+      http_endpoint: "my-endpoint"
 ```
 
 ### Change retention configuration

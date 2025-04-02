@@ -33,7 +33,6 @@ defmodule Sequin.Consumers.Transform do
     |> cast(attrs, [:name, :description])
     |> changeset(attrs)
     |> unique_constraint([:account_id, :name], error_key: :name)
-    |> Sequin.Changeset.validate_name()
   end
 
   def update_changeset(transform, attrs) do
@@ -45,6 +44,8 @@ defmodule Sequin.Consumers.Transform do
     |> cast(attrs, [:name, :description])
     |> cast_polymorphic_embed(:transform, required: true)
     |> validate_required([:name])
+    |> validate_exclusion(:name, ["none", "null", "nil"])
+    |> Sequin.Changeset.validate_name()
   end
 
   def where_account_id(query \\ base_query(), account_id) do

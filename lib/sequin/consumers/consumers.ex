@@ -164,6 +164,19 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def find_transform(account_id, params) do
+    params
+    |> Enum.reduce(Transform.where_account_id(account_id), fn
+      {:name, name}, query -> Transform.where_name(query, name)
+      {:id, id}, query -> Transform.where_id(query, id)
+    end)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :transform, params: params)}
+      transform -> {:ok, transform}
+    end
+  end
+
   def create_transform(account_id, params) do
     %Transform{account_id: account_id}
     |> Transform.create_changeset(params)

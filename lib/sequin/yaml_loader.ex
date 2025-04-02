@@ -122,6 +122,7 @@ defmodule Sequin.YamlLoader do
          {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
          http_endpoints = Consumers.list_http_endpoints_for_account(account.id),
+         {:ok, _transforms} <- upsert_transforms(account.id, config),
          {:ok, _sink_consumers} <- upsert_sink_consumers(account.id, config, databases, http_endpoints) do
       {:ok, all_resources(account.id)}
     end
@@ -135,13 +136,14 @@ defmodule Sequin.YamlLoader do
     databases = Databases.list_dbs_for_account(account_id, [:sequences, :replication_slot])
     wal_pipelines = Replication.list_wal_pipelines_for_account(account_id, [:source_database, :destination_database])
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
+    transforms = Consumers.list_transforms_for_account(account_id)
 
     sink_consumers =
       account_id
       |> Consumers.list_sink_consumers_for_account(sequence: [:postgres_database])
       |> Enum.map(&SinkConsumer.preload_http_endpoint/1)
 
-    [account | users] ++ databases ++ wal_pipelines ++ http_endpoints ++ sink_consumers
+    [account | users] ++ databases ++ wal_pipelines ++ http_endpoints ++ transforms ++ sink_consumers
   end
 
   #############
@@ -840,14 +842,14 @@ defmodule Sequin.YamlLoader do
     # Find existing consumer first
     case Sequin.Consumers.find_sink_consumer(account_id, name: name) do
       {:ok, existing_consumer} ->
-        with {:ok, params} <- parse_sink_consumer_params(consumer_attrs, databases, http_endpoints),
+        with {:ok, params} <- parse_sink_consumer_params(account_id, consumer_attrs, databases, http_endpoints),
              {:ok, consumer} <- Sequin.Consumers.update_sink_consumer(existing_consumer, params) do
           Logger.info("Updated HTTP push consumer: #{inspect(consumer, pretty: true)}")
           {:ok, consumer}
         end
 
       {:error, %NotFoundError{}} ->
-        with {:ok, params} <- parse_sink_consumer_params(consumer_attrs, databases, http_endpoints),
+        with {:ok, params} <- parse_sink_consumer_params(account_id, consumer_attrs, databases, http_endpoints),
              {:ok, consumer} <-
                Sequin.Consumers.create_sink_consumer(account_id, params) do
           Logger.info("Created HTTP push consumer: #{inspect(consumer, pretty: true)}")
@@ -857,6 +859,7 @@ defmodule Sequin.YamlLoader do
   end
 
   defp parse_sink_consumer_params(
+         account_id,
          %{"name" => name, "database" => database_name, "table" => table_ref, "destination" => sink_attrs} =
            consumer_attrs,
          databases,
@@ -869,7 +872,8 @@ defmodule Sequin.YamlLoader do
     with {:ok, database} <- find_database_by_name(database_name, databases),
          sequence_name = "#{database_name}.#{schema}.#{table_name}",
          {:ok, sequence} <- find_sequence_by_name(databases, sequence_name),
-         {:ok, sink} <- parse_sink(sink_attrs, %{http_endpoints: http_endpoints}) do
+         {:ok, sink} <- parse_sink(sink_attrs, %{http_endpoints: http_endpoints}),
+         {:ok, transform_id} <- parse_transform_id(account_id, consumer_attrs["transform"]) do
       table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
 
       {:ok,
@@ -885,7 +889,7 @@ defmodule Sequin.YamlLoader do
          },
          batch_size: Map.get(consumer_attrs, "batch_size", 1),
          sink: sink,
-         legacy_transform: consumer_attrs["transform"] || "none"
+         transform_id: transform_id
        }}
     end
   end
@@ -1011,6 +1015,16 @@ defmodule Sequin.YamlLoader do
     case Enum.find(http_endpoints, &(&1.name == name)) do
       nil -> {:error, Error.not_found(entity: :http_endpoint, params: %{name: name})}
       http_endpoint -> {:ok, http_endpoint}
+    end
+  end
+
+  defp parse_transform_id(_account_id, nil), do: {:ok, nil}
+  defp parse_transform_id(_account_id, "none"), do: {:ok, nil}
+
+  defp parse_transform_id(account_id, transform_name) do
+    case Consumers.find_transform(account_id, name: transform_name) do
+      {:ok, transform} -> {:ok, transform.id}
+      {:error, %NotFoundError{}} -> {:error, Error.validation(summary: "Transform '#{transform_name}' not found.")}
     end
   end
 
@@ -1166,6 +1180,61 @@ defmodule Sequin.YamlLoader do
         timeout_ms: :timer.seconds(30),
         interval_ms: :timer.seconds(3)
       }
+    end
+  end
+
+  defp upsert_transforms(account_id, %{"transforms" => transforms}) do
+    Logger.info("Upserting transforms: #{inspect(transforms, pretty: true)}")
+
+    Enum.reduce_while(transforms, {:ok, []}, fn transform_attrs, {:ok, acc} ->
+      case upsert_transform(account_id, transform_attrs) do
+        {:ok, transform} -> {:cont, {:ok, [transform | acc]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp upsert_transforms(_account_id, %{}), do: {:ok, []}
+
+  defp upsert_transform(account_id, %{"name" => name} = transform_attrs) do
+    case Consumers.find_transform(account_id, name: name) do
+      {:ok, transform} ->
+        update_transform(account_id, transform.id, transform_attrs)
+
+      {:error, %NotFoundError{}} ->
+        create_transform(account_id, transform_attrs)
+    end
+  end
+
+  defp upsert_transform(_account_id, %{}) do
+    {:error, Error.validation(summary: "`name` is required on transforms.")}
+  end
+
+  defp create_transform(account_id, attrs) do
+    case Consumers.create_transform(account_id, attrs) do
+      {:ok, transform} ->
+        Logger.info("Created transform: #{inspect(transform, pretty: true)}")
+        {:ok, transform}
+
+      {:error, changeset} ->
+        error = Sequin.Error.errors_on(changeset)
+
+        {:error,
+         Error.bad_request(message: "Error creating transform '#{attrs["name"]}': #{inspect(error, pretty: true)}")}
+    end
+  end
+
+  defp update_transform(account_id, id, attrs) do
+    case Consumers.update_transform(account_id, id, attrs) do
+      {:ok, transform} ->
+        Logger.info("Updated transform: #{inspect(transform, pretty: true)}")
+        {:ok, transform}
+
+      {:error, changeset} ->
+        error = Sequin.Error.errors_on(changeset)
+
+        {:error,
+         Error.bad_request(message: "Error updating transform '#{attrs["name"]}': #{inspect(error, pretty: true)}")}
     end
   end
 end

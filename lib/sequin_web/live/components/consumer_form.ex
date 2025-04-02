@@ -789,7 +789,8 @@ defmodule SequinWeb.Components.ConsumerForm do
     %{
       "id" => transform.id,
       "name" => transform.name,
-      "type" => transform.type
+      "type" => transform.type,
+      "description" => transform.description
     }
   end
 

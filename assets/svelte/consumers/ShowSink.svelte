@@ -46,6 +46,7 @@
   export let transform: {
     id: string;
     name: string;
+    description: string;
     transform: {
       path: string;
     };
@@ -1045,10 +1046,7 @@
               <div>
                 <span class="text-sm text-gray-500">Name</span>
                 <div class="mt-2">
-                  <span
-                    class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-                    >{transform.name}</span
-                  >
+                  <span class="">{transform.name}</span>
                 </div>
               </div>
 
@@ -1061,6 +1059,15 @@
                   >
                 </div>
               </div>
+
+              {#if transform.description}
+                <div>
+                  <span class="text-sm text-gray-500">Description</span>
+                  <div class="mt-2">
+                    <span class="">{transform.description}</span>
+                  </div>
+                </div>
+              {/if}
             </div>
           {:else}
             <p class="text-sm text-muted-foreground">

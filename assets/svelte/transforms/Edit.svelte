@@ -22,6 +22,7 @@
   interface FormData {
     id: string;
     name: string;
+    description: string;
     transform: {
       path: string;
     };
@@ -29,6 +30,7 @@
 
   interface FormErrors {
     name?: string[];
+    description?: string[];
     transform?: {
       path?: string[];
     };
@@ -135,11 +137,43 @@
             id="name"
             bind:value={form.name}
             placeholder="e.g. id-only-transform"
-            class="font-mono max-w-lg bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
+            class="max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
           />
           {#if formErrors.name}
             <p class="text-sm text-red-500 dark:text-red-400 font-mono">
               {formErrors.name[0]}
+            </p>
+          {/if}
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <Label for="description" class="font-mono">Description</Label>
+            <Popover>
+              <PopoverTrigger>
+                <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
+              </PopoverTrigger>
+              <PopoverContent
+                class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+              >
+                <div class="text-sm space-y-2">
+                  <p class="text-slate-500 dark:text-slate-400">
+                    Add a description to explain what this transform does and
+                    how it should be used.
+                  </p>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <textarea
+            id="description"
+            bind:value={form.description}
+            placeholder="e.g. Extracts only the ID field from the record"
+            class="w-full min-h-[100px] max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 rounded-md p-2 resize-y"
+          ></textarea>
+          {#if formErrors.description}
+            <p class="text-sm text-red-500 dark:text-red-400 font-mono">
+              {formErrors.description[0]}
             </p>
           {/if}
         </div>
@@ -179,7 +213,7 @@
             id="path"
             bind:value={form.transform.path}
             placeholder="e.g. record.id or changes.name"
-            class="font-mono max-w-lg bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
+            class="font-mono max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
           />
           {#if formErrors.transform?.path}
             <p class="text-sm text-red-500 dark:text-red-400 font-mono">

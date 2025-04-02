@@ -791,6 +791,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     %{
       id: transform.id,
       name: transform.name,
+      description: transform.description,
       transform: %{
         path: path
       }

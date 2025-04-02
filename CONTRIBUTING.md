@@ -54,18 +54,11 @@ Sequin uses LiveView + LiveSvelte for its frontend. As a monolith, the entire ap
 
 #### For external contributors
 
-When you submit a pull request, GitHub Actions will automatically run a series of checks. The automated checks include:
+When you submit a pull request, GitHub Actions will automatically run a series of checks.
 
-1. Elixir formatting verification
-2. Compilation with warnings as errors
-3. Elixir test suite
-4. CLI tests
-5. Spellcheck and link verification
-6. Frontend formatting and type checks
+After your PR passes, we will review your changes and hopefully merge!
 
-The PR cannot be merged until all these checks pass.
-
-After your PR passes the automated checks, a core maintainer will review your changes and manually sign off on them before merging.
+If you need to reach us sooner, the fastest way is through our [Discord server](https://discord.gg/BV8wFXvNtY).
 
 #### For core contributors
 

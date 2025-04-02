@@ -1,4 +1,12 @@
+
 name: PR Checks
+
+env:
+  # Base for the PR
+  BASE_REPO: ${{ github.event.pull_request.base.repo.clone_url }}
+
+  # Repository of PR
+  PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.clone_url }}
 
 on:
   pull_request:
@@ -9,8 +17,12 @@ jobs:
     name: Signoff Checks
     runs-on: ubuntu-latest
 
+    # if external PR  (TODO re-enable)
+    # if: ${{ env.BASE_REPO != env.PR_HEAD_REPO }}
+
     services:
       postgres:
+        # make sure to change this in the shell query later in this file
         image: pgvector/pgvector:0.8.0-pg17
         env:
           POSTGRES_USER: postgres
@@ -42,6 +54,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
+          set -e
           psql -h localhost -U postgres -c "ALTER SYSTEM SET wal_level = 'logical';"
           psql -h localhost -U postgres -c "ALTER SYSTEM SET max_connections = '200';"
           docker restart $(docker ps -q --filter "ancestor=pgvector/pgvector:0.8.0-pg17")
@@ -97,6 +110,7 @@ jobs:
 
       - name: Run CLI tests
         run: |
+          set -e
           cd cli
           go test ./cli
           go fmt ./...

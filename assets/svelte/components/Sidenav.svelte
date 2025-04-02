@@ -25,6 +25,14 @@
     Code,
   } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
+  import Beta from "./Beta.svelte";
+
+  type NavItem = {
+    path: string;
+    text: string;
+    icon: any;
+    beta?: boolean;
+  };
 
   export let live;
   export let currentPath: string;
@@ -49,28 +57,37 @@
           path: "/sinks",
           text: "Sinks",
           icon: Plug,
-        },
+          beta: false,
+        } as NavItem,
       ],
     },
     {
       heading: "Resources",
       items: [
-        { path: "/databases", text: "Databases", icon: Database },
+        {
+          path: "/databases",
+          text: "Databases",
+          icon: Database,
+          beta: false,
+        } as NavItem,
         {
           path: "/change-capture-pipelines",
           text: "Change Retention",
           icon: Logs,
-        },
+          beta: false,
+        } as NavItem,
         {
           path: "/transforms",
           text: "Transforms",
           icon: Code,
-        },
+          beta: true,
+        } as NavItem,
         {
           path: "/http-endpoints",
           text: "HTTP Endpoints",
           icon: Globe,
-        },
+          beta: false,
+        } as NavItem,
       ],
     },
   ];
@@ -197,6 +214,11 @@
               />
               {#if !$isNavCollapsed}
                 <span class="text-sm leading-tight truncate">{item.text}</span>
+                {#if item.beta}
+                  <div class="ml-1 flex items-center">
+                    <Beta size="sm" variant="subtle" />
+                  </div>
+                {/if}
               {/if}
             </div>
           </a>

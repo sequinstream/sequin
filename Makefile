@@ -78,7 +78,7 @@ addword: ## Add a word to project-words.txt
 	fi
 
 check-links: ## Run mintlify broken-links in the docs directory
-	@cd docs && mintlify broken-links
+	@cd docs && npx mintlify broken-links
 
 buildpush: ## Run mix buildpush (build and push docker image)
 	mix buildpush

@@ -15,6 +15,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.Transform
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
@@ -385,6 +386,103 @@ defmodule Sequin.YamlLoaderTest do
     end
   end
 
+  describe "transforms" do
+    test "creates a transform" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               transforms:
+                 - name: "my-record-only"
+                   transform:
+                      type: "path"
+                      path: "record"
+               """)
+
+      assert [transform] = Repo.all(Transform)
+      assert transform.name == "my-record-only"
+      assert transform.type == "path"
+      assert transform.transform.path == "record"
+    end
+
+    test "updates an existing transform" do
+      # First create the transform
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               transforms:
+                 - name: "my-transform"
+                   transform:
+                    type: "path"
+                    path: "record"
+               """)
+
+      # Then update it
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               transforms:
+                 - name: "my-transform"
+                   transform:
+                     type: "path"
+                     path: "record.id"
+               """)
+
+      assert [transform] = Repo.all(Transform)
+      assert transform.name == "my-transform"
+      assert transform.type == "path"
+      assert transform.transform.path == "record.id"
+    end
+
+    test "creates multiple transforms" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               transforms:
+                 - name: "transform-1"
+                   transform:
+                     type: "path"
+                     path: "record"
+                 - name: "transform-2"
+                   transform:
+                     type: "path"
+                     path: "record.status"
+               """)
+
+      assert transforms = Repo.all(Transform)
+      assert length(transforms) == 2
+
+      transform1 = Enum.find(transforms, &(&1.name == "transform-1"))
+      assert transform1.type == "path"
+      assert transform1.transform.path == "record"
+
+      transform2 = Enum.find(transforms, &(&1.name == "transform-2"))
+      assert transform2.type == "path"
+      assert transform2.transform.path == "record.status"
+    end
+
+    test "handles invalid transform type" do
+      assert_raise RuntimeError, ~r/Error creating transform/, fn ->
+        YamlLoader.apply_from_yml!("""
+        account:
+          name: "Configured by Sequin"
+
+        transforms:
+          - name: "invalid-transform"
+            transform:
+              type: "invalid_type"
+        """)
+      end
+    end
+  end
+
   describe "sinks" do
     def account_db_and_sequence_yml do
       """
@@ -409,6 +507,12 @@ defmodule Sequin.YamlLoaderTest do
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
+               transforms:
+                 - name: "record_only"
+                   transform:
+                     type: "path"
+                     path: "record"
+
                http_endpoints:
                  - name: "sequin-playground-http"
                    url: "https://api.example.com/webhook"
@@ -426,11 +530,11 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
+      consumer = Repo.preload(consumer, [:sequence, :transform])
 
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "test-db.public.Characters"
-      assert consumer.legacy_transform == :record_only
+      assert consumer.transform.name == "record_only"
 
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
@@ -641,7 +745,6 @@ defmodule Sequin.YamlLoaderTest do
                  - name: "kafka-consumer"
                    database: "test-db"
                    table: "Characters"
-                   transform: "record_only"
                    destination:
                      type: "kafka"
                      hosts: "localhost:9092"
@@ -657,7 +760,6 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "kafka-consumer"
       assert consumer.sequence.name == "test-db.public.Characters"
-      assert consumer.legacy_transform == :record_only
 
       assert %KafkaSink{
                type: :kafka,
@@ -968,6 +1070,92 @@ defmodule Sequin.YamlLoaderTest do
                  use_emulator: true,
                  emulator_base_url: "http://localhost:8085"
                } = consumer.sink
+      end
+    end
+
+    test "creates webhook subscription with transform reference" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               transforms:
+                 - name: "my-transform"
+                   transform:
+                    type: "path"
+                    path: "record"
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                   transform: "my-transform"
+               """)
+
+      assert [transform] = Repo.all(Transform)
+      assert transform.name == "my-transform"
+      assert transform.type == "path"
+      assert transform.transform.path == "record"
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "sequin-playground-webhook"
+      assert consumer.sequence.name == "test-db.public.Characters"
+      assert consumer.transform_id == transform.id
+    end
+
+    test "creates sink with no transform" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                   transform: "none"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "sequin-playground-webhook"
+      assert consumer.sequence.name == "test-db.public.Characters"
+      assert consumer.transform_id == nil
+    end
+
+    test "raises error when referenced transform not found" do
+      assert_raise RuntimeError, ~r/Transform 'missing-transform' not found/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_db_and_sequence_yml()}
+
+        http_endpoints:
+          - name: "sequin-playground-http"
+            url: "https://api.example.com/webhook"
+
+        sinks:
+          - name: "sequin-playground-webhook"
+            database: "test-db"
+            table: "Characters"
+            destination:
+              type: "webhook"
+              http_endpoint: "sequin-playground-http"
+            transform: "missing-transform"
+        """)
       end
     end
   end

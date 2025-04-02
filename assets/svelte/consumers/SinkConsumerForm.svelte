@@ -28,7 +28,7 @@
   import NatsSinkForm from "$lib/sinks/nats/NatsSinkForm.svelte";
   import RabbitMqSinkForm from "$lib/sinks/rabbitmq/RabbitMqSinkForm.svelte";
   import AzureEventHubSinkForm from "$lib/sinks/azure_event_hub/AzureEventHubSinkForm.svelte";
-  import { CircleAlert, Info, ChevronDown } from "lucide-svelte";
+  import { CircleAlert, Info, ChevronDown, Plus } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import TableSelector from "../components/TableSelector.svelte";
   import * as Popover from "$lib/components/ui/popover";
@@ -40,16 +40,24 @@
     AccordionItem,
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
-  import type { Table } from "$lib/databases/types";
+  import type { Table as DatabaseTable } from "$lib/databases/types";
   import BackfillForm from "$lib/components/BackfillForm.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { RotateCwIcon, CheckIcon } from "lucide-svelte";
   import Beta from "../components/Beta.svelte";
+  import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+  } from "$lib/components/ui/table";
 
   type Database = {
     id: string;
     name: string;
-    tables: Table[];
+    tables: DatabaseTable[];
   };
 
   export let live;
@@ -62,6 +70,7 @@
     id: string;
     name: string;
     type: string;
+    description: string;
   }>;
   export let errors: {
     consumer: Record<string, string>;
@@ -337,7 +346,7 @@
   let showMessageTypeExampleModal = false;
   let selectedExampleType: "change" | "record" = "change";
 
-  let transformSectionExpanded = form.transform !== "none";
+  let transformSectionExpanded = false;
   let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   function handleTransformChange(event: { value: string }) {
@@ -558,10 +567,14 @@
                 No transform. Messages will be sent as-is to the sink
                 destination.
               {:else}
-                Using transform: <code
-                  >{transforms.find((t) => t.id === form.transform)?.name ||
-                    form.transform}</code
-                >
+                <div class="font-medium">
+                  {transforms.find((t) => t.id === form.transform)?.name ||
+                    form.transform}
+                </div>
+                <div class="text-sm text-muted-foreground">
+                  {transforms.find((t) => t.id === form.transform)
+                    ?.description || ""}
+                </div>
               {/if}
             </p>
           {:else if !selectedTable}
@@ -570,71 +583,73 @@
             </p>
           {:else}
             <div class="space-y-4">
-              <div class="space-y-2">
-                <Label for="transform">Transform</Label>
-                <p class="text-sm text-muted-foreground mt-1 mb-2">
-                  Select how you want to transform your messages.
-                </p>
-                <div class="flex gap-2">
-                  <Select
-                    selected={{
-                      value: form.transform,
-                      label:
-                        form.transform === "none"
-                          ? "None"
-                          : transforms.find((t) => t.id === form.transform)
-                              ?.name || form.transform,
-                    }}
-                    onSelectedChange={handleTransformChange}
+              <div class="">
+                <div class="flex justify-end gap-2 mb-4">
+                  <Button
+                    variant="outline"
+                    class="whitespace-nowrap"
+                    on:click={refreshTransforms}
+                    disabled={transformRefreshState === "refreshing"}
+                    aria-label="Refresh Transforms"
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a transform" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {#each transforms as transform}
-                        <SelectItem value={transform.id}
-                          >{transform.name}</SelectItem
-                        >
-                      {/each}
-                    </SelectContent>
-                  </Select>
-                  <Tooltip.Root>
-                    <Tooltip.Trigger>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        on:click={refreshTransforms}
-                        disabled={transformRefreshState === "refreshing"}
-                        class="p-2"
-                        aria-label="Refresh Transforms"
-                      >
-                        {#if transformRefreshState === "refreshing"}
-                          <RotateCwIcon class="h-5 w-5 animate-spin" />
-                        {:else if transformRefreshState === "done"}
-                          <CheckIcon class="h-5 w-5 text-green-500" />
-                        {:else}
-                          <RotateCwIcon class="h-5 w-5" />
-                        {/if}
-                      </Button>
-                    </Tooltip.Trigger>
-                    <Tooltip.Content>
-                      <p class="text-xs">Refresh transforms</p>
-                    </Tooltip.Content>
-                  </Tooltip.Root>
+                    {#if transformRefreshState === "refreshing"}
+                      <RotateCwIcon class="h-4 w-4 animate-spin" />
+                    {:else if transformRefreshState === "done"}
+                      <CheckIcon class="h-4 w-4 text-green-500" />
+                    {:else}
+                      <RotateCwIcon class="h-4 w-4" />
+                    {/if}
+                  </Button>
                   <Button
                     variant="outline"
                     class="whitespace-nowrap"
                     on:click={() => window.open("/transforms/new", "_blank")}
                   >
-                    Create new Transform
+                    <Plus class="h-4 w-4 mr-2" />
+                    Create new transform
                   </Button>
                 </div>
-                {#if errors.consumer.transform_id}
-                  <p class="text-destructive text-sm">
-                    {errors.consumer.transform_id}
-                  </p>
-                {/if}
+
+                <div class="border rounded-lg overflow-hidden">
+                  <div class="max-h-[400px] overflow-y-auto">
+                    <Table>
+                      <TableBody>
+                        <TableRow
+                          on:click={() =>
+                            handleTransformChange({ value: "none" })}
+                          class="cursor-pointer {form.transform === 'none'
+                            ? 'bg-blue-50 hover:bg-blue-100'
+                            : 'hover:bg-gray-100'}"
+                        >
+                          <TableCell>
+                            <div class="font-medium">None</div>
+                            <div class="text-sm text-muted-foreground">
+                              No transform applied. Messages will be sent as-is.
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {#each transforms as transform}
+                          <TableRow
+                            on:click={() =>
+                              handleTransformChange({ value: transform.id })}
+                            class="cursor-pointer {transform.id ===
+                            form.transform
+                              ? 'bg-blue-50 hover:bg-blue-100'
+                              : 'hover:bg-gray-100'}"
+                          >
+                            <TableCell>
+                              <div class="font-medium">{transform.name}</div>
+                              <div class="text-sm text-muted-foreground">
+                                {transform.description ||
+                                  "No description provided."}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        {/each}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
               </div>
             </div>
           {/if}

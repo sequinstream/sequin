@@ -1,0 +1,89 @@
+---
+title: Transforms
+description: Reference for Sequin's transforms. Use transforms to modify the structure of your messages before they are sent to sinks.
+---
+
+Transforms allow you to modify the structure of your messages before they are sent to the sink destination. This is useful for:
+
+- Simplifying message payloads to reduce bandwidth and storage costs
+- Extracting specific fields from complex message structures
+- Maintaining compatibility with different sink destinations
+- Keeping payloads under size limits (e.g., SQS 256KB limit)
+
+## Available transform types
+
+### Path transform (Current)
+
+The path transform allows you to extract a specific field from your message using a dot-notation path. This is particularly useful for:
+
+1. Sending just the latest record to the destination (e.g., for materialized views in Postgres or data warehouses)
+2. Extracting just the record ID to keep payloads small (e.g., for SQS with its 256KB limit)
+
+#### Path syntax
+
+Paths follow a dot-notation format to traverse the message structure. Valid paths start with:
+
+- `record` - The record object
+- `changes` - The changes object
+- `action` - The action type (insert, update, delete)
+- `metadata` - The metadata object
+
+Paths can be as deep as you need them to be. For example, `record.id` will extract the `id` field from the `record` object and `record.address.city` will extract the `city` field from the `address` object in the `record` object.
+
+### Coming soon
+
+- **Code transform**: Write custom Lua code to transform your messages
+- **Webhook transform**: Send messages to a webhook for transformation before delivery
+
+### Testing transforms
+
+When creating or editing a transform, Sequin will automatically capture up to 10 recent events from your database. You can see how your transform affects these events in real-time.
+
+When changes occur in a connected database and you have the transform editor open, Sequin will capture events and display them in the editor:
+
+<Frame>
+  <img style={{maxWidth: '600px'}} src="/images/reference/record-only-transform.jpg" alt="Record only transform" />
+</Frame>
+
+This live preview helps ensure your transform will work correctly with your actual data.
+
+### Example use cases
+
+#### Keeping payloads small
+
+When using SQS (which has a 256KB payload limit), you can use a path transform to extract just the record ID:
+
+```yaml
+transform:
+  path: record.id
+```
+
+Your consumer can then query the full record details as needed.
+
+#### Maintaining Debezium-like format
+
+For systems expecting a Debezium-like format, use a path transform to extract just the record:
+
+```yaml
+transform:
+  path: record
+```
+
+This ensures your messages match the expected format without additional metadata.
+
+## Related
+
+<CardGroup>
+  <Card title="Messages reference" icon="message-dots" href="/reference/messages">
+    Learn about message shapes and how annotations appear in change messages.
+  </Card>
+  <Card title="sequin.yaml transforms" icon="pencil" href="/reference/sequin-yaml#sink-transforms">
+    Learn about the sequin.yaml file and how to use it to configure your Sequin instance.
+  </Card>
+  <Card title="Filters" icon="filter" href="/reference/filters">
+    Learn about filters and how to use them to filter messages before they are sent to your destination.
+  </Card>
+  <Card title="Sinks" icon="list-check" href="/reference/sinks">
+    Learn how to use sinks to send messages to your destination.
+  </Card>
+</CardGroup>

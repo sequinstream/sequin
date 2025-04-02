@@ -170,6 +170,7 @@ defmodule SequinWeb.TransformsLive.Edit do
     %{
       id: Ecto.Changeset.get_field(changeset, :id),
       name: Ecto.Changeset.get_field(changeset, :name),
+      description: Ecto.Changeset.get_field(changeset, :description),
       transform: %{
         path: path
       }
@@ -199,6 +200,7 @@ defmodule SequinWeb.TransformsLive.Edit do
   defp decode_params(params) do
     %{
       "name" => params["name"],
+      "description" => params["description"],
       "transform" => %{
         "type" => "path",
         "path" => params["transform"]["path"]

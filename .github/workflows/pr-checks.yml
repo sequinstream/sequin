@@ -17,8 +17,8 @@ jobs:
     name: Signoff Checks
     runs-on: ubuntu-latest
 
-    # if external PR  (TODO re-enable)
-    # if: ${{ env.BASE_REPO != env.PR_HEAD_REPO }}
+    # this workflow runs for external forks only, org members have `make signoff`
+    if: ${{ env.BASE_REPO != env.PR_HEAD_REPO }}
 
     services:
       postgres:

@@ -13,6 +13,7 @@ defmodule Sequin.Consumers.Transform do
   schema "transforms" do
     field :name, :string
     field :type, :string, read_after_writes: true
+    field :description, :string
 
     belongs_to :account, Account
 
@@ -29,7 +30,7 @@ defmodule Sequin.Consumers.Transform do
 
   def create_changeset(transform, attrs) do
     transform
-    |> cast(attrs, [:name])
+    |> cast(attrs, [:name, :description])
     |> changeset(attrs)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> Sequin.Changeset.validate_name()
@@ -41,7 +42,7 @@ defmodule Sequin.Consumers.Transform do
 
   def changeset(transform, attrs) do
     transform
-    |> cast(attrs, [:name])
+    |> cast(attrs, [:name, :description])
     |> cast_polymorphic_embed(:transform, required: true)
     |> validate_required([:name])
   end

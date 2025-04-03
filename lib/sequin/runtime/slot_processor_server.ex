@@ -33,6 +33,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
+  alias Sequin.Runtime.PostgresRelationHashCache
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Workers.CreateReplicationSlotWorker
@@ -952,7 +953,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   @spec put_relation_message(Relation.t(), State.t()) :: State.t()
-  defp put_relation_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
+  defp put_relation_message(
+         %Relation{id: id, columns: columns, namespace: schema, name: table} = relation,
+         %State{} = state
+       ) do
     conn = get_cached_conn(state)
 
     # First, determine if this is a partition and get its parent table info
@@ -1022,16 +1026,22 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         end
       end)
 
-    # Check if we already have a schema for this relation ID
-    # If so, enqueue a database update worker as the schema may have changed
-    if Map.has_key?(state.schemas, id) do
-      Logger.info("[SlotProcessorServer] Received relation message for existing relation, enqueueing database update",
+    # Create a relation with enriched columns
+    enriched_relation = %{relation | columns: enriched_columns}
+
+    # Compare schema hashes to detect changes
+    current_hash = PostgresRelationHashCache.compute_schema_hash(enriched_relation)
+    stored_hash = PostgresRelationHashCache.get_schema_hash(state.postgres_database.id, id)
+
+    unless stored_hash == current_hash do
+      Logger.info("[SlotProcessorServer] Schema changes detected for table, enqueueing database update",
         relation_id: id,
         schema: parent_info.schema,
         table: parent_info.name
       )
 
-      DatabaseUpdateWorker.enqueue(state.postgres_database.id)
+      PostgresRelationHashCache.update_schema_hash(state.postgres_database.id, id, current_hash)
+      DatabaseUpdateWorker.enqueue(state.postgres_database.id, unique_period: 0)
     end
 
     # Store using the actual relation_id but with parent table info

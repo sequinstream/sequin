@@ -35,6 +35,8 @@ defmodule SequinWeb.Endpoint do
     plug Phoenix.Ecto.CheckRepoStatus, otp_app: :sequin
   end
 
+  plug Sequin.PrometheusExporter
+
   plug Phoenix.LiveDashboard.RequestLogger,
     param_key: "request_logger",
     cookie_key: "request_logger"

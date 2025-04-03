@@ -18,6 +18,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Prometheus
   alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
 
@@ -174,12 +175,18 @@ defmodule Sequin.Runtime.SinkPipeline do
         already_delivered
 
       {to_deliver, already_delivered} ->
+        Prometheus.increment_message_deliver_attempt(context.consumer.id, length(to_deliver))
+
         case pipeline_mod.handle_batch(batch_name, to_deliver, batch_info, context) do
           {:ok, delivered, next_context} ->
+            Prometheus.increment_message_deliver_success(context.consumer.id, length(delivered))
+
             update_context(context, next_context)
             delivered ++ already_delivered
 
           {:error, error} ->
+            Prometheus.increment_message_deliver_failure(context.consumer.id, length(to_deliver))
+
             failed =
               Enum.map(to_deliver, fn message ->
                 Message.failed(message, error)

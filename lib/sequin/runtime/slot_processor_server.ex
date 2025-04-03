@@ -22,6 +22,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Health.Event
   alias Sequin.Postgres
   alias Sequin.Postgres.ReplicationConnection
+  alias Sequin.Prometheus
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Runtime.MessageHandler
@@ -1369,6 +1370,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       case res do
         :ok ->
+          Prometheus.increment_messages_ingested(state.replication_slot.id, count)
+
           if state.test_pid do
             state.message_handler_module.flush_messages(state.message_handler_ctx)
             send(state.test_pid, {__MODULE__, :flush_messages})

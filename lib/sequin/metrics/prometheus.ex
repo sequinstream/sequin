@@ -4,16 +4,11 @@ defmodule Sequin.Prometheus do
 
   @spec setup() :: :ok
   def setup do
-    Counter.declare(
-      name: :sequin_messages_delivery_attempt,
-      help: "The count of messages that are attempted to be delivered.",
-      labels: [:consumer_id]
-    )
-
     Histogram.new(
       name: :sequin_messages_ingested_latency_ms,
       labels: [:consumer_id],
       buckets: [100, 300, 500, 750, 1000],
+      duration_unit: :milliseconds,
       help: "The latency of messages being ingested from the replication slot."
     )
 
@@ -21,6 +16,7 @@ defmodule Sequin.Prometheus do
       name: :sequin_replication_lag_ms,
       labels: [:consumer_id],
       buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10_000, 100_000, 1_000_000],
+      duration_unit: :milliseconds,
       help: "The replication lag in milliseconds."
     )
 
@@ -28,6 +24,7 @@ defmodule Sequin.Prometheus do
       name: :sequin_internal_latency_ms,
       labels: [:consumer_id],
       buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10_000],
+      duration_unit: :milliseconds,
       help: "The internal processing latency in milliseconds."
     )
 
@@ -35,6 +32,7 @@ defmodule Sequin.Prometheus do
       name: :sequin_delivery_latency_ms,
       labels: [:consumer_id],
       buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10_000],
+      duration_unit: :milliseconds,
       help: "The delivery latency in milliseconds."
     )
 
@@ -42,6 +40,7 @@ defmodule Sequin.Prometheus do
       name: :sequin_post_delivery_latency_ms,
       labels: [:consumer_id],
       buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10_000],
+      duration_unit: :milliseconds,
       help: "The post-delivery latency in milliseconds."
     )
 
@@ -49,29 +48,30 @@ defmodule Sequin.Prometheus do
       name: :sequin_oldest_message_age_ms,
       labels: [:consumer_id],
       buckets: [1000, 5000, 10_000, 30_000, 60_000, 300_000, 600_000, 1_800_000, 3_600_000],
+      duration_unit: :milliseconds,
       help: "The approximate age of the oldest message in milliseconds."
     )
 
     Counter.declare(
       name: :sequin_messages_ingested_total,
       help: "Total number of messages ingested.",
-      labels: [:consumer_id]
+      labels: [:replication_slot_id]
     )
 
     Counter.declare(
-      name: :sequin_messages_delivery_attempted_total,
+      name: :sequin_message_deliver_attempt,
       help: "Total number of messages attempted for delivery.",
       labels: [:consumer_id]
     )
 
     Counter.declare(
-      name: :sequin_messages_delivered_total,
+      name: :sequin_message_deliver_success,
       help: "Total number of messages successfully delivered.",
       labels: [:consumer_id]
     )
 
     Counter.declare(
-      name: :sequin_messages_failed_total,
+      name: :sequin_message_deliver_failure,
       help: "Total number of messages that failed delivery.",
       labels: [:consumer_id]
     )
@@ -141,12 +141,98 @@ defmodule Sequin.Prometheus do
       labels: [:consumer_id],
       help: "Delivery saturation as a percentage."
     )
+
+    ## Ecto
+    :ok = :telemetry.attach("sequin-repo-query", [:sequin, :repo, :query], &Sequin.Prometheus.ecto_event/4, %{})
+
+    Histogram.new(
+      name: :sequin_repo_query_query,
+      buckets: [1, 10, 100, 1000, 10_000],
+      labels: [:query],
+      help: "Ecto query time: query.",
+      duration_unit: :milliseconds
+    )
+
+    Histogram.new(
+      name: :sequin_repo_query_idle,
+      buckets: [1, 10, 100, 1000, 10_000],
+      labels: [:query],
+      help: "Ecto query time: idle.",
+      duration_unit: :milliseconds
+    )
+
+    Histogram.new(
+      name: :sequin_repo_query_queue,
+      buckets: [1, 10, 100, 1000, 10_000],
+      labels: [:query],
+      help: "Ecto query time: queue.",
+      duration_unit: :milliseconds
+    )
+
+    Histogram.new(
+      name: :sequin_repo_query_decode,
+      buckets: [1, 10, 100, 1000, 10_000],
+      labels: [:query],
+      help: "Ecto query time: decode.",
+      duration_unit: :milliseconds
+    )
+
+    Histogram.new(
+      name: :sequin_repo_query_total,
+      buckets: [1, 10, 100, 1000, 10_000],
+      labels: [:query],
+      help: "Ecto query time: total.",
+      duration_unit: :milliseconds
+    )
   end
 
-  @spec increment_messages_delivery_attempt(consumer_id :: String.t(), count :: number()) :: :ok
-  def increment_messages_delivery_attempt(consumer_id, count \\ 1) do
+  def ecto_event([:sequin, :repo, :query], measurements, metadata, _config) do
+    # IO.inspect(measurements, label: "measurements")
+    lbls = [String.slice(metadata.query, 0, 100)]
+
+    Histogram.observe([name: :sequin_repo_query_query, labels: lbls], measurements.query_time)
+    Histogram.observe([name: :sequin_repo_query_total, labels: lbls], measurements.total_time)
+
+    case Map.fetch(metadata, :idle_time) do
+      {:ok, t} -> Histogram.observe([name: :sequin_repo_query_idle, labels: lbls], t)
+      _ -> nil
+    end
+
+    case Map.fetch(metadata, :decode_time) do
+      {:ok, t} -> Histogram.observe([name: :sequin_repo_query_decode, labels: lbls], t)
+      _ -> nil
+    end
+
+    case Map.fetch(metadata, :queue_time) do
+      {:ok, t} -> Histogram.observe([name: :sequin_repo_query_queue, labels: lbls], t)
+      _ -> nil
+    end
+  end
+
+  # no catchall - :telemetry prints error and removes handler in case of no match
+
+  @spec increment_message_deliver_attempt(consumer_id :: String.t(), count :: number()) :: :ok
+  def increment_message_deliver_attempt(consumer_id, count \\ 1) do
     Counter.inc(
-      name: :sequin_messages_delivery_attempt,
+      name: :sequin_message_deliver_attempt,
+      labels: [consumer_id],
+      count: count
+    )
+  end
+
+  @spec increment_message_deliver_success(consumer_id :: String.t(), count :: number()) :: :ok
+  def increment_message_deliver_success(consumer_id, count \\ 1) do
+    Counter.inc(
+      name: :sequin_message_deliver_success,
+      labels: [consumer_id],
+      count: count
+    )
+  end
+
+  @spec increment_message_deliver_failure(consumer_id :: String.t(), count :: number()) :: :ok
+  def increment_message_deliver_failure(consumer_id, count \\ 1) do
+    Counter.inc(
+      name: :sequin_message_deliver_failure,
       labels: [consumer_id],
       count: count
     )
@@ -186,31 +272,9 @@ defmodule Sequin.Prometheus do
     Histogram.observe([name: :sequin_oldest_message_age_ms, labels: [consumer_id]], age_ms)
   end
 
-  @spec increment_messages_ingested(consumer_id :: String.t(), count :: number()) :: :ok
-  def increment_messages_ingested(consumer_id, count \\ 1) do
-    Counter.inc(
-      name: :sequin_messages_ingested_total,
-      labels: [consumer_id],
-      count: count
-    )
-  end
-
-  @spec increment_messages_delivered(consumer_id :: String.t(), count :: number()) :: :ok
-  def increment_messages_delivered(consumer_id, count \\ 1) do
-    Counter.inc(
-      name: :sequin_messages_delivered_total,
-      labels: [consumer_id],
-      count: count
-    )
-  end
-
-  @spec increment_messages_failed(consumer_id :: String.t(), count :: number()) :: :ok
-  def increment_messages_failed(consumer_id, count \\ 1) do
-    Counter.inc(
-      name: :sequin_messages_failed_total,
-      labels: [consumer_id],
-      count: count
-    )
+  @spec increment_messages_ingested(replication_slot_id :: String.t(), count :: number()) :: :ok
+  def increment_messages_ingested(replication_slot_id, count \\ 1) do
+    Counter.inc([name: :sequin_messages_ingested_total, labels: [replication_slot_id]], count)
   end
 
   @spec set_messages_in_delivery(consumer_id :: String.t(), count :: number()) :: :ok

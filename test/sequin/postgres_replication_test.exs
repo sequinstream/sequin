@@ -17,6 +17,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
@@ -1524,6 +1525,66 @@ defmodule Sequin.PostgresReplicationTest do
       # Check that the tags field contains an empty string
       # Postgres quirk - the logical decoding slot will return `{}` for both `{}` and `{""}`.
       assert data.record["tags"] == [], "Expected array with empty string, got: #{inspect(data.record["tags"])}"
+    end
+
+    @tag capture_log: true
+    test "schema changes are detected and database update worker is enqueued", %{
+      source_db: source_db
+    } do
+      test_pid = self()
+
+      on_exit(fn ->
+        UnboxedRepo.query!(
+          "alter table #{Character.quoted_table_name()} drop column if exists test_column_for_schema_change",
+          []
+        )
+      end)
+
+      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, _msgs -> :ok end)
+
+      # Start replication
+      start_replication!(
+        message_handler_module: SlotMessageHandlerMock,
+        test_pid: test_pid
+      )
+
+      do_migration = fn ->
+        UnboxedRepo.query!(
+          "alter table #{Character.quoted_table_name()} drop column if exists test_column_for_schema_change",
+          []
+        )
+
+        UnboxedRepo.query!(
+          "alter table #{Character.quoted_table_name()} add column if not exists test_column_for_schema_change text",
+          []
+        )
+      end
+
+      do_migration.()
+
+      # Insert a record to trigger WAL processing
+      CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Wait for messages to be handled
+      assert_receive {SlotProcessorServer, :flush_messages}, 2000
+
+      # Verify that DatabaseUpdateWorker was enqueued with the correct args
+      [_] = all_enqueued(worker: DatabaseUpdateWorker, args: %{postgres_database_id: source_db.id})
+
+      do_migration.()
+
+      # Insert a record to trigger WAL processing
+      CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Wait for messages to be handled
+      assert_receive {SlotProcessorServer, :flush_messages}, 2000
+
+      # Verify that DatabaseUpdateWorker was enqueued with the correct args
+      # twice now
+      [_, _] = all_enqueued(worker: DatabaseUpdateWorker, args: %{postgres_database_id: source_db.id})
+
+      stop_replication!()
     end
   end
 

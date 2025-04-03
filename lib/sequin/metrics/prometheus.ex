@@ -13,11 +13,11 @@ defmodule Sequin.Prometheus do
     )
 
     Histogram.new(
-      name: :sequin_replication_lag_ms,
-      labels: [:consumer_id],
+      name: :sequin_ingestion_latency_ms,
+      labels: [:replication_slot_id],
       buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10_000, 100_000, 1_000_000],
       duration_unit: :milliseconds,
-      help: "The replication lag in milliseconds."
+      help: "The ingestion latency between Postgres and Sequin in milliseconds."
     )
 
     Histogram.new(
@@ -247,9 +247,9 @@ defmodule Sequin.Prometheus do
     )
   end
 
-  @spec observe_replication_lag(consumer_id :: String.t(), lag_ms :: number()) :: :ok
-  def observe_replication_lag(consumer_id, lag_ms) do
-    Histogram.observe([name: :sequin_replication_lag_ms, labels: [consumer_id]], lag_ms)
+  @spec observe_ingestion_latency(replication_slot_id :: String.t(), latency_ms :: number()) :: :ok
+  def observe_ingestion_latency(replication_slot_id, latency_ms) do
+    Histogram.observe([name: :sequin_ingestion_latency_ms, labels: [replication_slot_id]], latency_ms)
   end
 
   @spec observe_internal_latency(consumer_id :: String.t(), latency_ms :: number()) :: :ok

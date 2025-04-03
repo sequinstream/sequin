@@ -256,6 +256,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     state = schedule_heartbeat(state, 0)
     state = schedule_heartbeat_verification(state)
     schedule_process_logging(0)
+    schedule_observe_ingestion_latency()
 
     {:ok, %{state | connection_state: :disconnected}}
   end
@@ -851,6 +852,16 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:keep_state, state}
   end
 
+  def handle_info(:observe_ingestion_latency, %State{} = state) do
+    if state.current_commit_ts do
+      observe_ingestion_latency(state.replication_slot.id, state.current_commit_ts)
+    end
+
+    schedule_observe_ingestion_latency()
+
+    {:keep_state, state}
+  end
+
   defp on_connect_failure(%State{} = state, error) do
     conn = get_cached_conn(state)
 
@@ -1076,6 +1087,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         state
       end
 
+    observe_ingestion_latency(state.replication_slot.id, ts)
     %State{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: begin_lsn, current_xid: xid}
   end
 
@@ -1793,5 +1805,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
 
     wal_cursor.commit_lsn
+  end
+
+  defp schedule_observe_ingestion_latency do
+    Process.send_after(self(), :observe_ingestion_latency, :timer.seconds(5))
+  end
+
+  defp observe_ingestion_latency(replication_slot_id, ts) do
+    latency_ms = DateTime.diff(Sequin.utc_now(), ts, :millisecond)
+    Prometheus.observe_ingestion_latency(replication_slot_id, latency_ms)
   end
 end

@@ -9,7 +9,7 @@ defmodule Sequin.Consumers.Transform do
   alias Sequin.Accounts.Account
   alias Sequin.Consumers.PathTransform
 
-  @derive Jason.Encoder
+  @derive {Jason.Encoder, only: [:name, :type, :description, :transform]}
   schema "transforms" do
     field :name, :string
     field :type, :string, read_after_writes: true

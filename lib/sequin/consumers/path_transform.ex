@@ -5,7 +5,7 @@ defmodule Sequin.Consumers.PathTransform do
 
   import Ecto.Changeset
 
-  @derive {Jason.Encoder, only: [:path]}
+  @derive {Jason.Encoder, only: [:type, :path]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:path], default: :path
@@ -28,7 +28,7 @@ defmodule Sequin.Consumers.PathTransform do
     )
     |> validate_format(
       :path,
-      ~r/^(record|changes|action|metadata)$|^(record|changes|metadata)\.([a-zA-Z0-9_.]+)$|^metadata\.(table_schema|table_name|commit_timestamp|commit_lsn|transaction_annotations|consumer)$|^metadata\.transaction_annotations\.[a-zA-Z0-9_]+$|^metadata\.consumer\.(id|name)$/,
+      ~r/^(record|changes|action|metadata)(\.[a-zA-Z0-9_\-.]+)*$/,
       message: "must be a valid path into the record structure"
     )
     |> validate_length(:path, max: 2000)

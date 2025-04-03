@@ -1,0 +1,76 @@
+################################################################
+## Sequin dev bundle container
+# - Use this image to deploy a mini-Sequin to your test infrastructure.
+# - Runs docker-in-docker, uses docker-compose to fetch sequin:latest and friends
+# - Completely stateless - images are re-pulled and databases re-created on startup
+# - Default Sequin YAML config is overridden using layers or volumes
+# - Make your YAML available at either /app/sequin.yml or /mnt/sequin.yml
+
+## Example use (config via volume)
+# docker build . -f Dockerfile.dev-bundle -t my-omnibus:t3
+# docker run --rm --privileged --volume ./my-sequin-conf-dir:/mnt -p 7376:7376 -it my-omnibus:t3
+
+################################################################
+
+FROM docker:dind
+
+# Install dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    jq \
+    git \
+    docker-compose
+
+# Create app directory and copy project files at build time
+WORKDIR /app
+COPY ./docker-compose.yaml ./playground.yml /app/
+COPY ./postgres-init /app/postgres-init
+
+################
+# Entrypoint script
+################
+
+RUN cat >/entrypoint.sh <<EOF 
+#!/usr/bin/env bash
+set -e
+
+cd /app
+
+# /app/sequin.yml is intended to come from upper layers
+[ -f /app/sequin.yml ] && cp /app/sequin.yml playground.yml
+# /mnt/sequin.yml is intended to come from a bind-mounted host directory
+[ -f /mnt/sequin.yml ] && cp /mnt/sequin.yml playground.yml
+
+echo "starting dockerd..."
+dockerd-entrypoint.sh &
+echo "finished starting dockerd..."
+
+echo "waiting for docker to be ready..."
+until docker info >/dev/null 2>&1; do
+  sleep 1
+done
+echo "docker is ready."
+
+echo "running docker-compose up..."
+docker-compose up -d
+
+cleanup() {
+  echo "shutting down sub-containers..."
+  docker-compose down
+  exit 0
+}
+trap cleanup SIGINT SIGTERM
+
+echo "tailing the logs... (Ctrl-C to exit)"
+
+docker-compose logs -f
+
+EOF
+################################################################
+
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+
+EXPOSE 7376/tcp
+

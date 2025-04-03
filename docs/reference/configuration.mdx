@@ -138,9 +138,12 @@ To use GitHub OAuth as a sign-in/sign-up method, provide the following environme
 - `GITHUB_CLIENT_SECRET`: GitHub OAuth client secret
 - `GITHUB_CLIENT_REDIRECT_URI`: GitHub OAuth callback URL
 
-### Monitoring/stats configuration
+### Metrics configuration
 
-Monitoring/stats configuration is coming soon. [Please comment on this issue](https://github.com/sequinstream/sequin/issues/580) if you'd like to see this feature.
+- `SEQUIN_METRICS_PORT`: Port number for the metrics endpoint (default: 8376)
+  - This is the port that Sequin will expose Prometheus metrics on. Metrics are available at `/metrics` on this port.
+
+See [Metrics](/reference/metrics) reference for more information on the metrics exposed by Sequin.
 
 ## Deploying to production
 

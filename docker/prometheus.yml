@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'sequin'
+    static_configs:
+      - targets: ['sequin:8376']
+      # - targets: ['host.docker.internal:4001']

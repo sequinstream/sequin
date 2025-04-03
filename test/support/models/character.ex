@@ -17,6 +17,10 @@ defmodule Sequin.TestSupport.Models.Character do
     timestamps()
   end
 
+  def quoted_table_name do
+    ~s{"Characters"}
+  end
+
   def where_id(query \\ base_query(), id) do
     from(c in query, where: c.id == ^id)
   end

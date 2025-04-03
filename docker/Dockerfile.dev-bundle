@@ -10,6 +10,13 @@
 # docker build . -f Dockerfile.dev-bundle -t my-omnibus:t3
 # docker run --rm --privileged --volume ./my-sequin-conf-dir:/mnt -p 7376:7376 -it my-omnibus:t3
 
+## Example use (config via layers)
+# docker build . -f Dockerfile.dev-bundle -t my-omnibus:t3                      
+# - Create a Dockerfile.dev-layer FROM my-omnibus:t3
+# - use COPY to create /app/sequin.yml with your custom config (or RUN/cat/heredoc if you prefer)
+# docker build . -f Dockerfile.dev-layer -t my-omnibus:layer
+# docker run --rm --privileged -p 7376:7376 -it my-omnibus:layer 
+
 ################################################################
 
 FROM docker:dind

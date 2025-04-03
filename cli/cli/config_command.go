@@ -288,12 +288,68 @@ func PrettyDiff(oldMap, newMap map[string]interface{}) string {
 				// Changed field
 				if oldNested, oldOk := oldVal.(map[string]interface{}); oldOk {
 					if newNested, newOk := newVal.(map[string]interface{}); newOk {
-						builder.WriteString(fmt.Sprintf("  %s:\n    %s → %s",
-							modified(k),
-							modified(strings.TrimSpace(formatMap(oldNested, "    "))),
-							modified(strings.TrimSpace(formatMap(newNested, "    ")))))
+						// For nested maps, we need to handle them differently
+						// First, check if there are actual changes in the nested structure
+						changes, _ := differ.Diff(oldNested, newNested)
+						if len(changes) > 0 {
+							// There are changes in the nested structure, show the full diff
+							builder.WriteString(fmt.Sprintf("  %s:\n", modified(k)))
+
+							// Get all keys from both maps
+							nestedKeys := make(map[string]bool)
+							for nk := range oldNested {
+								nestedKeys[nk] = true
+							}
+							for nk := range newNested {
+								nestedKeys[nk] = true
+							}
+
+							// Sort nested keys
+							var sortedNestedKeys []string
+							for nk := range nestedKeys {
+								sortedNestedKeys = append(sortedNestedKeys, nk)
+							}
+							sort.Strings(sortedNestedKeys)
+
+							// Process each nested key
+							for _, nk := range sortedNestedKeys {
+								oldNestedVal, oldNestedOk := oldNested[nk]
+								newNestedVal, newNestedOk := newNested[nk]
+
+								if !oldNestedOk {
+									// New nested field
+									builder.WriteString(fmt.Sprintf("    %s: %v\n",
+										added(nk), added(formatValue(newNestedVal))))
+								} else if !newNestedOk {
+									// Deleted nested field
+									builder.WriteString(fmt.Sprintf("    %s: %v\n",
+										removed(nk), removed(formatValue(oldNestedVal))))
+								} else if !reflect.DeepEqual(oldNestedVal, newNestedVal) {
+									// Changed nested field
+									builder.WriteString(fmt.Sprintf("    %s: %v → %v\n",
+										modified(nk), modified(formatValue(oldNestedVal)), modified(formatValue(newNestedVal))))
+								} else {
+									// Unchanged nested field
+									builder.WriteString(fmt.Sprintf("    %s: %v\n",
+										unchanged(nk), unchanged(formatValue(oldNestedVal))))
+								}
+							}
+						} else {
+							// No changes in the nested structure, just show it as unchanged
+							builder.WriteString(fmt.Sprintf("  %s:\n%s",
+								unchanged(k), unchanged(formatMap(oldNested, "    "))))
+						}
+					} else {
+						// Type mismatch - old is map but new isn't
+						builder.WriteString(fmt.Sprintf("  %s: %v → %v\n",
+							modified(k), modified(formatValue(oldVal)), modified(formatValue(newVal))))
 					}
+				} else if _, newOk := newVal.(map[string]interface{}); newOk {
+					// Type mismatch - new is map but old isn't
+					builder.WriteString(fmt.Sprintf("  %s: %v → %v\n",
+						modified(k), modified(formatValue(oldVal)), modified(formatValue(newVal))))
 				} else {
+					// Simple value change
 					builder.WriteString(fmt.Sprintf("  %s: %v → %v\n",
 						modified(k), modified(formatValue(oldVal)), modified(formatValue(newVal))))
 				}

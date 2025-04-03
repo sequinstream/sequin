@@ -52,10 +52,12 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
       You should see output like the following:
 
       ```
-      CONTAINER ID   IMAGE                                 STATUS          PORTS                                       NAMES
-      abc123def456   sequinstream/sequin:latest           Up 10 seconds    0.0.0.0:7376->7376/tcp                     sequin
-      def456ghi789   redis:7.0                            Up 10 seconds    0.0.0.0:6379->6379/tcp                     sequin-redis
-      ghi789jkl012   postgres:15                          Up 10 seconds    0.0.0.0:5432->5432/tcp                     sequin-postgres
+      CONTAINER ID   IMAGE                                  COMMAND                  CREATED          STATUS                    PORTS                                                 NAMES
+      b21f5eb8e6aa   sequin/sequin:latest                   "/scripts/start_comm…"   15 seconds ago   Up 2 seconds              4000/tcp, 0.0.0.0:7376->7376/tcp, :::7376->7376/tcp   sequin-sequin-1
+      34ee4e39468e   grafana/grafana                        "/run.sh"                15 seconds ago   Up 14 seconds             0.0.0.0:3000->3000/tcp, :::3000->3000/tcp             sequin-sequin_grafana-1
+      01b006a7f300   prom/prometheus                        "/bin/prometheus --c…"   16 seconds ago   Up 15 seconds             0.0.0.0:9090->9090/tcp, :::9090->9090/tcp             sequin-sequin_prometheus-1
+      b0b509e37837   postgres:16                            "docker-entrypoint.s…"   16 seconds ago   Up 15 seconds (healthy)   0.0.0.0:7377->5432/tcp, [::]:7377->5432/tcp           sequin-sequin_postgres-1
+      4438297985da   redis:7                                "docker-entrypoint.s…"   16 seconds ago   Up 15 seconds             0.0.0.0:7378->6379/tcp, [::]:7378->6379/tcp           sequin-sequin_redis-1
       ```
 
       <Check>
@@ -108,6 +110,16 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
           Use Sequin's native streaming protocol.
         </Card>
       </CardGroup>
+    </Step>
+
+    <Step title="View metrics in Grafana">
+      Sequin exports  [various metrics](/reference/metrics) in Prometheus format.
+
+      Using the Grafana service from Docker Compose, you can view our [example dashboard here](http://localhost:3000/d/behuozial454wc/sequin). 
+
+      Sign in with Grafana's default credentials:
+      - Username: `admin`
+      - Password: `admin`
     </Step>
   </Steps>
 

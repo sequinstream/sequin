@@ -94,7 +94,9 @@ defmodule Sequin.MixProject do
       {:pgvector, "~> 0.3.0"},
       {:broadway_dashboard, "~> 0.4.0"},
       {:rexbug, "~> 1.0"},
-      {:decorator, "~> 1.4"}
+      {:decorator, "~> 1.4"},
+      {:prometheus_ex, "~> 3.0"},
+      {:prometheus_plugs, "~> 1.1"}
     ]
   end
 

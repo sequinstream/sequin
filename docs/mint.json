@@ -122,7 +122,8 @@
         "reference/change-retention",
         "reference/annotations",
         "reference/sequin-yaml",
-        "reference/cli/overview"
+        "reference/cli/overview",
+        "reference/metrics"
       ]
     },
     {

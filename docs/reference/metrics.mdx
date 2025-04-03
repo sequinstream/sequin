@@ -1,0 +1,68 @@
+---
+title: Metrics
+description: Reference for Sequin's metrics. Use metrics to monitor health and performance.
+---
+
+Sequin exposes a metrics endpoint, using Prometheus text format, which can be integrated into your existing observability workflows. By default, this endpoint is at `/metrics` on port `8376`.
+
+Metrics are designed to answer:
+
+- Is Sequin keeping up with the database? (Ingestion metrics)
+- Is Sequin processing messages quickly? (Internal processing metrics)
+- Are sinks keeping up with Sequin? (Delivery metrics)
+- Is the Sequin service experiencing CPU or memory pressure? (VM metrics)
+
+## Metrics reference
+
+### Ingestion metrics
+
+- `sequin_ingestion_latency_us` (Gauge)
+
+  Measures latency between transaction commit and when Sequin first receives it. Calculated by instrumenting Sequin's own heartbeat messages.
+
+- `sequin_messages_ingested_count` (Counter)
+
+  Number of messages Sequin has received from a given replication slot.
+
+### Internal processing metrics
+
+- `sequin_internal_latency_us` (Histogram)
+
+  Measures time between Sequin ingesting a message and beginning to process it.
+
+### Delivery metrics
+
+- `sequin_delivery_latency_us` (Histogram)
+
+  Measures time between Sequin beginning to deliver a message and a given sink's successful acknowledgement. Some sinks are able to batch messages, in which case this metric measures the batch latency, rather than the per-message latency.
+
+- `sequin_message_deliver_attempt_count` (Counter)
+
+  Incremented for each message Sequin tries to deliver, before receiving a success or failure response.
+
+- `sequin_message_deliver_success_count` (Counter)
+
+  Incremented for each message that Sequin successfully delivers.
+
+- `sequin_message_deliver_failure_count` (Counter)
+
+  Incremented for each message that Sequin fails to deliver to a sink. This is because the sink was either unreachable, timed out, or returned an error.
+
+### Total latency
+
+<Note>
+  The total latency from database commit to message delivery is the sum of the ingestion latency, internal processing latency, and delivery latency.
+</Note>
+
+### VM metrics
+Sequin is implemented with Elixir. Elixir's VM (the BEAM) exposes many metrics. The following are the ones we find most useful for monitoring Sequin:
+
+- `erlang_vm_statistics_reductions_total` (Counter)
+
+  Measures how many VM instructions are executed across all processes.
+  Shows intensity of CPU-bound work.
+  Recommend using with a rate query rather than directly.
+
+- `erlang_vm_memory_bytes_total` (Gauge)
+
+  Memory usage of the entire VM.

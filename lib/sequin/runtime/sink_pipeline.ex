@@ -181,6 +181,17 @@ defmodule Sequin.Runtime.SinkPipeline do
   end
 
   defp deliver_messages(pipeline_mod, batch_name, to_deliver, already_delivered, batch_info, context) do
+    now = Sequin.utc_now()
+
+    to_deliver
+    |> Stream.map(fn
+      %Broadway.Message{data: %ConsumerEvent{ingested_at: ingested_at}} -> ingested_at
+      %Broadway.Message{data: %ConsumerRecord{ingested_at: ingested_at}} -> ingested_at
+    end)
+    |> Stream.filter(& &1)
+    |> Stream.map(&DateTime.diff(now, &1, :millisecond))
+    |> Enum.each(&Prometheus.observe_internal_latency(context.consumer.id, context.consumer.name, &1))
+
     case :timer.tc(pipeline_mod, :handle_batch, [batch_name, to_deliver, batch_info, context], :millisecond) do
       {t, {:ok, delivered, next_context}} ->
         Prometheus.increment_message_deliver_success(context.consumer.id, context.consumer.name, length(delivered))

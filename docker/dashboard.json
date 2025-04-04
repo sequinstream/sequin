@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 3,
+  "id": 1,
   "links": [],
   "panels": [
     {
@@ -105,7 +105,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(replication_slot_id, slot_name) (rate(sequin_messages_ingested_total[$__rate_interval]))",
+          "expr": "sum by(replication_slot_id, slot_name) (rate(sequin_messages_ingested_count[$__rate_interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "{{slot_name}}",
@@ -201,7 +201,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by(consumer_id, consumer_name) (rate(sequin_message_deliver_success[$__rate_interval])) * 10",
+          "expr": "sum by(consumer_id, consumer_name) (rate(sequin_message_deliver_success_count[$__rate_interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "{{consumer_name}}",
@@ -229,6 +229,7 @@
             "axisColorMode": "text",
             "axisLabel": "Deliver Success/Attempts",
             "axisPlacement": "auto",
+            "axisSoftMax": 1,
             "axisSoftMin": 0.9,
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -295,7 +296,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by(consumer_id, consumer_name) ((rate(sequin_message_deliver_success[10m])) / (rate(sequin_message_deliver_attempt[10m])))",
+          "expr": "sum by(consumer_id, consumer_name) ((rate(sequin_message_deliver_success_count[10m])) / (rate(sequin_message_deliver_attempt_count[10m])))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "{{consumer_name}}",
@@ -367,7 +368,7 @@
         {
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum by(consumer_id, consumer_name) (increase(sequin_message_deliver_success[5m])) \n/ \nsum by(consumer_id, consumer_name) (increase(sequin_message_deliver_attempt[5m]))",
+          "expr": "sum by(consumer_id, consumer_name) (increase(sequin_message_deliver_success_count[5m])) \n/ \nsum by(consumer_id, consumer_name) (increase(sequin_message_deliver_attempt_count[5m]))",
           "instant": true,
           "legendFormat": "{{consumer_name}}",
           "range": false,
@@ -907,5 +908,5 @@
   "timezone": "browser",
   "title": "Sequin",
   "uid": "behuozial454wc",
-  "version": 21
+  "version": 1
 }

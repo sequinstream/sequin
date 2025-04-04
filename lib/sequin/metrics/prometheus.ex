@@ -43,25 +43,25 @@ defmodule Sequin.Prometheus do
     )
 
     Counter.declare(
-      name: :sequin_messages_ingested_total,
+      name: :sequin_messages_ingested_count,
       help: "Total number of messages ingested.",
       labels: [:replication_slot_id, :slot_name]
     )
 
     Counter.declare(
-      name: :sequin_message_deliver_attempt,
+      name: :sequin_message_deliver_attempt_count,
       help: "Total number of messages attempted for delivery.",
       labels: [:consumer_id, :consumer_name]
     )
 
     Counter.declare(
-      name: :sequin_message_deliver_success,
+      name: :sequin_message_deliver_success_count,
       help: "Total number of messages successfully delivered.",
       labels: [:consumer_id, :consumer_name]
     )
 
     Counter.declare(
-      name: :sequin_message_deliver_failure,
+      name: :sequin_message_deliver_failure_count,
       help: "Total number of messages that failed delivery.",
       labels: [:consumer_id, :consumer_name]
     )
@@ -87,12 +87,6 @@ defmodule Sequin.Prometheus do
     Counter.declare(
       name: :sequin_bytes_delivered_total,
       help: "Total number of bytes delivered.",
-      labels: [:consumer_id, :consumer_name]
-    )
-
-    Counter.declare(
-      name: :sequin_messages_failed_per_second,
-      help: "Number of messages that failed delivery per second.",
       labels: [:consumer_id, :consumer_name]
     )
 
@@ -205,7 +199,7 @@ defmodule Sequin.Prometheus do
           :ok
   def increment_message_deliver_attempt(consumer_id, consumer_name, count \\ 1) do
     Counter.inc(
-      name: :sequin_message_deliver_attempt,
+      name: :sequin_message_deliver_attempt_count,
       labels: [consumer_id, consumer_name],
       count: count
     )
@@ -215,7 +209,7 @@ defmodule Sequin.Prometheus do
           :ok
   def increment_message_deliver_success(consumer_id, consumer_name, count \\ 1) do
     Counter.inc(
-      name: :sequin_message_deliver_success,
+      name: :sequin_message_deliver_success_count,
       labels: [consumer_id, consumer_name],
       count: count
     )
@@ -225,7 +219,7 @@ defmodule Sequin.Prometheus do
           :ok
   def increment_message_deliver_failure(consumer_id, consumer_name, count \\ 1) do
     Counter.inc(
-      name: :sequin_message_deliver_failure,
+      name: :sequin_message_deliver_failure_count,
       labels: [consumer_id, consumer_name],
       count: count
     )
@@ -276,7 +270,7 @@ defmodule Sequin.Prometheus do
 
   @spec increment_messages_ingested(replication_slot_id :: String.t(), slot_name :: String.t(), count :: number()) :: :ok
   def increment_messages_ingested(replication_slot_id, slot_name, count \\ 1) do
-    Counter.inc([name: :sequin_messages_ingested_total, labels: [replication_slot_id, slot_name]], count)
+    Counter.inc([name: :sequin_messages_ingested_count, labels: [replication_slot_id, slot_name]], count)
   end
 
   @spec set_messages_in_delivery(consumer_id :: String.t(), consumer_name :: String.t(), count :: number()) :: :ok
@@ -304,16 +298,6 @@ defmodule Sequin.Prometheus do
       name: :sequin_bytes_delivered_total,
       labels: [consumer_id, consumer_name],
       count: bytes
-    )
-  end
-
-  @spec increment_messages_failed_per_second(consumer_id :: String.t(), consumer_name :: String.t(), count :: number()) ::
-          :ok
-  def increment_messages_failed_per_second(consumer_id, consumer_name, count \\ 1) do
-    Counter.inc(
-      name: :sequin_messages_failed_per_second,
-      labels: [consumer_id, consumer_name],
-      count: count
     )
   end
 

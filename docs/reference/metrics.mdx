@@ -29,7 +29,7 @@ Metrics are designed to answer:
 - `sequin_message_deliver_success_count` (Counter)
   Incremented for each message delivered and acknowledged.
 - `sequin_message_deliver_failure_count` (Counter)
-  Incremented for each message which was delivered but failed downstream.
+  Incremented for each message that Sequin fails to deliver to a sink. This is because the sink was either unreachable, timed out, or returned an error.
 
 ### VM metrics
 Sequin is implemented with Elixir. Elixir's VM (the BEAM) exposes many metrics. The following are the ones we find most useful for monitoring Sequin:

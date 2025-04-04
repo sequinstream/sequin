@@ -189,7 +189,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       message_handler_module: message_handler_module,
       connection: connection,
       last_commit_lsn: nil,
-      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.minutes(1)),
+      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15)),
       max_memory_bytes: max_memory_bytes,
       bytes_between_limit_checks: bytes_between_limit_checks,
       check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
@@ -853,8 +853,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   def handle_info(:observe_ingestion_latency, %State{} = state) do
-    if state.current_commit_ts do
-      observe_ingestion_latency(state.replication_slot.id, state.current_commit_ts)
+    # Check if we have an outstanding heartbeat
+    if not is_nil(state.current_heartbeat_id) and not is_nil(state.heartbeat_emitted_at) do
+      observe_ingestion_latency(state.replication_slot.id, state.heartbeat_emitted_at)
     end
 
     schedule_observe_ingestion_latency()
@@ -1087,7 +1088,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         state
       end
 
-    observe_ingestion_latency(state.replication_slot.id, ts)
     %State{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: begin_lsn, current_xid: xid}
   end
 
@@ -1155,6 +1155,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             heartbeat_id: heartbeat_id,
             emitted_at: emitted_at
           )
+
+          {:ok, emitted_at, _} = DateTime.from_iso8601(emitted_at)
+          observe_ingestion_latency(state.replication_slot.id, emitted_at)
 
           Health.put_event(
             state.replication_slot,

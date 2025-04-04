@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "behueeshbwu80a"
+        "uid": "eehuj9ff7c9vkf"
       },
       "fieldConfig": {
         "defaults": {
@@ -105,7 +105,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "behueeshbwu80a"
+            "uid": "eehuj9ff7c9vkf"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(sequin_ingestion_latency_ms_bucket[5m])) by (le, replication_slot_id, instance))\n",
@@ -116,7 +116,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "behueeshbwu80a"
+            "uid": "eehuj9ff7c9vkf"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.99, sum(rate(sequin_ingestion_latency_ms_bucket[5m])) by (le, replication_slot_id, instance))\n",
@@ -128,7 +128,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "behueeshbwu80a"
+            "uid": "eehuj9ff7c9vkf"
           },
           "editorMode": "code",
           "expr": "histogram_quantile(0.5, sum(rate(sequin_ingestion_latency_ms_bucket[5m])) by (le, replication_slot_id, instance))\n",

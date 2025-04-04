@@ -82,7 +82,8 @@ defmodule Sequin.Application do
       {Cluster.Supervisor, [topologies]},
       {Task, fn -> enqueue_workers() end},
       # Start to serve requests, typically the last entry
-      SequinWeb.Endpoint
+      SequinWeb.Endpoint,
+      SequinWeb.MetricsEndpoint
     ]
   end
 

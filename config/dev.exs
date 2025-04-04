@@ -75,6 +75,9 @@ config :sequin, SequinWeb.Router,
   admin_user: "admin",
   admin_password: "admin"
 
+config :sequin, SequinWeb.MetricsEndpoint,
+  http: [ip: {127, 0, 0, 1}, port: System.get_env("SEQUIN_METRICS_PORT", "4001")]
+
 config :sequin,
   api_base_url: "http://localhost:4000",
   features: [

@@ -29,6 +29,7 @@ maybe_parse_int_env = fn key ->
 end
 
 server_port = String.to_integer(System.get_env("SERVER_PORT") || System.get_env("PORT") || "7376")
+metrics_port = String.to_integer(System.get_env("SEQUIN_METRICS_PORT") || "7377")
 server_host = System.get_env("SERVER_HOST") || System.get_env("PHX_HOST") || "localhost"
 
 if System.get_env("PORT") do
@@ -147,6 +148,12 @@ if config_env() == :prod and self_hosted do
     secret_key_base: secret_key_base,
     live_view: [
       long_poll_fallback_ms: String.to_integer(System.get_env("LONG_POLL_FALLBACK_MS", "3000"))
+    ]
+
+  config :sequin, SequinWeb.MetricsEndpoint,
+    http: [
+      ip: {0, 0, 0, 0, 0, 0, 0, 0},
+      port: metrics_port
     ]
 
   config :sequin, :features,

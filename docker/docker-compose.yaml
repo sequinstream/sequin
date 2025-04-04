@@ -68,8 +68,10 @@ services:
     depends_on:
       - sequin_prometheus
     volumes:
-      - ./grafana_datasource.yml:/etc/grafana/provisioning/datasource.yml
       - sequin_grafana_data:/var/lib/grafana
+      - ./grafana_datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./grafana_dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml
+      - ./dashboard.json:/etc/grafana/dashboards/dashboards/sequin.json
 
 volumes:
   sequin_postgres_data:

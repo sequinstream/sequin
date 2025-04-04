@@ -24,7 +24,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "eehuj9ff7c9vkf"
+        "uid": "sqpds"
       },
       "fieldConfig": {
         "defaults": {
@@ -120,7 +120,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "eehuj9ff7c9vkf"
+        "uid": "sqpds"
       },
       "fieldConfig": {
         "defaults": {
@@ -216,7 +216,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "eehuj9ff7c9vkf"
+        "uid": "sqpds"
       },
       "fieldConfig": {
         "defaults": {
@@ -310,7 +310,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "eehuj9ff7c9vkf"
+        "uid": "sqpds"
       },
       "fieldConfig": {
         "defaults": {
@@ -377,7 +377,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "eehuj9ff7c9vkf"
+        "uid": "sqpds"
       },
       "fieldConfig": {
         "defaults": {
@@ -459,7 +459,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "eehuj9ff7c9vkf"
+            "uid": "sqpds"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
@@ -480,7 +480,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "eehuj9ff7c9vkf"
+        "uid": "sqpds"
       },
       "fieldConfig": {
         "defaults": {
@@ -565,7 +565,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "eehuj9ff7c9vkf"
+            "uid": "sqpds"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
@@ -586,7 +586,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "eehuj9ff7c9vkf"
+        "uid": "sqpds"
       },
       "fieldConfig": {
         "defaults": {
@@ -682,7 +682,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "eehuj9ff7c9vkf"
+        "uid": "sqpds"
       },
       "fieldConfig": {
         "defaults": {
@@ -764,7 +764,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "eehuj9ff7c9vkf"
+            "uid": "sqpds"
           },
           "disableTextWrap": false,
           "editorMode": "builder",

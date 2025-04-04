@@ -69,9 +69,10 @@
           ],
           "icon": "gauge-max"
         },
-        "compare",
         "running-sequin",
         "connect-postgres",
+        "postgres-change-data-capture",
+        "compare",
         "performance",
         "plans"
       ]

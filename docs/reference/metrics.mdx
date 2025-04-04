@@ -21,9 +21,7 @@ Metrics are designed to answer:
 
 ### Delivery metrics
 - `sequin_delivery_latency_ms` (Histogram)
-  Measures latency between Sequin and a given consumer's successful acknowledgement.
-  Some consumers are able to batch messages, in which case this metric measures
-  the batch latency, rather than the per-message latency.
+  Measures time between Sequin beginning to deliver a message and a given sink's successful acknowledgement. Some sinks are able to batch messages, in which case this metric measures the batch latency, rather than the per-message latency.
 - `sequin_message_deliver_attempt_count` (Counter)
   Incremented for each message Sequin tries to deliver, before receiving a success or failure response.
 - `sequin_message_deliver_success_count` (Counter)

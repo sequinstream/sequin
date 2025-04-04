@@ -32,6 +32,17 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure Docker for GCP Artifact Registry
+        run: gcloud auth configure-docker ${{ secrets.GCP_ARTIFACT_URL }} --quiet
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -84,6 +95,8 @@ jobs:
           tags: |
             ${{ secrets.ECR_URL }}/${{ secrets.IMAGE_NAME }}:${{ steps.repo-info.outputs.sha }}
             ${{ secrets.ECR_URL }}/${{ secrets.IMAGE_NAME }}:latest
+            ${{ secrets.GCP_ARTIFACT_URL }}/${{ secrets.IMAGE_NAME }}:${{ steps.repo-info.outputs.sha }}
+            ${{ secrets.GCP_ARTIFACT_URL }}/${{ secrets.IMAGE_NAME }}:latest
           cache-from: type=registry,ref=${{ secrets.ECR_URL }}/${{ secrets.IMAGE_NAME }}:cache
           cache-to: type=registry,ref=${{ secrets.ECR_URL }}/${{ secrets.IMAGE_NAME }}:cache,mode=max,image-manifest=true,oci-mediatypes=true
           provenance: false

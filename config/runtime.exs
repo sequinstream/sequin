@@ -29,7 +29,7 @@ maybe_parse_int_env = fn key ->
 end
 
 server_port = String.to_integer(System.get_env("SERVER_PORT") || System.get_env("PORT") || "7376")
-metrics_port = String.to_integer(System.get_env("SEQUIN_METRICS_PORT") || "7377")
+metrics_port = String.to_integer(System.get_env("SEQUIN_METRICS_PORT") || "8376")
 server_host = System.get_env("SERVER_HOST") || System.get_env("PHX_HOST") || "localhost"
 
 if System.get_env("PORT") do
@@ -58,6 +58,7 @@ end
 # script that automatically sets the env var above.
 if System.get_env("PHX_SERVER") do
   config :sequin, SequinWeb.Endpoint, server: true
+  config :sequin, SequinWeb.MetricsEndpoint, server: true
 end
 
 # Deprecate ECTO_IPV6 in favor of PG_IPV6
@@ -211,6 +212,12 @@ if config_env() == :prod and not self_hosted do
       port: server_port
     ],
     secret_key_base: secret_key_base
+
+  config :sequin, SequinWeb.MetricsEndpoint,
+    http: [
+      ip: {0, 0, 0, 0, 0, 0, 0, 0},
+      port: 8376
+    ]
 
   config :sequin, :features, account_self_signup: :enabled
   config :sequin, :koala, public_key: "pk_ec2e6140b3d56f5eb1735350eb20e92b8002"

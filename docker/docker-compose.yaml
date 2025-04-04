@@ -54,9 +54,29 @@ services:
     volumes:
       - sequin_redis_data:/data
 
+  sequin_prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  sequin_grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - sequin_prometheus
+    volumes:
+      - sequin_grafana_data:/var/lib/grafana
+      - ./grafana_datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./grafana_dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml
+      - ./dashboard.json:/etc/grafana/dashboards/dashboards/sequin.json
+
 volumes:
   sequin_postgres_data:
   sequin_redis_data:
+  sequin_grafana_data:
 
 # Un-comment this to enable IPv6
 # You may need to run

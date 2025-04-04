@@ -4,4 +4,5 @@ global:
 scrape_configs:
   - job_name: 'sequin'
     static_configs:
-      - targets: ['sequin:7376']
+      # - targets: ['sequin:7376']
+      - targets: ['host.docker.internal:4000']

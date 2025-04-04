@@ -4,19 +4,13 @@ defmodule Sequin.Prometheus do
 
   @spec setup() :: :ok
   def setup do
-    Histogram.new(
-      name: :sequin_messages_ingested_latency_ms,
-      labels: [:consumer_id],
-      buckets: [100, 300, 500, 750, 1000],
-      duration_unit: :milliseconds,
-      help: "The latency of messages being ingested from the replication slot."
-    )
 
     Histogram.new(
       name: :sequin_ingestion_latency_ms,
       labels: [:replication_slot_id],
-      buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10_000, 100_000, 1_000_000],
-      duration_unit: :milliseconds,
+      buckets: [10, 30, 90, 270, 810, 2430, 7290, 21870, 65610, 196830, 590490, 1771470,
+                5314410, 15943230, 47829690, 143489070]
+      duration_unit: false,
       help: "The ingestion latency between Postgres and Sequin in milliseconds."
     )
 

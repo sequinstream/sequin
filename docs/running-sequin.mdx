@@ -71,9 +71,9 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
       - Password: `sequinpassword!`
 
     </Step>
-    <Step title="Create a sync">
+    <Step title="Create a sink">
       <Check>
-        You're in! Create a sync by following one of our quickstart guides:
+        You're in! Create a sink by following one of our quickstart guides:
       </Check>
 
       <CardGroup cols={2}>
@@ -108,6 +108,16 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
           Use Sequin's native streaming protocol.
         </Card>
       </CardGroup>
+    </Step>
+
+    <Step title="View metrics in Grafana">
+      Sequin exports  [various metrics](/reference/metrics) in Prometheus format.
+
+      Using the Grafana service from docker compose, you can view our [example dashboard here](http://localhost:3000/d/behuozial454wc/sequin). 
+
+      Sign in with Grafana's default credentials:
+      - Username: `admin`
+      - Password: `admin`
     </Step>
   </Steps>
 

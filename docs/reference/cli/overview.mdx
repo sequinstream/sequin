@@ -113,6 +113,10 @@ See the [sequin.yaml reference](/reference/sequin-yaml) for detailed configurati
 
 The `file` argument defaults to `sequin.yaml` if not specified.
 
+#### Flags
+
+- `--auto-approve` - Skip interactive approval for the `apply` command (useful for CI/CD)
+
 #### Example Workflow
 
 ```bash
@@ -127,6 +131,10 @@ sequin config plan
 
 # Apply changes if they look correct
 sequin config apply
+
+# Apply changes non-interactively (for CI/CD)
+# Not recommended for production environments
+sequin config apply --auto-approve
 ```
 
 #### Using with Contexts

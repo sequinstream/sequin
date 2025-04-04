@@ -18,6 +18,7 @@ type ConfigCommands struct {
 	yamlPath      string
 	changes       int
 	showSensitive bool
+	autoApprove   bool
 }
 
 // AddYamlCommands adds the 'plan' and 'apply' commands for YAML-based operations
@@ -39,6 +40,7 @@ func AddConfigCommands(app *fisk.Application, cfg *Config) {
 	apply.Arg("file", "Path to YAML file").
 		Default("sequin.yaml").
 		StringVar(&cmd.yamlPath)
+	apply.Flag("auto-approve", "Skip interactive approval. Not recommended for production environments.").BoolVar(&cmd.autoApprove)
 	apply.Action(cmd.applyAction)
 
 	// Export command
@@ -59,14 +61,17 @@ func (c *ConfigCommands) applyAction(_ *fisk.ParseContext) error {
 		return nil
 	}
 
-	// Ask for confirmation
-	fmt.Print("\nDo you want to apply these changes? Only 'yes' will be accepted to confirm: ")
-	var response string
-	fmt.Scanln(&response)
+	// Skip confirmation if auto-approve is set
+	if !c.autoApprove {
+		// Ask for confirmation
+		fmt.Print("\nDo you want to apply these changes? Only 'yes' will be accepted to confirm: ")
+		var response string
+		fmt.Scanln(&response)
 
-	if response != "yes" {
-		fmt.Println("Apply cancelled.")
-		return nil
+		if response != "yes" {
+			fmt.Println("Apply cancelled.")
+			return nil
+		}
 	}
 
 	// Call apply

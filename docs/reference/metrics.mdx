@@ -32,7 +32,7 @@ Metrics are designed to answer:
   Incremented for each message which was delivered but failed downstream.
 
 ### VM metrics
-The BEAM VM exposes a many metrics - the following are the ones we find most useful for monitoring Sequin.
+Sequin is implemented with Elixir. Elixir's VM (the BEAM) exposes many metrics. The following are the ones we find most useful for monitoring Sequin:
 - `erlang_vm_statistics_reductions_total` (Counter)
   Measures how many VM instructions are executed across all processes.
   Shows intensity of CPU-bound work.

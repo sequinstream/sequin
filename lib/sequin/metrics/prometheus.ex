@@ -20,9 +20,9 @@ defmodule Sequin.Prometheus do
 
     Histogram.new(
       name: :sequin_delivery_latency_ms,
-      labels: [:consumer_id],
+      labels: [:consumer_id, :success],
       buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10_000],
-      duration_unit: :milliseconds,
+      duration_unit: :false,
       help: "The delivery latency in milliseconds."
     )
 
@@ -247,9 +247,10 @@ defmodule Sequin.Prometheus do
     Histogram.observe([name: :sequin_internal_latency_ms, labels: [consumer_id]], latency_ms)
   end
 
-  @spec observe_delivery_latency(consumer_id :: String.t(), latency_ms :: number()) :: :ok
-  def observe_delivery_latency(consumer_id, latency_ms) do
-    Histogram.observe([name: :sequin_delivery_latency_ms, labels: [consumer_id]], latency_ms)
+  @spec observe_delivery_latency(consumer_id :: String.t(), success :: :ok | :error, latency_ms :: number()) :: :ok
+  def observe_delivery_latency(consumer_id, success, latency_ms) do
+    validate_success(success)
+    Histogram.observe([name: :sequin_delivery_latency_ms, labels: [consumer_id, success]], latency_ms)
   end
 
   @spec observe_post_delivery_latency(consumer_id :: String.t(), latency_ms :: number()) :: :ok
@@ -333,4 +334,7 @@ defmodule Sequin.Prometheus do
   def set_delivery_saturation(consumer_id, percent) do
     Gauge.set([name: :sequin_delivery_saturation_percent, labels: [consumer_id]], percent)
   end
+
+  defp validate_success(:ok), do: :ok
+  defp validate_success(:error), do: :ok
 end

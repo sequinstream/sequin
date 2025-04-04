@@ -177,15 +177,19 @@ defmodule Sequin.Runtime.SinkPipeline do
       {to_deliver, already_delivered} ->
         Prometheus.increment_message_deliver_attempt(context.consumer.id, length(to_deliver))
 
-        case pipeline_mod.handle_batch(batch_name, to_deliver, batch_info, context) do
-          {:ok, delivered, next_context} ->
+
+        #case pipeline_mod.handle_batch(batch_name, to_deliver, batch_info, context) do
+        case :timer.tc(pipeline_mod, :handle_batch, [batch_name, to_deliver, batch_info, context], :millisecond) do
+          {t, {:ok, delivered, next_context}} ->
             Prometheus.increment_message_deliver_success(context.consumer.id, length(delivered))
+            Prometheus.observe_delivery_latency(context.consumer_id, :ok, t)
 
             update_context(context, next_context)
             delivered ++ already_delivered
 
-          {:error, error} ->
+          {t, {:error, error}} ->
             Prometheus.increment_message_deliver_failure(context.consumer.id, length(to_deliver))
+            Prometheus.observe_delivery_latency(context.consumer_id, :error, t)
 
             failed =
               Enum.map(to_deliver, fn message ->

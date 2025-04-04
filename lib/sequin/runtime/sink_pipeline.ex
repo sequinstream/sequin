@@ -175,30 +175,36 @@ defmodule Sequin.Runtime.SinkPipeline do
         already_delivered
 
       {to_deliver, already_delivered} ->
-        Prometheus.increment_message_deliver_attempt(context.consumer.id, length(to_deliver))
-
-
-        #case pipeline_mod.handle_batch(batch_name, to_deliver, batch_info, context) do
-        case :timer.tc(pipeline_mod, :handle_batch, [batch_name, to_deliver, batch_info, context], :millisecond) do
-          {t, {:ok, delivered, next_context}} ->
-            Prometheus.increment_message_deliver_success(context.consumer.id, length(delivered))
-            Prometheus.observe_delivery_latency(context.consumer.id, :ok, t)
-
-            update_context(context, next_context)
-            delivered ++ already_delivered
-
-          {t, {:error, error}} ->
-            Prometheus.increment_message_deliver_failure(context.consumer.id, length(to_deliver))
-            Prometheus.observe_delivery_latency(context.consumer.id, :error, t)
-
-            failed =
-              Enum.map(to_deliver, fn message ->
-                Message.failed(message, error)
-              end)
-
-            failed ++ already_delivered
-        end
+        Prometheus.increment_message_deliver_attempt(context.consumer.id, context.consumer.name, length(to_deliver))
+        deliver_messages(pipeline_mod, batch_name, to_deliver, already_delivered, batch_info, context)
     end
+  end
+
+  defp deliver_messages(pipeline_mod, batch_name, to_deliver, already_delivered, batch_info, context) do
+    case :timer.tc(pipeline_mod, :handle_batch, [batch_name, to_deliver, batch_info, context], :millisecond) do
+      {t, {:ok, delivered, next_context}} ->
+        Prometheus.increment_message_deliver_success(context.consumer.id, context.consumer.name, length(delivered))
+        Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :ok, t)
+
+        update_context(context, next_context)
+        delivered ++ already_delivered
+
+      {t, {:error, error}} ->
+        Prometheus.increment_message_deliver_failure(context.consumer.id, context.consumer.name, length(to_deliver))
+        Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :error, t)
+
+        failed =
+          Enum.map(to_deliver, fn message ->
+            Message.failed(message, error)
+          end)
+
+        failed ++ already_delivered
+    end
+  rescue
+    error ->
+      Prometheus.increment_message_deliver_failure(context.consumer.id, context.consumer.name, length(to_deliver))
+
+      reraise error, __STACKTRACE__
   end
 
   # Give processes a way to modify their context, which allows them to use it as a k/v store

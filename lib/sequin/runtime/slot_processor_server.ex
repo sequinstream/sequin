@@ -855,7 +855,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   def handle_info(:observe_ingestion_latency, %State{} = state) do
     # Check if we have an outstanding heartbeat
     if not is_nil(state.current_heartbeat_id) and not is_nil(state.heartbeat_emitted_at) do
-      observe_ingestion_latency(state.replication_slot.id, state.heartbeat_emitted_at)
+      observe_ingestion_latency(state, state.heartbeat_emitted_at)
     end
 
     schedule_observe_ingestion_latency()
@@ -1157,7 +1157,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           )
 
           {:ok, emitted_at, _} = DateTime.from_iso8601(emitted_at)
-          observe_ingestion_latency(state.replication_slot.id, emitted_at)
+          observe_ingestion_latency(state, emitted_at)
 
           Health.put_event(
             state.replication_slot,
@@ -1385,7 +1385,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       case res do
         :ok ->
-          Prometheus.increment_messages_ingested(state.replication_slot.id, count)
+          Prometheus.increment_messages_ingested(state.replication_slot.id, state.replication_slot.slot_name, count)
 
           if state.test_pid do
             state.message_handler_module.flush_messages(state.message_handler_ctx)
@@ -1814,8 +1814,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     Process.send_after(self(), :observe_ingestion_latency, :timer.seconds(5))
   end
 
-  defp observe_ingestion_latency(replication_slot_id, ts) do
+  defp observe_ingestion_latency(%State{} = state, ts) do
     latency_ms = DateTime.diff(Sequin.utc_now(), ts, :millisecond)
-    Prometheus.observe_ingestion_latency(replication_slot_id, latency_ms)
+    Prometheus.observe_ingestion_latency(state.replication_slot.id, state.replication_slot.slot_name, latency_ms)
   end
 end

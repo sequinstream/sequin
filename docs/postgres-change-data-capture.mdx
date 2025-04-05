@@ -1,0 +1,115 @@
+---
+title: 'How to set up real-time Postgres CDC'
+icon: 'plug'
+sidebarTitle: 'Set up CDC sink'
+description: 'Learn how to capture and deliver every insert, update, and delete in your Postgres database to a message queue or stream with Sequin.'
+---
+
+This guide serves as an overview of how to use Sequin to create real-time Postgres change data capture (CDC) pipelines.
+
+By the end, you'll have a complete change data capture pipeline that streams database changes to a message queue or stream in real-time.
+
+<Tip>
+  We have more detailed guides for each sink destination
+</Tip>
+
+## Prerequisites
+
+If you're self-hosting Sequin, you'll need:
+
+1. [Sequin installed](/running-sequin)
+2. [A database connected](/connect-postgres)
+3. A sink destination (like SQS, Kafka, Redis, or HTTP)
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/connect-postgres)
+3. A sink destination (like SQS, Kafka, Redis, or HTTP)
+
+## CDC architecture overview
+
+Your change data capture pipeline will have three components:
+
+1. **Source table(s)**: The table(s) in Postgres that you want to capture changes from.
+2. **Filters and transformations**: Optional filters and transformations to apply to changes before they're delivered to your sink.
+3. **Destination sink**: The message queue, stream, or webhook endpoint that Sequin delivers changes to (e.g. SQS, Kafka, or HTTP endpoint)
+
+## Create a sink
+
+With your Postgres [database connected](/connect-postgres) to Sequin, create a sink. Navigate to the **Sinks** tab and click the **Create Sink** button. Select the sink destination you want to use.
+
+<Steps>
+  <Step title="Select the source">
+    Select the table you want to capture changes from.
+  </Step>
+
+  <Step title="Select the message type">
+    To capture inserts, updates, and deletes with more detail about the changes, leave the default [Changes](/reference/messages#change-messages) message type selected.
+
+    If you only need the latest version of each row and don't need to track deletes, select [Records](/reference/messages#insert-messages).
+  </Step>
+
+  <Step title="Add filters and transformations">
+    You can add [SQL filters](/reference/filters) to capture a subset of the source table.
+
+    You can also add [transformations](/reference/transforms) to modify the data before it's delivered to your sink.
+  </Step>
+
+  <Step title="Specify backfill">
+    To stream existing roes in your source table, specify a `backfill`.
+
+    You can backfill all the data in your source table or specify a custom subset of the table using a SQL filter.
+  </Step>
+
+  <Step title="Set message grouping">
+    Messages in the same group are delivered in order. By default, Sequin will [group messages by primary key](/reference/sinks/overview#grouping-and-ordering).
+
+    You can configure a different grouping strategy by selecting custom columns from the source table.
+  </Step>
+
+  <Step title="Configure sink-specific settings">
+    Configure sink-specific settings:
+
+    * [Azure EventHubs](/reference/sinks/azure-event-hubs) sinks: Specify your Azure EventHubs credentials and topic to deliver messages to.
+    * [Google Cloud Pub/Sub](/reference/sinks/gcp-pubsub) sinks: Specify your GCP Pub/Sub credentials and the topic to deliver messages to.
+    * [Kafka](/reference/sinks/kafka) sinks: Specify your Kafka credentials and topic to deliver messages to.
+    * [NATS](/reference/sinks/nats) sinks: Specify your NATS credentials and subject to deliver messages to.
+    * [RabbitMQ](/reference/sinks/rabbitmq) sinks: Specify your RabbitMQ credentials and queue to deliver messages to.
+    * [Redis](/reference/sinks/redis) sinks: Specify your Redis credentials and key to deliver messages to.
+    * [Sequin Stream](/reference/sinks/sequin-stream) sinks: Specify your Sequin Stream to deliver messages to.
+    * [SQS](/reference/sinks/sqs) sinks: Specify your SQS queue to deliver messages to.
+    * [Webhook](/reference/sinks/webhooks) sinks: Specify the HTTP endpoint to deliver messages to.
+  </Step>
+
+  <Step title="Start the sink">
+    Click **Create Sink** to create the sink and start streaming changes.
+  </Step>
+</Steps>
+
+## Verify your CDC pipeline is working
+
+If you specified a backfill, there should be messages in your stream ready for your system to process. To observe these messages, navigate to the sink overview page and click the "Messages" tab. You should see messages flowing to your sink.
+
+If you didn't specify a backfill, then create a change in your database (e.g. an insert, update, or delete) and verify that a message is delivered on the "Messages" tab.
+
+## Next steps
+
+You now have a complete change data capture pipeline that streams Postgres changes to a message queue or stream in real-time.
+
+If you are using Sequin Cloud, you are ready to scale. If you are self-hosting Sequin, see "[Deploy to production](/how-to/deploy-to-production)" for guidance on copying your local sink configuration to your production environment.
+
+<CardGroup>
+  <Card title="Messages reference" icon="message-dots" href="/reference/messages">
+    Learn about the difference between change and record messages.
+  </Card>
+  <Card title="Backfills" icon="rotate" href="/reference/backfills">
+    Learn how to backfill existing data from your source tables.
+  </Card>
+  <Card title="Filters" icon="filter" href="/reference/filters">
+    Learn about filters and how to use them to filter messages before they are sent to your destination.
+  </Card>
+  <Card title="Transforms" icon="pencil" href="/reference/transforms">
+    Learn how to transform messages before they are sent to your destination.
+  </Card>
+</CardGroup>

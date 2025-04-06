@@ -12,7 +12,6 @@ if self_hosted do
   config :sequin, Sequin.ConsoleLogger, drop_metadata_keys: [:mfa]
 else
   config :logger,
-    level: :info,
     default_handler: [formatter: {LoggerJSON.Formatters.Datadog, metadata: :all}]
 end
 

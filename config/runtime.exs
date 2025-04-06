@@ -39,6 +39,12 @@ if System.get_env("PHX_HOST") do
   Logger.warning("PHX_HOST environment variable is deprecated. Please use SERVER_HOST instead.")
 end
 
+if config_env() == :test do
+  config :logger, level: ConfigParser.log_level(env_vars, :warning)
+else
+  config :logger, level: ConfigParser.log_level(env_vars, :info)
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
@@ -119,8 +125,6 @@ if config_env() == :prod and self_hosted do
       "0" -> false
       other -> raise("Invalid SERVER_CHECK_ORIGIN: #{other}, must be true or false or 1 or 0")
     end
-
-  config :logger, level: ConfigParser.log_level(env_vars)
 
   config :sequin, Sequin.Posthog,
     req_opts: [base_url: "https://us.i.posthog.com"],

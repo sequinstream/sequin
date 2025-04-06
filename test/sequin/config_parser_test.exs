@@ -55,31 +55,35 @@ defmodule Sequin.ConfigParserTest do
     end
   end
 
-  describe "log_level/1" do
-    test "returns default :info when LOG_LEVEL is not set" do
-      assert ConfigParser.log_level(%{}) == :info
+  describe "log_level/2" do
+    test "returns default provided level when LOG_LEVEL is not set" do
+      assert ConfigParser.log_level(%{}, :info) == :info
+      assert ConfigParser.log_level(%{}, :debug) == :debug
+      assert ConfigParser.log_level(%{}, :warning) == :warning
     end
 
     test "returns atom level when valid LOG_LEVEL is set" do
       for level <- ["error", "warning", "notice", "info", "debug"] do
         env = %{"LOG_LEVEL" => level}
         expected_atom = String.to_atom(level)
-        assert ConfigParser.log_level(env) == expected_atom
+        assert ConfigParser.log_level(env, :info) == expected_atom
       end
     end
 
-    test "returns uppercase variants" do
+    test "returns lowercase atom variants" do
       env = %{"LOG_LEVEL" => "ERROR"}
-      assert ConfigParser.log_level(env) == :error
+      assert ConfigParser.log_level(env, :info) == :error
 
       env = %{"LOG_LEVEL" => "Debug"}
-      assert ConfigParser.log_level(env) == :debug
+      assert ConfigParser.log_level(env, :info) == :debug
     end
 
     @tag capture_log: true
-    test "returns default :info for invalid LOG_LEVEL" do
+    test "returns provided default level for invalid LOG_LEVEL" do
       env = %{"LOG_LEVEL" => "invalid"}
-      assert ConfigParser.log_level(env) == :info
+      assert ConfigParser.log_level(env, :info) == :info
+      assert ConfigParser.log_level(env, :debug) == :debug
+      assert ConfigParser.log_level(env, :warning) == :warning
     end
   end
 

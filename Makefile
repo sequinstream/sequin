@@ -36,6 +36,13 @@ signoff: ## Run the signoff script
 signoff-dirty: ## Run the signoff script with --dirty flag
 	@./scripts/signoff.sh --dirty
 
+signoff-pr: ## Run signoff on a PR by providing PR number: make signoff-pr pr=1234
+	@if [ -z "$(pr)" ]; then \
+		echo "Usage: make signoff-pr pr=<pr-number>"; \
+	else \
+		./scripts/signoff_pr.sh $(pr); \
+	fi
+
 signoff-stack: ## Run the signoff-stack script
 	@./scripts/signoff_stack.sh
 

@@ -12,6 +12,10 @@ Metrics are designed to answer:
 - Are sinks keeping up with Sequin? (Delivery metrics)
 - Is the Sequin service experiencing CPU or memory pressure? (VM metrics)
 
+<Frame>
+  <img style={{maxWidth: '600px'}} src="/images/reference/grafana-dashboard.png" alt="Sequin Grafana dashboard" />
+</Frame>
+
 ## Metrics reference
 
 ### Ingestion metrics
@@ -66,3 +70,7 @@ Sequin is implemented with Elixir. Elixir's VM (the BEAM) exposes many metrics. 
 - `erlang_vm_memory_bytes_total` (Gauge)
 
   Memory usage of the entire VM.
+
+## Grafana dashboard
+
+Sequin provides a [Grafana dashboard template](https://github.com/sequinstream/sequin/blob/main/docker/dashboard.json) for monitoring Sequin. This can be imported directly into your Grafana instance for use, or referenced as a guide for building your own.

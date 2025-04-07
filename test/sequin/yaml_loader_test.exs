@@ -1280,6 +1280,7 @@ defmodule Sequin.YamlLoaderTest do
                    token: "other"
                """)
     end
+
     test "idempotency" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
@@ -1299,6 +1300,5 @@ defmodule Sequin.YamlLoaderTest do
                    token: "secret"
                """)
     end
-
   end
 end

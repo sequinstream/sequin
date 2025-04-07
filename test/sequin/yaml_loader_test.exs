@@ -4,7 +4,6 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
   alias Sequin.ApiTokens
-  alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
@@ -1281,5 +1280,25 @@ defmodule Sequin.YamlLoaderTest do
                    token: "other"
                """)
     end
+    test "idempotency" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+               api_tokens:
+                 - name: "mytoken"
+                   token: "secret"
+               """)
+
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+               api_tokens:
+                 - name: "mytoken"
+                   token: "secret"
+               """)
+    end
+
   end
 end

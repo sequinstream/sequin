@@ -23,6 +23,10 @@ account:
   name: "account-name"  # Required for self-hosted deployments
 ```
 
+<Note>
+  Creating accounts is only supported on self-hosted Sequin.
+</Note>
+
 ### User configuration
 
 ```yaml
@@ -30,6 +34,20 @@ users:
   - email: "user@example.com"    # Required
     password: "userpassword123"  # Required
 ```
+
+### API token configuration
+
+You can create API tokens for your account. This is intended for use in development or CI/CD workflows:
+
+```yaml
+api_tokens:
+  - name: "mytoken"
+    token: "secret"
+```
+
+<Note>
+  Creating API tokens is only supported on self-hosted Sequin.
+</Note>
 
 ### Database configuration
 

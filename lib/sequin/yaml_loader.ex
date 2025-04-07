@@ -2,6 +2,7 @@ defmodule Sequin.YamlLoader do
   @moduledoc false
   alias Sequin.Accounts
   alias Sequin.Accounts.Account
+  alias Sequin.ApiTokens
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.WebhookSiteGenerator
@@ -115,6 +116,7 @@ defmodule Sequin.YamlLoader do
   defp apply_config(account_id, config, opts) do
     with {:ok, account} <- find_or_create_account(account_id, config),
          {:ok, _users} <- find_or_create_users(account, config),
+         {:ok, _tokens} <- find_or_create_tokens(account, config),
          {:ok, _databases} <- upsert_databases(account.id, config, opts),
          databases = Databases.list_dbs_for_account(account.id),
          {:ok, _sequences} <- find_or_create_sequences(account.id, config, databases),
@@ -226,6 +228,50 @@ defmodule Sequin.YamlLoader do
     }
 
     Accounts.register_user(:identity, user_params, account)
+  end
+
+  ############
+  ## Tokens ##
+  ############
+
+  defp find_or_create_tokens(account, %{"api_tokens" => tokens}) do
+    if self_hosted?() do
+      do_find_or_create_tokens(account, tokens)
+    else
+      {:error, Error.unauthorized(message: "api token creation is not supported in Sequin Cloud")}
+    end
+  end
+
+  defp find_or_create_tokens(_, _), do: {:ok, []}
+
+  defp do_find_or_create_tokens(account, tokens) do
+    Enum.reduce_while(tokens, {:ok, []}, fn tok, {:ok, acc} ->
+      case find_or_create_token(account, tok) do
+        {:ok, token} -> {:cont, {:ok, [token | acc]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp find_or_create_token(account, %{"name" => token_name} = params) do
+    case ApiTokens.get_token_by(account_id: account.id, name: token_name) do
+      {:ok, t} ->
+        if t.token == params["token"] do
+          {:ok, t}
+        else
+          {:error, Error.bad_request(message: "Cannot modify existing token: #{token_name}")}
+        end
+
+      {:error, _} ->
+        ApiTokens.create_for_account(account.id, params)
+    end
+  end
+
+  defp find_or_create_token(_, token) do
+    {:error,
+     Error.bad_request(
+       message: "Error creating token: `name` required - received params: #{inspect(token, pretty: true)}"
+     )}
   end
 
   ###############

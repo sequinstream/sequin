@@ -29,12 +29,19 @@ defmodule Sequin.ApiTokens.ApiToken do
     |> unique_constraint([:name, :account_id], name: "api_tokens_account_id_name_index")
   end
 
-  def build_token(account_id) do
-    # Base64 to strip unwanted characters (makes copy/pasting easier in a command-line, as you can just
-    # double-click the token string - + and / break that)
-    token = @rand_bytes |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
+  def build_token(account_id), do: build_token(account_id, gen_token())
+
+  def build_token(account_id, nil), do: build_token(account_id, gen_token())
+
+  def build_token(account_id, token) do
     hashed_token = :crypto.hash(@hash_algo, token)
     %ApiToken{account_id: account_id, token: token, hashed_token: hashed_token}
+  end
+
+  defp gen_token do
+    # Base64 to strip unwanted characters (makes copy/pasting easier in a command-line, as you can just
+    # double-click the token string - + and / break that)
+    @rand_bytes |> :crypto.strong_rand_bytes() |> Base.url_encode64(padding: false)
   end
 
   def where_token(query \\ base_query(), token) do

@@ -3,6 +3,8 @@ defmodule Sequin.YamlLoaderTest do
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
+  alias Sequin.ApiTokens
+  alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
@@ -1240,6 +1242,44 @@ defmodule Sequin.YamlLoaderTest do
 
       # Verify we attempted at least once
       assert_received :test_connect_called
+    end
+  end
+
+  describe "provisions api token" do
+    test "creates local endpoint with options" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+               api_tokens:
+                 - name: "mytoken"
+                   token: "secret"
+               """)
+
+      assert {:ok, token} = ApiTokens.find_by_token("secret")
+      acct = Repo.one(Account, id: token.account_id)
+      assert %Account{name: "Configured by Sequin"} = acct
+      assert token.name == "mytoken"
+    end
+
+    test "cannot modify tokens" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+               api_tokens:
+                 - name: "mytoken"
+                   token: "secret"
+               """)
+
+      assert {:error, %BadRequestError{}} =
+               YamlLoader.apply_from_yml("""
+               account:
+                 name: "Configured by Sequin"
+               api_tokens:
+                 - name: "mytoken"
+                   token: "other"
+               """)
     end
   end
 end

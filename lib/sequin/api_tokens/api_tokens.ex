@@ -17,8 +17,11 @@ defmodule Sequin.ApiTokens do
   end
 
   def create_for_account(account_id, attrs) do
+    attrs = Map.new(attrs)
+    {token, attrs} = Map.pop(attrs, "token")
+
     account_id
-    |> ApiToken.build_token()
+    |> ApiToken.build_token(token)
     |> ApiToken.create_changeset(attrs)
     |> Repo.insert()
   end

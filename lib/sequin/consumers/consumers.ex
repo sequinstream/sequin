@@ -380,6 +380,7 @@ defmodule Sequin.Consumers do
   def find_sink_consumer(account_id, params \\ []) do
     params
     |> Enum.reduce(SinkConsumer.where_account_id(account_id), fn
+      {:id, id}, query -> SinkConsumer.where_id(query, id)
       {:name, name}, query -> SinkConsumer.where_name(query, name)
       {:id_or_name, id_or_name}, query -> SinkConsumer.where_id_or_name(query, id_or_name)
       {:type, type}, query -> SinkConsumer.where_type(query, type)

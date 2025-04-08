@@ -23,11 +23,7 @@ cat <"$REAL_CONFIG/$REAL_COMPOSE_YML" \
   | yq '.services.sequin.image = strenv(IMAGE_PREFIX) + ":" + strenv(IMAGE_VERSION)' \
   | cat >"$TEST_CONFIG/$TEST_COMPOSE_YML"
 
-cp "$REAL_CONFIG/playground.yml" "$TEST_CONFIG/playground.yml"
-cp -r "$REAL_CONFIG/postgres-init" "$TEST_CONFIG"
-
-
-
+cp -r "$REAL_CONFIG"/* "$TEST_CONFIG"
 
 cd "$TEST_CONFIG"
 

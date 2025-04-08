@@ -9,20 +9,20 @@ defmodule Sequin.ConfigParser do
     |> put_redis_opts_ipv6(env)
   end
 
-  def log_level(env) do
+  @valid_log_levels [:error, :warning, :notice, :info, :debug]
+  def log_level(env, default_level) when default_level in @valid_log_levels do
     env
-    |> Map.get("LOG_LEVEL", "info")
+    |> Map.get("LOG_LEVEL", to_string(default_level))
     |> String.downcase()
     |> String.to_atom()
-    |> validate_log_level()
+    |> validate_log_level(default_level)
   end
 
-  @valid_log_levels [:error, :warning, :notice, :info, :debug]
-  defp validate_log_level(level) when level in @valid_log_levels, do: level
+  defp validate_log_level(level, _default_level) when level in @valid_log_levels, do: level
 
-  defp validate_log_level(level) do
-    Logger.warning("[ConfigParser] Invalid log level: #{inspect(level)}. Using default :info level.")
-    :info
+  defp validate_log_level(level, default_level) do
+    Logger.warning("[ConfigParser] Invalid log level: #{inspect(level)}. Using default #{inspect(default_level)} level.")
+    default_level
   end
 
   defp put_redis_url(opts, %{"REDIS_URL" => url}) do

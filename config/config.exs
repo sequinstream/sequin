@@ -14,7 +14,6 @@ config :esbuild, :version, "0.17.11"
 
 # Configures Elixir's Logger
 config :logger, :console,
-  level: :info,
   format: {Sequin.ConsoleLogger, :format},
   metadata: :all
 

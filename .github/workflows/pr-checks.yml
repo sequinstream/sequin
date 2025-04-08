@@ -1,4 +1,3 @@
-
 name: PR Checks
 
 env:
@@ -18,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # this workflow runs for external forks only, org members have `make signoff`
-    if: ${{ env.BASE_REPO != env.PR_HEAD_REPO }}
+    if: ${{ github.event.pull_request.base.repo.clone_url != github.event.pull_request.head.repo.clone_url }}
 
     services:
       postgres:

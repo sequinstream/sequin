@@ -38,6 +38,12 @@ defmodule Sequin.Replication do
     |> Repo.all()
   end
 
+  def list_pg_replications_for_database(postgres_database_id) do
+    postgres_database_id
+    |> PostgresReplicationSlot.where_database()
+    |> Repo.all()
+  end
+
   def get_pg_replication(id) do
     case Repo.get(PostgresReplicationSlot, id, preload: :postgres_database) do
       nil -> {:error, Error.not_found(entity: :pg_replication, params: %{id: id})}
@@ -54,6 +60,24 @@ defmodule Sequin.Replication do
 
   def get_pg_replication_for_account(account_id, id) do
     case Repo.get_by(PostgresReplicationSlot, id: id, account_id: account_id) do
+      nil -> {:error, Error.not_found(entity: :pg_replication)}
+      pg_replication -> {:ok, pg_replication}
+    end
+  end
+
+  def get_pg_replication_for_database(postgres_database_id, id) do
+    case Repo.get_by(PostgresReplicationSlot, id: id, postgres_database_id: postgres_database_id) do
+      nil -> {:error, Error.not_found(entity: :pg_replication)}
+      pg_replication -> {:ok, pg_replication}
+    end
+  end
+
+  def get_pg_replication_for_database_by_id_or_name(postgres_database_id, id_or_name) do
+    postgres_database_id
+    |> PostgresReplicationSlot.where_database()
+    |> PostgresReplicationSlot.where_id_or_name(id_or_name)
+    |> Repo.one()
+    |> case do
       nil -> {:error, Error.not_found(entity: :pg_replication)}
       pg_replication -> {:ok, pg_replication}
     end

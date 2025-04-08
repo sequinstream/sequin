@@ -79,6 +79,28 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     from([postgres_replication: pgr] in query, where: pgr.account_id == ^account_id)
   end
 
+  @spec where_database(Queryable.t(), String.t()) :: Queryable.t()
+  def where_database(query \\ base_query(), postgres_database_id) do
+    from([postgres_replication: pgr] in query, where: pgr.postgres_database_id == ^postgres_database_id)
+  end
+
+  @spec where_id_or_name(Queryable.t(), String.t()) :: Queryable.t()
+  def where_id_or_name(query \\ base_query(), id_or_name) do
+    if Sequin.String.is_uuid?(id_or_name) do
+      where_id(query, id_or_name)
+    else
+      where_name(query, id_or_name)
+    end
+  end
+
+  def where_name(query \\ base_query(), name) do
+    from([postgres_replication: pgr] in query, where: pgr.slot_name == ^name)
+  end
+
+  def where_id(query \\ base_query(), id) do
+    from([postgres_replication: pgr] in query, where: pgr.id == ^id)
+  end
+
   @spec where_status(Queryable.t(), atom()) :: Queryable.t()
   def where_status(query \\ base_query(), status) do
     from([postgres_replication: pgr] in query, where: pgr.status == ^status)

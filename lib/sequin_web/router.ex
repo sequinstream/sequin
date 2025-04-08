@@ -141,10 +141,16 @@ defmodule SequinWeb.Router do
   scope "/api", SequinWeb do
     pipe_through(:api)
 
-    resources("/databases", DatabaseController, except: [:new, :edit], param: "id_or_name")
     resources("/api_keys", ApiKeyController, only: [:index, :create, :delete])
 
-    resources("/postgres_replications", PostgresReplicationController, except: [:new, :edit])
+    resources("/databases", DatabaseController, except: [:new, :edit], param: "id_or_name")
+    resources("/databases/:db_id_or_name/replication_slots", PostgresReplicationController, except: [:new, :edit])
+    resources("/consumers/:consumer_id_or_name/backfills", BackfillController, except: [:new, :edit])
+    # resources("/sinks", SinkConsumerController, except: [:new, :edit])
+    # resources("/destinations/http", HttpEndpointController, except: [:new, :edit])
+    # resources("/change_retentions", WalPipelineController, except: [:new, :edit])
+    # resources("/backfills", BackfillController, except: [:new, :edit])
+
     resources("/local_tunnels", LocalTunnelController, only: [:index])
 
     post("/databases/:id_or_name/test_connection", DatabaseController, :test_connection)

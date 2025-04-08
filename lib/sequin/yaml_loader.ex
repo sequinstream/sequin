@@ -5,7 +5,6 @@ defmodule Sequin.YamlLoader do
   alias Sequin.ApiTokens
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -13,6 +12,7 @@ defmodule Sequin.YamlLoader do
   alias Sequin.Error.NotFoundError
   alias Sequin.Replication
   alias Sequin.Repo
+  alias Sequin.Transforms
 
   require Logger
 
@@ -740,9 +740,14 @@ defmodule Sequin.YamlLoader do
         {:ok, http_endpoint} ->
           {:cont, {:ok, [http_endpoint | acc]}}
 
-        {:error, error} ->
+        {:error, error} when is_exception(error) ->
           {:halt,
            {:error, Error.bad_request(message: "Invalid HTTP endpoint configuration: #{Exception.message(error)}")}}
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          {:halt,
+           {:error,
+            Error.bad_request(message: "Invalid HTTP endpoint configuration: #{inspect(changeset, pretty: true)}")}}
       end
     end)
   end
@@ -763,107 +768,41 @@ defmodule Sequin.YamlLoader do
   end
 
   defp create_http_endpoint(account_id, attrs) do
-    with {:ok, endpoint_params} <- parse_http_endpoint_attrs(attrs),
+    with {:ok, endpoint_params} <- Transforms.from_external_http_endpoint(attrs),
          {:ok, endpoint} <- Sequin.Consumers.create_http_endpoint(account_id, endpoint_params) do
       Logger.info("Created HTTP endpoint: #{inspect(endpoint, pretty: true)}")
       {:ok, endpoint}
     else
-      {:error, error} ->
+      {:error, error} when is_exception(error) ->
         {:error,
-         Error.bad_request(message: "Error creating HTTP endpoint '#{attrs["name"]}': #{Exception.message(error)}")}
+         Error.bad_request(
+           message: "Error creating HTTP endpoint '#{attrs["name"]}': #{Exception.message(error)}\n#{@http_endpoint_docs}"
+         )}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error,
+         Error.bad_request(
+           message:
+             "Error creating HTTP endpoint '#{attrs["name"]}': #{inspect(changeset, pretty: true)}\n#{@http_endpoint_docs}"
+         )}
     end
   end
 
   defp update_http_endpoint(endpoint, attrs) do
-    with {:ok, endpoint_params} <- parse_http_endpoint_attrs(attrs),
+    with {:ok, endpoint_params} <- Transforms.from_external_http_endpoint(attrs),
          {:ok, endpoint} <- Sequin.Consumers.update_http_endpoint(endpoint, endpoint_params) do
       Logger.info("Updated HTTP endpoint: #{inspect(endpoint, pretty: true)}")
       {:ok, endpoint}
     else
       {:error, error} ->
         {:error,
-         Error.bad_request(message: "Error updating HTTP endpoint '#{endpoint.name}': #{Exception.message(error)}")}
-    end
-  end
+         Error.bad_request(
+           message: """
+           Error updating HTTP endpoint '#{endpoint.name}': #{Exception.message(error)}
 
-  defp parse_http_endpoint_attrs(%{"name" => name} = attrs) do
-    case attrs do
-      # Webhook.site endpoint
-      %{"webhook.site" => t} when t in [true, "true"] ->
-        {:ok,
-         %{
-           name: name,
-           scheme: :https,
-           host: "webhook.site",
-           path: "/" <> generate_webhook_site_id()
-         }}
-
-      # Local endpoint
-      %{"local" => "true"} = local_attrs ->
-        with {:ok, headers} <- parse_headers(local_attrs["headers"]),
-             {:ok, encrypted_headers} <- parse_headers(local_attrs["encrypted_headers"]) do
-          {:ok,
-           %{
-             name: name,
-             use_local_tunnel: true,
-             path: local_attrs["path"],
-             headers: headers,
-             encrypted_headers: encrypted_headers
-           }}
-        end
-
-      # External endpoint with URL
-      %{"url" => url} = external_attrs ->
-        uri = URI.parse(url)
-
-        with {:ok, headers} <- parse_headers(external_attrs["headers"]),
-             {:ok, encrypted_headers} <- parse_headers(external_attrs["encrypted_headers"]) do
-          {:ok,
-           %{
-             name: name,
-             scheme: String.to_existing_atom(uri.scheme),
-             host: uri.host,
-             port: uri.port,
-             path: uri.path,
-             query: uri.query,
-             fragment: uri.fragment,
-             headers: headers,
-             encrypted_headers: encrypted_headers
-           }}
-        end
-
-      _ ->
-        {:error, Error.validation(summary: "Invalid HTTP endpoint configuration for '#{name}'\n\n#{@http_endpoint_docs}")}
-    end
-  end
-
-  # Helper functions
-
-  defp parse_headers(nil), do: {:ok, %{}}
-
-  defp parse_headers(headers) when headers == %{} do
-    {:ok, %{}}
-  end
-
-  defp parse_headers(headers) when is_list(headers) do
-    {:ok, Map.new(headers, fn %{"key" => key, "value" => value} -> {key, value} end)}
-  end
-
-  defp parse_headers(headers) when is_binary(headers) do
-    {:error, Error.validation(summary: "Invalid headers configuration. Must be a list of key-value pairs.")}
-  end
-
-  defp generate_webhook_site_id do
-    if env() == :test do
-      UUID.uuid4()
-    else
-      case WebhookSiteGenerator.generate() do
-        {:ok, uuid} ->
-          uuid
-
-        {:error, reason} ->
-          raise "Failed to create webhook.site endpoint: #{reason}"
-      end
+           #{@http_endpoint_docs}
+           """
+         )}
     end
   end
 

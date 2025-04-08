@@ -937,6 +937,7 @@ defmodule Sequin.Consumers do
     |> Enum.reduce(HttpEndpoint.where_account_id(account_id), fn
       {:id, id}, query -> HttpEndpoint.where_id(query, id)
       {:name, name}, query -> HttpEndpoint.where_name(query, name)
+      {:id_or_name, id_or_name}, query -> HttpEndpoint.where_id_or_name(query, id_or_name)
     end)
     |> Repo.one()
     |> case do

@@ -18,7 +18,10 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.Transform
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabaseTable
+  alias Sequin.Databases.Sequence
   alias Sequin.Error
+  alias Sequin.Error.NotFoundError
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
 
@@ -122,6 +125,7 @@ defmodule Sequin.Transforms do
     filters = consumer.sequence_filter.column_filters || []
 
     %{
+      id: consumer.id,
       name: consumer.name,
       database: consumer.sequence.postgres_database.name,
       status: consumer.status,
@@ -140,6 +144,8 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%HttpPushSink{} = sink, _show_sensitive) do
+    sink = SinkConsumer.preload_http_endpoint(sink)
+
     %{
       type: "webhook",
       http_endpoint: sink.http_endpoint.name,
@@ -406,6 +412,319 @@ defmodule Sequin.Transforms do
       end
     end
   end
+
+  def from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints) do
+    # Start with base params that are always included if present
+    base_params = %{
+      name: consumer_attrs["name"],
+      status: parse_status(consumer_attrs["status"]),
+      batch_size: Map.get(consumer_attrs, "batch_size", 1)
+    }
+
+    base_params = Sequin.Map.put_if_present(base_params, :timestamp_format, consumer_attrs["timestamp_format"])
+
+    # Handle table and database related params if present
+    params =
+      if table_ref = consumer_attrs["table"] do
+        {schema, table_name} = parse_table_reference(table_ref)
+        databases = Repo.preload(databases, [:sequences, :replication_slot])
+
+        with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
+             {:ok, sequence} <- find_sequence_by_name(databases, consumer_attrs["database"], consumer_attrs["table"]) do
+          table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
+
+          {:ok,
+           base_params
+           |> Map.put(:sequence_id, sequence.id)
+           |> Map.put(:replication_slot_id, database.replication_slot.id)
+           |> Map.put(:sequence_filter, %{
+             actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
+             group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
+             column_filters: column_filters(consumer_attrs["filters"], table)
+           })}
+        end
+      else
+        {:ok, base_params}
+      end
+
+    # Handle sink if present
+    params =
+      case params do
+        {:ok, current_params} ->
+          if sink_attrs = consumer_attrs["destination"] do
+            case parse_sink(sink_attrs, %{http_endpoints: http_endpoints}) do
+              {:ok, sink} -> {:ok, Map.put(current_params, :sink, sink)}
+              {:error, error} -> {:error, error}
+            end
+          else
+            {:ok, current_params}
+          end
+
+        error ->
+          error
+      end
+
+    # Handle transform if present
+    case params do
+      {:ok, current_params} ->
+        if transform_name = consumer_attrs["transform"] do
+          case parse_transform_id(account_id, transform_name) do
+            {:ok, transform_id} -> {:ok, Map.put(current_params, :transform_id, transform_id)}
+            {:error, error} -> {:error, error}
+          end
+        else
+          {:ok, current_params}
+        end
+
+      error ->
+        error
+    end
+  end
+
+  defp parse_sink(nil, _resources), do: {:error, Error.validation(summary: "`sink` is required on sink consumers.")}
+
+  defp parse_sink(%{"type" => "sequin_stream"}, _resources) do
+    {:ok, %{type: :sequin_stream}}
+  end
+
+  defp parse_sink(%{"type" => "webhook"} = attrs, resources) do
+    http_endpoints = resources.http_endpoints
+
+    with {:ok, http_endpoint} <- find_http_endpoint_by_name(http_endpoints, attrs["http_endpoint"]) do
+      {:ok,
+       %{
+         type: :http_push,
+         http_endpoint_id: http_endpoint.id,
+         http_endpoint_path: attrs["http_endpoint_path"]
+       }}
+    end
+  end
+
+  defp parse_sink(%{"type" => "kafka"} = attrs, _resources) do
+    with {:ok, sasl_mechanism} <- parse_sasl_mechanism(attrs["sasl_mechanism"]) do
+      {:ok,
+       %{
+         type: :kafka,
+         hosts: attrs["hosts"],
+         topic: attrs["topic"],
+         tls: attrs["tls"] || false,
+         username: attrs["username"],
+         password: attrs["password"],
+         sasl_mechanism: sasl_mechanism
+       }}
+    end
+  end
+
+  defp parse_sink(%{"type" => "sqs"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :sqs,
+       queue_url: attrs["queue_url"],
+       region: attrs["region"],
+       access_key_id: attrs["access_key_id"],
+       secret_access_key: attrs["secret_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "rabbitmq"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :rabbitmq,
+       host: attrs["host"],
+       port: attrs["port"],
+       username: attrs["username"],
+       password: attrs["password"],
+       virtual_host: attrs["virtual_host"] || "/",
+       tls: attrs["tls"] || false,
+       exchange: attrs["exchange"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "redis"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :redis,
+       host: attrs["host"],
+       port: attrs["port"],
+       stream_key: attrs["stream_key"],
+       database: attrs["database"] || 0,
+       tls: attrs["tls"] || false,
+       username: attrs["username"],
+       password: attrs["password"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "azure_event_hub"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :azure_event_hub,
+       namespace: attrs["namespace"],
+       event_hub_name: attrs["event_hub_name"],
+       shared_access_key_name: attrs["shared_access_key_name"],
+       shared_access_key: attrs["shared_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "nats"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :nats,
+       host: attrs["host"],
+       port: attrs["port"],
+       username: attrs["username"],
+       password: attrs["password"],
+       jwt: attrs["jwt"],
+       nkey_seed: attrs["nkey_seed"],
+       tls: attrs["tls"] || false
+     }}
+  end
+
+  defp parse_sink(%{"type" => "gcp_pubsub"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :gcp_pubsub,
+       project_id: attrs["project_id"],
+       topic_id: attrs["topic_id"],
+       credentials: attrs["credentials"],
+       use_emulator: attrs["use_emulator"] || false,
+       emulator_base_url: attrs["emulator_base_url"]
+     }}
+  end
+
+  # Helper to parse table reference into schema and name
+  defp parse_table_reference(table_ref) do
+    case String.split(table_ref, ".", parts: 2) do
+      [table_name] -> {"public", table_name}
+      [schema, table_name] -> {schema, table_name}
+    end
+  end
+
+  defp find_database_by_name(name, databases) do
+    case Enum.find(databases, &(&1.name == name)) do
+      nil -> {:error, Error.not_found(entity: :database, params: %{name: name})}
+      database -> {:ok, database}
+    end
+  end
+
+  defp find_http_endpoint_by_name(http_endpoints, name) do
+    case Enum.find(http_endpoints, &(&1.name == name)) do
+      nil -> {:error, Error.not_found(entity: :http_endpoint, params: %{name: name})}
+      http_endpoint -> {:ok, http_endpoint}
+    end
+  end
+
+  defp column_filters(nil, _table), do: []
+
+  defp column_filters(filters, table) when is_list(filters) do
+    Enum.map(filters, &parse_column_filter(&1, table))
+  end
+
+  defp parse_transform_id(_account_id, nil), do: {:ok, nil}
+  defp parse_transform_id(_account_id, "none"), do: {:ok, nil}
+
+  defp parse_transform_id(account_id, transform_name) do
+    case Consumers.find_transform(account_id, name: transform_name) do
+      {:ok, transform} -> {:ok, transform.id}
+      {:error, %NotFoundError{}} -> {:error, Error.validation(summary: "Transform '#{transform_name}' not found.")}
+    end
+  end
+
+  def parse_column_filter(%{"column_name" => column_name} = filter, table) do
+    # Find the column by name
+    column = Enum.find(table.columns, &(&1.name == column_name))
+    unless column, do: raise("Column '#{column_name}' not found in table '#{table.name}'")
+
+    is_jsonb = filter["field_path"] != nil
+    value_type = determine_value_type(filter, column)
+
+    Sequin.Consumers.SequenceFilter.ColumnFilter.from_external(%{
+      "columnAttnum" => column.attnum,
+      "operator" => filter["operator"],
+      "valueType" => value_type,
+      "value" => filter["comparison_value"],
+      "isJsonb" => is_jsonb,
+      "jsonbPath" => filter["field_path"]
+    })
+  end
+
+  defp determine_value_type(%{"field_type" => explicit_type}, _column) when not is_nil(explicit_type) do
+    case String.downcase(explicit_type) do
+      "string" -> :string
+      "cistring" -> :cistring
+      "number" -> :number
+      "boolean" -> :boolean
+      "datetime" -> :datetime
+      "list" -> :list
+      invalid_type -> raise "Invalid field_type: #{invalid_type}"
+    end
+  end
+
+  defp determine_value_type(%{"operator" => operator}, _column) when operator in ["is null", "is not null", "not null"] do
+    :null
+  end
+
+  defp determine_value_type(%{"operator" => operator}, _column) when operator in ["in", "not in"] do
+    :list
+  end
+
+  defp determine_value_type(_filter, column) do
+    case column.type do
+      "character varying" -> :string
+      "text" -> :string
+      "citext" -> :cistring
+      "integer" -> :number
+      "bigint" -> :number
+      "numeric" -> :number
+      "double precision" -> :number
+      "boolean" -> :boolean
+      "timestamp" -> :datetime
+      "timestamp without time zone" -> :datetime
+      "timestamp with time zone" -> :datetime
+      "jsonb" -> :string
+      "json" -> :string
+      "uuid" -> :string
+      atom when is_atom(atom) -> determine_value_type(nil, to_string(atom))
+      type -> raise "Unsupported column type: #{type}"
+    end
+  end
+
+  defp find_sequence_by_name(databases, database_name, table_name) do
+    {schema, table_name} = parse_table_reference(table_name)
+
+    with %PostgresDatabase{tables: tables, sequences: sequences} <- Enum.find(databases, &(&1.name == database_name)),
+         %PostgresDatabaseTable{oid: table_oid} <- Enum.find(tables, &(&1.schema == schema and &1.name == table_name)),
+         %Sequence{} = sequence <- Enum.find(sequences, &(&1.table_oid == table_oid)) do
+      {:ok, sequence}
+    else
+      _ -> {:error, Error.not_found(entity: :sequence, params: %{database: database_name, table: table_name})}
+    end
+  end
+
+  defp group_column_attnums(nil, %PostgresDatabaseTable{} = table) do
+    PostgresDatabaseTable.default_group_column_attnums(table)
+  end
+
+  defp group_column_attnums(column_names, table) when is_list(column_names) do
+    table.columns
+    |> Enum.filter(&(&1.name in column_names))
+    |> Enum.map(& &1.attnum)
+  end
+
+  def parse_status(nil), do: :active
+  def parse_status(status), do: status
+
+  # Helper function to parse SASL mechanism
+  defp parse_sasl_mechanism(nil), do: {:ok, nil}
+  defp parse_sasl_mechanism("plain"), do: {:ok, :plain}
+  defp parse_sasl_mechanism("scram_sha_256"), do: {:ok, :scram_sha_256}
+  defp parse_sasl_mechanism("scram_sha_512"), do: {:ok, :scram_sha_512}
+
+  defp parse_sasl_mechanism(invalid),
+    do:
+      {:error,
+       Error.validation(
+         summary: "Invalid SASL mechanism '#{invalid}'. Must be one of: plain, scram_sha_256, scram_sha_512"
+       )}
 
   defp env do
     Application.fetch_env!(:sequin, :env)

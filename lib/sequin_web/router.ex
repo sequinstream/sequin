@@ -150,6 +150,9 @@ defmodule SequinWeb.Router do
     # HTTP Endpoints routes
     resources("/destinations/http_endpoints", HttpEndpointController, except: [:new, :edit], param: "id_or_name")
 
+    # Sink Consumer routes
+    resources("/sinks", SinkConsumerController, except: [:new, :edit], param: "id_or_name")
+
     post("/databases/:id_or_name/test_connection", DatabaseController, :test_connection)
     post("/databases/:id_or_name/setup_replication", DatabaseController, :setup_replication)
     get("/databases/:id_or_name/schemas", DatabaseController, :list_schemas)

@@ -340,6 +340,13 @@ fi
 # Build and push Docker image
 build_and_push_docker "$new_version" "$GITHUB_ACTIONS"
 
+# Prompt for confirmation to proceed
+read -p "Docker images built and pushed. If you used GitHub Actions, please verify the action succeeded. Do you want to proceed with the release? [Y/n] " proceed
+if [[ "$proceed" =~ ^[Nn]$ ]]; then
+    echo -e "${YELLOW}Release aborted by user.${RESET}"
+    exit 0
+fi
+
 # Create and push the new tag
 git tag "$new_version"
 git push origin "$new_version"

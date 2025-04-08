@@ -124,6 +124,14 @@ defmodule Sequin.Consumers.HttpEndpoint do
     from([http_endpoint: he] in query, where: he.name == ^name)
   end
 
+  def where_id_or_name(query \\ base_query(), id_or_name) do
+    if Sequin.String.is_uuid?(id_or_name) do
+      where_id(query, id_or_name)
+    else
+      where_name(query, id_or_name)
+    end
+  end
+
   def where_use_local_tunnel(query \\ base_query()) do
     from([http_endpoint: he] in query, where: he.use_local_tunnel == true)
   end

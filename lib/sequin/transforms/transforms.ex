@@ -16,7 +16,9 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Error
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
 
@@ -80,6 +82,7 @@ defmodule Sequin.Transforms do
 
   def to_external(%HttpEndpoint{use_local_tunnel: true} = http_endpoint, show_sensitive) do
     %{
+      id: http_endpoint.id,
       name: http_endpoint.name,
       local: true,
       path: http_endpoint.path,
@@ -91,6 +94,7 @@ defmodule Sequin.Transforms do
 
   def to_external(%HttpEndpoint{} = http_endpoint, show_sensitive) do
     %{
+      id: http_endpoint.id,
       name: http_endpoint.name,
       url:
         URI.to_string(%URI{
@@ -321,4 +325,89 @@ defmodule Sequin.Transforms do
   defp maybe_obfuscate(nil, _), do: nil
   defp maybe_obfuscate(value, true), do: value
   defp maybe_obfuscate(_value, false), do: "********"
+
+  def from_external_http_endpoint(attrs) do
+    # Parse headers and encrypted headers regardless of endpoint type
+    with {:ok, headers} <- parse_headers(attrs["headers"]),
+         {:ok, encrypted_headers} <- parse_headers(attrs["encrypted_headers"]) do
+      # Base params that are common to all endpoint types
+      base_params = %{
+        name: attrs["name"],
+        headers: headers,
+        encrypted_headers: encrypted_headers
+      }
+
+      # Determine the endpoint type and add specific params
+      params =
+        cond do
+          # Webhook.site endpoint
+          Map.get(attrs, "webhook.site") in [true, "true"] ->
+            Map.merge(base_params, %{
+              scheme: :https,
+              host: "webhook.site",
+              path: "/" <> generate_webhook_site_id()
+            })
+
+          # Local endpoint
+          Map.get(attrs, "local") == "true" ->
+            Map.merge(base_params, %{
+              use_local_tunnel: true,
+              path: attrs["path"]
+            })
+
+          # External endpoint with URL
+          is_binary(attrs["url"]) ->
+            uri = URI.parse(attrs["url"])
+
+            Map.merge(base_params, %{
+              scheme: uri.scheme,
+              host: uri.host,
+              port: uri.port,
+              path: uri.path,
+              query: uri.query,
+              fragment: uri.fragment
+            })
+
+          # No specific endpoint type provided
+          true ->
+            base_params
+        end
+
+      {:ok, params}
+    end
+  end
+
+  # Helper functions
+
+  defp parse_headers(nil), do: {:ok, %{}}
+
+  defp parse_headers(headers) when is_map(headers) do
+    {:ok, headers}
+  end
+
+  defp parse_headers(headers) when is_list(headers) do
+    {:ok, Map.new(headers, fn %{"key" => key, "value" => value} -> {key, value} end)}
+  end
+
+  defp parse_headers(headers) when is_binary(headers) do
+    {:error, Error.validation(summary: "Invalid headers configuration. Must be a list of key-value pairs.")}
+  end
+
+  defp generate_webhook_site_id do
+    if env() == :test do
+      UUID.uuid4()
+    else
+      case WebhookSiteGenerator.generate() do
+        {:ok, uuid} ->
+          uuid
+
+        {:error, reason} ->
+          raise "Failed to create webhook.site endpoint: #{reason}"
+      end
+    end
+  end
+
+  defp env do
+    Application.fetch_env!(:sequin, :env)
+  end
 end

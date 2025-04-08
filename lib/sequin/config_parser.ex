@@ -12,7 +12,7 @@ defmodule Sequin.ConfigParser do
   @valid_log_levels [:error, :warning, :notice, :info, :debug]
   def log_level(env, default_level) when default_level in @valid_log_levels do
     env
-    |> Map.get("LOG_LEVEL", default_level |> to_string())
+    |> Map.get("LOG_LEVEL", to_string(default_level))
     |> String.downcase()
     |> String.to_atom()
     |> validate_log_level(default_level)

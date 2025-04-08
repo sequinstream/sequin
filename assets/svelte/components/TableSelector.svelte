@@ -409,7 +409,9 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
                       : 'hover:bg-gray-100'}"
                   >
                     <TableCell class="flex items-center space-x-2">
-                      {#if onlyEventTables}
+                      {#if table.oid === selectedTableOid}
+                        <CheckIcon class="h-4 w-4 text-green-500" />
+                      {:else if onlyEventTables}
                         <Logs class="h-4 w-4 text-gray-400" />
                       {:else}
                         <TableIcon class="h-4 w-4 text-gray-400" />

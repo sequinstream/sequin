@@ -992,7 +992,7 @@ defmodule Sequin.YamlLoaderTest do
              } = consumer.sink
     end
 
-    test "creates sink with custom actions" do
+    test "creates sink with custom actions and timestamp format" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
@@ -1011,6 +1011,7 @@ defmodule Sequin.YamlLoaderTest do
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
+                   timestamp_format: "unix_microsecond"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
@@ -1024,6 +1025,8 @@ defmodule Sequin.YamlLoaderTest do
                column_filters: [],
                group_column_attnums: [1]
              }
+
+      assert consumer.timestamp_format == :unix_microsecond
     end
 
     test "creates multiple sinks with different names using YAML anchors" do

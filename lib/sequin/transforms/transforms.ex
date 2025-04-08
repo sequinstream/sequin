@@ -130,7 +130,8 @@ defmodule Sequin.Transforms do
         position: "beginning | end | from with value"
       },
       batch_size: consumer.batch_size,
-      transform: if(consumer.transform, do: consumer.transform.name, else: "none")
+      transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
+      timestamp_format: consumer.timestamp_format
     }
   end
 

@@ -103,6 +103,7 @@
     groupColumnAttnums: number[];
     batchSize: number;
     transform: string;
+    timestampFormat: string;
   }
 
   let initialForm: FormState = {
@@ -127,6 +128,7 @@
     groupColumnAttnums: consumer.group_column_attnums || [],
     batchSize: Number(consumer.batch_size) || 1,
     transform: consumer.transform_id || "none",
+    timestampFormat: consumer.timestamp_format || "iso8601",
   };
 
   let form: FormState = { ...initialForm };
@@ -362,6 +364,9 @@
       }, 2000);
     });
   }
+
+  const exampleIsoTimestamp = "2025-01-01T00:00:00.000000Z";
+  const exampleUnixMicrosecondTimestamp = 1704086400000000;
 </script>
 
 <FullPageModal
@@ -832,6 +837,43 @@
                     {#if errors.consumer.max_memory_mb}
                       <p class="text-destructive text-sm">
                         {errors.consumer.max_memory_mb}
+                      </p>
+                    {/if}
+                  </div>
+
+                  <div class="space-y-2">
+                    <Label for="timestamp-format">Timestamp format</Label>
+                    <Select
+                      selected={{
+                        value: form.timestampFormat,
+                        label:
+                          form.timestampFormat === "iso8601"
+                            ? `ISO8601 string (e.g. ${exampleIsoTimestamp})`
+                            : `Unix timestamp (numeric, microseconds, e.g. ${exampleUnixMicrosecondTimestamp})`,
+                      }}
+                      onSelectedChange={(event) => {
+                        form.timestampFormat = event.value;
+                      }}
+                    >
+                      <SelectTrigger id="timestamp-format" class="w-full">
+                        <SelectValue placeholder="Select timestamp format" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="iso8601"
+                          >ISO8601 string (e.g. {exampleIsoTimestamp})</SelectItem
+                        >
+                        <SelectItem value="unix_microsecond"
+                          >Unix timestamp (numeric, microseconds, e.g. {exampleUnixMicrosecondTimestamp})</SelectItem
+                        >
+                      </SelectContent>
+                    </Select>
+                    <p class="text-xs font-light">
+                      Choose how timestamps should be formatted in messages sent
+                      to your sink.
+                    </p>
+                    {#if errors.consumer.timestamp_format}
+                      <p class="text-destructive text-sm">
+                        {errors.consumer.timestamp_format}
                       </p>
                     {/if}
                   </div>

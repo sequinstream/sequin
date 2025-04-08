@@ -88,4 +88,54 @@ defmodule Sequin.Enum do
       end
     end)
   end
+
+  @doc """
+  Recursively traverses a data structure and applies a transformation function to each value.
+
+  The function traverses maps (including structs), lists, and scalar values. For each scalar value,
+  the provided transformation function is applied. Structs are temporarily converted to maps,
+  transformed, and then converted back to their original struct type.
+
+  ## Examples
+
+      iex> transform_deeply(%{a: 1, b: 2}, fn x -> x * 2 end)
+      %{a: 2, b: 4}
+
+      iex> transform_deeply([1, [2, 3], %{a: 4}], fn x -> is_integer(x) && x * 2 || x end)
+      [2, [4, 6], %{a: 8}]
+
+      iex> transform_deeply(%DateTime{year: 2023, month: 4, day: 8}, fn
+      ...>   %DateTime{} = dt -> DateTime.to_unix(dt)
+      ...>   other -> other
+      ...> end)
+      # Returns the DateTime converted to unix timestamp
+
+  """
+  @spec transform_deeply(term(), (term() -> term())) :: term()
+  def transform_deeply(value, transform_fn) when is_function(transform_fn, 1) do
+    case value do
+      %scalar_module{} = struct
+      when scalar_module in [DateTime, NaiveDateTime, Date, Time, Calendar.ISO, Decimal, MapSet, Regex, Range, Port, URI] ->
+        transform_fn.(struct)
+
+      %struct_module{} = struct ->
+        # For structs: convert to map → transform → convert back to same struct type
+        struct
+        |> Map.from_struct()
+        |> transform_deeply(transform_fn)
+        |> then(&struct(struct_module, &1))
+
+      %{} = map ->
+        # For maps: transform each value recursively
+        Map.new(map, fn {k, v} -> {k, transform_deeply(v, transform_fn)} end)
+
+      list when is_list(list) ->
+        # For lists: transform each element recursively
+        Enum.map(list, &transform_deeply(&1, transform_fn))
+
+      # For scalar values: apply the transform function directly
+      other ->
+        transform_fn.(other)
+    end
+  end
 end

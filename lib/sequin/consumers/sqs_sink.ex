@@ -19,8 +19,6 @@ defmodule Sequin.Consumers.SqsSink do
     field :is_fifo, :boolean, default: false
   end
 
-  @sqs_url_regex ~r/^https:\/\/sqs\.(?<region>[a-z0-9-]+)\.amazonaws\.com\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/
-
   def changeset(struct, params) do
     struct
     |> cast(params, [:queue_url, :region, :access_key_id, :secret_access_key, :is_fifo])
@@ -32,7 +30,7 @@ defmodule Sequin.Consumers.SqsSink do
 
   defp validate_queue_url(changeset) do
     changeset
-    |> validate_format(:queue_url, @sqs_url_regex,
+    |> validate_format(:queue_url, sqs_url_regex(),
       message: "must be a valid AWS SQS URL (https://sqs.<region>.amazonaws.com/<account-id>/<queue-name>)"
     )
     |> validate_length(:queue_url, max: 2000)
@@ -87,9 +85,13 @@ defmodule Sequin.Consumers.SqsSink do
 
   """
   def region_from_url(queue_url) do
-    case Regex.named_captures(@sqs_url_regex, queue_url) do
+    case Regex.named_captures(sqs_url_regex(), queue_url) do
       %{"region" => region} -> region
       _ -> {:error, Sequin.Error.validation(summary: "Invalid SQS queue URL format")}
     end
+  end
+
+  def sqs_url_regex do
+    ~r/^https:\/\/sqs\.(?<region>[a-z0-9-]+)\.amazonaws\.com\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/
   end
 end

@@ -746,6 +746,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "secret_access_key" => sink.secret_access_key
     }
   end
+
   defp encode_sink(%KafkaSink{} = sink) do
     %{
       "type" => "kafka",

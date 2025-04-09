@@ -23,7 +23,8 @@ defmodule SequinWeb.BackfillControllerTest do
         postgres_database_id: database.id
       )
 
-    backfill = ConsumersFactory.insert_backfill!(account_id: account.id, sink_consumer_id: sink_consumer.id)
+    backfill =
+      ConsumersFactory.insert_backfill!(account_id: account.id, sink_consumer_id: sink_consumer.id, state: :completed)
 
     other_account = AccountsFactory.insert_account!()
     other_sink_consumer = ConsumersFactory.insert_sink_consumer!(account_id: other_account.id)
@@ -75,7 +76,7 @@ defmodule SequinWeb.BackfillControllerTest do
     test "shows backfill details", %{conn: conn, sink_consumer: sink_consumer, backfill: backfill} do
       sink_identifier = Enum.random([sink_consumer.id, sink_consumer.name])
       conn = get(conn, ~p"/api/sinks/#{sink_identifier}/backfills/#{backfill.id}")
-      assert %{"data" => backfill_json} = json_response(conn, 200)
+      assert backfill_json = json_response(conn, 200)
 
       assert backfill.id == backfill_json["id"]
       assert to_string(backfill.state) == backfill_json["state"]
@@ -99,7 +100,7 @@ defmodule SequinWeb.BackfillControllerTest do
     } do
       sink_identifier = Enum.random([sink_consumer.id, sink_consumer.name])
       conn = post(conn, ~p"/api/sinks/#{sink_identifier}/backfills")
-      assert %{"data" => backfill_json} = json_response(conn, 200)
+      assert backfill_json = json_response(conn, 200)
 
       assert backfill_json["sink_consumer"] == sink_consumer.name
       assert backfill_json["state"] == "active"
@@ -122,7 +123,7 @@ defmodule SequinWeb.BackfillControllerTest do
     } do
       update_attrs = %{state: "cancelled"}
       conn = put(conn, ~p"/api/sinks/#{sink_consumer.id}/backfills/#{backfill.id}", update_attrs)
-      assert %{"data" => updated_backfill_json} = json_response(conn, 200)
+      assert updated_backfill_json = json_response(conn, 200)
 
       assert updated_backfill_json["id"] == backfill.id
       assert updated_backfill_json["state"] == "cancelled"

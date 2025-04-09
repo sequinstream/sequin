@@ -122,6 +122,7 @@
         "reference/change-retention",
         "reference/annotations",
         "reference/sequin-yaml",
+        "reference/management-api",
         "reference/cli/overview",
         "reference/metrics"
       ]

@@ -79,6 +79,7 @@ defmodule Sequin.Transforms do
 
   def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint, _show_sensitive) do
     %{
+      id: http_endpoint.id,
       name: http_endpoint.name,
       "webhook.site": true
     }

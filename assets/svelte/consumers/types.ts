@@ -6,6 +6,7 @@ export type BaseConsumer = {
   type:
     | "http_push"
     | "sqs"
+    | "sns"
     | "redis"
     | "kafka"
     | "sequin_stream"

@@ -24,6 +24,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -650,6 +651,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sink(%SinkConsumer{sink: %SnsSink{} = sink}) do
+    %{
+      type: :sns,
+      topic_arn: sink.topic_arn,
+      region: sink.region,
+      is_fifo: sink.is_fifo
+    }
+  end
+
   defp encode_sink(%SinkConsumer{sink: %KafkaSink{} = sink}) do
     %{
       type: :kafka,
@@ -1142,6 +1152,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp consumer_title(%{sink: %{type: :http_push}}), do: "Webhook Sink"
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"
+  defp consumer_title(%{sink: %{type: :sns}}), do: "SNS Sink"
   defp consumer_title(%{sink: %{type: :redis}}), do: "Redis Sink"
   defp consumer_title(%{sink: %{type: :kafka}}), do: "Kafka Sink"
   defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"

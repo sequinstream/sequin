@@ -718,6 +718,15 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp encode_sink(%SnsSink{} = sink) do
+    %{
+      "type" => "sns",
+      "topic_arn" => sink.topic_arn,
+      "region" => sink.region,
+      "access_key_id" => sink.access_key_id,
+      "secret_access_key" => sink.secret_access_key
+    }
+  end
   defp encode_sink(%KafkaSink{} = sink) do
     %{
       "type" => "kafka",
@@ -1104,6 +1113,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :pull -> "Consumer Group"
       :redis -> "Redis Sink"
       :sqs -> "SQS Sink"
+      :sns -> "SNS Sink"
       :sequin_stream -> "Sequin Stream Sink"
       :gcp_pubsub -> "GCP Pub/Sub Sink"
       :nats -> "NATS Sink"

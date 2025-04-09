@@ -14,9 +14,9 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.SequenceFilter.StringValue
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase

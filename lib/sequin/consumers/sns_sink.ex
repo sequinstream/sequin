@@ -33,7 +33,8 @@ defmodule Sequin.Consumers.SnsSink do
     |> validate_format(:topic_arn, sns_arn_regex(),
       message: "must be a valid AWS SNS Topic ARN (arn:aws:sns:<region>:<account-id>:<topic-name>)"
     )
-    |> validate_length(:topic_arn, max: 2000) # Keep length validation, ARNs can be long
+    # Keep length validation, ARNs can be long
+    |> validate_length(:topic_arn, max: 2000)
   end
 
   defp maybe_put_region_from_arn(changeset) do

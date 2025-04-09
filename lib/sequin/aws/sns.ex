@@ -46,19 +46,15 @@ defmodule Sequin.Aws.SNS do
 
     request_body = %{
       "TopicArn" => topic_arn,
-      "PublishBatchRequestEntries" => entries
+      "PublishBatchRequestEntries" => %{"member" => entries}
     }
 
     case AWS.SNS.publish_batch(client, request_body) do
-      {:ok,
-       %{
-         "Failed" => failed_entries
-       } = resp, %{body: body}}
-      when failed_entries != [] ->
-        {:error, resp, %{body: body}}
-
-      {:ok, %{"Successful" => _successful}, %{body: _body}} ->
+      {:ok, %{"PublishBatchResponse" => %{"PublishBatchResult" => %{"Failed" => :none}}}, %{body: body}} ->
         :ok
+
+      {:ok, resp, %{body: body}} ->
+        {:error, resp, %{body: body}}
 
       {:error, {:unexpected_response, details}} ->
         handle_unexpected_response(details)

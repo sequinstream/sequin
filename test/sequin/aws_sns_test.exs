@@ -28,11 +28,21 @@ defmodule Sequin.Aws.SNSTest do
         assert conn.method == "POST"
 
         Req.Test.json(conn, %{
-          "Successful" => [
-            %{"Id" => "1", "MessageId" => "msg1"},
-            %{"Id" => "2", "MessageId" => "msg2"}
-          ],
-          "Failed" => []
+          "PublishBatchResponse" => %{
+            "PublishBatchResult" => %{
+              "Failed" => :none,
+              "Successful" => %{
+                "member" => %{
+                  "Id" => "23df4256-b838-4538-ad38-b4231aa2b71c",
+                  "MessageId" => "73260025-473a-5494-b7d2-6055e8dd4bfd",
+                  "SequenceNumber" => "10000000000000003000"
+                }
+              }
+            },
+            "ResponseMetadata" => %{
+              "RequestId" => "abbf754a-da6a-557c-865b-153a6b69bc16"
+            }
+          }
         })
       end)
 

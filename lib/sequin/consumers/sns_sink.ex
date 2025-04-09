@@ -93,6 +93,6 @@ defmodule Sequin.Consumers.SnsSink do
   end
 
   defp sns_arn_regex do
-    ~r/^arn:aws:sns:(?<region>[a-z0-9-]+):(?<account_id>\d{12}):(?<topic_name>[a-zA-Z0-9_-]+)$/
+    ~r/^arn:aws:sns:(?<region>[a-z0-9-]+):(?<account_id>\d{12}):(?<topic_name>[a-zA-Z0-9_.-]+)$/
   end
 end

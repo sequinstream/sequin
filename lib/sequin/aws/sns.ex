@@ -50,7 +50,7 @@ defmodule Sequin.Aws.SNS do
     }
 
     case AWS.SNS.publish_batch(client, request_body) do
-      {:ok, %{"PublishBatchResponse" => %{"PublishBatchResult" => %{"Failed" => :none}}}, %{body: body}} ->
+      {:ok, %{"PublishBatchResponse" => %{"PublishBatchResult" => %{"Failed" => :none}}}, _} ->
         :ok
 
       {:ok, resp, %{body: body}} ->

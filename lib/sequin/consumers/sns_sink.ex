@@ -18,8 +18,6 @@ defmodule Sequin.Consumers.SnsSink do
     field :secret_access_key, Encrypted.Field
   end
 
-  @sns_arn_regex ~r/^arn:aws:sns:(?<region>[a-z0-9-]+):(?<account_id>\d{12}):(?<topic_name>[a-zA-Z0-9_-]+)$/
-
   def changeset(struct, params) do
     struct
     |> cast(params, [:topic_arn, :region, :access_key_id, :secret_access_key])
@@ -31,7 +29,7 @@ defmodule Sequin.Consumers.SnsSink do
 
   defp validate_topic_arn(changeset) do
     changeset
-    |> validate_format(:topic_arn, @sns_arn_regex,
+    |> validate_format(:topic_arn, sns_arn_regex(),
       message: "must be a valid AWS SNS Topic ARN (arn:aws:sns:<region>:<account-id>:<topic-name>)"
     )
     |> validate_length(:topic_arn, max: 2000) # Keep length validation, ARNs can be long
@@ -86,9 +84,13 @@ defmodule Sequin.Consumers.SnsSink do
 
   """
   def region_from_arn(topic_arn) do
-    case Regex.named_captures(@sns_arn_regex, topic_arn) do
+    case Regex.named_captures(sns_arn_regex(), topic_arn) do
       %{"region" => region} -> region
       _ -> {:error, Sequin.Error.validation(summary: "Invalid SNS Topic ARN format")}
     end
+  end
+
+  defp sns_arn_regex do
+    ~r/^arn:aws:sns:(?<region>[a-z0-9-]+):(?<account_id>\d{12}):(?<topic_name>[a-zA-Z0-9_-]+)$/
   end
 end

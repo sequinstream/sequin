@@ -14,8 +14,8 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.SnsSink
+  alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication.WalPipeline

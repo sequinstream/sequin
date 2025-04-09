@@ -19,9 +19,9 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot

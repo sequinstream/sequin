@@ -25,7 +25,6 @@ defmodule Sequin.Factory.SinkFactory do
     )
   end
 
-
   def sns_message(attrs \\ []) do
     attrs = Map.new(attrs)
 

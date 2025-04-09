@@ -76,20 +76,20 @@ defmodule Sequin.Runtime.KeysetCursor do
   end
 
   # Return the lexographically smallest value for the given type
-  defp min_for_type("uuid"), do: "00000000-0000-0000-0000-000000000000"
-  defp min_for_type("timestamp"), do: ~N[0001-01-01 00:00:00]
-  defp min_for_type("timestamp without time zone"), do: ~N[0001-01-01 00:00:00]
-  defp min_for_type("timestamp with time zone"), do: ~U[0001-01-01 00:00:00Z]
-  defp min_for_type("date"), do: ~D[0001-01-01]
-  defp min_for_type("time"), do: ~T[00:00:00]
-  defp min_for_type("time without time zone"), do: ~T[00:00:00]
-  defp min_for_type("time with time zone"), do: ~T[00:00:00]
+  def min_for_type("uuid"), do: "00000000-0000-0000-0000-000000000000"
+  def min_for_type("timestamp"), do: ~N[0001-01-01 00:00:00]
+  def min_for_type("timestamp without time zone"), do: ~N[0001-01-01 00:00:00]
+  def min_for_type("timestamp with time zone"), do: ~U[0001-01-01 00:00:00Z]
+  def min_for_type("date"), do: ~D[0001-01-01]
+  def min_for_type("time"), do: ~T[00:00:00]
+  def min_for_type("time without time zone"), do: ~T[00:00:00]
+  def min_for_type("time with time zone"), do: ~T[00:00:00]
 
-  defp min_for_type(numeric_type)
-       when numeric_type in ["smallint", "integer", "bigint", "decimal", "numeric", "real", "double precision"],
-       do: 0
+  def min_for_type(numeric_type)
+      when numeric_type in ["smallint", "integer", "bigint", "decimal", "numeric", "real", "double precision"],
+      do: 0
 
-  defp min_for_type(_), do: ""
+  def min_for_type(_), do: ""
 
   @spec where_sql(Table.t(), String.t()) :: String.t()
   def where_sql(%Table{} = table, operator) do

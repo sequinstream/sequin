@@ -1289,6 +1289,24 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def get_backfill_for_sink_consumer(sink_consumer_id, backfill_id) do
+    sink_consumer_id
+    |> Backfill.where_sink_consumer_id()
+    |> Backfill.where_id(backfill_id)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :backfill, params: %{id: backfill_id})}
+      backfill -> {:ok, backfill}
+    end
+  end
+
+  def list_backfills_for_sink_consumer(sink_consumer_id) do
+    sink_consumer_id
+    |> Backfill.where_sink_consumer_id()
+    |> order_by(desc: :inserted_at)
+    |> Repo.all()
+  end
+
   def update_backfill(backfill, attrs, opts \\ []) do
     Repo.transact(fn ->
       res =

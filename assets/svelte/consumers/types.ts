@@ -166,6 +166,16 @@ export type TypesenseConsumer = BaseConsumer & {
   };
 };
 
+// SNS specific sink
+export type SnsConsumer = BaseConsumer & {
+  sink: {
+    type: "sns";
+    topic_arn: string;
+    region: string;
+    is_fifo: boolean;
+  };
+};
+
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer
@@ -177,4 +187,5 @@ export type Consumer =
   | NatsConsumer
   | AzureEventHubConsumer
   | RabbitMqConsumer
-  | TypesenseConsumer;
+  | TypesenseConsumer
+  | SnsConsumer;

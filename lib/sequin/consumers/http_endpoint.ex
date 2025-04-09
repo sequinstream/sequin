@@ -62,6 +62,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
       :encrypted_headers,
       :use_local_tunnel
     ])
+    |> put_defaults()
     |> validate_required([:name])
     |> validate_uri_components()
     |> foreign_key_constraint(:account_id)
@@ -85,9 +86,16 @@ defmodule Sequin.Consumers.HttpEndpoint do
       :encrypted_headers,
       :use_local_tunnel
     ])
+    |> put_defaults()
     |> validate_uri_components()
     |> Sequin.Changeset.validate_name()
     |> unique_constraint([:name, :account_id], name: :http_endpoints_name_account_id_index)
+  end
+
+  defp put_defaults(changeset) do
+    changeset
+    |> put_change(:encrypted_headers, get_field(changeset, :encrypted_headers) || %{})
+    |> put_change(:headers, get_field(changeset, :headers) || %{})
   end
 
   defp validate_uri_components(changeset) do

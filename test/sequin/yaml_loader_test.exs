@@ -526,8 +526,6 @@ defmodule Sequin.YamlLoaderTest do
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
                    transform: "record_only"
-                   consumer_start:
-                     position: "beginning"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
@@ -579,8 +577,6 @@ defmodule Sequin.YamlLoaderTest do
                        comparison_value:
                         - "Alderaan"
                         - "Tatooine"
-                   consumer_start:
-                     position: "end"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
@@ -631,8 +627,6 @@ defmodule Sequin.YamlLoaderTest do
           destination:
             type: "webhook"
             http_endpoint: "sequin-playground-http"
-          consumer_start:
-            position: "beginning"
         - name: "sequin-playground-kafka"
           database: "test-db"
           table: "Characters"
@@ -717,8 +711,6 @@ defmodule Sequin.YamlLoaderTest do
                    group_column_names: ["house"]
                    destination:
                      type: "sequin_stream"
-                   consumer_start:
-                     position: "beginning"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)

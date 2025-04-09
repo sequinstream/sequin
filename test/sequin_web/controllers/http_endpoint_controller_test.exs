@@ -124,6 +124,11 @@ defmodule SequinWeb.HttpEndpointControllerTest do
 
       {:ok, updated_endpoint} = Consumers.find_http_endpoint_for_account(http_endpoint.account_id, id: id)
       assert updated_endpoint.name == name
+      assert updated_endpoint.host == http_endpoint.host
+      assert updated_endpoint.port == http_endpoint.port
+      assert updated_endpoint.path == http_endpoint.path
+      assert updated_endpoint.headers == http_endpoint.headers
+      assert updated_endpoint.encrypted_headers == http_endpoint.encrypted_headers
     end
 
     test "returns validation error for invalid attributes", %{conn: conn, http_endpoint: http_endpoint} do

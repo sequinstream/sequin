@@ -28,6 +28,7 @@ defmodule SequinWeb.BackfillController do
   end
 
   def create(conn, %{"sink_id_or_name" => sink_id_or_name} = params) do
+    params = Map.delete(params, "sink_id_or_name")
     account_id = conn.assigns.account_id
 
     with {:ok, sink_consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: sink_id_or_name),
@@ -46,6 +47,7 @@ defmodule SequinWeb.BackfillController do
   end
 
   def update(conn, %{"sink_id_or_name" => sink_id_or_name, "id" => id} = params) do
+    params = Map.drop(params, ["sink_id_or_name", "id"])
     account_id = conn.assigns.account_id
 
     with {:ok, sink_consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: sink_id_or_name),

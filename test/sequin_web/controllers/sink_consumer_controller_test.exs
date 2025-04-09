@@ -175,6 +175,12 @@ defmodule SequinWeb.SinkConsumerControllerTest do
 
       {:ok, updated_consumer} = Consumers.find_sink_consumer(sink_consumer.account_id, id: id)
       assert updated_consumer.name == name
+
+      assert updated_consumer.sequence_id == sink_consumer.sequence_id
+      assert updated_consumer.sequence_filter == sink_consumer.sequence_filter
+      assert updated_consumer.sink == sink_consumer.sink
+      assert updated_consumer.transform == sink_consumer.transform
+      assert updated_consumer.batch_size == sink_consumer.batch_size
     end
 
     test "returns validation error for invalid attributes", %{conn: conn, sink_consumer: sink_consumer} do

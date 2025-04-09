@@ -330,7 +330,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       client = SnsSink.aws_client(sink)
 
       case Sequin.Aws.SNS.topic_meta(client, sink.topic_arn) do
-        {:ok, _} -> :ok
+        :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else

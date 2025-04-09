@@ -922,21 +922,22 @@ defmodule Sequin.YamlLoader do
          {:ok, transform_id} <- parse_transform_id(account_id, consumer_attrs["transform"]) do
       table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
 
-      {:ok,
-       %{
-         name: name,
-         status: parse_status(consumer_attrs["status"]),
-         sequence_id: sequence.id,
-         replication_slot_id: database.replication_slot.id,
-         sequence_filter: %{
-           actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
-           group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
-           column_filters: column_filters(consumer_attrs["filters"], table)
-         },
-         batch_size: Map.get(consumer_attrs, "batch_size", 1),
-         sink: sink,
-         transform_id: transform_id
-       }}
+      attrs = %{
+        name: name,
+        status: parse_status(consumer_attrs["status"]),
+        sequence_id: sequence.id,
+        replication_slot_id: database.replication_slot.id,
+        sequence_filter: %{
+          actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
+          group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
+          column_filters: column_filters(consumer_attrs["filters"], table)
+        },
+        batch_size: Map.get(consumer_attrs, "batch_size", 1),
+        sink: sink,
+        transform_id: transform_id
+      }
+
+      {:ok, Sequin.Map.put_if_present(attrs, :timestamp_format, consumer_attrs["timestamp_format"])}
     end
   end
 

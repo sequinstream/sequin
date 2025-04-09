@@ -452,7 +452,8 @@ defmodule SequinWeb.Components.ConsumerForm do
         },
         "batch_size" => form["batchSize"],
         "initial_backfill" => decode_initial_backfill(form),
-        "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"])
+        "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
+        "timestamp_format" => form["timestampFormat"]
       }
 
     maybe_put_replication_slot_id(params, socket)
@@ -615,7 +616,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "status" => consumer.status,
       "table_oid" => source_table && source_table.oid,
       "type" => consumer.type,
-      "transform_id" => consumer.transform_id
+      "transform_id" => consumer.transform_id,
+      "timestamp_format" => consumer.timestamp_format
     }
   end
 

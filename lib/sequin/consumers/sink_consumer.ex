@@ -44,7 +44,8 @@ defmodule Sequin.Consumers.SinkConsumer do
              :status,
              :health,
              :max_memory_mb,
-             :legacy_transform
+             :legacy_transform,
+             :timestamp_format
            ]}
   typed_schema "sink_consumers" do
     field :name, :string
@@ -61,6 +62,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :max_memory_mb, :integer, default: 1024
     field :partition_count, :integer, default: 1
     field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
+    field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
 
     field :type, Ecto.Enum,
       values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
@@ -139,7 +141,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_memory_mb,
       :partition_count,
       :legacy_transform,
-      :transform_id
+      :transform_id,
+      :timestamp_format
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)

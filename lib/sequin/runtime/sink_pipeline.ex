@@ -144,6 +144,7 @@ defmodule Sequin.Runtime.SinkPipeline do
     )
 
     context = context(context)
+    message = format_timestamps(message, context.consumer)
 
     if function_exported?(pipeline_mod, :handle_message, 2) do
       case pipeline_mod.handle_message(message, context) do
@@ -411,5 +412,34 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+  end
+
+  # Formats timestamps according to the consumer's timestamp_format setting
+  defp format_timestamps(%{data: %struct{} = event_or_record} = message, %SinkConsumer{} = consumer)
+       when struct in [ConsumerEvent, ConsumerRecord] do
+    %{message | data: %{event_or_record | data: format_timestamps(event_or_record.data, consumer)}}
+  end
+
+  defp format_timestamps(%struct{} = event_or_record_data, %SinkConsumer{} = consumer)
+       when struct in [ConsumerEventData, ConsumerRecordData] do
+    case consumer.timestamp_format do
+      :unix_microsecond ->
+        record = format_timestamps_to_unix(event_or_record_data.record, :microsecond)
+        changes = format_timestamps_to_unix(event_or_record_data.changes, :microsecond)
+        %{event_or_record_data | record: record, changes: changes}
+
+      # Keep as ISO8601 (default)
+      _iso8601 ->
+        event_or_record_data
+    end
+  end
+
+  # Generic function to convert timestamps in any nested data structure
+  defp format_timestamps_to_unix(data, unit) do
+    Sequin.Enum.transform_deeply(data, fn
+      %DateTime{} = dt -> DateTime.to_unix(dt, unit)
+      %NaiveDateTime{} = dt -> dt |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix(unit)
+      other -> other
+    end)
   end
 end

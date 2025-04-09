@@ -6,6 +6,7 @@ defmodule Sequin.Runtime.SnsPipelineTest do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.AwsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -64,7 +65,8 @@ defmodule Sequin.Runtime.SnsPipelineTest do
 
       Req.Test.stub(HttpClient, fn conn ->
         send(test_pid, {:sns_request, conn})
-        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "msg1"}], "Failed" => []})
+        body = AwsFactory.sns_publish_batch_response_success()
+        Req.Test.text(conn, body)
       end)
 
       start_pipeline!(consumer)
@@ -92,14 +94,8 @@ defmodule Sequin.Runtime.SnsPipelineTest do
 
       Req.Test.stub(HttpClient, fn conn ->
         send(test_pid, {:sns_request, conn})
-
-        Req.Test.json(conn, %{
-          "Successful" => [
-            %{"Id" => "1", "MessageId" => "msg1"},
-            %{"Id" => "2", "MessageId" => "msg2"}
-          ],
-          "Failed" => []
-        })
+        body = AwsFactory.sns_publish_batch_response_success()
+        Req.Test.text(conn, body)
       end)
 
       start_pipeline!(consumer)
@@ -113,16 +109,8 @@ defmodule Sequin.Runtime.SnsPipelineTest do
     @tag capture_log: true
     test "failed SNS requests result in failed events", %{consumer: consumer} do
       Req.Test.stub(HttpClient, fn conn ->
-        Req.Test.json(conn, %{
-          "Failed" => [
-            %{
-              "Id" => "1",
-              "Code" => "InternalError",
-              "Message" => "Internal Error occurred"
-            }
-          ],
-          "Successful" => []
-        })
+        body = SinkFactory.sns_publish_batch_response_failure()
+        Req.Test.text(conn, body)
       end)
 
       start_pipeline!(consumer)
@@ -170,7 +158,8 @@ defmodule Sequin.Runtime.SnsPipelineTest do
 
       Req.Test.stub(HttpClient, fn conn ->
         send(test_pid, {:sns_request, conn})
-        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "msg1"}], "Failed" => []})
+        body = AwsFactory.sns_publish_batch_response_success()
+        Req.Test.text(conn, body)
       end)
 
       consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)

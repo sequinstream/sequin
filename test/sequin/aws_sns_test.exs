@@ -93,7 +93,7 @@ defmodule Sequin.Aws.SNSTest do
               }
             },
             "ResponseMetadata" => %{
-              "RequestId" => "************************************"
+              "RequestId" => "abbf754a-da6a-557c-865b-153a6b69bc16"
             }
           }
         })

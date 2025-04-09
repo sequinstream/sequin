@@ -54,7 +54,7 @@ defmodule Sequin.Consumers.SnsSink do
   end
 
   defp put_is_fifo(changeset) do
-    if changeset |> get_field(:queue_url) |> ends_with_fifo?() do
+    if changeset |> get_field(:topic_arn) |> ends_with_fifo?() do
       put_change(changeset, :is_fifo, true)
     else
       changeset
@@ -62,7 +62,7 @@ defmodule Sequin.Consumers.SnsSink do
   end
 
   defp ends_with_fifo?(nil), do: false
-  defp ends_with_fifo?(url), do: String.ends_with?(url, ".fifo")
+  defp ends_with_fifo?(arn), do: String.ends_with?(arn, ".fifo")
 
   def aws_client(%__MODULE__{} = sink) do
     sink.access_key_id

@@ -1,0 +1,259 @@
+---
+title: "Management API"
+sidebarTitle: "Management API"
+description: "Reference for Sequin's Management API for programmatic control of Sequin resources."
+---
+
+## Overview
+
+The Sequin Management API allows you to programmatically control Sequin resources like sinks, HTTP endpoints, and backfills. This API follows RESTful principles and uses JSON for request and response bodies.
+
+## Authentication
+
+All API requests require authentication using a Bearer token. The token can be found in the Sequin Console under the "Manage account" section.
+
+Include the token in the Authorization header:
+
+```
+Authorization: Bearer YOUR_API_TOKEN
+```
+
+## Base URL
+
+The base URL for all API endpoints is:
+
+```
+https://api.sequinstream.com/api
+```
+
+## Endpoints
+
+### Sinks
+
+Sinks stream data from a table to a destination. The following endpoints are available for managing sinks:
+
+#### List sinks
+
+```http
+GET /sinks
+```
+
+Returns a list of all sinks.
+
+#### Get sink
+
+```http
+GET /sinks/{sink_name_or_id}
+```
+
+Returns details for a specific sink.
+
+#### Create sink
+
+```http
+POST /sinks
+```
+
+Creates a new sink. The request body should include:
+
+```json
+{
+  "name": "gcp-events",
+  "status": "disabled",
+  "table": "public.benchmark_records",
+  "filters": [],
+  "destination": {
+    "type": "gcp_pubsub",
+    "credentials": "(credentials present) - sha256sum: 71547b00",
+    "project_id": "my-project-id",
+    "topic_id": "my-topic",
+    "use_emulator": true,
+    "emulator_base_url": "http://localhost:8085"
+  },
+  "database": "dune",
+  "transform": "none",
+  "actions": [
+    "insert",
+    "update",
+    "delete"
+  ],
+  "batch_size": 1,
+  "active_backfill": null,
+  "group_column_names": [
+    "id"
+  ]
+}
+```
+
+#### Update sink
+
+```http
+PATCH /sinks/{sink_name_or_id}
+```
+
+Updates an existing sink. The request body can include any of the fields from the create sink request.
+
+```json
+{
+  "name": "gcp-events",
+  "status": "disabled",
+  "transform": "none",
+  "actions": [
+    "insert",
+    "update",
+    "deletes"
+  ],
+  "batch_size": 1
+}
+```
+
+#### Delete sink
+
+```http
+DELETE /sinks/{sink_id}
+```
+
+Deletes a sink by its ID.
+
+### HTTP Endpoints
+
+HTTP endpoints are destinations for webhook sinks. The following endpoints are available for managing HTTP endpoints:
+
+#### List HTTP endpoints
+
+```http
+GET /destinations/http_endpoints
+```
+
+Returns a list of all HTTP endpoints.
+
+#### Get HTTP endpoint
+
+```http
+GET /destinations/http_endpoints/{endpoint_name_or_id}
+```
+
+Returns details for a specific HTTP endpoint.
+
+#### Create HTTP endpoint
+
+```http
+POST /destinations/http_endpoints
+```
+
+Creates a new HTTP endpoint. The request body should include:
+
+```json
+{
+  "name": "localhost-endpoint",
+  "url": "http://localhost:4000/push-webhook",
+  "headers": {
+    "Content": "my-content"
+  },
+  "encrypted_headers": {
+    "Encrypted-Content": "some encrypted header!"
+  }
+}
+```
+
+#### Update HTTP endpoint
+
+```http
+PATCH /destinations/http_endpoints/{endpoint_id}
+```
+
+Updates an existing HTTP endpoint. The request body can include any of the fields from the create HTTP endpoint request.
+
+```json
+{
+  "name": "localhost-endpoint",
+  "headers": {"Content": "my-content"}
+}
+```
+
+#### Delete HTTP endpoint
+
+```http
+DELETE /destinations/http_endpoints/{endpoint_id}
+```
+
+Deletes an HTTP endpoint by its ID.
+
+### Backfills
+
+Backfills allow you to process historical data for a sink. The following endpoints are available for managing backfills:
+
+#### List backfills
+
+```http
+GET /sinks/{sink_name_or_id}/backfills
+```
+
+Returns a list of all backfills for a specific sink.
+
+#### Get backfill
+
+```http
+GET /sinks/{sink_name_or_id}/backfills/{backfill_id}
+```
+
+Returns details for a specific backfill.
+
+#### Create backfill
+
+```http
+POST /sinks/{sink_name_or_id}/backfills
+```
+
+Creates a new backfill for a specific sink. The request body is empty.
+
+#### Update backfill
+
+```http
+PATCH /sinks/{sink_name_or_id}/backfills/{backfill_id}
+```
+
+Updates an existing backfill. The request body can include:
+
+```json
+{
+  "state": "cancelled"
+}
+```
+
+## Error Handling
+
+The API uses standard HTTP status codes to indicate the success or failure of a request:
+
+- 200: Success
+- 400: Bad Request
+- 401: Unauthorized
+- 403: Forbidden
+- 404: Not Found
+- 422: Unprocessable Entity
+- 500: Internal Server Error
+
+Error responses include a JSON body with details about the error:
+
+```json
+HTTP 422
+{
+    "summary": "Validation failed",
+    "validation_errors": {
+        "status": [
+            "is invalid"
+        ]
+    }
+}
+```
+
+# Continue reading
+
+<CardGroup>
+  <Card title="Sequin Managed" icon="filter" href="/sequin-managed/overview">
+    Learn about Sequin Managed, a managed service for running Sequin in your own infrastructure.
+  </Card>
+  <Card title="sequin.yaml" icon="pencil" href="/reference/sequin-yaml">
+    Learn about the sequin.yaml file and how to use it to configure your Sequin instance.
+  </Card>
+</CardGroup>

@@ -10,7 +10,7 @@ defmodule SequinWeb.BackfillJSON do
   Renders a single backfill.
   """
   def show(%{backfill: backfill}) do
-    %{data: data(backfill)}
+    data(backfill)
   end
 
   defp data(backfill) do

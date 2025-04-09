@@ -26,7 +26,7 @@ defmodule Sequin.Consumers.SnsSink do
     |> maybe_put_region_from_arn()
     |> validate_required([:topic_arn, :region, :access_key_id, :secret_access_key])
     |> validate_topic_arn()
-    # |> put_is_fifo() # Removed for SNS
+    |> put_is_fifo()
   end
 
   defp validate_topic_arn(changeset) do
@@ -53,7 +53,16 @@ defmodule Sequin.Consumers.SnsSink do
     end
   end
 
-  # Removed put_is_fifo/1 and ends_with_fifo?/1 as they are SQS specific
+  defp put_is_fifo(changeset) do
+    if changeset |> get_field(:queue_url) |> ends_with_fifo?() do
+      put_change(changeset, :is_fifo, true)
+    else
+      changeset
+    end
+  end
+
+  defp ends_with_fifo?(nil), do: false
+  defp ends_with_fifo?(url), do: String.ends_with?(url, ".fifo")
 
   def aws_client(%__MODULE__{} = sink) do
     sink.access_key_id

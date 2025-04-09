@@ -548,6 +548,16 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp decode_sink(:sns, sink) do
+    %{
+      "type" => "sns",
+      "topic_arn" => sink["topic_arn"],
+      "region" => aws_region_from_topic_arn(sink["topic_arn"]),
+      "access_key_id" => sink["access_key_id"],
+      "secret_access_key" => sink["secret_access_key"]
+    }
+  end
+
   defp decode_sink(:kafka, sink) do
     %{
       "type" => "kafka",
@@ -654,6 +664,15 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   defp aws_region_from_queue_url(queue_url) do
     case SqsSink.region_from_url(queue_url) do
+      {:ok, region} -> region
+      _ -> nil
+    end
+  end
+
+  defp aws_region_from_topic_arn(nil), do: nil
+
+  defp aws_region_from_topic_arn(topic_arn) do
+    case SnsSink.region_from_arn(topic_arn) do
       {:ok, region} -> region
       _ -> nil
     end

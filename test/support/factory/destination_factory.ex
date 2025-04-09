@@ -30,13 +30,10 @@ defmodule Sequin.Factory.SinkFactory do
 
     merge_attributes(
       %{
-        id: Factory.uuid(),
-        message_body: %{
+        message_id: Factory.uuid(),
+        message: %{
           "event" => Factory.word(),
           "payload" => %{Factory.word() => Factory.word()}
-        },
-        attributes: %{
-          Factory.word() => Factory.word()
         },
         message_group_id: Factory.unique_word(),
         message_deduplication_id: Factory.uuid()

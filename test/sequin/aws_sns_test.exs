@@ -27,23 +27,28 @@ defmodule Sequin.Aws.SNSTest do
         assert conn.host == "sns.us-east-1.amazonaws.com"
         assert conn.method == "POST"
 
-        Req.Test.json(conn, %{
-          "PublishBatchResponse" => %{
-            "PublishBatchResult" => %{
-              "Failed" => :none,
-              "Successful" => %{
-                "member" => %{
-                  "Id" => "23df4256-b838-4538-ad38-b4231aa2b71c",
-                  "MessageId" => "73260025-473a-5494-b7d2-6055e8dd4bfd",
-                  "SequenceNumber" => "10000000000000003000"
+        body =
+          AWS.XML.encode_to_iodata!(%{
+            "PublishBatchResponse" => %{
+              "PublishBatchResult" => %{
+                "Failed" => "",
+                "Successful" => %{
+                  "member" => [
+                    %{
+                      "Id" => "23df4256-b838-4538-ad38-b4231aa2b71c",
+                      "MessageId" => "73260025-473a-5494-b7d2-6055e8dd4bfd",
+                      "SequenceNumber" => "10000000000000003000"
+                    }
+                  ]
                 }
+              },
+              "ResponseMetadata" => %{
+                "RequestId" => "abbf754a-da6a-557c-865b-153a6b69bc16"
               }
-            },
-            "ResponseMetadata" => %{
-              "RequestId" => "abbf754a-da6a-557c-865b-153a6b69bc16"
             }
-          }
-        })
+          })
+
+        Req.Test.text(conn, body)
       end)
 
       assert :ok = SNS.publish_messages(client, @topic_arn, messages)
@@ -53,19 +58,41 @@ defmodule Sequin.Aws.SNSTest do
       messages = [SinkFactory.sns_message()]
 
       Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
-        Req.Test.json(conn, %{
-          "Failed" => [
-            %{
-              "Id" => "1",
-              "Code" => "InternalError",
-              "Message" => "Internal Error occurred"
+        body =
+          AWS.XML.encode_to_iodata!(%{
+            "PublishBatchResponse" => %{
+              "PublishBatchResult" => %{
+                "Failed" => %{
+                  "member" => [
+                    %{
+                      "Id" => "23df4256-b838-4538-ad38-b4231aa2b71c",
+                      "Code" => "InternalError",
+                      "Message" => "Internal Error occurred",
+                      "SenderFault" => true
+                    }
+                  ]
+                },
+                "Successful" => %{
+                  "member" => [
+                    %{
+                      "Id" => "23df4256-b838-4538-ad38-b4231aa2b71c",
+                      "MessageId" => "73260025-473a-5494-b7d2-6055e8dd4bfd",
+                      "SequenceNumber" => "10000000000000003000"
+                    }
+                  ]
+                }
+              },
+              "ResponseMetadata" => %{
+                "RequestId" => "abbf754a-da6a-557c-865b-153a6b69bc16"
+              }
             }
-          ],
-          "Successful" => []
-        })
+          })
+
+        Req.Test.text(conn, body)
       end)
 
-      assert {:error, %{"Failed" => [_failed_message]}, _} = SNS.publish_messages(client, @topic_arn, messages)
+      assert {:error, resp, _} = SNS.publish_messages(client, @topic_arn, messages)
+      assert is_map(resp["PublishBatchResponse"]["PublishBatchResult"]["Failed"])
     end
   end
 
@@ -75,28 +102,24 @@ defmodule Sequin.Aws.SNSTest do
         assert conn.method == "POST"
         assert String.contains?(conn.host, "sns.us-east-1.amazonaws.com")
 
-        Req.Test.json(conn, %{
-          "GetTopicAttributesResponse" => %{
-            "GetTopicAttributesResult" => %{
-              "Attributes" => %{
-                "entry" => [
-                  %{
-                    "key" => "TopicArn",
-                    "value" => "arn:aws:sns:us-east-2:689238261712:testing.fifo"
-                  },
-                  %{"key" => "FifoTopic", "value" => "true"},
-                  %{"key" => "DisplayName", "value" => :none},
-                  %{"key" => "ContentBasedDeduplication", "value" => "false"},
-                  %{"key" => "FifoThroughputScope", "value" => "MessageGroup"},
-                  %{"key" => "SubscriptionsConfirmed", "value" => "0"}
-                ]
-              }
-            },
-            "ResponseMetadata" => %{
-              "RequestId" => "abbf754a-da6a-557c-865b-153a6b69bc16"
+        body =
+          AWS.XML.encode_to_iodata!(%{
+            "Attributes" => %{
+              "entry" => [
+                %{
+                  "key" => "TopicArn",
+                  "value" => "arn:aws:sns:us-east-2:689238261712:testing.fifo"
+                },
+                %{"key" => "FifoTopic", "value" => "true"},
+                %{"key" => "DisplayName", "value" => ""},
+                %{"key" => "ContentBasedDeduplication", "value" => "false"},
+                %{"key" => "FifoThroughputScope", "value" => "MessageGroup"},
+                %{"key" => "SubscriptionsConfirmed", "value" => "0"}
+              ]
             }
-          }
-        })
+          })
+
+        Req.Test.text(conn, body)
       end)
 
       assert :ok = SNS.topic_meta(client, @topic_arn)

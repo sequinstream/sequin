@@ -270,9 +270,6 @@ defmodule Sequin.TransformsTest do
                  topic_id: topic_id,
                  credentials: "(credentials present) - sha256sum: " <> _
                },
-               consumer_start: %{
-                 position: "beginning | end | from with value"
-               },
                group_column_names: group_column_names,
                filters: filters
              } = json
@@ -343,9 +340,6 @@ defmodule Sequin.TransformsTest do
              destination: %{
                type: "webhook",
                http_endpoint: endpoint_name
-             },
-             consumer_start: %{
-               position: "beginning | end | from with value"
              },
              group_column_names: group_column_names,
              filters: filters

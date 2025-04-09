@@ -4,6 +4,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Accounts.User
   alias Sequin.Consumers
   alias Sequin.Consumers.AzureEventHubSink
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -118,7 +119,7 @@ defmodule Sequin.Transforms do
   def to_external(%SinkConsumer{sink: sink} = consumer, show_sensitive) do
     consumer =
       consumer
-      |> Repo.preload([:transform, sequence: [:postgres_database]])
+      |> Repo.preload([:active_backfill, :transform, sequence: [:postgres_database]])
       |> SinkConsumer.preload_http_endpoint()
 
     table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
@@ -134,12 +135,10 @@ defmodule Sequin.Transforms do
       actions: consumer.sequence_filter.actions,
       destination: to_external(sink, show_sensitive),
       filters: Enum.map(filters, &format_filter(&1, table)),
-      consumer_start: %{
-        position: "beginning | end | from with value"
-      },
       batch_size: consumer.batch_size,
       transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
-      timestamp_format: consumer.timestamp_format
+      timestamp_format: consumer.timestamp_format,
+      active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive))
     }
   end
 
@@ -280,6 +279,30 @@ defmodule Sequin.Transforms do
       destination_table_name: destination_table.name,
       filters: Enum.map(source_table.column_filters, &to_external/1),
       actions: source_table.actions
+    }
+  end
+
+  def to_external(%Backfill{} = backfill, _show_sensitive) do
+    backfill = Repo.preload(backfill, sink_consumer: [sequence: [:postgres_database]])
+
+    sort_column =
+      Sequin.Enum.find!(
+        backfill.sink_consumer.sequence.postgres_database.tables,
+        &(&1.oid == backfill.sink_consumer.sequence.table_oid)
+      )
+
+    %{
+      id: backfill.id,
+      sink_consumer: backfill.sink_consumer.name,
+      state: backfill.state,
+      sort_column: sort_column.name,
+      rows_initial_count: backfill.rows_initial_count,
+      rows_processed_count: backfill.rows_processed_count,
+      rows_ingested_count: backfill.rows_ingested_count,
+      completed_at: backfill.completed_at,
+      canceled_at: backfill.canceled_at,
+      inserted_at: backfill.inserted_at,
+      updated_at: backfill.updated_at
     }
   end
 
@@ -728,5 +751,15 @@ defmodule Sequin.Transforms do
 
   defp env do
     Application.fetch_env!(:sequin, :env)
+  end
+
+  def from_external_backfill(attrs) do
+    base_params = %{
+      state: Map.get(attrs, "state")
+    }
+
+    base_params = Map.reject(base_params, fn {_k, v} -> is_nil(v) end)
+
+    {:ok, base_params}
   end
 end

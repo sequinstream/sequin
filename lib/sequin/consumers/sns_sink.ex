@@ -16,6 +16,7 @@ defmodule Sequin.Consumers.SnsSink do
     field :region, :string
     field :access_key_id, :string
     field :secret_access_key, Encrypted.Field
+    field :is_fifo, :boolean, default: false
   end
 
   def changeset(struct, params) do

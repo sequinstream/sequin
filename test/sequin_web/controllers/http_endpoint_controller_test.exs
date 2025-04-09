@@ -78,6 +78,13 @@ defmodule SequinWeb.HttpEndpointControllerTest do
       assert http_endpoint.account_id == account.id
     end
 
+    test "creating an http endpoint with duplicate name fails", %{conn: conn, account: account} do
+      ConsumersFactory.insert_http_endpoint!(account_id: account.id, name: "name")
+
+      conn = post(conn, ~p"/api/destinations/http_endpoints", %{name: "name", url: "https://enim.com/iusto"})
+      assert json_response(conn, 422)["errors"] != %{}
+    end
+
     test "returns validation error for invalid attributes", %{conn: conn} do
       invalid_attrs = %{name: nil}
       conn = post(conn, ~p"/api/destinations/http_endpoints", invalid_attrs)

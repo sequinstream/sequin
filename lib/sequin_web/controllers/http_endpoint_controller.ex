@@ -31,6 +31,7 @@ defmodule SequinWeb.HttpEndpointController do
   end
 
   def update(conn, %{"id_or_name" => id_or_name} = params) do
+    params = Map.delete(params, "id_or_name")
     account_id = conn.assigns.account_id
 
     with {:ok, existing_endpoint} <- Consumers.find_http_endpoint_for_account(account_id, id_or_name: id_or_name),

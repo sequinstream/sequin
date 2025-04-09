@@ -34,6 +34,7 @@ defmodule SequinWeb.SinkConsumerController do
   end
 
   def update(conn, %{"id_or_name" => id_or_name} = params) do
+    params = Map.delete(params, "id_or_name")
     account_id = conn.assigns.account_id
     databases = Databases.list_dbs_for_account(account_id)
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)

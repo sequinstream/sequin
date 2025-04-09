@@ -340,6 +340,8 @@ defmodule Sequin.Transforms do
   defp format_operator(:not_null), do: "is not null"
   defp format_operator(op), do: to_string(op)
 
+  defp encrypted_headers(%HttpEndpoint{encrypted_headers: nil}), do: %{}
+
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}) do
     "(#{map_size(encrypted_headers)} encrypted header(s)) - sha256sum: #{sha256sum(encrypted_headers)}"
   end
@@ -357,54 +359,80 @@ defmodule Sequin.Transforms do
   defp maybe_obfuscate(_value, false), do: "********"
 
   def from_external_http_endpoint(attrs) do
-    # Parse headers and encrypted headers regardless of endpoint type
-    with {:ok, headers} <- parse_headers(attrs["headers"]),
-         {:ok, encrypted_headers} <- parse_headers(attrs["encrypted_headers"]) do
-      # Base params that are common to all endpoint types
-      base_params = %{
-        name: attrs["name"],
-        headers: headers,
-        encrypted_headers: encrypted_headers
-      }
+    Enum.reduce_while(attrs, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      case key do
+        "name" ->
+          {:cont, {:ok, Map.put(acc, :name, value)}}
 
-      # Determine the endpoint type and add specific params
-      params =
-        cond do
-          # Webhook.site endpoint
-          Map.get(attrs, "webhook.site") in [true, "true"] ->
-            Map.merge(base_params, %{
-              scheme: :https,
-              host: "webhook.site",
-              path: "/" <> generate_webhook_site_id()
-            })
+        "headers" ->
+          case parse_headers(value) do
+            {:ok, headers} -> {:cont, {:ok, Map.put(acc, :headers, headers)}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
 
-          # Local endpoint
-          Map.get(attrs, "local") == "true" ->
-            Map.merge(base_params, %{
-              use_local_tunnel: true,
-              path: attrs["path"]
-            })
+        "encrypted_headers" ->
+          case parse_headers(value) do
+            {:ok, headers} -> {:cont, {:ok, Map.put(acc, :encrypted_headers, headers)}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
 
-          # External endpoint with URL
-          is_binary(attrs["url"]) ->
-            uri = URI.parse(attrs["url"])
+        "webhook.site" ->
+          if value in [true, "true"] do
+            {:cont,
+             {:ok,
+              acc
+              |> Map.put(:scheme, :https)
+              |> Map.put(:host, "webhook.site")
+              |> Map.put(:path, "/" <> generate_webhook_site_id())}}
+          else
+            {:cont, {:ok, acc}}
+          end
 
-            Map.merge(base_params, %{
-              scheme: uri.scheme,
-              host: uri.host,
-              port: uri.port,
-              path: uri.path,
-              query: uri.query,
-              fragment: uri.fragment
-            })
+        "local" ->
+          if value == "true" do
+            {:cont,
+             {:ok,
+              acc
+              |> Map.put(:use_local_tunnel, true)
+              |> Map.put(:path, attrs["path"])}}
+          else
+            {:cont, {:ok, acc}}
+          end
 
-          # No specific endpoint type provided
-          true ->
-            base_params
-        end
+        "url" ->
+          uri = URI.parse(value)
 
-      {:ok, params}
-    end
+          {:cont,
+           {:ok,
+            acc
+            |> Map.put(:scheme, uri.scheme)
+            |> Map.put(:host, uri.host)
+            |> Map.put(:port, uri.port)
+            |> Map.put(:path, uri.path)
+            |> Map.put(:query, uri.query)
+            |> Map.put(:fragment, uri.fragment)}}
+
+        "path" ->
+          {:cont, {:ok, Map.put(acc, :path, value)}}
+
+        # Ignore internal fields that might be present in the external data
+        "id" ->
+          {:cont, {:ok, acc}}
+
+        "inserted_at" ->
+          {:cont, {:ok, acc}}
+
+        "updated_at" ->
+          {:cont, {:ok, acc}}
+
+        "account_id" ->
+          {:cont, {:ok, acc}}
+
+        # Unknown field
+        _ ->
+          {:halt, {:error, Error.validation(summary: "Unknown field: #{key}")}}
+      end
+    end)
   end
 
   # Helper functions
@@ -438,71 +466,77 @@ defmodule Sequin.Transforms do
   end
 
   def from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints) do
-    # Start with base params that are always included if present
-    base_params = %{
-      name: consumer_attrs["name"],
-      status: parse_status(consumer_attrs["status"]),
-      batch_size: Map.get(consumer_attrs, "batch_size", 1)
-    }
+    Enum.reduce_while(consumer_attrs, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      case key do
+        "name" ->
+          {:cont, {:ok, Map.put(acc, :name, value)}}
 
-    base_params = Sequin.Map.put_if_present(base_params, :timestamp_format, consumer_attrs["timestamp_format"])
+        "status" ->
+          {:cont, {:ok, Map.put(acc, :status, parse_status(value))}}
 
-    # Handle table and database related params if present
-    params =
-      if table_ref = consumer_attrs["table"] do
-        {schema, table_name} = parse_table_reference(table_ref)
-        databases = Repo.preload(databases, [:sequences, :replication_slot])
+        "batch_size" ->
+          case value do
+            size when is_integer(size) and size > 0 and size <= 1_000 ->
+              {:cont, {:ok, Map.put(acc, :batch_size, size)}}
 
-        with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
-             {:ok, sequence} <- find_sequence_by_name(databases, consumer_attrs["database"], consumer_attrs["table"]) do
-          table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
+            _ ->
+              {:halt, {:error, Error.validation(summary: "batch_size must be a positive integer <= 1000")}}
+          end
 
-          {:ok,
-           base_params
-           |> Map.put(:sequence_id, sequence.id)
-           |> Map.put(:replication_slot_id, database.replication_slot.id)
-           |> Map.put(:sequence_filter, %{
-             actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
-             group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
-             column_filters: column_filters(consumer_attrs["filters"], table)
-           })}
-        end
-      else
-        {:ok, base_params}
-      end
+        "table" ->
+          {schema, table_name} = parse_table_reference(value)
+          databases = Repo.preload(databases, [:sequences, :replication_slot])
 
-    # Handle sink if present
-    params =
-      case params do
-        {:ok, current_params} ->
-          if sink_attrs = consumer_attrs["destination"] do
-            case parse_sink(sink_attrs, %{http_endpoints: http_endpoints}) do
-              {:ok, sink} -> {:ok, Map.put(current_params, :sink, sink)}
-              {:error, error} -> {:error, error}
-            end
+          with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
+               {:ok, sequence} <- find_sequence_by_name(databases, consumer_attrs["database"], value) do
+            table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
+
+            {:cont,
+             {:ok,
+              acc
+              |> Map.put(:sequence_id, sequence.id)
+              |> Map.put(:replication_slot_id, database.replication_slot.id)
+              |> Map.put(:sequence_filter, %{
+                actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
+                group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
+                column_filters: column_filters(consumer_attrs["filters"], table)
+              })}}
           else
-            {:ok, current_params}
+            {:error, error} -> {:halt, {:error, error}}
           end
 
-        error ->
-          error
+        # handled in "table"
+        key when key in ~w(database filters group_column_names actions) ->
+          {:cont, {:ok, acc}}
+
+        "destination" ->
+          case parse_sink(value, %{http_endpoints: http_endpoints}) do
+            {:ok, sink} -> {:cont, {:ok, Map.put(acc, :sink, sink)}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+
+        "transform" ->
+          case parse_transform_id(account_id, value) do
+            {:ok, transform_id} -> {:cont, {:ok, Map.put(acc, :transform_id, transform_id)}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+
+        "timestamp_format" ->
+          {:cont, {:ok, Map.put(acc, :timestamp_format, value)}}
+
+        # temporary for backwards compatibility
+        "consumer_start" ->
+          {:cont, {:ok, acc}}
+
+        # Ignore internal fields that might be present in the external data
+        ignored when ignored in ~w(id inserted_at updated_at account_id replication_slot_id sequence_id) ->
+          {:cont, {:ok, acc}}
+
+        # Unknown field
+        _ ->
+          {:halt, {:error, Error.validation(summary: "Unknown field: #{key}")}}
       end
-
-    # Handle transform if present
-    case params do
-      {:ok, current_params} ->
-        if transform_name = consumer_attrs["transform"] do
-          case parse_transform_id(account_id, transform_name) do
-            {:ok, transform_id} -> {:ok, Map.put(current_params, :transform_id, transform_id)}
-            {:error, error} -> {:error, error}
-          end
-        else
-          {:ok, current_params}
-        end
-
-      error ->
-        error
-    end
+    end)
   end
 
   defp parse_sink(nil, _resources), do: {:error, Error.validation(summary: "`sink` is required on sink consumers.")}
@@ -755,12 +789,15 @@ defmodule Sequin.Transforms do
   end
 
   def from_external_backfill(attrs) do
-    base_params = %{
-      state: Map.get(attrs, "state")
-    }
+    Enum.reduce_while(attrs, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+      case key do
+        "state" ->
+          {:cont, {:ok, Map.put(acc, :state, value)}}
 
-    base_params = Map.reject(base_params, fn {_k, v} -> is_nil(v) end)
-
-    {:ok, base_params}
+        # Disallow unknown fields
+        unknown ->
+          {:halt, {:error, Error.validation(summary: "Unknown field: #{unknown}")}}
+      end
+    end)
   end
 end

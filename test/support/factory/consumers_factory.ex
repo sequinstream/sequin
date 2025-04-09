@@ -20,6 +20,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -47,7 +48,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     type =
       attrs[:type] || get_in(attrs, [:sink, :type]) ||
-        Enum.random([:http_push, :redis, :sqs, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq])
+        Enum.random([:http_push, :redis, :sqs, :sns, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq])
 
     {sink_attrs, attrs} = Map.pop(attrs, :sink, %{})
     sink = sink(type, account_id, sink_attrs)
@@ -183,6 +184,19 @@ defmodule Sequin.Factory.ConsumersFactory do
         access_key_id: Factory.word(),
         secret_access_key: Factory.word(),
         is_fifo: Enum.random([true, false])
+      },
+      attrs
+    )
+  end
+
+  defp sink(:sns, _account_id, attrs) do
+    merge_attributes(
+      %SnsSink{
+        type: :sns,
+        topic_arn: "arn:aws:sns:us-east-1:123456789012:MyTopic",
+        region: Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
+        access_key_id: Factory.word(),
+        secret_access_key: Factory.word()
       },
       attrs
     )

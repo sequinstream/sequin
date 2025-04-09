@@ -13,6 +13,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases
   alias Sequin.Databases.DatabaseUpdateWorker
@@ -145,6 +146,18 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       id="new-consumer"
       action={:new}
       consumer={%SinkConsumer{type: :sqs, sink: %SqsSink{}, batch_size: 10}}
+    />
+    """
+  end
+
+  defp render_consumer_form(%{form_kind: "sns"} = assigns) do
+    ~H"""
+    <.live_component
+      current_user={@current_user}
+      module={ConsumerForm}
+      id="new-consumer"
+      action={:new}
+      consumer={%SinkConsumer{type: :sns, sink: %SnsSink{}, batch_size: 10}}
     />
     """
   end

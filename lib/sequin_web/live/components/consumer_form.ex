@@ -17,6 +17,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases
@@ -255,6 +256,12 @@ defmodule SequinWeb.Components.ConsumerForm do
             {:reply, %{ok: false, error: error}, socket}
         end
 
+      :sns ->
+        case test_sns_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
+
       :redis ->
         case test_redis_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
@@ -301,6 +308,28 @@ defmodule SequinWeb.Components.ConsumerForm do
       client = SqsSink.aws_client(sink)
 
       case Sequin.Aws.SQS.queue_meta(client, sink.queue_url) do
+        {:ok, _} -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
+  defp test_sns_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %SnsSink{} = sink -> SnsSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+      client = SnsSink.aws_client(sink)
+
+      case Sequin.Aws.SNS.topic_meta(client, sink.topic_arn) do
         {:ok, _} -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end

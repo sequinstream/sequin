@@ -21,6 +21,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases.Sequence
@@ -76,7 +77,8 @@ defmodule Sequin.Consumers.SinkConsumer do
         :nats,
         :rabbitmq,
         :azure_event_hub,
-        :typesense
+        :typesense,
+        :sns
       ],
       read_after_writes: true
 
@@ -98,6 +100,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       types: [
         http_push: HttpPushSink,
         sqs: SqsSink,
+        sns: SnsSink,
         redis: RedisSink,
         kafka: KafkaSink,
         sequin_stream: SequinStreamSink,

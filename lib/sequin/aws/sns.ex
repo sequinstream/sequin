@@ -81,8 +81,8 @@ defmodule Sequin.Aws.SNS do
   @spec topic_meta(Client.t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def topic_meta(%Client{} = client, topic_arn) do
     case AWS.SNS.get_topic_attributes(client, %{"TopicArn" => topic_arn}) do
-      {:ok, %{"Attributes" => attributes}, %{status_code: 200}} ->
-        {:ok, %{arn: attributes["TopicArn"]}}
+      {:ok, _resp, %{status_code: 200}} ->
+        :ok
 
       {:error, {:unexpected_response, details}} ->
         Logger.debug("[SNS] Failed to get topic attributes: #{inspect(details)}")

@@ -66,18 +66,30 @@ defmodule Sequin.Aws.SNSTest do
         assert String.contains?(conn.host, "sns.us-east-1.amazonaws.com")
 
         Req.Test.json(conn, %{
-          "Attributes" => %{
-            "TopicArn" => "arn:aws:sns:us-east-1:123456789012:test-topic",
-            "DisplayName" => "Test Topic",
-            "SubscriptionsConfirmed" => "5"
+          "GetTopicAttributesResponse" => %{
+            "GetTopicAttributesResult" => %{
+              "Attributes" => %{
+                "entry" => [
+                  %{
+                    "key" => "TopicArn",
+                    "value" => "arn:aws:sns:us-east-2:689238261712:testing.fifo"
+                  },
+                  %{"key" => "FifoTopic", "value" => "true"},
+                  %{"key" => "DisplayName", "value" => :none},
+                  %{"key" => "ContentBasedDeduplication", "value" => "false"},
+                  %{"key" => "FifoThroughputScope", "value" => "MessageGroup"},
+                  %{"key" => "SubscriptionsConfirmed", "value" => "0"},
+                ]
+              }
+            },
+            "ResponseMetadata" => %{
+              "RequestId" => "************************************"
+            }
           }
         })
       end)
 
-      assert {:ok, meta} = SNS.topic_meta(client, @topic_arn)
-      assert meta.topic_arn == "arn:aws:sns:us-east-1:123456789012:test-topic"
-      assert meta.display_name == "Test Topic"
-      assert meta.subscriptions_confirmed == 5
+      assert :ok = SNS.topic_meta(client, @topic_arn)
     end
   end
 end

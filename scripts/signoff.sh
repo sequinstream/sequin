@@ -71,6 +71,7 @@ fi
 echo -e "${BLUE}Attempting to sign off on ${SHA} in ${OWNER}/${REPO} as ${USER}${RESET}"
 
 # Run steps
+run_step "mix deps.get --check-locked"
 run_step "mix format --check-formatted"
 run_step "MIX_ENV=prod mix compile --warnings-as-errors"
 # Pass max cases if asked to do so

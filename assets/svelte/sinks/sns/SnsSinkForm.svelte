@@ -7,42 +7,36 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
-  import {
-    Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger,
-  } from "$lib/components/ui/accordion";
 
   export let form;
   export let errors: any = {};
 
-  // Update is_fifo based on queue URL
-  $: if (form.sink?.queue_url) {
-    form.sink.is_fifo = form.sink.queue_url.endsWith(".fifo");
+  // Update is_fifo based on topic ARN
+  $: if (form.sink?.topic_arn) {
+    form.sink.is_fifo = form.sink.topic_arn.endsWith(".fifo");
   }
 </script>
 
 <Card>
   <CardHeader>
-    <CardTitle>SQS Configuration</CardTitle>
+    <CardTitle>SNS Configuration</CardTitle>
   </CardHeader>
-  <CardContent class="space-y-4">
-    <div class="space-y-2">
-      <Label for="queue-url">Queue URL</Label>
+  <CardContent class="flex flex-col gap-4">
+    <div class="flex flex-col gap-2">
+      <Label for="topic-arn">Topic ARN</Label>
       <Input
-        id="queue-url"
-        bind:value={form.sink.queue_url}
-        placeholder="https://sqs.region.amazonaws.com/123456789012/queue-name"
+        id="topic-arn"
+        bind:value={form.sink.topic_arn}
+        placeholder="arn:aws:sns:region:123456789012:topic-name"
       />
-      {#if errors.sink?.queue_url}
-        <p class="text-destructive text-sm">{errors.sink.queue_url}</p>
+      {#if errors.sink?.topic_arn}
+        <p class="text-destructive text-sm">{errors.sink.topic_arn}</p>
       {:else if errors.sink?.region}
         <p class="text-destructive text-sm">{errors.sink.region}</p>
       {/if}
     </div>
 
-    <div class="space-y-2">
+    <div class="flex flex-col gap-2">
       <Label for="access-key">AWS Access Key ID</Label>
       <Input
         id="access-key"
@@ -58,7 +52,7 @@
       {/if}
     </div>
 
-    <div class="space-y-2">
+    <div class="flex flex-col gap-2">
       <Label for="secret-key">AWS Secret Access Key</Label>
       <Input
         id="secret-key"

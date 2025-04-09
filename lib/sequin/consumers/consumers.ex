@@ -996,6 +996,16 @@ defmodule Sequin.Consumers do
         {:ok, http_endpoint}
       end
     end)
+  rescue
+    error in Postgrex.Error ->
+      msg = Exception.message(error)
+
+      if String.match?(msg, ~r/Cannot delete HTTP endpoint .* as it is in use by/) do
+        "ERROR P0001 (raise_exception) " <> msg = msg
+        {:error, Error.bad_request(message: msg)}
+      else
+        reraise error, __STACKTRACE__
+      end
   end
 
   def test_reachability(%HttpEndpoint{} = http_endpoint) do

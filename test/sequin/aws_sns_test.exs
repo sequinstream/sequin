@@ -78,7 +78,7 @@ defmodule Sequin.Aws.SNSTest do
                   %{"key" => "DisplayName", "value" => :none},
                   %{"key" => "ContentBasedDeduplication", "value" => "false"},
                   %{"key" => "FifoThroughputScope", "value" => "MessageGroup"},
-                  %{"key" => "SubscriptionsConfirmed", "value" => "0"},
+                  %{"key" => "SubscriptionsConfirmed", "value" => "0"}
                 ]
               }
             },

@@ -1,0 +1,77 @@
+%{
+  "user" => %{
+    "id" => record.customer_id,
+    "name" => "John Doe",
+    "active" => "true",
+    "contact" => %{
+      "info" => "Email: #{record.inner.email}, Phone: 123-456-7890",
+      "address" => %{
+        "street" => "123 Elm St",
+        "city" => "Springfield",
+        "zip_code" => "98765",
+        "coordinates" => %{
+          "latitude" => 37.7749,
+          "longitude" => -122.4194
+        }
+      }
+    }
+  },
+  "account" => %{
+    "balance" => 2563.75,
+    "currency" => "USD",
+    "transactions" => [
+      %{"id" => 101, "amount" => -150.00, "type" => "debit", "date" => "2023-01-10"},
+      %{"id" => 102, "amount" => 200.00, "type" => "credit", "date" => "2023-01-17"},
+      %{"id" => 103, "amount" => -50.00, "type" => "debit", "date" => "2023-01-22"}
+    ],
+    "settings" => %{
+      "notifications" => "true",
+      "theme" => "dark",
+      "privacy" => %{
+        "tracking" => "false",
+        "personalization" => "true"
+      }
+    }
+  },
+  "preferences" => %{
+    "language" => "en",
+    "timezone" => "America/New_York",
+    "favorites" => %{
+      "colors" => ["blue", "green", "red"],
+      "movies" => ["Inception", "The Matrix", "Interstellar"],
+      "music" => %{
+        "genres" => ["rock", "jazz", "classical"],
+        "playlists" => [
+          %{"name" => "Morning Vibes", "songs" => ["Song A", "Song B", "Song C"]},
+          %{"name" => "Evening Chill", "songs" => ["Song D", "Song E"]}
+        ]
+      }
+    }
+  },
+  "metadata" => %{
+    "created_at" => "2022-12-01T10:00:00Z",
+    "updated_at" => "2023-03-15T15:45:00Z",
+    "tags" => ["sample", "test", "data"]
+  },
+  "projects" => [
+    %{
+      "project_id" => 1001,
+      "name" => "Apex",
+      "due_date" => "2023-06-01",
+      "tasks" => [
+        %{"task_id" => 501, "description" => "Setup environment", "status" => "done"},
+        %{"task_id" => 502, "description" => "Implement feature X", "status" => "in-progress"},
+        %{"task_id" => 503, "description" => "Test module Y", "status" => "pending"}
+      ]
+    },
+    %{
+      "project_id" => 1002,
+      "name" => "Basalt",
+      "due_date" => "2023-09-15",
+      "tasks" => [
+        %{"task_id" => 601, "description" => "Gather requirements", "status" => "done"},
+        %{"task_id" => 602, "description" => "Design architecture", "status" => "in-progress"}
+      ]
+    }
+  ]
+}

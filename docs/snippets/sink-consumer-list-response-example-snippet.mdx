@@ -1,0 +1,261 @@
+<ResponseExample>
+
+```json Kafka
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-kafka-sink",
+      "status": "active",
+      "table": "public.records",
+      "filters": [],
+      "destination": {
+        "type": "kafka",
+        "hosts": "localhost:9092",
+        "tls": false,
+        "topic": "records",
+        "username": "kafka_user",
+        "password": "kafka_password",
+        "sasl_mechanism": "PLAIN"
+      },
+      "database": "dune",
+      "transform": "id-transform",
+      "active_backfill": null,
+      "batch_size": 50,
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"],
+      "timestamp_format": "iso8601"
+    }
+  ]
+}
+```
+
+```json SQS
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-sqs-sink",
+      "status": "active",
+      "table": "public.records",
+      "filters": [],
+      "destination": {
+        "type": "sqs",
+        "queue_url": "https://sqs.us-east-1.amazonaws.com/123456789012/MyQueue",
+        "region": "us-east-1",
+        "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+        "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+      },
+      "database": "dune",
+      "transform": "id-transform",
+      "active_backfill": null,
+      "batch_size": 50,
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"],
+      "timestamp_format": "iso8601"
+    }
+  ]
+}
+```
+
+```json RabbitMQ
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-rabbitmq-sink",
+      "status": "active",
+      "table": "public.records",
+      "filters": [],
+      "destination": {
+        "type": "rabbitmq",
+        "host": "localhost",
+        "port": 5672,
+        "username": "guest",
+        "password": "guest",
+        "virtual_host": "/",
+        "tls": false,
+        "exchange": "records"
+      },
+      "database": "dune",
+      "transform": "id-transform",
+      "active_backfill": null,
+      "batch_size": 50,
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"],
+      "timestamp_format": "iso8601"
+    }
+  ]
+}
+```
+
+```json Redis
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-redis-sink",
+      "status": "active",
+      "table": "public.records",
+      "filters": [],
+      "destination": {
+        "type": "redis",
+        "host": "localhost",
+        "port": 6379,
+        "stream_key": "records",
+        "database": 0,
+        "tls": false,
+        "username": "redis_user",
+        "password": "redis_password"
+      },
+      "database": "dune",
+      "transform": "id-transform",
+      "active_backfill": null,
+      "batch_size": 50,
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"],
+      "timestamp_format": "iso8601"
+    }
+  ]
+}
+```
+
+```json Azure Event Hub
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-azure-event-hub-sink",
+      "status": "active",
+      "table": "public.records",
+      "filters": [],
+      "destination": {
+        "type": "azure_event_hub",
+        "namespace": "my-namespace",
+        "event_hub_name": "records",
+        "shared_access_key_name": "RootManageSharedAccessKey",
+        "shared_access_key": "your-shared-access-key"
+      },
+      "database": "dune",
+      "transform": "id-transform",
+      "active_backfill": null,
+      "batch_size": 50,
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"],
+      "timestamp_format": "iso8601"
+    }
+  ]
+}
+```
+
+```json NATS
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-nats-sink",
+      "status": "active",
+      "table": "public.records",
+      "filters": [],
+      "destination": {
+        "type": "nats",
+        "host": "localhost",
+        "port": 4222,
+        "username": "nats_user",
+        "password": "nats_password",
+        "jwt": "your-jwt-token",
+        "nkey_seed": "your-nkey-seed",
+        "tls": false
+      },
+      "database": "dune",
+      "transform": "id-transform",
+      "active_backfill": null,
+      "batch_size": 50,
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"],
+      "timestamp_format": "iso8601"
+    }
+  ]
+}
+```
+
+```json GCP PubSub
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-gcp-pubsub-sink",
+      "status": "active",
+      "table": "public.records",
+      "filters": [],
+      "destination": {
+        "type": "gcp_pubsub",
+        "project_id": "my-project",
+        "topic_id": "records",
+        "credentials": "base64-encoded-credentials",
+        "use_emulator": false,
+        "emulator_base_url": "http://localhost:8085"
+      },
+      "database": "dune",
+      "transform": "id-transform",
+      "active_backfill": null,
+      "batch_size": 50,
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"],
+      "timestamp_format": "iso8601"
+    }
+  ]
+}
+```
+
+```json Sequin Stream
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-sequin-stream-sink",
+      "status": "active",
+      "table": "public.records",
+      "filters": [],
+      "destination": {
+        "type": "sequin_stream"
+      },
+      "database": "dune",
+      "transform": "id-transform",
+      "active_backfill": null,
+      "batch_size": 50,
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"],
+      "timestamp_format": "iso8601"
+    }
+  ]
+}
+```
+
+```json Webhook
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-webhook-sink",
+      "status": "active",
+      "table": "public.records",
+      "filters": [],
+      "destination": {
+        "type": "webhook",
+        "http_endpoint": "my-endpoint",
+        "http_endpoint_path": "/webhook"
+      },
+      "database": "dune",
+      "transform": "id-transform",
+      "active_backfill": null,
+      "batch_size": 50,
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"],
+      "timestamp_format": "iso8601"
+    }
+  ]
+}
+```
+
+</ResponseExample>

@@ -1,0 +1,35 @@
+---
+title: 'Delete Sink Consumer'
+api: 'DELETE /sinks/{sink_id_or_name}'
+---
+
+Deletes a sink consumer by its ID or name.
+
+## Request fields
+
+<ParamField path="sink_id_or_name" type="string" required>
+  The name or ID of the sink consumer to delete
+</ParamField>
+
+## Response fields
+
+<ResponseField name="id" type="string" >
+  The unique identifier of the deleted sink consumer
+</ResponseField>
+<ResponseField name="deleted" type="boolean" >
+  Whether the sink consumer was successfully deleted
+</ResponseField>
+
+<RequestExample>
+  ```bash cURL
+  curl -X DELETE "https://api.sequinstream.com/api/sinks/kafka-ids" \
+    -H "Authorization: Bearer YOUR_API_TOKEN"
+  ```
+
+  ```json Response
+  {
+    "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+    "deleted": true
+  }
+  ```
+</RequestExample> 

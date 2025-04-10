@@ -1,0 +1,35 @@
+---
+title: 'Delete HTTP Endpoint'
+api: 'DELETE /destinations/http_endpoints/{endpoint_id_or_name}'
+---
+
+Deletes an HTTP endpoint by its ID.
+
+## Request fields
+
+<ParamField path="endpoint_id_or_name" type="string" required>
+  The ID or name of the HTTP endpoint to delete
+</ParamField>
+
+## Response fields
+
+<ResponseField name="id" type="string" >
+  The unique identifier of the deleted HTTP endpoint
+</ResponseField>
+  <ResponseField name="deleted" type="boolean" >
+  Whether the endpoint was successfully deleted
+</ResponseField>
+
+<RequestExample>
+  ```bash cURL
+  curl -X DELETE "https://api.sequinstream.com/api/destinations/http_endpoints/my-endpoint" \
+    -H "Authorization: Bearer YOUR_API_TOKEN"
+  ```
+
+  ```json Response
+  {
+    "id": "7c87ba76-c13c-4a87-bfff-0f1ba73f33a0",
+    "deleted": true
+  }
+  ```
+</RequestExample> 

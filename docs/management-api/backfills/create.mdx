@@ -1,0 +1,41 @@
+---
+title: 'Create Backfill'
+api: 'POST /sinks/{sink_id_or_name}/backfills'
+---
+
+import ResponseSnippet from '/snippets/backfill-response-snippet.mdx'
+
+Creates a new backfill for a specific sink. The backfill will be created in the `active` state.
+
+## Request fields
+
+<ParamField path="sink_id_or_name" type="string" required>
+  The name or ID of the sink
+</ParamField>
+
+## Response fields
+
+<ResponseSnippet />
+
+<RequestExample>
+  ```bash cURL
+  curl -X POST "https://api.sequinstream.com/api/sinks/kafka-ids/backfills" \
+    -H "Authorization: Bearer YOUR_API_TOKEN"
+  ```
+
+  ```json Response
+  {
+    "id": "e0c918bb-12a2-4810-94a3-387cd672a478",
+    "state": "active",
+    "inserted_at": "2025-04-09T04:06:23Z",
+    "sink_consumer": "kafka-ids",
+    "updated_at": "2025-04-09T04:06:23Z",
+    "canceled_at": null,
+    "completed_at": null,
+    "rows_ingested_count": 0,
+    "rows_initial_count": 0,
+    "rows_processed_count": 0,
+    "sort_column": "benchmark_records"
+  }
+  ```
+</RequestExample>

@@ -1,0 +1,25 @@
+---
+title: 'List Sink Consumers'
+api: 'GET /sinks'
+---
+
+import SinkConsumerResponseSnippet from '/snippets/sink-consumer-response-snippet.mdx'
+import SinkConsumerListResponseExample from '/snippets/sink-consumer-list-response-example-snippet.mdx'
+
+Returns a list of all sink consumers.
+
+## Response fields
+
+<ResponseField name="data" type="data[]">
+Where data is an array of objects with the following fields:
+    <SinkConsumerResponseSnippet />
+</ResponseField>
+
+<RequestExample>
+  ```bash cURL
+  curl -X GET "https://api.sequinstream.com/api/sinks" \
+    -H "Authorization: Bearer YOUR_API_TOKEN"
+  ```
+</RequestExample> 
+
+<SinkConsumerListResponseExample />

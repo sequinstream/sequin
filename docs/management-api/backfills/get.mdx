@@ -1,0 +1,45 @@
+---
+title: 'Get Backfill'
+api: 'GET /sinks/{sink_id_or_name}/backfills/{backfill_id}'
+---
+
+import ResponseSnippet from '/snippets/backfill-response-snippet.mdx'
+
+Returns details for a specific backfill.
+
+## Request fields
+
+<ParamField path="sink_id_or_name" type="string" required>
+  The name or ID of the sink
+</ParamField>
+
+<ParamField path="backfill_id" type="string" required>
+  The ID of the backfill
+</ParamField>
+
+## Response fields
+
+<ResponseSnippet />
+
+<RequestExample>
+  ```bash cURL
+  curl -X GET "https://api.sequinstream.com/api/sinks/kafka-ids/backfills/e0c918bb-12a2-4810-94a3-387cd672a478" \
+    -H "Authorization: Bearer YOUR_API_TOKEN"
+  ```
+
+  ```json Response
+  {
+    "id": "e0c918bb-12a2-4810-94a3-387cd672a478",
+    "state": "completed",
+    "inserted_at": "2025-04-09T04:06:23Z",
+    "sink_consumer": "kafka-ids",
+    "updated_at": "2025-04-09T04:06:28Z",
+    "canceled_at": null,
+    "completed_at": "2025-04-09T04:06:28.000000Z",
+    "rows_ingested_count": 54700,
+    "rows_initial_count": 54700,
+    "rows_processed_count": 54700,
+    "sort_column": "benchmark_records"
+  }
+  ```
+</RequestExample> 

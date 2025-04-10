@@ -40,9 +40,21 @@ apply_config() {
 
   if [ -n "${CONFIG_FILE_PATH}" ] && [ -f "${CONFIG_FILE_PATH}" ]; then
     echo "Substituting environment variables in ${CONFIG_FILE_PATH}"
-    # Perform environment variable substitution in place
-    yq -i '(.. | select(tag == "!!str")) |= envsubst' "${CONFIG_FILE_PATH}"
-    echo "Environment variable substitution complete"
+    # Copy to adjacent location with .interpolated.yml suffix
+    CONFIG_DIR=$(dirname "${CONFIG_FILE_PATH}")
+    CONFIG_FILENAME=$(basename "${CONFIG_FILE_PATH}")
+    INTERPOLATED_CONFIG_PATH="${CONFIG_DIR}/${CONFIG_FILENAME}.interpolated.yml"
+
+    # Copy the original file
+    cp "${CONFIG_FILE_PATH}" "${INTERPOLATED_CONFIG_PATH}"
+
+    # Perform environment variable substitution on the copied file
+    yq -i '(.. | select(tag == "!!str")) |= envsubst' "${INTERPOLATED_CONFIG_PATH}"
+
+    # Update CONFIG_FILE_PATH to use the interpolated file
+    export CONFIG_FILE_PATH="${INTERPOLATED_CONFIG_PATH}"
+
+    echo "Environment variable substitution complete in ${INTERPOLATED_CONFIG_PATH}"
   else
     echo "No config file found or path is empty, skipping environment variable substitution"
   fi

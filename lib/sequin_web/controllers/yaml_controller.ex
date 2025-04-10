@@ -99,7 +99,12 @@ defmodule SequinWeb.YamlController do
       |> Enum.group_by(&get_resource_type/1)
       |> Enum.reject(fn {resource_type, _resources} -> resource_type in ["account", "user"] end)
       |> Map.new(fn {resource_type, resources} ->
-        {"#{resource_type}s", Enum.map(resources, &Transforms.to_external(&1, show_sensitive))}
+        external_resources =
+          resources
+          |> Enum.map(&Transforms.to_external(&1, show_sensitive))
+          |> Enum.map(&Map.delete(&1, :id))
+
+        {"#{resource_type}s", external_resources}
       end)
       |> Ymlr.document!()
 

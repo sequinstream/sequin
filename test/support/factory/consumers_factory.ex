@@ -108,7 +108,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         status: :active,
         sequence_id: sequence_id,
         sequence_filter: sequence_filter,
-        legacy_transform: Enum.random([:none, :record_only])
+        legacy_transform: Enum.random([:none, :record_only]),
+        timestamp_format: :iso8601
       },
       attrs
     )
@@ -359,11 +360,12 @@ defmodule Sequin.Factory.ConsumersFactory do
   def http_endpoint(attrs \\ []) do
     merge_attributes(
       %HttpEndpoint{
-        name: "Test-Endpoint",
+        name: Factory.unique_word(),
         scheme: :https,
-        host: "example.com",
-        path: "/webhook",
+        host: "#{Factory.word()}.com",
+        path: "/#{Factory.word()}",
         headers: %{"Content-Type" => "application/json"},
+        encrypted_headers: %{"Authorization" => "Bearer #{Factory.word()}"},
         account_id: Factory.uuid()
       },
       attrs

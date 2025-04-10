@@ -265,7 +265,7 @@ defmodule SequinWeb.YamlControllerTest do
 
       assert %{"yaml" => exported_yaml} = json_response(conn, 200)
 
-      [database] = Repo.all(PostgresDatabase)
+      [_database] = Repo.all(PostgresDatabase)
       [sequence] = Repo.all(Sequence)
       assert sequence.name == "test-db.public.Characters"
 
@@ -273,7 +273,6 @@ defmodule SequinWeb.YamlControllerTest do
       parsed_yaml = YamlElixir.read_from_string!(exported_yaml)
 
       assert get_in(parsed_yaml, ["databases", Access.at(0)]) == %{
-               "id" => database.id,
                "database" => "sequin_test",
                "hostname" => "localhost",
                "name" => "test-db",

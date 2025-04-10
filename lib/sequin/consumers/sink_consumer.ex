@@ -45,7 +45,8 @@ defmodule Sequin.Consumers.SinkConsumer do
              :status,
              :health,
              :max_memory_mb,
-             :legacy_transform
+             :legacy_transform,
+             :timestamp_format
            ]}
   typed_schema "sink_consumers" do
     field :name, :string
@@ -62,6 +63,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :max_memory_mb, :integer, default: 1024
     field :partition_count, :integer, default: 1
     field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
+    field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
 
     field :type, Ecto.Enum,
       values: [:http_push, :sqs, :sns, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
@@ -141,10 +143,12 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_memory_mb,
       :partition_count,
       :legacy_transform,
-      :transform_id
+      :transform_id,
+      :timestamp_format
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)
+    |> put_defaults()
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
@@ -152,6 +156,18 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:max_memory_mb, greater_than_or_equal_to: 128)
     |> validate_number(:partition_count, greater_than_or_equal_to: 1)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
+  end
+
+  defp put_defaults(changeset) do
+    changeset
+    |> put_change(:batch_size, get_field(changeset, :batch_size) || 1)
+    |> put_change(:ack_wait_ms, get_field(changeset, :ack_wait_ms) || 30_000)
+    |> put_change(:max_waiting, get_field(changeset, :max_waiting) || 20)
+    |> put_change(:max_ack_pending, get_field(changeset, :max_ack_pending) || 10_000)
+    |> put_change(:max_memory_mb, get_field(changeset, :max_memory_mb) || 1024)
+    |> put_change(:partition_count, get_field(changeset, :partition_count) || 1)
+    |> put_change(:legacy_transform, get_field(changeset, :legacy_transform) || :none)
+    |> put_change(:message_kind, get_field(changeset, :message_kind) || :event)
   end
 
   def where_account_id(query \\ base_query(), account_id) do
@@ -230,10 +246,13 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> DateTime.compare(now) == :lt
   end
 
+  def preload_http_endpoint(%HttpPushSink{http_endpoint: nil} = sink) do
+    http_endpoint = Consumers.get_http_endpoint!(sink.http_endpoint_id)
+    %{sink | http_endpoint: http_endpoint}
+  end
+
   def preload_http_endpoint(%SinkConsumer{sink: %HttpPushSink{http_endpoint: nil}} = consumer) do
-    http_endpoint = Consumers.get_http_endpoint!(consumer.sink.http_endpoint_id)
-    sink = %HttpPushSink{consumer.sink | http_endpoint: http_endpoint}
-    %{consumer | sink: sink}
+    %{consumer | sink: preload_http_endpoint(consumer.sink)}
   end
 
   def preload_http_endpoint(consumer), do: consumer

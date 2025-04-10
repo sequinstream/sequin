@@ -147,6 +147,14 @@ defmodule SequinWeb.Router do
     resources("/postgres_replications", PostgresReplicationController, except: [:new, :edit])
     resources("/local_tunnels", LocalTunnelController, only: [:index])
 
+    # HTTP Endpoints routes
+    resources("/destinations/http_endpoints", HttpEndpointController, except: [:new, :edit], param: "id_or_name")
+
+    # Sink Consumer routes
+    resources("/sinks", SinkConsumerController, except: [:new, :edit], param: "id_or_name")
+    # Backfill routes
+    resources("/sinks/:sink_id_or_name/backfills", BackfillController, except: [:new, :edit, :delete])
+
     post("/databases/:id_or_name/test_connection", DatabaseController, :test_connection)
     post("/databases/:id_or_name/setup_replication", DatabaseController, :setup_replication)
     get("/databases/:id_or_name/schemas", DatabaseController, :list_schemas)

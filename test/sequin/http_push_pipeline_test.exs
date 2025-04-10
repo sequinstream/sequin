@@ -745,6 +745,85 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
     end
   end
 
+  describe "timestamp formatting" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          type: :http_push,
+          sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
+          message_kind: :event,
+          timestamp_format: :unix_microsecond,
+          legacy_transform: :none
+        )
+
+      {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
+    end
+
+    test "timestamps are converted to unix format when timestamp_format is set to unix", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
+      test_pid = self()
+      timestamp = DateTime.from_naive!(~N[2023-01-01 00:00:00], "Etc/UTC")
+
+      # Use a fixed timestamp for predictable test results
+      event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          action: :insert,
+          data: %ConsumerEventData{
+            record: %{
+              "id" => "123",
+              "created_at" => timestamp,
+              "nested" => %{
+                "updated_at" => timestamp
+              }
+            },
+            changes: %{
+              "updated_at" => timestamp
+            },
+            action: :insert,
+            metadata: %{
+              table_name: "users",
+              table_schema: "public",
+              commit_timestamp: timestamp,
+              commit_lsn: 123_456,
+              database_name: "postgres",
+              consumer: %{
+                id: consumer.id,
+                name: consumer.name
+              }
+            }
+          }
+        )
+
+      expected_unix_timestamp = DateTime.to_unix(timestamp, :microsecond)
+
+      adapter = fn %Req.Request{} = req ->
+        assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
+        %{"data" => [event_json]} = Jason.decode!(req.body)
+
+        send(test_pid, {:sent, event_json})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
+      assert_receive {:sent, event_json}, 1_000
+
+      # Verify record field timestamps are in unix format
+      assert event_json["record"]["created_at"] == expected_unix_timestamp
+      assert event_json["record"]["nested"]["updated_at"] == expected_unix_timestamp
+      assert event_json["changes"]["updated_at"] == expected_unix_timestamp
+    end
+  end
+
   defp start_pipeline!(consumer, adapter) do
     start_supervised!(
       {SinkPipeline,

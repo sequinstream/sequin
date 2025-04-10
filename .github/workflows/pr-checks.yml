@@ -96,7 +96,7 @@ jobs:
           restore-keys: ${{ runner.os }}-build-
 
       - name: Install Elixir dependencies
-        run: mix deps.get
+        run: mix deps.get --check-locked
 
       - name: Check formatting
         run: mix format --check-formatted

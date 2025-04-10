@@ -380,6 +380,7 @@ defmodule Sequin.Consumers do
   def find_sink_consumer(account_id, params \\ []) do
     params
     |> Enum.reduce(SinkConsumer.where_account_id(account_id), fn
+      {:id, id}, query -> SinkConsumer.where_id(query, id)
       {:name, name}, query -> SinkConsumer.where_name(query, name)
       {:id_or_name, id_or_name}, query -> SinkConsumer.where_id_or_name(query, id_or_name)
       {:type, type}, query -> SinkConsumer.where_type(query, type)
@@ -937,6 +938,7 @@ defmodule Sequin.Consumers do
     |> Enum.reduce(HttpEndpoint.where_account_id(account_id), fn
       {:id, id}, query -> HttpEndpoint.where_id(query, id)
       {:name, name}, query -> HttpEndpoint.where_name(query, name)
+      {:id_or_name, id_or_name}, query -> HttpEndpoint.where_id_or_name(query, id_or_name)
     end)
     |> Repo.one()
     |> case do
@@ -994,6 +996,16 @@ defmodule Sequin.Consumers do
         {:ok, http_endpoint}
       end
     end)
+  rescue
+    error in Postgrex.Error ->
+      msg = Exception.message(error)
+
+      if String.match?(msg, ~r/Cannot delete HTTP endpoint .* as it is in use by/) do
+        "ERROR P0001 (raise_exception) " <> msg = msg
+        {:error, Error.bad_request(message: msg)}
+      else
+        reraise error, __STACKTRACE__
+      end
   end
 
   def test_reachability(%HttpEndpoint{} = http_endpoint) do
@@ -1285,6 +1297,24 @@ defmodule Sequin.Consumers do
       {:ok, backfill} -> backfill
       {:error, error} -> raise error
     end
+  end
+
+  def get_backfill_for_sink_consumer(sink_consumer_id, backfill_id) do
+    sink_consumer_id
+    |> Backfill.where_sink_consumer_id()
+    |> Backfill.where_id(backfill_id)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :backfill, params: %{id: backfill_id})}
+      backfill -> {:ok, backfill}
+    end
+  end
+
+  def list_backfills_for_sink_consumer(sink_consumer_id) do
+    sink_consumer_id
+    |> Backfill.where_sink_consumer_id()
+    |> order_by(desc: :inserted_at)
+    |> Repo.all()
   end
 
   def update_backfill(backfill, attrs, opts \\ []) do

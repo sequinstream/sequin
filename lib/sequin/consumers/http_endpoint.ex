@@ -62,11 +62,13 @@ defmodule Sequin.Consumers.HttpEndpoint do
       :encrypted_headers,
       :use_local_tunnel
     ])
+    |> put_defaults()
     |> validate_required([:name])
     |> validate_uri_components()
     |> foreign_key_constraint(:account_id)
     |> validate_no_port_if_local_tunnel_enabled()
     |> Sequin.Changeset.validate_name()
+    |> unique_constraint([:name, :account_id], name: :http_endpoints_name_account_id_index)
   end
 
   def update_changeset(http_endpoint, attrs) do
@@ -84,8 +86,16 @@ defmodule Sequin.Consumers.HttpEndpoint do
       :encrypted_headers,
       :use_local_tunnel
     ])
+    |> put_defaults()
     |> validate_uri_components()
     |> Sequin.Changeset.validate_name()
+    |> unique_constraint([:name, :account_id], name: :http_endpoints_name_account_id_index)
+  end
+
+  defp put_defaults(changeset) do
+    changeset
+    |> put_change(:encrypted_headers, get_field(changeset, :encrypted_headers) || %{})
+    |> put_change(:headers, get_field(changeset, :headers) || %{})
   end
 
   defp validate_uri_components(changeset) do
@@ -122,6 +132,14 @@ defmodule Sequin.Consumers.HttpEndpoint do
 
   def where_name(query \\ base_query(), name) do
     from([http_endpoint: he] in query, where: he.name == ^name)
+  end
+
+  def where_id_or_name(query \\ base_query(), id_or_name) do
+    if Sequin.String.is_uuid?(id_or_name) do
+      where_id(query, id_or_name)
+    else
+      where_name(query, id_or_name)
+    end
   end
 
   def where_use_local_tunnel(query \\ base_query()) do

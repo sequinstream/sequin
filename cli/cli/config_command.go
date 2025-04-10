@@ -454,7 +454,6 @@ func (c *ConfigCommands) exportAction(ctx *fisk.ParseContext) error {
 		fmt.Printf("%s\n", dim("• You will need to replace values for encrypted fields, like password and encrypted_headers. "))
 		fmt.Printf("\t%s\n", dim("• You can use the --show-sensitive flag to see the actual values."))
 	}
-	fmt.Printf("%s\n", dim("• The field consumer_start is not properly exported. You'll have to specify it."))
 
 	// Print usage instructions
 	fmt.Printf("\n%s\n\n", dim("To use this export:"))

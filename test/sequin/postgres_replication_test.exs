@@ -1112,7 +1112,8 @@ defmodule Sequin.PostgresReplicationTest do
 
     test "emits heartbeat messages" do
       # Attempt to start replication with the non-existent slot
-      start_replication!(heartbeat_interval: 5)
+      id = Faker.UUID.v4()
+      start_replication!(heartbeat_interval: 5, id: id)
 
       stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
@@ -1124,7 +1125,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessorServer, :heartbeat_received}, 1000
 
       # Verify that the Health status was updated
-      {:ok, health} = Sequin.Health.health(%PostgresReplicationSlot{id: "test_slot_id", inserted_at: DateTime.utc_now()})
+      {:ok, health} = Sequin.Health.health(%PostgresReplicationSlot{id: id, inserted_at: DateTime.utc_now()})
 
       check = Enum.find(health.checks, &(&1.slug == :replication_messages))
       assert check.status == :healthy
@@ -1792,6 +1793,7 @@ defmodule Sequin.PostgresReplicationTest do
   end
 
   defp start_replication!(opts) do
+    id = Keyword.get(opts, :id, "test_slot_id")
     db = DatabasesFactory.postgres_database()
     ConnectionCache.cache_connection(db, UnboxedRepo)
 
@@ -1807,12 +1809,12 @@ defmodule Sequin.PostgresReplicationTest do
           message_handler_ctx: %MessageHandler.Context{
             consumers: [],
             wal_pipelines: [],
-            replication_slot_id: "test_slot_id",
+            replication_slot_id: id,
             postgres_database: db,
             table_reader_mod: TableReaderServer
           },
           postgres_database: db,
-          replication_slot: %PostgresReplicationSlot{id: "test_slot_id"}
+          replication_slot: %PostgresReplicationSlot{id: id}
         ],
         opts
       )

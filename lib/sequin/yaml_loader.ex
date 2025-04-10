@@ -17,6 +17,10 @@ defmodule Sequin.YamlLoader do
 
   @app :sequin
 
+  def config_file_path do
+    Application.get_env(@app, :config_file_path)
+  end
+
   def apply! do
     Logger.info("Applying config")
     load_app()
@@ -850,10 +854,6 @@ defmodule Sequin.YamlLoader do
 
   defp config_file_yaml do
     Application.get_env(@app, :config_file_yaml)
-  end
-
-  defp config_file_path do
-    Application.get_env(@app, :config_file_path)
   end
 
   defp load_app do

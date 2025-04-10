@@ -34,6 +34,19 @@ migrate() {
 
 apply_config() {
   echo "Applying config"
+
+  # Get the config file path from the application
+  CONFIG_FILE_PATH=$(./prod/rel/sequin/bin/sequin eval "IO.puts Sequin.YamlLoader.config_file_path()")
+
+  if [ -n "${CONFIG_FILE_PATH}" ] && [ -f "${CONFIG_FILE_PATH}" ]; then
+    echo "Substituting environment variables in ${CONFIG_FILE_PATH}"
+    # Perform environment variable substitution in place
+    yq -i '(.. | select(tag == "!!str")) |= envsubst' "${CONFIG_FILE_PATH}"
+    echo "Environment variable substitution complete"
+  else
+    echo "No config file found or path is empty, skipping environment variable substitution"
+  fi
+
   ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply!"
   echo "Config applied"
 }

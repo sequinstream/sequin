@@ -26,6 +26,7 @@ defmodule Scratch do
   end
 
   @goodop [
+    # note that e.g. <<0::99999>> creates large binary
     :"::", :<<>>,
     :+, :-, :*, :/,
     :==, :!=, :===, :!==, :>, :>=, :<, :<=,

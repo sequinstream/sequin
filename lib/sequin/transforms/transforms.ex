@@ -609,6 +609,17 @@ defmodule Sequin.Transforms do
      }}
   end
 
+  defp parse_sink(%{"type" => "sns"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :sns,
+       topic_arn: attrs["topic_arn"],
+       region: attrs["region"],
+       access_key_id: attrs["access_key_id"],
+       secret_access_key: attrs["secret_access_key"]
+     }}
+  end
+
   defp parse_sink(%{"type" => "rabbitmq"} = attrs, _resources) do
     {:ok,
      %{

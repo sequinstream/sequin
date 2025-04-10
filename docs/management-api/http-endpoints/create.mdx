@@ -1,0 +1,89 @@
+---
+title: 'Create HTTP Endpoint'
+api: 'POST /destinations/http_endpoints'
+---
+
+import EndpointResponseSnippet from '/snippets/http-endpoint-response-snippet.mdx'
+import EndpointResponseExample from '/snippets/http-endpoint-single-response-example-snippet.mdx'
+
+Creates a new HTTP endpoint.
+
+## Request fields
+
+The request body is one of the following:
+
+<Expandable title="HTTP endpoint">
+  <ParamField body="name" type="string" required>
+    The name of the HTTP endpoint
+  </ParamField>
+
+  <ParamField body="url" type="string" required>
+    The URL of the HTTP endpoint
+  </ParamField>
+
+  <ParamField body="headers" type="object">
+    Headers to include with requests
+  </ParamField>
+
+  <ParamField body="encrypted_headers" type="object">
+    Headers that should be encrypted
+  </ParamField>
+</Expandable>
+
+<Expandable title="webhook.site endpoint">
+  <ParamField body="name" type="string" required>
+    The name of the HTTP endpoint
+  </ParamField>
+
+  <ParamField body="webhook.site" type="boolean" required>
+    Set to true to create a webhook.site endpoint
+  </ParamField>
+</Expandable>
+
+<Expandable title="local endpoint">
+  <ParamField body="name" type="string" required>
+    The name of the HTTP endpoint
+  </ParamField>
+
+  <ParamField body="local" type="boolean" required>
+    Set to true to create a local endpoint
+  </ParamField>
+
+  <ParamField body="path" type="string" required>
+    The path for the local endpoint
+  </ParamField>
+
+  <ParamField body="headers" type="object">
+    Headers to include with requests
+  </ParamField>
+
+  <ParamField body="encrypted_headers" type="object">
+    Headers that should be encrypted
+  </ParamField>
+</Expandable>
+
+## Response fields
+
+The response is one of the following:
+
+<EndpointResponseSnippet />
+
+<RequestExample>
+  ```bash cURL
+  curl -X POST "https://api.sequinstream.com/api/destinations/http_endpoints" \
+    -H "Authorization: Bearer YOUR_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "name": "my-endpoint",
+      "url": "https://dune.com/sandworms",
+      "headers": {
+        "house": "atreides"
+      },
+      "encrypted_headers": {
+        "secret": "house-secret"
+      }
+    }'
+  ```
+</RequestExample> 
+
+<EndpointResponseExample />

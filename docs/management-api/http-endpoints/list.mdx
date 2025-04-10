@@ -1,0 +1,28 @@
+---
+title: 'List HTTP Endpoints'
+api: 'GET /destinations/http_endpoints'
+---
+
+import ResponseSnippet from '/snippets/http-endpoint-response-snippet.mdx'
+import ListResponseExample from '/snippets/http-endpoint-list-response-example-snippet.mdx'
+
+Returns a list of all HTTP endpoints.
+
+## Response fields
+
+There are three types of HTTP endpoints:
+
+<ResponseField name="data" type="data[]">
+Where `data` is one of:
+
+<ResponseSnippet />
+</ResponseField>
+
+<RequestExample>
+  ```bash cURL
+  curl -X GET "https://api.sequinstream.com/api/destinations/http_endpoints" \
+    -H "Authorization: Bearer YOUR_API_TOKEN"
+  ```
+</RequestExample>
+
+<ListResponseExample /> 

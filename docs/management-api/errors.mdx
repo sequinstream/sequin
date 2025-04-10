@@ -11,29 +11,25 @@ iconType: "solid"
 | ---------------- | ------------------------- | ------------------------------------------------------------------------------- |
 | 400              | **Bad Request**           | Your request is invalid.                                                        |
 | 401              | **Unauthorized**          | Your API key is wrong.                                                          |
-| 403              | **Forbidden**             | The object requested is hidden for administrators only.                         |
 | 404              | **Not Found**             | The specified object could not be found.                                        |
 | 422              | **Unprocessable Entity**  | Your request failed validation.                                                 |
 | 429              | **Too Many Requests**     | You're requesting too many kittens! Slow down!                                  |
 | 500              | **Internal Server Error** | We had a problem with our server. Try again later.                              |
-| 501              | **Not Implemented**       | The server does not support the functionality required to fulfill the request.  |
-| 504              | **Gateway Timeout**       | Your request took too long to response.                                         |
-
+| 502              | **Bad Gateway**           | The service encountered an error while processing your request.                 |
+| 504              | **Gateway Timeout**       | Your request took too long to respond.                                          |
 
 ## Error JSON
 
-Errors from Sequin have a consistent `JSON` body. Each HTTP status code has it's own canonical fields:
+Errors from Sequin have a consistent `JSON` body. Each HTTP status code has its own canonical fields:
 
-
-| HTTP status code | JSON Body
+| HTTP status code | JSON Body                                                                                                 |
 | ---------------- | -------------------------------------------------------------------------------------------------------- |
 | 400              | `{"summary": "Error summary"}`
 | 401              | `{"summary": "Error summary"}`
-| 403              | `{"summary": "Error summary"}`
 | 404              | `{"summary": "Error summary"}`
-| 422              | `{"summary": "Error summary", "validation_errors": {"Some validation": ["Reason for validation failure"]}}`
+| 422              | `{"summary": "Error summary", "validation_errors": {"field_name": ["Reason for validation failure"]}}`
 | 429              | `{"summary": "Error summary"}`
 | 500              | `{"summary": "Error summary"}`
-| 501              | `{"summary": "Error summary"}`
+| 502              | `{"summary": "Error summary"}`
 | 504              | `{"summary": "Error summary"}`
 

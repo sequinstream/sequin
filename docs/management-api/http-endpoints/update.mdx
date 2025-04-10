@@ -1,0 +1,78 @@
+---
+title: 'Update HTTP Endpoint'
+api: 'PATCH /destinations/http_endpoints/{endpoint_id_or_name}'
+---
+
+import EndpointResponseSnippet from '/snippets/http-endpoint-response-snippet.mdx'
+import EndpointResponseExample from '/snippets/http-endpoint-single-response-example-snippet.mdx'
+
+Updates an existing HTTP endpoint.
+
+## Request fields
+
+The modifiable fields depend on the type of HTTP endpoint.
+
+<ParamField path="endpoint_id_or_name" type="string" required>
+  The ID or name of the HTTP endpoint to update
+</ParamField>
+
+The request body depends on the type of endpoint being updated:
+
+<Expandable title="HTTP endpoint">
+  <ParamField body="name" type="string">
+    The name of the HTTP endpoint
+  </ParamField>
+
+  <ParamField body="url" type="string">
+    The URL of the HTTP endpoint
+  </ParamField>
+
+  <ParamField body="headers" type="object">
+    Headers to include with requests
+  </ParamField>
+
+  <ParamField body="encrypted_headers" type="object">
+    Headers that should be encrypted
+  </ParamField>
+</Expandable>
+
+<Expandable title="webhook.site endpoint">
+  <ParamField body="name" type="string">
+    The name of the HTTP endpoint
+  </ParamField>
+</Expandable>
+
+<Expandable title="local endpoint">
+  <ParamField body="name" type="string">
+    The name of the HTTP endpoint
+  </ParamField>
+
+  <ParamField body="path" type="string">
+    The path for the local endpoint
+  </ParamField>
+
+  <ParamField body="headers" type="object">
+    Headers to include with requests
+  </ParamField>
+
+  <ParamField body="encrypted_headers" type="object">
+    Headers that should be encrypted
+  </ParamField>
+</Expandable>
+
+## Response fields
+
+The response is one of the following:
+
+<EndpointResponseSnippet />
+
+<RequestExample>
+  ```bash cURL
+  curl -X PATCH "https://api.sequinstream.com/api/destinations/http_endpoints/my-endpoint" \
+    -H "Authorization: Bearer YOUR_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"headers": {"house": "fremen"}}'
+  ```
+</RequestExample> 
+
+<EndpointResponseExample />

@@ -1,12 +1,12 @@
 ---
 title: 'Ack messages'
 description: "Ack messages in a Sequin Stream"
-api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/ack'
+api: 'POST /api/http_pull_consumers/{consumer_id_or_name}/ack'
 ---
 
 ## Request parameters
 
-<ParamField path="consumer_name_or_id" type="string" required>
+<ParamField path="consumer_id_or_name" type="string" required>
   The ID or name of the Sequin Stream.
 </ParamField>
 <ParamField body="ack_ids" type="string[]" required>

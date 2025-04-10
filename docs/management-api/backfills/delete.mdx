@@ -1,0 +1,40 @@
+---
+title: 'Delete Backfill'
+api: 'DELETE /sinks/{sink_id_or_name}/backfills/{backfill_id}'
+---
+
+Deletes a backfill by its ID.
+
+## Request fields
+
+<ParamField path="sink_id_or_name" type="string" required>
+  The name or ID of the sink
+</ParamField>
+
+<ParamField path="backfill_id" type="string" required>
+  The ID of the backfill to delete
+</ParamField>
+
+## Response fields
+
+<ResponseField name="id" type="string" >
+  The unique identifier of the deleted backfill
+</ResponseField>
+
+<ResponseField name="deleted" type="boolean" >
+  Whether the backfill was successfully deleted
+</ResponseField>
+
+<RequestExample>
+  ```bash cURL
+  curl -X DELETE "https://api.sequinstream.com/api/sinks/kafka-ids/backfills/e0c918bb-12a2-4810-94a3-387cd672a478" \
+    -H "Authorization: Bearer YOUR_API_TOKEN"
+  ```
+
+  ```json Response
+  {
+    "id": "e0c918bb-12a2-4810-94a3-387cd672a478",
+    "deleted": true
+  }
+  ```
+</RequestExample> 

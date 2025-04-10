@@ -1,26 +1,45 @@
 ---
 title: Authentication
-description: Sequin's API uses HTTP Bearer Authentication.
+description: How to authenticate with the Sequin Management API.
 icon: "key"
 iconType: "solid"
 ---
 
-You can [retrieve and manage your API tokens](/management-api/introduction ) in your account settings page in the [Sequin Console](https://console.sequinstream.com).
+All API requests require authentication using a Bearer token. The token can be found in the Sequin Console under the "Manage account" section.
 
-## API requests
+## Retrieve your API token
 
-You'll include your token in the header of your HTTP requests. For example, with a client such as `curl`, you can include your token by using the `--header` option:
+You can retrieve your API token from the [Sequin Console](https://console.sequinstream.com):
 
-```bash
-curl --request GET \
-  --url api.sequinstream.com/api/http_pull_consumers/{{sequin_stream_name}}/receive \
-  --header 'Authorization: Bearer YOUR_API_TOKEN'
+<Steps>
+  <Step title="Navigate to account settings">
+    Click your account name (next to the gear ⚙️ icon) in the bottom left corner and select "Manage account".
+  </Step>
+  <Step title="Find your API token">
+    Your API token is displayed under **API tokens**.
+  </Step>
+</Steps>
+
+You can generate and delete API tokens as needed.
+
+## Using your API token
+
+Include the token in the Authorization header of your requests:
+
+```
+Authorization: Bearer YOUR_API_TOKEN
 ```
 
-## CLI
-
-You can set your API token as a context variable in the [Sequin CLI](/reference/cli/overview) by running:
+An example cURL request with Bearer token authorization:
 
 ```bash
-sequin context add {{CONTEXT_NAME}} --api-token={{YOUR_API_TOKEN}}
+curl -X GET "https://api.sequinstream.com/api/sinks" \
+  -H "Authorization: Bearer YOUR_API_TOKEN"
 ```
+
+## Token security
+
+- Keep your API tokens secure and never share them publicly
+- Rotate your tokens regularly
+- Delete tokens that are no longer needed
+- Use different tokens for different environments (development, staging, production)

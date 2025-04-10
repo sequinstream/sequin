@@ -1,0 +1,235 @@
+<ResponseField name="id" type="string" >
+    The unique identifier of the sink consumer
+</ResponseField>
+<ResponseField name="name" type="string" >
+    The name of the sink consumer
+</ResponseField>
+<ResponseField name="status" type="string" >
+    The current status of the sink consumer (active, disabled, paused)
+</ResponseField>
+<ResponseField name="table" type="string" >
+    The source table for the sink consumer.
+
+    The table name is of the format `schema.table`. Schema is optional and defaults to `public`.
+</ResponseField>
+<ResponseField name="filters" type="array" >
+    Array of filters to apply to the source data
+</ResponseField>
+<ResponseField name="destination" type="object" >
+    The destination configuration for the sink consumer. The shape varies by destination type.
+    <Expandable title="destination properties" anyOf={true} >
+        <Expandable title="Kafka properties" >
+            <ResponseField name="type" type="string" >
+                Must be "kafka"
+            </ResponseField>
+            <ResponseField name="hosts" type="string" >
+                Comma-separated list of Kafka hosts
+            </ResponseField>
+            <ResponseField name="tls" type="boolean" >
+                Whether to use TLS
+            </ResponseField>
+            <ResponseField name="topic" type="string" >
+                Kafka topic name
+            </ResponseField>
+            <ResponseField name="username" type="string" >
+                Optional username for authentication
+            </ResponseField>
+            <ResponseField name="password" type="string" >
+                Optional password for authentication
+            </ResponseField>
+            <ResponseField name="sasl_mechanism" type="string" >
+                Optional SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
+            </ResponseField>
+        </Expandable>
+
+        <Expandable title="SQS properties" >
+            <ResponseField name="type" type="string" >
+                Must be "sqs"
+            </ResponseField>
+            <ResponseField name="queue_url" type="string" >
+                SQS queue URL
+            </ResponseField>
+            <ResponseField name="region" type="string" >
+                AWS region
+            </ResponseField>
+            <ResponseField name="access_key_id" type="string" >
+                AWS access key ID
+            </ResponseField>
+            <ResponseField name="secret_access_key" type="string" >
+                AWS secret access key
+            </ResponseField>
+        </Expandable>
+
+
+        <Expandable title="RabbitMQ properties" >
+            <ResponseField name="type" type="string" >
+                Must be "rabbitmq"
+            </ResponseField>
+            <ResponseField name="host" type="string" >
+                RabbitMQ host
+            </ResponseField>
+            <ResponseField name="port" type="integer" >
+                RabbitMQ port
+            </ResponseField>
+            <ResponseField name="username" type="string" >
+                Username for authentication
+            </ResponseField>
+            <ResponseField name="password" type="string" >
+                Password for authentication
+            </ResponseField>
+            <ResponseField name="virtual_host" type="string" >
+                Virtual host name
+            </ResponseField>
+            <ResponseField name="tls" type="boolean" >
+                Whether to use TLS
+            </ResponseField>
+            <ResponseField name="exchange" type="string" >
+                Exchange name
+            </ResponseField>
+        </Expandable>
+
+        <Expandable title="Redis properties" >
+            <ResponseField name="type" type="string" >
+                Must be "redis"
+            </ResponseField>
+            <ResponseField name="host" type="string" >
+                Redis host
+            </ResponseField>
+            <ResponseField name="port" type="integer" >
+                Redis port
+            </ResponseField>
+            <ResponseField name="stream_key" type="string" >
+                Redis stream key
+            </ResponseField>
+            <ResponseField name="database" type="integer" >
+                Redis database number
+            </ResponseField>
+            <ResponseField name="tls" type="boolean" >
+                Whether to use TLS
+            </ResponseField>
+            <ResponseField name="username" type="string" >
+                Optional username for authentication
+            </ResponseField>
+            <ResponseField name="password" type="string" >
+                Optional password for authentication
+            </ResponseField>
+        </Expandable>
+
+        <Expandable title="Azure Event Hub properties" >
+            <ResponseField name="type" type="string" >
+                Must be "azure_event_hub"
+            </ResponseField>
+            <ResponseField name="namespace" type="string" >
+                Event Hub namespace
+            </ResponseField>
+            <ResponseField name="event_hub_name" type="string" >
+                Event Hub name
+            </ResponseField>
+            <ResponseField name="shared_access_key_name" type="string" >
+                Shared access key name
+            </ResponseField>
+            <ResponseField name="shared_access_key" type="string" >
+                Shared access key
+            </ResponseField>
+        </Expandable>
+
+        <Expandable title="NATS properties" >
+            <ResponseField name="type" type="string" >
+                Must be "nats"
+            </ResponseField>
+            <ResponseField name="host" type="string" >
+                NATS host
+            </ResponseField>
+            <ResponseField name="port" type="integer" >
+                NATS port
+            </ResponseField>
+            <ResponseField name="username" type="string" >
+                Optional username for authentication
+            </ResponseField>
+            <ResponseField name="password" type="string" >
+                Optional password for authentication
+            </ResponseField>
+            <ResponseField name="jwt" type="string" >
+                Optional JWT for authentication
+            </ResponseField>
+            <ResponseField name="nkey_seed" type="string" >
+                Optional NKey seed for authentication
+            </ResponseField>
+            <ResponseField name="tls" type="boolean" >
+                Whether to use TLS
+            </ResponseField>
+        </Expandable>
+
+        <Expandable title="GCP PubSub properties" >
+            <ResponseField name="type" type="string" >
+                Must be "gcp_pubsub"
+            </ResponseField>
+            <ResponseField name="project_id" type="string" >
+                GCP project ID
+            </ResponseField>
+            <ResponseField name="topic_id" type="string" >
+                PubSub topic ID
+            </ResponseField>
+            <ResponseField name="credentials" type="string" >
+                Base64-encoded credentials
+            </ResponseField>
+            <ResponseField name="use_emulator" type="boolean" >
+                Whether to use the emulator
+            </ResponseField>
+            <ResponseField name="emulator_base_url" type="string" >
+                Emulator base URL if using emulator
+            </ResponseField>
+            </Expandable>
+
+            <Expandable title="Sequin Stream properties" >
+            <ResponseField name="type" type="string" >
+                Must be "sequin_stream"
+            </ResponseField>
+        </Expandable>
+
+        <Expandable title="Webhook properties" >
+            <ResponseField name="type" type="string" >
+                Must be "webhook"
+            </ResponseField>
+            <ResponseField name="http_endpoint" type="string" >
+                HTTP endpoint name
+            </ResponseField>
+            <ResponseField name="http_endpoint_path" type="string" >
+                HTTP endpoint path
+            </ResponseField>
+        </Expandable>
+    </Expandable>
+</ResponseField>
+<ResponseField name="database" type="string" >
+    The source database for the sink consumer.
+
+    When you create a database in Sequin, you specify the name of the database resource. That value is this database field.
+</ResponseField>
+<ResponseField name="transform" type="string" >
+    The transform to apply to messages.
+
+    This is the name of the transform that you created in the Sequin console.
+</ResponseField>
+<ResponseField name="active_backfill" type="string" >
+    The ID of the active backfill, if any.
+
+    Backfills that were completed or cancelled will not appear here.
+</ResponseField>
+<ResponseField name="batch_size" type="integer" >
+    Number of records to batch together (1-1000)
+
+    This is the number of records that will be sent in a single message to the destination.
+</ResponseField>
+<ResponseField name="actions" type="array" >
+    The database actions to include in the sink.
+
+    Possible values include `insert`, `update`, `delete`.
+</ResponseField>
+<ResponseField name="group_column_names" type="array" >
+    Column names used for grouping records
+</ResponseField>
+<ResponseField name="timestamp_format" type="string" >
+    The format of the timestamp in the source data.
+
+    Possible values include `iso8601` and `unix_microsecond`.
+</ResponseField>

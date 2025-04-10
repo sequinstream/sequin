@@ -1,27 +1,83 @@
 ---
 title: Introduction
-description: An overview of Sequin's API.
+description: An overview of Sequin's Management API.
 icon: "book-open"
 iconType: "solid"
 ---
 
-You'll use Sequin's API via the [Sequin CLI](/reference/cli/overview) to manage your Sequin resources and with the [Sequin Stream API](/reference/sequin-stream-api) to process messages in Sequin Stream sinks.
+The Sequin Management API allows you to programmatically control Sequin resources like sinks, HTTP endpoints, and backfills.
 
-<Note>
-  We're working on providing direct CRUD operations for Sequin resources via the API as well.
-</Note>
+The API is intended for developers who want to manage Sequin resources from their own applications. This is useful for:
+* Setting up sinks and backfills for your customers
+* Automatically backfilling a sink, for instance to re-populate a cache destination
 
-## Retrieve your API token
+## Resources
 
-You can retrieve your API token from the [Sequin Console](https://console.sequinstream.com):
+The Management API provides endpoints for managing the following resources:
 
-<Steps>
-  <Step title="Navigate to account settings">
-    Click your account name (next to the gear ⚙️ icon) in the bottom left corner and select "Manage account".
-  </Step>
-  <Step title="Find your API token">
-    Your API token is displayed under **API tokens**.
-  </Step>
-</Steps>
+- [Sinks](/reference/sinks/overview) - Stream data from a table to a destination
+- HTTP Endpoints for [webhook sinks](/reference/sinks/webhooks) - Configure webhook destinations
+- [Backfills](/reference/backfills) - Backfill data from Postgres tables to a sink
 
-You can generate and delete API tokens as needed.
+Not all resources are available in the management API. If you need a resource that is not yet available, please [let us know](https://github.com/sequinstream/sequin/issues/932).
+
+
+## Base URL
+
+In cloud, the base URL for all API endpoints is:
+
+```
+https://api.sequinstream.com/api
+```
+
+In our dev docker compose setup, the base URL is:
+
+```
+http://localhost:7376/api
+```
+
+In self hosted deploys, you can access the API on the same port as the console. The URL will be something like:
+
+```
+http(s)://your-host:your-port/api
+```
+
+For the rest of this documentation, we provide paths to be concatenated onto the base URL. For instance, the path to list sinks is:
+
+```
+GET /sinks
+```
+
+And the fully qualified URL is:
+
+```
+https://api.sequinstream.com/api/sinks
+```
+
+or
+
+```
+http://localhost:7376/api/sinks
+```
+
+
+## Authentication
+
+All API requests require authentication using a Bearer token. The token can be found in the Sequin Console under the "Manage account" section.
+
+Include the token in the Authorization header:
+
+```
+Authorization: Bearer YOUR_API_TOKEN
+```
+
+An example cURL request with Bearer token authorization:
+
+```bash
+curl -X GET "https://api.sequinstream.com/api/sinks" \
+  -H "Authorization: Bearer YOUR_API_TOKEN"
+```
+
+## Error Handling
+
+The API uses standard HTTP status codes to indicate the success or failure of a request. See the [errors documentation](/management-api/errors) for details on error responses and handling.

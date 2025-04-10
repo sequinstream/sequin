@@ -1,0 +1,255 @@
+---
+title: 'Update Sink Consumer'
+api: 'PATCH /sinks/{sink_id_or_name}'
+---
+
+import SinkConsumerResponseSnippet from '/snippets/sink-consumer-response-snippet.mdx'
+import SinkConsumerResponseExample from '/snippets/sink-consumer-single-response-example-snippet.mdx'
+
+Updates an existing sink consumer.
+
+## Request fields
+
+<ParamField path="sink_id_or_name" type="string" required>
+  The name or ID of the sink consumer to update
+</ParamField>
+
+The request body can include any of the following fields:
+
+<ParamField body="name" type="string">
+  The name of the sink consumer
+</ParamField>
+
+<ParamField body="status" type="string">
+  The current status of the sink consumer (active, disabled, paused)
+</ParamField>
+
+<ParamField body="filters" type="array">
+  Array of filters to apply to the source data
+</ParamField>
+
+<ParamField body="transform" type="string">
+  The transform to apply to messages.
+
+  This is the name of the transform that you created in the Sequin console.
+</ParamField>
+
+<ParamField body="batch_size" type="integer">
+  Number of records to batch together (1-1000)
+
+  This is the number of records that will be sent in a single message to the destination.
+</ParamField>
+
+<ParamField body="actions" type="array">
+  The database actions to include in the sink.
+
+  Possible values include `insert`, `update`, `delete`.
+</ParamField>
+
+
+<ParamField body="timestamp_format" type="string">
+  The format of the timestamp in the source data.
+
+  Possible values include `iso8601` and `unix_microsecond`.
+</ParamField>
+
+<ParamField body="destination" type="object">
+  The destination configuration for the sink consumer. The shape varies by destination type.
+  <Expandable title="Kafka">
+    <ParamField body="type" type="string">
+      Must be "kafka"
+    </ParamField>
+    <ParamField body="hosts" type="string">
+      Comma-separated list of Kafka hosts
+    </ParamField>
+    <ParamField body="tls" type="boolean">
+      Whether to use TLS
+    </ParamField>
+    <ParamField body="topic" type="string">
+      Kafka topic name
+    </ParamField>
+    <ParamField body="username" type="string">
+      Optional username for authentication
+    </ParamField>
+    <ParamField body="password" type="string">
+      Optional password for authentication
+    </ParamField>
+    <ParamField body="sasl_mechanism" type="string">
+      Optional SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="SQS">
+    <ParamField body="type" type="string">
+      Must be "sqs"
+    </ParamField>
+    <ParamField body="queue_url" type="string">
+      SQS queue URL
+    </ParamField>
+    <ParamField body="region" type="string">
+      AWS region
+    </ParamField>
+    <ParamField body="access_key_id" type="string">
+      AWS access key ID
+    </ParamField>
+    <ParamField body="secret_access_key" type="string">
+      AWS secret access key
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="RabbitMQ">
+    <ParamField body="type" type="string">
+      Must be "rabbitmq"
+    </ParamField>
+    <ParamField body="host" type="string">
+      RabbitMQ host
+    </ParamField>
+    <ParamField body="port" type="integer">
+      RabbitMQ port
+    </ParamField>
+    <ParamField body="username" type="string">
+      Username for authentication
+    </ParamField>
+    <ParamField body="password" type="string">
+      Password for authentication
+    </ParamField>
+    <ParamField body="virtual_host" type="string">
+      Virtual host name
+    </ParamField>
+    <ParamField body="tls" type="boolean">
+      Whether to use TLS
+    </ParamField>
+    <ParamField body="exchange" type="string">
+      Exchange name
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Redis">
+    <ParamField body="type" type="string">
+      Must be "redis"
+    </ParamField>
+    <ParamField body="host" type="string">
+      Redis host
+    </ParamField>
+    <ParamField body="port" type="integer">
+      Redis port
+    </ParamField>
+    <ParamField body="stream_key" type="string">
+      Redis stream key
+    </ParamField>
+    <ParamField body="database" type="integer">
+      Redis database number
+    </ParamField>
+    <ParamField body="tls" type="boolean">
+      Whether to use TLS
+    </ParamField>
+    <ParamField body="username" type="string">
+      Optional username for authentication
+    </ParamField>
+    <ParamField body="password" type="string">
+      Optional password for authentication
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Azure Event Hub">
+    <ParamField body="type" type="string">
+      Must be "azure_event_hub"
+    </ParamField>
+    <ParamField body="namespace" type="string">
+      Event Hub namespace
+    </ParamField>
+    <ParamField body="event_hub_name" type="string">
+      Event Hub name
+    </ParamField>
+    <ParamField body="shared_access_key_name" type="string">
+      Shared access key name
+    </ParamField>
+    <ParamField body="shared_access_key" type="string">
+      Shared access key
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="NATS">
+    <ParamField body="type" type="string">
+      Must be "nats"
+    </ParamField>
+    <ParamField body="host" type="string">
+      NATS host
+    </ParamField>
+    <ParamField body="port" type="integer">
+      NATS port
+    </ParamField>
+    <ParamField body="username" type="string">
+      Optional username for authentication
+    </ParamField>
+    <ParamField body="password" type="string">
+      Optional password for authentication
+    </ParamField>
+    <ParamField body="jwt" type="string">
+      Optional JWT for authentication
+    </ParamField>
+    <ParamField body="nkey_seed" type="string">
+      Optional NKey seed for authentication
+    </ParamField>
+    <ParamField body="tls" type="boolean">
+      Whether to use TLS
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="GCP PubSub">
+    <ParamField body="type" type="string">
+      Must be "gcp_pubsub"
+    </ParamField>
+    <ParamField body="project_id" type="string">
+      GCP project ID
+    </ParamField>
+    <ParamField body="topic_id" type="string">
+      PubSub topic ID
+    </ParamField>
+    <ParamField body="credentials" type="string">
+      Base64-encoded credentials
+    </ParamField>
+    <ParamField body="use_emulator" type="boolean">
+      Whether to use the emulator
+    </ParamField>
+    <ParamField body="emulator_base_url" type="string">
+      Emulator base URL if using emulator
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Sequin Stream">
+    <ParamField body="type" type="string">
+      Must be "sequin_stream"
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Webhook">
+    <ParamField body="type" type="string">
+      Must be "webhook"
+    </ParamField>
+    <ParamField body="http_endpoint" type="string">
+      HTTP endpoint name
+    </ParamField>
+    <ParamField body="http_endpoint_path" type="string">
+      HTTP endpoint path
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response fields
+
+<SinkConsumerResponseSnippet />
+
+<RequestExample>
+  ```bash cURL
+  curl -X PATCH "https://api.sequinstream.com/api/sinks/kafka-ids" \
+    -H "Authorization: Bearer YOUR_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "status": "disabled",
+      "batch_size": 50
+    }'
+  ```
+</RequestExample> 
+
+<SinkConsumerResponseExample />

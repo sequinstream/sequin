@@ -1,0 +1,33 @@
+<ResponseField name="id" type="string" >
+    The unique identifier of the backfill
+</ResponseField>
+<ResponseField name="state" type="string" >
+    The current state of the backfill (active, completed, cancelled)
+</ResponseField>
+<ResponseField name="inserted_at" type="string" >
+    The timestamp when the backfill was created
+</ResponseField>
+<ResponseField name="sink_consumer" type="string" >
+    The name of the sink consumer
+</ResponseField>
+<ResponseField name="updated_at" type="string" >
+    The timestamp when the backfill was last updated
+</ResponseField>
+<ResponseField name="canceled_at" type="string" >
+    The timestamp when the backfill was cancelled (null if not cancelled)
+</ResponseField>
+<ResponseField name="completed_at" type="string" >
+    The timestamp when the backfill was completed (null if not completed)
+</ResponseField>
+<ResponseField name="rows_ingested_count" type="integer" >
+    The number of rows ingested by the backfill
+</ResponseField>
+<ResponseField name="rows_initial_count" type="integer" >
+    The initial number of rows to be processed
+</ResponseField>
+<ResponseField name="rows_processed_count" type="integer" >
+    The number of rows processed by the backfill
+</ResponseField>
+<ResponseField name="sort_column" type="string" >
+    The column used for sorting the backfill data
+</ResponseField>

@@ -2,14 +2,14 @@
 title: 'Receive next messages'
 sidebarTitle: "Receive"
 description: "Use the `/receive` endpoint to get one or more messages from a Sequin Stream"
-api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/receive'
+api: 'POST /api/http_pull_consumers/{consumer_id_or_name}/receive'
 ---
 
 <Note>You can use either `POST` or `GET` to receive messages from a Sequin Stream.</Note>
 
 ## Request parameters
 
-<ParamField path="name_or_id" type="string" required>
+<ParamField path="id_or_name" type="string" required>
   The ID or name of the Sequin Stream.
 </ParamField>
 <ParamField body="batch_size" type="integer" placeholder={1}>

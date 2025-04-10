@@ -1,0 +1,28 @@
+---
+title: 'Get Sink Consumer'
+api: 'GET /sinks/{sink_id_or_name}'
+---
+
+import SinkConsumerResponseSnippet from '/snippets/sink-consumer-response-snippet.mdx'
+import SinkConsumerResponseExample from '/snippets/sink-consumer-single-response-example-snippet.mdx'
+
+Returns details for a specific sink consumer.
+
+## Request fields
+
+<ParamField path="sink_id_or_name" type="string" required>
+  The name or ID of the sink consumer
+</ParamField>
+
+## Response fields
+
+<SinkConsumerResponseSnippet />
+
+<RequestExample>
+  ```bash cURL
+  curl -X GET "https://api.sequinstream.com/api/sinks/kafka-ids" \
+    -H "Authorization: Bearer YOUR_API_TOKEN"
+  ```
+</RequestExample> 
+
+<SinkConsumerResponseExample />

@@ -7,7 +7,7 @@
     "href": "https://sequinstream.com"
   },
   "favicon": "/favicon.png",
-  "theme": "quill",
+  "theme": "venus",
   "colors": {
     "primary": "#7855FF",
     "light": "#F5F5F5",
@@ -44,7 +44,7 @@
   },
   "tabs": [
     {
-      "name": "API",
+      "name": "API Reference",
       "url": "management-api"
     }
   ],
@@ -122,9 +122,9 @@
         "reference/change-retention",
         "reference/annotations",
         "reference/sequin-yaml",
-        "reference/management-api",
         "reference/cli/overview",
-        "reference/metrics"
+        "reference/metrics",
+        "reference/management-api"
       ]
     },
     {
@@ -179,6 +179,36 @@
       "pages": [
         "management-api/introduction",
         "management-api/authentication",
+        {
+          "group": "HTTP Endpoints",
+          "pages": [
+            "management-api/http-endpoints/list",
+            "management-api/http-endpoints/get",
+            "management-api/http-endpoints/create",
+            "management-api/http-endpoints/update",
+            "management-api/http-endpoints/delete"
+          ]
+        },
+        {
+          "group": "Sink Consumers",
+          "pages": [
+            "management-api/sink-consumers/list",
+            "management-api/sink-consumers/get",
+            "management-api/sink-consumers/create",
+            "management-api/sink-consumers/update",
+            "management-api/sink-consumers/delete"
+          ]
+        },
+        {
+          "group": "Backfills",
+          "pages": [
+            "management-api/backfills/list",
+            "management-api/backfills/get",
+            "management-api/backfills/create",
+            "management-api/backfills/update",
+            "management-api/backfills/delete"
+          ]
+        },
         "management-api/errors"
       ]
     }
@@ -235,6 +265,11 @@
     {
       "source": "/guides/azure",
       "destination": "/how-to/setup-azure",
+      "permanent": true
+    },
+    {
+      "source": "/reference/management-api",
+      "destination": "/management-api/introduction",
       "permanent": true
     }
   ]

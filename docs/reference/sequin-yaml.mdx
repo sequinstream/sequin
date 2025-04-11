@@ -206,6 +206,20 @@ destination:
   password: "redis-pass"        # Optional, for authentication
 ```
 
+#### RabbitMQ sink
+For publishing changes to RabbitMQ exchanges:
+```yaml
+destination:
+  type: "rabbitmq"              # Required
+  host: "localhost"              # Required
+  port: 5672                    # Required
+  exchange: "my-exchange"        # Required
+  username: "guest"              # Optional, default: guest
+  password: "guest"              # Optional, default: guest
+  virtual_host: "/"              # Optional, default: /
+  tls: false                    # Optional, enable TLS, default: false
+```
+
 #### GCP PubSub sink
 For publishing changes to Google Cloud Pub/Sub topics:
 ```yaml

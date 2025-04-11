@@ -10,6 +10,7 @@
     Pause,
     AlertTriangle,
     StopCircle,
+    BookText,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -103,6 +104,15 @@
   onMount(() => {
     activeTab = live_action === "messages" ? "messages" : "overview";
   });
+
+  let sinkDocsSlug: string;
+  switch (consumer.sink.type) {
+    case "http_push":
+      sinkDocsSlug = "webhooks";
+      break;
+    default:
+      sinkDocsSlug = consumer.sink.type.replace(/_/g, "-");
+  }
 </script>
 
 <div class="bg-white border-b header">
@@ -154,6 +164,15 @@
             <span>Updated {formatRelativeTimestamp(consumer.updated_at)}</span>
           </div>
         </div>
+        <a
+          href="https://sequinstream.com/docs/reference/sinks/{sinkDocsSlug}"
+          target="_blank"
+        >
+          <Button variant="outline" size="sm">
+            <BookText class="h-3 w-3 mr-1" />
+            Docs
+          </Button>
+        </a>
         {#if consumer.sink.type !== "sequin_stream"}
           {#if statusTransitioning}
             {#if displayStatus === "active"}

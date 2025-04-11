@@ -275,6 +275,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     {:ok, low_watermark_wal_cursor} = Sequin.Replication.low_watermark_wal_cursor(state.id)
 
+    Logger.info("[SlotProcessorServer] Low watermark wal cursor for slot: #{inspect(low_watermark_wal_cursor)}")
+
     query =
       if state.id in @slots_ids_with_old_postgres do
         "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"

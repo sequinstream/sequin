@@ -62,12 +62,15 @@ defmodule Sequin.YamlLoader do
   def apply_from_yml(account_id \\ nil, yml, opts \\ []) do
     case YamlElixir.read_from_string(yml, merge_anchors: true) do
       {:ok, config} ->
-        Repo.transaction(fn ->
-          case apply_config(account_id, config, opts) do
-            {:ok, resources} -> {:ok, resources}
-            {:error, error} -> Repo.rollback(error)
-          end
-        end)
+        Repo.transaction(
+          fn ->
+            case apply_config(account_id, config, opts) do
+              {:ok, resources} -> {:ok, resources}
+              {:error, error} -> Repo.rollback(error)
+            end
+          end,
+          timeout: :timer.seconds(90)
+        )
 
       {:error, %YamlElixir.ParsingError{} = error} ->
         {:error, Error.bad_request(message: "Invalid YAML: #{Exception.message(error)}")}
@@ -83,11 +86,14 @@ defmodule Sequin.YamlLoader do
     case YamlElixir.read_from_string(yml, merge_anchors: true) do
       {:ok, config} ->
         result =
-          Repo.transaction(fn ->
-            account_id
-            |> apply_config(config, opts)
-            |> Repo.rollback()
-          end)
+          Repo.transaction(
+            fn ->
+              account_id
+              |> apply_config(config, opts)
+              |> Repo.rollback()
+            end,
+            timeout: :timer.seconds(90)
+          )
 
         case result do
           {:error, {:ok, planned_resources}} ->

@@ -17,12 +17,13 @@ defmodule SequinWeb.TransformsLive.Edit do
 
   require Logger
 
+  @max_test_messages TestMessages.max_message_count()
+
   def mount(params, _session, socket) do
     id = params["id"]
 
     if connected?(socket) do
       schedule_poll_test_messages()
-      TestMessages.register_needs_messages(current_account_id(socket))
     end
 
     changeset =
@@ -42,8 +43,6 @@ defmodule SequinWeb.TransformsLive.Edit do
         []
       end
 
-    test_messages = TestMessages.get_test_messages(current_account_id(socket))
-
     socket =
       socket
       |> assign(
@@ -52,9 +51,11 @@ defmodule SequinWeb.TransformsLive.Edit do
         form_data: changeset_to_form_data(changeset),
         used_by_consumers: used_by_consumers,
         form_errors: %{},
-        test_messages: test_messages,
+        test_messages: [],
         validating: false,
-        show_errors?: false
+        show_errors?: false,
+        selected_database_id: nil,
+        selected_table_oid: nil
       )
       |> assign_databases()
 
@@ -84,9 +85,22 @@ defmodule SequinWeb.TransformsLive.Edit do
   end
 
   def handle_info(:poll_test_messages, socket) do
-    test_messages = TestMessages.get_test_messages(current_account_id(socket))
+    database_id = socket.assigns.selected_database_id
+    table_oid = socket.assigns.selected_table_oid
+
     schedule_poll_test_messages()
-    {:noreply, assign(socket, test_messages: test_messages)}
+
+    if database_id && table_oid do
+      test_messages = TestMessages.get_test_messages(database_id, table_oid)
+
+      if length(test_messages) >= @max_test_messages do
+        TestMessages.unregister_needs_messages(database_id)
+      end
+
+      {:noreply, assign(socket, test_messages: test_messages)}
+    else
+      {:noreply, assign(socket, test_messages: [])}
+    end
   end
 
   def handle_event("validate", %{"transform" => params}, socket) do
@@ -148,8 +162,21 @@ defmodule SequinWeb.TransformsLive.Edit do
          |> push_navigate(to: ~p"/transforms")}
 
       {:error, error} ->
-        Logger.error("Failed to delete transform", error: error)
+        Logger.error("[Transform.Edit] Failed to delete transform", error: error)
         {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Failed to delete transform"})}
+    end
+  end
+
+  def handle_event("table_selected", %{"database_id" => database_id, "table_oid" => table_oid}, socket) do
+    socket = assign(socket, selected_database_id: database_id, selected_table_oid: table_oid)
+
+    case TestMessages.get_test_messages(database_id, table_oid) do
+      messages when length(messages) < @max_test_messages ->
+        TestMessages.register_needs_messages(database_id)
+        {:noreply, assign(socket, test_messages: messages)}
+
+      messages ->
+        {:noreply, assign(socket, test_messages: messages)}
     end
   end
 

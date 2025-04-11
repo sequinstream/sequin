@@ -147,6 +147,10 @@
 
   function handleTableSelect(event: any) {
     selectedTableOid = event.value;
+    pushEvent("table_selected", {
+      database_id: selectedDatabaseId,
+      table_oid: selectedTableOid,
+    });
   }
 
   function refreshDatabases() {
@@ -465,14 +469,23 @@
           </div>
         </div>
         <div class="p-4 space-y-2">
-          {#if testMessages.length === 0}
+          {#if !selectedDatabaseId || !selectedTableOid}
             <div class="text-center py-8">
               <p class="text-slate-500 dark:text-slate-400 mt-4">
-                Waiting for database events...
+                Select a database and table to begin
               </p>
-              <p
-                class="text-sm text-slate-400 dark:text-slate-500 mt-2 font-mono"
-              >
+              <p class="text-sm text-slate-400 dark:text-slate-500 mt-2">
+                Test messages will appear once you make a selection
+              </p>
+            </div>
+          {:else if testMessages.length === 0}
+            <div class="text-center py-8">
+              <div class="flex items-center justify-center gap-2">
+                <p class="text-slate-500 dark:text-slate-400">
+                  Waiting for database events...
+                </p>
+              </div>
+              <p class="text-sm text-slate-400 dark:text-slate-500 mt-2">
                 Make changes to your database to generate test messages
               </p>
             </div>
@@ -485,7 +498,7 @@
                   : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}"
                 on:click={() => (selectedMessageIndex = i)}
               >
-                <span class="font-medium font-mono">Message {i + 1}</span>
+                <span class="font-medium">Message {i + 1}</span>
                 {#if selectedMessageIndex === i}
                   <div
                     class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800"
@@ -522,7 +535,7 @@
         <div class="p-4">
           {#if testMessages.length === 0}
             <div class="text-center py-8">
-              <p class="text-slate-500 dark:text-slate-400 font-mono">
+              <p class="text-slate-500 dark:text-slate-400">
                 Select a test message to view output
               </p>
             </div>

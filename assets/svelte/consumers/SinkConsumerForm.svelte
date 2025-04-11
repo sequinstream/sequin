@@ -42,7 +42,6 @@
   } from "$lib/components/ui/accordion";
   import type { Table as DatabaseTable } from "$lib/databases/types";
   import BackfillForm from "$lib/components/BackfillForm.svelte";
-  import * as Tooltip from "$lib/components/ui/tooltip";
   import { RotateCwIcon, CheckIcon } from "lucide-svelte";
   import Beta from "../components/Beta.svelte";
   import {

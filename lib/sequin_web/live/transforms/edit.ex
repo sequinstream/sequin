@@ -8,6 +8,9 @@ defmodule SequinWeb.TransformsLive.Edit do
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Transform
+  alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabaseTable
+  alias Sequin.Repo
   alias Sequin.Runtime
   alias Sequin.Transforms.Message
   alias Sequin.Transforms.TestMessages
@@ -41,17 +44,21 @@ defmodule SequinWeb.TransformsLive.Edit do
 
     test_messages = TestMessages.get_test_messages(current_account_id(socket))
 
-    {:ok,
-     assign(socket,
-       id: id,
-       changeset: changeset,
-       form_data: changeset_to_form_data(changeset),
-       used_by_consumers: used_by_consumers,
-       form_errors: %{},
-       test_messages: test_messages,
-       validating: false,
-       show_errors?: false
-     )}
+    socket =
+      socket
+      |> assign(
+        id: id,
+        changeset: changeset,
+        form_data: changeset_to_form_data(changeset),
+        used_by_consumers: used_by_consumers,
+        form_errors: %{},
+        test_messages: test_messages,
+        validating: false,
+        show_errors?: false
+      )
+      |> assign_databases()
+
+    {:ok, socket}
   end
 
   def render(assigns) do
@@ -65,6 +72,7 @@ defmodule SequinWeb.TransformsLive.Edit do
             formErrors: if(@show_errors?, do: @form_errors, else: %{}),
             testMessages: encode_test_messages(@test_messages, @form_data),
             usedByConsumers: Enum.map(@used_by_consumers, &encode_consumer/1),
+            databases: Enum.map(@databases, &encode_database/1),
             validating: @validating,
             parent: "transform_new"
           }
@@ -191,9 +199,49 @@ defmodule SequinWeb.TransformsLive.Edit do
     end)
   end
 
+  defp assign_databases(socket) do
+    account_id = current_account_id(socket)
+
+    databases =
+      account_id
+      |> Databases.list_dbs_for_account()
+      |> Repo.preload(:sequences)
+
+    assign(socket, :databases, databases)
+  end
+
   defp encode_consumer(consumer) do
     %{
       name: consumer.name
+    }
+  end
+
+  defp encode_database(database) do
+    %{
+      "id" => database.id,
+      "name" => database.name,
+      "tables" =>
+        database.tables
+        |> Enum.map(&encode_table/1)
+        |> Enum.sort_by(&{&1["schema"], &1["name"]}, :asc)
+    }
+  end
+
+  defp encode_table(%PostgresDatabaseTable{} = table) do
+    %{
+      "oid" => table.oid,
+      "schema" => table.schema,
+      "name" => table.name,
+      "columns" => Enum.map(table.columns, &encode_column/1)
+    }
+  end
+
+  defp encode_column(%PostgresDatabaseTable.Column{} = column) do
+    %{
+      "attnum" => column.attnum,
+      "isPk?" => column.is_pk?,
+      "name" => column.name,
+      "type" => column.type
     }
   end
 

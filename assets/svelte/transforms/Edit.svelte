@@ -1,7 +1,15 @@
 <script lang="ts">
+  import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  } from "$lib/components/ui/select";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import { onMount } from "svelte";
   import { Info } from "lucide-svelte";
   import {
     Popover,
@@ -92,6 +100,86 @@
 
   let showUpdateDialog = false;
   let showDeleteDialog = false;
+
+  ////////////////////////////////////////////////////////////////
+
+  type Table = {
+    oid: number;
+    schema: string;
+    name: string;
+  };
+
+  type Database = {
+    id: string;
+    name: string;
+    tables: Array<Table>;
+  };
+
+  export let databases: Array<Database>;
+
+  let selectedDatabaseId: string | undefined;
+  let selectedTableOid: number | null;
+  let selectedDatabase: Database | null = null;
+  let selectedTable: Table | null = null;
+
+  $: {
+    if (selectedDatabaseId) {
+      selectedDatabase = databases.find((db) => db.id === selectedDatabaseId);
+    }
+  }
+
+  $: {
+    if (selectedDatabase) {
+      selectedTable =
+        selectedDatabase.tables.find(
+          (table) => table.oid === selectedTableOid,
+        ) || null;
+    }
+  }
+
+  let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
+  let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
+
+  function handleDatabaseSelect(event: any) {
+    selectedDatabaseId = event.value;
+    selectedTableOid = null; // Reset table selection when database changes
+  }
+
+  function handleTableSelect(event: any) {
+    selectedTableOid = event.value;
+  }
+
+  function refreshDatabases() {
+    databaseRefreshState = "refreshing";
+    pushEvent("refresh_databases", {}, () => {
+      databaseRefreshState = "done";
+      setTimeout(() => {
+        databaseRefreshState = "idle";
+      }, 2000);
+    });
+  }
+
+  function refreshTables() {
+    if (selectedDatabaseId) {
+      tableRefreshState = "refreshing";
+      pushEvent("refresh_tables", { database_id: selectedDatabaseId }, () => {
+        tableRefreshState = "done";
+        setTimeout(() => {
+          tableRefreshState = "idle";
+        }, 2000);
+      });
+    }
+  }
+
+  onMount(() => {
+    if (databases.length === 1 && !selectedDatabaseId) {
+      handleDatabaseSelect({ value: databases[0].id });
+    }
+
+    if (selectedDatabase && selectedDatabase.tables.length === 1) {
+      handleTableSelect(selectedDatabase.tables[0]);
+    }
+  });
 
   $: pushEvent("validate", { transform: form });
 </script>
@@ -313,97 +401,140 @@
   </div>
 
   <div
-    class="grid grid-cols-1 xl:grid-cols-2 h-full gap-4 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50"
+    class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900"
   >
-    <!-- Left Rail: Test Messages and Original Message -->
-    <div
-      class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900"
-    >
-      <div class="p-4 border-b border-slate-200 dark:border-slate-800">
-        <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold tracking-tight">Test Messages</h2>
+    <div class="p-4 border-b border-slate-200 dark:border-slate-800">
+      <h2 class="text-lg font-semibold tracking-tight">Test Messages</h2>
+
+      <div class="flex flex-col lg:flex-row gap-4 mt-4">
+        <div class="flex-1 space-y-2">
+          <Label for="database-select" class="font-mono">Database</Label>
+          <Select
+            onSelectedChange={handleDatabaseSelect}
+            selected={{
+              value: selectedDatabaseId,
+              label: selectedDatabase?.name,
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a database" />
+            </SelectTrigger>
+            <SelectContent>
+              {#each databases as db}
+                <SelectItem value={db.id}>{db.name}</SelectItem>
+              {/each}
+            </SelectContent>
+          </Select>
         </div>
-      </div>
-      <div class="p-4 space-y-2">
-        {#if testMessages.length === 0}
-          <div class="text-center py-8">
-            <div class="animate-pulse space-y-4">
-              <div
-                class="w-12 h-12 mx-auto rounded-full bg-slate-100 dark:bg-slate-800"
-              ></div>
-              <div class="space-y-2">
-                <div
-                  class="h-4 w-48 mx-auto bg-slate-100 dark:bg-slate-800 rounded"
-                ></div>
-                <div
-                  class="h-3 w-64 mx-auto bg-slate-100 dark:bg-slate-800 rounded"
-                ></div>
-              </div>
-            </div>
-            <p class="text-slate-500 dark:text-slate-400 mt-4">
-              Waiting for database events...
-            </p>
-            <p
-              class="text-sm text-slate-400 dark:text-slate-500 mt-2 font-mono"
-            >
-              Make changes to your database to generate test messages
-            </p>
-          </div>
-        {:else}
-          {#each testMessages as message, i}
-            <button
-              class="w-full text-left p-3 rounded-lg border border-slate-200 dark:border-slate-800 transition-all duration-200 {selectedMessageIndex ===
-              i
-                ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800 shadow-sm'
-                : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}"
-              on:click={() => (selectedMessageIndex = i)}
-            >
-              <span class="font-medium font-mono">Message {i + 1}</span>
-              {#if selectedMessageIndex === i}
-                <div
-                  class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800"
+
+        <div class="flex-1 space-y-2">
+          <Label for="table-select" class="font-mono">Table</Label>
+          <Select
+            onSelectedChange={handleTableSelect}
+            selected={{
+              value: selectedTableOid,
+              label: selectedTable
+                ? `${selectedTable.schema}.${selectedTable.name}`
+                : undefined,
+            }}
+            disabled={!selectedDatabaseId}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a table" />
+            </SelectTrigger>
+            <SelectContent>
+              {#each selectedDatabase.tables as table}
+                <SelectItem value={table.oid}
+                  >{table.schema}.{table.name}</SelectItem
                 >
-                  <h3
-                    class="text-sm font-medium mb-2 text-slate-500 dark:text-slate-400"
-                  >
-                    Original Message
-                  </h3>
-                  <pre
-                    class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300">{JSON.stringify(
-                      message.original,
-                      null,
-                      2,
-                    )}</pre>
-                </div>
-              {/if}
-            </button>
-          {/each}
-        {/if}
+              {/each}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
 
-    <!-- Right Rail: Transformed Output -->
     <div
-      class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900"
+      class="grid grid-cols-1 xl:grid-cols-2 h-full gap-4 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50"
     >
-      <div class="p-4 border-b border-slate-200 dark:border-slate-800">
-        <h2 class="text-lg font-semibold tracking-tight">Transformed Output</h2>
-      </div>
-      <div class="p-4">
-        {#if testMessages.length === 0}
-          <div class="text-center py-8">
-            <p class="text-slate-500 dark:text-slate-400 font-mono">
-              Select a test message to view output
-            </p>
+      <!-- Left Rail: Test Messages and Original Message -->
+      <div>
+        <div class="p-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold tracking-tight">Input</h3>
           </div>
-        {:else}
-          <pre
-            class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300">{JSON.stringify(
-              testMessages[selectedMessageIndex].transformed,
-              null,
-              2,
-            )}</pre>
-        {/if}
+        </div>
+        <div class="p-4 space-y-2">
+          {#if testMessages.length === 0}
+            <div class="text-center py-8">
+              <p class="text-slate-500 dark:text-slate-400 mt-4">
+                Waiting for database events...
+              </p>
+              <p
+                class="text-sm text-slate-400 dark:text-slate-500 mt-2 font-mono"
+              >
+                Make changes to your database to generate test messages
+              </p>
+            </div>
+          {:else}
+            {#each testMessages as message, i}
+              <button
+                class="w-full text-left p-3 rounded-lg border border-slate-200 dark:border-slate-800 transition-all duration-200 {selectedMessageIndex ===
+                i
+                  ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800 shadow-sm'
+                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}"
+                on:click={() => (selectedMessageIndex = i)}
+              >
+                <span class="font-medium font-mono">Message {i + 1}</span>
+                {#if selectedMessageIndex === i}
+                  <div
+                    class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800"
+                  >
+                    <h3
+                      class="text-sm font-medium mb-2 text-slate-500 dark:text-slate-400"
+                    >
+                      Original Message
+                    </h3>
+                    <pre
+                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300">{JSON.stringify(
+                        message.original,
+                        null,
+                        2,
+                      )}</pre>
+                  </div>
+                {/if}
+              </button>
+            {/each}
+          {/if}
+        </div>
+      </div>
+
+      <!-- Right Rail: Transformed Output -->
+      <div
+        class="w-full border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+      >
+        <div class="p-4">
+          <h3 class="text-lg font-semibold tracking-tight">
+            Transformed Output
+          </h3>
+        </div>
+
+        <div class="p-4">
+          {#if testMessages.length === 0}
+            <div class="text-center py-8">
+              <p class="text-slate-500 dark:text-slate-400 font-mono">
+                Select a test message to view output
+              </p>
+            </div>
+          {:else}
+            <pre
+              class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300">{JSON.stringify(
+                testMessages[selectedMessageIndex].transformed,
+                null,
+                2,
+              )}</pre>
+          {/if}
+        </div>
       </div>
     </div>
   </div>

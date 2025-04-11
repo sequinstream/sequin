@@ -1,0 +1,15 @@
+[package]
+name = "sequin_processors_starlark"
+version = "0.1.0"
+authors = []
+edition = "2021"
+
+[lib]
+name = "sequin_processors_starlark"
+crate-type = ["cdylib"]
+
+[dependencies]
+rustler = "0.36.1"
+starlark = "0.13.0"
+anyhow = "1.0.75"
+chrono = "0.4"

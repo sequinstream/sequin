@@ -96,7 +96,8 @@ defmodule Sequin.MixProject do
       {:rexbug, "~> 1.0"},
       {:decorator, "~> 1.4"},
       {:prometheus_ex, "~> 3.0"},
-      {:prometheus_plugs, "~> 1.1"}
+      {:prometheus_plugs, "~> 1.1"},
+      {:rustler, "~> 0.36.1"}
     ]
   end
 

@@ -68,3 +68,5 @@ sequin.yaml
 
 # Image testing files
 test-config/
+# Rust binary artifacts
+/target/

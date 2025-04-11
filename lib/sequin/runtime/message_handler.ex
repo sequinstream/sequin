@@ -583,7 +583,7 @@ defmodule Sequin.Runtime.MessageHandler do
 
   defp save_test_messages(%Context{} = ctx, messages) do
     # Early out if no sequences need messages
-    if TestMessages.needs_test_messages?(ctx.postgres_database.account_id) do
+    if TestMessages.needs_test_messages?(ctx.postgres_database.id) do
       # Process each message once
       Enum.each(messages, fn message ->
         # Add message to each matching sequence's test messages
@@ -595,7 +595,7 @@ defmodule Sequin.Runtime.MessageHandler do
         }
 
         message = consumer_event(test_consumer, message)
-        TestMessages.add_test_message(ctx.postgres_database.account_id, message)
+        TestMessages.add_test_message(ctx.postgres_database.id, message.table_oid, message)
       end)
     end
   end

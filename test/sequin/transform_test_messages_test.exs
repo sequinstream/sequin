@@ -108,7 +108,7 @@ defmodule Sequin.Transforms.TestMessagesTest do
       # Verify only 10 messages are stored
       stored_messages = TestMessages.get_test_messages(database_id, table_oid)
       assert length(stored_messages) == 10
-      assert stored_messages == Enum.reverse(Enum.take(messages, 10))
+      assert stored_messages == Enum.take(messages, 10)
     end
 
     test "needs_test_messages?/1 returns false for empty sequence before test messages are requested" do
@@ -151,7 +151,7 @@ defmodule Sequin.Transforms.TestMessagesTest do
       assert TestMessages.get_test_messages(database_id, table_oid) == []
     end
 
-    test "get_test_messages/1 returns messages in reverse order of insertion" do
+    test "get_test_messages/1 returns messages in order of insertion" do
       database_id = Factory.uuid()
       table_oid = Factory.integer()
 
@@ -179,7 +179,7 @@ defmodule Sequin.Transforms.TestMessagesTest do
         TestMessages.add_test_message(database_id, table_oid, message)
       end)
 
-      assert TestMessages.get_test_messages(database_id, table_oid) == Enum.reverse(messages)
+      assert TestMessages.get_test_messages(database_id, table_oid) == messages
     end
   end
 

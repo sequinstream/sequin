@@ -479,6 +479,42 @@ defmodule Sequin.YamlLoaderTest do
         """)
       end
     end
+
+    test "creates a function transform" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               transforms:
+                 - name: "id-action-functional"
+                   description: "Record ID and action"
+                   transform:
+                     type: "function"
+                     code: |-
+                        def transform(action, record, changes, metadata) do
+                          %{
+                            id: record["id"],
+                            action: action
+                          }
+                        end
+               """)
+
+      assert [transform] = Repo.all(Transform)
+      assert transform.name == "id-action-functional"
+      assert transform.type == "function"
+      assert transform.description == "Record ID and action"
+
+      assert transform.transform.code ==
+               String.trim("""
+               def transform(action, record, changes, metadata) do
+                 %{
+                   id: record["id"],
+                   action: action
+                 }
+               end
+               """)
+    end
   end
 
   describe "sinks" do
@@ -1094,6 +1130,61 @@ defmodule Sequin.YamlLoaderTest do
       assert transform.name == "my-transform"
       assert transform.type == "path"
       assert transform.transform.path == "record"
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "sequin-playground-webhook"
+      assert consumer.sequence.name == "test-db.public.Characters"
+      assert consumer.transform_id == transform.id
+    end
+
+    test "creates webhook subscription with function transform" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               transforms:
+                 - name: "id-action-transform"
+                   description: "Extract ID and action"
+                   transform:
+                     type: "function"
+                     code: |-
+                       def transform(action, record, changes, metadata) do
+                         %{
+                           id: record["id"],
+                           action: action
+                         }
+                       end
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                   transform: "id-action-transform"
+               """)
+
+      assert [transform] = Repo.all(Transform)
+      assert transform.name == "id-action-transform"
+      assert transform.type == "function"
+      assert transform.description == "Extract ID and action"
+
+      assert transform.transform.code ==
+               String.trim("""
+               def transform(action, record, changes, metadata) do
+                 %{
+                   id: record["id"],
+                   action: action
+                 }
+               end
+               """)
 
       assert [consumer] = Repo.all(SinkConsumer)
       consumer = Repo.preload(consumer, :sequence)

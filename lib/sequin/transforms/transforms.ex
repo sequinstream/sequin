@@ -5,11 +5,13 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
+  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -242,13 +244,24 @@ defmodule Sequin.Transforms do
     })
   end
 
-  def to_external(%Transform{} = transform, _show_sensitive) do
+  def to_external(%Transform{transform: %PathTransform{}} = transform, _show_sensitive) do
     %{
       name: transform.name,
       description: transform.description,
       transform: %{
         type: transform.type,
         path: transform.transform.path
+      }
+    }
+  end
+
+  def to_external(%Transform{transform: %FunctionTransform{}} = transform, _show_sensitive) do
+    %{
+      name: transform.name,
+      description: transform.description,
+      transform: %{
+        type: transform.type,
+        code: transform.transform.code
       }
     }
   end

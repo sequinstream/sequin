@@ -48,7 +48,10 @@
     name: string;
     description: string;
     transform: {
+      type: string;
       path: string;
+      code: string;
+      sink_type: string;
     };
   } | null;
 
@@ -1042,21 +1045,11 @@
               > if you want this.
             </p>
           {:else if transform}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 gap-4">
               <div>
                 <span class="text-sm text-gray-500">Name</span>
                 <div class="mt-2">
                   <span class="">{transform.name}</span>
-                </div>
-              </div>
-
-              <div>
-                <span class="text-sm text-gray-500">Path</span>
-                <div class="mt-2">
-                  <span
-                    class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-                    >{transform.transform.path}</span
-                  >
                 </div>
               </div>
 
@@ -1065,6 +1058,28 @@
                   <span class="text-sm text-gray-500">Description</span>
                   <div class="mt-2">
                     <span class="">{transform.description}</span>
+                  </div>
+                </div>
+              {/if}
+
+              {#if transform.transform.type === "path"}
+                <div>
+                  <span class="text-sm text-gray-500">Path</span>
+                  <div class="mt-2">
+                    <span
+                      class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+                      >{transform.transform.path}</span
+                    >
+                  </div>
+                </div>
+              {:else if transform.transform.type === "function"}
+                <div>
+                  <span class="text-sm text-gray-500">Code</span>
+                  <div class="mt-2">
+                    <pre
+                      class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
+                        >{transform.transform.code}</code
+                      ></pre>
                   </div>
                 </div>
               {/if}

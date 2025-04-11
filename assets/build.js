@@ -23,6 +23,7 @@ let optsClient = {
   tsconfig: "./tsconfig.json",
   loader: {
     ".svg": "dataurl",
+    ".mdx": "text",
   },
   plugins: [
     importGlobPlugin(),
@@ -64,6 +65,7 @@ let optsServer = {
   tsconfig: "./tsconfig.json",
   loader: {
     ".svg": "dataurl",
+    ".mdx": "text",
   },
   plugins: [
     importGlobPlugin(),

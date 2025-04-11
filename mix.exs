@@ -95,8 +95,8 @@ defmodule Sequin.MixProject do
       {:broadway_dashboard, "~> 0.4.0"},
       {:rexbug, "~> 1.0"},
       {:decorator, "~> 1.4"},
-      {:prometheus_ex, "~> 3.0"},
-      {:prometheus_plugs, "~> 1.1"}
+      {:prometheus_ex, "~> 4.0"},
+      {:accept, "~> 0.3"}
     ]
   end
 

@@ -1,4 +1,4 @@
 defmodule Sequin.PrometheusExporter do
   @moduledoc false
-  use Prometheus.PlugExporter
+  use Sequin.Prometheus.PlugExporter
 end

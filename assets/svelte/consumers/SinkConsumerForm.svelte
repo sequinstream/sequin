@@ -21,6 +21,7 @@
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
   import SinkHttpPushForm from "$lib/consumers/SinkHttpPushForm.svelte";
   import SqsSinkForm from "$lib/sinks/sqs/SqsSinkForm.svelte";
+  import SnsSinkForm from "$lib/sinks/sns/SnsSinkForm.svelte";
   import RedisSinkForm from "$lib/sinks/redis/RedisSinkForm.svelte";
   import KafkaSinkForm from "$lib/sinks/kafka/KafkaSinkForm.svelte";
   import GcpPubsubSinkForm from "$lib/sinks/gcp_pubsub/GcpPubsubSinkForm.svelte";
@@ -762,6 +763,8 @@
       />
     {:else if consumer.type === "sqs"}
       <SqsSinkForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "sns"}
+      <SnsSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "redis"}
       <RedisSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "kafka"}

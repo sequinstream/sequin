@@ -16,6 +16,7 @@
   import { formatRelativeTimestamp } from "../utils";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
+  import SnsIcon from "../sinks/sns/SnsIcon.svelte";
   import RedisIcon from "../sinks/redis/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
@@ -135,6 +136,8 @@
             <RabbitMqIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "azure_event_hub"}
             <AzureEventHubIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "sns"}
+            <SnsIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumer.name}

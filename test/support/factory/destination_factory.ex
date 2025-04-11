@@ -24,4 +24,21 @@ defmodule Sequin.Factory.SinkFactory do
       attrs
     )
   end
+
+  def sns_message(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %{
+        message_id: Factory.uuid(),
+        message: %{
+          "event" => Factory.word(),
+          "payload" => %{Factory.word() => Factory.word()}
+        },
+        message_group_id: Factory.unique_word(),
+        message_deduplication_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
 end

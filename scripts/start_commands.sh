@@ -3,6 +3,9 @@
 # Exit if any command returns a non-zero status.
 set -euo pipefail
 
+# Define app home directory - used for file operations where app user needs write access
+APP_HOME_DIR="/home/app"
+
 # Only set RELEASE_NODE if AUTO_ASSIGN_RELEASE_NODE is true and RELEASE_NODE is not already set
 if [ "${AUTO_ASSIGN_RELEASE_NODE:-false}" = "true" ]; then
     # Generate random string (8 characters)
@@ -40,10 +43,9 @@ apply_config() {
 
   if [ -n "${CONFIG_FILE_PATH}" ] && [ -f "${CONFIG_FILE_PATH}" ]; then
     echo "Substituting environment variables in ${CONFIG_FILE_PATH}"
-    # Copy to adjacent location with .interpolated.yml suffix
-    CONFIG_DIR=$(dirname "${CONFIG_FILE_PATH}")
+    # Copy to app home directory where the app user has write permissions
     CONFIG_FILENAME=$(basename "${CONFIG_FILE_PATH}")
-    INTERPOLATED_CONFIG_PATH="${CONFIG_DIR}/${CONFIG_FILENAME}.interpolated.yml"
+    INTERPOLATED_CONFIG_PATH="${APP_HOME_DIR}/${CONFIG_FILENAME}.interpolated.yml"
 
     # Copy the original file
     cp "${CONFIG_FILE_PATH}" "${INTERPOLATED_CONFIG_PATH}"

@@ -8,6 +8,8 @@ self_hosted = Application.compile_env(:sequin, :self_hosted)
 
 env_vars = System.get_env()
 
+enabled_feature_values = ~w(true 1 enabled ENABLED)
+
 get_env = fn key ->
   if self_hosted do
     System.get_env(key)
@@ -71,13 +73,13 @@ end
 ecto_socket_opts = if (System.get_env("ECTO_IPV6") || System.get_env("PG_IPV6")) in ~w(true 1), do: [:inet6], else: []
 
 if config_env() == :prod and self_hosted do
-  enabled_feature_value = ~w(true 1 enabled ENABLED)
-
   account_self_signup =
-    if System.get_env("FEATURE_ACCOUNT_SELF_SIGNUP", "enabled") in enabled_feature_value, do: :enabled, else: :disabled
+    if System.get_env("FEATURE_ACCOUNT_SELF_SIGNUP", "enabled") in enabled_feature_values, do: :enabled, else: :disabled
 
   provision_default_user =
-    if System.get_env("FEATURE_PROVISION_DEFAULT_USER", "enabled") in enabled_feature_value, do: :enabled, else: :disabled
+    if System.get_env("FEATURE_PROVISION_DEFAULT_USER", "enabled") in enabled_feature_values,
+      do: :enabled,
+      else: :disabled
 
   backfill_max_pending_messages = maybe_parse_int_env.("BACKFILL_MAX_PENDING_MESSAGES")
 
@@ -163,7 +165,8 @@ if config_env() == :prod and self_hosted do
 
   config :sequin, :features,
     account_self_signup: account_self_signup,
-    provision_default_user: provision_default_user
+    provision_default_user: provision_default_user,
+    function_transforms: :enabled
 
   config :sequin, :koala,
     public_key: "pk_ec2e6140b3d56f5eb1735350eb20e92b8002",
@@ -187,6 +190,9 @@ if config_env() == :prod and not self_hosted do
       environment variable SECRET_KEY_BASE is missing.
       You can generate one by calling: mix phx.gen.secret
       """
+
+  function_transforms =
+    if System.get_env("FEATURE_FUNCTION_TRANSFORMS", "disabled") in enabled_feature_values, do: :enabled, else: :disabled
 
   config :sequin, Sequin.Pagerduty, integration_key: System.fetch_env!("PAGERDUTY_INTEGRATION_KEY")
 
@@ -223,7 +229,10 @@ if config_env() == :prod and not self_hosted do
       port: 8376
     ]
 
-  config :sequin, :features, account_self_signup: :enabled
+  config :sequin, :features,
+    account_self_signup: :enabled,
+    function_transforms: function_transforms
+
   config :sequin, :koala, public_key: "pk_ec2e6140b3d56f5eb1735350eb20e92b8002"
 
   config :sequin,

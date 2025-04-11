@@ -17,11 +17,12 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
+  alias Sequin.Transforms.MiniElixir
 
   require Logger
 
   @events ~w(create update delete)a
-  @entities ~w(sink_consumer http_endpoint backfill)a
+  @entities ~w(sink_consumer http_endpoint backfill transform)a
 
   @spec enqueue(event :: atom(), entity_type :: atom(), entity_id :: String.t(), data :: map() | nil) ::
           {:ok, Oban.Job.t()} | {:error, Oban.Job.changeset() | term()}
@@ -42,6 +43,9 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
 
       "backfill" ->
         handle_backfill_event(event, entity_id)
+
+      "transform" ->
+        handle_transform_event(event, entity_id)
     end
   end
 
@@ -137,6 +141,42 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
           end
 
           :ok
+        end
+    end
+  end
+
+  defp handle_transform_event(event, id) do
+    Logger.metadata(transform_id: id)
+    Logger.info("[LifecycleEventWorker] Handling event `#{event}` for transform")
+
+    case event do
+      "create" ->
+        with {:ok, transform} <- Consumers.get_transform(id) do
+          case MiniElixir.create(id, transform.transform.code) do
+            {:ok, _} ->
+              :ok
+
+            {:error, error} ->
+              Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
+              {:error, error}
+          end
+        end
+
+      "update" ->
+        with {:ok, transform} <- Consumers.get_transform(id) do
+          consumers = Consumers.list_consumers_for_transform(transform.account_id, transform.id, [:replication_slot])
+          replication_slots = consumers |> Enum.map(& &1.replication_slot) |> Enum.uniq_by(& &1.id)
+          Enum.each(replication_slots, &RuntimeSupervisor.stop_replication/1)
+
+          case MiniElixir.create(id, transform.transform.code) do
+            {:ok, _} ->
+              Enum.each(replication_slots, &RuntimeSupervisor.restart_replication/1)
+              :ok
+
+            {:error, error} ->
+              Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
+              {:error, error}
+          end
         end
     end
   end

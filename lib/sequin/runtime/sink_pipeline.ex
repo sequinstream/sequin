@@ -343,6 +343,9 @@ defmodule Sequin.Runtime.SinkPipeline do
 
           {:error, error} ->
             Error.service(service: "sink_pipeline", code: :unknown_error, message: error)
+
+          {:exit, error} ->
+            Error.service(service: "sink_pipeline", code: :unknown_error, message: inspect(error, pretty: true))
         end
 
       error_message = Exception.message(error)

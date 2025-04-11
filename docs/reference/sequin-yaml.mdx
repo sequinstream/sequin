@@ -290,49 +290,30 @@ sinks:
 
 ```yaml
 transforms:
-  - name: "my-transform"          # Required, unique name for this transform
-    transform:                    # Required, transform configuration
-      type: "path"                # Required, currently only "path" is supported
-      path: "record"              # Required, path to extract from the message
+  - name: "my-path-transform"           # Required, unique name for this transform
+    description: "Extract record"       # Optional, description of the transform
+    transform:                          # Required, transform configuration
+      type: "path"                      # Required, "path" or "function"
+      path: "record"                    # Optional, path to extract from the message (Required if type is "path")
+  - name: "my-function-transform"
+    transform:
+      type: "function"
+      code: |-                          # Optional, Elixir code to transform the message (Required if type is "function")
+        def transform(action, record, changes, metadata) do
+          %{
+            id: record["id"],
+            action: action
+          }
+        end
 ```
 
-The `path` field supports the following paths:
-- `record` - The entire record object
-- `changes` - The changes object (only available for event messages)
-- `action` - The action type (insert, update, delete) (only available for event messages)
-- `metadata` - The metadata object
+You can reference transforms in your sinks by name:
 
-You can also use dot notation to access nested fields within these objects, for example:
-- `record.id` - The ID field from the record
-- `changes.name` - The name field from the changes
-- `metadata.transaction_annotations.user_id` - A custom transaction annotation
-
-Example usage:
 ```yaml
-transforms:
-  - name: "record-only"
-    transform:
-      type: "path"
-      path: "record"
-
-  - name: "id-only"
-    transform:
-      type: "path"
-      path: "record.id"
-
-  - name: "metadata-only"
-    transform:
-      type: "path"
-      path: "metadata"
-
 sinks:
-  - name: "user-changes"
-    database: "my-database"
-    table: "users"
-    transform: "record-only"      # Reference the transform by name
-    destination:
-      type: "webhook"
-      http_endpoint: "my-endpoint"
+  - name: "my-sink"
+    transform: "my-path-transform"       # Reference the transform by name (or "none" for no transform)
+    ...
 ```
 
 ### Change retention configuration

@@ -7,6 +7,7 @@ defmodule Sequin.Consumers.Transform do
   import PolymorphicEmbed
 
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.PathTransform
 
   @derive {Jason.Encoder, only: [:name, :type, :description, :transform]}
@@ -19,7 +20,8 @@ defmodule Sequin.Consumers.Transform do
 
     polymorphic_embeds_one(:transform,
       types: [
-        path: PathTransform
+        path: PathTransform,
+        function: FunctionTransform
       ],
       on_replace: :update,
       type_field_name: :type

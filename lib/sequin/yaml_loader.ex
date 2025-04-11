@@ -500,13 +500,11 @@ defmodule Sequin.YamlLoader do
   end
 
   defp upsert_sequence(account_id, %PostgresDatabase{id: id} = database, sequence) do
-    with {:ok, table} <- table_for_sequence(database, sequence),
-         {:ok, sort_column_attnum} <- sort_column_attnum_for_sequence(table, sequence) do
+    with {:ok, table} <- table_for_sequence(database, sequence) do
       attrs =
         sequence
         |> Map.put("postgres_database_id", id)
         |> Map.put("table_oid", table.oid)
-        |> Map.put("sort_column_attnum", sort_column_attnum)
 
       account_id
       |> Databases.upsert_sequence(attrs)
@@ -534,24 +532,6 @@ defmodule Sequin.YamlLoader do
 
   defp table_for_sequence(_, %{}) do
     {:error, Error.bad_request(message: "`table` and `schema` are required for each stream")}
-  end
-
-  defp sort_column_attnum_for_sequence(table, %{"sort_column_name" => sort_column_name}) do
-    case Enum.find(table.columns, fn column -> column.name == sort_column_name end) do
-      nil ->
-        {:error,
-         Error.not_found(
-           entity: :column,
-           params: %{table_schema: table.schema, table_name: table.name, column_name: sort_column_name}
-         )}
-
-      column ->
-        {:ok, column.attnum}
-    end
-  end
-
-  defp sort_column_attnum_for_sequence(_, %{}) do
-    {:ok, nil}
   end
 
   ##############################

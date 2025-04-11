@@ -68,8 +68,7 @@ defmodule Sequin.Transforms do
           if table do
             %{
               table_name: table.name,
-              table_schema: table.schema,
-              sort_column_name: sequence.sort_column_name
+              table_schema: table.schema
             }
           end
         end)

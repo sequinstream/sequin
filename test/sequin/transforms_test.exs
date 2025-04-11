@@ -32,12 +32,11 @@ defmodule Sequin.TransformsTest do
           account_id: database.account_id
         )
 
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: database.account_id,
-          postgres_database_id: database.id,
-          table_oid: table.oid
-        )
+      DatabasesFactory.insert_sequence!(
+        account_id: database.account_id,
+        postgres_database_id: database.id,
+        table_oid: table.oid
+      )
 
       json = Transforms.to_external(database)
 
@@ -73,7 +72,6 @@ defmodule Sequin.TransformsTest do
       assert is_map(table_json)
       assert table_json.table_schema == table.schema
       assert table_json.table_name == table.name
-      assert table_json.sort_column_name == sequence.sort_column_name
     end
 
     test "returns a map of the column filter" do

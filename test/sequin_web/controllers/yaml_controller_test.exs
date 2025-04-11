@@ -43,7 +43,6 @@ defmodule SequinWeb.YamlControllerTest do
           tables:
             - table_name: "Characters"
               table_schema: "public"
-              sort_column_name: "updated_at"
       """
 
       conn = post(conn, ~p"/api/config/plan", %{yaml: yaml})
@@ -77,8 +76,7 @@ defmodule SequinWeb.YamlControllerTest do
                      "tables" => [
                        %{
                          "table_schema" => "public",
-                         "table_name" => "Characters",
-                         "sort_column_name" => "updated_at"
+                         "table_name" => "Characters"
                        }
                      ]
                    },
@@ -191,7 +189,6 @@ defmodule SequinWeb.YamlControllerTest do
                        "group_column_attnums" => nil,
                        "oid" => _,
                        "schema_name" => nil,
-                       "sort_column_attnum" => nil,
                        "table_name" => nil
                      }
                    ],
@@ -242,7 +239,6 @@ defmodule SequinWeb.YamlControllerTest do
           tables:
             - table_name: "Characters"
               table_schema: "public"
-              sort_column_name: "updated_at"
 
       http_endpoints:
         - name: "sequin-playground-webhook"
@@ -288,8 +284,7 @@ defmodule SequinWeb.YamlControllerTest do
                "tables" => [
                  %{
                    "table_schema" => "public",
-                   "table_name" => "Characters",
-                   "sort_column_name" => "updated_at"
+                   "table_name" => "Characters"
                  }
                ]
              }

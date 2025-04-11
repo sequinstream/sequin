@@ -63,7 +63,6 @@ defmodule Sequin.YamlLoaderTest do
         tables:
           - table_name: "Characters"
             table_schema: "public"
-            sort_column_name: "updated_at"
     """
   end
 
@@ -89,7 +88,6 @@ defmodule Sequin.YamlLoaderTest do
                     tables:
                       - table_name: "Characters"
                         table_schema: "public"
-                        sort_column_name: "updated_at"
 
                 http_endpoints:
                   - name: "test-endpoint"
@@ -172,7 +170,6 @@ defmodule Sequin.YamlLoaderTest do
       assert sequence.postgres_database_id == db.id
       assert sequence.table_name == "Characters"
       assert sequence.table_schema == "public"
-      assert sequence.sort_column_name == "updated_at"
     end
 
     test "applying yml twice creates no duplicates" do
@@ -499,7 +496,6 @@ defmodule Sequin.YamlLoaderTest do
           tables:
             - table_name: "Characters"
               table_schema: "public"
-              sort_column_name: "updated_at"
       """
     end
 

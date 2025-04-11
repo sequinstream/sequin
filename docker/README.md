@@ -24,15 +24,19 @@ This will make Sequin available at http://localhost:7376.
 
 ### `docker-compose.ci.yaml`
 
-A simplified version of the docker-compose configuration used for continuous integration environments. This file is specifically designed for CI pipelines and testing environments.
-
-Key differences:
+A simplified version of the docker-compose configuration specifically designed for your CI pipeline or test environment:
 
 - No Prometheus or Grafana services
 - No sample data initialization
 - Uses environment variable `SEQUIN_IMAGE_VERSION` to control the image version
 
 ## Using Sequin in CI Pipelines
+
+We recommend downloading `docker-compose.ci.yaml` and committing a copy to your own repo.
+Or, your CI pipeline can have a step to download the Sequin CI compose file:
+```bash
+curl -O https://raw.githubusercontent.com/sequinstream/sequin/main/docker/docker-compose.ci.yaml -o sequin-ci.yaml
+```
 
 ### Basic approach
 
@@ -57,9 +61,7 @@ You can use the `include` feature to include Sequin and its dependencies in your
    services:
      # Your application services
      myapp:
-       build: .
-       depends_on:
-         - sequin
+       ...
    ```
 
 2. Create an override file (e.g., `sequin-config.yml`) to customize Sequin for your specific test setup. These attributes will be merged into the `sequin` service definition in Sequin's `docker-compose.ci.yaml` file:
@@ -83,17 +85,9 @@ You can use the `include` feature to include Sequin and its dependencies in your
 
    ```bash
    # Start the services
-   docker compose -f ci-compose.yml -f sequin-config.yml up -d
+   docker compose -f my-ci-compose.yml -f sequin-config.yml up -d
    ```
 
-If you want, your CI pipeline can have a step to download the Sequin CI compose file:
-
-   ```bash
-   curl -O https://raw.githubusercontent.com/sequinstream/sequin/main/docker/docker-compose.ci.yaml -o sequin-ci.yaml
-   ```
-
-## Extending
-
-To use Sequin with your own PostgreSQL database, modify the environment variables in the docker-compose.yaml file or create a new compose file based on your needs.
+## More docs
 
 For more information on how to use Sequin, visit the [official documentation](https://sequinstream.com/docs). 

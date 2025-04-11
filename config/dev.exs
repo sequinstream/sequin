@@ -10,6 +10,8 @@ config :libcluster,
     ]
   ]
 
+config :logger, :console, level: :warning
+
 config :mix_test_interactive,
   clear: true
 

@@ -15,12 +15,21 @@ if [ "${AUTO_ASSIGN_RELEASE_NODE:-false}" = "true" ]; then
 fi
 
 set_agent_address() {
-  # Use STATSD_HOST if set, otherwise get from ECS metadata endpoint
+  # Use STATSD_HOST if set, otherwise get from metadata endpoint
   if [ -n "${STATSD_HOST:-}" ]; then
     AGENT_ADDRESS="$STATSD_HOST"
   else
-    TOKEN=$(curl -s -S -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
-    AGENT_ADDRESS=$(curl -s -S -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4 || echo "meta-data curl failed")
+    # Check if running on Fargate (ECS_CONTAINER_METADATA_URI_V4 will be set)
+    if [ -n "${ECS_CONTAINER_METADATA_URI_V4:-}" ]; then
+      # Get container metadata from Fargate endpoint
+      METADATA=$(curl -s -S "${ECS_CONTAINER_METADATA_URI_V4}/task")
+      # Extract container IP from metadata
+      AGENT_ADDRESS=$(echo "$METADATA" | jq -r '.Containers[0].Networks[0].IPv4Addresses[0]' 2>/dev/null || echo "fargate-metadata-parse-failed")
+    else
+      # Use EC2 metadata endpoint as fallback
+      TOKEN=$(curl -s -S -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+      AGENT_ADDRESS=$(curl -s -S -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4 || echo "ec2-metadata-curl-failed")
+    fi
   fi
 
   echo "Datadog Agent Address: $AGENT_ADDRESS"

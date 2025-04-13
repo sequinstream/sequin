@@ -101,8 +101,6 @@ config :sequin, SequinWeb.Endpoint,
   pubsub_server: Sequin.PubSub,
   live_view: [signing_salt: "Sm59ovfq", long_poll_fallback_ms: 3000]
 
-config :sequin, SequinWeb.MetricsEndpoint, adapter: Bandit.PhoenixAdapter
-
 config :sequin, SequinWeb.UserSessionController,
   github: [
     redirect_uri: "http://localhost:4000/auth/github/callback"

@@ -17,9 +17,6 @@ defmodule Sequin.Application do
     env = Application.get_env(:sequin, :env)
     children = children(env)
 
-    Sequin.Prometheus.setup()
-    Sequin.PrometheusExporter.setup()
-
     :ets.new(Sequin.Runtime.SlotProcessorServer.ets_table(), [:set, :public, :named_table])
     # Add this line to create the new ETS table for health debouncing
     :ets.new(Sequin.Health.debounce_ets_table(), [:set, :public, :named_table])
@@ -83,7 +80,7 @@ defmodule Sequin.Application do
       {Task, fn -> enqueue_workers() end},
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint,
-      SequinWeb.MetricsEndpoint
+      Sequin.Metrics.PrometheusSupervisor
     ]
   end
 

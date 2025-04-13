@@ -18,7 +18,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
-  alias Sequin.Prometheus
+  alias Sequin.Metrics.Prometheus
   alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
 

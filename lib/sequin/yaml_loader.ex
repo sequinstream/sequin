@@ -372,7 +372,7 @@ defmodule Sequin.YamlLoader do
       :ok ->
         :ok
 
-      {:error, _error} ->
+      {:error, error} ->
         if now < timeout_at do
           Logger.info("Waiting for external database (#{name}) to be ready...")
           remaining_time = timeout_at - now
@@ -380,6 +380,12 @@ defmodule Sequin.YamlLoader do
           Process.sleep(sleep_time)
           await_database(database_attrs, test_connect_fun, started_at)
         else
+          if is_exception(error) do
+            Logger.error("Failed to connect to database: #{Exception.message(error)}")
+          else
+            Logger.error("Failed to connect to database: #{inspect(error, pretty: true)}")
+          end
+
           {:error,
            Error.service(
              message:

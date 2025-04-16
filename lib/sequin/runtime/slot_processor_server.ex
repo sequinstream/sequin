@@ -21,6 +21,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
+  alias Sequin.Postgres.ArrayLexer
   alias Sequin.Postgres.ReplicationConnection
   alias Sequin.Prometheus
   alias Sequin.Replication
@@ -1566,19 +1567,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp cast_value("_" <> _type, "{}"), do: {:ok, []}
 
   defp cast_value("_" <> type, array_string) when is_binary(array_string) do
-    array_string
-    |> String.trim("{")
-    |> String.trim("}")
-    |> parse_pg_array()
-    |> Enum.reduce_while({:ok, []}, fn value, {:ok, acc} ->
-      case cast_value(type, value) do
-        {:ok, casted_value} -> {:cont, {:ok, [casted_value | acc]}}
-        error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, array} -> {:ok, Enum.reverse(array)}
-      error -> error
+    with {:ok, uncasted_list} <- ArrayLexer.lex(array_string) do
+      cast_value(type, uncasted_list)
     end
   end
 
@@ -1618,6 +1608,21 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:ok, list}
   end
 
+  defp cast_value(type, value) when is_list(value) do
+    res =
+      Enum.reduce_while(value, {:ok, []}, fn elem, {:ok, acc} ->
+        case cast_value(type, elem) do
+          {:ok, casted_elem} -> {:cont, {:ok, [casted_elem | acc]}}
+          error -> {:halt, error}
+        end
+      end)
+
+    case res do
+      {:ok, res} -> {:ok, Enum.reverse(res)}
+      error -> error
+    end
+  end
+
   defp cast_value(type, value) do
     case Ecto.Type.cast(string_to_ecto_type(type), value) do
       {:ok, casted_value} -> {:ok, casted_value}
@@ -1625,26 +1630,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       :error -> {:ok, value}
     end
   end
-
-  defp parse_pg_array(str) do
-    str
-    # split the string on commas, but only when they're not inside quotes.
-    |> String.split(~r/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
-    |> Enum.map(&String.trim/1)
-    |> Enum.map(&unescape_string/1)
-  end
-
-  # When an array element contains a comma and is coming from Postgres, it will be wrapped in double quotes:
-  # "\"royal,interest\""
-  # We want to remove the double quotes so that we get:
-  # "royal,interest"
-  defp unescape_string(<<"\"", rest::binary>>) do
-    rest
-    |> String.slice(0..-2//1)
-    |> String.replace("\\\"", "\"")
-  end
-
-  defp unescape_string(str), do: str
 
   @postgres_to_ecto_type_mapping %{
     # Numeric Types

@@ -441,6 +441,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     event_slug =
       case String.to_existing_atom(error_slug) do
         :replica_identity_not_full -> :alert_replica_identity_not_full_dismissed
+        :replica_identity_not_full_partitioned -> :alert_replica_identity_not_full_dismissed
         :toast_columns_detected -> :alert_toast_columns_detected_dismissed
         :invalid_transaction_annotation_received -> :invalid_transaction_annotation_received_dismissed
       end
@@ -1170,6 +1171,31 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         maybe_augment_alert(check, consumer)
       end)
     end)
+  end
+
+  defp maybe_augment_alert(
+         %{slug: :sink_configuration, error_slug: :replica_identity_not_full_partitioned} = check,
+         consumer
+       ) do
+    table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
+
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Notice: Replica identity not set to full for all tables",
+        alertMessage: """
+        The replica identity for either your partition root table or one or more of its child tables is not set to `full`. This means the `changes` field in message payloads may be empty.
+
+        If you want the `changes` field to appear in message payloads, run the following SQL command on the root table and on each partition table:
+
+        ```sql
+        alter table #{table_name} replica identity full;
+        ```
+        """,
+        refreshable: true,
+        dismissable: true
+      }
+    )
   end
 
   defp maybe_augment_alert(%{slug: :sink_configuration, error_slug: :replica_identity_not_full} = check, consumer) do

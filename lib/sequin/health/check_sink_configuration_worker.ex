@@ -23,8 +23,9 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
 
         with {:ok, tables} <- Databases.tables(consumer.postgres_database),
              :ok <- check_table_exists(tables, consumer.sequence.table_oid),
-             {:ok, event} <- check_replica_identity(consumer),
-             {:ok, event} <- check_publication(consumer, event) do
+             {:ok, relation_kind} <- Postgres.get_relation_kind(consumer.postgres_database, consumer.sequence.table_oid),
+             {:ok, event} <- check_replica_identity(consumer, relation_kind),
+             {:ok, event} <- check_publication(consumer, event, relation_kind) do
           Health.put_event(consumer, event)
 
           :syn.publish(:consumers, {:sink_config_checked, consumer.id}, :sink_config_checked)
@@ -83,20 +84,38 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     end
   end
 
-  defp check_replica_identity(%SinkConsumer{} = consumer) do
+  defp check_replica_identity(%SinkConsumer{} = consumer, relation_kind) do
     source_table = Consumers.source_table(consumer)
 
-    with {:ok, replica_identity} <- Databases.check_replica_identity(consumer.postgres_database, source_table.oid) do
-      {:ok, %Event{slug: :sink_config_checked, status: :success, data: %{replica_identity: replica_identity}}}
+    with {:ok, replica_identity} <-
+           get_replica_identity_by_kind(relation_kind, consumer.postgres_database, source_table.oid) do
+      {:ok,
+       %Event{
+         slug: :sink_config_checked,
+         status: :success,
+         data: %{
+           replica_identity: replica_identity,
+           relation_kind: relation_kind
+         }
+       }}
     end
   end
 
-  defp check_publication(%SinkConsumer{} = consumer, %Event{} = event) do
+  defp get_replica_identity_by_kind("p", postgres_database, table_oid) do
+    # For partitioned tables, check all partitions
+    Postgres.check_partitioned_replica_identity(postgres_database, table_oid)
+  end
+
+  defp get_replica_identity_by_kind(_relation_kind, postgres_database, table_oid) do
+    # For regular tables and any other kind, just check the single table
+    Databases.check_replica_identity(postgres_database, table_oid)
+  end
+
+  defp check_publication(%SinkConsumer{} = consumer, %Event{} = event, relation_kind) do
     postgres_database = consumer.postgres_database
     slot = consumer.replication_slot
 
-    with {:ok, relation_kind} <- Postgres.get_relation_kind(postgres_database, consumer.sequence.table_oid),
-         {:ok, publication} <- Postgres.get_publication(postgres_database, slot.publication_name),
+    with {:ok, publication} <- Postgres.get_publication(postgres_database, slot.publication_name),
          :ok <- validate_partition_publication(relation_kind, publication),
          :ok <-
            Postgres.verify_table_in_publication(postgres_database, slot.publication_name, consumer.sequence.table_oid) do

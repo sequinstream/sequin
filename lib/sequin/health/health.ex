@@ -627,6 +627,12 @@ defmodule Sequin.Health do
       config_checked_event.data["replica_identity"] == "full" ->
         put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
 
+      consumer.message_kind == :event and is_nil(alert_replica_identity_not_full_dismissed) and
+          config_checked_event.data["relation_kind"] == "p" ->
+        put_check_timestamps(%{base_check | status: :notice, error_slug: :replica_identity_not_full_partitioned}, [
+          config_checked_event
+        ])
+
       consumer.message_kind == :event and is_nil(alert_replica_identity_not_full_dismissed) ->
         put_check_timestamps(%{base_check | status: :notice, error_slug: :replica_identity_not_full}, [
           config_checked_event

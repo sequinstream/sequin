@@ -1165,7 +1165,7 @@ defmodule Sequin.PostgresReplicationTest do
           CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
           # Process should shut down due to memory limit
-          assert_receive {:stop_replication, _}, 1000
+          assert_receive {SlotProcessorServer, :disconnected}, 1000
 
           stop_replication!()
         end)

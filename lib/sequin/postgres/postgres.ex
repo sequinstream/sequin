@@ -620,6 +620,71 @@ defmodule Sequin.Postgres do
   end
 
   @doc """
+  Checks replica identity for a partitioned table and all its partitions.
+
+  This function examines both the root table (provided by OID) and all of its partitions
+  to determine if they have consistent replica identity settings.
+
+  Returns:
+  - `{:ok, :mixed}` if partitions have different replica identity settings
+  - `{:ok, identity}` where identity is `:full`, `:default`, `:nothing`, or `:index` if all partitions have the same setting
+  - `{:error, error}` on failure
+
+  ## Parameters
+    - conn: The database connection
+    - root_oid: The OID of the partitioned (root) table
+  """
+  @spec check_partitioned_replica_identity(db_conn(), integer()) ::
+          {:ok, :full | :default | :nothing | :index | :mixed} | {:error, Error.t()}
+  def check_partitioned_replica_identity(conn, root_oid) do
+    query = """
+    with partitions as (
+    select c.oid, c.relreplident
+    from pg_inherits i
+    join pg_class c on c.oid = i.inhrelid
+    where i.inhparent = $1
+
+    union all
+
+    select $1 as oid, c.relreplident
+    from pg_class c
+    where c.oid = $1
+    )
+    select relreplident, count(*)
+    from partitions
+    group by relreplident
+    """
+
+    case query(conn, query, [root_oid]) do
+      {:ok, %{rows: []}} ->
+        {:error, Error.not_found(entity: :table, params: %{oid: root_oid})}
+
+      {:ok, %{rows: rows}} ->
+        if length(rows) > 1 do
+          # Multiple different replica identity settings exist
+          {:ok, :mixed}
+        else
+          # All partitions have the same replica identity
+          [[relreplident, _count]] = rows
+
+          identity =
+            case relreplident do
+              "f" -> :full
+              "d" -> :default
+              "n" -> :nothing
+              "i" -> :index
+            end
+
+          {:ok, identity}
+        end
+
+      {:error, error} ->
+        Logger.error("Failed to check replica identity for partitioned table #{root_oid}: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
   For crafting a `select *`, but only selecting columns that are considered "safe"
   (i.e. we have a Postgrex encoder available)
   """

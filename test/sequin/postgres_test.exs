@@ -169,4 +169,58 @@ defmodule Sequin.PostgresTest do
                )
     end
   end
+
+  describe "check_partitioned_replica_identity/2" do
+    @table "postgres_test_test_partitioned"
+    setup do
+      # Create a partitioned table and its partitions
+      """
+      drop table if exists #{@table} cascade;
+
+      create table #{@table} (
+        id serial,
+        value int,
+        created_at timestamp not null
+      ) partition by range (created_at);
+
+      create table #{@table}_2021 partition of #{@table}
+        for values from ('2021-01-01') to ('2022-01-01');
+
+      create table #{@table}_2022 partition of #{@table}
+        for values from ('2022-01-01') to ('2023-01-01');
+      """
+      |> String.split(";")
+      |> Enum.each(&Repo.query!(&1))
+
+      # Get the OIDs for cleanup and testing
+      {:ok, %{rows: [[parent_oid]]}} = Repo.query("select oid from pg_class where relname = '#{@table}'")
+
+      %{parent_oid: parent_oid}
+    end
+
+    test "returns the same replica identity when all partitions match", %{parent_oid: parent_oid} do
+      # By default, all partitions inherit the same replica identity (default)
+      {:ok, identity} = Postgres.check_partitioned_replica_identity(Repo, parent_oid)
+      assert identity == :default
+
+      # Change parent, will come back as :mixed
+      Repo.query!("alter table #{@table} replica identity full")
+
+      {:ok, identity} = Postgres.check_partitioned_replica_identity(Repo, parent_oid)
+      assert identity == :mixed
+
+      # Change children
+      Repo.query!("alter table #{@table}_2021 replica identity full")
+      Repo.query!("alter table #{@table}_2022 replica identity full")
+
+      {:ok, identity} = Postgres.check_partitioned_replica_identity(Repo, parent_oid)
+      assert identity == :full
+    end
+
+    test "returns error for non-existent table", %{conn: conn} do
+      non_existent_oid = 999_999_999
+
+      assert {:error, %NotFoundError{}} = Postgres.check_partitioned_replica_identity(conn, non_existent_oid)
+    end
+  end
 end

@@ -478,7 +478,7 @@ defmodule Sequin.Runtime.WalPipelineServer do
       |> Enum.map(fn wal_event ->
         values =
           [
-            wal_event.commit_lsn,
+            wal_event.commit_lsn + wal_event.commit_idx,
             Sequin.String.string_to_binary!(state.replication_slot.postgres_database_id),
             wal_event.source_table_oid,
             wal_event.source_table_schema,

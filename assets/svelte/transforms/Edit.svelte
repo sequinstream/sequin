@@ -98,10 +98,6 @@
     function: "Function transform",
   };
 
-  let sinkTypeToExternal = {
-    http_push: "HTTP Push",
-  };
-
   let errorKeyOrder = ["description", "snippet", "line", "column"];
 
   let form = {

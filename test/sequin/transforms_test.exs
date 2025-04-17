@@ -540,7 +540,7 @@ defmodule Sequin.TransformsTest do
 
       Oban.drain_queue(queue: :default)
 
-      assert {:ok, mod} = MiniElixir.ensure_name(xf.id)
+      assert {:ok, mod} = MiniElixir.module_name_from_id(xf.id)
       assert Code.loaded?(mod)
       md5 = mod.__info__(:md5)
 

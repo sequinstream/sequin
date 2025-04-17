@@ -65,9 +65,8 @@ COPY lib lib
 
 COPY assets assets
 
-# Copy shared MDX files to both svelte and snippets directories
-COPY shared_mdx/*.mdx assets/svelte/mdx/
-COPY shared_mdx/*.mdx docs/snippets/
+# Copy MDX snippets from docs to assets for CopyForChatGPT button
+COPY docs/snippets/function-transform-snippet.mdx assets/svelte/mdx/function-transform-snippet.mdx
 
 # install all npm packages in assets directory
 WORKDIR /app/assets

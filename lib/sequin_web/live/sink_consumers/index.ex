@@ -13,6 +13,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases
   alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Health
@@ -233,6 +234,18 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       id="new-consumer"
       action={:new}
       consumer={%SinkConsumer{type: :azure_event_hub, sink: %AzureEventHubSink{}}}
+    />
+    """
+  end
+
+  defp render_consumer_form(%{form_kind: "typesense"} = assigns) do
+    ~H"""
+    <.live_component
+      current_user={@current_user}
+      module={ConsumerForm}
+      id="new-consumer"
+      action={:new}
+      consumer={%SinkConsumer{type: :typesense, sink: %TypesenseSink{}}}
     />
     """
   end

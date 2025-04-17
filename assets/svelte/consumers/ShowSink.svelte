@@ -32,6 +32,8 @@
   import GcpPubsubSinkCard from "../sinks/gcp_pubsub/GcpPubsubSinkCard.svelte";
   import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
   import RabbitMqSinkCard from "../sinks/rabbitmq/RabbitMqSinkCard.svelte";
+  import TypesenseSinkCard from "../sinks/typesense/TypesenseSinkCard.svelte";
+  import TypesenseSinkCard from "../sinks/typesense/TypesenseSinkCard.svelte";
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
@@ -98,6 +100,12 @@
 
   function isKafkaConsumer(consumer: Consumer): consumer is KafkaConsumer {
     return consumer.sink.type === "kafka";
+  }
+
+  function isTypesenseConsumer(
+    consumer: Consumer,
+  ): consumer is TypesenseConsumer {
+    return consumer.sink.type === "typesense";
   }
 
   function isNatsConsumer(consumer: Consumer): consumer is NatsConsumer {
@@ -1094,6 +1102,8 @@
         <NatsSinkCard {consumer} />
       {:else if isRabbitMqConsumer(consumer)}
         <RabbitMqSinkCard {consumer} />
+      {:else if isTypesenseConsumer(consumer)}
+        <TypesenseSinkCard {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

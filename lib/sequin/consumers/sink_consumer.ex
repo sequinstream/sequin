@@ -65,7 +65,18 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
 
     field :type, Ecto.Enum,
-      values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
+      values: [
+        :http_push,
+        :sqs,
+        :redis,
+        :kafka,
+        :sequin_stream,
+        :gcp_pubsub,
+        :nats,
+        :rabbitmq,
+        :azure_event_hub,
+        :typesense
+      ],
       read_after_writes: true
 
     field :health, :map, virtual: true

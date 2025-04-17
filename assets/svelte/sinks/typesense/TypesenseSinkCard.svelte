@@ -1,0 +1,83 @@
+<script lang="ts">
+  import { ExternalLink } from "lucide-svelte";
+  import { Card, CardContent } from "$lib/components/ui/card";
+  import { Button } from "$lib/components/ui/button";
+  import type { TypesenseConsumer } from "../../consumers/types";
+
+  export let consumer: TypesenseConsumer;
+</script>
+
+<Card>
+  <CardContent class="p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-semibold">Typesense Configuration</h2>
+      <!-- <div class="flex gap-2"> -->
+      <!--   <a -->
+      <!--     href={consumer.sink.endpoint_url} -->
+      <!--     target="_blank" -->
+      <!--     rel="noopener noreferrer" -->
+      <!--   > -->
+      <!--     <Button variant="outline" size="sm"> -->
+      <!--       <ExternalLink class="h-4 w-4 mr-2" /> -->
+      <!--       Open Typesense Dashboard -->
+      <!--     </Button> -->
+      <!--   </a> -->
+      <!-- </div> -->
+    </div>
+
+    <div class="grid gap-4">
+      <div>
+        <span class="text-sm text-gray-500">Endpoint URL</span>
+        <div class="mt-2">
+          <div
+            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md break-all w-fit"
+          >
+            <span>{consumer.sink.endpoint_url}</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <span class="text-sm text-gray-500">Collection Name</span>
+        <div class="mt-2">
+          <span
+            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            >{consumer.sink.collection_name}</span
+          >
+        </div>
+      </div>
+
+      <div>
+        <span class="text-sm text-gray-500">Import Action</span>
+        <div class="mt-2">
+          <span
+            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            >{consumer.sink.import_action}</span
+          >
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <span class="text-sm text-gray-500">Batch Size</span>
+          <div class="mt-2">
+            <span
+              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+              >{consumer.sink.batch_size}</span
+            >
+          </div>
+        </div>
+
+        <div>
+          <span class="text-sm text-gray-500">Timeout (seconds)</span>
+          <div class="mt-2">
+            <span
+              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+              >{consumer.sink.timeout_seconds}</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+  </CardContent>
+</Card>

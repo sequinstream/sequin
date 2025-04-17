@@ -18,6 +18,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -276,6 +277,12 @@ defmodule SequinWeb.Components.ConsumerForm do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
+
+      :typesense ->
+        case test_typesense_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
     end
   end
 
@@ -432,6 +439,28 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp test_typesense_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %TypesenseSink{} = sink -> TypesenseSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+
+      # Test the connection to Typesense
+      case Sequin.Typesense.Client.test_connection(sink) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
   defp decode_params(form, socket) do
     params =
       %{
@@ -576,6 +605,18 @@ defmodule SequinWeb.Components.ConsumerForm do
       "event_hub_name" => sink["event_hub_name"],
       "shared_access_key_name" => sink["shared_access_key_name"],
       "shared_access_key" => sink["shared_access_key"]
+    }
+  end
+
+  defp decode_sink(:typesense, sink) do
+    %{
+      "type" => "typesense",
+      "endpoint_url" => sink["endpoint_url"],
+      "collection_name" => sink["collection_name"],
+      "api_key" => sink["api_key"],
+      "import_action" => sink["import_action"],
+      "batch_size" => sink["batch_size"] && String.to_integer(sink["batch_size"]),
+      "timeout_seconds" => sink["timeout_seconds"] && String.to_integer(sink["timeout_seconds"])
     }
   end
 
@@ -744,6 +785,18 @@ defmodule SequinWeb.Components.ConsumerForm do
       "event_hub_name" => sink.event_hub_name,
       "shared_access_key_name" => sink.shared_access_key_name,
       "shared_access_key" => sink.shared_access_key
+    }
+  end
+
+  defp encode_sink(%TypesenseSink{} = sink) do
+    %{
+      "type" => "typesense",
+      "endpoint_url" => sink.endpoint_url,
+      "collection_name" => sink.collection_name,
+      "api_key" => sink.api_key,
+      "import_action" => sink.import_action,
+      "batch_size" => sink.batch_size,
+      "timeout_seconds" => sink.timeout_seconds
     }
   end
 
@@ -1026,6 +1079,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :nats -> "NATS Sink"
       :rabbitmq -> "RabbitMQ Sink"
       :azure_event_hub -> "Azure Event Hub Sink"
+      :typesense -> "Typesense Sink"
     end
   end
 

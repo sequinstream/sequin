@@ -17,6 +17,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.TypesenseSink
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -239,6 +240,18 @@ defmodule Sequin.Transforms do
       event_hub_name: sink.event_hub_name,
       shared_access_key_name: sink.shared_access_key_name,
       shared_access_key: maybe_obfuscate(sink.shared_access_key, show_sensitive)
+    })
+  end
+
+  def to_external(%TypesenseSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "typesense",
+      endpoint_url: sink.endpoint_url,
+      collection_name: sink.collection_name,
+      api_key: maybe_obfuscate(sink.api_key, show_sensitive),
+      import_action: sink.import_action,
+      batch_size: sink.batch_size,
+      timeout_seconds: sink.timeout_seconds
     })
   end
 
@@ -645,6 +658,20 @@ defmodule Sequin.Transforms do
        credentials: attrs["credentials"],
        use_emulator: attrs["use_emulator"] || false,
        emulator_base_url: attrs["emulator_base_url"]
+     }}
+  end
+
+  # Add parse_sink for typesense type
+  defp parse_sink(%{"type" => "typesense"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :typesense,
+       endpoint_url: attrs["endpoint_url"],
+       collection_name: attrs["collection_name"],
+       api_key: attrs["api_key"],
+       import_action: String.to_existing_atom(attrs["import_action"]),
+       batch_size: attrs["batch_size"],
+       timeout_seconds: attrs["timeout_seconds"]
      }}
   end
 

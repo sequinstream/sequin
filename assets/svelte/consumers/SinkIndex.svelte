@@ -26,6 +26,9 @@
   import SequinStreamIcon from "../sinks/sequin_stream/SequinStreamIcon.svelte";
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
+
+  import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
+
   import { Badge } from "$lib/components/ui/badge";
   import * as d3 from "d3";
   import { onMount } from "svelte";
@@ -42,7 +45,9 @@
       | "gcp_pubsub"
       | "sequin_stream"
       | "nats"
-      | "rabbitmq";
+      | "rabbitmq"
+      | "typesense";
+
     status: "active" | "disabled" | "paused";
     database_name: string;
     active_backfill: boolean;
@@ -106,6 +111,11 @@
       id: "azure_event_hub",
       name: "Azure EventHub",
       icon: AzureEventHubIcon,
+    },
+    {
+      id: "typesense",
+      name: "Typesense",
+      icon: TypesenseIcon,
     },
   ];
 

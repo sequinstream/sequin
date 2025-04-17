@@ -65,6 +65,10 @@ COPY lib lib
 
 COPY assets assets
 
+# Copy shared MDX files to both svelte and snippets directories
+COPY shared_mdx/*.mdx assets/svelte/mdx/
+COPY shared_mdx/*.mdx docs/snippets/
+
 # install all npm packages in assets directory
 WORKDIR /app/assets
 RUN npm install

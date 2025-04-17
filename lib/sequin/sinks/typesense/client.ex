@@ -18,8 +18,11 @@ defmodule Sequin.Sinks.Typesense.Client do
   @doc """
   Creates a new Typesense client.
   """
-  @spec new(String.t(), String.t()) :: t()
-  def new(url, api_key) do
+  @spec new(keyword()) :: t()
+  def new(opts) do
+    url = Keyword.fetch!(opts, :url)
+    api_key = Keyword.fetch!(opts, :api_key)
+
     %__MODULE__{
       url: String.trim_trailing(url, "/"),
       api_key: api_key

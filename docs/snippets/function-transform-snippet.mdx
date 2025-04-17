@@ -26,7 +26,8 @@ The `transform/4` function receives each key from the [message object](/referenc
 - `metadata`: The metadata object
 
 <Info>
-  Your transform must define the `transform/4` function and may not define any other functions.
+  Your transform must define the `transform/4` function and may not define any
+  other functions.
 </Info>
 
 ### Elixir standard library
@@ -41,7 +42,7 @@ The function transform allows you to use a subset of the Elixir standard library
 - [Decimal](https://hexdocs.pm/decimal/readme.html)
 - [URI](https://hexdocs.pm/elixir/URI.html)
 
-Other parts of the Elixir standard library are not yet supported.  If you need something specific, please [let us know](https://github.com/sequinstream/sequin/issues/new/choose)
+Other parts of the Elixir standard library are not yet supported. If you need something specific, please [let us know](https://github.com/sequinstream/sequin/issues/new/choose)
 and we will be happy to help.
 
 ### Examples
@@ -74,11 +75,12 @@ end
 <Note>
   Both `record` and `changes` use string keys for access (ie. `record["id"]`).
 
-  In contrast, the `metadata` object uses atom keys (ie. `metadata.table_schema`).
+In contrast, the `metadata` object uses atom keys (ie. `metadata.table_schema`).
 
-  This is because the `record` and `changes` objects are dynamically typed- they depend on the schema of the connected Postgres table. Metadata, on the other hand, is statically typed and will always have the same keys.
+This is because the `record` and `changes` objects are dynamically typed––they depend on the schema of the connected Postgres table. Metadata, on the other hand, is statically typed and will always have the same keys.
 
-  See the [Elixir Map docs](https://hexdocs.pm/elixir/1.12/Map.html) for more information on the difference between string and atom keys.
+See the [Elixir Map docs](https://hexdocs.pm/elixir/1.12/Map.html) for more information on the difference between string and atom keys.
+
 </Note>
 
 #### Sanitize sensitive data
@@ -105,7 +107,7 @@ def transform(action, record, changes, metadata) do
   last_name = record["last_name"]
   full_name = first_name <> " " <> last_name
   name_length = String.length(full_name)
- 
+
   %{
     full_name: full_name,
     name_length: name_length

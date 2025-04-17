@@ -8,14 +8,14 @@ import FunctionTransformSnippet from '/snippets/function-transform-snippet.mdx';
 Transforms allow you to modify the structure of your messages before they are sent to the sink destination. This is useful for:
 
 - Simplifying message payloads to reduce bandwidth and storage costs
-- Converting from the database format to a format compatible with your sink destination or downstream systems
-- Maintaining the same message format as you migrate from eg. Debezium to Sequin
-- Keeping payloads under size limits (e.g., SQS 256KB limit)
+- Converting from the database's format to a format compatible with your sink destination or downstream systems
+- Maintaining the same message format as you migrate from e.g. Debezium to Sequin
+- Keeping payloads under size limits (e.g., SQS' 256KB limit)
 
 
 ## Path transform
 
-Path transform are the simplest transform. Path transforms allow you to extract one field from your message using a dot-notation path. This is useful for:
+Path transforms are the simplest kind of transform. Path transforms allow you to extract one field from your message using a dot-notation path. This is useful for:
 
 1. Sending just the latest record to the destination (e.g., for materialized views in Postgres or data warehouses)
 2. Extracting just the record ID to keep payloads small (e.g., for SQS with its 256KB limit)

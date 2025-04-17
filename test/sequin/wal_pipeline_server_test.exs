@@ -99,7 +99,7 @@ defmodule Sequin.Runtime.WalPipelineServerTest do
       as_logs =
         Enum.map(wal_events, fn wal_event ->
           %{
-            seq: wal_event.commit_lsn,
+            seq: wal_event.commit_lsn + wal_event.commit_idx,
             source_table_oid: wal_event.source_table_oid,
             source_table_schema: wal_event.source_table_schema,
             source_table_name: wal_event.source_table_name,
@@ -222,7 +222,7 @@ defmodule Sequin.Runtime.WalPipelineServerTest do
       log = hd(logs)
 
       # Verify basic fields match
-      assert log.seq == wal_event.commit_lsn
+      assert log.seq == wal_event.commit_lsn + wal_event.commit_idx
       assert log.record_pk == hd(wal_event.record_pks)
       assert log.action == to_string(wal_event.action)
     end

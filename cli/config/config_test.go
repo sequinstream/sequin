@@ -138,7 +138,7 @@ database: default_db
 
 	// Check the result with exact match
 	if string(outputContent) != expectedOutput {
-		t.Errorf("Interpolate() output file content does not match.\nGot:\n%s\nWant:\n%s", 
+		t.Errorf("Interpolate() output file content does not match.\nGot:\n%s\nWant:\n%s",
 			string(outputContent), expectedOutput)
 	}
 
@@ -156,14 +156,14 @@ database: default_db
 	// Restore stdout and read the captured output
 	w.Close()
 	os.Stdout = oldStdout
-	
+
 	var buf bytes.Buffer
 	io.Copy(&buf, r)
 	stdoutContent := buf.String()
 
 	// Check the result with exact match
 	if stdoutContent != expectedOutput {
-		t.Errorf("Interpolate() stdout content does not match.\nGot:\n%s\nWant:\n%s", 
+		t.Errorf("Interpolate() stdout content does not match.\nGot:\n%s\nWant:\n%s",
 			stdoutContent, expectedOutput)
 	}
 
@@ -171,4 +171,4 @@ database: default_db
 	if err := Interpolate("nonexistent.yaml", ""); err == nil {
 		t.Errorf("Interpolate() expected error for nonexistent file, got nil")
 	}
-} 
+}

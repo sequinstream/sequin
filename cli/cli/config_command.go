@@ -479,10 +479,10 @@ func (c *ConfigCommands) interpolateAction(_ *fisk.ParseContext) error {
 	if err != nil {
 		return fmt.Errorf("interpolation failed: %w", err)
 	}
-	
+
 	if c.outputPath != "" {
 		fmt.Printf("Interpolated YAML written to %s\n", c.outputPath)
 	}
-	
+
 	return nil
 }

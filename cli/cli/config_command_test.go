@@ -55,11 +55,11 @@ app:
 
 	t.Run("interpolate to stdout", func(t *testing.T) {
 		cmd := &ConfigCommands{yamlPath: yamlPath}
-		
+
 		output, err := captureOutput(func() error {
 			return cmd.interpolateAction(nil)
 		})
-		
+
 		if err != nil {
 			t.Errorf("interpolateAction() error = %v", err)
 			return
@@ -84,11 +84,11 @@ app:
 			yamlPath:   yamlPath,
 			outputPath: outputPath,
 		}
-		
+
 		output, err := captureOutput(func() error {
 			return cmd.interpolateAction(nil)
 		})
-		
+
 		if err != nil {
 			t.Errorf("interpolateAction() error = %v", err)
 			return
@@ -121,13 +121,13 @@ app:
 
 	t.Run("file not found", func(t *testing.T) {
 		cmd := &ConfigCommands{yamlPath: "nonexistent.yaml"}
-		
+
 		_, err := captureOutput(func() error {
 			return cmd.interpolateAction(nil)
 		})
-		
+
 		if err == nil {
 			t.Error("interpolateAction() expected error for nonexistent file, got nil")
 		}
 	})
-} 
+}

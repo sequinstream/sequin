@@ -15,7 +15,7 @@ Transforms allow you to modify the structure of your messages before they are se
 
 ## Path transform
 
-Path transform are the simplest transform. Path transforms allow you to extract one field from your message using a dot-notation path. This is particularly useful for:
+Path transform are the simplest transform. Path transforms allow you to extract one field from your message using a dot-notation path. This is useful for:
 
 1. Sending just the latest record to the destination (e.g., for materialized views in Postgres or data warehouses)
 2. Extracting just the record ID to keep payloads small (e.g., for SQS with its 256KB limit)

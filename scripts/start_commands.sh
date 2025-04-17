@@ -56,16 +56,12 @@ apply_config() {
     CONFIG_FILENAME=$(basename "${CONFIG_FILE_PATH}")
     INTERPOLATED_CONFIG_PATH="${APP_HOME_DIR}/${CONFIG_FILENAME}.interpolated.yml"
 
-    # Copy the original file
-    cp "${CONFIG_FILE_PATH}" "${INTERPOLATED_CONFIG_PATH}"
-
-    # Perform environment variable substitution on the copied file
-    yq -i '(.. | select(tag == "!!str")) |= envsubst' "${INTERPOLATED_CONFIG_PATH}"
+    # Use sequin-cli to interpolate environment variables
+    sequin-cli config interpolate "${CONFIG_FILE_PATH}" --output "${INTERPOLATED_CONFIG_PATH}"
+    echo "Environment variable substitution complete in ${INTERPOLATED_CONFIG_PATH}"
 
     # Update CONFIG_FILE_PATH to use the interpolated file
     export CONFIG_FILE_PATH="${INTERPOLATED_CONFIG_PATH}"
-
-    echo "Environment variable substitution complete in ${INTERPOLATED_CONFIG_PATH}"
   else
     echo "No config file found or path is empty, skipping environment variable substitution"
   fi

@@ -9,7 +9,15 @@ ARG RUNNER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${
 
 ARG SELF_HOSTED=0
 
-# ---- Build Stage ----
+# ---- CLI Build Stage ----
+FROM golang:1.24-bullseye AS cli-builder
+
+ARG SEQUIN_CLI_VERSION=0.6.97
+RUN git clone --depth 1 --branch v${SEQUIN_CLI_VERSION} https://github.com/sequinstream/sequin.git /tmp/sequin \
+    && cd /tmp/sequin/cli \
+    && go build -o /sequin-cli
+
+# ---- Elixir Build Stage ----
 FROM ${BUILDER_IMAGE} AS builder
 
 # Pass the SELF_HOSTED arg as an environment variable
@@ -95,8 +103,9 @@ RUN apt-get update -y && \
     apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates curl ssh jq telnet netcat htop \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
-# Install yq for environment variable substitution in sequin.yml
-RUN curl -L  https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64 -o /usr/bin/yq && chmod +x /usr/bin/yq
+# Copy the Sequin CLI from the cli-builder stage
+COPY --from=cli-builder /sequin-cli /usr/local/bin/sequin-cli
+RUN chmod +x /usr/local/bin/sequin-cli
 
 # Pass the SELF_HOSTED arg again in this stage
 ARG SELF_HOSTED

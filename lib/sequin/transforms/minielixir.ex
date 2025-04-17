@@ -1,29 +1,22 @@
 defmodule Sequin.Transforms.MiniElixir do
   @moduledoc false
+  use Agent
+
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.Transform
   alias Sequin.Error
-  alias Sequin.Repo
   alias Sequin.Transforms.MiniElixir.Validator
 
   require Logger
 
   @timeout 1000
 
-  def on_create(%Transform{type: "routing"} = xf) do
-    case create(xf.id, xf.transform.code) do
-      {:ok, _} -> :ok
-      err -> Logger.warning("Transform create failed", id: xf.id, err: err)
-    end
-
-    xf
+  def start_link(_opts) do
+    Agent.start_link(fn -> :no_state end, name: __MODULE__)
   end
-
-  def on_create(e), do: e
-
-  def on_update(e), do: on_create(e)
 
   def run_compiled(transform, data) do
     if Sequin.feature_enabled?(:function_transforms) do
@@ -93,7 +86,7 @@ defmodule Sequin.Transforms.MiniElixir do
         %ConsumerEventData{changes: changes} -> changes
       end
 
-    {:ok, mod} = ensure(id)
+    {:ok, mod} = ensure_code_is_loaded(id)
     {:ok, mod.transform(to_string(data.action), data.record, changes, Sequin.Map.from_struct_deep(data.metadata))}
   rescue
     error ->
@@ -125,7 +118,14 @@ defmodule Sequin.Transforms.MiniElixir do
   end
 
   def compile_and_load!(ast) do
-    {result, _messages} = compile_quoted(ast)
+    {result, _messages} =
+      Code.with_diagnostics(fn ->
+        try do
+          {:ok, Code.compile_quoted(ast)}
+        rescue
+          err -> {:error, err}
+        end
+      end)
 
     case result do
       {:ok, [{mod, bin}]} ->
@@ -133,7 +133,8 @@ defmodule Sequin.Transforms.MiniElixir do
           {:module, mod} ->
             {:ok, mod}
 
-          _ ->
+          {:error, error} ->
+            Logger.error("[MiniElixir] Error loading module: #{inspect(error)}")
             {:error, :cantload}
         end
 
@@ -143,42 +144,34 @@ defmodule Sequin.Transforms.MiniElixir do
     end
   end
 
-  def compile_quoted(ast) do
-    Code.with_diagnostics(fn ->
-      try do
-        {:ok, Code.compile_quoted(ast)}
-      rescue
-        err -> {:error, err}
-      end
-    end)
+  defp ensure_code_is_loaded(id) do
+    unless is_code_loaded(id) do
+      Agent.update(__MODULE__, fn state ->
+        recreate(id)
+        state
+      end)
+    end
+
+    module_name_from_id(id)
   end
 
-  def ensure(id) do
-    with {:ok, mod} <- ensure_name(id),
+  defp is_code_loaded(id) do
+    with {:ok, mod} <- module_name_from_id(id),
          {:file, _} <- :code.is_loaded(mod) do
-      {:ok, mod}
+      true
     else
-      _ -> recreate(id)
+      _ -> false
     end
   end
 
-  def recreate(id) do
-    with {:ok, xf} <- get_transform_for_account(id) do
-      create(xf.id, xf.transform.code)
+  defp recreate(id) do
+    with false <- is_code_loaded(id),
+         {:ok, %Transform{} = transform} <- Consumers.get_transform(id) do
+      create(transform.id, transform.transform.code)
     end
   end
 
-  def get_transform_for_account(id) do
-    id
-    |> Transform.where_id()
-    |> Repo.one()
-    |> case do
-      nil -> {:error, :not_found}
-      transform -> {:ok, transform}
-    end
-  end
-
-  def ensure_name(id) do
+  def module_name_from_id(id) do
     modname = generate_module_name(id)
     mod = String.to_existing_atom(modname)
     {:ok, mod}

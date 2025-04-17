@@ -378,10 +378,27 @@ For example:
 ```yaml
 databases:
   - name: "production-db"
+    # Note quotes around the reference in case of special characters (see below)
     hostname: "${DB_HOST:-localhost}"
-    password: "${DB_PASSWORD:-postgres}"
+    # You can alternatively use a YAML heredoc, if your env variable might contain quotes (see below)
+    password: |-
+      ${DB_PASSWORD:-postgres}
     database: "${DB_NAME:-app_production}"
 ```
+
+### Best practices for environment variables in YAML
+
+YAML has special characters that can affect parsing if they appear unquoted in your configuration. When using environment variables that might contain special characters (like `:`, `-`, `{`, `}`, `[`, `]`, etc.), it's recommended to quote the entire reference:
+
+```yaml
+# Safe pattern for values that might contain special characters
+api_key: "${API_KEY}"
+# Alternatively, use a heredoc if your string contains quotes
+password: |-
+  ${DB_PASSWORD}
+```
+
+This ensures that the substituted value is treated as a string literal regardless of its content, preventing YAML parsing errors.
 
 ### Using with dotenv
 
@@ -397,6 +414,20 @@ This is particularly useful for:
 - Managing environment-specific configurations
 - Keeping sensitive values out of your YAML files
 - Simplifying deployment across different environments
+
+### Previewing interpolated YAML
+
+You can preview how your environment variables will be interpolated into your configuration before applying it:
+
+```bash
+# View the interpolated YAML with environment variables substituted
+sequin config interpolate my-config.yaml
+
+# Write the interpolated YAML to a file
+sequin config interpolate my-config.yaml --output interpolated.yaml
+```
+
+This helps verify that your configuration will be processed correctly, especially when using default values or complex environment variable patterns.
 
 ## Example configuration
 

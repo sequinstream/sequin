@@ -19,6 +19,7 @@ type ConfigCommands struct {
 	changes       int
 	showSensitive bool
 	autoApprove   bool
+	outputPath    string
 }
 
 // AddYamlCommands adds the 'plan' and 'apply' commands for YAML-based operations
@@ -47,6 +48,14 @@ func AddConfigCommands(app *fisk.Application, cfg *Config) {
 	export := config.Command("export", "Export current configuration as YAML")
 	export.Action(cmd.exportAction)
 	export.Flag("show-sensitive", "Show sensitive values like passwords and encrypted headers").BoolVar(&cmd.showSensitive)
+
+	// Interpolate command
+	interpolate := config.Command("interpolate", "Output YAML file with all environment variables interpolated")
+	interpolate.Arg("file", "Path to YAML file").
+		Default("sequin.yaml").
+		StringVar(&cmd.yamlPath)
+	interpolate.Flag("output", "Output file path (default: stdout)").StringVar(&cmd.outputPath)
+	interpolate.Action(cmd.interpolateAction)
 }
 
 func (c *ConfigCommands) applyAction(_ *fisk.ParseContext) error {
@@ -462,5 +471,18 @@ func (c *ConfigCommands) exportAction(ctx *fisk.ParseContext) error {
 	fmt.Printf("%s\n", dim("3. Review changes with sequin config plan sequin.yaml"))
 	fmt.Printf("%s\n", dim("4. Apply changes with sequin config apply sequin.yaml"))
 
+	return nil
+}
+
+func (c *ConfigCommands) interpolateAction(_ *fisk.ParseContext) error {
+	err := config.Interpolate(c.yamlPath, c.outputPath)
+	if err != nil {
+		return fmt.Errorf("interpolation failed: %w", err)
+	}
+	
+	if c.outputPath != "" {
+		fmt.Printf("Interpolated YAML written to %s\n", c.outputPath)
+	}
+	
 	return nil
 }

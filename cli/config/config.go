@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"regexp"
 
+	"github.com/a8m/envsubst"
 	"github.com/sequinstream/sequin/cli/context"
 )
 
@@ -31,25 +31,43 @@ type ExportResponse struct {
 	YAML string `json:"yaml"`
 }
 
-// processEnvVars replaces environment variables in the YAML content using the ${VAR_NAME:-default} syntax
-func processEnvVars(yamlContent []byte) []byte {
-	// Regex to match ${VAR_NAME:-default} pattern
-	pattern := regexp.MustCompile(`\${([^{}:]+)(?::-([^{}]*))?}`)
+// processEnvVars replaces environment variables in the YAML content using envsubst library
+func processEnvVars(yamlContent []byte) ([]byte, error) {
+	processed, err := envsubst.Bytes(yamlContent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process environment variables: %w", err)
+	}
+	return processed, nil
+}
 
-	return pattern.ReplaceAllFunc(yamlContent, func(match []byte) []byte {
-		parts := pattern.FindSubmatch(match)
+// Interpolate reads a YAML file, processes environment variables, and outputs the result
+func Interpolate(inputPath, outputPath string) error {
+	// Read YAML file
+	yamlContent, err := os.ReadFile(inputPath)
+	if err != nil {
+		return fmt.Errorf("failed to read YAML file: %w", err)
+	}
 
-		// parts[1] is the variable name
-		envVarName := string(parts[1])
-		envValue := os.Getenv(envVarName)
+	// Process environment variables
+	processed, err := processEnvVars(yamlContent)
+	if err != nil {
+		return err
+	}
 
-		// If environment variable is not set and we have a default value (parts[2])
-		if envValue == "" && len(parts) > 2 && parts[2] != nil {
-			envValue = string(parts[2])
-		}
+	// Write output
+	if outputPath == "" {
+		// Write to stdout if no output path specified
+		_, err = os.Stdout.Write(processed)
+	} else {
+		// Write to the specified file
+		err = os.WriteFile(outputPath, processed, 0644)
+	}
 
-		return []byte(envValue)
-	})
+	if err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+
+	return nil
 }
 
 func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
@@ -60,7 +78,10 @@ func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 	}
 
 	// Process environment variables
-	yamlContent = processEnvVars(yamlContent)
+	yamlContent, err = processEnvVars(yamlContent)
+	if err != nil {
+		return nil, err
+	}
 
 	// Get server URL
 	serverURL, err := context.GetServerURL(ctx)
@@ -125,7 +146,10 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 	}
 
 	// Process environment variables
-	yamlContent = processEnvVars(yamlContent)
+	yamlContent, err = processEnvVars(yamlContent)
+	if err != nil {
+		return nil, err
+	}
 
 	// Get server URL
 	serverURL, err := context.GetServerURL(ctx)

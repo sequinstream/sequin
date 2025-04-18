@@ -154,7 +154,7 @@ export type GcpPubsubConsumer = BaseConsumer & {
   };
 };
 
-// Typesense specific sink 
+// Typesense specific sink
 export type TypesenseConsumer = BaseConsumer & {
   sink: {
     type: "typesense";

@@ -11,18 +11,6 @@
   <CardContent class="p-6">
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-lg font-semibold">Typesense Configuration</h2>
-      <!-- <div class="flex gap-2"> -->
-      <!--   <a -->
-      <!--     href={consumer.sink.endpoint_url} -->
-      <!--     target="_blank" -->
-      <!--     rel="noopener noreferrer" -->
-      <!--   > -->
-      <!--     <Button variant="outline" size="sm"> -->
-      <!--       <ExternalLink class="h-4 w-4 mr-2" /> -->
-      <!--       Open Typesense Dashboard -->
-      <!--     </Button> -->
-      <!--   </a> -->
-      <!-- </div> -->
     </div>
 
     <div class="grid gap-4">

@@ -26,7 +26,7 @@ defmodule Sequin.Sinks.Typesense.Client do
 
     url = "/collections/#{collection_name}/documents"
     case Req.post(req, url: url, json: document, params: %{action: action}) do
-      {:ok, %{status: 200, body: body}} ->
+      {:ok, %{status: st, body: body}} when st in 200..299 ->
         {:ok, body}
 
       {:ok, %{status: status, body: body}} ->

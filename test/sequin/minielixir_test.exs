@@ -194,5 +194,9 @@ defmodule Sequin.MiniElixirTest do
       # In if condition
       assert :ok = Validator.check(quote do: if(match?(x when x > 0, 1), do: :ok, else: :error))
     end
+
+    test "interpolation" do
+      assert :ok = Validator.check(quote do: "#{1}")
+    end
   end
 end

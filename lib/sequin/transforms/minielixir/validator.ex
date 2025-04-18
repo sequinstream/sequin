@@ -142,6 +142,7 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
     trunc
     tuple_size
     update_in
+    to_string
   ]a
 
   def check(ast) do

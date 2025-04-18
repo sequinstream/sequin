@@ -41,16 +41,16 @@ defmodule Sequin.Runtime.TypesensePipeline do
     setup_allowances(test_pid)
 
     external_messages =
-      Enum.map(messages, fn %{data: data} ->
+      messages
+      |> Enum.map(fn %{data: data} ->
         Sequin.Transforms.Message.to_external(consumer, data)
       end)
 
-    case length(external_messages) do
-      1 ->
-        # Use single document API for a single message
-        [message] = external_messages
+    case external_messages do
+      [] -> :noop
 
-        case Client.index_document(client, sink.collection_name, message) do
+      [message] ->
+        case Client.index_document(client, sink.collection_name, message, action: sink.import_action) do
           {:ok, _response} ->
             {:ok, messages, context}
 
@@ -59,7 +59,6 @@ defmodule Sequin.Runtime.TypesensePipeline do
         end
 
       _ ->
-        # Use batch import API with JSONL for multiple messages
         jsonl = encode_as_jsonl(external_messages)
 
         case Client.import_documents(client, sink.collection_name, jsonl, action: sink.import_action) do
@@ -69,6 +68,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
                 {:ok, messages, context}
 
               errors ->
+                dbg(errors)
                 {:error, Error.service(service: :typesense, message: "Failed to import documents", details: errors)}
             end
 
@@ -93,3 +93,4 @@ defmodule Sequin.Runtime.TypesensePipeline do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 end
+

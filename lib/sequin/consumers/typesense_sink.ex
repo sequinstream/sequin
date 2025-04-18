@@ -1,13 +1,8 @@
 defmodule Sequin.Consumers.TypesenseSink do
-  @moduledoc """
-  Represents configuration for sinking events to a Typesense collection.
-  """
   use Ecto.Schema
   use TypedEctoSchema
 
   import Ecto.Changeset
-
-  alias Sequin.Encrypted.Binary
 
   @import_actions [:create, :upsert, :update, :emplace]
 
@@ -17,7 +12,7 @@ defmodule Sequin.Consumers.TypesenseSink do
     field :type, Ecto.Enum, values: [:typesense], default: :typesense
     field :endpoint_url, :string
     field :collection_name, :string
-    field :api_key, Binary
+    field :api_key, Sequin.Encrypted.Binary
     field :import_action, Ecto.Enum, values: @import_actions, default: :emplace
     field :batch_size, :integer, default: 40
     field :timeout_seconds, :integer, default: 5
@@ -49,6 +44,8 @@ defmodule Sequin.Consumers.TypesenseSink do
 
   def client_params(%__MODULE__{} = me) do
     [url: me.endpoint_url,
-     api_key: me.api_key]
+     api_key: me.api_key,
+     timeout_seconds: me.timeout_seconds
+    ]
   end
 end

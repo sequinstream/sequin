@@ -7,37 +7,26 @@ defmodule Sequin.Sinks.Typesense.Client do
 
   require Logger
 
-  @type t :: %__MODULE__{
-          api_key: String.t(),
-          url: String.t(),
-          req_client: module()
-        }
+  defstruct [:api_key, :url, :timeout_seconds, req_client: Req]
 
-  defstruct [:api_key, :url, req_client: Req]
-
-  @doc """
-  Creates a new Typesense client.
-  """
-  @spec new(keyword()) :: t()
   def new(opts) do
-    url = Keyword.fetch!(opts, :url)
-    api_key = Keyword.fetch!(opts, :api_key)
-
     %__MODULE__{
-      url: String.trim_trailing(url, "/"),
-      api_key: api_key
+      url: Keyword.fetch!(opts, :url) |> String.trim_trailing("/"),
+      api_key: Keyword.fetch!(opts, :api_key),
+      timeout_seconds: Keyword.get(opts, :timeout_seconds, 30)
     }
   end
 
   @doc """
   Index a single document in a collection.
   """
-  @spec index_document(t(), String.t(), map()) :: {:ok, map()} | {:error, Error.t()}
-  def index_document(%__MODULE__{} = client, collection_name, document) do
+  def index_document(%__MODULE__{} = client, collection_name, document, opts \\ []) do
+    action = Keyword.get(opts, :action, "create")
     req = base_request(client)
 
-    case Req.post(req, url: "/collections/#{collection_name}/documents", json: document) do
-      {:ok, %{status: status, body: body}} when status in 200..299 ->
+    url = "/collections/#{collection_name}/documents"
+    case Req.post(req, url: url, json: document, params: %{action: action}) do
+      {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 
       {:ok, %{status: status, body: body}} ->
@@ -62,7 +51,6 @@ defmodule Sequin.Sinks.Typesense.Client do
   @doc """
   Import multiple documents in JSONL format.
   """
-  @spec import_documents(t(), String.t(), String.t(), keyword()) :: {:ok, list(map())} | {:error, Error.t()}
   def import_documents(%__MODULE__{} = client, collection_name, jsonl, opts \\ []) do
     action = Keyword.get(opts, :action, "create")
     batch_size = Keyword.get(opts, :batch_size, 40)
@@ -79,14 +67,19 @@ defmodule Sequin.Sinks.Typesense.Client do
            body: jsonl,
            params: query_params
          ) do
-      {:ok, %{status: status, body: body}} when status in 200..299 ->
-        # The response is one JSON object per line, parse each line separately
+      {:ok, %{status: 200, body: body}} ->
         responses =
           body
           |> String.split("\n", trim: true)
           |> Enum.map(&Jason.decode!/1)
+        # :::warning NOTE
+        # The import endpoint will always return a `HTTP 200 OK` code, regardless of the import results of the individual documents.
 
-        # TODO: we can get 200 from the HTTP request but be told about errors here...        
+        # We do this because there might be some documents which succeeded on import and others that failed, and we don't want to return an HTTP error code in those partial scenarios.
+        # To keep it consistent, we just return HTTP 200 in all cases.
+
+        # So always be sure to check the API response for any `{success: false, ...}` records to see if there are any documents that failed import.
+        # :::
         {:ok, responses}
 
       {:ok, %{status: status, body: body}} ->
@@ -111,7 +104,6 @@ defmodule Sequin.Sinks.Typesense.Client do
   @doc """
   Test the connection to the Typesense server.
   """
-  @spec test_connection(t()) :: :ok | {:error, Error.t()}
   def test_connection(%__MODULE__{} = client) do
     req = base_request(client)
 
@@ -141,12 +133,11 @@ defmodule Sequin.Sinks.Typesense.Client do
   @doc """
   Create a new collection in Typesense.
   """
-  @spec create_collection(t(), map()) :: {:ok, map()} | {:error, Error.t()}
   def create_collection(%__MODULE__{} = client, schema) do
     req = base_request(client)
 
     case Req.post(req, url: "/collections", json: schema) do
-      {:ok, %{status: status, body: body}} when status in 200..299 ->
+      {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 
       {:ok, %{status: status, body: body}} ->
@@ -171,12 +162,11 @@ defmodule Sequin.Sinks.Typesense.Client do
   @doc """
   Get information about a collection.
   """
-  @spec retrieve_collection(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def retrieve_collection(%__MODULE__{} = client, collection_name) do
     req = base_request(client)
 
     case Req.get(req, url: "/collections/#{collection_name}") do
-      {:ok, %{status: status, body: body}} when status in 200..299 ->
+      {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 
       {:ok, %{status: 404}} ->
@@ -209,7 +199,7 @@ defmodule Sequin.Sinks.Typesense.Client do
       headers: [
         {"X-TYPESENSE-API-KEY", client.api_key}
       ],
-      receive_timeout: :timer.seconds(30),
+      receive_timeout: :timer.seconds(client.timeout_seconds),
       retry: false
     )
   end

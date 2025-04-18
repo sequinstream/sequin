@@ -1,0 +1,264 @@
+---
+title: 'Get started with Typesense'
+sidebarTitle: 'Typesense'
+description: 'Learn how to create real-time search indexes from Postgres changes in minutes. Use Sequin to keep your Typesense collections in sync with your database.'
+---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Typesense collection. You'll:
+
+- Boot Sequin
+- Connect to a sample playground database
+- Create a Typesense collection
+- Set up a sink to sync changes to Typesense
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin and Typesense. This same pattern can be used to setup your own Postgres CDC pipeline with Typesense.
+
+<Steps titleSize="h2">
+ <QuickstartInitialSteps />
+ <Step title="Create a Typesense Collection" icon="database">
+  First, let's start Typesense and create a collection to store our product data:
+
+  <Steps>
+    <Step title="Start Typesense">
+     Typesense offers a docker image that can be run locally. Let's start it up:
+
+      ```bash
+      docker run -d \
+        --name typesense-server \
+        -p 8108:8108 \
+        -v ./typesense-data:/data \
+        --restart on-failure \
+        typesense/typesense:28.0 \
+        --data-dir /data \
+        --api-key=your-api-key \
+        --enable-cors
+      ```
+    </Step>
+
+    <Step title="Create the collection">
+      Run the following command to create a new collection called "products":
+
+      ```bash
+      curl -X POST http://localhost:8108/collections \
+        -H "Content-Type: application/json" \
+        -H "X-TYPESENSE-API-KEY: your-api-key" \
+        -d '{
+          "name": "products",
+          "fields": [
+            {"name": ".*", "type": "auto" }
+          ]
+        }'
+      ```
+
+      This creates a collection that will automatically detect field types from our data.
+    </Step>
+
+    <Step title="Verify the collection">
+      You can verify the collection was created by searching it:
+
+      ```bash
+      curl -X GET "http://localhost:8108/collections/products/documents/search?q=*" \
+        -H "X-TYPESENSE-API-KEY: your-api-key"
+      ```
+
+      The collection should be empty initially.
+
+      ```
+      {
+        "found": 0,
+        "hits": [],
+        "out_of": 6,
+        "page": 1
+      }
+      ```
+    </Step>
+  </Steps>
+ </Step>
+
+ <Step title="Create a Typesense Sink" icon="plug">
+  With the playground database connected and Typesense collection created, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to your Typesense collection:
+
+  <Steps>
+    <Step title="Navigate to Sinks">
+      Click "Sinks" in the sidebar navigation, then click "Create Sink".
+    </Step>
+
+    <Step title="Select sink type">
+      Select "Typesense" as the sink type and click "Continue".
+    </Step>
+
+    <Step title='Note "Source" configuration'>
+      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
+
+      <Frame>
+        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
+      </Frame>
+    </Step>
+
+    <Step title="Setup a transform">
+      In the [Transform](/reference/transforms) card, click the toggle to view existing transforms. None exist, so click the "+" icon which will open a window for creating a new transform.
+
+      Select "Function transform" and input the following code:
+
+      ```elixir
+      def transform(action, record, changes, metadata) do
+        Map.take(record, ["id", "name", "price"])
+      end
+      ```
+
+      This transform will take the `id`, `name`, and `price` fields from the `products` table and use them to create a new document in Typesense.
+
+      <Frame>
+        <img src="/images/quickstart/typesense/transform-card.png" alt="Transform card with Elixir transform" />
+      </Frame>
+    </Step> 
+
+    <Step title="Setup a backfill">
+      In the "Initial backfill" card, click the toggle to enable an initial backfill. You can leave the default start position, which will backfill all existing rows in the `products` table:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
+      </Frame>
+    </Step>
+
+    <Step title='Configure Typesense'>
+      In the Typesense card, enter your Typesense configuration:
+
+      - Host: `http://localhost:8108`
+      - API Key: `your-api-key`
+      - Collection: `products`
+
+      You can leave the rest of the defaults.
+
+      <Frame>
+        <img  src="/images/quickstart/typesense/config-card.png" alt="Typesense configuration card" />
+      </Frame>
+    </Step>
+
+    <Step title="Create the sink">
+      You can leave the rest of the defaults. As configured, the Typesense collection will first receive a backfill of all rows currently in the `products` table. Then, it will receive all changes to the `products` table in real-time.
+
+      Click "Create Sink" to finish setting up your Typesense sync.
+    </Step>
+  </Steps>
+ </Step>
+
+  <Step title="Query your data in Typesense" icon="waveform-lines">
+    With our initial backfill complete, we can now query Typesense for our `products` collection:
+
+    ```bash
+    curl -X GET "http://localhost:8108/collections/products/documents/search?q=*" \
+      -H "X-TYPESENSE-API-KEY: your-api-key"
+    ```
+
+    This query will return all documents in the `products` collection.
+
+    To query for just products matching "avocado", we can add a `name` parameter to the query:
+
+    ```bash
+    curl -X GET "http://localhost:8108/collections/products/documents/search?q=avocado&query_by=name" \
+        -H "X-TYPESENSE-API-KEY: your-api-key"
+    ```
+
+    This query returns all documents in the `products` collection where the `name` field matches "avocado".
+  </Step>
+
+  <Step title="See changes flow to Typesense" icon="waveform-lines">
+    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to Typesense.
+
+    Let's confirm data is flowing by making some changes and searching in Typesense:
+
+    <Steps>
+      <Step title="Make some changes">
+        Let's make some changes to the `products` table and see them flow to Typesense.
+
+        In your terminal, run the following command to insert a new row into the `products` table:
+
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+        ```
+
+        After a few seconds, search for the new product in Typesense:
+
+        ```bash
+        curl -X GET "http://localhost:8108/collections/products/documents/search?q=honey&query_by=name" \
+          -H "X-TYPESENSE-API-KEY: your-api-key"
+        ```
+
+        You should see the new product appear in the search results.
+
+        Feel free to try other changes:
+
+        <AccordionGroup>
+          <Accordion title="Update a product's price">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Change a product's name">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Delete a product">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "delete from products where name = 'Blueberries (6 oz)';"
+            ```
+          </Accordion>
+        </AccordionGroup>
+
+        Each change will be reflected in Typesense within a few seconds. Try searching for the modified or deleted products to verify the changes.
+      </Step>
+
+      <Step title="Try fuzzy search">
+        Typesense supports fuzzy search with typo tolerance. Try searching with a typo:
+
+        ```bash
+        curl -X GET "http://localhost:8108/collections/products/documents/search?q=steak&query_by=name&num_typos=1" \
+          -H "X-TYPESENSE-API-KEY: your-api-key"
+        ```
+
+        Even with a typo, you should still find relevant products.
+      </Step>
+    </Steps>
+  </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Set up a complete Postgres change data capture pipeline
+- Created a Typesense collection
+- Loaded existing data through a backfill
+- Made changes to the `products` table
+- Verified changes are flowing to Typesense
+- Tested search functionality
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  <Card title="Guide: Setting up a Typesense sink" icon="search" href="/how-to/stream-postgres-to-typesense">
+    Setup a Typesense sink to keep your search index in sync.
+  </Card>
+</CardGroup> 

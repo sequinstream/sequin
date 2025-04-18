@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Input } from "$lib/components/ui/input";
+  import * as Alert from "$lib/components/ui/alert";
   import {
     Card,
     CardContent,
@@ -34,6 +35,23 @@
     <CardTitle>Typesense Configuration</CardTitle>
   </CardHeader>
   <CardContent class="space-y-4">
+
+    <Alert.Root variant="info">
+      <Alert.Title>Transform Requirements</Alert.Title>
+      <Alert.Description>
+        <p class="mb-2">
+          Your transform must return documents matching the schema of the <a href="https://typesense.org/docs/28.0/api/collections.html#create-a-collection" class="underline font-medium">Typesense collection</a>
+        </p>
+        <div class="mb-2">
+          Sequin uses Typesense's <code>emplace</code> import action, which means:
+          <ul class="ml-6 list-disc">
+            <li>Typesense will create a new document or update an existing one based on the <code>id</code></li>
+            <li>Your transform can supply either a complete document or a partial document for update</li>
+          </ul>
+        </div>
+      </Alert.Description>
+    </Alert.Root>
+
     <div class="space-y-2">
       <Label for="endpoint_url">Endpoint URL</Label>
       <Input
@@ -87,38 +105,6 @@
       {#if errors.sink?.api_key}
         <p class="text-destructive text-sm">{errors.sink.api_key}</p>
       {/if}
-    </div>
-
-    <div class="space-y-2">
-      <Label for="import_action">Import Action</Label>
-      <select
-        id="import_action"
-        bind:value={form.sink.import_action}
-        class="block w-full border border-gray-300 rounded-md p-2"
-      >
-        {#each importActionOptions as option}
-          <option value={option.value}>{option.label}</option>
-        {/each}
-      </select>
-      {#if errors.sink?.import_action}
-        <p class="text-destructive text-sm">{errors.sink.import_action}</p>
-      {/if}
-      <div class="flex items-center text-sm text-muted-foreground">
-        <Tooltip.Root>
-          <Tooltip.Trigger class="cursor-default">
-            <Info class="h-4 w-4 mr-1" />
-          </Tooltip.Trigger>
-          <Tooltip.Content>
-            <p>
-              <strong>Create:</strong> Add documents (fail if ID exists)<br />
-              <strong>Upsert:</strong> Add or replace documents<br />
-              <strong>Update:</strong> Update existing documents<br />
-              <strong>Emplace:</strong> Add if ID doesn't exist, update if it does
-            </p>
-          </Tooltip.Content>
-        </Tooltip.Root>
-        How documents should be imported into Typesense
-      </div>
     </div>
 
     <div class="space-y-2">

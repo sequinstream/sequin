@@ -4,7 +4,6 @@ defmodule Sequin.Runtime.TypesensePipeline do
 
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.TypesenseSink
-  alias Sequin.Error
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Typesense.Client
 
@@ -41,7 +40,11 @@ defmodule Sequin.Runtime.TypesensePipeline do
     setup_allowances(test_pid)
 
     external_messages =
-      Enum.map(messages, fn %{data: data} -> Sequin.Transforms.Message.to_external(consumer, data) end)
+      Enum.map(messages, fn %{data: data} ->
+        consumer
+        |> Sequin.Transforms.Message.to_external(data)
+        |> ensure_id_string()
+      end)
 
     case external_messages do
       [] ->
@@ -69,6 +72,10 @@ defmodule Sequin.Runtime.TypesensePipeline do
   defp encode_as_jsonl(messages) do
     Enum.map_join(messages, "\n", &Jason.encode!/1)
   end
+
+  defp ensure_id_string(%{"id" => id} = m) when is_binary(id), do: m
+  defp ensure_id_string(%{"id" => id} = m), do: %{m | "id" => to_string(id)}
+  defp ensure_id_string(m), do: m
 
   defp setup_allowances(nil), do: :ok
 

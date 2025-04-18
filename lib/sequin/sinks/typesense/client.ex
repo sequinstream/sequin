@@ -21,7 +21,7 @@ defmodule Sequin.Sinks.Typesense.Client do
   Index a single document in a collection.
   """
   def index_document(%__MODULE__{} = client, collection_name, document, opts \\ []) do
-    action = Keyword.get(opts, :action, "create")
+    action = Keyword.get(opts, :action, "emplace")
     req = base_request(client)
 
     url = "/collections/#{collection_name}/documents"
@@ -53,7 +53,7 @@ defmodule Sequin.Sinks.Typesense.Client do
   Import multiple documents in JSONL format.
   """
   def import_documents(%__MODULE__{} = client, collection_name, jsonl, opts \\ []) do
-    action = Keyword.get(opts, :action, "create")
+    action = Keyword.get(opts, :action, "emplace")
     batch_size = Keyword.get(opts, :batch_size, 40)
     req = base_request(client)
 

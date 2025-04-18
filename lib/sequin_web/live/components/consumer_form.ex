@@ -38,6 +38,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Sinks.Nats
   alias Sequin.Sinks.RabbitMq
   alias Sequin.Sinks.Redis
+  alias Sequin.Sinks.Typesense.Client, as: TypesenseClient
   alias SequinWeb.RouteHelpers
 
   require Logger
@@ -450,9 +451,9 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     if sink_changeset.valid? do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
-      client = Sequin.Sinks.Typesense.Client.new(TypesenseSink.client_params(sink))
+      client = TypesenseClient.new(TypesenseSink.client_params(sink))
       # Test the connection to Typesense
-      case Sequin.Sinks.Typesense.Client.test_connection(client) do
+      case TypesenseClient.test_connection(client) do
         :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end

@@ -6,12 +6,13 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
+  import type { TypesenseConsumer } from "$lib/consumers/types";
   import { Label } from "$lib/components/ui/label";
   import { Eye, EyeOff, Info } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { Select } from "$lib/components/ui/select";
 
-  export let form;
+  export let form: TypesenseConsumer;
   export let errors: any = {};
   let showPassword = false;
 

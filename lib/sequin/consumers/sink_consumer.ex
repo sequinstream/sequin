@@ -19,6 +19,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
+  alias Sequin.Consumers.TypesenseSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
@@ -103,7 +104,8 @@ defmodule Sequin.Consumers.SinkConsumer do
         gcp_pubsub: GcpPubsubSink,
         nats: NatsSink,
         rabbitmq: RabbitMqSink,
-        azure_event_hub: AzureEventHubSink
+        azure_event_hub: AzureEventHubSink,
+        typesense: TypesenseSink
       ],
       on_replace: :update,
       type_field_name: :type

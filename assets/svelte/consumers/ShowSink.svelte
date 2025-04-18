@@ -33,7 +33,6 @@
   import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
   import RabbitMqSinkCard from "../sinks/rabbitmq/RabbitMqSinkCard.svelte";
   import TypesenseSinkCard from "../sinks/typesense/TypesenseSinkCard.svelte";
-  import TypesenseSinkCard from "../sinks/typesense/TypesenseSinkCard.svelte";
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";

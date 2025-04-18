@@ -13,7 +13,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
   @impl SinkPipeline
   def init(context, _opts) do
     %{consumer: consumer} = context
-    typesense_client = Client.new(consumer.sink.endpoint_url, consumer.sink.api_key)
+    typesense_client = Client.new(TypesenseSink.client_params(consumer.sink))
     Map.put(context, :typesense_client, typesense_client)
   end
 

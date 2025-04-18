@@ -615,8 +615,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "collection_name" => sink["collection_name"],
       "api_key" => sink["api_key"],
       "import_action" => sink["import_action"],
-      "batch_size" => sink["batch_size"] && String.to_integer(sink["batch_size"]),
-      "timeout_seconds" => sink["timeout_seconds"] && String.to_integer(sink["timeout_seconds"])
+      "batch_size" => sink["batch_size"],
+      "timeout_seconds" => sink["timeout_seconds"]
     }
   end
 

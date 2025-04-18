@@ -11,6 +11,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -800,16 +801,17 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_transform(nil), do: nil
 
-  defp encode_transform(%Transform{transform: %PathTransform{path: path}} = transform) do
+  defp encode_transform(%Transform{type: type, transform: inner_transform} = transform) do
     %{
       id: transform.id,
       name: transform.name,
       description: transform.description,
-      transform: %{
-        path: path
-      }
+      transform: Map.merge(%{type: type}, encode_transform_inner(inner_transform))
     }
   end
+
+  defp encode_transform_inner(%PathTransform{path: path}), do: %{path: path}
+  defp encode_transform_inner(%FunctionTransform{code: code}), do: %{code: code}
 
   defp encode_postgres_database(postgres_database) do
     %{
@@ -1058,6 +1060,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       nil -> nil
       _ -> Message.to_external(consumer, message)
     end
+  rescue
+    error ->
+      "Error transforming message: #{Exception.message(error)}"
   end
 
   defp encode_backfill(consumer, last_completed_backfill) do

@@ -84,7 +84,7 @@ defmodule Sequin.Transforms.TestMessages do
   @spec get_test_messages(database_id(), table_oid()) :: [consumer_message()]
   def get_test_messages(database_id, table_oid) do
     case :ets.lookup(:test_messages, {database_id, table_oid}) do
-      [{{^database_id, ^table_oid}, messages}] -> messages
+      [{{^database_id, ^table_oid}, messages}] -> Enum.reverse(messages)
       [] -> []
     end
   end

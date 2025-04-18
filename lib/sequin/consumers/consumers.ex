@@ -146,7 +146,14 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
-  def get_transform(account_id, id) do
+  def get_transform(id) do
+    case Repo.get(Transform, id) do
+      nil -> {:error, Error.not_found(entity: :transform, params: %{id: id})}
+      transform -> {:ok, transform}
+    end
+  end
+
+  def get_transform_for_account(account_id, id) do
     account_id
     |> Transform.where_account_id()
     |> Transform.where_id(id)
@@ -157,8 +164,8 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def get_transform!(account_id, id) do
-    case get_transform(account_id, id) do
+  def get_transform_for_account!(account_id, id) do
+    case get_transform_for_account(account_id, id) do
       {:ok, transform} -> transform
       {:error, error} -> raise error
     end
@@ -178,19 +185,39 @@ defmodule Sequin.Consumers do
   end
 
   def create_transform(account_id, params) do
-    %Transform{account_id: account_id}
-    |> Transform.create_changeset(params)
-    |> Repo.insert()
+    Repo.transact(fn ->
+      %Transform{account_id: account_id}
+      |> Transform.create_changeset(params)
+      |> Repo.insert()
+      |> case do
+        {:ok, transform} ->
+          ConsumerLifecycleEventWorker.enqueue(:create, :transform, transform.id)
+          {:ok, transform}
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end)
   end
 
   def update_transform(account_id, id, params) do
-    %Transform{id: id, account_id: account_id}
-    |> Transform.update_changeset(params)
-    |> Repo.update()
+    Repo.transact(fn ->
+      %Transform{id: id, account_id: account_id}
+      |> Transform.update_changeset(params)
+      |> Repo.update()
+      |> case do
+        {:ok, transform} ->
+          ConsumerLifecycleEventWorker.enqueue(:update, :transform, transform.id)
+          {:ok, transform}
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end)
   end
 
   def delete_transform(account_id, id) do
-    with {:ok, transform} <- get_transform(account_id, id) do
+    with {:ok, transform} <- get_transform_for_account(account_id, id) do
       transform
       |> Transform.changeset(%{})
       |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_transform_id_fkey")

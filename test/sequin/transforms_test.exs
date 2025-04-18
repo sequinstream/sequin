@@ -1,13 +1,18 @@
 defmodule Sequin.TransformsTest do
   use Sequin.DataCase
 
+  alias Sequin.Consumers
+  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Transform
+  alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Runtime.ConsumerLifecycleEventWorker, as: CLEW
   alias Sequin.Transforms
+  alias Sequin.Transforms.MiniElixir
 
   describe "to_external/1" do
     test "returns a map of the account" do
@@ -484,6 +489,91 @@ defmodule Sequin.TransformsTest do
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == nil
+    end
+  end
+
+  def consumer_with_function(code, id \\ nil) do
+    xf =
+      case %Transform{transform: %FunctionTransform{code: code}} do
+        e when is_nil(id) -> e
+        e -> %Transform{e | id: id}
+      end
+
+    %SinkConsumer{transform: xf}
+  end
+
+  def mkfunction(body) do
+    """
+    def transform(action, record, changes, metadata) do
+      #{body}
+    end
+    """
+  end
+
+  describe "function transform" do
+    test "simple interpreted" do
+      message = ConsumersFactory.consumer_message(message_kind: :event)
+
+      consumer =
+        consumer_with_function(
+          mkfunction("""
+          %{it: record["column"]}
+          """)
+        )
+
+      result = Transforms.Message.to_external(consumer, message)
+
+      colval = message.data.record["column"]
+      assert %{it: ^colval} = result
+    end
+
+    test "compiler worker creates and updates" do
+      account = AccountsFactory.insert_account!()
+
+      assert {:ok, xf} =
+               Consumers.create_transform(
+                 account.id,
+                 %{name: Factory.unique_word(), transform: %{type: :function, code: mkfunction("1")}}
+               )
+
+      assert_enqueued(worker: CLEW, args: %{"event" => "create"})
+
+      Oban.drain_queue(queue: :default)
+
+      assert {:ok, mod} = MiniElixir.module_name_from_id(xf.id)
+      assert Code.loaded?(mod)
+      md5 = mod.__info__(:md5)
+
+      assert {:ok, _} =
+               Consumers.update_transform(account.id, xf.id, %{
+                 name: xf.name,
+                 transform: %{type: :function, code: mkfunction("2")}
+               })
+
+      assert_enqueued(worker: CLEW, args: %{"event" => "update"})
+
+      Oban.drain_queue(queue: :default)
+
+      refute md5 == mod.__info__(:md5)
+    end
+
+    test "no junk in the database" do
+      refute_enqueued(worker: CLEW)
+    end
+
+    test "compile transparently on first use when we wake up" do
+      account = AccountsFactory.insert_account!()
+
+      assert {:ok, xf} =
+               Consumers.create_transform(
+                 account.id,
+                 %{name: Factory.unique_word(), transform: %{type: :function, code: mkfunction("1")}}
+               )
+
+      consumer = %SinkConsumer{transform: xf}
+      message = ConsumersFactory.consumer_message(message_kind: :event)
+      result = Transforms.Message.to_external(consumer, message)
+      assert 1 == result
     end
   end
 end

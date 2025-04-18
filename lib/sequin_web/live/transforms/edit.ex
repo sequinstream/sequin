@@ -5,7 +5,7 @@ defmodule SequinWeb.TransformsLive.Edit do
   import LiveSvelte
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.PathTransform
+  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Transform
   alias Sequin.Databases
@@ -18,6 +18,16 @@ defmodule SequinWeb.TransformsLive.Edit do
   require Logger
 
   @max_test_messages TestMessages.max_message_count()
+  @initialcode """
+  def transform(action, record, changes, metadata) do
+    %{
+      action: action,
+      record: record,
+      changes: changes,
+      metadata: metadata
+    }
+  end
+  """
 
   def mount(params, _session, socket) do
     id = params["id"]
@@ -29,10 +39,10 @@ defmodule SequinWeb.TransformsLive.Edit do
     changeset =
       case id do
         nil ->
-          Transform.changeset(%Transform{}, %{"transform" => %{"type" => "path", "path" => ""}})
+          Transform.changeset(%Transform{}, %{"transform" => %{}})
 
         id ->
-          transform = Consumers.get_transform!(current_account_id(socket), id)
+          transform = Consumers.get_transform_for_account!(current_account_id(socket), id)
           Transform.changeset(transform, %{})
       end
 
@@ -55,7 +65,10 @@ defmodule SequinWeb.TransformsLive.Edit do
         validating: false,
         show_errors?: false,
         selected_database_id: nil,
-        selected_table_oid: nil
+        selected_table_oid: nil,
+        synthetic_test_message: FunctionTransform.synthetic_message(),
+        initial_code: @initialcode,
+        function_completions: generate_function_completions()
       )
       |> assign_databases()
 
@@ -70,12 +83,18 @@ defmodule SequinWeb.TransformsLive.Edit do
         props={
           %{
             formData: @form_data,
-            formErrors: if(@show_errors?, do: @form_errors, else: %{}),
-            testMessages: encode_test_messages(@test_messages, @form_data),
+            showErrors: @show_errors?,
+            formErrors: @form_errors,
+            testMessages: encode_test_messages(@test_messages, @form_data, @form_errors),
+            syntheticTestMessages:
+              encode_synthetic_test_message(@synthetic_test_message, @form_data, @form_errors),
             usedByConsumers: Enum.map(@used_by_consumers, &encode_consumer/1),
             databases: Enum.map(@databases, &encode_database/1),
             validating: @validating,
-            parent: "transform_new"
+            parent: "transform_new",
+            initialCode: @initial_code,
+            functionTransformsEnabled: Sequin.feature_enabled?(:function_transforms),
+            functionCompletions: @function_completions
           }
         }
         socket={@socket}
@@ -195,35 +214,77 @@ defmodule SequinWeb.TransformsLive.Edit do
   defp changeset_to_form_data(changeset) do
     transform = Ecto.Changeset.get_field(changeset, :transform)
 
-    path =
+    transform_data =
       case transform do
-        nil -> ""
-        %PathTransform{path: path} -> path
-        %Ecto.Changeset{} = changeset -> Ecto.Changeset.get_field(changeset, :path)
+        nil ->
+          %{}
+
+        %Ecto.Changeset{} ->
+          Ecto.Changeset.apply_changes(transform)
+
+        %_{} = struct ->
+          struct
       end
 
     %{
       id: Ecto.Changeset.get_field(changeset, :id),
       name: Ecto.Changeset.get_field(changeset, :name),
       description: Ecto.Changeset.get_field(changeset, :description),
-      transform: %{
-        path: path
-      }
+      transform: transform_data
     }
   end
 
-  defp encode_test_messages(test_messages, form_data) do
-    original_consumer = %SinkConsumer{transform: nil, legacy_transform: :none}
-    path = get_in(form_data, [:transform, :path]) || ""
+  defp encode_synthetic_test_message(synthetic_message, form_data, form_errors) do
+    [synthetic_message]
+    |> encode_test_messages(form_data, form_errors)
+    |> Enum.map(&Map.put(&1, :isSynthetic, true))
+  end
+
+  defp encode_test_messages(test_messages, form_data, form_errors) do
+    if is_nil(get_in(form_errors, [:transform, :code])) do
+      do_encode_test_messages(test_messages, form_data)
+    else
+      Enum.map(test_messages, &prepare_test_message/1)
+    end
+  end
+
+  defp do_encode_test_messages(test_messages, form_data) do
+    transform = form_data[:transform]
 
     consumer = %SinkConsumer{
-      transform: %Transform{transform: %PathTransform{path: path}},
+      transform: %Transform{transform: transform},
       legacy_transform: :none
     }
 
-    Enum.map(test_messages, fn message ->
-      %{original: Message.to_external(original_consumer, message), transformed: Message.to_external(consumer, message)}
-    end)
+    base_messages = Enum.map(test_messages, &prepare_test_message/1)
+
+    if is_struct(transform) do
+      results = Enum.map(test_messages, &encode_one(&1, consumer))
+      Enum.zip_with(base_messages, results, &Map.merge/2)
+    else
+      base_messages
+    end
+  end
+
+  defp encode_one(message, consumer) do
+    case :timer.tc(fn -> Message.to_external(consumer, message) end, :microsecond) do
+      {time, tuple} when is_tuple(tuple) ->
+        %{transformed: inspect(tuple), time: time}
+
+      {time, transformed} ->
+        %{transformed: transformed, time: time}
+    end
+  rescue
+    ex -> %{error: Sequin.Transforms.MiniElixir.encode_error(ex), time: nil}
+  end
+
+  defp prepare_test_message(m) do
+    %{
+      record: inspect(m.data.record, pretty: true),
+      changes: inspect(m.data.changes, pretty: true),
+      action: inspect(to_string(m.data.action), pretty: true),
+      metadata: inspect(Sequin.Map.from_struct_deep(m.data.metadata), pretty: true)
+    }
   end
 
   defp assign_databases(socket) do
@@ -273,17 +334,83 @@ defmodule SequinWeb.TransformsLive.Edit do
   end
 
   defp decode_params(params) do
-    %{
+    Sequin.Map.reject_nil_values(%{
       "name" => params["name"],
       "description" => params["description"],
-      "transform" => %{
-        "type" => "path",
-        "path" => params["transform"]["path"]
-      }
-    }
+      "transform" => decode_transform(params["transform"])
+    })
   end
+
+  defp decode_transform(%{"type" => "path"} = transform) do
+    %{"type" => "path", "path" => transform["path"]}
+  end
+
+  defp decode_transform(%{"type" => "function"} = transform) do
+    %{"type" => "function", "code" => transform["code"]}
+  end
+
+  defp decode_transform(%{}), do: nil
 
   defp schedule_poll_test_messages do
     Process.send_after(self(), :poll_test_messages, 1000)
+  end
+
+  defp generate_function_completions do
+    modules = [
+      Date,
+      DateTime,
+      Decimal,
+      Enum,
+      Map,
+      NaiveDateTime,
+      String,
+      Time,
+      URI
+    ]
+
+    modules
+    |> Enum.flat_map(fn module ->
+      case Code.fetch_docs(module) do
+        {:docs_v1, _, _, _, %{"en" => module_doc}, _, functions_with_docs} ->
+          [first_sentence | _] = String.split(module_doc, ".")
+          first_sentence = String.replace(first_sentence, "\n", "")
+
+          module_completion =
+            %{
+              label: "#{inspect(module)}",
+              type: "module",
+              info: first_sentence
+            }
+
+          function_completions =
+            Enum.flat_map(functions_with_docs, fn
+              {{:function, :__struct__, _arity}, _, _, %{}, _} ->
+                []
+
+              {{:function, name, _arity}, _, _, %{"en" => doc}, _} ->
+                # Take only the first sentence of the doc
+                [first_sentence | _] = String.split(doc, ".")
+                first_sentence = String.replace(first_sentence, "\n", "")
+
+                [
+                  %{
+                    label: "#{inspect(module)}.#{name}",
+                    type: "function",
+                    info: first_sentence
+                  }
+                ]
+
+              _ ->
+                []
+            end)
+
+          [module_completion | function_completions]
+
+        _ ->
+          []
+      end
+    end)
+    # Right now we are techincally taking a random one by arity 😳
+    |> Enum.uniq_by(& &1.label)
   end
 end

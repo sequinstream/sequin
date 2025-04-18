@@ -88,7 +88,10 @@ config :sequin,
   datadog_req_opts: [
     plug: {Req.Test, Sequin.Datadog}
   ],
-  features: [account_self_signup: :enabled],
+  features: [
+    account_self_signup: :enabled,
+    function_transforms: :enabled
+  ],
   aws_sqs: [
     req_opts: [plug: {Req.Test, Sequin.Aws.HttpClient}]
   ],

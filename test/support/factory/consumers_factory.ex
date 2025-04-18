@@ -822,25 +822,6 @@ defmodule Sequin.Factory.ConsumersFactory do
     )
   end
 
-  def transform_attrs(attrs \\ []) do
-    attrs
-    |> transform()
-    |> Sequin.Map.from_ecto()
-  end
-
-  def insert_transform!(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {account_id, attrs} =
-      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
-
-    attrs
-    |> Map.put(:account_id, account_id)
-    |> transform_attrs()
-    |> then(&Transform.create_changeset(%Transform{}, &1))
-    |> Repo.insert!()
-  end
-
   # PathTransform
   def path_transform(attrs \\ []) do
     valid_paths = [

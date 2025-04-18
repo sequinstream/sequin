@@ -60,9 +60,6 @@ defmodule Sequin.YamlLoaderTest do
         database: "sequin_test"
         slot_name: "#{replication_slot()}"
         publication_name: "#{@publication}"
-        tables:
-          - table_name: "Characters"
-            table_schema: "public"
     """
   end
 
@@ -85,9 +82,6 @@ defmodule Sequin.YamlLoaderTest do
                     database: "sequin_test"
                     slot_name: "#{replication_slot()}"
                     publication_name: "#{@publication}"
-                    tables:
-                      - table_name: "Characters"
-                        table_schema: "public"
 
                 http_endpoints:
                   - name: "test-endpoint"
@@ -165,11 +159,6 @@ defmodule Sequin.YamlLoaderTest do
       assert replication.postgres_database_id == db.id
       assert replication.slot_name == replication_slot()
       assert replication.publication_name == @publication
-
-      assert [%Sequence{} = sequence] = Repo.all(Sequence)
-      assert sequence.postgres_database_id == db.id
-      assert sequence.table_name == "Characters"
-      assert sequence.table_schema == "public"
     end
 
     test "applying yml twice creates no duplicates" do
@@ -187,10 +176,6 @@ defmodule Sequin.YamlLoaderTest do
       assert replication.postgres_database_id == db.id
       assert replication.slot_name == replication_slot()
       assert replication.publication_name == @publication
-
-      assert [%Sequence{} = sequence] = Repo.all(Sequence)
-      assert sequence.postgres_database_id == db.id
-      assert sequence.table_name == "Characters"
     end
   end
 
@@ -217,6 +202,36 @@ defmodule Sequin.YamlLoaderTest do
       assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
       assert db.account_id == account.id
       assert db.name == "test-db"
+    end
+
+    test "creates a database (backwards compatible with specified tables)" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "test-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
+                   tables:
+                     - name: "Characters"
+                       schema: "public"
+               """)
+
+      assert [account] = Repo.all(Account)
+      assert account.name == "Configured by Sequin"
+
+      assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
+      assert db.account_id == account.id
+      assert db.name == "test-db"
+
+      db = Repo.preload(db, [:sequences])
+      assert [] = db.sequences
     end
 
     test "updates a database" do
@@ -529,9 +544,6 @@ defmodule Sequin.YamlLoaderTest do
           database: "sequin_test"
           slot_name: "#{replication_slot()}"
           publication_name: "#{@publication}"
-          tables:
-            - table_name: "Characters"
-              table_schema: "public"
       """
     end
 
@@ -1284,6 +1296,7 @@ defmodule Sequin.YamlLoaderTest do
       assert :atomics.get(counter, 1) == 2
     end
 
+    @tag capture_log: true
     test "returns error when timeout is reached" do
       # Track attempts using atomics
       counter = :atomics.new(1, [])

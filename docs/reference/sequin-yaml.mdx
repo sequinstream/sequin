@@ -65,9 +65,6 @@ databases:
     await_database:             # Optional, configuration for database connection retry behavior
       timeout_ms: 30000         # Default: 30000 (30 seconds)
       interval_ms: 3000         # Default: 3000 (3 seconds)
-    tables:                     # Optional, list of tables to track
-      - table_name: "users"     # Required
-        table_schema: "public"  # Default: public
 ```
 
 #### Database connection retry
@@ -428,8 +425,6 @@ databases:
     database: "app_production"
     slot_name: "sequin_slot"
     publication_name: "sequin_pub"
-    tables:
-      - table_name: "users"
 
 http_endpoints:
   - name: "webhook-endpoint"
@@ -465,13 +460,6 @@ YAML anchors allow you to reuse YAML configuration across multiple resources. Fo
 # This database has three tables we want to sink from
 databases:
   - name: "production-db"
-    tables:
-      - table_name: "users"
-        ...
-      - table_name: "accounts"
-        ...
-      - table_name: "documents"
-        ...
 
 # Create a re-usable sink template- in this case a GCP PubSub topic
 gcp_pubsub_sink_template: &gcp_pubsub_sink_template

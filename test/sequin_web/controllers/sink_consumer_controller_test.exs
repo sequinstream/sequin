@@ -2,6 +2,7 @@ defmodule SequinWeb.SinkConsumerControllerTest do
   use SequinWeb.ConnCase, async: true
 
   alias Sequin.Consumers
+  alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -24,7 +25,6 @@ defmodule SequinWeb.SinkConsumerControllerTest do
     column = List.first(table.columns)
 
     ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: database.id)
-    DatabasesFactory.insert_sequence!(account_id: account.id, postgres_database_id: database.id, table_oid: table.oid)
 
     %{
       database: database,
@@ -79,7 +79,7 @@ defmodule SequinWeb.SinkConsumerControllerTest do
   end
 
   describe "create" do
-    test "creates a sink consumer under the authenticated account", %{
+    test "creates a webhook sink consumer under the authenticated account", %{
       conn: conn,
       account: account,
       database: database,
@@ -115,6 +115,33 @@ defmodule SequinWeb.SinkConsumerControllerTest do
 
       {:ok, sink_consumer} = Consumers.find_sink_consumer(account.id, name: name)
       assert sink_consumer.account_id == account.id
+    end
+
+    test "creates a sink consumer with an existing sequence", %{
+      conn: conn,
+      account: account,
+      database: database,
+      table: table
+    } do
+      existing_sequence =
+        DatabasesFactory.insert_sequence!(account_id: account.id, postgres_database_id: database.id, table_oid: table.oid)
+
+      name = Factory.unique_word()
+
+      create_attrs = %{
+        name: name,
+        table: "#{table.schema}.#{table.name}",
+        destination: %{
+          type: "sequin_stream"
+        },
+        database: database.name
+      }
+
+      conn = post(conn, ~p"/api/sinks", create_attrs)
+      assert %{"name" => name} = json_response(conn, 200)
+
+      {:ok, sink_consumer} = Consumers.find_sink_consumer(account.id, name: name)
+      assert sink_consumer.sequence_id == existing_sequence.id
     end
 
     test "returns validation error for invalid attributes", %{conn: conn} do

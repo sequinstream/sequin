@@ -20,6 +20,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Consumers.WebhookSiteGenerator
+  alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
@@ -61,20 +62,7 @@ defmodule Sequin.Transforms do
       pool_size: database.pool_size,
       ssl: database.ssl,
       ipv6: database.ipv6,
-      use_local_tunnel: database.use_local_tunnel,
-      tables:
-        database.sequences
-        |> Enum.map(fn sequence ->
-          table = Enum.find(database.tables, &(&1.oid == sequence.table_oid))
-
-          if table do
-            %{
-              table_name: table.name,
-              table_schema: table.schema
-            }
-          end
-        end)
-        |> Enum.filter(& &1)
+      use_local_tunnel: database.use_local_tunnel
     }
   end
 
@@ -761,12 +749,33 @@ defmodule Sequin.Transforms do
   defp find_sequence_by_name(databases, database_name, table_name) do
     {schema, table_name} = parse_table_reference(table_name)
 
-    with %PostgresDatabase{tables: tables, sequences: sequences} <- Enum.find(databases, &(&1.name == database_name)),
-         %PostgresDatabaseTable{oid: table_oid} <- Enum.find(tables, &(&1.schema == schema and &1.name == table_name)),
-         %Sequence{} = sequence <- Enum.find(sequences, &(&1.table_oid == table_oid)) do
+    with %PostgresDatabase{tables: tables} = database <- Enum.find(databases, &(&1.name == database_name)),
+         %PostgresDatabaseTable{} = table <- Enum.find(tables, &(&1.schema == schema and &1.name == table_name)),
+         {:ok, %Sequence{} = sequence} <- find_or_create_sequence(database, table) do
       {:ok, sequence}
     else
+      {:error, error} -> {:error, error}
       _ -> {:error, Error.not_found(entity: :sequence, params: %{database: database_name, table: table_name})}
+    end
+  end
+
+  # This is a hack while sequences are required
+  # Transforms should not perform any database operations
+  # TODO: Excise this once sequences are removed
+  defp find_or_create_sequence(%PostgresDatabase{} = database, %PostgresDatabaseTable{} = table) do
+    case Enum.find(database.sequences, &(&1.table_oid == table.oid)) do
+      %Sequence{} = sequence ->
+        {:ok, sequence}
+
+      nil ->
+        name = "#{database.name}.#{table.schema}.#{table.name}"
+
+        Databases.create_sequence(database.account_id, %{
+          name: name,
+          postgres_database_id: database.id,
+          table_oid: table.oid,
+          table_schema: table.schema
+        })
     end
   end
 

@@ -72,13 +72,7 @@ defmodule SequinWeb.YamlControllerTest do
                      "ssl" => false,
                      "use_local_tunnel" => false,
                      "username" => "postgres",
-                     "id" => postgres_database_id,
-                     "tables" => [
-                       %{
-                         "table_schema" => "public",
-                         "table_name" => "Characters"
-                       }
-                     ]
+                     "id" => postgres_database_id
                    },
                    "old" => nil
                  },
@@ -280,13 +274,7 @@ defmodule SequinWeb.YamlControllerTest do
                "ssl" => false,
                "ipv6" => false,
                "use_local_tunnel" => false,
-               "username" => "postgres",
-               "tables" => [
-                 %{
-                   "table_schema" => "public",
-                   "table_name" => "Characters"
-                 }
-               ]
+               "username" => "postgres"
              }
 
       assert %{

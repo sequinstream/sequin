@@ -20,6 +20,7 @@
   import DatabaseConnectionAlert from "../components/DatabaseConnectionAlert.svelte";
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
+  import SnsIcon from "../sinks/sns/SnsIcon.svelte";
   import RedisIcon from "../sinks/redis/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
@@ -37,6 +38,7 @@
     type:
       | "http_push"
       | "sqs"
+      | "sns"
       | "redis"
       | "kafka"
       | "gcp_pubsub"
@@ -71,6 +73,11 @@
       id: "sqs",
       name: "Amazon SQS",
       icon: SqsIcon,
+    },
+    {
+      id: "sns",
+      name: "Amazon SNS",
+      icon: SnsIcon,
     },
     {
       id: "redis",

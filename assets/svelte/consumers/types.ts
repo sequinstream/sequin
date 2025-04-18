@@ -6,6 +6,7 @@ export type BaseConsumer = {
   type:
     | "http_push"
     | "sqs"
+    | "sns"
     | "redis"
     | "kafka"
     | "sequin_stream"
@@ -153,6 +154,16 @@ export type GcpPubsubConsumer = BaseConsumer & {
   };
 };
 
+// SNS specific sink
+export type SnsConsumer = BaseConsumer & {
+  sink: {
+    type: "sns";
+    topic_arn: string;
+    region: string;
+    is_fifo: boolean;
+  };
+};
+
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer
@@ -163,4 +174,5 @@ export type Consumer =
   | GcpPubsubConsumer
   | NatsConsumer
   | AzureEventHubConsumer
-  | RabbitMqConsumer;
+  | RabbitMqConsumer
+  | SnsConsumer;

@@ -19,6 +19,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
@@ -65,7 +66,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
 
     field :type, Ecto.Enum,
-      values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
+      values: [:http_push, :sqs, :sns, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
       read_after_writes: true
 
     field :health, :map, virtual: true
@@ -86,6 +87,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       types: [
         http_push: HttpPushSink,
         sqs: SqsSink,
+        sns: SnsSink,
         redis: RedisSink,
         kafka: KafkaSink,
         sequin_stream: SequinStreamSink,

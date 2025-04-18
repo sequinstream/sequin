@@ -92,6 +92,42 @@ defmodule Sequin.Sinks.Typesense.Client do
          )}
 
       {:error, %Req.TransportError{} = error} ->
+        Logger.error("[Typesense] Transport error: #{Exception.message(error)}")
+        {:error, Error.service(service: :typesense, message: "Transport error: #{Exception.message(error)}")}
+
+      {:error, reason} ->
+        {:error, Error.service(service: :typesense, message: "Unknown error", details: reason)}
+    end
+  end
+
+  @doc """
+  Delete a document from a collection.
+  """
+  def delete_document(%__MODULE__{} = client, collection_name, document_id, opts \\ []) do
+    ignore_not_found = Keyword.get(opts, :ignore_not_found, false)
+    req = base_request(client)
+
+    url = "/collections/#{collection_name}/documents/#{document_id}"
+
+    case Req.delete(req, url: url, params: %{ignore_not_found: ignore_not_found}) do
+      {:ok, %{status: st, body: body}} when st in 200..299 ->
+        {:ok, body}
+
+      {:ok, %{status: 404}} ->
+        {:error, Error.service(service: :typesense, message: "Can't delete: document '#{document_id}' not found")}
+
+      {:ok, %{status: status, body: body}} ->
+        error_message = extract_error_message(body)
+
+        {:error,
+         Error.service(
+           service: :typesense,
+           message: "Failed to delete document: #{error_message}",
+           details: %{status: status, body: body}
+         )}
+
+      {:error, %Req.TransportError{} = error} ->
+        Logger.error("[Typesense] Failed to delete document: #{Exception.message(error)}")
         {:error, Error.service(service: :typesense, message: "Transport error: #{Exception.message(error)}")}
 
       {:error, reason} ->
@@ -228,9 +264,5 @@ defmodule Sequin.Sinks.Typesense.Client do
 
   defp extract_error_message(body) do
     inspect(body)
-  end
-
-  defp find_errors(response) do
-    Enum.filter(response, fn item -> Map.get(item, "success") == false end)
   end
 end

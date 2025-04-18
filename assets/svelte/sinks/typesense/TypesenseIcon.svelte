@@ -1,6 +1,7 @@
 <svg
   fill="none"
   xmlns="http://www.w3.org/2000/svg"
+  class={$$props.class}
   viewBox="7.3 6.87 47.67 48.13"
 >
   <path

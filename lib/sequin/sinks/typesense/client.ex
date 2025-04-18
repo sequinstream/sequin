@@ -11,7 +11,7 @@ defmodule Sequin.Sinks.Typesense.Client do
 
   def new(opts) do
     %__MODULE__{
-      url: Keyword.fetch!(opts, :url) |> String.trim_trailing("/"),
+      url: opts |> Keyword.fetch!(:url) |> String.trim_trailing("/"),
       api_key: Keyword.fetch!(opts, :api_key),
       timeout_seconds: Keyword.get(opts, :timeout_seconds, 30)
     }
@@ -25,6 +25,7 @@ defmodule Sequin.Sinks.Typesense.Client do
     req = base_request(client)
 
     url = "/collections/#{collection_name}/documents"
+
     case Req.post(req, url: url, json: document, params: %{action: action}) do
       {:ok, %{status: st, body: body}} when st in 200..299 ->
         {:ok, body}
@@ -72,15 +73,13 @@ defmodule Sequin.Sinks.Typesense.Client do
           body
           |> String.split("\n", trim: true)
           |> Enum.map(&Jason.decode!/1)
-        # :::warning NOTE
-        # The import endpoint will always return a `HTTP 200 OK` code, regardless of the import results of the individual documents.
 
-        # We do this because there might be some documents which succeeded on import and others that failed, and we don't want to return an HTTP error code in those partial scenarios.
-        # To keep it consistent, we just return HTTP 200 in all cases.
-
-        # So always be sure to check the API response for any `{success: false, ...}` records to see if there are any documents that failed import.
-        # :::
-        {:ok, responses}
+        if Enum.all?(responses, &Map.get(&1, "success", false)) do
+          {:ok, responses}
+        else
+          msg = extract_error_message(responses)
+          {:error, Error.service(service: :typesense, message: "Batch import failed: #{msg}")}
+        end
 
       {:ok, %{status: status, body: body}} ->
         error_message = extract_error_message(body)
@@ -88,12 +87,11 @@ defmodule Sequin.Sinks.Typesense.Client do
         {:error,
          Error.service(
            service: :typesense,
-           message: "Failed to import documents: #{error_message}",
+           message: "Batch import failed: #{error_message}",
            details: %{status: status, body: body}
          )}
 
       {:error, %Req.TransportError{} = error} ->
-        Logger.error("[Typesense] Failed to import documents: #{Exception.message(error)}")
         {:error, Error.service(service: :typesense, message: "Transport error: #{Exception.message(error)}")}
 
       {:error, reason} ->
@@ -108,7 +106,7 @@ defmodule Sequin.Sinks.Typesense.Client do
     req = base_request(client)
 
     case Req.get(req, url: "/health") do
-      {:ok, %{status: 200, body: %{"ok" => true}}} ->
+      {:ok, %{status: st, body: %{"ok" => true}}} when st in 200..299 ->
         :ok
 
       {:ok, %{status: status, body: body}} ->
@@ -137,7 +135,7 @@ defmodule Sequin.Sinks.Typesense.Client do
     req = base_request(client)
 
     case Req.post(req, url: "/collections", json: schema) do
-      {:ok, %{status: 200, body: body}} ->
+      {:ok, %{status: st, body: body}} when st in 200..299 ->
         {:ok, body}
 
       {:ok, %{status: status, body: body}} ->
@@ -166,7 +164,7 @@ defmodule Sequin.Sinks.Typesense.Client do
     req = base_request(client)
 
     case Req.get(req, url: "/collections/#{collection_name}") do
-      {:ok, %{status: 200, body: body}} ->
+      {:ok, %{status: st, body: body}} when st in 200..299 ->
         {:ok, body}
 
       {:ok, %{status: 404}} ->
@@ -219,7 +217,20 @@ defmodule Sequin.Sinks.Typesense.Client do
     end
   end
 
+  defp extract_error_message(body) when is_list(body) do
+    body
+    |> Enum.map(&extract_error_message/1)
+    |> Enum.frequencies()
+    |> Enum.map_join("\n", fn {msg, n} ->
+      "#{n}x #{msg}"
+    end)
+  end
+
   defp extract_error_message(body) do
     inspect(body)
+  end
+
+  defp find_errors(response) do
+    Enum.filter(response, fn item -> Map.get(item, "success") == false end)
   end
 end

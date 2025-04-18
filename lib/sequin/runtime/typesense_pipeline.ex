@@ -41,13 +41,11 @@ defmodule Sequin.Runtime.TypesensePipeline do
     setup_allowances(test_pid)
 
     external_messages =
-      messages
-      |> Enum.map(fn %{data: data} ->
-        Sequin.Transforms.Message.to_external(consumer, data)
-      end)
+      Enum.map(messages, fn %{data: data} -> Sequin.Transforms.Message.to_external(consumer, data) end)
 
     case external_messages do
-      [] -> :noop
+      [] ->
+        :noop
 
       [message] ->
         case Client.index_document(client, sink.collection_name, message, action: sink.import_action) do
@@ -62,28 +60,14 @@ defmodule Sequin.Runtime.TypesensePipeline do
         jsonl = encode_as_jsonl(external_messages)
 
         case Client.import_documents(client, sink.collection_name, jsonl, action: sink.import_action) do
-          {:ok, response} ->
-            case find_errors(response) do
-              [] ->
-                {:ok, messages, context}
-
-              errors ->
-                dbg(errors)
-                {:error, Error.service(service: :typesense, message: "Failed to import documents", details: errors)}
-            end
-
-          {:error, error} ->
-            {:error, error}
+          {:error, _} = e -> e
+          {:ok, _} -> {:ok, messages, context}
         end
     end
   end
 
   defp encode_as_jsonl(messages) do
     Enum.map_join(messages, "\n", &Jason.encode!/1)
-  end
-
-  defp find_errors(response) do
-    Enum.filter(response, fn item -> Map.get(item, "success") == false end)
   end
 
   defp setup_allowances(nil), do: :ok
@@ -93,4 +77,3 @@ defmodule Sequin.Runtime.TypesensePipeline do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 end
-

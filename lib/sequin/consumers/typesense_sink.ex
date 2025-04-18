@@ -1,4 +1,5 @@
 defmodule Sequin.Consumers.TypesenseSink do
+  @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema
 
@@ -43,9 +44,6 @@ defmodule Sequin.Consumers.TypesenseSink do
   end
 
   def client_params(%__MODULE__{} = me) do
-    [url: me.endpoint_url,
-     api_key: me.api_key,
-     timeout_seconds: me.timeout_seconds
-    ]
+    [url: me.endpoint_url, api_key: me.api_key, timeout_seconds: me.timeout_seconds]
   end
 end

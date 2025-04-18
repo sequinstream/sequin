@@ -40,7 +40,11 @@
       <Alert.Title>Transform Requirements</Alert.Title>
       <Alert.Description>
         <p class="mb-2">
-          Your transform must return documents matching the schema of the <a href="https://typesense.org/docs/28.0/api/collections.html#create-a-collection" class="underline font-medium">Typesense collection</a>
+          Your <a class="underline font-medium" href="https://sequinstream.com/docs/reference/transforms" target="_blank">transform</a> must return a document matching
+          the schema of the <a class="underline font-medium" href="https://typesense.org/docs/28.0/api/collections.html#create-a-collection">Typesense collection</a>.
+        </p>
+        <p class="mb-2">
+          This includes an <code>id</code> field which is mandatory.
         </p>
         <div class="mb-2">
           Sequin uses Typesense's <code>emplace</code> import action, which means:

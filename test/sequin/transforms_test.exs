@@ -58,8 +58,7 @@ defmodule Sequin.TransformsTest do
                pool_size: pool_size,
                ssl: ssl,
                ipv6: ipv6,
-               use_local_tunnel: use_local_tunnel,
-               tables: [table_json]
+               use_local_tunnel: use_local_tunnel
              } = json
 
       assert id == database.id
@@ -74,9 +73,6 @@ defmodule Sequin.TransformsTest do
       assert is_boolean(use_local_tunnel)
       assert is_binary(slot_name)
       assert is_binary(publication_name)
-      assert is_map(table_json)
-      assert table_json.table_schema == table.schema
-      assert table_json.table_name == table.name
     end
 
     test "returns a map of the column filter" do

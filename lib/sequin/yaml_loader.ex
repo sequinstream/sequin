@@ -127,8 +127,6 @@ defmodule Sequin.YamlLoader do
          {:ok, _users} <- find_or_create_users(account, config),
          {:ok, _tokens} <- find_or_create_tokens(account, config),
          {:ok, _databases} <- upsert_databases(account.id, config, opts),
-         databases = Databases.list_dbs_for_account(account.id),
-         {:ok, _sequences} <- find_or_create_sequences(account.id, config, databases),
          databases = Databases.list_dbs_for_account(account.id, [:sequences, :replication_slot]),
          {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
@@ -447,99 +445,6 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  ###############
-  ## Sequences ##
-  ###############
-
-  defp find_or_create_sequences(account_id, %{"databases" => databases}, db_records) do
-    Logger.info("Creating sequences from database tables")
-
-    # Flatten all tables from all databases into sequence configs
-    sequence_configs =
-      Enum.flat_map(databases, fn database ->
-        tables = database["tables"] || []
-
-        Enum.map(tables, fn table ->
-          database_name = database["name"]
-          table_name = table["table_name"]
-          schema = table["table_schema"] || "public"
-          name = "#{database_name}.#{schema}.#{table_name}"
-
-          %{
-            "name" => name,
-            "database" => database_name,
-            "table_schema" => schema,
-            "table_name" => table_name,
-            "sort_column_name" => table["sort_column_name"]
-          }
-        end)
-      end)
-
-    Enum.reduce_while(sequence_configs, {:ok, []}, fn sequence, {:ok, acc} ->
-      database = database_for_sequence!(sequence, db_records)
-
-      case find_or_create_sequence(account_id, database, sequence) do
-        {:ok, sequence} -> {:cont, {:ok, [sequence | acc]}}
-        {:error, error} -> {:halt, {:error, error}}
-      end
-    end)
-  end
-
-  defp find_or_create_sequences(_account_id, _config, _databases) do
-    Logger.info("No database tables found in config")
-    {:ok, []}
-  end
-
-  defp database_for_sequence!(%{"database" => database_name}, databases) do
-    Sequin.Enum.find!(databases, fn database -> database.name == database_name end)
-  end
-
-  defp find_or_create_sequence(account_id, %PostgresDatabase{} = database, sequence_attrs) do
-    case Databases.find_sequence_for_account(account_id, name: sequence_attrs["name"]) do
-      {:ok, sequence} ->
-        Logger.info("Found sequence: #{inspect(sequence, pretty: true)}")
-        {:ok, sequence}
-
-      {:error, %NotFoundError{}} ->
-        upsert_sequence(account_id, database, sequence_attrs)
-    end
-  end
-
-  defp upsert_sequence(account_id, %PostgresDatabase{id: id} = database, sequence) do
-    with {:ok, table} <- table_for_sequence(database, sequence) do
-      attrs =
-        sequence
-        |> Map.put("postgres_database_id", id)
-        |> Map.put("table_oid", table.oid)
-
-      account_id
-      |> Databases.upsert_sequence(attrs)
-      |> case do
-        {:ok, sequence} ->
-          Logger.info("Created stream: #{inspect(sequence, pretty: true)}")
-          {:ok, sequence}
-
-        {:error, error} when is_exception(error) ->
-          {:error, Error.bad_request(message: "Error creating stream '#{sequence["name"]}': #{Exception.message(error)}")}
-
-        {:error, %Ecto.Changeset{} = changeset} ->
-          {:error,
-           Error.bad_request(message: "Error creating stream '#{sequence["name"]}': #{inspect(changeset, pretty: true)}")}
-      end
-    end
-  end
-
-  defp table_for_sequence(database, %{"table_schema" => table_schema, "table_name" => table_name}) do
-    case Enum.find(database.tables, fn table -> table.name == table_name and table.schema == table_schema end) do
-      nil -> {:error, Error.not_found(entity: :table, params: %{table_schema: table_schema, table_name: table_name})}
-      table -> {:ok, table}
-    end
-  end
-
-  defp table_for_sequence(_, %{}) do
-    {:error, Error.bad_request(message: "`table` and `schema` are required for each stream")}
-  end
-
   ##############################
   ## Change Retention         ##
   ##############################
@@ -809,6 +714,10 @@ defmodule Sequin.YamlLoader do
     Logger.info("Upserting sink consumers: #{inspect(consumers, pretty: true)}")
 
     Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
+      # This is a hack while sequences might be created while we create sinks
+      # TODO: Excise this once sequences are removed
+      databases = Repo.preload(databases, [:sequences], force: true)
+
       case upsert_sink_consumer(account_id, consumer, databases, http_endpoints) do
         {:ok, consumer} -> {:cont, {:ok, [consumer | acc]}}
         {:error, error} -> {:halt, {:error, error}}

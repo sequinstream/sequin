@@ -170,6 +170,7 @@
     {
       "group": "Webhook destinations",
       "pages": [
+        "guides/user-webhooks",
         "guides/cloudflare",
         "guides/inngest",
         "guides/lambda",

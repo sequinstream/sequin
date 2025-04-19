@@ -287,20 +287,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     current_memory = state.check_memory_fn.()
 
     if current_memory > state.max_memory_bytes do
-      Logger.warning("[SlotProcessorServer] System at memory limit, shutting down",
+      Logger.warning("[SlotProcessorServer] System at memory limit, disconnecting",
         limit: state.max_memory_bytes,
         current_memory: current_memory
       )
 
-      {:disconnect, :over_system_memory_limit}
+      {:disconnect, :over_system_memory_limit, state}
+    else
+      {:stream, query, [],
+       %{
+         state
+         | connection_state: :streaming,
+           low_watermark_wal_cursor: low_watermark_wal_cursor
+       }}
     end
-
-    {:stream, query, [],
-     %{
-       state
-       | connection_state: :streaming,
-         low_watermark_wal_cursor: low_watermark_wal_cursor
-     }}
   end
 
   @impl ReplicationConnection
@@ -315,7 +315,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
 
     case reason do
-      :payload_size_limit_exceeded ->
+      reason when reason in [:payload_size_limit_exceeded, :over_system_memory_limit] ->
         actions = [
           {{:timeout, :reconnect}, state.setting_reconnect_interval, nil}
         ]
@@ -385,7 +385,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       else
         {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
           Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
-          {:disconnect, :payload_size_limit_exceeded}
+          {:disconnect, :payload_size_limit_exceeded, state}
 
         {:error, %InvariantError{code: :over_system_memory_limit}} ->
           Health.put_event(
@@ -404,7 +404,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             send(state.test_pid, {:stop_replication, state.id})
           end
 
-          {:stop, :over_system_memory_limit, state}
+          {:disconnect, :over_system_memory_limit, state}
       end
     end)
   rescue

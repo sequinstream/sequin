@@ -452,9 +452,9 @@ defmodule SequinWeb.Components.ConsumerForm do
     if sink_changeset.valid? do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
       client = TypesenseClient.new(TypesenseSink.client_params(sink))
-      # Test the connection to Typesense
-      case TypesenseClient.test_connection(client) do
-        :ok -> :ok
+
+      case TypesenseClient.get_collection(client, sink.collection_name) do
+        {:ok, _} -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else

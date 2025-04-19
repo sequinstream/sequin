@@ -10,20 +10,12 @@
   import type { TypesenseConsumer } from "$lib/consumers/types";
   import { Label } from "$lib/components/ui/label";
   import { Eye, EyeOff, Info } from "lucide-svelte";
-  import * as Tooltip from "$lib/components/ui/tooltip";
-  import { Select } from "$lib/components/ui/select";
 
   export let form: TypesenseConsumer;
   export let errors: any = {};
   let showPassword = false;
 
   // Import action options based on the typesense_sink.ex Elixir module
-  let importActionOptions = [
-    { value: "create", label: "Create" },
-    { value: "upsert", label: "Upsert" },
-    { value: "update", label: "Update" },
-    { value: "emplace", label: "Emplace" },
-  ];
 
   function togglePasswordVisibility() {
     showPassword = !showPassword;
@@ -32,11 +24,11 @@
 
 <Card>
   <CardHeader>
-    <CardTitle>Typesense Configuration</CardTitle>
+    <CardTitle>Typesense configuration</CardTitle>
   </CardHeader>
   <CardContent class="space-y-4">
     <Alert.Root variant="info">
-      <Alert.Title>Transform Requirements</Alert.Title>
+      <Alert.Title>Transform requirements</Alert.Title>
       <Alert.Description>
         <p class="mb-2">
           Your <a
@@ -87,7 +79,7 @@
     </div>
 
     <div class="space-y-2">
-      <Label for="collection_name">Collection Name</Label>
+      <Label for="collection_name">Collection name</Label>
       <Input
         id="collection_name"
         bind:value={form.sink.collection_name}
@@ -99,7 +91,7 @@
     </div>
 
     <div class="space-y-2">
-      <Label for="api_key">API Key</Label>
+      <Label for="api_key">API key</Label>
       <div class="relative">
         <Input
           id="api_key"
@@ -127,7 +119,7 @@
     </div>
 
     <div class="space-y-2">
-      <Label for="batch_size">Batch Size</Label>
+      <Label for="batch_size">Batch size</Label>
       <Input
         id="batch_size"
         type="number"

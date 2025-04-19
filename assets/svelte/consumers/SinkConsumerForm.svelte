@@ -29,6 +29,7 @@
   import RabbitMqSinkForm from "$lib/sinks/rabbitmq/RabbitMqSinkForm.svelte";
   import AzureEventHubSinkForm from "$lib/sinks/azure_event_hub/AzureEventHubSinkForm.svelte";
   import { CircleAlert, Info, ChevronDown, Plus } from "lucide-svelte";
+  import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import TableSelector from "../components/TableSelector.svelte";
   import * as Popover from "$lib/components/ui/popover";
@@ -775,6 +776,8 @@
       <RabbitMqSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "azure_event_hub"}
       <AzureEventHubSinkForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "typesense"}
+      <TypesenseSinkForm errors={errors.consumer} bind:form />
     {/if}
 
     <Card>

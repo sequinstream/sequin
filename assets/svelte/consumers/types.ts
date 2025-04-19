@@ -11,7 +11,8 @@ export type BaseConsumer = {
     | "sequin_stream"
     | "gcp_pubsub"
     | "nats"
-    | "rabbitmq";
+    | "rabbitmq"
+    | "typesense";
   name: string;
   annotations: Record<string, boolean>;
   status: "active" | "paused" | "disabled";
@@ -153,6 +154,18 @@ export type GcpPubsubConsumer = BaseConsumer & {
   };
 };
 
+// Typesense specific sink
+export type TypesenseConsumer = BaseConsumer & {
+  sink: {
+    type: "typesense";
+    endpoint_url: string;
+    collection_name: string;
+    import_action: "create" | "upsert" | "update" | "emplace";
+    batch_size: number;
+    timeout_seconds: number;
+  };
+};
+
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer
@@ -163,4 +176,5 @@ export type Consumer =
   | GcpPubsubConsumer
   | NatsConsumer
   | AzureEventHubConsumer
-  | RabbitMqConsumer;
+  | RabbitMqConsumer
+  | TypesenseConsumer;

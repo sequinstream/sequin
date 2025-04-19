@@ -26,6 +26,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
@@ -738,6 +739,17 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sink(%SinkConsumer{sink: %TypesenseSink{} = sink}) do
+    %{
+      type: :typesense,
+      endpoint_url: sink.endpoint_url,
+      collection_name: sink.collection_name,
+      import_action: sink.import_action,
+      batch_size: sink.batch_size,
+      timeout_seconds: sink.timeout_seconds
+    }
+  end
+
   defp encode_sink(%SinkConsumer{sink: %SequinStreamSink{}}) do
     %{type: :sequin_stream}
   end
@@ -1155,6 +1167,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :nats}}), do: "NATS Sink"
   defp consumer_title(%{sink: %{type: :rabbitmq}}), do: "RabbitMQ Sink"
   defp consumer_title(%{sink: %{type: :azure_event_hub}}), do: "Azure Event Hub Sink"
+  defp consumer_title(%{sink: %{type: :typesense}}), do: "Typesense Sink"
 
   defp put_health(%SinkConsumer{} = consumer) do
     with {:ok, health} <- Health.health(consumer),

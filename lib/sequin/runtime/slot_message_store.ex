@@ -549,11 +549,15 @@ defmodule Sequin.Runtime.SlotMessageStore do
         )
       end
 
+      state = %{state | last_consumer_producer_pid: producer_pid}
+
       if length(messages) > 0 do
         Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
+        {:reply, {:ok, messages}, state}
+      else
+        :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_processed)
+        {:reply, {:ok, []}, state, :hibernate}
       end
-
-      {:reply, {:ok, messages}, %{state | last_consumer_producer_pid: producer_pid}}
     end)
   end
 

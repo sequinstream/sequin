@@ -163,7 +163,7 @@ defmodule Sequin.TableReaderTest do
       batch_id = "test_batch"
 
       # Let an actual connection be created
-      ConnectionCache.invalidate_connection(db)
+      ConnectionCache.invalidate_connection(db.id)
 
       # This does not test that watermark messages are emitted, we will do this in a separate test
 

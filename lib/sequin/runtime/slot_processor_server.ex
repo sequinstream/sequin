@@ -20,9 +20,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Error.ServiceError
   alias Sequin.Health
   alias Sequin.Health.Event
+  alias Sequin.Metrics.Prometheus
   alias Sequin.Postgres
   alias Sequin.Postgres.ReplicationConnection
-  alias Sequin.Prometheus
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Runtime.MessageHandler

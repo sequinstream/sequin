@@ -1,0 +1,76 @@
+---
+title: "Typesense sink"
+sidebarTitle: "Typesense sink"
+description: "Stream Postgres changes directly to Typesense with Sequin's Typesense sink."
+---
+
+The Typesense sink indexes documents into a Typesense collection, using the Typesense JSON API.
+
+## Configuration
+
+- **Endpoint URL**
+
+    The URL of your Typesense server (e.g., `https://your-typesense-server:8108`).
+
+- **Collection Name**
+
+    The name of the Typesense collection where documents will be indexed.
+    The collection must exist before imports can work, but 
+
+- **API Key**
+
+    The API key for authenticating with your Typesense server.
+
+- **Batch Size** (optional)
+
+    Number of documents to batch together in a single import request to Typesense. Default is 40. Maximum is 10,000.
+
+- **Timeout (seconds)** (optional)
+
+    Number of seconds to wait for a response from Typesense. Default is 5 seconds. Maximum is 300 seconds.
+
+## Transform Requirements
+
+Your [transform](/docs/reference/transforms) must return a document matching the schema of the [Typesense collection](https://typesense.org/docs/28.0/api/collections.html#create-a-collection).
+
+This includes a string `id` field which is mandatory for Typesense.
+It's also okay to use an integer/serial/bigserial/uuid `id` - Sequin will automatically stringify it for you.
+However, from Typesense's perspective, all `id`s are strings and will be returned as such in search results.
+
+Note: the `id` should not include spaces or any other characters that require encoding in urls.
+
+## Import action
+
+Sequin always uses Typesense's `emplace` import action, which means:
+
+- Typesense will create a new document or update an existing one based on the `id`
+- Your transform can supply either a complete document or a partial document for update.
+
+Note: The full document should be provided for creation -  partials are only allowed when updating an existing document.
+
+## API endpoints used by Sequin
+
+Sequin uses the following specific endpoints of the [Typesense documents API](https://typesense.org/docs/28.0/api/documents.html):
+
+- "/collections/#{collection_name}/documents/import"
+  For indexing batches of documents.  This is the most common path.
+- "/collections/#{collection_name}/documents"
+  For indexing documents one at a time.
+  Used when batch size was manually configured to be 1, or when the batch happens to have only 1 document.
+- "/collections/#{collection_name}/documents/#{document_id}"
+  For deleting documents.  Deletions are always processed one at a time.
+
+Sequin does not interact with the collections API, or perform any searches.
+
+## Error handling
+
+Common errors that can occur when working with the Typesense sink include:
+
+- Connection issues to the Typesense server (HTTP vs HTTPS, TCP port number, URL typos, etc)
+- Collection doesn't exist (Typesense reports "Not Found")
+- Schema mismatches
+- Missing `id` fields
+
+When errors occur, they will be visible in the "Messages" tab of the Sequin web console. You can click on a message to see details about the error.
+Error messages from the Typesense API are passed through unchanged to the Sequin console, except in case of batch imports, where they are aggregated into one error report for the whole batch.
+

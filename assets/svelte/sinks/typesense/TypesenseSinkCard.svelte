@@ -41,7 +41,7 @@
           <span
             class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.batch_size}</span
-                                         >
+          >
         </div>
       </div>
 
@@ -51,7 +51,7 @@
           <span
             class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.timeout_seconds}</span
-                                              >
+          >
         </div>
       </div>
     </div>

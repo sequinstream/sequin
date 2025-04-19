@@ -166,7 +166,6 @@ export type TypesenseConsumer = BaseConsumer & {
   };
 };
 
-
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer

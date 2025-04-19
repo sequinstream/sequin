@@ -35,22 +35,37 @@
     <CardTitle>Typesense Configuration</CardTitle>
   </CardHeader>
   <CardContent class="space-y-4">
-
     <Alert.Root variant="info">
       <Alert.Title>Transform Requirements</Alert.Title>
       <Alert.Description>
         <p class="mb-2">
-          Your <a class="underline font-medium" href="https://sequinstream.com/docs/reference/transforms" target="_blank">transform</a> must return a document matching
-          the schema of the <a class="underline font-medium" href="https://typesense.org/docs/28.0/api/collections.html#create-a-collection">Typesense collection</a>.
+          Your <a
+            class="underline font-medium"
+            href="https://sequinstream.com/docs/reference/transforms"
+            target="_blank">transform</a
+          >
+          must return a document matching the schema of the
+          <a
+            class="underline font-medium"
+            href="https://typesense.org/docs/28.0/api/collections.html#create-a-collection"
+            >Typesense collection</a
+          >.
         </p>
         <p class="mb-2">
           This includes an <code>id</code> field which is mandatory.
         </p>
         <div class="mb-2">
-          Sequin uses Typesense's <code>emplace</code> import action, which means:
+          Sequin uses Typesense's <code>emplace</code> import action, which
+          means:
           <ul class="ml-6 list-disc">
-            <li>Typesense will create a new document or update an existing one based on the <code>id</code></li>
-            <li>Your transform can supply either a complete document or a partial document for update</li>
+            <li>
+              Typesense will create a new document or update an existing one
+              based on the <code>id</code>
+            </li>
+            <li>
+              Your transform can supply either a complete document or a partial
+              document for update
+            </li>
           </ul>
         </div>
       </Alert.Description>

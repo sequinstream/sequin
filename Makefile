@@ -72,6 +72,16 @@ release-gh: ## Run the release script using GitHub Actions for Docker builds
 release-dirty-gh: ## Run the release script with --dirty flag using GitHub Actions
 	@./scripts/release.sh --dirty --github-actions
 
+checkout-pr: ## Check out a PR locally: make checkout-pr pr=<pr-number>
+	@if [ -z "$(pr)" ]; then \
+		echo "Usage: make checkout-pr pr=<pr-number>"; \
+	else \
+		./scripts/checkout_pr.sh $(pr); \
+	fi
+
+delete-branch: ## Delete the current branch and its non‑origin remote
+	@./scripts/delete_branch.sh
+
 spellcheck: ## Run cspell to check spelling in .md and .mdx files
 	@npx -y cspell "**/*.{md,mdx}" --config spellcheck/.cspell.json
 

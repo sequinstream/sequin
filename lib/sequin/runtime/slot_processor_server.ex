@@ -1732,13 +1732,23 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     conn
   end
 
-  defp check_limit(%State{} = state, raw_bytes_received) do
+  # Give the system 3 seconds to lower memory
+  @check_limit_attempts 30
+  @check_limit_interval 100
+  defp check_limit(state, raw_bytes_received, attempt \\ 1)
+
+  defp check_limit(_state, _raw_bytes_received, attempt) when attempt > @check_limit_attempts do
+    {:error, Error.invariant(message: "Memory limit exceeded", code: :over_system_memory_limit)}
+  end
+
+  defp check_limit(%State{} = state, raw_bytes_received, attempt) do
     # Check if it's been a while since we last checked the limit
     if state.bytes_received_since_last_limit_check + raw_bytes_received >= state.bytes_between_limit_checks do
       current_memory = state.check_memory_fn.()
 
       if current_memory >= state.max_memory_bytes do
-        {:error, Error.invariant(message: "Memory limit exceeded", code: :over_system_memory_limit)}
+        Process.sleep(@check_limit_interval)
+        check_limit(state, raw_bytes_received, attempt + 1)
       else
         {:ok, %{state | bytes_received_since_last_limit_check: 0}}
       end

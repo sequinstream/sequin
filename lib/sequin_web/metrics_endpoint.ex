@@ -1,5 +1,14 @@
 defmodule SequinWeb.MetricsEndpoint do
-  use Phoenix.Endpoint, otp_app: :sequin
+  def child_spec(_opts) do
+    opts = Application.get_env(:sequin, __MODULE__, [])
 
-  plug Sequin.PrometheusExporter
+    if Keyword.get(opts, :server, false) do
+      opts
+      |> Keyword.get(:http, [])
+      |> Keyword.put(:plug, {Peep.Plug, peep_worker: :sequin})
+      |> Bandit.child_spec()
+    else
+      :ignore
+    end
+  end
 end

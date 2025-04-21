@@ -1,0 +1,201 @@
+---
+title: 'Get started with SNS'
+sidebarTitle: 'SNS'
+description: 'Learn how to stream rows and changes from Postgres to Amazon SNS in minutes. Use Sequin to stream Postgres to Lambdas, Kinesis, SQS, and more via SNS.'
+---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx'
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to an Amazon SNS topic. You'll:
+
+- Boot Sequin
+- Connect to a sample playground database  
+- Create an SNS topic and subscription
+- Set up a sink to sync changes to SNS
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin and SNS. This same pattern can be used to setup your own Postgres CDC pipeline with SNS.
+
+<Steps titleSize="h2">
+  <QuickstartInitialSteps />
+
+  <Step title="Create an SNS topic" icon="database">
+    We'll start by creating an Amazon SNS topic that will receive change events from Sequin.
+
+    <Steps>
+      <Step title="Open the SNS console">
+        Sign in to the <a href="https://console.aws.amazon.com/sns/v3/home" target="_blank" rel="noopener noreferrer">Amazon SNS console</a>. Make sure you're in the AWS region where you want to create your topic.
+      </Step>
+
+      <Step title="Create the topic">
+        Click "Create topic".
+
+        For the type, select "Standard". For name, enter <code>products-updates</code>.
+
+        Leave the rest of the defaults and click "Create topic".
+      </Step>
+    </Steps>
+  </Step>
+
+  <Step title="Create a subscription" icon="envelope">
+    We'll create an email subscription so you can see notifications arrive in your inbox:
+
+    <Steps>
+      <Step title="Subscribe an email endpoint">
+        On the topic overview page click "Create subscription".
+
+        Set "Protocol" to "Email" and enter your email address in the "Endpoint" field.
+
+        Click "Create Subscription".
+      </Step>
+
+      <Step title="Confirm the subscription">
+        Check your email inbox for a message from Amazon SNS and click the "Confirm subscription" link.
+
+        Once confirmed, the subscription's <i>Status</i> will change to <code>Confirmed</code> in the SNS console.
+
+        <Note>
+          If you don't see the confirmation email, check your spam folder.
+
+          You can re-send the confirmation email by clicking "Request confirmation" in the SNS console.
+        </Note>
+      </Step>
+    </Steps>
+  </Step>
+
+  <Step title="Create an SNS Sink" icon="plug">
+    With the playground database connected and your SNS topic ready, you can create a [sink](/reference/sinks/overview) in Sequin. This sink will send changes from the <code>products</code> table to your SNS topic:
+
+    <Steps>
+      <Step title="Navigate to Sinks">
+        In Sequin, click "Sinks" in the sidebar navigation, then click "Create Sink".
+      </Step>
+
+      <Step title="Select sink type">
+        Select "Amazon SNS" as the sink type and click "Continue".
+      </Step>
+
+      <Step title='Note "Source" configuration'>
+        In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
+
+        <Frame>
+          <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
+        </Frame>
+      </Step>
+
+      <Step title="Setup a backfill">
+        Toggle open the "Initial backfill" card and select "Backfill all rows":
+
+        <Frame>
+          <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
+        </Frame>
+      </Step>
+
+      <Step title='Configure SNS'>
+        In the SNS card, enter your configuration:
+
+        - Topic ARN: the ARN of the SNS topic you created earlier
+        - AWS Access Key ID / Secret Access Key: credentials that have permission to publish to the topic
+
+        <Note>
+          If you don't have credentials, you can create a new user for Sequin with [write permissions to SNS](/reference/sinks/sns#iam-user-permissions).
+        </Note>
+
+        <Frame>
+          <img src="/images/quickstart/sns/config-card.png" alt="SNS configuration card" />
+        </Frame>
+      </Step>
+
+      <Step title="Create the sink">
+        Give your sink a name, like <code>products-sns</code>, and click "Create Sink".
+
+        Sequin will first backfill the rows in the `products` table, then stream every change in real‑time to your SNS topic.
+      </Step>
+    </Steps>
+  </Step>
+
+  <Step title="See backfill messages in Sequin" icon="waveform-lines">
+    With our initial backfill complete, click the "Messages" tab to see the status of backfill messages. All messages will be marked as "Delivered":
+
+    <Frame>
+      <img src="/images/quickstart/sns/messages-tab.png" alt="Backfill messages in Sequin" />
+    </Frame>
+  </Step>
+
+  <Step title="See backfill notifications in your email" icon="waveform-lines">
+    Check your email inbox. You should see an email for each backfill message. The email contains a JSON payload with the backfilled data. Sequin's message is under the `Message` field.
+  </Step>
+
+  <Step title="See changes flow to SNS" icon="waveform-lines">
+    Now, see how changes flow to SNS in real-time:
+
+    <Steps>
+      <Step title="Make some changes">
+        In your terminal insert a new row into the `products` table:
+
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+        ```
+
+        The change should flow through SNS to your email inbox in a few seconds.
+
+        Feel free to try other changes:
+
+        <AccordionGroup>
+          <Accordion title="Update a product's price">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Change a product's name">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Delete a product">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "delete from products where name = 'Blueberries (6 oz)';"
+            ```
+          </Accordion>
+        </AccordionGroup>
+
+        Each change will be forwarded to your email inbox via SNS within a few seconds.
+      </Step>
+    </Steps>
+  </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Created an SNS topic and confirmed an email subscription
+- Loaded existing data through a backfill
+- Made changes to the `products` table
+- Verified notifications are flowing to SNS (and landing in your inbox)
+- Set up a complete Postgres change data capture pipeline
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  <Card title="Guide: Setting up an SNS sink" icon="plug" href="/how-to/stream-postgres-to-sns">
+    Set up an SNS sink to bring CDC events to AWS.
+  </Card>
+</CardGroup>

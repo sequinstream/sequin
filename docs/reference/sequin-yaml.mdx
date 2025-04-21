@@ -201,6 +201,19 @@ destination:
   secret_access_key: "secret"   # Required
 ```
 
+#### SNS sink
+For publishing changes to AWS SNS topics:
+```yaml
+destination:
+  type: "sns"                   # Required
+  topic_arn: "arn:aws:sns:us-west-2:123456789012:my-topic" # Required, full SNS Topic ARN
+  region: "us-west-2"          # Optional, inferred from topic_arn if omitted
+  access_key_id: "AKIAXXXX"    # Required
+  secret_access_key: "secret"   # Required
+```
+
+The `region` field is optional. If not provided, Sequin will automatically infer the region from the `topic_arn`. FIFO topics are supported—Sequin will detect a FIFO topic automatically when the `topic_arn` ends with `.fifo`.
+
 #### Redis sink
 For publishing changes to Redis streams:
 ```yaml

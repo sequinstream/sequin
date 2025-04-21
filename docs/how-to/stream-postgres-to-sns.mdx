@@ -1,0 +1,153 @@
+---
+title: "How to stream Postgres to AWS SNS"
+sidebarTitle: "SNS"
+description: "Setup Postgres change data capture (CDC) and stream changes to Amazon SNS topics with Sequin. Power event-driven architectures, fan‑out to SQS queues, Lambdas, and more."
+---
+
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to Amazon SNS using Sequin.
+
+With Postgres data streaming to SNS you can fan‑out events to SQS queues, trigger AWS Lambdas, send emails, stream to AWS Kinesis, and more.
+
+By the end of this how‑to, you'll have database changes flowing into an SNS topic.
+
+## Prerequisites
+
+If you're self‑hosting Sequin, you'll need:
+
+1. [Sequin installed](/running-sequin)
+2. [A database connected](/connect-postgres)
+3. An AWS account
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/connect-postgres)
+3. An AWS account
+
+## Basic setup
+
+### Create an SNS topic
+
+If you don't have a topic already, create one in the [SNS console](https://console.aws.amazon.com/sns/v3/home):
+
+1. Click "Create topic".
+2. Choose "Standard" unless you need FIFO ordering. Note that FIFO SNS topics can only fan‑out to SQS queues. (Read more about [FIFO vs standard topics in the reference](/reference/sinks/sns#fifo-vs-standard-topics).)
+3. Give the topic a name, e.g. `postgres-changes`.
+4. Click "Create topic".
+5. Copy the **Topic ARN** – you'll need it when configuring the sink.
+
+
+### Create an IAM user for Sequin
+
+Create an IAM user with permission to publish to the topic:
+
+1. Open the [IAM console](https://console.aws.amazon.com/iam/).
+2. Click "Users" → "Add users".
+3. Name the user (e.g. `sequin-sns-publisher`) and select "Access key – Programmatic access".
+4. Attach the policy below (replace `<your-topic-arn>`):
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": [
+           "sns:Publish",
+           "sns:PublishBatch",
+           "sns:GetTopicAttributes"
+         ],
+         "Resource": "<your-topic-arn>"
+       }
+     ]
+   }
+   ```
+
+5. Finish the wizard and save the Access Key ID and Secret Access Key. You'll enter these in Sequin next.
+
+### (Optional) Enable retention for changes
+
+You can stream either [changes or rows](/reference/messages) to SNS. Changes are transient; if you need to replay them later consider [change retention](/reference/change-retention) or streaming a retention table instead.
+
+## Create SNS sink
+
+In Sequin, navigate to the "Sinks" tab, click "Create Sink", and select "SNS Sink".
+
+### Configure the source
+
+<Steps>
+  <Step title="Select source table">
+    Under **Source**, choose the table you want to stream.
+  </Step>
+
+  <Step title="Choose message type">
+    Decide whether to receive [changes or rows](/reference/messages). If unsure, start with **Changes**.
+  </Step>
+
+  <Step title="Specify filters">
+    For changes you can restrict to `insert`, `update`, and/or `delete` actions and add [SQL filters](/reference/filters) such as `mrr > 100`.
+  </Step>
+
+  <Step title="Specify transforms">
+    Optionally transform the shape of messages using [transforms](/reference/transforms).
+  </Step>
+
+  <Step title="Specify backfill">
+    Optionally send a [backfill](/reference/backfills) of existing rows. Toggle **Backfill** off if you only need new changes.
+  </Step>
+
+  <Step title="Specify message grouping">
+    Leave the default grouping (primary key) so events for the same row share a `MessageGroupId` when using FIFO topics.
+  </Step>
+</Steps>
+
+### Configure SNS
+
+<Steps>
+  <Step title="Enter topic details">
+    Fill in:
+    
+    - Topic ARN (required): The ARN you copied earlier.
+    - AWS Access Key ID / Secret Access Key (required): Credentials you created for Sequin.
+  </Step>
+
+  <Step title="Test connection">
+    Click "Test Connection" to ensure Sequin can publish to the topic.
+  </Step>
+
+  <Step title="Create the sink">
+    Give your sink a name, then click "Create SNS Sink".
+  </Step>
+</Steps>
+
+## Verify & debug
+
+To verify your sink:
+
+1. Make changes in the source table.
+2. Watch the message count increase in Sequin's "Messages" tab.
+3. Check your subscription (email, SQS queue, etc.) – you should receive the events.
+
+If messages aren't flowing:
+
+1. In Sequin click the "Messages" tab.
+2. Inspect any failed message to see the AWS error.
+3. Confirm:
+   - Credentials are correct and active.
+   - IAM policy includes `sns:Publish*` permissions for the topic.
+   - Topic ARN and region are correct.
+
+
+## Next steps
+
+- **Process the events**
+
+  Subscribe an SQS queue or Lambda function to the topic and build your processor. Refer to the [SNS sink reference](/reference/sinks/sns) for the exact message shape.
+
+- **Deploy to production**
+
+  When you're ready, see "[How to deploy to production](/how-to/deploy-to-production)".
+
+- **Advanced configuration**
+
+  Explore transforms, filtering, and grouping options in the [sink reference](/reference/sinks/sns). 

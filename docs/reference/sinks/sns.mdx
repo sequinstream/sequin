@@ -1,0 +1,96 @@
+---
+title: "SNS sink"
+sidebarTitle: "SNS sink"
+description: "Reference for configuring and using the AWS SNS sink with Sequin."
+---
+
+The SNS sink publishes messages to an Amazon SNS topic.
+
+## Configuration
+
+- **Topic ARN**
+
+    The ARN of your SNS topic. Must match the pattern `arn:aws:sns:<region>:<account-id>:<topic-name>`.
+    
+    For FIFO topics the topic name **must** end with `.fifo`.
+
+- **Access Key ID**
+
+    AWS access key ID that has permission to publish to the topic.
+
+- **Secret Access Key**
+
+    The secret access key that pairs with the access key ID.
+
+## IAM user permissions
+
+Sequin needs an IAM user or role with the following permissions:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sns:Publish",
+        "sns:PublishBatch",
+        "sns:GetTopicAttributes"
+      ],
+      "Resource": "<your-topic-arn>"
+    }
+  ]
+}
+```
+
+Replace `<your-topic-arn>` with the ARN of your SNS topic (e.g., `arn:aws:sns:us-east-1:123456789012:products-updates`).
+
+## Message format
+
+By default, Sequin publishes JSON‑encoded messages that match the [messages reference](/reference/messages). You can configure [transforms](/reference/transforms) to customize the message format.
+
+When the topic is FIFO, Sequin additionally sets the following per‑entry attributes:
+
+- `MessageGroupId` – By default the primary key(s) of the source row, or your custom [message grouping](/reference/sinks/overview#message-grouping-and-ordering) when configured.
+- `MessageDeduplicationId` – The message's unique `message_id`.
+
+This ensures ordered, exactly‑once processing within each group.
+
+## Retry behavior
+
+If Sequin receives an error from SNS, it retries message delivery indefinitely, using exponential backoff with a maximum delay of roughly 3 minutes per attempt.
+
+## Message size limits
+
+SNS enforces a [maximum message size of 256 KB](https://docs.aws.amazon.com/general/latest/gr/sns.html).
+
+If SNS rejects a message for exceeding this limit, Sequin cancels that message's delivery.
+
+<Info>
+  If you would like logging or alerting for oversized messages, please [upvote the corresponding issue](https://github.com/sequinstream/sequin/issues/596).
+</Info>
+
+## FIFO vs standard topics
+
+Standard topics deliver messages at‑least‑once and may reorder them. FIFO topics guarantee exactly‑once delivery per subscription and preserve the order of messages that share the same `MessageGroupId`. However, FIFO SNS topics can only send messages to SQS queues.
+
+## When to use SNS vs SQS
+
+Sequin supports streaming to either SNS or [SQS](/reference/sinks/sqs) directly.
+
+Use Sequin's SQS sink if you're sending data to a single SQS queue. Use Sequin's SNS sink with SQS subscriptions if you need to fan‑out events to multiple SQS queues.
+
+## Debugging
+
+You can monitor the status of your SNS sink in the Sequin console.
+
+On the **Messages** tab you will see messages currently in flight to SNS, messages that have failed delivery, and recently delivered messages.
+
+Click on any failed message to inspect the full error returned by AWS.
+
+Common things to check when debugging:
+
+- Access key and secret are valid and not expired.
+- IAM user/role has the required SNS permissions.
+- Topic ARN is correct and the topic exists.
+- Region in the sink configuration matches the topic's region. 

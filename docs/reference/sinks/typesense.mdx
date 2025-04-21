@@ -12,24 +12,25 @@ The Typesense sink indexes documents into a Typesense collection, using the Type
 
     The URL of your Typesense server (e.g., `https://your-typesense-server:8108`).
 
-- **Collection Name**
+- **Collection name**
 
-    The name of the Typesense collection where documents will be indexed.
-    The collection must exist before imports can work, but 
+    The name of the Typesense collection where documents will be indexed. The collection must exist before imports can work.
 
-- **API Key**
+- **API key**
 
     The API key for authenticating with your Typesense server.
 
-- **Batch Size** (optional)
+- **Batch size** (optional)
 
     Number of documents to batch together in a single import request to Typesense. Default is 40. Maximum is 10,000.
 
 - **Timeout (seconds)** (optional)
 
     Number of seconds to wait for a response from Typesense. Default is 5 seconds. Maximum is 300 seconds.
+    Typesense writes are synchronous, and [Typesense recommends](https://typesense.org/docs/guide/syncing-data-into-typesense.html#client-side-timeouts)
+    using long client timeouts of up to 60 minutes if you are importing large batches.
 
-## Transform Requirements
+## Transform requirements
 
 Your [transform](/docs/reference/transforms) must return a document matching the schema of the [Typesense collection](https://typesense.org/docs/28.0/api/collections.html#create-a-collection).
 
@@ -39,9 +40,16 @@ However, from Typesense's perspective, all `id`s are strings and will be returne
 
 Note: the `id` should not include spaces or any other characters that require encoding in urls.
 
+For example, the following transform would convert a numeric `product_id` column into the string `id`:
+```elixir
+def transform(action, record, changes, metadata) do
+  Map.put(record, "id", Kernel.to_string(record["product_id"]))
+end
+```
+
 ## Import action
 
-Sequin always uses Typesense's `emplace` import action, which means:
+Sequin always uses Typesense's `emplace` [import action](https://typesense.org/docs/28.0/api/documents.html#action-modes-create-upsert-update-emplace), which means:
 
 - Typesense will create a new document or update an existing one based on the `id`
 - Your transform can supply either a complete document or a partial document for update.
@@ -52,12 +60,16 @@ Note: The full document should be provided for creation -  partials are only all
 
 Sequin uses the following specific endpoints of the [Typesense documents API](https://typesense.org/docs/28.0/api/documents.html):
 
-- "/collections/#{collection_name}/documents/import"
+- `/collections/#{collection_name}/documents/import`
+
   For indexing batches of documents.  This is the most common path.
-- "/collections/#{collection_name}/documents"
+
+- `/collections/#{collection_name}/documents`
+
   For indexing documents one at a time.
   Used when batch size was manually configured to be 1, or when the batch happens to have only 1 document.
-- "/collections/#{collection_name}/documents/#{document_id}"
+
+- `/collections/#{collection_name}/documents/#{document_id}`
   For deleting documents.  Deletions are always processed one at a time.
 
 Sequin does not interact with the collections API, or perform any searches.

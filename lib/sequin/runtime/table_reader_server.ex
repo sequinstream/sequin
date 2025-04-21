@@ -364,6 +364,7 @@ defmodule Sequin.Runtime.TableReaderServer do
       database = database(state)
       table = table(state)
       cursor = state.cursor
+      fetch_batch_pks = state.fetch_batch_pks
 
       task =
         Task.Supervisor.async_nolink(state.task_supervisor, fn ->
@@ -371,7 +372,7 @@ defmodule Sequin.Runtime.TableReaderServer do
 
           res =
             with {:ok, conn} <- ConnectionCache.connection(database) do
-              state.fetch_batch_pks.(
+              fetch_batch_pks.(
                 conn,
                 table,
                 cursor,

@@ -429,7 +429,7 @@ Please help me create or modify the Elixir function transform to achieve the des
       <form on:submit={handleSubmit} class="space-y-4">
         <div class="space-y-2">
           <div class="flex items-center gap-2">
-            <Label for="name">Transform Name</Label>
+            <Label for="name">Transform name</Label>
             <Popover>
               <PopoverTrigger>
                 <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
@@ -461,7 +461,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 
         <div class="space-y-2 max-w-xl">
           <div class="flex items-center gap-2">
-            <Label for="type">Transform Type</Label>
+            <Label for="type">Transform type</Label>
             <Popover>
               <PopoverTrigger>
                 <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />

@@ -22,6 +22,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Health.Event
   alias Sequin.Postgres
   alias Sequin.Postgres.ReplicationConnection
+  alias Sequin.Postgres.ValueCaster
   alias Sequin.Prometheus
   alias Sequin.Replication
   alias Sequin.Repo
@@ -287,20 +288,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     current_memory = state.check_memory_fn.()
 
     if current_memory > state.max_memory_bytes do
-      Logger.warning("[SlotProcessorServer] System at memory limit, shutting down",
+      Logger.warning("[SlotProcessorServer] System at memory limit, disconnecting",
         limit: state.max_memory_bytes,
         current_memory: current_memory
       )
 
-      {:disconnect, :over_system_memory_limit}
+      {:disconnect, :over_system_memory_limit, state}
+    else
+      {:stream, query, [],
+       %{
+         state
+         | connection_state: :streaming,
+           low_watermark_wal_cursor: low_watermark_wal_cursor
+       }}
     end
-
-    {:stream, query, [],
-     %{
-       state
-       | connection_state: :streaming,
-         low_watermark_wal_cursor: low_watermark_wal_cursor
-     }}
   end
 
   @impl ReplicationConnection
@@ -315,7 +316,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
 
     case reason do
-      :payload_size_limit_exceeded ->
+      reason when reason in [:payload_size_limit_exceeded, :over_system_memory_limit] ->
         actions = [
           {{:timeout, :reconnect}, state.setting_reconnect_interval, nil}
         ]
@@ -385,7 +386,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       else
         {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
           Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
-          {:disconnect, :payload_size_limit_exceeded}
+          {:disconnect, :payload_size_limit_exceeded, state}
 
         {:error, %InvariantError{code: :over_system_memory_limit}} ->
           Health.put_event(
@@ -404,7 +405,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             send(state.test_pid, {:stop_replication, state.id})
           end
 
-          {:stop, :over_system_memory_limit, state}
+          {:disconnect, :over_system_memory_limit, state}
       end
     end)
   rescue
@@ -1540,7 +1541,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     columns
     |> Enum.zip(Tuple.to_list(tuple_data))
     |> Enum.map(fn {%{name: name, attnum: attnum, type: type}, value} ->
-      case cast_value(type, value) do
+      case ValueCaster.cast(type, value) do
         {:ok, casted_value} ->
           %Message.Field{
             column_name: name,
@@ -1560,162 +1561,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end)
   end
 
-  defp cast_value("bool", "t"), do: {:ok, true}
-  defp cast_value("bool", "f"), do: {:ok, false}
-
-  defp cast_value("_" <> _type, "{}"), do: {:ok, []}
-
-  defp cast_value("_" <> type, array_string) when is_binary(array_string) do
-    array_string
-    |> String.trim("{")
-    |> String.trim("}")
-    |> parse_pg_array()
-    |> Enum.reduce_while({:ok, []}, fn value, {:ok, acc} ->
-      case cast_value(type, value) do
-        {:ok, casted_value} -> {:cont, {:ok, [casted_value | acc]}}
-        error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, array} -> {:ok, Enum.reverse(array)}
-      error -> error
-    end
-  end
-
-  defp cast_value(type, value) when type in ["json", "jsonb"] and is_binary(value) do
-    case Jason.decode(value) do
-      {:ok, json} ->
-        {:ok, json}
-
-      {:error, %Jason.DecodeError{} = error} ->
-        Logger.error("Failed to decode JSON value: #{inspect(error, limit: 10_000)}")
-
-        wrapped_error =
-          Error.service(
-            service: :postgres_replication_slot,
-            message: "Failed to decode JSON value: #{inspect(error)}",
-            details: %{error: Exception.message(error)},
-            code: :invalid_json
-          )
-
-        {:error, wrapped_error}
-    end
-  end
-
-  defp cast_value("vector", nil), do: {:ok, nil}
-
-  defp cast_value("vector", value_str) when is_binary(value_str) do
-    list =
-      value_str
-      |> String.trim("[")
-      |> String.trim("]")
-      |> String.split(",")
-      |> Enum.map(fn num ->
-        {float, ""} = Float.parse(num)
-        float
-      end)
-
-    {:ok, list}
-  end
-
-  defp cast_value(type, value) do
-    case Ecto.Type.cast(string_to_ecto_type(type), value) do
-      {:ok, casted_value} -> {:ok, casted_value}
-      # Fallback to original value if casting fails
-      :error -> {:ok, value}
-    end
-  end
-
-  defp parse_pg_array(str) do
-    str
-    # split the string on commas, but only when they're not inside quotes.
-    |> String.split(~r/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
-    |> Enum.map(&String.trim/1)
-    |> Enum.map(&unescape_string/1)
-  end
-
-  # When an array element contains a comma and is coming from Postgres, it will be wrapped in double quotes:
-  # "\"royal,interest\""
-  # We want to remove the double quotes so that we get:
-  # "royal,interest"
-  defp unescape_string(<<"\"", rest::binary>>) do
-    rest
-    |> String.slice(0..-2//1)
-    |> String.replace("\\\"", "\"")
-  end
-
-  defp unescape_string(str), do: str
-
-  @postgres_to_ecto_type_mapping %{
-    # Numeric Types
-    "int2" => :integer,
-    "int4" => :integer,
-    "int8" => :integer,
-    "float4" => :float,
-    "float8" => :float,
-    "numeric" => :decimal,
-    "money" => :decimal,
-    # Character Types
-    "char" => :string,
-    "varchar" => :string,
-    "text" => :string,
-    # Binary Data Types
-    "bytea" => :binary,
-    # Date/Time Types
-    "timestamp" => :naive_datetime,
-    "timestamptz" => :utc_datetime,
-    "date" => :date,
-    "time" => :time,
-    "timetz" => :time,
-    # Ecto doesn't have a direct interval type
-    "interval" => :map,
-    # Boolean Type
-    "bool" => :boolean,
-    # Geometric Types
-    "point" => {:array, :float},
-    "line" => :string,
-    "lseg" => :string,
-    "box" => :string,
-    "path" => :string,
-    "polygon" => :string,
-    "circle" => :string,
-    # Network Address Types
-    "inet" => :string,
-    "cidr" => :string,
-    "macaddr" => :string,
-    # Bit String Types
-    "bit" => :string,
-    "bit_varying" => :string,
-    # Text Search Types
-    "tsvector" => :string,
-    "tsquery" => :string,
-    # UUID Type
-    "uuid" => Ecto.UUID,
-    # XML Type
-    "xml" => :string,
-    # JSON Types
-    "json" => :map,
-    "jsonb" => :map,
-    # Arrays
-    "_text" => {:array, :string},
-    # Composite Types
-    "composite" => :map,
-    # Range Types
-    "range" => {:array, :any},
-    # Domain Types
-    "domain" => :any,
-    # Object Identifier Types
-    "oid" => :integer,
-    # pg_lsn Type
-    "pg_lsn" => :string,
-    # Pseudotypes
-    "any" => :any
-  }
-
-  defp string_to_ecto_type(type) do
-    Map.get(@postgres_to_ecto_type_mapping, type, :string)
-  end
-
   @epoch DateTime.to_unix(~U[2000-01-01 00:00:00Z], :microsecond)
   defp current_time, do: System.os_time(:microsecond) - @epoch
 
@@ -1732,13 +1577,23 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     conn
   end
 
-  defp check_limit(%State{} = state, raw_bytes_received) do
+  # Give the system 3 seconds to lower memory
+  @check_limit_attempts 30
+  @check_limit_interval 100
+  defp check_limit(state, raw_bytes_received, attempt \\ 1)
+
+  defp check_limit(_state, _raw_bytes_received, attempt) when attempt > @check_limit_attempts do
+    {:error, Error.invariant(message: "Memory limit exceeded", code: :over_system_memory_limit)}
+  end
+
+  defp check_limit(%State{} = state, raw_bytes_received, attempt) do
     # Check if it's been a while since we last checked the limit
     if state.bytes_received_since_last_limit_check + raw_bytes_received >= state.bytes_between_limit_checks do
       current_memory = state.check_memory_fn.()
 
       if current_memory >= state.max_memory_bytes do
-        {:error, Error.invariant(message: "Memory limit exceeded", code: :over_system_memory_limit)}
+        Process.sleep(@check_limit_interval)
+        check_limit(state, raw_bytes_received, attempt + 1)
       else
         {:ok, %{state | bytes_received_since_last_limit_check: 0}}
       end

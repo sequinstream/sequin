@@ -14,6 +14,7 @@ defmodule SequinWeb.TransformsLive.Edit do
   alias Sequin.Runtime
   alias Sequin.Transforms.Message
   alias Sequin.Transforms.TestMessages
+  alias SequinWeb.TransformLive.AutoComplete
 
   require Logger
 
@@ -28,6 +29,10 @@ defmodule SequinWeb.TransformsLive.Edit do
     }
   end
   """
+
+  # We generate the function completions at compile time because
+  # docs are not available at runtime in our release.
+  @function_completions AutoComplete.function_completions()
 
   def mount(params, _session, socket) do
     id = params["id"]
@@ -68,7 +73,7 @@ defmodule SequinWeb.TransformsLive.Edit do
         selected_table_oid: nil,
         synthetic_test_message: FunctionTransform.synthetic_message(),
         initial_code: @initialcode,
-        function_completions: generate_function_completions()
+        function_completions: @function_completions
       )
       |> assign_databases()
 
@@ -353,64 +358,5 @@ defmodule SequinWeb.TransformsLive.Edit do
 
   defp schedule_poll_test_messages do
     Process.send_after(self(), :poll_test_messages, 1000)
-  end
-
-  defp generate_function_completions do
-    modules = [
-      Date,
-      DateTime,
-      Decimal,
-      Enum,
-      Map,
-      NaiveDateTime,
-      String,
-      Time,
-      URI
-    ]
-
-    modules
-    |> Enum.flat_map(fn module ->
-      case Code.fetch_docs(module) do
-        {:docs_v1, _, _, _, %{"en" => module_doc}, _, functions_with_docs} ->
-          [first_sentence | _] = String.split(module_doc, ".")
-          first_sentence = String.replace(first_sentence, "\n", "")
-
-          module_completion =
-            %{
-              label: "#{inspect(module)}",
-              type: "module",
-              info: first_sentence
-            }
-
-          function_completions =
-            Enum.flat_map(functions_with_docs, fn
-              {{:function, :__struct__, _arity}, _, _, %{}, _} ->
-                []
-
-              {{:function, name, _arity}, _, _, %{"en" => doc}, _} ->
-                # Take only the first sentence of the doc
-                [first_sentence | _] = String.split(doc, ".")
-                first_sentence = String.replace(first_sentence, "\n", "")
-
-                [
-                  %{
-                    label: "#{inspect(module)}.#{name}",
-                    type: "function",
-                    info: first_sentence
-                  }
-                ]
-
-              _ ->
-                []
-            end)
-
-          [module_completion | function_completions]
-
-        _ ->
-          []
-      end
-    end)
-    # Right now we are techincally taking a random one by arity 😳
-    |> Enum.uniq_by(& &1.label)
   end
 end

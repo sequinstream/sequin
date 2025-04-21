@@ -192,11 +192,15 @@ defmodule Sequin.Transforms.MiniElixir do
     MatchError,
     KeyError,
     FunctionClauseError,
+    Protocol.UndefinedError,
     Sequin.Error.InvariantError
   ]
-  def encode_error(%{__struct__: s} = e) when s in @error_modules do
+  def encode_error(%s{} = e) when s in @error_modules do
     %{type: Atom.to_string(s), info: Map.drop(e, [:__struct__, :__exception__])}
   end
+
+  def encode_error(%_s{__exception__: true} = ex), do: Exception.message(ex)
+  def encode_error(_), do: "Unencodeable error"
 
   defp generate_module_name(id) when is_binary(id) do
     <<"UserTransform.", id::binary>>

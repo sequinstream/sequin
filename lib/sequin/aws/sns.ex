@@ -35,14 +35,23 @@ defmodule Sequin.Aws.SNS do
 
   def publish_messages(%Client{} = client, topic_arn, messages) do
     entries =
-      Enum.map(messages, fn msg ->
-        %{
-          "Id" => Map.fetch!(msg, :message_id),
-          "Message" => Jason.encode!(msg.message)
-        }
-        |> Sequin.Map.put_if_present("MessageGroupId", msg[:message_group_id])
-        |> Sequin.Map.put_if_present("MessageDeduplicationId", msg[:message_deduplication_id])
-      end)
+      if is_fifo?(topic_arn) do
+        Enum.map(messages, fn msg ->
+          %{
+            "Id" => Map.fetch!(msg, :message_id),
+            "Message" => Jason.encode!(msg.message)
+          }
+          |> Sequin.Map.put_if_present("MessageGroupId", msg[:message_group_id])
+          |> Sequin.Map.put_if_present("MessageDeduplicationId", msg[:message_deduplication_id])
+        end)
+      else
+        Enum.map(messages, fn msg ->
+          %{
+            "Id" => Map.fetch!(msg, :message_id),
+            "Message" => Jason.encode!(msg.message)
+          }
+        end)
+      end
 
     request_body = %{
       "TopicArn" => topic_arn,
@@ -106,5 +115,9 @@ defmodule Sequin.Aws.SNS do
 
     {:error,
      Error.service(service: :aws_sns, message: "Error from AWS: #{message} (status=#{status_code})", details: message)}
+  end
+
+  defp is_fifo?(topic_arn) do
+    String.ends_with?(topic_arn, ".fifo")
   end
 end

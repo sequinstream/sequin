@@ -99,7 +99,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
     </Step>
 
     <Step title="Setup a transform">
-      In the [Transform](/reference/transforms) card, click the toggle to view existing transforms. None exist, so click the "+" icon which will open a window for creating a new transform.
+      In the [Transform](/reference/transforms) card, click the toggle to view existing transforms. None exist, so click "+ Create new transform" which will open a window for creating a new transform.
 
       For "Transform name", put `products-typesense`. For "Transform type", select "Function transform".
 
@@ -119,7 +119,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
 
        Click "Create Transform".
        
-       You can close the transform window, which should bring you back to the Typesense sink create page.
+       You can close the transform tab and navigate back to the Typesense sink create page.
 
        Now, select the `products-typesense` transform in the "Transform" list. (If you don't see it, click the refresh icon.)
     </Step> 
@@ -135,11 +135,13 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
     <Step title='Configure Typesense'>
       In the Typesense card, enter your Typesense configuration:
 
-      - Host: `http://localhost:8108`
+      - Host: `http://host.docker.internal:8108`
       - Collection: `products`
       - API Key: `my-api-key`
 
       You can leave the rest of the defaults.
+
+      Give your sink a name, like `products-typesense`, and click "Create Sink".
 
       <Frame>
         <img  src="/images/quickstart/typesense/config-card.png" alt="Typesense configuration card" />

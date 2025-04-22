@@ -9,7 +9,8 @@ defmodule SequinWeb.TransformLive.AutoComplete do
     NaiveDateTime,
     String,
     Time,
-    URI
+    URI,
+    Base
   ]
 
   def function_completions do

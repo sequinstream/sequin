@@ -262,6 +262,7 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   defp fnok([NaiveDateTime, _]), do: :ok
   defp fnok([Decimal, _]), do: :ok
   defp fnok([URI, _]), do: :ok
+  defp fnok([Base, _]), do: :ok
   defp fnok(p), do: {:error, :validator, "Forbidden function: #{redot(p)}"}
 
   # Convert left-associated instances of the . operator to a get_in path

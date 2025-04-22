@@ -133,7 +133,7 @@
       {/if}
       <p class="text-xs">
         Number of documents to batch together in a single import request to
-        Typesense. Default is 40. Maximum is 10,000.
+        Typesense. Default is 100. Maximum is 10,000.
       </p>
     </div>
 

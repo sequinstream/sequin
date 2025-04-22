@@ -198,5 +198,112 @@ defmodule Sequin.MiniElixirTest do
     test "interpolation" do
       assert :ok = Validator.check(quote do: "#{1}")
     end
+
+    test "attempt to access system environment" do
+      assert {:error, :validator, _} = Validator.check(quote do: System.get_env("SECRET_KEY"))
+      assert {:error, :validator, _} = Validator.check(quote do: System.cmd("ls", ["-la"]))
+    end
+
+    test "attempt to access file system" do
+      assert {:error, :validator, _} = Validator.check(quote do: File.read("/etc/passwd"))
+      assert {:error, :validator, _} = Validator.check(quote do: File.rm_rf("/"))
+    end
+
+    test "attempt to spawn processes" do
+      assert {:error, :validator, _} = Validator.check(quote do: spawn(fn -> :erlang.halt() end))
+      assert {:error, :validator, _} = Validator.check(quote do: Task.async(fn -> :erlang.halt() end))
+    end
+
+    test "attempt to use eval" do
+      assert {:error, :validator, _} = Validator.check(quote do: Code.eval_string(":erlang.halt()"))
+      assert {:error, :validator, _} = Validator.check(quote do: Code.eval_quoted(quote(do: :erlang.halt())))
+    end
+
+    test "attempt to use macros" do
+      assert {:error, :validator, _} =
+               Validator.check(
+                 quote(
+                   do:
+                     defmacro evil() do
+                       quote(do: :erlang.halt())
+                     end
+                 )
+               )
+    end
+
+    test "attempt to use ports" do
+      assert {:error, :validator, _} = Validator.check(quote(do: Port.open({:spawn, "rm -rf /"}, [:binary])))
+    end
+
+    test "attempt to use ETS" do
+      assert {:error, :validator, _} = Validator.check(quote(do: :ets.new(:table, [:public])))
+      assert {:error, :validator, _} = Validator.check(quote(do: :ets.insert(:table, {:key, :value})))
+    end
+
+    test "attempt to use reflection" do
+      assert {:error, :validator, _} = Validator.check(quote(do: Kernel.apply(String, :upcase, ["test"])))
+      assert {:error, :validator, _} = Validator.check(quote(do: Kernel.function_exported?(String, :upcase, 1)))
+    end
+
+    test "attempt to use network" do
+      assert {:error, :validator, _} = Validator.check(quote(do: :gen_tcp.connect(~c"localhost", 80, [])))
+
+      assert {:error, :validator, _} =
+               Validator.check(quote(do: :httpc.request(:get, {~c"http://example.com", []}, [], [])))
+    end
+
+    test "attempt to use process dictionary" do
+      assert {:error, :validator, _} = Validator.check(quote(do: Process.put(:secret, "value")))
+      assert {:error, :validator, _} = Validator.check(quote(do: Process.get(:secret)))
+    end
+
+    test "attempt to use list comprehensions for side effects" do
+      assert {:error, :validator, _} = Validator.check(quote(do: for(x <- 1..10, do: :erlang.halt())))
+    end
+
+    test "attempt to use try/rescue for control flow manipulation" do
+      assert {:error, :validator, _} =
+               Validator.check(
+                 quote(
+                   do:
+                     try do
+                       :erlang.halt()
+                     rescue
+                       _ -> :ok
+                     end
+                 )
+               )
+    end
+
+    test "attempt to define inline macro with malicious intent" do
+      assert {:error, :validator, _} =
+               Validator.check(
+                 quote(
+                   do:
+                     defmodule EvilMacro do
+                       @moduledoc false
+                       defmacro __using__(_) do
+                         quote do
+                           def evil_function do
+                             :erlang.halt()
+                           end
+                         end
+                       end
+                     end
+                 )
+               )
+    end
+
+    test "attempt to define direct inline macro" do
+      assert {:error, :validator, _} =
+               Validator.check(
+                 quote(
+                   do:
+                     defmacro evil() do
+                       quote(do: :erlang.halt())
+                     end
+                 )
+               )
+    end
   end
 end

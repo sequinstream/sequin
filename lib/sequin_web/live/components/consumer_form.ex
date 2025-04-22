@@ -16,6 +16,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Consumers.TypesenseSink
@@ -255,6 +256,12 @@ defmodule SequinWeb.Components.ConsumerForm do
             {:reply, %{ok: false, error: error}, socket}
         end
 
+      :sns ->
+        case test_sns_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
+
       :redis ->
         case test_redis_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
@@ -302,6 +309,28 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       case Sequin.Aws.SQS.queue_meta(client, sink.queue_url) do
         {:ok, _} -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
+  defp test_sns_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %SnsSink{} = sink -> SnsSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+      client = SnsSink.aws_client(sink)
+
+      case Sequin.Aws.SNS.topic_meta(client, sink.topic_arn) do
+        :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
@@ -519,6 +548,16 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp decode_sink(:sns, sink) do
+    %{
+      "type" => "sns",
+      "topic_arn" => sink["topic_arn"],
+      "region" => aws_region_from_topic_arn(sink["topic_arn"]),
+      "access_key_id" => sink["access_key_id"],
+      "secret_access_key" => sink["secret_access_key"]
+    }
+  end
+
   defp decode_sink(:kafka, sink) do
     %{
       "type" => "kafka",
@@ -630,6 +669,15 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp aws_region_from_topic_arn(nil), do: nil
+
+  defp aws_region_from_topic_arn(topic_arn) do
+    case SnsSink.region_from_arn(topic_arn) do
+      {:ok, region} -> region
+      _ -> nil
+    end
+  end
+
   defp encode_consumer(nil), do: nil
 
   defp encode_consumer(%_{} = consumer) do
@@ -686,6 +734,16 @@ defmodule SequinWeb.Components.ConsumerForm do
       "access_key_id" => sink.access_key_id,
       "secret_access_key" => sink.secret_access_key,
       "is_fifo" => sink.is_fifo
+    }
+  end
+
+  defp encode_sink(%SnsSink{} = sink) do
+    %{
+      "type" => "sns",
+      "topic_arn" => sink.topic_arn,
+      "region" => sink.region,
+      "access_key_id" => sink.access_key_id,
+      "secret_access_key" => sink.secret_access_key
     }
   end
 
@@ -1075,6 +1133,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :pull -> "Consumer Group"
       :redis -> "Redis Sink"
       :sqs -> "SQS Sink"
+      :sns -> "SNS Sink"
       :sequin_stream -> "Sequin Stream Sink"
       :gcp_pubsub -> "GCP Pub/Sub Sink"
       :nats -> "NATS Sink"

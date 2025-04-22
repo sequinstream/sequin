@@ -192,10 +192,24 @@ defmodule Sequin.Transforms.MiniElixir do
     MatchError,
     KeyError,
     FunctionClauseError,
-    Sequin.Error.InvariantError
+    Sequin.Error.InvariantError,
+    Protocol.UndefinedError
   ]
+
+  def encode_error(%Protocol.UndefinedError{protocol: Jason.Encoder}) do
+    %{type: "JSON encoding error", info: %{description: "Return value is not JSON serializable"}}
+  end
+
+  def encode_error(%Protocol.UndefinedError{protocol: protocol, value: value}) do
+    %{type: "Type mismatch", info: %{description: "Value #{inspect(value)} does not implement `#{inspect(protocol)}`"}}
+  end
+
   def encode_error(%{__struct__: s} = e) when s in @error_modules do
     %{type: Atom.to_string(s), info: Map.drop(e, [:__struct__, :__exception__])}
+  end
+
+  def encode_error(error) when is_exception(error) do
+    %{type: "Unknown error", info: %{description: Exception.message(error)}}
   end
 
   defp generate_module_name(id) when is_binary(id) do

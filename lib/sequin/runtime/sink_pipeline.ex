@@ -277,6 +277,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       :sequin_stream -> Sequin.Runtime.SequinStreamPipeline
       :sqs -> Sequin.Runtime.SqsPipeline
       :typesense -> Sequin.Runtime.TypesensePipeline
+      :sns -> Sequin.Runtime.SnsPipeline
     end
   end
 

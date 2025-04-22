@@ -5,6 +5,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
+  alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
@@ -254,6 +255,17 @@ defmodule Sequin.Transforms do
       import_action: sink.import_action,
       batch_size: sink.batch_size,
       timeout_seconds: sink.timeout_seconds
+    })
+  end
+
+  def to_external(%ElasticsearchSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "elasticsearch",
+      endpoint_url: sink.endpoint_url,
+      index_name: sink.index_name,
+      auth_type: sink.auth_type,
+      auth_value: maybe_obfuscate(sink.auth_value, show_sensitive),
+      batch_size: sink.batch_size
     })
   end
 
@@ -699,6 +711,19 @@ defmodule Sequin.Transforms do
      }}
   end
 
+  # Add parse_sink for elasticsearch type
+  defp parse_sink(%{"type" => "elasticsearch"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :elasticsearch,
+       endpoint_url: attrs["endpoint_url"],
+       index_name: attrs["index_name"],
+       auth_type: parse_auth_type(attrs["auth_type"]),
+       auth_value: attrs["auth_value"],
+       batch_size: attrs["batch_size"]
+     }}
+  end
+
   # Helper to parse table reference into schema and name
   defp parse_table_reference(table_ref) do
     case String.split(table_ref, ".", parts: 2) do
@@ -871,4 +896,10 @@ defmodule Sequin.Transforms do
       end
     end)
   end
+
+  # Helper to parse auth_type
+  defp parse_auth_type("api_key"), do: :api_key
+  defp parse_auth_type("basic"), do: :basic
+  defp parse_auth_type("bearer"), do: :bearer
+  defp parse_auth_type(nil), do: :api_key
 end

@@ -5,6 +5,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Accounts.User
   alias Sequin.ApiTokens
   alias Sequin.Consumers
+  alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.KafkaSink
@@ -960,6 +961,40 @@ defmodule Sequin.YamlLoaderTest do
                  client_x509_cert_url:
                    "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com"
                }
+             } = consumer.sink
+    end
+
+    test "creates elasticsearch sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "elasticsearch-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "elasticsearch"
+                     endpoint_url: "https://elasticsearch.example.com"
+                     index_name: "test-index"
+                     auth_type: "api_key"
+                     auth_value: "sensitive-api-key"
+                     batch_size: 100
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "elasticsearch-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      assert %ElasticsearchSink{
+               type: :elasticsearch,
+               endpoint_url: "https://elasticsearch.example.com",
+               index_name: "test-index",
+               auth_type: :api_key,
+               auth_value: "sensitive-api-key",
+               batch_size: 100
              } = consumer.sink
     end
 

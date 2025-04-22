@@ -13,7 +13,8 @@ export type BaseConsumer = {
     | "gcp_pubsub"
     | "nats"
     | "rabbitmq"
-    | "typesense";
+    | "typesense"
+    | "elasticsearch";
   name: string;
   annotations: Record<string, boolean>;
   status: "active" | "paused" | "disabled";
@@ -177,6 +178,19 @@ export type SnsConsumer = BaseConsumer & {
   };
 };
 
+// Elasticsearch specific sink
+export type ElasticsearchConsumer = BaseConsumer & {
+  sink: {
+    type: "elasticsearch";
+    endpoint_url: string;
+    index_name: string;
+    auth_type: "api_key" | "basic" | "bearer";
+    auth_value: string;
+    batch_size: number;
+    timeout_seconds: number;
+  };
+};
+
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer
@@ -189,4 +203,5 @@ export type Consumer =
   | AzureEventHubConsumer
   | RabbitMqConsumer
   | TypesenseConsumer
-  | SnsConsumer;
+  | SnsConsumer
+  | ElasticsearchConsumer;

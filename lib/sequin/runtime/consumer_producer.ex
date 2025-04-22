@@ -46,7 +46,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
       consumer: consumer,
       receive_timer: nil,
       trim_timer: nil,
-      batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
+      batch_timeout: Keyword.get(opts, :batch_timeout, :timer.minutes(1)),
       test_pid: test_pid,
       scheduled_handle_demand: false,
       slot_message_store_mod: slot_message_store_mod
@@ -98,6 +98,12 @@ defmodule Sequin.Runtime.ConsumerProducer do
   @impl GenStage
   def handle_info(:messages_ingested, state) do
     new_state = maybe_schedule_demand(state)
+    {:noreply, [], new_state}
+  end
+
+  @impl GenStage
+  def handle_info(:messages_processed, state) do
+    new_state = schedule_receive_messages(state)
     {:noreply, [], new_state}
   end
 
@@ -192,6 +198,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
   end
 
   defp schedule_receive_messages(state) do
+    if state.receive_timer, do: Process.cancel_timer(state.receive_timer)
     receive_timer = Process.send_after(self(), :receive_messages, state.batch_timeout)
     %{state | receive_timer: receive_timer}
   end

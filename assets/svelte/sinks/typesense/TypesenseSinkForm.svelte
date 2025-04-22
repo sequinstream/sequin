@@ -117,43 +117,5 @@
         <p class="text-destructive text-sm">{errors.sink.api_key}</p>
       {/if}
     </div>
-
-    <div class="space-y-2">
-      <Label for="batch_size">Batch size</Label>
-      <Input
-        id="batch_size"
-        type="number"
-        min="1"
-        max="10000"
-        bind:value={form.sink.batch_size}
-        placeholder="40"
-      />
-      {#if errors.sink?.batch_size}
-        <p class="text-destructive text-sm">{errors.sink.batch_size}</p>
-      {/if}
-      <p class="text-xs">
-        Number of documents to batch together in a single import request to
-        Typesense. Default is 100. Maximum is 10,000.
-      </p>
-    </div>
-
-    <div class="space-y-2">
-      <Label for="timeout_seconds">Timeout (seconds)</Label>
-      <Input
-        id="timeout_seconds"
-        type="number"
-        min="1"
-        max="300"
-        bind:value={form.sink.timeout_seconds}
-        placeholder="5"
-      />
-      {#if errors.sink?.timeout_seconds}
-        <p class="text-destructive text-sm">{errors.sink.timeout_seconds}</p>
-      {/if}
-      <p class="text-xs">
-        Number of seconds to wait for a response from Typesense. Default is 5
-        seconds. Maximum is 300 seconds.
-      </p>
-    </div>
   </CardContent>
 </Card>

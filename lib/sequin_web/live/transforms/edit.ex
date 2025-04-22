@@ -5,7 +5,6 @@ defmodule SequinWeb.TransformsLive.Edit do
   import LiveSvelte
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Transform
   alias Sequin.Databases
@@ -72,7 +71,7 @@ defmodule SequinWeb.TransformsLive.Edit do
         show_errors?: false,
         selected_database_id: nil,
         selected_table_oid: nil,
-        synthetic_test_message: FunctionTransform.synthetic_message(),
+        synthetic_test_message: Consumers.synthetic_message(),
         initial_code: @initialcode,
         function_completions: @function_completions
       )

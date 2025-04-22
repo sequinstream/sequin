@@ -17,13 +17,13 @@ defmodule Sequin.Runtime.TypesensePipeline do
   end
 
   @impl SinkPipeline
-  def batchers_config(_consumer) do
+  def batchers_config(consumer) do
     concurrency = min(System.schedulers_online() * 2, 50)
 
     [
       default: [
         concurrency: concurrency,
-        batch_size: 40,
+        batch_size: consumer.sink.batch_size,
         batch_timeout: 1000
       ],
       delete: [

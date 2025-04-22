@@ -13,7 +13,7 @@ defmodule Sequin.Sinks.Typesense.Client do
     %__MODULE__{
       url: opts |> Keyword.fetch!(:url) |> String.trim_trailing("/"),
       api_key: Keyword.fetch!(opts, :api_key),
-      timeout_seconds: Keyword.get(opts, :timeout_seconds, 30)
+      timeout_seconds: Keyword.fetch!(opts, :timeout_seconds)
     }
   end
 
@@ -54,12 +54,10 @@ defmodule Sequin.Sinks.Typesense.Client do
   """
   def import_documents(%__MODULE__{} = client, collection_name, jsonl, opts \\ []) do
     action = Keyword.get(opts, :action, "emplace")
-    batch_size = Keyword.get(opts, :batch_size, 40)
     req = base_request(client)
 
     query_params = %{
-      "action" => action,
-      "batch_size" => batch_size
+      "action" => action
     }
 
     case Req.post(req,
@@ -104,7 +102,7 @@ defmodule Sequin.Sinks.Typesense.Client do
   Delete a document from a collection.
   """
   def delete_document(%__MODULE__{} = client, collection_name, document_id, opts \\ []) do
-    ignore_not_found = Keyword.get(opts, :ignore_not_found, false)
+    ignore_not_found = Keyword.get(opts, :ignore_not_found, true)
     req = base_request(client)
 
     url = "/collections/#{collection_name}/documents/#{document_id}"

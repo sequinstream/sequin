@@ -14,6 +14,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.SequenceFilter.StringValue
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
@@ -838,6 +839,37 @@ defmodule Sequin.YamlLoaderTest do
                access_key_id: "AKIAXXXXXXXXXXXXXXXX",
                secret_access_key: "secret123",
                is_fifo: true
+             } = consumer.sink
+    end
+
+    test "creates sns sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "sns-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "sns"
+                     topic_arn: "arn:aws:sns:us-west-2:123456789012:MyTopic"
+                     access_key_id: "AKIAXXXXXXXXXXXXXXXX"
+                     secret_access_key: "secret123"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "sns-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      assert %SnsSink{
+               type: :sns,
+               topic_arn: "arn:aws:sns:us-west-2:123456789012:MyTopic",
+               region: "us-west-2",
+               access_key_id: "AKIAXXXXXXXXXXXXXXXX",
+               secret_access_key: "secret123"
              } = consumer.sink
     end
 

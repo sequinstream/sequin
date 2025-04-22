@@ -17,6 +17,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
   alias Sequin.Consumers.TypesenseSink
@@ -192,6 +193,17 @@ defmodule Sequin.Transforms do
     Sequin.Map.reject_nil_values(%{
       type: "sqs",
       queue_url: sink.queue_url,
+      region: sink.region,
+      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
+      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
+      is_fifo: sink.is_fifo
+    })
+  end
+
+  def to_external(%SnsSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "sns",
+      topic_arn: sink.topic_arn,
       region: sink.region,
       access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
       secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
@@ -591,6 +603,17 @@ defmodule Sequin.Transforms do
      %{
        type: :sqs,
        queue_url: attrs["queue_url"],
+       region: attrs["region"],
+       access_key_id: attrs["access_key_id"],
+       secret_access_key: attrs["secret_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "sns"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :sns,
+       topic_arn: attrs["topic_arn"],
        region: attrs["region"],
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"]

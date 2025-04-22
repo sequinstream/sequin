@@ -17,6 +17,7 @@
     Consumer,
     HttpPushConsumer,
     SqsConsumer,
+    SnsConsumer,
     RedisConsumer,
     KafkaConsumer,
     SequinStreamConsumer,
@@ -26,6 +27,7 @@
   } from "./types";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
+  import SnsSinkCard from "../sinks/sns/SnsSinkCard.svelte";
   import RedisSinkCard from "../sinks/redis/RedisSinkCard.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SequinStreamSinkCard from "../sinks/sequin_stream/SequinStreamSinkCard.svelte";
@@ -94,6 +96,10 @@
 
   function isSqsConsumer(consumer: Consumer): consumer is SqsConsumer {
     return consumer.sink.type === "sqs";
+  }
+
+  function isSnsConsumer(consumer: Consumer): consumer is SnsConsumer {
+    return consumer.sink.type === "sns";
   }
 
   function isRedisConsumer(consumer: Consumer): consumer is RedisConsumer {
@@ -1104,6 +1110,8 @@
         <SinkCardHttpPush {consumer} />
       {:else if isSqsConsumer(consumer)}
         <SqsSinkCard {consumer} />
+      {:else if isSnsConsumer(consumer)}
+        <SnsSinkCard {consumer} />
       {:else if isRedisConsumer(consumer)}
         <RedisSinkCard {consumer} />
       {:else if isKafkaConsumer(consumer)}

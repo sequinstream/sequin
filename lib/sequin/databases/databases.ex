@@ -20,6 +20,9 @@ defmodule Sequin.Databases do
 
   require Logger
 
+  @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
+  @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
+
   # PostgresDatabase
 
   def list_dbs do
@@ -157,6 +160,12 @@ defmodule Sequin.Databases do
       true ->
         :ok
     end
+  end
+
+  def reject_sequin_internal_tables(tables) do
+    Enum.reject(tables, fn %PostgresDatabaseTable{} = table ->
+      table.schema != "public" and table.schema in [@config_schema, @stream_schema]
+    end)
   end
 
   def print_connection_url(id) do

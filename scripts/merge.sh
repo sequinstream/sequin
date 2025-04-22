@@ -60,6 +60,25 @@ elif [ "${PR_COUNT}" -eq 1 ]; then
 
         if gh pr merge "${PR_NUMBER}" --repo "${OWNER}/${REPO}" --rebase --admin; then
             echo -e "${GREEN}Pull request #${PR_NUMBER} merged successfully with rebase.${RESET}"
+
+            # Prompt to delete local branch and pull changes
+            read -p "$(echo -e "${BLUE}Delete local branch '${LOCAL_BRANCH_NAME}' and pull latest changes? [Y/n] ${RESET}")" RESPONSE
+            RESPONSE=${RESPONSE:-Y}  # Default to Y if empty
+
+            if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
+                echo -e "${BLUE}Checking out main branch...${RESET}"
+                git checkout main
+
+                echo -e "${BLUE}Deleting local branch '${LOCAL_BRANCH_NAME}'...${RESET}"
+                git branch -D "${LOCAL_BRANCH_NAME}"
+
+                echo -e "${BLUE}Pulling latest changes...${RESET}"
+                git pull
+
+                echo -e "${GREEN}Branch cleanup complete.${RESET}"
+            else
+                echo -e "${YELLOW}Branch cleanup skipped.${RESET}"
+            fi
         else
             echo -e "${RED}Failed to merge pull request #${PR_NUMBER}.${RESET}"
             exit 1

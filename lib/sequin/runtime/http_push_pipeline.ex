@@ -7,6 +7,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Metrics
+  alias Sequin.Transforms.MiniElixir
   alias Sequin.Runtime.SinkPipeline
 
   require Logger
@@ -26,7 +27,24 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_message(message, context) do
+    routing = context.consumer.routing
+    if is_nil(routing) do
+      {:ok, message, context}
+    else
+      res = MiniElixir.run_compiled(routing, message.data.data)
+      cond do
+        not is_map(res) -> {:ok, message, context}
+        not is_binary(res[:endpoint_path]) -> {:ok, message, context}
+        true ->
+          message = Broadway.Message.put_batch_key(message, res[:endpoint_path])
+          {:ok, message, context}
+      end
+    end
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, batch_info, context) do
     %{
       consumer: consumer,
       http_endpoint: http_endpoint,
@@ -41,6 +59,12 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       messages
       |> Enum.map(& &1.data)
       |> prepare_message_data(consumer, features)
+
+    req_opts =
+      case batch_info.batch_key do
+        :default -> req_opts
+        url -> Keyword.put(req_opts, :url, url)
+      end                 
 
     case push_message(http_endpoint, consumer, message_data, req_opts) do
       :ok ->

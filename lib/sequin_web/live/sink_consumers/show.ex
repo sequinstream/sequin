@@ -12,6 +12,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.FunctionTransform
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -812,16 +813,22 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_transform(nil), do: nil
 
   defp encode_transform(%Transform{type: type, transform: inner_transform} = transform) do
+    IO.inspect(inner_transform, label: "INNER")
     %{
       id: transform.id,
       name: transform.name,
       description: transform.description,
-      transform: Map.merge(%{type: type}, encode_transform_inner(inner_transform))
+      transform: Map.merge(%{type: type}, encode_transform_inner(inner_transform)),
+      gugger: true
     }
   end
 
   defp encode_transform_inner(%PathTransform{path: path}), do: %{path: path}
   defp encode_transform_inner(%FunctionTransform{code: code}), do: %{code: code}
+  defp encode_transform_inner(%RoutingTransform{sink_type: sink_type, code: code}) do
+    %{sink_type: sink_type, code: code}
+  end
+
 
   defp encode_postgres_database(postgres_database) do
     %{

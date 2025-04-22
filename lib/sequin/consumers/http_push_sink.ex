@@ -12,6 +12,7 @@ defmodule Sequin.Consumers.HttpPushSink do
     field :http_endpoint_id, :binary_id
     field :http_endpoint_path, :string
     field :http_endpoint, :map, virtual: true
+    field :mode, Ecto.Enum, values: [:static, :dynamic], default: :static
   end
 
   def changeset(struct, params) do

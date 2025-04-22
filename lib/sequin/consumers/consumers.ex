@@ -335,6 +335,7 @@ defmodule Sequin.Consumers do
       res =
         %SinkConsumer{account_id: account_id}
         |> SinkConsumer.create_changeset(attrs)
+        |> dbg
         |> Repo.insert()
 
       with {:ok, consumer} <- res,

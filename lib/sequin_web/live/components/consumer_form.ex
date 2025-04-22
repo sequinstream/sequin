@@ -19,6 +19,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
@@ -512,6 +513,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "batch_size" => form["batchSize"],
         "initial_backfill" => decode_initial_backfill(form),
         "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
+        "routing_id" => if(form["routing"] === "none", do: nil, else: form["routing"]),
         "timestamp_format" => form["timestampFormat"]
       }
 
@@ -534,7 +536,8 @@ defmodule SequinWeb.Components.ConsumerForm do
     %{
       "type" => "http_push",
       "http_endpoint_id" => sink["httpEndpointId"],
-      "http_endpoint_path" => sink["httpEndpointPath"]
+      "http_endpoint_path" => sink["httpEndpointPath"],
+      "mode" => sink["mode"]
     }
   end
 
@@ -906,6 +909,11 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => transform.type,
       "description" => transform.description
     }
+    |> Map.merge(
+      case transform.transform do
+        rt = %RoutingTransform{} -> %{"sink_type" =>  rt.sink_type}
+        _ -> %{}
+      end)
   end
 
   defp encode_http_endpoint(http_endpoint) do
@@ -1026,6 +1034,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp find_or_create_sequence(account_id, %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id}) do
+    IO.puts(["!!!! find or creat sequence\n\n"])
     case Databases.find_sequence_for_account(account_id, postgres_database_id: postgres_database_id, table_oid: table_oid) do
       {:ok, sequence} ->
         {:ok, sequence}

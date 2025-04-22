@@ -350,10 +350,15 @@
   let selectedExampleType: "change" | "record" = "change";
 
   let transformSectionExpanded = false;
+  let routingSectionExpanded = false;
+
   let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   function handleTransformChange(event: { value: string }) {
     form.transform = event.value;
+  }
+  function handleRoutingChange(event: { value: string }) {
+    form.routing = event.value;
   }
 
   function refreshTransforms() {
@@ -634,7 +639,7 @@
                             </div>
                           </TableCell>
                         </TableRow>
-                        {#each transforms as transform}
+                        {#each transforms.filter((t) => t.type === "function" || t.type === "path") as transform}
                           <TableRow
                             on:click={() =>
                               handleTransformChange({ value: transform.id })}
@@ -644,7 +649,174 @@
                               : 'hover:bg-gray-100'}"
                           >
                             <TableCell>
-                              <div class="font-medium">{transform.name}</div>
+                              <div class="flex items-center gap-2">
+                                <span class="font-medium">{transform.name}</span
+                                >
+                                <span
+                                  class="text-xs bg-gray-200 px-2 py-0.5 rounded-full"
+                                  >{transform.type}</span
+                                >
+                              </div>
+                              <div class="text-sm text-muted-foreground">
+                                {transform.description ||
+                                  "No description provided."}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        {/each}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Routing -->
+
+    <Card>
+      <CardHeader class="flex flex-row items-center justify-between">
+        <CardTitle class="flex items-center gap-2">
+          Routing
+          <Popover.Root>
+            <Popover.Trigger asChild let:builder>
+              <Button
+                builders={[builder]}
+                variant="link"
+                class="text-muted-foreground hover:text-foreground p-0"
+              >
+                <Info class="h-4 w-4" />
+              </Button>
+            </Popover.Trigger>
+            <Popover.Content class="w-80">
+              <div class="grid gap-4">
+                <div class="space-y-2">
+                  <p class="text-sm text-muted-foreground font-normal">
+                    Route your messages to different destinations based on
+                    conditions.
+                  </p>
+                </div>
+              </div>
+            </Popover.Content>
+          </Popover.Root>
+          <Beta size="sm" variant="subtle" />
+        </CardTitle>
+        {#if consumer.type !== "redis"}
+          <button
+            type="button"
+            class="flex items-center space-x-2 text-sm hover:text-primary transition-colors disabled:opacity-50"
+            on:click={() => (routingSectionExpanded = !routingSectionExpanded)}
+            disabled={!selectedTable}
+          >
+            <div
+              class="transition-transform duration-200"
+              class:rotate-180={routingSectionExpanded}
+            >
+              <ChevronDown class="h-4 w-4" />
+            </div>
+          </button>
+        {/if}
+      </CardHeader>
+      <CardContent>
+        <div class="space-y-2">
+          {#if consumer.type === "redis"}
+            <p class="text-sm text-muted-foreground">
+              Routing is coming soon for Redis sinks. <a
+                href="https://github.com/sequinstream/sequin/issues/1186"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-primary underline">Let us know</a
+              > if you want this.
+            </p>
+          {:else if !routingSectionExpanded}
+            <p class="text-sm text-muted-foreground">
+              {#if form.routing === "none" || !form.routing}
+                No routing. All messages will be sent to the default
+                destination.
+              {:else}
+                <div class="font-medium">
+                  {transforms.find((t) => t.id === form.routing)?.name ||
+                    form.routing}
+                </div>
+                <div class="text-sm text-muted-foreground">
+                  {transforms.find((t) => t.id === form.routing)?.description ||
+                    ""}
+                </div>
+              {/if}
+            </p>
+          {:else if !selectedTable}
+            <p class="text-sm text-muted-foreground">
+              Please select a table first.
+            </p>
+          {:else}
+            <div class="space-y-4">
+              <div class="">
+                <div class="flex justify-end gap-2 mb-4">
+                  <Button
+                    variant="outline"
+                    class="whitespace-nowrap"
+                    on:click={refreshTransforms}
+                    disabled={transformRefreshState === "refreshing"}
+                    aria-label="Refresh Routes"
+                  >
+                    {#if transformRefreshState === "refreshing"}
+                      <RotateCwIcon class="h-4 w-4 animate-spin" />
+                    {:else if transformRefreshState === "done"}
+                      <CheckIcon class="h-4 w-4 text-green-500" />
+                    {:else}
+                      <RotateCwIcon class="h-4 w-4" />
+                    {/if}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    class="whitespace-nowrap"
+                    on:click={() => window.open("/transforms/new", "_blank")}
+                  >
+                    <Plus class="h-4 w-4 mr-2" />
+                    Create new router
+                  </Button>
+                </div>
+
+                <div class="border rounded-lg overflow-hidden">
+                  <div class="max-h-[400px] overflow-y-auto">
+                    <Table>
+                      <TableBody>
+                        <TableRow
+                          on:click={() =>
+                            handleRoutingChange({ value: "none" })}
+                          class="cursor-pointer {form.routing === 'none' ||
+                          !form.routing
+                            ? 'bg-blue-50 hover:bg-blue-100'
+                            : 'hover:bg-gray-100'}"
+                        >
+                          <TableCell>
+                            <div class="font-medium">None</div>
+                            <div class="text-sm text-muted-foreground">
+                              No routing applied. All messages will be sent to
+                              the default destination.
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                        {#each transforms.filter((t) => t.type === "routing") as transform}
+                          <TableRow
+                            on:click={() =>
+                              handleRoutingChange({ value: transform.id })}
+                            class="cursor-pointer {transform.id === form.routing
+                              ? 'bg-blue-50 hover:bg-blue-100'
+                              : 'hover:bg-gray-100'}"
+                          >
+                            <TableCell>
+                              <div class="flex items-center gap-2">
+                                <span class="font-medium">{transform.name}</span
+                                >
+                                <span
+                                  class="text-xs bg-gray-200 px-2 py-0.5 rounded-full"
+                                  >{transform.sink_type}</span
+                                >
+                              </div>
                               <div class="text-sm text-muted-foreground">
                                 {transform.description ||
                                   "No description provided."}

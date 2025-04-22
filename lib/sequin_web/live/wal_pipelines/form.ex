@@ -273,7 +273,9 @@ defmodule SequinWeb.WalPipelinesLive.Form do
       "id" => database.id,
       "name" => database.name,
       "tables" =>
-        Enum.map(database.tables, fn %PostgresDatabaseTable{} = table ->
+        database.tables
+        |> Databases.reject_sequin_internal_tables()
+        |> Enum.map(fn %PostgresDatabaseTable{} = table ->
           %{
             "oid" => table.oid,
             "schema" => table.schema,

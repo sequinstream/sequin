@@ -923,6 +923,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "name" => database.name,
       "tables" =>
         database.tables
+        |> Databases.reject_sequin_internal_tables()
         |> Enum.map(&encode_table/1)
         |> Enum.sort_by(&{&1["schema"], &1["name"]}, :asc)
     }

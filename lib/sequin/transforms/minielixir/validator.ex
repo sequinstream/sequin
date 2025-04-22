@@ -185,6 +185,7 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   defp good(body) when is_list(body), do: check_body(body)
   defp good({l, r}), do: with(:ok <- check(l), do: check(r))
   defp good({sigil, _, body}) when sigil in @kernel_sigils, do: check(body)
+  defp good({kernel_function, l, r}) when kernel_function in @kernel_functions, do: with(:ok <- check(l), do: check(r))
   defp good({:match?, _, [l, r]}), do: with(:ok <- check(l), do: check(r))
   defp good({:defmodule, _, _}), do: {:error, :validator, "defining modules is not allowed"}
   defp good({:def, _, _}), do: {:error, :validator, "defining functions is not allowed"}

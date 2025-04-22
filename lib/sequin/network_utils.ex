@@ -22,7 +22,8 @@ defmodule Sequin.NetworkUtils do
   @doc """
   Pings a host on a port to see if it is reachable.
   """
-  @spec test_tcp_reachability(String.t(), number(), boolean(), number()) :: :ok | {:error, Error.t()}
+  @spec test_tcp_reachability(host :: String.t(), port :: number(), ipv6 :: boolean(), timeout :: number()) ::
+          :ok | {:error, Error.t()}
   def test_tcp_reachability(host, port, ipv6, timeout \\ 10_000) do
     with :ok <- validate_port(port) do
       case :gen_tcp.connect(to_charlist(host), port, ipv6_opts(ipv6), timeout) do

@@ -13,6 +13,7 @@ defmodule SequinWeb.TransformsLive.Edit do
   alias Sequin.Repo
   alias Sequin.Runtime
   alias Sequin.Transforms.Message
+  alias Sequin.Transforms.MiniElixir
   alias Sequin.Transforms.TestMessages
   alias SequinWeb.TransformLive.AutoComplete
 
@@ -273,14 +274,14 @@ defmodule SequinWeb.TransformsLive.Edit do
 
   defp encode_one(message, consumer) do
     case :timer.tc(fn -> Message.to_external(consumer, message) end, :microsecond) do
-      {time, tuple} when is_tuple(tuple) ->
-        %{transformed: inspect(tuple), time: time}
-
-      {time, transformed} ->
-        %{transformed: transformed, time: time}
+      {time, value} ->
+        case Jason.encode(value) do
+          {:ok, _} -> %{transformed: value, time: time}
+          {:error, error} -> %{error: MiniElixir.encode_error(error), time: time}
+        end
     end
   rescue
-    ex -> %{error: Sequin.Transforms.MiniElixir.encode_error(ex), time: nil}
+    ex -> %{error: MiniElixir.encode_error(ex), time: nil}
   end
 
   defp prepare_test_message(m) do

@@ -18,11 +18,13 @@ You can read the step-by-step tutorial in our [docs](https://sequinstream.com/do
 ## Setup
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
 
-2. Set up your database tables:
+1. Set up your database tables:
+
 ```sql
 -- Create users table
 CREATE TABLE users (
@@ -48,7 +50,8 @@ CREATE TABLE webhook_subscriptions (
 );
 ```
 
-3. Create some test users:
+1. Create some test users:
+
 ```sql
 INSERT INTO users (name) VALUES ('User 1'), ('User 2'), ('User 3');
 ```

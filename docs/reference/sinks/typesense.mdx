@@ -20,16 +20,6 @@ The Typesense sink indexes documents into a Typesense collection, using the Type
 
     The API key for authenticating with your Typesense server.
 
-- **Batch size** (optional)
-
-    Number of documents to batch together in a single import request to Typesense. Default is 40. Maximum is 10,000.
-
-- **Timeout (seconds)** (optional)
-
-    Number of seconds to wait for a response from Typesense. Default is 5 seconds. Maximum is 300 seconds.
-    Typesense writes are synchronous, and [Typesense recommends](https://typesense.org/docs/guide/syncing-data-into-typesense.html#client-side-timeouts)
-    using long client timeouts of up to 60 minutes if you are importing large batches.
-
 ## Transform requirements
 
 Your [transform](/reference/transforms) must return a document matching the schema of the [Typesense collection](https://typesense.org/docs/28.0/api/collections.html#create-a-collection).

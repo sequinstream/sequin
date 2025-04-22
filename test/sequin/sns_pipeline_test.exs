@@ -109,7 +109,7 @@ defmodule Sequin.Runtime.SnsPipelineTest do
     @tag capture_log: true
     test "failed SNS requests result in failed events", %{consumer: consumer} do
       Req.Test.stub(HttpClient, fn conn ->
-        body = SinkFactory.sns_publish_batch_response_failure()
+        body = AwsFactory.sns_publish_batch_response_failure()
         Req.Test.text(conn, body)
       end)
 

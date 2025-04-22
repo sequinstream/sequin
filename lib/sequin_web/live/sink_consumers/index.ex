@@ -13,8 +13,8 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
-  alias Sequin.Consumers.TypesenseSink
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases
   alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Health

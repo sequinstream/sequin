@@ -29,6 +29,7 @@
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
 
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
+  import ElasticsearchIcon from "../sinks/elasticsearch/ElasticsearchIcon.svelte";
 
   import { Badge } from "$lib/components/ui/badge";
   import * as d3 from "d3";
@@ -48,7 +49,8 @@
       | "sequin_stream"
       | "nats"
       | "rabbitmq"
-      | "typesense";
+      | "typesense"
+      | "elasticsearch";
 
     status: "active" | "disabled" | "paused";
     database_name: string;
@@ -123,6 +125,11 @@
       id: "typesense",
       name: "Typesense",
       icon: TypesenseIcon,
+    },
+    {
+      id: "elasticsearch",
+      name: "Elasticsearch",
+      icon: ElasticsearchIcon,
     },
   ];
 

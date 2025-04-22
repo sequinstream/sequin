@@ -8,6 +8,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -48,7 +49,18 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     type =
       attrs[:type] || get_in(attrs, [:sink, :type]) ||
-        Enum.random([:http_push, :redis, :sqs, :sns, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq])
+        Enum.random([
+          :http_push,
+          :redis,
+          :sqs,
+          :sns,
+          :kafka,
+          :sequin_stream,
+          :gcp_pubsub,
+          :nats,
+          :rabbitmq,
+          :elasticsearch
+        ])
 
     {sink_attrs, attrs} = Map.pop(attrs, :sink, %{})
     sink = sink(type, account_id, sink_attrs)
@@ -261,6 +273,20 @@ defmodule Sequin.Factory.ConsumersFactory do
         project_id: "test-project-123",
         topic_id: "test-topic-#{Factory.word()}",
         credentials: gcp_credential_attrs()
+      },
+      attrs
+    )
+  end
+
+  defp sink(:elasticsearch, _account_id, attrs) do
+    merge_attributes(
+      %ElasticsearchSink{
+        type: :elasticsearch,
+        endpoint_url: "https://elasticsearch.example.com",
+        index_name: "test-index-#{Factory.word()}",
+        auth_type: Enum.random([:api_key, :basic, :bearer]),
+        auth_value: Factory.word(),
+        batch_size: Enum.random(50..500)
       },
       attrs
     )

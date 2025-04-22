@@ -26,6 +26,7 @@
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
   import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
+  import ElasticsearchIcon from "../sinks/elasticsearch/ElasticsearchIcon.svelte";
   import StopSinkModal from "./StopSinkModal.svelte";
 
   export let consumer;
@@ -149,6 +150,8 @@
             <AzureEventHubIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "typesense"}
             <TypesenseIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "elasticsearch"}
+            <ElasticsearchIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "sns"}
             <SnsIcon class="h-6 w-6 mr-2" />
           {/if}

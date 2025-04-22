@@ -31,6 +31,7 @@
   import AzureEventHubSinkForm from "$lib/sinks/azure_event_hub/AzureEventHubSinkForm.svelte";
   import { CircleAlert, Info, ChevronDown, Plus } from "lucide-svelte";
   import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
+  import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import TableSelector from "../components/TableSelector.svelte";
   import * as Popover from "$lib/components/ui/popover";
@@ -781,6 +782,8 @@
       <AzureEventHubSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "typesense"}
       <TypesenseSinkForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "elasticsearch"}
+      <ElasticsearchSinkForm errors={errors.consumer} bind:form />
     {/if}
 
     <Card>

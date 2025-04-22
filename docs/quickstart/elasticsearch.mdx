@@ -1,0 +1,227 @@
+---
+title: 'Get started with Elasticsearch'
+sidebarTitle: 'Elasticsearch'
+description: 'Learn how to create real-time Elasticsearch indexes from Postgres changes in minutes using Sequin.'
+---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+
+In this quickstart, you'll create a real‑time data pipeline that streams changes from a Postgres database into an Elasticsearch index.
+You'll:
+
+- Boot Sequin
+- Connect to a sample playground database
+- Start a local Elasticsearch + Kibana stack
+- Create an Elasticsearch index
+- Create a Sequin sink from Postgres to Elasticsearch
+- Watch your data flow in real‑time
+
+By the end you'll have hands‑on experience setting up Postgres change data capture (CDC) with Sequin and Elasticsearch. The same pattern applies to your own database.
+
+<Steps titleSize="h2">
+ <QuickstartInitialSteps />
+
+ <Step title="Start Elasticsearch & Kibana" icon="database">
+  We'll run Elasticsearch locally with Docker using Elastic's *start‑local* helper script.
+
+  ```bash
+  # Download and run the helper script (≈ 1–2 minutes)
+  curl -fsSL https://elastic.co/start-local | sh
+  ```
+
+  The script:
+  - Downloads the Elasticsearch & Kibana images
+  - Generates credentials
+  - Starts both services via docker‑compose
+
+  When the script finishes you'll see output like:
+
+  ```text
+  🎉 Congrats, Elasticsearch and Kibana are installed and running in Docker!
+
+  🌐 Open your browser at http://localhost:5601
+
+  Username: elastic
+  Password: <elastic-password>
+
+  🔌 Elasticsearch API endpoint: http://localhost:9200
+  🔑 API key: <api-key>
+  ```
+
+  Copy the **API key** and **API endpoint URL** – you'll need them when configuring the sink.
+ </Step>
+
+ <Step title="Create an index" icon="database">
+  Next create the `products` index that will receive documents.
+
+  ```bash
+  curl -X PUT "http://localhost:9200/products" \
+    -H "Authorization: ApiKey <api-key>" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0
+      }
+    }'
+  ```
+
+  You should receive:
+
+  ```json
+  {"acknowledged": true, "shards_acknowledged": true, "index": "products"}
+  ```
+ </Step>
+
+ <Step title="Create an Elasticsearch sink" icon="plug">
+  With the playground database connected and the index created, you're ready to add a [sink](/reference/sinks/overview) that pushes changes to Elasticsearch.
+
+  <Steps>
+    <Step title="Navigate to Sinks">
+      Click **Sinks** in the sidebar, then **Create Sink**.
+    </Step>
+
+    <Step title="Select sink type">
+      Choose **Elasticsearch** and click **Continue**.
+    </Step>
+
+    <Step title="Verify source configuration">
+      In the **Source** card you'll see the `sequin_playground` database and the `products` table pre‑selected. Leave the defaults.
+
+      <Frame>
+        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card" />
+      </Frame>
+    </Step>
+
+    <Step title="Add a transform">
+      Open the **Transform** card, click **+ Create new transform** and use the following Elixir function:
+
+      ```elixir
+      def transform(_action, record, _changes, _metadata) do
+        Map.take(record, ["id", "name", "price"])
+      end
+      ```
+
+      Name the transform `products-elasticsearch`, save it, and select it in the list.
+    </Step>
+
+    <Step title="Configure a backfill">
+      Open **Initial backfill** and choose **Backfill all rows** so the existing data is loaded.
+    </Step>
+
+    <Step title="Configure Elasticsearch">
+      In the **Elasticsearch** card enter:
+
+      - Endpoint URL: `http://host.docker.internal:9200`
+      - Index name: `products`
+      - Authentication type: `api_key`
+      - Authentication value: `<api-key>` (copied earlier)
+
+      Leave the other defaults.
+
+      <Frame>
+        <img src="/images/quickstart/elasticsearch/config-card.png" alt="Elasticsearch configuration card" />
+      </Frame>
+    </Step>
+
+    <Step title="Create the sink">
+      Give it a name, e.g. `products-elasticsearch`, and click **Create Sink**.
+
+      Sequin will first backfill all rows from the `products` table, then stream every change in real‑time.
+    </Step>
+  </Steps>
+ </Step>
+
+ <Step title="Query your data in Elasticsearch" icon="waveform-lines">
+   Once the backfill completes you can query the index:
+
+   ```bash
+   curl -X GET "http://localhost:9200/products/_search?pretty" \
+     -H "Authorization: ApiKey <api-key>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "query": {
+         "match_all": {}
+       }
+     }'
+   ```
+
+   You should see the documents from your Postgres table.
+ </Step>
+
+ <Step title="See changes flow to Elasticsearch" icon="waveform-lines">
+   In the sink's overview page the **Health** indicator should turn green once data flows.
+
+   Let's test live updates:
+
+   <Steps>
+     <Step title="Insert a product">
+       ```bash
+       docker exec -i sequin-sequin_postgres-1 \
+         psql -U postgres -d sequin_playground -c \
+         "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+       ```
+
+       Search for the new product:
+
+       ```bash
+       curl -X GET "http://localhost:9200/products/_search?pretty" \
+         -H "Authorization: ApiKey <api-key>" \
+         -H "Content-Type: application/json" \
+         -d '{"query": {"match": {"name": "honey"}}}'
+       ```
+     </Step>
+
+     <AccordionGroup>
+       <Accordion title="Update a product's price">
+         ```bash
+         docker exec -i sequin-sequin_postgres-1 \
+           psql -U postgres -d sequin_playground -c \
+           "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+         ```
+       </Accordion>
+
+       <Accordion title="Change a product's name">
+         ```bash
+         docker exec -i sequin-sequin_postgres-1 \
+           psql -U postgres -d sequin_playground -c \
+           "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+         ```
+       </Accordion>
+
+       <Accordion title="Delete a product">
+         ```bash
+         docker exec -i sequin-sequin_postgres-1 \
+           psql -U postgres -d sequin_playground -c \
+           "delete from products where name = 'Blueberries (6 oz)';"
+         ```
+       </Accordion>
+     </AccordionGroup>
+
+     Each change appears (or disappears) in Elasticsearch within a few seconds.
+   </Steps>
+ </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Started Elasticsearch + Kibana locally
+- Created an index
+- Loaded existing data via backfill
+- Streamed live changes
+- Queried Elasticsearch
+
+## Ready to stream your own data
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  <Card title="Guide: Setting up an Elasticsearch sink" icon="search" href="/how-to/stream-postgres-to-elasticsearch">
+    Keep your search index in sync.
+  </Card>
+</CardGroup> 

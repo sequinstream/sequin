@@ -1,0 +1,95 @@
+defmodule Sequin.Runtime.ElasticsearchPipeline do
+  @moduledoc false
+  @behaviour Sequin.Runtime.SinkPipeline
+
+  alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Error
+  alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Sinks.Elasticsearch.Client
+  alias Sequin.Transforms
+
+  require Logger
+
+  @impl SinkPipeline
+  def init(context, _opts) do
+    context
+  end
+
+  @impl SinkPipeline
+  def batchers_config(%SinkConsumer{sink: %ElasticsearchSink{batch_size: batch_size}}) do
+    concurrency = min(System.schedulers_online() * 2, 80)
+
+    [
+      default: [
+        concurrency: concurrency,
+        batch_size: batch_size,
+        batch_timeout: :timer.seconds(1)
+      ]
+    ]
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, _batch_info, context) do
+    %{consumer: consumer, test_pid: test_pid} = context
+    %ElasticsearchSink{index_name: index_name} = sink = consumer.sink
+
+    setup_allowances(test_pid)
+
+    # Create proper bulk API format with action line + data line for each document
+    # Map each consumer event action to appropriate Elasticsearch bulk operation
+    # Each row, including the last row, must end with a newline
+    ndjson =
+      Enum.map(messages, fn %Broadway.Message{data: consumer_message} ->
+        id = Enum.join(consumer_message.record_pks, "-")
+
+        case consumer_message.data.action do
+          :delete ->
+            [Jason.encode!(%{delete: %{_index: index_name, _id: id}}), "\n"]
+
+          action when action in [:insert, :update, :read] ->
+            action = Jason.encode!(%{index: %{_index: index_name, _id: id}})
+            data = Jason.encode!(Transforms.Message.to_external(consumer, consumer_message))
+            [action, "\n", data, "\n"]
+        end
+      end)
+
+    client = Client.new(sink)
+
+    case Client.import_documents(client, index_name, ndjson) do
+      {:ok, results} ->
+        messages =
+          messages
+          |> Enum.zip(results)
+          |> Enum.map(fn {message, result} ->
+            case result do
+              %{status: :ok} ->
+                message
+
+              %{status: :error, error_message: error_message} ->
+                Broadway.Message.failed(message, error_message)
+            end
+          end)
+
+        {:ok, messages, context}
+
+      {:error, error} ->
+        reason =
+          Error.service(
+            service: :elasticsearch,
+            code: "index_error",
+            message: "Elasticsearch bulk index failed",
+            details: %{error: error}
+          )
+
+        {:error, reason}
+    end
+  end
+
+  defp setup_allowances(nil), do: :ok
+
+  defp setup_allowances(test_pid) do
+    # Mox.allow(Sequin.Sinks.ElasticsearchMock, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+  end
+end

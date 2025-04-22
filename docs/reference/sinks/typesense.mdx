@@ -70,9 +70,17 @@ Sequin uses the following specific endpoints of the [Typesense documents API](ht
   Used when batch size was manually configured to be 1, or when the batch happens to have only 1 document.
 
 - `/collections/#{collection_name}/documents/#{document_id}`
+
   For deleting documents.  Deletions are always processed one at a time.
 
-Sequin does not interact with the collections API, or perform any searches.
+Sequin also uses one method of the [collections API](https://typesense.org/docs/28.0/api/collections.html):
+
+- `/collections/#{collection_name}`
+
+  Only called when you click "Test Connection" in the Sequin console.
+  Successful responses indicate the connection is working and the collection exists, but the result is otherwise ignored.  
+
+Sequin does not perform any searches.
 
 ## Error handling
 

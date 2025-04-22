@@ -196,7 +196,7 @@ defmodule Sequin.Sinks.Typesense.Client do
   @doc """
   Get information about a collection.
   """
-  def retrieve_collection(%__MODULE__{} = client, collection_name) do
+  def get_collection(%__MODULE__{} = client, collection_name) do
     req = base_request(client)
 
     case Req.get(req, url: "/collections/#{collection_name}") do
@@ -212,12 +212,12 @@ defmodule Sequin.Sinks.Typesense.Client do
         {:error,
          Error.service(
            service: :typesense,
-           message: "Failed to retrieve collection: #{error_message}",
+           message: "Failed to get collection: #{error_message}",
            details: %{status: status, body: body}
          )}
 
       {:error, %Req.TransportError{} = error} ->
-        Logger.error("[Typesense] Failed to retrieve collection: #{Exception.message(error)}")
+        Logger.error("[Typesense] Failed to get collection: #{Exception.message(error)}")
         {:error, Error.service(service: :typesense, message: "Transport error: #{Exception.message(error)}")}
 
       {:error, reason} ->

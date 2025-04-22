@@ -32,13 +32,13 @@ The Typesense sink indexes documents into a Typesense collection, using the Type
 
 ## Transform requirements
 
-Your [transform](/docs/reference/transforms) must return a document matching the schema of the [Typesense collection](https://typesense.org/docs/28.0/api/collections.html#create-a-collection).
+Your [transform](/reference/transforms) must return a document matching the schema of the [Typesense collection](https://typesense.org/docs/28.0/api/collections.html#create-a-collection).
 
 This includes a string `id` field which is mandatory for Typesense.
 It's also okay to use an integer/serial/bigserial/uuid `id` - Sequin will automatically stringify it for you.
 However, from Typesense's perspective, all `id`s are strings and will be returned as such in search results.
 
-Note: the `id` should not include spaces or any other characters that require encoding in urls.
+<Note>The `id` should not include spaces or any other characters that require encoding in URLs.</Note>
 
 For example, the following transform would convert a numeric `product_id` column into the string `id`:
 ```elixir
@@ -54,7 +54,7 @@ Sequin always uses Typesense's `emplace` [import action](https://typesense.org/d
 - Typesense will create a new document or update an existing one based on the `id`
 - Your transform can supply either a complete document or a partial document for update.
 
-Note: The full document should be provided for creation -  partials are only allowed when updating an existing document.
+<Note> The full document should be provided for creation -  partials are only allowed when updating an existing document. </Note>
 
 ## API endpoints used by Sequin
 

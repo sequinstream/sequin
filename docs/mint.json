@@ -142,6 +142,7 @@
         "reference/sinks/rabbitmq",
         "reference/sinks/sequin-stream",
         "reference/sinks/azure-event-hubs",
+        "reference/sinks/typesense",
         {
           "group": "Sequin Stream API",
           "pages": [

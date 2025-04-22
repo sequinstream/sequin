@@ -1,16 +1,16 @@
 ---
 title: "Building User-Specific Webhook Subscriptions with Sequin"
 sidebarTitle: "User Webhooks"
-description: "Allow users to subscribe to webhooks for their own data using the Management API to dynamically create HTTP endpoints and webhook sinks."
+description: "Learn how to use Sequin to build a webhook subscription system for your users. Let your users receive webhook notifications whenever their data changes in your Postgres database.
 icon: "user-plus"
 iconType: "sharp-solid"
 ---
 
 Webhooks are a convenient way for your users to subscribe to data changes in your application. But creating a robust webhook system that can reliably deliver every change, handle errors, and scale to millions of messages per day is not an easy task.
 
-Sequin's [webhook sinks](/reference/sinks/webhooks) combined with the [management API](/management-api/introduction) give you the tools to build a user-specific webhook system that is reliable and feature rich:
+Sequin's [webhook sinks](/reference/sinks/webhooks) combined with Sequin's [Management API](/management-api/introduction) give you the tools to build a user-facing webhook system that is reliable and feature rich:
 
-- Capture and deliver every change to your users
+- Capture and deliver every change that happens in Postgres to your users
 - Customizable filters so users can subscribe to only the data they care about
 - Backfill support so users can catch up on missed data
 - Automatic retries and backoff
@@ -20,12 +20,12 @@ In this tutorial, you'll build a simple Node.js application that allows users to
 
 ## Prerequisites
 - Sequin [installed and running locally](/running-sequin)
-- A postgres database [connected to Sequin](/connect-postgres)
+- A Postgres database [connected to Sequin](/connect-postgres)
 - Node.js [installed](https://nodejs.org/en/download) on your machine (if you want to [run the code examples](https://github.com/sequinstream/sequin/tree/main/examples/user-specific-webhooks))
 
 ## Retrieve your API token
 
-To interact with the Management API, you'll need an [API token](/management-api/authentication).
+To interact with the Management API, you'll need an [API token](/management-api/authentication):
 
 <Steps titleSize="h3">
     <Step title="Log in to the Sequin console">

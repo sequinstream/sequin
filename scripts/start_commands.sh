@@ -50,6 +50,20 @@ apply_config() {
   # Get the config file path from the application
   CONFIG_FILE_PATH=$(./prod/rel/sequin/bin/sequin eval "IO.puts Sequin.YamlLoader.config_file_path()")
 
+  # Check if CONFIG_FILE_YAML is provided (base64 encoded YAML)
+  if [ -n "${CONFIG_FILE_YAML:-}" ]; then
+    echo "CONFIG_FILE_YAML environment variable found, decoding and using it"
+    YAML_FILENAME="config_from_env.yml"
+    RAW_CONFIG_PATH="${APP_HOME_DIR}/${YAML_FILENAME}"
+
+    # Decode base64 content and write to file
+    echo "${CONFIG_FILE_YAML}" | base64 -d > "${RAW_CONFIG_PATH}"
+    echo "Decoded YAML config to ${RAW_CONFIG_PATH}"
+
+    # Update CONFIG_FILE_PATH to use this file
+    CONFIG_FILE_PATH="${RAW_CONFIG_PATH}"
+  fi
+
   if [ -n "${CONFIG_FILE_PATH}" ] && [ -f "${CONFIG_FILE_PATH}" ]; then
     echo "Substituting environment variables in ${CONFIG_FILE_PATH}"
     # Copy to app home directory where the app user has write permissions

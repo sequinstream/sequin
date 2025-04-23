@@ -26,11 +26,23 @@ defmodule Sequin.ConfigParser do
   end
 
   defp put_redis_url(opts, %{"REDIS_URL" => url}) do
+    url = ensure_redis_port(url)
     Keyword.put(opts, :url, url)
   end
 
   defp put_redis_url(_opts, _env) do
     raise "REDIS_URL is not set. Please set the REDIS_URL env variable. Docs: #{doc_link(:redis)}"
+  end
+
+  defp ensure_redis_port(url) do
+    uri = URI.parse(url)
+
+    if uri.port == nil do
+      # Default to port 6379 if port is missing
+      URI.to_string(%{uri | port: 6379})
+    else
+      url
+    end
   end
 
   defp put_redis_opts_ssl(opts, %{"REDIS_SSL" => ssl}) do

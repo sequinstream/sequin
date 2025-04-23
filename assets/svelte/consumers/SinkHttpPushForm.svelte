@@ -361,6 +361,17 @@
             {/if}
           {:else if activeTab === "dynamic"}
             <div class="space-y-4">
+              {#if form.sink.httpEndpointId && selectedHttpEndpoint}
+                <div class="space-y-2">
+                  <Label for="http-endpoint-url">HTTP Endpoint Base URL</Label>
+                  <div class="flex flex-row bg-white">
+                    <div class="text-sm rounded px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap">
+                      {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
+                    </div>
+                  </div>
+                </div>
+              {/if}
+
               <TransformPicker
                 {transforms}
                 selectedTransformId={form.sink.routingTransformId || "none"}
@@ -375,13 +386,15 @@
               >
                 <p class="text-sm text-muted-foreground">
                   Select a routing transform to dynamically set request
-                  parameters
+                  parameters:
                 </p>
               </TransformPicker>
+
               <div class="mt-4 space-y-4">
                 <div class="p-4">
                   <p class="text-sm text-muted-foreground">
-                    HTTP Endpoint routing transform allows you to dynamically set:
+                    HTTP Endpoint routing transform allows you to dynamically
+                    set:
                   </p>
                   <ul
                     class="list-disc pl-5 mt-2 space-y-1 text-sm text-muted-foreground"
@@ -401,8 +414,7 @@
                     </li>
                   </ul>
                   <p class="text-sm text-muted-foreground mt-3">
-                    <strong>Note:</strong> The base URL is fixed by the selected
-                    HTTP endpoint and cannot be changed dynamically.
+                    <strong>Note:</strong> The base URL cannot be changed dynamically.
                   </p>
                   <p class="text-sm text-muted-foreground mt-3">
                     Your transform needs to return a map with these keys to

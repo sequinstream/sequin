@@ -5,6 +5,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
+  alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -34,6 +35,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Runtime
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Sinks.Azure.EventHub
+  alias Sequin.Sinks.Elasticsearch
   alias Sequin.Sinks.Gcp.Credentials
   alias Sequin.Sinks.Gcp.PubSub
   alias Sequin.Sinks.Kafka
@@ -292,6 +294,12 @@ defmodule SequinWeb.Components.ConsumerForm do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
+
+      :elasticsearch ->
+        case test_elasticsearch_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
     end
   end
 
@@ -492,6 +500,28 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp test_elasticsearch_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %ElasticsearchSink{} = sink -> ElasticsearchSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+      client = Elasticsearch.Client.new(sink)
+
+      case Elasticsearch.Client.test_connection(client) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
   defp decode_params(form, socket) do
     params =
       %{
@@ -660,6 +690,17 @@ defmodule SequinWeb.Components.ConsumerForm do
       "import_action" => sink["import_action"],
       "batch_size" => sink["batch_size"],
       "timeout_seconds" => sink["timeout_seconds"]
+    }
+  end
+
+  defp decode_sink(:elasticsearch, sink) do
+    %{
+      "type" => "elasticsearch",
+      "endpoint_url" => sink["endpoint_url"],
+      "index_name" => sink["index_name"],
+      "auth_type" => sink["auth_type"],
+      "auth_value" => sink["auth_value"],
+      "batch_size" => sink["batch_size"]
     }
   end
 
@@ -859,6 +900,17 @@ defmodule SequinWeb.Components.ConsumerForm do
       "import_action" => sink.import_action,
       "batch_size" => sink.batch_size,
       "timeout_seconds" => sink.timeout_seconds
+    }
+  end
+
+  defp encode_sink(%ElasticsearchSink{} = sink) do
+    %{
+      "type" => "elasticsearch",
+      "endpoint_url" => sink.endpoint_url,
+      "index_name" => sink.index_name,
+      "auth_type" => sink.auth_type,
+      "auth_value" => sink.auth_value,
+      "batch_size" => sink.batch_size
     }
   end
 
@@ -1144,6 +1196,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :rabbitmq -> "RabbitMQ Sink"
       :azure_event_hub -> "Azure Event Hub Sink"
       :typesense -> "Typesense Sink"
+      :elasticsearch -> "Elasticsearch Sink"
     end
   end
 

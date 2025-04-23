@@ -59,6 +59,7 @@
             "quickstart/webhooks",
             "quickstart/kafka",
             "quickstart/typesense",
+            "quickstart/elasticsearch",
             "quickstart/sqs",
             "quickstart/sns",
             "quickstart/redis",
@@ -92,6 +93,7 @@
         "how-to/stream-postgres-to-a-webhook-endpoint",
         "how-to/stream-postgres-to-kafka",
         "how-to/stream-postgres-to-typesense",
+        "how-to/stream-postgres-to-elasticsearch",
         "how-to/stream-postgres-to-sqs",
         "how-to/stream-postgres-to-sns",
         "how-to/stream-postgres-to-redis",
@@ -136,6 +138,8 @@
       "pages": [
         "reference/sinks/overview",
         "reference/sinks/webhooks",
+        "reference/sinks/typesense",
+        "reference/sinks/elasticsearch",
         "reference/sinks/sqs",
         "reference/sinks/sns",
         "reference/sinks/kafka",
@@ -145,7 +149,6 @@
         "reference/sinks/rabbitmq",
         "reference/sinks/sequin-stream",
         "reference/sinks/azure-event-hubs",
-        "reference/sinks/typesense",
         {
           "group": "Sequin Stream API",
           "pages": [
@@ -170,6 +173,7 @@
     {
       "group": "Webhook destinations",
       "pages": [
+        "guides/user-webhooks",
         "guides/cloudflare",
         "guides/inngest",
         "guides/lambda",

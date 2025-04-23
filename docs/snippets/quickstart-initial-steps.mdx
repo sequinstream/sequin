@@ -38,13 +38,16 @@
       You should see output like the following:
 
       ```
-      CONTAINER ID   IMAGE         STATUS         PORTS                      NAMES
-      2fd334a873e1   redis:7       Up 9 seconds   127.0.0.1:6379->6379/tcp   sequin-dev-redis-1
-      bf4119bf250f   postgres:17   Up 9 seconds   127.0.0.1:5432->5432/tcp   sequin-dev-postgres-1
+      CONTAINER ID   IMAGE                           COMMAND                  CREATED          STATUS                    PORTS                              NAMES
+      bd5c458cabde   sequin/sequin:latest            "/scripts/start_comm…"   11 seconds ago   Up 9 seconds              4000/tcp, 0.0.0.0:7376->7376/tcp   sequin-sequin-1
+      3bacd89765e7   grafana/grafana                 "/run.sh"                11 seconds ago   Up 11 seconds             0.0.0.0:3000->3000/tcp             sequin-sequin_grafana-1
+      3ad41319a66c   postgres:16                     "docker-entrypoint.s…"   11 seconds ago   Up 11 seconds (healthy)   0.0.0.0:7377->5432/tcp             sequin-sequin_postgres-1
+      6139a5fc4e80   redis:7                         "docker-entrypoint.s…"   11 seconds ago   Up 11 seconds             0.0.0.0:7378->6379/tcp             sequin-sequin_redis-1
+      7e07a5b052de   prom/prometheus                 "/bin/prometheus --c…"   11 seconds ago   Up 11 seconds             0.0.0.0:9090->9090/tcp             sequin-sequin_prometheus-1
       ```
 
       <Check>
-        All three containers should be up and running (status: `Up`).
+        Sequin, Postgres, Redis, Prometheus, and Grafana should be up and running (status: `Up`).
       </Check>
     </Step>
   </Steps>

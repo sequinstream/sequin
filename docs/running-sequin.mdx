@@ -52,16 +52,16 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
       You should see output like the following:
 
       ```
-      CONTAINER ID   IMAGE                                  COMMAND                  CREATED          STATUS                    PORTS                                                 NAMES
-      b21f5eb8e6aa   sequin/sequin:latest                   "/scripts/start_comm…"   15 seconds ago   Up 2 seconds              4000/tcp, 0.0.0.0:7376->7376/tcp, :::7376->7376/tcp   sequin-sequin-1
-      34ee4e39468e   grafana/grafana                        "/run.sh"                15 seconds ago   Up 14 seconds             0.0.0.0:3000->3000/tcp, :::3000->3000/tcp             sequin-sequin_grafana-1
-      01b006a7f300   prom/prometheus                        "/bin/prometheus --c…"   16 seconds ago   Up 15 seconds             0.0.0.0:9090->9090/tcp, :::9090->9090/tcp             sequin-sequin_prometheus-1
-      b0b509e37837   postgres:16                            "docker-entrypoint.s…"   16 seconds ago   Up 15 seconds (healthy)   0.0.0.0:7377->5432/tcp, [::]:7377->5432/tcp           sequin-sequin_postgres-1
-      4438297985da   redis:7                                "docker-entrypoint.s…"   16 seconds ago   Up 15 seconds             0.0.0.0:7378->6379/tcp, [::]:7378->6379/tcp           sequin-sequin_redis-1
+      CONTAINER ID   IMAGE                           COMMAND                  CREATED          STATUS                    PORTS                              NAMES
+      bd5c458cabde   sequin/sequin:latest            "/scripts/start_comm…"   11 seconds ago   Up 9 seconds              4000/tcp, 0.0.0.0:7376->7376/tcp   sequin-sequin-1
+      3bacd89765e7   grafana/grafana                 "/run.sh"                11 seconds ago   Up 11 seconds             0.0.0.0:3000->3000/tcp             sequin-sequin_grafana-1
+      3ad41319a66c   postgres:16                     "docker-entrypoint.s…"   11 seconds ago   Up 11 seconds (healthy)   0.0.0.0:7377->5432/tcp             sequin-sequin_postgres-1
+      6139a5fc4e80   redis:7                         "docker-entrypoint.s…"   11 seconds ago   Up 11 seconds             0.0.0.0:7378->6379/tcp             sequin-sequin_redis-1
+      7e07a5b052de   prom/prometheus                 "/bin/prometheus --c…"   11 seconds ago   Up 11 seconds             0.0.0.0:9090->9090/tcp             sequin-sequin_prometheus-1
       ```
 
       <Check>
-        All three containers should be up and running (status: `Up`).
+        Sequin, Postgres, Redis, Prometheus, and Grafana should be up and running (status: `Up`).
       </Check>
     </Step>
     <Step title="Login to Sequin">
@@ -84,6 +84,12 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
         </Card>
         <Card title="Kafka" icon="bolt" href="/quickstart/kafka">
           Set up CDC streaming with Apache Kafka.
+        </Card>
+        <Card title="Typesense" icon="folder-magnifying-glass" href="/quickstart/typesense">
+          Stream changes to Typesense.
+        </Card>
+        <Card title="Elasticsearch" icon="file-magnifying-glass" href="/quickstart/elasticsearch">
+          Stream changes to Elasticsearch.
         </Card>
         <Card title="Redis" icon="database" href="/quickstart/redis">
           Stream changes using Redis pub/sub.

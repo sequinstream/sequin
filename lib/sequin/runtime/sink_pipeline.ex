@@ -268,6 +268,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   defp pipeline_mod_for_consumer(%SinkConsumer{} = consumer) do
     case consumer.type do
       :azure_event_hub -> Sequin.Runtime.AzureEventHubPipeline
+      :elasticsearch -> Sequin.Runtime.ElasticsearchPipeline
       :gcp_pubsub -> Sequin.Runtime.GcpPubsubPipeline
       :http_push -> Sequin.Runtime.HttpPushPipeline
       :kafka -> Sequin.Runtime.KafkaPipeline

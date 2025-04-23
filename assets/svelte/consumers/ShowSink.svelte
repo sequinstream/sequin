@@ -24,6 +24,8 @@
     GcpPubsubConsumer,
     NatsConsumer,
     RabbitMqConsumer,
+    TypesenseConsumer,
+    ElasticsearchConsumer,
   } from "./types";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
@@ -35,6 +37,7 @@
   import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
   import RabbitMqSinkCard from "../sinks/rabbitmq/RabbitMqSinkCard.svelte";
   import TypesenseSinkCard from "../sinks/typesense/TypesenseSinkCard.svelte";
+  import ElasticsearchSinkCard from "../sinks/elasticsearch/ElasticsearchSinkCard.svelte";
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
@@ -114,6 +117,12 @@
     consumer: Consumer,
   ): consumer is TypesenseConsumer {
     return consumer.sink.type === "typesense";
+  }
+
+  function isElasticsearchConsumer(
+    consumer: Consumer,
+  ): consumer is ElasticsearchConsumer {
+    return consumer.sink.type === "elasticsearch";
   }
 
   function isNatsConsumer(consumer: Consumer): consumer is NatsConsumer {
@@ -1126,6 +1135,8 @@
         <RabbitMqSinkCard {consumer} />
       {:else if isTypesenseConsumer(consumer)}
         <TypesenseSinkCard {consumer} />
+      {:else if isElasticsearchConsumer(consumer)}
+        <ElasticsearchSinkCard {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

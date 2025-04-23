@@ -290,6 +290,85 @@ defmodule Sequin.TransformsTest do
                comparison_value: "test"
              } = filter
     end
+
+    test "returns a map of the elasticsearch consumer" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
+      [table] = database.tables
+      [column | _] = table.columns
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          account_id: account.id,
+          postgres_database_id: database.id,
+          table_oid: table.oid
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "elasticsearch-consumer",
+          account_id: account.id,
+          status: :active,
+          sink: %{
+            type: :elasticsearch,
+            endpoint_url: "https://elasticsearch.example.com",
+            index_name: "test-index",
+            auth_type: :api_key,
+            auth_value: "sensitive-api-key",
+            batch_size: 100
+          },
+          sequence_id: sequence.id,
+          sequence_filter: %{
+            group_column_attnums: [column.attnum],
+            actions: [:insert, :update],
+            column_filters: [
+              ConsumersFactory.sequence_filter_column_filter_attrs(
+                column_attnum: column.attnum,
+                operator: :==,
+                value: %{__type__: :string, value: "test"}
+              )
+            ]
+          }
+        )
+
+      json = Transforms.to_external(consumer)
+
+      assert %{
+               name: name,
+               status: status,
+               database: database_name,
+               table: schema_and_table,
+               destination: %{
+                 type: "elasticsearch",
+                 endpoint_url: endpoint_url,
+                 index_name: index_name,
+                 auth_type: auth_type,
+                 auth_value: "********",
+                 batch_size: batch_size
+               },
+               group_column_names: group_column_names,
+               filters: filters
+             } = json
+
+      assert name == "elasticsearch-consumer"
+      assert endpoint_url == "https://elasticsearch.example.com"
+      assert index_name == "test-index"
+      assert auth_type == :api_key
+      assert batch_size == 100
+      assert database_name == database.name
+      assert schema_and_table == "#{table.schema}.#{table.name}"
+      assert status == :active
+      assert group_column_names == [column.name]
+      assert length(filters) == 1
+
+      [filter] = filters
+
+      assert %{
+               column_name: _,
+               operator: "==",
+               comparison_value: "test"
+             } = filter
+    end
   end
 
   test "returns a map of the http push consumer" do

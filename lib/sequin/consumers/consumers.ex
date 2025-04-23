@@ -6,17 +6,15 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
+  alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
-  alias Sequin.Transforms.Message
-  alias Sequin.Consumers.FunctionTransform
-  alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Consumers.SequenceFilter.DateTimeValue
-  alias Sequin.Transforms.MiniElixir.Validator
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
@@ -32,6 +30,8 @@ defmodule Sequin.Consumers do
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Time
   alias Sequin.Tracer.Server, as: TracerServer
+  alias Sequin.Transforms.Message
+  alias Sequin.Transforms.MiniElixir.Validator
 
   require Logger
 
@@ -335,7 +335,7 @@ defmodule Sequin.Consumers do
       res =
         %SinkConsumer{account_id: account_id}
         |> SinkConsumer.create_changeset(attrs)
-        |> dbg
+        |> dbg()
         |> Repo.insert()
 
       with {:ok, consumer} <- res,
@@ -1430,32 +1430,32 @@ defmodule Sequin.Consumers do
     if byte_size(code) > Keyword.get(opts, :maxlen, 2000) do
       [code: "too long"]
     else
-        with {:ok, ast} <- Code.string_to_quoted(code),
-             {:ok, body} <- Validator.unwrap(ast),
-               :ok <- Validator.check(body),
-               :ok <- safe_evaluate_code(code) do
-          []
-        else
-          {:error, {location, {_, _} = msg, token}} ->
-            msg = "parse error at #{inspect(location)}: #{inspect(msg)} #{token}"
+      with {:ok, ast} <- Code.string_to_quoted(code),
+           {:ok, body} <- Validator.unwrap(ast),
+           :ok <- Validator.check(body),
+           :ok <- safe_evaluate_code(code) do
+        []
+      else
+        {:error, {location, {_, _} = msg, token}} ->
+          msg = "parse error at #{inspect(location)}: #{inspect(msg)} #{token}"
           [code: msg]
 
         {:error, {location, msg, token}} ->
-            msg = "parse error at #{inspect(location)}: #{msg} #{token}"
+          msg = "parse error at #{inspect(location)}: #{msg} #{token}"
           [code: msg]
 
         {:error, :validator, msg} ->
-            [code: "validation failed: #{msg}"]
+          [code: "validation failed: #{msg}"]
 
-          {:error, :evaluation_error, %CompileError{} = error} ->
-            [code: "code failed to evaluate: #{Exception.message(error)}"]
+        {:error, :evaluation_error, %CompileError{} = error} ->
+          [code: "code failed to evaluate: #{Exception.message(error)}"]
 
-          # We ignore other runtime errors because the synthetic message
-          # might cause ie. bad arithmetic errors whereas the users' real
-          # data might be ok.
-          {:error, :evaluation_error, _} ->
-            []
-        end
+        # We ignore other runtime errors because the synthetic message
+        # might cause ie. bad arithmetic errors whereas the users' real
+        # data might be ok.
+        {:error, :evaluation_error, _} ->
+          []
+      end
     end
   end
 
@@ -1497,6 +1497,4 @@ defmodule Sequin.Consumers do
       }
     }
   end
-
-
 end

@@ -12,6 +12,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -19,7 +20,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.Transform
-  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
@@ -903,17 +903,13 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp encode_transform(%Transform{} = transform) do
-    %{
-      "id" => transform.id,
-      "name" => transform.name,
-      "type" => transform.type,
-      "description" => transform.description
-    }
-    |> Map.merge(
+    Map.merge(
+      %{"id" => transform.id, "name" => transform.name, "type" => transform.type, "description" => transform.description},
       case transform.transform do
-        rt = %RoutingTransform{} -> %{"sink_type" =>  rt.sink_type}
+        %RoutingTransform{} = rt -> %{"sink_type" => rt.sink_type}
         _ -> %{}
-      end)
+      end
+    )
   end
 
   defp encode_http_endpoint(http_endpoint) do

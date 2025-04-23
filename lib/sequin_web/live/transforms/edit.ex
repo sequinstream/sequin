@@ -132,7 +132,7 @@ defmodule SequinWeb.TransformsLive.Edit do
       %Transform{}
       |> Transform.changeset(params)
       |> Map.put(:action, :validate)
-    
+
     form_data = changeset_to_form_data(changeset)
     form_errors = Sequin.Error.errors_on(changeset)
 
@@ -355,9 +355,7 @@ defmodule SequinWeb.TransformsLive.Edit do
   end
 
   defp decode_transform(%{"type" => "routing"} = transform) do
-    %{"type" => "routing",
-      "code" => transform["code"],
-      "sink_type" => transform["sink_type"]}
+    %{"type" => "routing", "code" => transform["code"], "sink_type" => transform["sink_type"]}
   end
 
   defp decode_transform(%{}), do: nil

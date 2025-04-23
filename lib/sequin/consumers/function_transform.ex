@@ -28,5 +28,4 @@ defmodule Sequin.Consumers.FunctionTransform do
       add_error(changeset, :type, "Function transforms are not enabled. Talk to the Sequin team to enable them.")
     end
   end
-
 end

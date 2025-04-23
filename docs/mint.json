@@ -111,7 +111,8 @@
         "how-to/replicate-tables",
         "how-to/maintain-caches",
         "how-to/deploy-to-production",
-        "how-to/annotate-changes"
+        "how-to/annotate-changes",
+        "how-to/stream-postgres-to-aws-lambda"
       ]
     },
     {

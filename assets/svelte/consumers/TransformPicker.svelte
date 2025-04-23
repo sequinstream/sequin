@@ -23,7 +23,9 @@
   export let showTypeLabel: boolean = true;
   export let typeLabelKey: string = "type";
   export let refreshState: "idle" | "refreshing" | "done" = "idle";
+  export let createNewQueryParams: string = "";
 
+  $: createNewLink = `/transforms/new${createNewQueryParams}`;
   $: filteredTransforms = transforms.filter((t) =>
     transformTypes.includes(t.type),
   );
@@ -61,7 +63,7 @@
         <Button
           variant="outline"
           class="whitespace-nowrap"
-          on:click={() => window.open("/transforms/new", "_blank")}
+          on:click={() => window.open(createNewLink, "_blank")}
         >
           <Plus class="h-4 w-4 mr-2" />
           Create new {title.toLowerCase()}

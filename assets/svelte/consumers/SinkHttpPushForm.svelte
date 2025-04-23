@@ -365,7 +365,9 @@
                 <div class="space-y-2">
                   <Label for="http-endpoint-url">HTTP Endpoint Base URL</Label>
                   <div class="flex flex-row bg-white">
-                    <div class="text-sm rounded px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap">
+                    <div
+                      class="text-sm rounded px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+                    >
                       {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
                     </div>
                   </div>
@@ -382,6 +384,7 @@
                 {refreshTransforms}
                 transformTypes={["routing"]}
                 typeLabelKey="sink_type"
+                createNewQueryParams="?type=routing&sink_type=http_push"
                 bind:refreshState={transformRefreshState}
               >
                 <p class="text-sm text-muted-foreground">

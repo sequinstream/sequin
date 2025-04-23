@@ -6,8 +6,10 @@ defmodule Sequin.Transforms.Message do
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.PathTransform
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Transform
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Transforms.MiniElixir
 
   def to_external(%SinkConsumer{transform: nil, legacy_transform: :none}, %ConsumerEvent{} = event) do
@@ -34,10 +36,10 @@ defmodule Sequin.Transforms.Message do
     record.data.record
   end
 
-  def to_external(
-        %SinkConsumer{transform: %Transform{id: id, transform: %FunctionTransform{}} = transform},
-        %ConsumerEvent{data: data}
-      ) do
+  def to_external(%SinkConsumer{transform: %Transform{id: id, transform: %FunctionTransform{}} = transform}, %c{
+        data: data
+      })
+      when c in [ConsumerEvent, ConsumerRecord] do
     # Presence or abscence of ID is intended to indicate whether we are evaluating for test messages
     if id do
       MiniElixir.run_compiled(transform, data)
@@ -47,15 +49,17 @@ defmodule Sequin.Transforms.Message do
   end
 
   def to_external(
-        %SinkConsumer{transform: %Transform{id: id, transform: %FunctionTransform{}} = transform},
-        %ConsumerRecord{data: data}
+        %SinkConsumer{transform: %Transform{id: id, transform: %RoutingTransform{} = router} = transform} = sc,
+        %ConsumerEvent{data: data}
       ) do
-    # Presence or abscence of ID is intended to indicate whether we are evaluating for test messages
-    if id do
-      MiniElixir.run_compiled(transform, data)
-    else
-      MiniElixir.run_interpreted(transform, data)
-    end
+    res =
+      if id do
+        MiniElixir.run_compiled(transform, data)
+      else
+        MiniElixir.run_interpreted(transform, data)
+      end
+
+    SinkPipeline.apply_routing(sc, res)
   end
 
   def to_external(%SinkConsumer{transform: %Transform{transform: %PathTransform{path: path}}}, %ConsumerEvent{} = event) do

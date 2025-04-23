@@ -46,7 +46,7 @@ defmodule Sequin.Transforms.MiniElixir do
     end
   end
 
-  def run_interpreted_inner(%Transform{id: id, transform: %FunctionTransform{code: code}}, data) do
+  def run_interpreted_inner(%Transform{id: id, transform: %_s{code: code}}, data) do
     changes =
       case data do
         %ConsumerRecordData{} -> %{}

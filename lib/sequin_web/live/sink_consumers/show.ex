@@ -817,8 +817,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       id: transform.id,
       name: transform.name,
       description: transform.description,
-      transform: Map.merge(%{type: type}, encode_transform_inner(inner_transform)),
-      gugger: true
+      transform: Map.merge(%{type: type}, encode_transform_inner(inner_transform))
     }
   end
 

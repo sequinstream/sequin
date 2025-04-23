@@ -104,11 +104,9 @@
 
   $: fullUrl = selectedHttpEndpoint?.baseUrl
     ? concatenateUrl(selectedHttpEndpoint?.baseUrl, form.sink.httpEndpointPath)
-  : "";
-
+    : "";
 
   let activeTab = "static";
-
 </script>
 
 <Card>
@@ -361,10 +359,6 @@
           {/if}
         {:else if activeTab === "dynamic"}
           <div class="space-y-4">
-            <p class="text-sm text-muted-foreground">
-              Select a routing transform to dynamically determine the
-              destination URL for each message.
-            </p>
             <TransformPicker
               {transforms}
               selectedTransformId={form.sink.routingTransformId || "none"}
@@ -376,10 +370,15 @@
               transformTypes={["routing"]}
               typeLabelKey="sink_type"
               bind:refreshState={transformRefreshState}
-            />
+            >
+              <p class="text-sm text-muted-foreground">
+                Select a routing transform to dynamically set request parameters:
+              </p>
+            </TransformPicker>
           </div>
         {/if}
       </div>
     </div>
+
   </CardContent>
 </Card>

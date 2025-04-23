@@ -510,9 +510,8 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     if sink_changeset.valid? do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
-      client = Elasticsearch.Client.new(sink)
 
-      case Elasticsearch.Client.test_connection(client) do
+      case Elasticsearch.Client.test_connection(sink) do
         :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end

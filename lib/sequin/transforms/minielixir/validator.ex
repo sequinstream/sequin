@@ -1,9 +1,11 @@
 defmodule Sequin.Transforms.MiniElixir.Validator do
   @moduledoc false
-  @funname :transform
+  @allowed_funname [:transform, :route]
   @args [:action, :record, :changes, :metadata]
+  @error_bad_toplevel "Expecting only `def transform` or `def route` at the top level"
+  @error_invalid_name "Only function names `transform` or `route` are allowed"
 
-  def create_expr(body_ast, modname) do
+  def create_expr(body_ast, modname, funname \\ :transform) do
     :ok = check(body_ast)
 
     arglist = Enum.map(@args, fn a -> Macro.var(a, :"Elixir") end)
@@ -16,7 +18,7 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
 
     quote do
       defmodule unquote(modname) do
-        def unquote(@funname)(unquote_splicing(arglist)) do
+        def unquote(funname)(unquote_splicing(arglist)) do
           unquote(body_ast)
         end
       end
@@ -24,8 +26,6 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   end
 
   def unwrap({:def, _, [{fnname, _, params}, [{:do, body}]]}) do
-    %{fnname: fnname, body: body, params: params}
-
     with :ok <- unwrap_fnname(fnname),
          :ok <- unwrap_params(params) do
       {:ok, body}
@@ -33,11 +33,11 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   end
 
   def unwrap(_) do
-    {:error, :validator, "Expecting only `def transform` at the top level "}
+    {:error, :validator, @error_bad_toplevel}
   end
 
-  defp unwrap_fnname(:transform), do: :ok
-  defp unwrap_fnname(_), do: {:error, :validator, "The name `transform` is required"}
+  defp unwrap_fnname(fnname) when fnname in @allowed_funname, do: :ok
+  defp unwrap_fnname(_), do: {:error, :validator, @error_invalid_name}
 
   defp unwrap_params(args) do
     case Enum.map(args, &elem(&1, 0)) do

@@ -813,7 +813,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_transform(nil), do: nil
 
   defp encode_transform(%Transform{type: type, transform: inner_transform} = transform) do
-    IO.inspect(inner_transform, label: "INNER")
     %{
       id: transform.id,
       name: transform.name,

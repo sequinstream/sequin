@@ -62,6 +62,10 @@ apply_config() {
 
     # Update CONFIG_FILE_PATH to use this file
     CONFIG_FILE_PATH="${RAW_CONFIG_PATH}"
+
+    # Unset CONFIG_FILE_YAML to prevent the app from attempting to use it directly
+    unset CONFIG_FILE_YAML
+    echo "Unset CONFIG_FILE_YAML after processing"
   fi
 
   if [ -n "${CONFIG_FILE_PATH}" ] && [ -f "${CONFIG_FILE_PATH}" ]; then

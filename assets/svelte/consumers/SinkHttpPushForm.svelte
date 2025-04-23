@@ -378,10 +378,10 @@
                   parameters
                 </p>
               </TransformPicker>
-              <div class="mt-4 space-y-4 border-t pt-4">
+              <div class="mt-4 space-y-4">
                 <div class="p-4">
                   <p class="text-sm text-muted-foreground">
-                    A routing transform allows you to dynamically set:
+                    HTTP Endpoint routing transform allows you to dynamically set:
                   </p>
                   <ul
                     class="list-disc pl-5 mt-2 space-y-1 text-sm text-muted-foreground"
@@ -389,12 +389,15 @@
                     <li>
                       <span class="font-mono text-xs bg-stone-100 px-1 rounded"
                         >method</span
-                      > - HTTP method (GET, POST, PUT, etc.)
+                      >
+                      - HTTP method (<code>GET</code>, <code>POST</code>,
+                      <code>PUT</code>, etc.)
                     </li>
                     <li>
                       <span class="font-mono text-xs bg-stone-100 px-1 rounded"
-                        >path</span
-                      > - Path portion of the URL
+                        >endpoint_path</span
+                      >
+                      - Path portion of the URL
                     </li>
                   </ul>
                   <p class="text-sm text-muted-foreground mt-3">
@@ -402,10 +405,12 @@
                     HTTP endpoint and cannot be changed dynamically.
                   </p>
                   <p class="text-sm text-muted-foreground mt-3">
-                    Your transform needs to return a map with these keys to route the message, such as:
+                    Your transform needs to return a map with these keys to
+                    route the message.
                   </p>
                   <p class="text-sm text-muted-foreground mt-3">
-                    For missing or nil keys, the default values from the static configuration will be used.
+                    For missing or nil keys, the default values from the static
+                    configuration will be used.
                   </p>
                 </div>
               </div>

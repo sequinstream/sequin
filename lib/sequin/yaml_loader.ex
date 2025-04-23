@@ -126,9 +126,15 @@ defmodule Sequin.YamlLoader do
             {:error, error}
         end
 
+      {:error, %YamlElixir.ParsingError{} = error} ->
+        {:error, Error.bad_request(message: "Invalid YAML: #{Exception.message(error)}")}
+
+      {:error, error} when is_exception(error) ->
+        {:error, Error.bad_request(message: "Error reading config file: #{Exception.message(error)}")}
+
       {:error, error} ->
         Logger.error("Error reading config file: #{inspect(error)}")
-        {:error, error}
+        {:error, Error.bad_request(message: "Error reading config file: #{inspect(error, pretty: true)}")}
     end
   end
 

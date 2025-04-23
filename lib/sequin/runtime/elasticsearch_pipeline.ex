@@ -54,9 +54,7 @@ defmodule Sequin.Runtime.ElasticsearchPipeline do
         end
       end)
 
-    client = Client.new(sink)
-
-    case Client.import_documents(client, index_name, ndjson) do
+    case Client.import_documents(sink, index_name, ndjson) do
       {:ok, results} ->
         messages =
           messages

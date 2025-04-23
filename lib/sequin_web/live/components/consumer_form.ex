@@ -1034,7 +1034,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp find_or_create_sequence(account_id, %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id}) do
-    IO.puts(["!!!! find or creat sequence\n\n"])
     case Databases.find_sequence_for_account(account_id, postgres_database_id: postgres_database_id, table_oid: table_oid) do
       {:ok, sequence} ->
         {:ok, sequence}

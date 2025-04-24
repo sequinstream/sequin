@@ -50,8 +50,9 @@ defmodule Sequin.Transforms.Message do
 
   def to_external(
         %SinkConsumer{transform: %Transform{id: id, transform: %RoutingTransform{}} = transform} = sc,
-        %ConsumerEvent{data: data}
-      ) do
+        %c{data: data}
+  )
+  when c in [ConsumerEvent, ConsumerRecord] do
     res =
       if id do
         MiniElixir.run_compiled(transform, data)

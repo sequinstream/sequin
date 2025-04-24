@@ -30,6 +30,7 @@
     transformTypes.includes(t.type),
   );
   $: hasNoneOption = $$slots["none-option"] !== undefined;
+  $: hasValidOptions = filteredTransforms.length > 0 || hasNoneOption;
 
   function handleTransformClick(transformId: string) {
     // Only allow selection of "none" if the none-option slot exists
@@ -41,9 +42,16 @@
 <div class="space-y-4">
   <div class="">
     <div class="flex justify-between mb-4">
-      <!-- Slot for content on the left side -->
+      <!-- Show either the informational slot or the error message -->
       <div class="flex items-center">
-        <slot></slot>
+        {#if hasValidOptions}
+          <slot></slot>
+        {:else}
+          <div class="text-red-600">
+            No valid {title.toLowerCase()}s available. Please create a {title.toLowerCase()}
+            first.
+          </div>
+        {/if}
       </div>
 
       <!-- Buttons on the right side -->
@@ -74,8 +82,8 @@
       </div>
     </div>
 
-    <!-- Check if we have transforms or a none option -->
-    {#if filteredTransforms.length > 0 || hasNoneOption}
+    <!-- Only show the table if we have valid options -->
+    {#if hasValidOptions}
       <div class="border rounded-lg overflow-hidden">
         <div class="max-h-[400px] overflow-y-auto">
           <Table>
@@ -124,14 +132,6 @@
             </TableBody>
           </Table>
         </div>
-      </div>
-    {:else}
-      <!-- Error message when no transforms and no none option -->
-      <div class="border rounded-lg p-4 bg-red-50 text-red-800">
-        <p>
-          No valid {title.toLowerCase()}s available. Please create a {title.toLowerCase()}
-          first.
-        </p>
       </div>
     {/if}
   </div>

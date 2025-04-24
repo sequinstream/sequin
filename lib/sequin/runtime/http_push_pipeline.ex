@@ -43,9 +43,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     end
   end
 
-  def apply_routing(consumer, _) do
-    %{endpoint_path: (consumer.sink && consumer.sink.http_endpoint_path) || "", method: "POST"}
-  end
+  def apply_routing(_, _), do: %{endpoint_path: "", method: "POST"}
 
   @impl SinkPipeline
   def handle_message(message, context) do

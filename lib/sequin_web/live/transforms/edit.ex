@@ -35,7 +35,7 @@ defmodule SequinWeb.TransformsLive.Edit do
   def transform(action, record, changes, metadata) do
     %{
       method: "PATCH",
-      endpoint_url: "/entities/\#{record["id"]}"
+      endpoint_path: "/entities/\#{record["id"]}"
     }
   end
   """

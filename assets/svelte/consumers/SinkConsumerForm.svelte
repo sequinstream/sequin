@@ -356,16 +356,8 @@
   let selectedExampleType: "change" | "record" = "change";
 
   let transformSectionExpanded = false;
-  let routingSectionExpanded = false;
 
   let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
-
-  function handleTransformChange(event: { value: string }) {
-    form.transform = event.value;
-  }
-  function handleRoutingChange(event: { value: string }) {
-    form.routing = event.value;
-  }
 
   function refreshTransforms() {
     transformRefreshState = "refreshing";
@@ -714,7 +706,7 @@
         {parent}
         {transforms}
         {refreshTransforms}
-        bind:refreshState={transformRefreshState}
+        bind:transformRefreshState
       />
     {:else if consumer.type === "sqs"}
       <SqsSinkForm errors={errors.consumer} bind:form />

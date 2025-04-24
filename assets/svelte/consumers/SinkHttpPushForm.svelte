@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import TransformPicker from "$lib/consumers/TransformPicker.svelte";
+  import FunctionPicker from "$lib/consumers/FunctionPicker.svelte";
   import { Input } from "$lib/components/ui/input";
   import { Switch } from "$lib/components/ui/switch";
   import {
@@ -49,7 +49,7 @@
   export let errors: any = {};
 
   export let transforms: Array<any> = [];
-  export let refreshTransforms: () => void;
+  export let refreshFunctions: () => void;
   export let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   const pushEvent = (event, payload = {}, cb = (result: any) => {}) => {
@@ -357,13 +357,13 @@
               </p>
             </div>
 
-            <TransformPicker
+            <FunctionPicker
               {transforms}
-              selectedTransformId={form.routingId || "none"}
+              selectedFunctionId={form.routingId || "none"}
               title="Router"
-              onTransformChange={(transformId) =>
+              onFunctionChange={(transformId) =>
                 (form.routingId = transformId === "none" ? null : transformId)}
-              {refreshTransforms}
+              {refreshFunctions}
               transformTypes={["routing"]}
               typeLabelKey="sink_type"
               createNewQueryParams="?type=routing&sink_type=http_push"
@@ -373,7 +373,7 @@
                 Select a routing transform to dynamically set request
                 parameters:
               </p>
-            </TransformPicker>
+            </FunctionPicker>
 
             {#if errors.routing_id}
               <p class="text-destructive text-sm">{errors.routing_id}</p>

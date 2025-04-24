@@ -56,9 +56,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     socket =
       socket
       |> assign(:consumers, consumers)
-      |> assign(:form_errors, %{})
       |> assign(:has_databases?, has_databases?)
-      |> assign(:has_sequences?, has_sequences?)
       |> assign(:self_hosted, Application.get_env(:sequin, :self_hosted))
 
     {:ok, socket}
@@ -92,9 +90,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
         props={
           %{
             consumers: @encoded_consumers,
-            formErrors: @form_errors,
             hasDatabases: @has_databases?,
-            hasSequences: @has_sequences?,
             selfHosted: @self_hosted
           }
         }

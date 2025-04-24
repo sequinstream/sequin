@@ -19,7 +19,7 @@
   import { cn } from "$lib/utils";
   import FilterForm from "../components/FilterForm.svelte";
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
-  import TransformPicker from "$lib/consumers/TransformPicker.svelte";
+  import FunctionPicker from "$lib/consumers/FunctionPicker.svelte";
   import SinkHttpPushForm from "$lib/consumers/SinkHttpPushForm.svelte";
   import SqsSinkForm from "$lib/sinks/sqs/SqsSinkForm.svelte";
   import SnsSinkForm from "$lib/sinks/sns/SnsSinkForm.svelte";
@@ -359,7 +359,7 @@
 
   let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
-  function refreshTransforms() {
+  function refreshFunctions() {
     transformRefreshState = "refreshing";
     pushEvent("refresh_transforms", {}, () => {
       transformRefreshState = "done";
@@ -592,14 +592,14 @@
               Please select a table first.
             </p>
           {:else}
-            <TransformPicker
+            <FunctionPicker
               {transforms}
-              selectedTransformId={form.transform}
+              selectedFunctionId={form.transform}
               title="Transform"
-              onTransformChange={(transformId) =>
-                (form.transform = transformId)}
-              {refreshTransforms}
+              onFunctionChange={(transformId) => (form.transform = transformId)}
+              {refreshFunctions}
               transformTypes={["function", "path"]}
+              createNewQueryParams="?type=function"
               bind:refreshState={transformRefreshState}
             />
           {/if}
@@ -705,7 +705,7 @@
         {live}
         {parent}
         {transforms}
-        {refreshTransforms}
+        {refreshFunctions}
         bind:transformRefreshState
       />
     {:else if consumer.type === "sqs"}

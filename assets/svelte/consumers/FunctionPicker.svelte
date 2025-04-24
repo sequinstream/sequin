@@ -15,27 +15,27 @@
     description: string;
     sink_type?: string;
   }>;
-  export let selectedTransformId: string = "none";
-  export let title: string = "Transform";
-  export let onTransformChange: (transformId: string) => void;
-  export let refreshTransforms: () => void;
+  export let selectedFunctionId: string = "none";
+  export let title: string = "Function";
+  export let onFunctionChange: (transformId: string) => void;
+  export let refreshFunctions: () => void;
   export let transformTypes: string[] = ["function", "path"];
   export let showTypeLabel: boolean = true;
   export let typeLabelKey: string = "type";
   export let refreshState: "idle" | "refreshing" | "done" = "idle";
   export let createNewQueryParams: string = "";
 
-  $: createNewLink = `/transforms/new${createNewQueryParams}`;
-  $: filteredTransforms = transforms.filter((t) =>
+  $: createNewLink = `/functions/new${createNewQueryParams}`;
+  $: filteredFunctions = transforms.filter((t) =>
     transformTypes.includes(t.type),
   );
   $: hasNoneOption = $$slots["none-option"] !== undefined;
-  $: hasValidOptions = filteredTransforms.length > 0 || hasNoneOption;
+  $: hasValidOptions = filteredFunctions.length > 0 || hasNoneOption;
 
-  function handleTransformClick(transformId: string) {
+  function handleFunctionClick(transformId: string) {
     // Only allow selection of "none" if the none-option slot exists
     if (transformId === "none" && !hasNoneOption) return;
-    onTransformChange(transformId);
+    onFunctionChange(transformId);
   }
 </script>
 
@@ -53,7 +53,7 @@
           <Button
             variant="outline"
             class="whitespace-nowrap"
-            on:click={refreshTransforms}
+            on:click={refreshFunctions}
             disabled={refreshState === "refreshing"}
             aria-label="Refresh {title}s"
           >
@@ -84,9 +84,9 @@
               <!-- Only show "None" option if the none-option slot exists -->
               {#if hasNoneOption}
                 <TableRow
-                  on:click={() => handleTransformClick("none")}
-                  class="cursor-pointer {selectedTransformId === 'none' ||
-                  !selectedTransformId
+                  on:click={() => handleFunctionClick("none")}
+                  class="cursor-pointer {selectedFunctionId === 'none' ||
+                  !selectedFunctionId
                     ? 'bg-blue-50 hover:bg-blue-100'
                     : 'hover:bg-gray-100'}"
                 >
@@ -99,10 +99,10 @@
                 </TableRow>
               {/if}
 
-              {#each filteredTransforms as transform}
+              {#each filteredFunctions as transform}
                 <TableRow
-                  on:click={() => handleTransformClick(transform.id)}
-                  class="cursor-pointer {transform.id === selectedTransformId
+                  on:click={() => handleFunctionClick(transform.id)}
+                  class="cursor-pointer {transform.id === selectedFunctionId
                     ? 'bg-blue-50 hover:bg-blue-100'
                     : 'hover:bg-gray-100'}"
                 >
@@ -142,7 +142,7 @@
         <Button
           variant="outline"
           class="whitespace-nowrap"
-          on:click={refreshTransforms}
+          on:click={refreshFunctions}
           disabled={refreshState === "refreshing"}
           aria-label="Refresh {title}s"
         >

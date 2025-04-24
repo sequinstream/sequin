@@ -221,7 +221,7 @@
       form.transform.sink_type,
     );
 
-    if (form.transform.code === oldInitialCode) {
+    if (form.transform.code === oldInitialCode || !form.transform.code) {
       form.transform.code = newInitialCode;
       functionEditorView.dispatch({
         changes: {
@@ -242,7 +242,7 @@
     const oldInitialCode = initialCodeFor(form.transform.type, oldSinkType);
     const newInitialCode = initialCodeFor(form.transform.type, event.value);
 
-    if (form.transform.code === oldInitialCode) {
+    if (form.transform.code === oldInitialCode || !form.transform.code) {
       form.transform.code = newInitialCode;
       functionEditorView.dispatch({
         changes: {
@@ -328,7 +328,8 @@
   }
 
   function initialCodeFor(type: string, sinkType: string | null) {
-    let key = type + (type === "routing" ? "_" + sinkType : "");
+    const key = type + (type === "routing" ? "_" + sinkType : "");
+    console.log("key", key);
     return initialCodeMap[key];
   }
 
@@ -432,7 +433,7 @@
 
     const prompt = `I need help creating or modifying an Elixir function transform for Sequin. Here are the details:
 
-Transform Details:
+Function Details:
 - Name: ${form.name}
 - Description: ${form.description}
 - Current Function Code:
@@ -461,7 +462,7 @@ Test Message:
 ${showSyntheticMessages ? "Warning ⚠️: This is a synthetic test message. The actual data in your database may differ. If the specific data in the test message is important for the behavior of the transform, please capture test messages from your database." : ""}
 
 Documentation:
-${FunctionTransformSnippet}
+${FunctionFunctionSnippet}
 
 Please help me create or modify the Elixir function transform to achieve the desired transformation. The function should take the record, changes, action, and metadata as arguments and return the transformed data.`;
 
@@ -479,9 +480,9 @@ Please help me create or modify the Elixir function transform to achieve the des
 <div class="flex flex-col h-full gap-4 max-w-screen-2xl mx-auto">
   <h1 class="text-2xl font-semibold tracking-tight">
     {#if isEditing}
-      Edit Transform
+      Edit Function
     {:else}
-      New Transform
+      New Function
     {/if}
   </h1>
   <div
@@ -490,7 +491,7 @@ Please help me create or modify the Elixir function transform to achieve the des
     <div class="p-4 border-b border-slate-200 dark:border-slate-800">
       <div class="flex justify-between items-center">
         <h2 class="text-lg font-semibold tracking-tight">
-          Transform Configuration
+          Function Configuration
         </h2>
         <a
           href="https://sequinstream.com/docs/reference/transforms"
@@ -507,7 +508,7 @@ Please help me create or modify the Elixir function transform to achieve the des
       <form on:submit={handleSubmit} class="space-y-4">
         <div class="space-y-2">
           <div class="flex items-center gap-2">
-            <Label for="name">Transform name</Label>
+            <Label for="name">Function name</Label>
             <Popover>
               <PopoverTrigger>
                 <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
@@ -539,7 +540,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 
         <div class="space-y-2 max-w-xl">
           <div class="flex items-center gap-2">
-            <Label for="type">Transform type</Label>
+            <Label for="type">Function type</Label>
             <Popover>
               <PopoverTrigger>
                 <Info class="w-4 h-4 text-slate-500 dark:text-slate-400" />
@@ -821,14 +822,14 @@ Please help me create or modify the Elixir function transform to achieve the des
                 {/if}
               </span>
               {#if isEditing}
-                Update Transform
+                Update Function
               {:else}
-                Create Transform
+                Create Function
               {/if}
             </Button>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Update Transform</AlertDialogTitle>
+                <AlertDialogTitle>Update Function</AlertDialogTitle>
                 <AlertDialogDescription>
                   This transform is currently being used by the following
                   consumers:
@@ -853,7 +854,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                     });
                   }}
                 >
-                  Update Transform
+                  Update Function
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -866,11 +867,11 @@ Please help me create or modify the Elixir function transform to achieve the des
                 variant="destructive"
                 on:click={handleDelete}
               >
-                Delete Transform
+                Delete Function
               </Button>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Cannot Delete Transform</AlertDialogTitle>
+                  <AlertDialogTitle>Cannot Delete Function</AlertDialogTitle>
                   <AlertDialogDescription>
                     This transform cannot be deleted because it is currently
                     being used by the following consumers:
@@ -1096,22 +1097,18 @@ Please help me create or modify the Elixir function transform to achieve the des
         </div>
       </div>
 
-      <!-- Right Rail: Transformed Output -->
+      <!-- Right Rail: Output -->
       <div
         class="w-full border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-        hidden={form.transform.type === "function" &&
-          !functionTransformsEnabled}
       >
         <div class="p-4 flex items-center justify-between">
-          <h3 class="text-lg font-semibold tracking-tight">
-            Transformed output
-          </h3>
+          <h3 class="text-lg font-semibold tracking-tight">Output</h3>
           {#if messagesToShow[selectedMessageIndex].time}
             <div class="flex items-center gap-1">
               <span
                 class="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium cursor-help"
               >
-                Transformed in
+                Executed in
                 {messagesToShow[selectedMessageIndex].time >= 1000
                   ? `${(messagesToShow[selectedMessageIndex].time / 1000).toFixed(2)}ms`
                   : `${messagesToShow[selectedMessageIndex].time}μs`}

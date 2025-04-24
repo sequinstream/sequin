@@ -49,7 +49,7 @@ defmodule Sequin.Transforms.Message do
   end
 
   def to_external(
-        %SinkConsumer{transform: %Transform{id: id, transform: %RoutingTransform{} = router} = transform} = sc,
+        %SinkConsumer{transform: %Transform{id: id, transform: %RoutingTransform{}} = transform} = sc,
         %ConsumerEvent{data: data}
       ) do
     res =

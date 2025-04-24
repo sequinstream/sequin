@@ -19,18 +19,18 @@
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <Code class="h-6 w-6 mr-2" />
-      <h1 class="text-2xl font-bold">Transforms</h1>
+      <h1 class="text-2xl font-bold">Functions</h1>
       <div class="ml-2">
         <Beta size="lg" variant="subtle" />
       </div>
     </div>
     {#if transforms.length > 0}
       <a
-        href="/transforms/new"
+        href="/functions/new"
         data-phx-link="redirect"
         data-phx-link-state="push"
       >
-        <Button>Create Transform</Button>
+        <Button>Create Function</Button>
       </a>
     {/if}
   </div>
@@ -40,15 +40,15 @@
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
         <h2 class="text-xl font-semibold mb-4">No transforms found</h2>
         <p class="text-gray-600 mb-6">
-          Transforms allow you to modify and restructure your data as it flows
+          Functions allow you to modify and restructure your data as it flows
           through your pipelines.
         </p>
         <a
-          href="/transforms/new"
+          href="/functions/new"
           data-phx-link="redirect"
           data-phx-link-state="push"
         >
-          <Button>Create your first transform</Button>
+          <Button>Create your first function</Button>
         </a>
       </div>
     </div>
@@ -57,7 +57,7 @@
       <Table.Header>
         <Table.Row>
           <Table.Head>Name</Table.Head>
-          <Table.Head>Transform</Table.Head>
+          <Table.Head>Function</Table.Head>
           <Table.Head>Created at</Table.Head>
           <Table.Head>Last updated</Table.Head>
         </Table.Row>
@@ -67,7 +67,7 @@
           <Table.Row
             class="cursor-pointer"
             on:click={() => {
-              const url = `/transforms/${transform.id}`;
+              const url = `/functions/${transform.id}`;
               window.history.pushState({}, "", url);
               dispatchEvent(new PopStateEvent("popstate"));
             }}

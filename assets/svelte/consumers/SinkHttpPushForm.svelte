@@ -107,8 +107,11 @@
     ? concatenateUrl(selectedHttpEndpoint?.baseUrl, form.sink.httpEndpointPath)
     : "";
 
-  let activeTab = "static";
-  let selectedDynamic = false;
+
+  let selectedDynamic = form.routing_mode == "dynamic";
+  $: {
+    form.routing_mode = selectedDynamic ? "dynamic" : "static";
+  }
 </script>
 
 <Card>
@@ -339,8 +342,7 @@
                 </div>
                 <Input
                   id="http-endpoint-path"
-                  bind:value={form.sink.httpEndpointPath}
-                  placeholder="/some-path"
+                  value=""
                   class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
                   style="border-left: none;"
                   disabled={true}
@@ -354,10 +356,10 @@
 
             <TransformPicker
               {transforms}
-              selectedTransformId={form.sink.routingTransformId || "none"}
+              selectedTransformId={form.routing_id || "none"}
               title="Router"
               onTransformChange={(transformId) =>
-                (form.sink.routingTransformId =
+                (form.routing_id =
                   transformId === "none" ? null : transformId)}
               {refreshTransforms}
               transformTypes={["routing"]}
@@ -370,6 +372,10 @@
                 parameters:
               </p>
             </TransformPicker>
+
+            {#if errors.routing_id}
+              <p class="text-destructive text-sm">{errors.routing_id}</p>
+            {/if}
 
             <div class="p-4 bg-muted/50 rounded-md mt-4">
               <p class="text-sm text-muted-foreground">

@@ -177,6 +177,28 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:max_memory_mb, greater_than_or_equal_to: 128)
     |> validate_number(:partition_count, greater_than_or_equal_to: 1)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
+    |> validate_routing(attrs)
+  end
+
+  defp validate_routing(cs, attrs) do
+    case {attrs["routing_mode"], fetch_field(cs, :routing_id)} do
+      {nil, {:data, _}} ->
+        # Both unchanged, this is fine
+        cs
+
+      {"static", {_, nil}} -> cs
+
+      {"static", {_, id}} when not is_nil(id) ->
+        add_error(cs, :routing_id, "static routing cannot have linked router!")
+
+      {"dynamic", {_, id}} when not is_nil(id) -> cs
+
+      {"dynamic", {_, nil}} ->
+        add_error(cs, :routing_id, "dynamic routing requires linked router!")
+
+      zz ->
+        add_error(cs, :routing_id, "unknown routing mode! #{inspect(zz)}")
+    end
   end
 
   defp put_defaults(changeset) do

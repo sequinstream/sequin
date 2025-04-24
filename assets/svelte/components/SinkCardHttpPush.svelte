@@ -63,6 +63,24 @@
         </div>
       </div>
 
+      {#if consumer.routing_id}
+        <div>
+          <span class="text-sm text-gray-500">Router</span>
+          <div class="mt-2">
+          <a
+            href={`/functions/${consumer.routing_id}`}
+            data-phx-link="redirect"
+            data-phx-link-state="push"
+            >
+            <Button variant="outline" size="sm">
+              <ExternalLink class="h-4 w-4 mr-2" />
+              View Router
+            </Button>
+          </a>
+          </div>
+        </div>
+      {/if}
+
       <div>
         <span class="text-sm text-gray-500">HTTP Method</span>
         <div class="mt-2">

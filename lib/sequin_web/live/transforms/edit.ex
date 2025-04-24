@@ -66,7 +66,13 @@ defmodule SequinWeb.TransformsLive.Edit do
     changeset =
       case id do
         nil ->
-          Transform.changeset(%Transform{}, %{"transform" => %{}})
+          transform =
+            Sequin.Map.reject_nil_values(%{
+              type: params["type"],
+              sink_type: params["sink_type"]
+            })
+
+          Transform.changeset(%Transform{}, %{"transform" => transform})
 
         id ->
           transform = Consumers.get_transform_for_account!(current_account_id(socket), id)

@@ -29,8 +29,11 @@
   $: filteredTransforms = transforms.filter((t) =>
     transformTypes.includes(t.type),
   );
+  $: hasNoneOption = $$slots["none-option"] !== undefined;
 
   function handleTransformClick(transformId: string) {
+    // Only allow selection of "none" if the none-option slot exists
+    if (transformId === "none" && !hasNoneOption) return;
     onTransformChange(transformId);
   }
 </script>
@@ -71,52 +74,65 @@
       </div>
     </div>
 
-    <!-- Rest of the component remains unchanged -->
-    <div class="border rounded-lg overflow-hidden">
-      <div class="max-h-[400px] overflow-y-auto">
-        <Table>
-          <TableBody>
-            <TableRow
-              on:click={() => handleTransformClick("none")}
-              class="cursor-pointer {selectedTransformId === 'none' ||
-              !selectedTransformId
-                ? 'bg-blue-50 hover:bg-blue-100'
-                : 'hover:bg-gray-100'}"
-            >
-              <TableCell>
-                <div class="font-medium">None</div>
-                <div class="text-sm text-muted-foreground">
-                  No {title.toLowerCase()} applied. {#if title.toLowerCase() === "transform"}Messages
-                    will be sent as-is.{:else}All messages will be sent to the
-                    default destination.{/if}
-                </div>
-              </TableCell>
-            </TableRow>
-            {#each filteredTransforms as transform}
-              <TableRow
-                on:click={() => handleTransformClick(transform.id)}
-                class="cursor-pointer {transform.id === selectedTransformId
-                  ? 'bg-blue-50 hover:bg-blue-100'
-                  : 'hover:bg-gray-100'}"
-              >
-                <TableCell>
-                  <div class="flex items-center gap-2">
-                    <span class="font-medium">{transform.name}</span>
-                    {#if showTypeLabel}
-                      <span class="text-xs bg-gray-200 px-2 py-0.5 rounded-full"
-                        >{transform[typeLabelKey]}</span
-                      >
-                    {/if}
-                  </div>
-                  <div class="text-sm text-muted-foreground">
-                    {transform.description || "No description provided."}
-                  </div>
-                </TableCell>
-              </TableRow>
-            {/each}
-          </TableBody>
-        </Table>
+    <!-- Check if we have transforms or a none option -->
+    {#if filteredTransforms.length > 0 || hasNoneOption}
+      <div class="border rounded-lg overflow-hidden">
+        <div class="max-h-[400px] overflow-y-auto">
+          <Table>
+            <TableBody>
+              <!-- Only show "None" option if the none-option slot exists -->
+              {#if hasNoneOption}
+                <TableRow
+                  on:click={() => handleTransformClick("none")}
+                  class="cursor-pointer {selectedTransformId === 'none' ||
+                  !selectedTransformId
+                    ? 'bg-blue-50 hover:bg-blue-100'
+                    : 'hover:bg-gray-100'}"
+                >
+                  <TableCell>
+                    <div class="font-medium">None</div>
+                    <div class="text-sm text-muted-foreground">
+                      <slot name="none-option"></slot>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              {/if}
+
+              {#each filteredTransforms as transform}
+                <TableRow
+                  on:click={() => handleTransformClick(transform.id)}
+                  class="cursor-pointer {transform.id === selectedTransformId
+                    ? 'bg-blue-50 hover:bg-blue-100'
+                    : 'hover:bg-gray-100'}"
+                >
+                  <TableCell>
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium">{transform.name}</span>
+                      {#if showTypeLabel}
+                        <span
+                          class="text-xs bg-gray-200 px-2 py-0.5 rounded-full"
+                          >{transform[typeLabelKey]}</span
+                        >
+                      {/if}
+                    </div>
+                    <div class="text-sm text-muted-foreground">
+                      {transform.description || "No description provided."}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              {/each}
+            </TableBody>
+          </Table>
+        </div>
       </div>
-    </div>
+    {:else}
+      <!-- Error message when no transforms and no none option -->
+      <div class="border rounded-lg p-4 bg-red-50 text-red-800">
+        <p>
+          No valid {title.toLowerCase()}s available. Please create a {title.toLowerCase()}
+          first.
+        </p>
+      </div>
+    {/if}
   </div>
 </div>

@@ -107,10 +107,14 @@
     ? concatenateUrl(selectedHttpEndpoint?.baseUrl, form.sink.httpEndpointPath)
     : "";
 
-
-  let selectedDynamic = form.routing_mode == "dynamic";
+  let selectedDynamic = form.routingMode == "dynamic";
   $: {
-    form.routing_mode = selectedDynamic ? "dynamic" : "static";
+    if (selectedDynamic) {
+      form.routingMode = "dynamic";
+    } else {
+      form.routingMode = "static";
+      form.routingId = "none";
+    }
   }
 </script>
 
@@ -331,7 +335,6 @@
               {/if}
             </div>
           {:else}
-            
             <div class="space-y-2">
               <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
               <div class="flex flex-row bg-white">
@@ -356,11 +359,10 @@
 
             <TransformPicker
               {transforms}
-              selectedTransformId={form.routing_id || "none"}
+              selectedTransformId={form.routingId || "none"}
               title="Router"
               onTransformChange={(transformId) =>
-                (form.routing_id =
-                  transformId === "none" ? null : transformId)}
+                (form.routingId = transformId === "none" ? null : transformId)}
               {refreshTransforms}
               transformTypes={["routing"]}
               typeLabelKey="sink_type"
@@ -402,8 +404,8 @@
                 <strong>Note:</strong> The base URL cannot be changed dynamically.
               </p>
               <p class="text-sm text-muted-foreground mt-3">
-                Your transform needs to return a map with the above keys to route
-                the message.
+                Your transform needs to return a map with the above keys to
+                route the message.
               </p>
               <p class="text-sm text-muted-foreground mt-3">
                 For missing or nil keys, the default values from the static

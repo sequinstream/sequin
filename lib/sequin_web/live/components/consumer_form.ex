@@ -543,8 +543,8 @@ defmodule SequinWeb.Components.ConsumerForm do
         "batch_size" => form["batchSize"],
         "initial_backfill" => decode_initial_backfill(form),
         "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
-        "routing_id" => if(form["routing_id"] === "none", do: nil, else: form["routing_id"]),
-        "routing_mode" => form["routing_mode"],
+        "routing_id" => if(form["routingId"] === "none", do: nil, else: form["routingId"]),
+        "routing_mode" => form["routingMode"],
         "timestamp_format" => form["timestampFormat"]
       }
 

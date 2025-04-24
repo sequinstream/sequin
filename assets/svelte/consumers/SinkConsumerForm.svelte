@@ -107,8 +107,8 @@
     batchSize: number;
     transform: string;
     timestampFormat: string;
-    routing_id: string;
-    routing_mode: string;
+    routingId: string;
+    routingMode: string;
   }
 
   let initialForm: FormState = {
@@ -134,8 +134,8 @@
     batchSize: Number(consumer.batch_size) || 1,
     transform: consumer.transform_id || "none",
     timestampFormat: consumer.timestamp_format || "iso8601",
-    routing_id: consumer.routing_id || "none",
-    routing_mode: consumer.routing_mode,
+    routingId: consumer.routing_id || "none",
+    routingMode: consumer.routing_mode,
   };
 
   let form: FormState = { ...initialForm };

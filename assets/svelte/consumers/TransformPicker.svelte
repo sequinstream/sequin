@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import { Plus, RotateCwIcon, CheckIcon } from "lucide-svelte";
+  import { Plus, RotateCwIcon, CheckIcon, AlertCircle } from "lucide-svelte";
   import {
     Table,
     TableBody,
@@ -40,50 +40,43 @@
 </script>
 
 <div class="space-y-4">
-  <div class="">
-    <div class="flex justify-between mb-4">
-      <!-- Show either the informational slot or the error message -->
-      <div class="flex items-center">
-        {#if hasValidOptions}
+  {#if hasValidOptions}
+    <div class="">
+      <div class="flex justify-between mb-4">
+        <!-- Show informational slot -->
+        <div class="flex items-center">
           <slot></slot>
-        {:else}
-          <div class="text-red-600">
-            No valid {title.toLowerCase()}s available. Please create a {title.toLowerCase()}
-            first.
-          </div>
-        {/if}
+        </div>
+
+        <!-- Buttons on the right side -->
+        <div class="flex gap-2">
+          <Button
+            variant="outline"
+            class="whitespace-nowrap"
+            on:click={refreshTransforms}
+            disabled={refreshState === "refreshing"}
+            aria-label="Refresh {title}s"
+          >
+            {#if refreshState === "refreshing"}
+              <RotateCwIcon class="h-4 w-4 animate-spin" />
+            {:else if refreshState === "done"}
+              <CheckIcon class="h-4 w-4 text-green-500" />
+            {:else}
+              <RotateCwIcon class="h-4 w-4" />
+            {/if}
+          </Button>
+          <Button
+            variant="outline"
+            class="whitespace-nowrap"
+            on:click={() => window.open(createNewLink, "_blank")}
+          >
+            <Plus class="h-4 w-4 mr-2" />
+            Create new {title.toLowerCase()}
+          </Button>
+        </div>
       </div>
 
-      <!-- Buttons on the right side -->
-      <div class="flex gap-2">
-        <Button
-          variant="outline"
-          class="whitespace-nowrap"
-          on:click={refreshTransforms}
-          disabled={refreshState === "refreshing"}
-          aria-label="Refresh {title}s"
-        >
-          {#if refreshState === "refreshing"}
-            <RotateCwIcon class="h-4 w-4 animate-spin" />
-          {:else if refreshState === "done"}
-            <CheckIcon class="h-4 w-4 text-green-500" />
-          {:else}
-            <RotateCwIcon class="h-4 w-4" />
-          {/if}
-        </Button>
-        <Button
-          variant="outline"
-          class="whitespace-nowrap"
-          on:click={() => window.open(createNewLink, "_blank")}
-        >
-          <Plus class="h-4 w-4 mr-2" />
-          Create new {title.toLowerCase()}
-        </Button>
-      </div>
-    </div>
-
-    <!-- Only show the table if we have valid options -->
-    {#if hasValidOptions}
+      <!-- Table with options -->
       <div class="border rounded-lg overflow-hidden">
         <div class="max-h-[400px] overflow-y-auto">
           <Table>
@@ -133,6 +126,46 @@
           </Table>
         </div>
       </div>
-    {/if}
-  </div>
+    </div>
+  {:else}
+    <!-- Beautiful empty state -->
+    <div
+      class="border rounded-lg p-8 flex flex-col items-center justify-center text-center space-y-4"
+    >
+      <AlertCircle class="h-12 w-12 text-gray-300 mb-2" />
+      <h3 class="text-lg font-medium">No {title.toLowerCase()}s</h3>
+      <p class="text-muted-foreground max-w-md">
+        You don't have any {title.toLowerCase()}s yet. Create one to get
+        started.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-3 pt-2">
+        <Button
+          variant="outline"
+          class="whitespace-nowrap"
+          on:click={refreshTransforms}
+          disabled={refreshState === "refreshing"}
+          aria-label="Refresh {title}s"
+        >
+          {#if refreshState === "refreshing"}
+            <RotateCwIcon class="h-4 w-4 animate-spin mr-2" />
+            Refreshing...
+          {:else if refreshState === "done"}
+            <CheckIcon class="h-4 w-4 text-green-500 mr-2" />
+            Refreshed
+          {:else}
+            <RotateCwIcon class="h-4 w-4 mr-2" />
+            Refresh {title}s
+          {/if}
+        </Button>
+        <Button
+          variant="default"
+          class="whitespace-nowrap"
+          on:click={() => window.open(createNewLink, "_blank")}
+        >
+          <Plus class="h-4 w-4 mr-2" />
+          Create new {title.toLowerCase()}
+        </Button>
+      </div>
+    </div>
+  {/if}
 </div>

@@ -87,7 +87,7 @@
   export let live;
   export let usedByConsumers: Consumer[] = [];
   export let saving: boolean = false;
-  export let initialCode: string;
+  export let initialCodeMap: Record<string, string>;
   export let functionTransformsEnabled: boolean;
   export let functionCompletions: Array<{
     label: string;
@@ -98,7 +98,7 @@
   let transformInternalToExternal = {
     path: "Path transform",
     function: "Function transform",
-    routing: "Routing function"
+    routing: "Routing function",
   };
 
   let sinkTypeInternalToExternal = {
@@ -214,16 +214,46 @@
     }
   }
 
-  function handleTypeSelect(event: any) {
+  function handleTypeSelect(event: any, oldType: string) {
+    const oldInitialCode = initialCodeFor(oldType, form.transform.sink_type);
+    const newInitialCode = initialCodeFor(
+      event.value,
+      form.transform.sink_type,
+    );
+
+    if (form.transform.code === oldInitialCode) {
+      form.transform.code = newInitialCode;
+      functionEditorView.dispatch({
+        changes: {
+          from: 0,
+          to: functionEditorView.state.doc.length,
+          insert: newInitialCode,
+        },
+      });
+      console.log("Replaced untouched initial code");
+    } else {
+      console.log("Did not replace initial code");
+    }
+
     form.transform.type = event.value;
-    form.transform.code ||= initialCode;
   }
 
-  function handleRoutingSinkTypeSelect(event: any) {
+  function handleRoutingSinkTypeSelect(event: any, oldSinkType: string) {
+    const oldInitialCode = initialCodeFor(form.transform.type, oldSinkType);
+    const newInitialCode = initialCodeFor(form.transform.type, event.value);
+
+    if (form.transform.code === oldInitialCode) {
+      form.transform.code = newInitialCode;
+      functionEditorView.dispatch({
+        changes: {
+          from: 0,
+          to: functionEditorView.state.doc.length,
+          insert: newInitialCode,
+        },
+      });
+    }
     form.transform.sink_type = event.value;
-    // form.transform.code ||= initialCode;
   }
-
 
   function handleDelete() {
     if (usedByConsumers.length > 0) {
@@ -288,6 +318,20 @@
   // let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
   // let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
 
+  function maybeSetInitialCode() {
+    if (form.id == null && form.transform.type) {
+      form.transform.code = initialCodeFor(
+        form.transform.type,
+        form.transform.sink_type,
+      );
+    }
+  }
+
+  function initialCodeFor(type: string, sinkType: string | null) {
+    let key = type + (type === "routing" ? "_" + sinkType : "");
+    return initialCodeMap[key];
+  }
+
   function handleDatabaseSelect(event: any) {
     selectedDatabaseId = event.value;
     selectedTableOid = null; // Reset table selection when database changes
@@ -325,19 +369,21 @@
   // }
 
   onMount(() => {
-
     // Handle URL parameters for new transforms
     if (!isEditing) {
       const urlParams = new URLSearchParams(window.location.search);
 
-      const typeParam = urlParams.get('type');
+      const typeParam = urlParams.get("type");
       if (typeParam && transformInternalToExternal[typeParam]) {
         form.transform.type = typeParam;
       }
 
-      const sinkTypeParam = urlParams.get('sink_type');
-      if (sinkTypeParam && form.transform.type === 'routing' &&
-          sinkTypeInternalToExternal[sinkTypeParam]) {
+      const sinkTypeParam = urlParams.get("sink_type");
+      if (
+        sinkTypeParam &&
+        form.transform.type === "routing" &&
+        sinkTypeInternalToExternal[sinkTypeParam]
+      ) {
         form.transform.sink_type = sinkTypeParam;
       }
     }
@@ -350,9 +396,11 @@
       handleTableSelect(selectedDatabase.tables[0]);
     }
 
+    maybeSetInitialCode();
+
     // Initialize CodeMirror for function transform if it exists
     const startState = EditorState.create({
-      doc: form.transform.code || initialCode || "",
+      doc: form.transform.code || "",
       extensions: [
         basicSetup,
         elixir(),
@@ -389,7 +437,7 @@ Transform Details:
 - Description: ${form.description}
 - Current Function Code:
 \`\`\`elixir
-${form.transform.code || initialCode}
+${form.transform.code}
 \`\`\`
 ${
   codeErrors.length > 0
@@ -530,7 +578,10 @@ Please help me create or modify the Elixir function transform to achieve the des
           </div>
 
           <Select
-            onSelectedChange={handleTypeSelect}
+            onSelectedChange={(event) => {
+              const old = form.transform.type;
+              handleTypeSelect(event, old);
+            }}
             selected={{
               value: form.transform.type,
               label: transformInternalToExternal[form.transform.type],
@@ -548,38 +599,11 @@ Please help me create or modify the Elixir function transform to achieve the des
               <SelectItem
                 value="function"
                 label={transformInternalToExternal.function}
-                />
+              />
               <SelectItem
                 value="routing"
                 label={transformInternalToExternal.routing}
-                />
-            </SelectContent>
-          </Select>
-          {#if showErrors && formErrors.transform?.type}
-            <p class="text-sm text-red-500 dark:text-red-400">
-              {formErrors.transform.type[0]}
-            </p>
-          {/if}
-
-
-        {#if form.transform.type === "routing"}
-        <Select
-            onSelectedChange={handleRoutingSinkTypeSelect}
-            selected={{
-              value: form.transform.sink_type,
-              label: sinkTypeInternalToExternal[form.transform.sink_type]
-            }}
-            disabled={isEditing}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a sink type for routing..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                value="http_push"
-                label={sinkTypeInternalToExternal.http_push}
               />
-
             </SelectContent>
           </Select>
           {#if showErrors && formErrors.transform?.type}
@@ -587,8 +611,35 @@ Please help me create or modify the Elixir function transform to achieve the des
               {formErrors.transform.type[0]}
             </p>
           {/if}
-        {/if}
 
+          {#if form.transform.type === "routing"}
+            <Select
+              onSelectedChange={(event) => {
+                const oldSinkType = form.transform.sink_type;
+                handleRoutingSinkTypeSelect(event, oldSinkType);
+              }}
+              selected={{
+                value: form.transform.sink_type,
+                label: sinkTypeInternalToExternal[form.transform.sink_type],
+              }}
+              disabled={isEditing}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a sink type for routing..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  value="http_push"
+                  label={sinkTypeInternalToExternal.http_push}
+                />
+              </SelectContent>
+            </Select>
+            {#if showErrors && formErrors.transform?.type}
+              <p class="text-sm text-red-500 dark:text-red-400">
+                {formErrors.transform.type[0]}
+              </p>
+            {/if}
+          {/if}
         </div>
 
         <div class="space-y-2">
@@ -622,8 +673,6 @@ Please help me create or modify the Elixir function transform to achieve the des
             </p>
           {/if}
         </div>
-
-
 
         {#if form.transform.type === "path"}
           <div class="space-y-2">
@@ -673,9 +722,10 @@ Please help me create or modify the Elixir function transform to achieve the des
           </div>
         {/if}
 
-        
-
-        <div hidden={form.transform.type !== "function" && form.transform.type !== "routing" }>
+        <div
+          hidden={form.transform.type !== "function" &&
+            form.transform.type !== "routing"}
+        >
           <div class="space-y-2">
             {#if !functionTransformsEnabled}
               <div

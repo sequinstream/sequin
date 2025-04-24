@@ -41,7 +41,8 @@ defmodule SequinWeb.TransformsLive.Edit do
   """
 
   @initial_code_map %{
-    "transform" => @initial_transform,
+    "path" => "",
+    "function" => @initial_transform,
     "routing_http_push" => @initial_route_http
   }
 

@@ -111,12 +111,16 @@ Once your sink is configured, changes from your source table will flow to your m
 
 1. **Idempotency**: Implement idempotent processing to handle edge cases safely
 
-Messages don't have a unique identifier. Instead, you can use a combination of the message's `metadata.commit_lsn` and the message's primary key(s) to uniquely identify a message. While many messages may share a `metadata.commit_lsn` (as it corresponds to the LSN of the transaction), your system should only care about capturing a single message per row per transaction.
+ Duplicates are rare and only occur if your processor successfully writes to the database but fails to acknowledge messages from the queue (SQS/Kafka) or fails to return a 200 status code (HTTP endpoints). In these cases, the message will be redelivered to ensure at-least-once delivery.
+
+ To protect against duplicates, you can design your processor and/or destination to be idempotent.
+
+Messages don't have a unique identifier (coming soon - see below). Instead, you can use a combination of the message's `metadata.commit_lsn` and the message's primary key(s) to uniquely identify a message. While many messages may share a `metadata.commit_lsn` (as it corresponds to the LSN of the transaction), your system should only care about capturing a single message per row per transaction.
 
 So, if your table's primary key is `id`, your audit table should have the columns `id` and `commit_lsn`. Then, you can create a unique index on `(id, commit_lsn)` to ensure that each row is only written once per transaction. Finally, your processor should use an `ON CONFLICT (id, commit_lsn)` clause to update the row if it already exists.
 
   <Info>
-    Duplicates are rare and only occur if your processor successfully writes to the database but fails to acknowledge messages from the queue (SQS/Kafka) or return a 200 status code (HTTP endpoints). In these cases, the message will be redelivered to ensure at-least-once delivery.
+    `idempotency_key` is coming to messages in May 2025 ([#1251](https://github.com/sequinstream/sequin/issues/1251)).
   </Info>
 
 2. **Type handling**: Cast JSON to Postgres types
@@ -128,9 +132,7 @@ So, if your table's primary key is `id`, your audit table should have the column
     - UUIDs: Cast from strings to `uuid`
     - Numeric types: Cast to `decimal`, `bigint`, etc. based on precision needs
 
-3. **Batch processing**: For better performance, batch your database operations:
-
-    Consider your message queue's batching capabilities (e.g., SQS batch size).
+3. **Batch processing**: For better performance, batch your database operations.
 
 ### Example: Enhanced audit table with annotations
 
@@ -356,15 +358,11 @@ You may need to re-sync your audit logs in these scenarios:
 2. **Logic updates**: Changes to audit transformation logic
 3. **Data recovery**: Recovering from processing errors
 
-Streaming `changes`, by default, does not include retention. This means that a `change` message is evicted from Sequin after it is propagated to the destination sink.
-
-When streaming `changes` without retention, you can [backfill](/reference/backfills) from the source table. The change messages will be of action `read` and will only include the value currently in the database. Old values and deleted rows are not included.
+When streaming `changes` without [retention](/reference/change-retention), you can [backfill](/reference/backfills) from the source table. The change messages will be of action `read` and will only include the value currently in the database. Old values and deleted rows are not included.
 
 <Note>
   Note that backfilled records will not include transaction annotations.
 </Note>
-
-If you need the ability to re-sync your audit logs with full history of changes, you can use a [Change retention](/reference/change-retention).
 
 ## Next steps
 

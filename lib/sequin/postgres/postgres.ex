@@ -2,6 +2,7 @@ defmodule Sequin.Postgres do
   @moduledoc false
   import Bitwise
   import Ecto.Query, only: [from: 2]
+  import Sequin.Error.Guards
 
   alias Ecto.Type
   alias Sequin.Consumers.SourceTable
@@ -766,22 +767,107 @@ defmodule Sequin.Postgres do
             :ok
 
           {:error, error} ->
-            Sequin.Error.service(
-              service: :postgres,
-              message: "Failed to create replication slot",
-              details: error
-            )
+            {:error,
+             Error.service(
+               service: :postgres,
+               message: "Failed to create replication slot",
+               details: error
+             )}
         end
 
       {:ok, _} ->
         :ok
 
       {:error, error} ->
-        Sequin.Error.service(
-          service: :postgres,
-          message: "Failed to check for existing replication slot",
-          details: error
-        )
+        {:error,
+         Error.service(
+           service: :postgres,
+           message: "Failed to check for existing replication slot",
+           details: error
+         )}
+    end
+  end
+
+  @doc """
+  Creates a logical replication publication for one or more schemas.
+
+  ## Parameters
+    - conn: The database connection
+    - publication_name: The name of the publication to create
+    - schemas: A list of schema names to include in the publication, defaults to ["public"]
+
+  ## Returns
+    - :ok on success
+    - {:error, Error.t()} on failure
+  """
+  def create_publication_for_schemas(conn, publication_name, schemas \\ ["public"]) do
+    schemas_clause =
+      Enum.map_join(schemas, ", ", fn schema -> "tables in schema #{quote_name(schema)}" end)
+
+    init_sql =
+      "create publication #{quote_name(publication_name)} for #{schemas_clause} with (publish_via_partition_root = true)"
+
+    create_publication(conn, publication_name, init_sql)
+  end
+
+  @doc """
+  Creates a logical replication publication if it doesn't already exist.
+
+  ## Parameters
+    - conn: The database connection
+    - publication_name: The name of the publication to create
+    - init_sql: Optional SQL to create the publication. If not provided, creates a publication for the public schema.
+
+  ## Returns
+    - :ok on success
+    - {:error, Error.t()} on failure
+
+  ## Examples
+      # Create publication for all tables in the public schema
+      create_publication(conn, "my_publication")
+
+      # Create publication with custom SQL
+      create_publication(conn, "my_publication", "create publication my_publication for tables in schema public")
+  """
+  @spec create_publication(db_conn(), name :: String.t(), init_sql :: String.t() | nil) :: :ok | {:error, Error.t()}
+  def create_publication(conn, publication_name, init_sql \\ nil) do
+    # Check if publication already exists
+    check_query = "select 1 from pg_publication where pubname = $1"
+
+    init_sql =
+      init_sql ||
+        "create publication #{quote_name(publication_name)} for tables in schema public with (publish_via_partition_root = true)"
+
+    with :ok <- verify_publication_init_sql(publication_name, init_sql),
+         {:ok, %{num_rows: 0}} <- query(conn, check_query, [publication_name]),
+         {:ok, _} <- query(conn, init_sql) do
+      :ok
+    else
+      {:ok, _} ->
+        :ok
+
+      {:error, error} when is_error(error) ->
+        {:error, error}
+
+      {:error, error} ->
+        {:error,
+         Error.service(
+           service: :postgres,
+           message: "Failed to check or create publication",
+           details: error
+         )}
+    end
+  end
+
+  defp verify_publication_init_sql(pub_name, init_sql) do
+    if Regex.match?(~r/^\s*create\s+publication\s+\"?#{pub_name}\"?/, String.downcase(init_sql)) do
+      :ok
+    else
+      {:error,
+       Error.bad_request(
+         message:
+           "Invalid publication `init_sql`. Must be a `create publication` statement that matches supplied `name` of publication: #{init_sql}"
+       )}
     end
   end
 

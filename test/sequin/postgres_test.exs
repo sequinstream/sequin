@@ -4,6 +4,7 @@ defmodule Sequin.PostgresTest do
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Postgres
+  alias Sequin.Repo
   alias Sequin.Test.UnboxedRepo
 
   setup do
@@ -221,6 +222,63 @@ defmodule Sequin.PostgresTest do
       non_existent_oid = 999_999_999
 
       assert {:error, %NotFoundError{}} = Postgres.check_partitioned_replica_identity(conn, non_existent_oid)
+    end
+  end
+
+  describe "create_publication/3" do
+    test "creates a publication with default SQL when init_sql is not provided" do
+      pub_name = "test_pub"
+
+      # Publication shouldn't exist yet
+      assert {:error, _} = Postgres.get_publication(Repo, pub_name)
+
+      # Create publication
+      assert :ok = Postgres.create_publication(Repo, pub_name)
+
+      # Verify publication exists
+      {:ok, pub_info} = Postgres.get_publication(Repo, pub_name)
+      assert pub_info["pubname"] == pub_name
+    end
+
+    test "creates a publication with custom init_sql" do
+      pub_name = "test_pub_custom"
+      init_sql = "CREATE PUBLICATION test_pub_custom FOR TABLES IN SCHEMA public WITH (publish = 'insert, update')"
+
+      # Publication shouldn't exist yet
+      assert {:error, _} = Postgres.get_publication(Repo, pub_name)
+
+      # Create publication
+      assert :ok = Postgres.create_publication(Repo, pub_name, init_sql)
+
+      # Verify publication exists with correct properties
+      {:ok, pub_info} = Postgres.get_publication(Repo, pub_name)
+      assert pub_info["pubname"] == pub_name
+      assert pub_info["pubinsert"] == true
+      assert pub_info["pubupdate"] == true
+      # Should be false because we only specified insert, update
+      assert pub_info["pubdelete"] == false
+    end
+
+    test "returns error for invalid init_sql" do
+      pub_name = "test_pub_invalid"
+      invalid_sql = "CREATE PUBLICATION wrong_name FOR TABLES IN SCHEMA public"
+
+      result = Postgres.create_publication(Repo, pub_name, invalid_sql)
+      assert {:error, error} = result
+      assert error.message =~ "Invalid publication `init_sql`"
+
+      # Verify publication wasn't created
+      assert {:error, _} = Postgres.get_publication(Repo, pub_name)
+    end
+
+    test "returns :ok for already existing publication" do
+      pub_name = "test_pub_existing"
+
+      # Create the publication first
+      :ok = Postgres.create_publication(Repo, pub_name)
+
+      # Try to create it again
+      assert :ok = Postgres.create_publication(Repo, pub_name)
     end
   end
 end

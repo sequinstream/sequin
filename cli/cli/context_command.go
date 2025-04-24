@@ -18,7 +18,7 @@ type ctxCommand struct {
 	hostname      string
 	portalBaseURL string
 	tls           bool
-	tlsProvided   bool  // Track whether --tls flag was explicitly provided
+	tlsProvided   bool // Track whether --tls flag was explicitly provided
 	setDefault    bool
 	apiToken      string
 	tunnelPorts   string // New field for tunnel ports
@@ -97,9 +97,9 @@ func (c *ctxCommand) addAction(pctx *fisk.ParseContext) error {
 	// Decide the default *only* if --tls was not on the CLI
 	if !c.tlsProvided {
 		if isLocalHostname(c.hostname) {
-			c.tls = false          // local ⇒ plain-HTTP
+			c.tls = false // local ⇒ plain-HTTP
 		} else {
-			c.tls = true           // remote ⇒ HTTPS
+			c.tls = true // remote ⇒ HTTPS
 		}
 	}
 
@@ -154,14 +154,14 @@ func (c *ctxCommand) addAction(pctx *fisk.ParseContext) error {
 func isLocalHostname(hostname string) bool {
 	hostname = strings.ToLower(hostname)
 	hostname = strings.Split(hostname, ":")[0] // Remove port if present
-	
+
 	return hostname == "localhost" ||
-		   hostname == "127.0.0.1" ||
-		   hostname == "::1" ||
-		   hostname == "host.docker.internal" ||
-		   strings.HasPrefix(hostname, "192.168.") ||
-		   strings.HasPrefix(hostname, "10.") ||
-		   strings.HasPrefix(hostname, "172.16.")
+		hostname == "127.0.0.1" ||
+		hostname == "::1" ||
+		hostname == "host.docker.internal" ||
+		strings.HasPrefix(hostname, "192.168.") ||
+		strings.HasPrefix(hostname, "10.") ||
+		strings.HasPrefix(hostname, "172.16.")
 }
 
 func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
@@ -382,7 +382,7 @@ func (c *ctxCommand) editAction(_ *fisk.ParseContext) error {
 	if c.portalBaseURL != "" {
 		newCtx.PortalBaseURL = c.portalBaseURL
 	}
-	if c.tlsProvided {            // user asked to change it
+	if c.tlsProvided { // user asked to change it
 		newCtx.TLS = c.tls
 	}
 	if c.apiToken != "" {

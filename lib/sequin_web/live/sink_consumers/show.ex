@@ -635,7 +635,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       group_column_names: encode_group_column_names(consumer),
       batch_size: consumer.batch_size,
       table: encode_table(table),
-      transform_id: consumer.transform_id
+      transform_id: consumer.transform_id,
+      routing_id: consumer.routing_id,
     }
   end
 

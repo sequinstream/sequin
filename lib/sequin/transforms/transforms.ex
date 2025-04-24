@@ -61,8 +61,12 @@ defmodule Sequin.Transforms do
       password: maybe_obfuscate(database.password, show_sensitive),
       hostname: database.hostname,
       database: database.database,
-      slot_name: database.replication_slot.slot_name,
-      publication_name: database.replication_slot.publication_name,
+      slot: %{
+        name: database.replication_slot.slot_name
+      },
+      publication: %{
+        name: database.replication_slot.publication_name
+      },
       port: database.port,
       pool_size: database.pool_size,
       ssl: database.ssl,

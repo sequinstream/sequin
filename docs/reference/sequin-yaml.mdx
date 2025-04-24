@@ -60,8 +60,14 @@ databases:
     port: 5432                  # Default: 5432
     database: "my_database"     # Required
     pool_size: 10               # Default: 3
-    slot_name: "sequin_slot"    # Required
-    publication_name: "sequin_pub" # Required
+    slot:
+      name: "sequin_slot"        # Required
+      create_if_missing: false   # Optional, default: false
+    publication:
+      name: "sequin_pub"         # Required
+      create_if_missing: false   # Optional, default: false
+      init_sql: |-               # Optional, SQL to run to create the publication. Defaults to create a publication for schema "public"
+        create publication sequin_pub for tables in schema public with (publish_via_partition_root = true)
     await_database:             # Optional, configuration for database connection retry behavior
       timeout_ms: 30000         # Default: 30000 (30 seconds)
       interval_ms: 3000         # Default: 3000 (3 seconds)
@@ -80,8 +86,10 @@ databases:
     port: 5432                  # Default: 5432
     database: "my_database"     # Required
     pool_size: 10               # Default: 3
-    slot_name: "sequin_slot"    # Required
-    publication_name: "sequin_pub" # Required
+    slot:
+      name: "sequin_slot"        # Required
+    publication:
+      name: "sequin_pub"         # Required
     await_database:             # Optional, configuration for database connection retry behavior
       timeout_ms: 30000         # Default: 30000 (30 seconds)
       interval_ms: 3000         # Default: 3000 (3 seconds)
@@ -94,6 +102,37 @@ databases:
       database: "my_database"      # Required
 ```
 
+#### Replication slot and publication configuration
+
+Sequin uses PostgreSQL's logical replication to capture changes from your database. This requires a [replication slot and a publication](/connect-postgres#replication-configuration).
+
+##### Replication slot
+
+After following the instructions in the Sequin console to create a replication slot, you can indicate the name of the slot in the `slot` block. Alternatively, you can choose to have Sequin create the slot for you by setting `create_if_missing` to `true`:
+
+```yaml
+slot:
+  name: "sequin_slot"         # Required
+  create_if_missing: true     # Optional, default: false
+```
+
+<Warning>
+  Replication slots are durable and can accumulate data if not in use (i.e. if Sequin is not running). So while Sequin can automatically create slots for you, slots will hang around until you drop them–even if you disconnect Sequin.
+</Warning>
+
+##### Publication
+
+After following the instructions in the Sequin console to create a publication, you can indicate the name of the publication in the `publication` block. Alternatively, you can choose to have Sequin create the publication for you by setting `create_if_missing` to `true`:
+
+```yaml
+publication:
+  name: "sequin_pub"          # Required
+  create_if_missing: true     # Optional, default: false
+  init_sql: |-               # Optional, SQL to run to create the publication. Defaults to create a publication for schema "public"
+    create publication sequin_pub for tables in schema public with (publish_via_partition_root = true)
+```
+
+When `create_if_missing` is `true`, Sequin will attempt to create the publication if it doesn't exist. If you specify `init_sql`, Sequin will run that SQL to create the publication. Otherwise, Sequin will create a publication for the schema "public".
 
 #### Database connection retry
 
@@ -488,8 +527,13 @@ databases:
   - name: "production-db"
     hostname: "prod.db.example.com"  
     database: "app_production"
-    slot_name: "sequin_slot"
-    publication_name: "sequin_pub"
+    slot:
+      name: "sequin_slot"
+      create_if_missing: true
+    publication:
+      name: "sequin_pub"
+      create_if_missing: true
+      schemas: ["public"]
 
 http_endpoints:
   - name: "webhook-endpoint"

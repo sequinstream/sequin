@@ -9,6 +9,8 @@ defmodule Sequin.YamlLoader do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Error.ServiceError
+  alias Sequin.Postgres
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Transforms
@@ -194,6 +196,10 @@ defmodule Sequin.YamlLoader do
     Accounts.get_account(account_id)
   end
 
+  defp do_find_or_create_account(%{"account" => %{"name" => nil}}) do
+    {:error, Error.bad_request(message: "Account name is required.")}
+  end
+
   defp do_find_or_create_account(%{"account" => %{"name" => name}}) do
     case Accounts.find_account(name: name) do
       {:ok, account} ->
@@ -276,6 +282,10 @@ defmodule Sequin.YamlLoader do
     end)
   end
 
+  defp find_or_create_token(_account, %{"name" => nil} = _params) do
+    {:error, Error.validation(summary: "`name` is required on each token.")}
+  end
+
   defp find_or_create_token(account, %{"name" => token_name} = params) do
     case ApiTokens.get_token_by(account_id: account.id, name: token_name) do
       {:ok, t} ->
@@ -325,6 +335,10 @@ defmodule Sequin.YamlLoader do
     {:ok, []}
   end
 
+  defp upsert_database(_account_id, %{"name" => nil} = _database_attrs, _opts) do
+    {:error, Error.bad_request(message: "Database name is required.")}
+  end
+
   defp upsert_database(account_id, %{"name" => name} = database_attrs, opts) when is_binary(name) do
     test_connect_fun = Keyword.get(opts, :test_connect_fun, &Databases.test_connect/1)
 
@@ -336,13 +350,18 @@ defmodule Sequin.YamlLoader do
       |> case do
         {:ok, database} ->
           Logger.info("Found database: #{inspect(database, pretty: true)}")
-          update_database(database, db_params)
+
+          database = Sequin.Repo.preload(database, :replication_slot)
+
+          with {:ok, database_attrs} <- parse_database_update_attrs(db_params, database.replication_slot) do
+            update_database(database, database_attrs)
+          end
 
         {:error, %NotFoundError{}} ->
           db_params_with_defaults = Map.merge(@database_defaults, db_params)
 
-          with %Ecto.Changeset{valid?: true} <-
-                 Databases.create_db_changeset(account_id, db_params_with_defaults),
+          with {:ok, db_params_with_defaults} <- parse_database_update_attrs(db_params_with_defaults, nil),
+               %Ecto.Changeset{valid?: true} <- Databases.create_db_changeset(account_id, db_params_with_defaults),
                :ok <- await_database(db_params_with_defaults, test_connect_fun) do
             create_database_with_replication(account_id, db_params_with_defaults)
           else
@@ -411,44 +430,160 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  defp create_database_with_replication(account_id, database) do
-    account_id
-    |> Databases.create_db(database)
-    |> case do
-      {:ok, db} ->
-        replication_params = Map.put(database, "postgres_database_id", db.id)
+  defp create_database_with_replication(account_id, database_attrs) do
+    with {:ok, database_attrs, replication_attrs, slot_attrs, pub_attrs} <- parse_database_attrs(database_attrs),
+         {:ok, db} <- Databases.create_db(account_id, database_attrs),
+         :ok <- maybe_create_replication_slot(db, slot_attrs),
+         :ok <- maybe_create_publication(db, pub_attrs) do
+      replication_attrs = Map.put(replication_attrs, "postgres_database_id", db.id)
 
-        case Replication.create_pg_replication(account_id, replication_params) do
-          {:ok, replication} ->
-            Logger.info("Created database: #{inspect(db, pretty: true)}")
-            {:ok, %PostgresDatabase{db | replication_slot: replication}}
+      case Replication.create_pg_replication(account_id, replication_attrs) do
+        {:ok, replication} ->
+          Logger.info("Created database: #{inspect(db, pretty: true)}")
+          {:ok, %PostgresDatabase{db | replication_slot: replication}}
 
-          {:error, error} when is_exception(error) ->
-            {:error,
-             Error.bad_request(
-               message: "Error creating Sequin replication slot for database '#{db.name}': #{Exception.message(error)}"
-             )}
+        {:error, error} when is_exception(error) ->
+          {:error,
+           Error.bad_request(
+             message: "Error creating replication slot for database '#{db.name}': #{Exception.message(error)}"
+           )}
 
-          {:error, %Ecto.Changeset{} = changeset} ->
-            {:error,
-             Error.bad_request(
-               message:
-                 "Error creating Sequin replication slot for database '#{db.name}': #{inspect(changeset, pretty: true)}"
-             )}
-        end
-
+        {:error, %Ecto.Changeset{} = changeset} ->
+          {:error,
+           Error.bad_request(
+             message: "Error creating replication slot for database '#{db.name}': #{inspect(changeset, pretty: true)}"
+           )}
+      end
+    else
       {:error, %DBConnection.ConnectionError{}} ->
         {:error,
          Error.bad_request(
-           message: "Failed to connect to database '#{database["name"]}'. Please check your database credentials."
+           message: "Failed to connect to database '#{database_attrs["name"]}'. Please check your database credentials."
          )}
 
       {:error, error} when is_exception(error) ->
-        {:error, Error.bad_request(message: "Error creating database '#{database["name"]}': #{Exception.message(error)}")}
+        {:error,
+         Error.bad_request(message: "Error creating database '#{database_attrs["name"]}': #{Exception.message(error)}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error,
-         Error.bad_request(message: "Error creating database '#{database["name"]}': #{inspect(changeset, pretty: true)}")}
+         Error.bad_request(
+           message: "Error creating database '#{database_attrs["name"]}': #{inspect(changeset, pretty: true)}"
+         )}
+    end
+  end
+
+  defp parse_database_update_attrs(%{"publication" => _, "publication_name" => _}, _replication_slot) do
+    {:error,
+     Error.validation(
+       summary:
+         "Invalid database configuration: `publication` and `publication_name` are both specified. Only `publication` should be used."
+     )}
+  end
+
+  defp parse_database_update_attrs(%{"slot" => _, "slot_name" => _}, _replication_slot) do
+    {:error,
+     Error.validation(
+       summary: "Invalid database configuration: `slot` and `slot_name` are both specified. Only `slot` should be used."
+     )}
+  end
+
+  defp parse_database_update_attrs(database_attrs, replication_slot) do
+    slot_name = database_attrs["slot"]["name"] || database_attrs["slot_name"]
+    pub_name = database_attrs["publication"]["name"] || database_attrs["publication_name"]
+
+    cond do
+      not is_nil(slot_name) and not is_nil(replication_slot) and slot_name != replication_slot.slot_name ->
+        {:error,
+         Error.validation(
+           summary:
+             "Updating a database's replication slot is not supported. You can update in the Sequin web console. (Current slot name: #{replication_slot.slot_name}, new slot name: #{slot_name})"
+         )}
+
+      not is_nil(pub_name) and not is_nil(replication_slot) and pub_name != replication_slot.publication_name ->
+        {:error,
+         Error.validation(
+           summary:
+             "Updating a database's publication is not supported. You can update in the Sequin web console. (Current publication name: #{replication_slot.publication_name}, new publication name: #{pub_name})"
+         )}
+
+      true ->
+        {:ok, database_attrs}
+    end
+  end
+
+  defp parse_database_attrs(database_attrs) do
+    cond do
+      # Check for mutual exclusion: slot block vs slot_name flat key
+      # Flat "slot_name" is old style
+      is_nil(database_attrs["slot"]) and is_nil(database_attrs["slot_name"]) ->
+        {:error, Error.validation(summary: "`slot` is not specified")}
+
+      # Check for mutual exclusion: publication block vs publication_name flat key
+      # Flat "publication_name" is old style
+      is_nil(database_attrs["publication"]) and is_nil(database_attrs["publication_name"]) ->
+        {:error, Error.validation(summary: "`publication` is not specified")}
+
+      true ->
+        slot_name = database_attrs["slot_name"] || database_attrs["slot"]["name"]
+        pub_name = database_attrs["publication_name"] || database_attrs["publication"]["name"]
+
+        replication_attrs = %{"slot_name" => slot_name, "publication_name" => pub_name}
+
+        slot_attrs =
+          case Map.fetch(database_attrs, "slot") do
+            {:ok, %{"create_if_missing" => true}} -> %{"name" => slot_name}
+            _ -> nil
+          end
+
+        pub_attrs =
+          case Map.fetch(database_attrs, "publication") do
+            {:ok, %{"create_if_missing" => true}} ->
+              %{
+                "name" => pub_name,
+                "init_sql" => database_attrs["publication"]["init_sql"]
+              }
+
+            _ ->
+              nil
+          end
+
+        database_attrs = Map.merge(database_attrs, %{"slot_name" => slot_name, "publication_name" => pub_name})
+
+        {:ok, database_attrs, replication_attrs, slot_attrs, pub_attrs}
+    end
+  end
+
+  defp maybe_create_replication_slot(_db, nil), do: :ok
+
+  defp maybe_create_replication_slot(db, slot_params) do
+    case Postgres.create_replication_slot(db, slot_params["name"]) do
+      :ok ->
+        :ok
+
+      {:error, %ServiceError{} = error} ->
+        {:error,
+         Error.bad_request(
+           message: "Error creating replication slot: #{error.message} (#{inspect(error.details, pretty: true)})"
+         )}
+    end
+  end
+
+  defp maybe_create_publication(_db, nil), do: :ok
+
+  defp maybe_create_publication(db, pub_params) do
+    case Postgres.create_publication(db, pub_params["name"], pub_params["init_sql"]) do
+      :ok ->
+        :ok
+
+      {:error, %ServiceError{} = error} ->
+        {:error,
+         Error.bad_request(
+           message: "Error creating publication: #{error.message} (#{inspect(error.details, pretty: true)})"
+         )}
+
+      {:error, error} ->
+        {:error, Error.bad_request(message: "Error creating publication: #{Exception.message(error)}")}
     end
   end
 
@@ -481,6 +616,10 @@ defmodule Sequin.YamlLoader do
   defp upsert_wal_pipelines(_account_id, %{}, _databases) do
     Logger.info("Change retention not setup in config")
     {:ok, []}
+  end
+
+  defp upsert_wal_pipeline(_account_id, %{"name" => nil} = _attrs, _databases) do
+    {:error, Error.validation(summary: "`name` is required on each wal_pipeline.")}
   end
 
   defp upsert_wal_pipeline(account_id, %{"name" => name} = attrs, databases) do
@@ -681,6 +820,10 @@ defmodule Sequin.YamlLoader do
     {:ok, []}
   end
 
+  defp upsert_http_endpoint(_account_id, %{"name" => nil} = _attrs) do
+    {:error, Error.validation(summary: "`name` is required on each http_endpoint.")}
+  end
+
   defp upsert_http_endpoint(account_id, %{"name" => name} = attrs) do
     case Sequin.Consumers.find_http_endpoint_for_account(account_id, name: name) do
       {:ok, endpoint} ->
@@ -762,6 +905,10 @@ defmodule Sequin.YamlLoader do
 
   defp upsert_sink_consumers(_account_id, %{}, _databases, _http_endpoints), do: {:ok, []}
 
+  defp upsert_sink_consumer(_account_id, %{"name" => nil} = _consumer_attrs, _databases, _http_endpoints) do
+    {:error, Error.validation(summary: "`name` is a required field on each sink.")}
+  end
+
   defp upsert_sink_consumer(account_id, %{"name" => name} = consumer_attrs, databases, http_endpoints) do
     # Find existing consumer first
     case Sequin.Consumers.find_sink_consumer(account_id, name: name) do
@@ -842,6 +989,10 @@ defmodule Sequin.YamlLoader do
   end
 
   defp upsert_transforms(_account_id, %{}), do: {:ok, []}
+
+  defp upsert_transform(_account_id, %{"name" => nil} = _transform_attrs) do
+    {:error, Error.validation(summary: "`name` is required on transforms.")}
+  end
 
   defp upsert_transform(account_id, %{"name" => name} = raw_attrs) do
     with {:ok, transform_attrs} <- coerce_transform_attrs(raw_attrs) do

@@ -63,31 +63,24 @@
         </div>
       </div>
 
-      {#if consumer.routing_id}
-        <div>
-          <span class="text-sm text-gray-500">Router</span>
-          <div class="mt-2">
-          <a
-            href={`/functions/${consumer.routing_id}`}
-            data-phx-link="redirect"
-            data-phx-link-state="push"
-            >
-            <Button variant="outline" size="sm">
-              <ExternalLink class="h-4 w-4 mr-2" />
-              View Router
-            </Button>
-          </a>
-          </div>
-        </div>
-      {/if}
-
       <div>
         <span class="text-sm text-gray-500">HTTP Method</span>
         <div class="mt-2">
           <span
             class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
-            >{consumer.routing_id ? "Determined by router" : "POST"}</span
           >
+            {#if consumer.routing_id}
+              Determined by <a
+                href={`/functions/${consumer.routing_id}`}
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+                class="underline">router</a
+              >
+              <ExternalLink class="h-4 w-4 inline" />
+            {:else}
+              POST
+            {/if}
+          </span>
         </div>
       </div>
 
@@ -96,10 +89,20 @@
         <div class="mt-2">
           <span
             class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
-            >{consumer.routing_id ? "Determined by router" :     consumer.sink.http_endpoint_path}</span
           >
+            {#if consumer.routing_id}
+              Determined by <a
+                href={`/functions/${consumer.routing_id}`}
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+                class="underline">router</a
+              >
+              <ExternalLink class="h-4 w-4 inline" />
+            {:else}
+              {consumer.sink.http_endpoint_path}
+            {/if}
+          </span>
         </div>
-
       </div>
 
       {#if !consumer.routing_id}

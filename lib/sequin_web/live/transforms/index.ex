@@ -18,15 +18,15 @@ defmodule SequinWeb.TransformsLive.Index do
 
     ~H"""
     <div id="transforms-index">
-      <.svelte
-        name="transforms/Index"
-        props={
-          %{
-            transforms: @encoded_transforms
-          }
-        }
-        socket={@socket}
-      />
+    <.svelte
+    name="transforms/Index"
+    props={
+    %{
+    transforms: @encoded_transforms
+    }
+    }
+    socket={@socket}
+    />
     </div>
     """
   end
@@ -38,16 +38,16 @@ defmodule SequinWeb.TransformsLive.Index do
       type: transform.type,
       snippet:
         case transform.type do
-          "path" -> truncate(transform.transform.path, 40)
-          "function" -> truncate(transform.transform.code, 40)
-          "routing" -> truncate(transform.transform.code, 40)
+          "path" -> truncate(transform.transform.path)
+          "function" -> truncate(transform.transform.code)
+          "routing" -> truncate(transform.transform.code)
         end,
       insertedAt: transform.inserted_at,
       updatedAt: transform.updated_at
     }
   end
 
-  defp truncate(string, length) do
+  defp truncate(string, length \\ 512) do
     if String.length(string) > length do
       String.slice(string, 0, length) <> "..."
     else

@@ -5,7 +5,7 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   @error_bad_toplevel "Expecting only `def transform` or `def route` at the top level"
   @error_invalid_name "Only function names `transform` or `route` are allowed"
 
-  def create_expr(body_ast, modname, funname \\ :transform) do
+  def create_expr(body_ast, modname) do
     :ok = check(body_ast)
 
     arglist = Enum.map(@args, fn a -> Macro.var(a, :"Elixir") end)

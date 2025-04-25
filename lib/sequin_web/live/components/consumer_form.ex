@@ -12,7 +12,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
-  alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -264,7 +264,7 @@ defmodule SequinWeb.Components.ConsumerForm do
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
 
-      :redis ->
+      :redis_stream ->
         case test_redis_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
@@ -352,7 +352,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> Ecto.Changeset.get_field(:sink)
       |> case do
         %Ecto.Changeset{} = changeset -> changeset
-        %RedisSink{} = sink -> RedisSink.changeset(sink, %{})
+        %RedisStreamSink{} = sink -> RedisStreamSink.changeset(sink, %{})
       end
 
     if sink_changeset.valid? do
@@ -603,9 +603,9 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
-  defp decode_sink(:redis, sink) do
+  defp decode_sink(:redis_stream, sink) do
     %{
-      "type" => "redis",
+      "type" => "redis_stream",
       "host" => sink["host"],
       "port" => sink["port"],
       "stream_key" => sink["streamKey"],
@@ -803,9 +803,9 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
-  defp encode_sink(%RedisSink{} = sink) do
+  defp encode_sink(%RedisStreamSink{} = sink) do
     %{
-      "type" => "redis",
+      "type" => "redis_stream",
       "host" => sink.host,
       "port" => sink.port,
       "streamKey" => sink.stream_key,
@@ -1183,7 +1183,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :http_push -> "Webhook Sink"
       :kafka -> "Kafka Sink"
       :pull -> "Consumer Group"
-      :redis -> "Redis Sink"
+      :redis_stream -> "Redis Stream Sink"
       :sqs -> "SQS Sink"
       :sns -> "SNS Sink"
       :sequin_stream -> "Sequin Stream Sink"

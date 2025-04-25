@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.RedisSink do
+defmodule Sequin.Consumers.RedisStreamSink do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema
@@ -10,7 +10,7 @@ defmodule Sequin.Consumers.RedisSink do
   @derive {Jason.Encoder, only: [:host, :port, :stream_key]}
   @primary_key false
   typed_embedded_schema do
-    field :type, Ecto.Enum, values: [:redis], default: :redis
+    field :type, Ecto.Enum, values: [:redis_stream], default: :redis_stream
     field :host, :string
     field :port, :integer
     field :username, :string
@@ -67,7 +67,7 @@ defmodule Sequin.Consumers.RedisSink do
     "#{protocol(sink)}#{auth}#{sink.host}:#{sink.port}/#{sink.database}"
   end
 
-  def start_opts(%RedisSink{} = sink) do
+  def start_opts(%RedisStreamSink{} = sink) do
     # https://hexdocs.pm/eredis/eredis.html#start_link-1
     [
       host: to_charlist(sink.host),
@@ -80,34 +80,34 @@ defmodule Sequin.Consumers.RedisSink do
     |> maybe_put_password(sink)
   end
 
-  defp maybe_put_tls(opts, %RedisSink{tls: true}), do: Keyword.put(opts, :tls, verify: :verify_none)
+  defp maybe_put_tls(opts, %RedisStreamSink{tls: true}), do: Keyword.put(opts, :tls, verify: :verify_none)
   defp maybe_put_tls(opts, _), do: opts
 
-  defp maybe_put_username(opts, %RedisSink{username: nil}), do: opts
-  defp maybe_put_username(opts, %RedisSink{username: username}), do: Keyword.put(opts, :username, username)
+  defp maybe_put_username(opts, %RedisStreamSink{username: nil}), do: opts
+  defp maybe_put_username(opts, %RedisStreamSink{username: username}), do: Keyword.put(opts, :username, username)
 
-  defp maybe_put_password(opts, %RedisSink{password: nil}), do: opts
-  defp maybe_put_password(opts, %RedisSink{password: password}), do: Keyword.put(opts, :password, password)
+  defp maybe_put_password(opts, %RedisStreamSink{password: nil}), do: opts
+  defp maybe_put_password(opts, %RedisStreamSink{password: password}), do: Keyword.put(opts, :password, password)
 
-  defp build_auth_string(%RedisSink{username: nil, password: nil}, _obscure), do: ""
+  defp build_auth_string(%RedisStreamSink{username: nil, password: nil}, _obscure), do: ""
 
-  defp build_auth_string(%RedisSink{username: nil, password: password}, obscure) do
+  defp build_auth_string(%RedisStreamSink{username: nil, password: password}, obscure) do
     "#{format_password(password, obscure)}@"
   end
 
-  defp build_auth_string(%RedisSink{username: username, password: nil}, _obscure) do
+  defp build_auth_string(%RedisStreamSink{username: username, password: nil}, _obscure) do
     "#{username}@"
   end
 
-  defp build_auth_string(%RedisSink{username: username, password: password}, obscure) do
+  defp build_auth_string(%RedisStreamSink{username: username, password: password}, obscure) do
     "#{username}:#{format_password(password, obscure)}@"
   end
 
   defp format_password(_, true), do: "******"
   defp format_password(password, false), do: password
 
-  defp protocol(%RedisSink{tls: true}), do: "rediss://"
-  defp protocol(%RedisSink{tls: false}), do: "redis://"
+  defp protocol(%RedisStreamSink{tls: true}), do: "rediss://"
+  defp protocol(%RedisStreamSink{tls: false}), do: "redis://"
 
   defp prod_env?, do: Application.get_env(:sequin, :env) == :prod
 

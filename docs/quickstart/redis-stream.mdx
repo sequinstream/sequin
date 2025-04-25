@@ -1,6 +1,6 @@
 ---
-title: 'Get started with Redis'
-sidebarTitle: 'Redis'
+title: 'Get started with Redis Streams'
+sidebarTitle: 'Redis Streams'
 description: 'Stream Postgres changes to a Redis stream in minutes. Build real-time data pipelines with Redis and Postgres change data capture (CDC).'
 ---
 
@@ -29,7 +29,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
  </Step>
 
  <QuickstartInitialSteps />
- <Step title="Create a Redis Sink" icon="database">
+ <Step title="Create a Redis Stream Sink" icon="database">
   With the playground database connected, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to your Redis stream:
 
   <Steps>
@@ -38,7 +38,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
     </Step>
 
     <Step title="Select sink type">
-      Select "Redis" as the sink type and click "Continue".
+      Select "Redis Stream" as the sink type and click "Continue".
     </Step>
 
     <Step title='Note "Source" configuration'>
@@ -69,7 +69,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       - TLS: Toggle on if your Redis instance requires TLS
 
       <Frame>
-        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis/redis-config-card.png" alt="Redis configuration card" />
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis-stream/redis-config-card.png" alt="Redis configuration card" />
       </Frame>
     </Step>
 
@@ -84,7 +84,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
     <Step title="Create the sink">
       You can leave the rest of the defaults. As configured, the Redis stream will first receive a backfill of all rows currently in the `products` table. Then, it will receive all changes to the `products` table in real-time.
 
-      Click "Create Sink" to finish setting up your Redis sink.
+      Click "Create Sink" to finish setting up your Redis Stream sink.
     </Step>
   </Steps>
  </Step>
@@ -99,7 +99,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       Click the "Messages" tab. You'll see a list of the recently delivered messages:
 
       <Frame>
-        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis/messages-tab.png" alt="List of recently delivered messages" />
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis-stream/messages-tab.png" alt="List of recently delivered messages" />
       </Frame>
 
       <Check>
@@ -193,7 +193,7 @@ Now you're ready to connect your own database to Sequin and start streaming chan
   <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
     Connect your Postgres database to Sequin.
   </Card>
-  <Card title="Guide: Setting up a Redis sink" icon="database" href="/how-to/stream-postgres-to-redis">
+  <Card title="Guide: Setting up a Redis sink" icon="database" href="/how-to/stream-postgres-to-redis-stream">
     Setup a Redis sink to send changes to your stream.
   </Card>
 </CardGroup>

@@ -2,20 +2,13 @@ defmodule Sequin.RoutingTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.RoutingTransform
-  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Transform
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.SinkPipeline
-  alias Sequin.Runtime.SlotMessageStore
-  alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.Transforms.MiniElixir
 
   describe "routing transform creation and validation" do
@@ -80,7 +73,7 @@ defmodule Sequin.RoutingTest do
           }
         )
 
-      {:ok, mod} = MiniElixir.create(transform.id, transform.transform.code)
+      {:ok, _} = MiniElixir.create(transform.id, transform.transform.code)
 
       consumer =
         ConsumersFactory.insert_sink_consumer!(

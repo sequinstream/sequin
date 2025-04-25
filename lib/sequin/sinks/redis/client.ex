@@ -4,7 +4,7 @@ defmodule Sequin.Sinks.Redis.Client do
 
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.NetworkUtils
@@ -14,7 +14,7 @@ defmodule Sequin.Sinks.Redis.Client do
   require Logger
 
   @impl Redis
-  def send_messages(%SinkConsumer{sink: %RedisSink{} = sink} = consumer, messages) do
+  def send_messages(%SinkConsumer{sink: %RedisStreamSink{} = sink} = consumer, messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       commands = xadd_commands(consumer, messages)
 
@@ -29,7 +29,7 @@ defmodule Sequin.Sinks.Redis.Client do
   end
 
   @impl Redis
-  def message_count(%RedisSink{} = sink) do
+  def message_count(%RedisStreamSink{} = sink) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       case q(connection, ["XLEN", sink.stream_key]) do
         {:ok, count} -> {:ok, String.to_integer(count)}
@@ -39,14 +39,14 @@ defmodule Sequin.Sinks.Redis.Client do
   end
 
   @impl Redis
-  def client_info(%RedisSink{} = sink) do
+  def client_info(%RedisStreamSink{} = sink) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       q(connection, ["INFO"])
     end
   end
 
   @impl Redis
-  def test_connection(%RedisSink{} = sink) do
+  def test_connection(%RedisStreamSink{} = sink) do
     with {:ok, ipv6} <- NetworkUtils.check_ipv6(sink.host),
          :ok <-
            NetworkUtils.test_tcp_reachability(sink.host, sink.port, ipv6, :timer.seconds(10)),
@@ -83,7 +83,7 @@ defmodule Sequin.Sinks.Redis.Client do
       {:error, handle_error(error)}
   end
 
-  defp xadd_commands(%SinkConsumer{legacy_transform: :none, sink: %RedisSink{} = sink}, messages) do
+  defp xadd_commands(%SinkConsumer{legacy_transform: :none, sink: %RedisStreamSink{} = sink}, messages) do
     Enum.map(messages, fn
       %ConsumerRecord{} = message ->
         [
@@ -113,7 +113,7 @@ defmodule Sequin.Sinks.Redis.Client do
     end)
   end
 
-  defp xadd_commands(%SinkConsumer{legacy_transform: :record_only, sink: %RedisSink{} = sink} = consumer, messages) do
+  defp xadd_commands(%SinkConsumer{legacy_transform: :record_only, sink: %RedisStreamSink{} = sink} = consumer, messages) do
     Enum.map(messages, fn
       message ->
         [
@@ -128,22 +128,22 @@ defmodule Sequin.Sinks.Redis.Client do
 
   defp handle_error(:no_connection) do
     Logger.error("[Sequin.Sinks.Redis] No connection to Redis")
-    Error.service(service: :redis_sink, code: :no_connection, message: "No connection to Redis")
+    Error.service(service: :redis_stream_sink, code: :no_connection, message: "No connection to Redis")
   end
 
   defp handle_error(:timeout) do
     Logger.error("[Sequin.Sinks.Redis] Timeout sending messages to Redis")
-    Error.timeout(source: :redis_sink, timeout_ms: :timer.seconds(5))
+    Error.timeout(source: :redis_stream_sink, timeout_ms: :timer.seconds(5))
   end
 
   # Not sure if we hit this clause
   defp handle_error(error) when is_exception(error) do
     Logger.error("[Sequin.Sinks.Redis] Error sending messages to Redis", error: error)
-    Error.service(service: :redis_sink, code: :command_failed, message: Exception.message(error))
+    Error.service(service: :redis_stream_sink, code: :command_failed, message: Exception.message(error))
   end
 
   defp handle_error(error) do
     Logger.error("[Sequin.Sinks.Redis] Unknown error", error: error)
-    Error.service(service: :redis_sink, code: :command_failed, message: inspect(error))
+    Error.service(service: :redis_stream_sink, code: :command_failed, message: inspect(error))
   end
 end

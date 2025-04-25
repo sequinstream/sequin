@@ -9,7 +9,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.KafkaSink
-  alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.StringValue
@@ -884,7 +884,7 @@ defmodule Sequin.YamlLoaderTest do
                    database: "test-db"
                    table: "Characters"
                    destination:
-                     type: "redis"
+                     type: "redis_stream"
                      host: "localhost"
                      port: 6379
                      stream_key: "test-stream"
@@ -900,8 +900,8 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.name == "redis-consumer"
       assert consumer.sequence.name == "test-db.public.Characters"
 
-      assert %RedisSink{
-               type: :redis,
+      assert %RedisStreamSink{
+               type: :redis_stream,
                host: "localhost",
                port: 6379,
                stream_key: "test-stream",

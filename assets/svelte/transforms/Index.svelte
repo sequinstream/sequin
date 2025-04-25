@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
+  import { ExternalLink } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
   import { Code } from "lucide-svelte";
   import Beta from "$lib/components/Beta.svelte";
@@ -13,6 +14,16 @@
     insertedAt: string;
     updatedAt: string;
   }>;
+
+  let docBase = "https://sequinstream.com/docs";
+
+  let typeToDocPath = {
+    function: "/reference/transforms",
+    path: "/reference/transforms",
+    routing: "/reference/routing",
+  };
+
+  let getHref = (transform) => docBase + typeToDocPath[transform.type];
 </script>
 
 <div class="container mx-auto py-10">
@@ -57,8 +68,9 @@
       <Table.Header>
         <Table.Row>
           <Table.Head>Name</Table.Head>
+          <Table.Head>Type</Table.Head>
           <Table.Head>Function</Table.Head>
-          <Table.Head>Created at</Table.Head>
+          <Table.Head>Created</Table.Head>
           <Table.Head>Last updated</Table.Head>
         </Table.Row>
       </Table.Header>
@@ -74,8 +86,22 @@
           >
             <Table.Cell>{transform.name}</Table.Cell>
             <Table.Cell>
-              <div class="text-gray-600 bg-gray-50 p-2 rounded-md w-fit">
-                <code>{transform.snippet}</code>
+              <a
+                href={getHref(transform)}
+                target="_blank"
+                on:click|stopPropagation
+              >
+                <Button variant="outline" size="sm">
+                  <ExternalLink class="h-4 w-4 mr-2" />
+                  {transform.type}
+                </Button>
+              </a>
+            </Table.Cell>
+            <Table.Cell>
+              <div
+                class="text-gray-600 bg-gray-50 p-2 rounded-md max-w-lg overflow-x-auto"
+              >
+                <pre><code>{transform.snippet}</code></pre>
               </div>
             </Table.Cell>
             <Table.Cell>

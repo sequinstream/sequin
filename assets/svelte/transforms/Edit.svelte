@@ -255,6 +255,11 @@
     form.transform.sink_type = event.value;
   }
 
+  function handleRoutingSinkTypeSelect(event: any) {
+    form.transform.sink_type = event.value;
+    // form.transform.code ||= initialCode;
+  }
+
   function handleDelete() {
     if (usedByConsumers.length > 0) {
       showDeleteDialog = true;
@@ -370,6 +375,25 @@
   // }
 
   onMount(() => {
+    // Handle URL parameters for new transforms
+    if (!isEditing) {
+      const urlParams = new URLSearchParams(window.location.search);
+
+      const typeParam = urlParams.get("type");
+      if (typeParam && transformInternalToExternal[typeParam]) {
+        form.transform.type = typeParam;
+      }
+
+      const sinkTypeParam = urlParams.get("sink_type");
+      if (
+        sinkTypeParam &&
+        form.transform.type === "routing" &&
+        sinkTypeInternalToExternal[sinkTypeParam]
+      ) {
+        form.transform.sink_type = sinkTypeParam;
+      }
+    }
+
     if (databases.length === 1 && !selectedDatabaseId) {
       handleDatabaseSelect({ value: databases[0].id });
     }

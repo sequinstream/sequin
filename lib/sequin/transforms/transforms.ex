@@ -14,8 +14,8 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
-  alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.RoutingTransform
+  alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
@@ -178,9 +178,9 @@ defmodule Sequin.Transforms do
     })
   end
 
-  def to_external(%RedisSink{} = sink, show_sensitive) do
+  def to_external(%RedisStreamSink{} = sink, show_sensitive) do
     Sequin.Map.reject_nil_values(%{
-      type: "redis",
+      type: "redis_stream",
       host: sink.host,
       port: sink.port,
       stream_key: sink.stream_key,
@@ -662,10 +662,15 @@ defmodule Sequin.Transforms do
      }}
   end
 
-  defp parse_sink(%{"type" => "redis"} = attrs, _resources) do
+  # Backwards compatibility for Redis sink -> Redis Stream sink
+  defp parse_sink(%{"type" => "redis"} = attrs, resources) do
+    parse_sink(%{attrs | "type" => "redis_stream"}, resources)
+  end
+
+  defp parse_sink(%{"type" => "redis_stream"} = attrs, _resources) do
     {:ok,
      %{
-       type: :redis,
+       type: :redis_stream,
        host: attrs["host"],
        port: attrs["port"],
        stream_key: attrs["stream_key"],

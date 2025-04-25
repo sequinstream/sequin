@@ -85,7 +85,15 @@ run_step "$MIX_TEST_CMD"
 # Run CLI tests
 cd cli
 run_step "go test ./cli"
-run_step "go fmt ./..."
+
+# -------------------------------------------------------------
+# Make sure Go sources are already formatted – fail otherwise
+# -------------------------------------------------------------
+run_step 'if unformatted=$(gofmt -s -l .); [ -n "$unformatted" ]; then \
+    echo -e "${RED}The following Go files need to be formatted. Run '\''go fmt ./...'\'' and commit the changes:${RESET}\n$unformatted"; \
+    exit 1; fi'
+
+# Static analysis & build checks
 run_step "go vet ./..."
 run_step "go build -o /dev/null ./..."
 # Return to the project root

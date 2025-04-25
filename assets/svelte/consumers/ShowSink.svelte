@@ -30,7 +30,7 @@
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
   import SnsSinkCard from "../sinks/sns/SnsSinkCard.svelte";
-  import RedisSinkCard from "../sinks/redis/RedisSinkCard.svelte";
+  import RedisStreamSinkCard from "../sinks/redis/RedisStreamSinkCard.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SequinStreamSinkCard from "../sinks/sequin_stream/SequinStreamSinkCard.svelte";
   import GcpPubsubSinkCard from "../sinks/gcp_pubsub/GcpPubsubSinkCard.svelte";
@@ -105,8 +105,10 @@
     return consumer.sink.type === "sns";
   }
 
-  function isRedisConsumer(consumer: Consumer): consumer is RedisConsumer {
-    return consumer.sink.type === "redis";
+  function isRedisStreamConsumer(
+    consumer: Consumer,
+  ): consumer is RedisConsumer {
+    return consumer.sink.type === "redis_stream";
   }
 
   function isKafkaConsumer(consumer: Consumer): consumer is KafkaConsumer {
@@ -1044,7 +1046,7 @@
               Transform
               <Beta size="sm" variant="subtle" />
             </h2>
-            {#if transform && !isRedisConsumer(consumer)}
+            {#if transform && !isRedisStreamConsumer(consumer)}
               <a
                 href="/functions/{transform.id}"
                 data-phx-link="redirect"
@@ -1057,9 +1059,9 @@
               </a>
             {/if}
           </div>
-          {#if isRedisConsumer(consumer)}
+          {#if isRedisStreamConsumer(consumer)}
             <p class="text-sm text-muted-foreground">
-              Transforms are coming soon for Redis sinks. <a
+              Transforms are coming soon for Redis Stream sinks. <a
                 href="https://github.com/sequinstream/sequin/issues/1186"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -1121,8 +1123,8 @@
         <SqsSinkCard {consumer} />
       {:else if isSnsConsumer(consumer)}
         <SnsSinkCard {consumer} />
-      {:else if isRedisConsumer(consumer)}
-        <RedisSinkCard {consumer} />
+      {:else if isRedisStreamConsumer(consumer)}
+        <RedisStreamSinkCard {consumer} />
       {:else if isKafkaConsumer(consumer)}
         <KafkaSinkCard {consumer} />
       {:else if isGcpPubsubConsumer(consumer)}

@@ -107,7 +107,7 @@ If you're using Redis Streams, you'll need to be mindful of race conditions as y
 
 While Sequin will write messages pertaining to the same row to your stream in order, there's a risk that two separate workers will process messages simultaneously for the same row.
 
-You can use the Redis stream entry ID for a message to determine the order of messages for a given row. See the [Redis sink reference](/reference/sinks/redis#grouping-and-ordering) for more details.
+You can use the Redis stream entry ID for a message to determine the order of messages for a given row. See the [Redis sink reference](/reference/sinks/redis-stream#grouping-and-ordering) for more details.
 
 ## Verify your pipeline is working
 

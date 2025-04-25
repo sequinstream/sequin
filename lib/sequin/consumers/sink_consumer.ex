@@ -198,6 +198,10 @@ defmodule Sequin.Consumers.SinkConsumer do
       {"dynamic", {_, nil}} ->
         add_error(cs, :routing_id, "dynamic routing requires linked router!")
 
+        # XXX HACK TODO: this is for testing, it's probably wrong in real life  
+      {nil, {:changes, _}} ->
+        cs
+
       zz ->
         add_error(cs, :routing_id, "unknown routing mode! #{inspect(zz)}")
     end

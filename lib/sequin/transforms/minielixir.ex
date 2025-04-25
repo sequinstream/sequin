@@ -94,7 +94,7 @@ defmodule Sequin.Transforms.MiniElixir do
       end
 
     {:ok, mod} = ensure_code_is_loaded(id)
-    {:ok, mod.transform(to_string(data.action), data.record, changes, Sequin.Map.from_struct_deep(data.metadata))}
+    {:ok, mod.run(to_string(data.action), data.record, changes, Sequin.Map.from_struct_deep(data.metadata))}
   rescue
     error ->
       :telemetry.execute([:minielixir, :compile, :exception], %{id: id})

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -440,36 +441,36 @@ func (c *ConfigCommands) exportAction(ctx *fisk.ParseContext) error {
 		return err
 	}
 
-	// Print YAML content in default color
+	// Print YAML content to stdout
 	fmt.Println(exportResp.YAML)
 
 	// Create color styles
 	dim := color.New(color.Faint).SprintFunc()
 	yellow := color.New(color.FgYellow).SprintFunc()
 
-	// Print separator
-	fmt.Printf("%s\n", dim("───────────────────────────────────────────"))
+	// Print separator to stderr
+	fmt.Fprintf(os.Stderr, "%s\n", dim("───────────────────────────────────────────"))
 
-	// Print experimental warning and notes
-	fmt.Printf("%s %s%s\n\n",
+	// Print experimental warning and notes to stderr
+	fmt.Fprintf(os.Stderr, "%s %s%s\n\n",
 		"⚠️",
 		"export may be ",
 		yellow("INCOMPLETE")+". You may need to make modifications to the document before using it in plan/apply. Notably:",
 	)
 
-	// Print limitations in dim gray
-	fmt.Printf("%s\n", dim("• account and user are not exported. If you need them, add them manually."))
+	// Print limitations in dim gray to stderr
+	fmt.Fprintf(os.Stderr, "%s\n", dim("• account and user are not exported. If you need them, add them manually."))
 	if !c.showSensitive {
-		fmt.Printf("%s\n", dim("• You will need to replace values for encrypted fields, like password and encrypted_headers. "))
-		fmt.Printf("\t%s\n", dim("• You can use the --show-sensitive flag to see the actual values."))
+		fmt.Fprintf(os.Stderr, "%s\n", dim("• You will need to replace values for encrypted fields, like password and encrypted_headers. "))
+		fmt.Fprintf(os.Stderr, "\t%s\n", dim("• You can use the --show-sensitive flag to see the actual values."))
 	}
 
-	// Print usage instructions
-	fmt.Printf("\n%s\n\n", dim("To use this export:"))
-	fmt.Printf("%s\n", dim("1. Save the above YAML to a file (e.g., sequin.yaml)"))
-	fmt.Printf("%s\n", dim("2. Make tweaks as necessary, per above"))
-	fmt.Printf("%s\n", dim("3. Review changes with sequin config plan sequin.yaml"))
-	fmt.Printf("%s\n", dim("4. Apply changes with sequin config apply sequin.yaml"))
+	// Print usage instructions to stderr
+	fmt.Fprintf(os.Stderr, "\n%s\n\n", dim("To use this export:"))
+	fmt.Fprintf(os.Stderr, "%s\n", dim("1. Save the config YAML to a file (e.g., sequin.yaml)"))
+	fmt.Fprintf(os.Stderr, "%s\n", dim("2. Make tweaks as necessary, per above"))
+	fmt.Fprintf(os.Stderr, "%s\n", dim("3. Review changes with sequin config plan sequin.yaml"))
+	fmt.Fprintf(os.Stderr, "%s\n", dim("4. Apply changes with sequin config apply sequin.yaml"))
 
 	return nil
 }

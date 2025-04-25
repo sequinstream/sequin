@@ -1057,4 +1057,74 @@ defmodule Sequin.Postgres do
       {:error, error} -> {:error, error}
     end
   end
+
+  @doc """
+  Checks if the connected PostgreSQL instance is currently in recovery mode (i.e., a replica).
+  """
+  @spec is_in_recovery?(db_conn()) :: {:ok, boolean()} | {:error, Error.t()}
+  def is_in_recovery?(conn) do
+    query = "SELECT pg_is_in_recovery();"
+
+    case query(conn, query) do
+      {:ok, %{rows: [[is_recovery]]}} ->
+        {:ok, is_recovery}
+
+      {:error, error} ->
+        {:error,
+         Error.service(
+           service: :postgres,
+           message: "Failed to check recovery status",
+           details: error
+         )}
+    end
+  end
+
+  @doc """
+  Fetches the primary connection info string from a replica.
+  Returns `:error` if not a replica or if the setting is not available.
+  """
+  @spec get_primary_conninfo(db_conn()) :: {:ok, String.t()} | {:error, Error.t()}
+  def get_primary_conninfo(conn) do
+    with {:ok, true} <- is_in_recovery?(conn),
+         {:ok, %{rows: [[conninfo]]}} <- query(conn, "SHOW primary_conninfo;") do
+      {:ok, conninfo}
+    else
+      {:ok, false} ->
+        {:error, Error.invariant(message: "Not a replica database")}
+
+      {:error, %Postgrex.Error{postgres: %{code: "undefined_object"}}} ->
+        {:error, Error.service(service: :postgres, message: "primary_conninfo setting not found. Is this a replica?")}
+
+      {:error, error} ->
+        {:error, Error.service(service: :postgres, message: "Failed to get primary_conninfo", details: error)}
+    end
+  end
+
+  @doc """
+  Parses a `primary_conninfo` string into a map of connection attributes.
+  """
+  @spec parse_conninfo(String.t()) :: {:ok, map()} | {:error, :invalid_format}
+  def parse_conninfo(conninfo) do
+    opts =
+      conninfo
+      |> String.split()
+      |> Map.new(fn part ->
+        case String.split(part, "=", parts: 2) do
+          [key, value] -> {String.to_atom(key), trim_quotes(value)}
+          _ -> raise "Invalid format"
+        end
+      end)
+
+    {:ok, opts}
+  rescue
+    _ -> {:error, :invalid_format}
+  end
+
+  defp trim_quotes(value) do
+    if String.starts_with?(value, "'") and String.ends_with?(value, "'") do
+      String.slice(value, 1..(String.length(value) - 2))
+    else
+      value
+    end
+  end
 end

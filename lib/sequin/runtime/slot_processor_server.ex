@@ -120,6 +120,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :last_commit_lsn, integer()
       field :connection_state, :disconnected | :streaming
       field :transaction_annotations, nil | String.t()
+      field :is_replica?, boolean(), default: false
 
       # Wal cursors
       field :low_watermark_wal_cursor, Replication.wal_cursor()
@@ -247,6 +248,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       "[SlotProcessorServer] Initialized with opts: #{inspect(Keyword.delete(state.connection, :password), pretty: true)}"
     )
 
+    is_replica? =
+      case Databases.with_uncached_connection(state.postgres_database, &Postgres.is_in_recovery?/1) do
+        {:ok, is_recovery} ->
+          Logger.info("[SlotProcessorServer] Database recovery status: #{is_recovery}")
+          is_recovery
+
+        {:error, error} ->
+          Logger.error(
+            "[SlotProcessorServer] Failed to check database recovery status: #{inspect(error)}. Assuming primary."
+          )
+
+          false
+      end
+
     if state.test_pid do
       Mox.allow(Sequin.Runtime.SlotMessageHandlerMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
@@ -259,7 +274,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     schedule_process_logging(0)
     schedule_observe_ingestion_latency()
 
-    {:ok, %{state | connection_state: :disconnected}}
+    {:ok, %{state | connection_state: :disconnected, is_replica?: is_replica?}}
   end
 
   @impl ReplicationConnection
@@ -588,7 +603,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   def handle_info(:emit_heartbeat, %State{} = state) do
     execute_timed(:emit_heartbeat, fn ->
-      conn = get_cached_conn(state)
       heartbeat_id = UUID.uuid4()
       emitted_at = Sequin.utc_now()
 
@@ -599,19 +613,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           version: "1.0"
         })
 
-      case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.1', $1)", [payload]) do
-        {:ok, _res} ->
-          Logger.info("Emitted heartbeat", heartbeat_id: heartbeat_id, emitted_at: emitted_at)
+      with {:ok, conn} <- if(state.is_replica?, do: get_primary_conn(state), else: {:ok, get_cached_conn(state)}),
+           {:ok, _res} <-
+             Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.1', $1)", [payload]) do
+        Logger.info("Emitted heartbeat", heartbeat_id: heartbeat_id, emitted_at: emitted_at)
 
-          {:keep_state,
-           %{
-             state
-             | heartbeat_timer: nil,
-               current_heartbeat_id: heartbeat_id,
-               heartbeat_emitted_at: emitted_at,
-               message_received_since_last_heartbeat: false
-           }}
-
+        {:keep_state,
+         %{
+           state
+           | heartbeat_timer: nil,
+             current_heartbeat_id: heartbeat_id,
+             heartbeat_emitted_at: emitted_at,
+             message_received_since_last_heartbeat: false
+         }}
+      else
         {:error, error} ->
           Logger.error("Error emitting heartbeat: #{inspect(error)}")
           {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(10))}
@@ -1575,6 +1590,21 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp get_cached_conn(%State{} = state) do
     {:ok, conn} = ConnectionCache.connection(state.postgres_database)
     conn
+  end
+
+  defp get_primary_conn(%State{} = state) do
+    case Databases.primary_database_from_replica(state.postgres_database) do
+      {:ok, primary_db} ->
+        Logger.debug(
+          "[SlotProcessorServer] Attempting to get connection to primary: #{primary_db.hostname}:#{primary_db.port}"
+        )
+
+        ConnectionCache.connection(primary_db)
+
+      {:error, error} ->
+        Logger.error("[SlotProcessorServer] Failed to get primary database info: #{inspect(error)}")
+        {:error, error}
+    end
   end
 
   # Give the system 3 seconds to lower memory

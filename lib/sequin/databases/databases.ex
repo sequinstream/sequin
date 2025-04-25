@@ -475,6 +475,38 @@ defmodule Sequin.Databases do
     end
   end
 
+  @doc """
+  Tests connection to the primary database derived from a replica.
+  """
+  @spec test_primary_connect(PostgresDatabase.t(), integer()) :: :ok | {:error, term()}
+  def test_primary_connect(%PostgresDatabase{} = replica_db, timeout \\ 30_000) do
+    case Databases.primary_database_from_replica(replica_db) do
+      {:ok, primary_db} -> test_connect(primary_db, timeout)
+      # Error getting primary info
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  Verifies that the database connected to (assumed primary) is not in recovery.
+  """
+  @spec verify_is_primary(PostgresDatabase.t()) :: :ok | {:error, Error.t()}
+  def verify_is_primary(%PostgresDatabase{} = primary_db) do
+    # Use an uncached connection to be sure we're checking the right instance
+    with_uncached_connection(primary_db, fn conn ->
+      case Postgres.is_in_recovery?(conn) do
+        {:ok, false} ->
+          :ok
+
+        {:ok, true} ->
+          {:error, Error.validation(summary: "Primary connection check failed: Connected instance is still a replica.")}
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end)
+  end
+
   def check_replica_identity(%PostgresDatabase{} = db, oid) do
     with_connection(db, fn conn ->
       Postgres.check_replica_identity(conn, oid)
@@ -550,4 +582,46 @@ defmodule Sequin.Databases do
   end
 
   def list_tables(conn, schema), do: Postgres.list_tables(conn, schema)
+
+  @doc """
+  Creates a temporary PostgresDatabase struct representing the primary,
+  derived from a replica's struct and connection info.
+  """
+  @spec primary_database_from_replica(t()) :: {:ok, t()} | {:error, Error.t()}
+  def primary_database_from_replica(%PostgresDatabase{} = replica_db) do
+    # Use a temporary connection to the replica to get primary info
+    Databases.with_uncached_connection(replica_db, fn conn ->
+      with {:ok, conninfo_str} <- Postgres.get_primary_conninfo(conn),
+           {:ok, conninfo_map} <- Postgres.parse_conninfo(conninfo_str) do
+        required_keys = [:hostname, :port, :username, :password]
+
+        if Enum.all?(required_keys, &(Map.get(conninfo_map, &1) != nil)) do
+          %{
+            replica_db
+            | id: replica_db.id <> "-primary",
+              name: replica_db.name <> " (Primary)",
+              hostname: Map.get(conninfo_map, :host),
+              port: String.to_integer(Map.get(conninfo_map, :port)),
+              # Use replica db name if not specified
+              database: Map.get(conninfo_map, :dbname, replica_db.database),
+              username: Map.get(conninfo_map, :user),
+              password: Map.get(conninfo_map, :password),
+              # TODO: Handle ssl
+              ssl: replica_db.ssl,
+              # TODO: Handle ipv6
+              ipv6: replica_db.ipv6,
+              # Limit pool size for primary connection
+              pool_size: 2
+          }
+        else
+          missing = Enum.filter(required_keys, &(Map.get(primary_attrs, &1) == nil))
+
+          {:error,
+           Error.invariant(
+             message: "Missing required primary connection info keys: #{inspect(missing)} from '#{conninfo_str}'"
+           )}
+        end
+      end
+    end)
+  end
 end

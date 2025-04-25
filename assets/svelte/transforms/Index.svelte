@@ -86,13 +86,14 @@
           >
             <Table.Cell>{transform.name}</Table.Cell>
             <Table.Cell>
-              <a href={getHref(transform)}
-                 target="_blank"
-                 on:click|stopPropagation
-                 >
+              <a
+                href={getHref(transform)}
+                target="_blank"
+                on:click|stopPropagation
+              >
                 <Button variant="outline" size="sm">
                   <ExternalLink class="h-4 w-4 mr-2" />
-                {transform.type}
+                  {transform.type}
                 </Button>
               </a>
             </Table.Cell>

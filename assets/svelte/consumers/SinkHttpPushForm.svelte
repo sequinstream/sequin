@@ -400,17 +400,6 @@
                   - Path portion of the URL
                 </li>
               </ul>
-              <p class="text-sm text-muted-foreground mt-3">
-                <strong>Note:</strong> The base URL cannot be changed dynamically.
-              </p>
-              <p class="text-sm text-muted-foreground mt-3">
-                Your transform needs to return a map with the above keys to
-                route the message.
-              </p>
-              <p class="text-sm text-muted-foreground mt-3">
-                For missing or nil keys, the default values from the static
-                configuration will be used.
-              </p>
             </div>
           {/if}
 

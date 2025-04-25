@@ -39,7 +39,7 @@ defmodule SequinWeb.TransformsLive.Edit do
   @initial_route_http """
   def route(action, record, changes, metadata) do
     %{
-      method: "PATCH",
+      method: "POST",
       endpoint_path: "/entities/\#{record["id"]}"
     }
   end

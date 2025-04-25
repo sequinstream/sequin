@@ -45,7 +45,6 @@ defmodule Sequin.Transforms.MiniElixir do
           raise error
 
         {:error, :validator, error} ->
-          dbg(transform)
           raise error
       end
     else

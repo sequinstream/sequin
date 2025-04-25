@@ -34,10 +34,21 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
   @impl SinkPipeline
   def apply_routing(_consumer, rinfo) when is_map(rinfo) do
-    struct(RoutingInfo, rinfo)
+    struct!(RoutingInfo, rinfo)
+  rescue
+    KeyError ->
+      expected_keys =
+        RoutingInfo.__struct__()
+        |> Map.keys()
+        |> Enum.reject(&(&1 == :__struct__))
+        |> Enum.join(", ")
+
+      raise Error.invariant(
+              message: "Invalid routing response. Expected a map with keys: #{expected_keys}, got: #{inspect(rinfo)}"
+            )
   end
 
-  def apply_routing(_, v), do: raise("Routing transform must return a map! Got: #{inspect(v)}")
+  def apply_routing(_, v), do: raise("Routing function must return a map! Got: #{inspect(v)}")
 
   @impl SinkPipeline
   def handle_message(message, context) do

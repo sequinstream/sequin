@@ -812,7 +812,7 @@ Please help me create or modify the Elixir function transform to achieve the des
               <AlertDialogHeader>
                 <AlertDialogTitle>Update Function</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This transform is currently being used by the following
+                  This function is currently being used by the following
                   consumers:
                   <ul class="list-disc pl-4 mt-2 space-y-1">
                     {#each usedByConsumers as consumer}
@@ -820,7 +820,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                     {/each}
                   </ul>
                   <p class="mt-2">
-                    Are you sure you want to update this transform? This may
+                    Are you sure you want to update this function? This may
                     affect the behavior of these consumers.
                   </p>
                 </AlertDialogDescription>

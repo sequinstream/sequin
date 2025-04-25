@@ -5,7 +5,6 @@ defmodule Sequin.Transforms.MiniElixir do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.Transform
   alias Sequin.Error
   alias Sequin.Transforms.MiniElixir.Validator
@@ -46,7 +45,7 @@ defmodule Sequin.Transforms.MiniElixir do
     end
   end
 
-  def run_interpreted_inner(%Transform{id: id, transform: %FunctionTransform{code: code}}, data) do
+  def run_interpreted_inner(%Transform{id: id, transform: %_s{code: code}}, data) do
     changes =
       case data do
         %ConsumerRecordData{} -> %{}

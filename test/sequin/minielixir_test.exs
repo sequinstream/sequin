@@ -4,11 +4,13 @@ defmodule Sequin.MiniElixirTest do
   alias Sequin.Transforms.MiniElixir.Validator
 
   describe "unwrap" do
-    test "unwrap extracts the single def transform or fails" do
+    test "unwrap extracts the single def or fails" do
       assert {:ok, _} = Validator.unwrap(quote(do: def(transform(action, record, changes, metadata), do: x)))
+      assert {:ok, _} = Validator.unwrap(quote(do: def(route(action, record, changes, metadata), do: x)))
 
       assert {:error, :validator, _} = Validator.unwrap(quote(do: def(f(a, b, c, d), do: x)))
       assert {:error, :validator, _} = Validator.unwrap(quote(do: def(transform(a, b, c, d), do: x)))
+      assert {:error, :validator, _} = Validator.unwrap(quote(do: def(route(a, b, c, d), do: x)))
 
       assert {:error, :validator, _} =
                Validator.unwrap(

@@ -21,6 +21,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -834,6 +835,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_transform_inner(%PathTransform{path: path}), do: %{path: path}
   defp encode_transform_inner(%FunctionTransform{code: code}), do: %{code: code}
+
+  defp encode_transform_inner(%RoutingTransform{sink_type: sink_type, code: code}) do
+    %{sink_type: sink_type, code: code}
+  end
 
   defp encode_postgres_database(postgres_database) do
     %{

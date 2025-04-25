@@ -45,6 +45,7 @@
       type: string;
       path?: string;
       code?: string;
+      sink_type?: string;
     };
   }
 
@@ -55,6 +56,7 @@
       type?: string[];
       path?: string[];
       code?: string[];
+      sink_type?: string[];
     };
   }
 
@@ -96,6 +98,11 @@
   let transformInternalToExternal = {
     path: "Path transform",
     function: "Function transform",
+    routing: "Routing function",
+  };
+
+  let sinkTypeInternalToExternal = {
+    http_push: "Webhook sink",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];
@@ -212,6 +219,11 @@
     form.transform.code ||= initialCode;
   }
 
+  function handleRoutingSinkTypeSelect(event: any) {
+    form.transform.sink_type = event.value;
+    // form.transform.code ||= initialCode;
+  }
+
   function handleDelete() {
     if (usedByConsumers.length > 0) {
       showDeleteDialog = true;
@@ -312,6 +324,25 @@
   // }
 
   onMount(() => {
+    // Handle URL parameters for new transforms
+    if (!isEditing) {
+      const urlParams = new URLSearchParams(window.location.search);
+
+      const typeParam = urlParams.get("type");
+      if (typeParam && transformInternalToExternal[typeParam]) {
+        form.transform.type = typeParam;
+      }
+
+      const sinkTypeParam = urlParams.get("sink_type");
+      if (
+        sinkTypeParam &&
+        form.transform.type === "routing" &&
+        sinkTypeInternalToExternal[sinkTypeParam]
+      ) {
+        form.transform.sink_type = sinkTypeParam;
+      }
+    }
+
     if (databases.length === 1 && !selectedDatabaseId) {
       handleDatabaseSelect({ value: databases[0].id });
     }
@@ -498,6 +529,7 @@ Please help me create or modify the Elixir function transform to achieve the des
               </PopoverContent>
             </Popover>
           </div>
+
           <Select
             onSelectedChange={handleTypeSelect}
             selected={{
@@ -518,12 +550,42 @@ Please help me create or modify the Elixir function transform to achieve the des
                 value="function"
                 label={transformInternalToExternal.function}
               />
+              <SelectItem
+                value="routing"
+                label={transformInternalToExternal.routing}
+              />
             </SelectContent>
           </Select>
           {#if showErrors && formErrors.transform?.type}
             <p class="text-sm text-red-500 dark:text-red-400">
               {formErrors.transform.type[0]}
             </p>
+          {/if}
+
+          {#if form.transform.type === "routing"}
+            <Select
+              onSelectedChange={handleRoutingSinkTypeSelect}
+              selected={{
+                value: form.transform.sink_type,
+                label: sinkTypeInternalToExternal[form.transform.sink_type],
+              }}
+              disabled={isEditing}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a sink type for routing..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  value="http_push"
+                  label={sinkTypeInternalToExternal.http_push}
+                />
+              </SelectContent>
+            </Select>
+            {#if showErrors && formErrors.transform?.type}
+              <p class="text-sm text-red-500 dark:text-red-400">
+                {formErrors.transform.type[0]}
+              </p>
+            {/if}
           {/if}
         </div>
 
@@ -607,7 +669,10 @@ Please help me create or modify the Elixir function transform to achieve the des
           </div>
         {/if}
 
-        <div hidden={form.transform.type !== "function"}>
+        <div
+          hidden={form.transform.type !== "function" &&
+            form.transform.type !== "routing"}
+        >
           <div class="space-y-2">
             {#if !functionTransformsEnabled}
               <div

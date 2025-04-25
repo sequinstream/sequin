@@ -65,10 +65,20 @@ defmodule Sequin.Runtime.SinkPipeline do
   """
   @callback batchers_config(consumer :: SinkConsumer.t()) :: keyword()
 
+  @doc """
+  Returns the key/value pairs which control the pipeline after routing.
+
+  Receives the result of running the routing transform.
+  Should return the effective values of all relevant keys.
+  It's intended that the return value become the batch key.
+  """
+  @callback apply_routing(self :: SinkConsumer.t(), rinfo :: Map.t()) :: Map.t()
+
   @optional_callbacks [
     processors_config: 1,
     batchers_config: 1,
-    handle_message: 2
+    handle_message: 2,
+    apply_routing: 2
   ]
 
   @doc """
@@ -93,7 +103,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       consumer =
       opts
       |> Keyword.fetch!(:consumer)
-      |> Repo.lazy_preload([:sequence, :postgres_database, :transform])
+      |> Repo.lazy_preload([:sequence, :postgres_database, :transform, :routing])
 
     slot_message_store_mod = Keyword.get(opts, :slot_message_store_mod, Sequin.Runtime.SlotMessageStore)
     producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
@@ -265,7 +275,16 @@ defmodule Sequin.Runtime.SinkPipeline do
     end
   end
 
-  defp pipeline_mod_for_consumer(%SinkConsumer{} = consumer) do
+  def apply_routing(sc, rinfo) do
+    pmod = pipeline_mod_for_consumer(sc)
+
+    if function_exported?(pmod, :apply_routing, 2) do
+      # Stupid
+      apply(pmod, :apply_routing, [sc, rinfo])
+    end
+  end
+
+  def pipeline_mod_for_consumer(%SinkConsumer{} = consumer) do
     case consumer.type do
       :azure_event_hub -> Sequin.Runtime.AzureEventHubPipeline
       :elasticsearch -> Sequin.Runtime.ElasticsearchPipeline

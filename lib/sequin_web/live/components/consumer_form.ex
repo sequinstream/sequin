@@ -13,6 +13,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -541,6 +542,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "batch_size" => form["batchSize"],
         "initial_backfill" => decode_initial_backfill(form),
         "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
+        "routing_id" => if(form["routing"] === "none", do: nil, else: form["routing"]),
         "timestamp_format" => form["timestampFormat"]
       }
 
@@ -563,7 +565,8 @@ defmodule SequinWeb.Components.ConsumerForm do
     %{
       "type" => "http_push",
       "http_endpoint_id" => sink["httpEndpointId"],
-      "http_endpoint_path" => sink["httpEndpointPath"]
+      "http_endpoint_path" => sink["httpEndpointPath"],
+      "mode" => sink["mode"]
     }
   end
 
@@ -952,12 +955,13 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp encode_transform(%Transform{} = transform) do
-    %{
-      "id" => transform.id,
-      "name" => transform.name,
-      "type" => transform.type,
-      "description" => transform.description
-    }
+    Map.merge(
+      %{"id" => transform.id, "name" => transform.name, "type" => transform.type, "description" => transform.description},
+      case transform.transform do
+        %RoutingTransform{} = rt -> %{"sink_type" => rt.sink_type}
+        _ -> %{}
+      end
+    )
   end
 
   defp encode_http_endpoint(http_endpoint) do

@@ -8,6 +8,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Error
   alias Sequin.Metrics
   alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Transforms.MiniElixir
 
   require Logger
 
@@ -26,7 +27,41 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def apply_routing(me, rinfo) when is_map(rinfo) do
+    path = rinfo[:endpoint_path]
+    method = rinfo[:method]
+
+    me
+    |> apply_routing(nil)
+    |> case do
+      m when is_binary(path) -> Map.put(m, :endpoint_path, path)
+      m -> m
+    end
+    |> case do
+      m when is_binary(method) -> Map.put(m, :method, method)
+      m -> m
+    end
+  end
+
+  def apply_routing(consumer, _) do
+    %{endpoint_path: (consumer.sink && consumer.sink.http_endpoint_path) || "", method: "POST"}
+  end
+
+  @impl SinkPipeline
+  def handle_message(message, context) do
+    routing = context.consumer.routing
+
+    if is_nil(routing) do
+      {:ok, message, context}
+    else
+      res = MiniElixir.run_compiled(routing, message.data.data)
+      message = Broadway.Message.put_batch_key(message, apply_routing(context.consumer, res))
+      {:ok, message, context}
+    end
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, batch_info, context) do
     %{
       consumer: consumer,
       http_endpoint: http_endpoint,
@@ -41,6 +76,17 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       messages
       |> Enum.map(& &1.data)
       |> prepare_message_data(consumer, features)
+
+    req_opts =
+      case batch_info.batch_key do
+        :default ->
+          req_opts
+
+        m when is_map(m) ->
+          req_opts
+          |> Keyword.put(:url, m.endpoint_path)
+          |> Keyword.put(:method, m.method)
+      end
 
     case push_message(http_endpoint, consumer, message_data, req_opts) do
       :ok ->
@@ -106,6 +152,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
     req =
       [
+        method: "POST",
         base_url: HttpEndpoint.url(http_endpoint),
         url: consumer.sink.http_endpoint_path || "",
         headers: headers,
@@ -115,13 +162,13 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       |> Keyword.merge(req_opts)
       |> Req.new()
 
-    case Req.post(req) do
+    case Req.request(req) do
       {:ok, response} ->
         ensure_status(response, consumer)
 
       {:error, %Mint.TransportError{reason: reason} = error} ->
         Logger.error(
-          "[HttpPushPipeline] POST to webhook endpoint failed with Mint.TransportError: #{Exception.message(error)}",
+          "[HttpPushPipeline] #{req.method} to webhook endpoint failed with Mint.TransportError: #{Exception.message(error)}",
           error: error
         )
 
@@ -129,13 +176,13 @@ defmodule Sequin.Runtime.HttpPushPipeline do
          Error.service(
            service: :http_endpoint,
            code: "transport_error",
-           message: "POST to webhook endpoint failed",
+           message: "#{req.method} to webhook endpoint failed",
            details: reason
          )}
 
       {:error, %Req.TransportError{reason: reason} = error} ->
         Logger.error(
-          "[HttpPushPipeline] POST to webhook endpoint failed with Req.TransportError: #{Exception.message(error)}",
+          "[HttpPushPipeline] #{req.method} to webhook endpoint failed with Req.TransportError: #{Exception.message(error)}",
           error: error
         )
 
@@ -143,7 +190,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
          Error.service(
            service: :http_endpoint,
            code: "transport_error",
-           message: "POST to webhook endpoint failed",
+           message: "#{req.method} to webhook endpoint failed",
            details: reason
          )}
 

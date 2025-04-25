@@ -9,6 +9,7 @@ defmodule Sequin.Consumers.Transform do
   alias Sequin.Accounts.Account
   alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.PathTransform
+  alias Sequin.Consumers.RoutingTransform
 
   @derive {Jason.Encoder, only: [:name, :type, :description, :transform]}
   schema "transforms" do
@@ -21,7 +22,8 @@ defmodule Sequin.Consumers.Transform do
     polymorphic_embeds_one(:transform,
       types: [
         path: PathTransform,
-        function: FunctionTransform
+        function: FunctionTransform,
+        routing: RoutingTransform
       ],
       on_replace: :update,
       type_field_name: :type

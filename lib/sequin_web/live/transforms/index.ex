@@ -40,6 +40,7 @@ defmodule SequinWeb.TransformsLive.Index do
         case transform.type do
           "path" -> truncate(transform.transform.path, 40)
           "function" -> truncate(transform.transform.code, 40)
+          "routing" -> truncate(transform.transform.code, 40)
         end,
       insertedAt: transform.inserted_at,
       updatedAt: transform.updated_at

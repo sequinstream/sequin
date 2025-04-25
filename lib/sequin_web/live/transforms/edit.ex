@@ -5,7 +5,7 @@ defmodule SequinWeb.TransformsLive.Edit do
   import LiveSvelte
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.FunctionTransform
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Transform
   alias Sequin.Databases
@@ -20,7 +20,7 @@ defmodule SequinWeb.TransformsLive.Edit do
   require Logger
 
   @max_test_messages TestMessages.max_message_count()
-  @initialcode """
+  @initial_transform """
   def transform(action, record, changes, metadata) do
     %{
       action: action,
@@ -30,6 +30,20 @@ defmodule SequinWeb.TransformsLive.Edit do
     }
   end
   """
+
+  @initial_route_http """
+  def transform(action, record, changes, metadata) do
+    %{
+      method: "PATCH",
+      endpoint_url: "/entities/\#{record["id"]}"
+    }
+  end
+  """
+
+  @initial_code_map %{
+    "transform" => @initial_transform,
+    "routing_http_push" => @initial_route_http
+  }
 
   # We generate the function completions at compile time because
   # docs are not available at runtime in our release.
@@ -72,8 +86,8 @@ defmodule SequinWeb.TransformsLive.Edit do
         show_errors?: false,
         selected_database_id: nil,
         selected_table_oid: nil,
-        synthetic_test_message: FunctionTransform.synthetic_message(),
-        initial_code: @initialcode,
+        synthetic_test_message: Consumers.synthetic_message(),
+        initial_code: @initial_code_map,
         function_completions: @function_completions
       )
       |> assign_databases()
@@ -98,7 +112,8 @@ defmodule SequinWeb.TransformsLive.Edit do
             databases: Enum.map(@databases, &encode_database/1),
             validating: @validating,
             parent: "transform_new",
-            initialCode: @initial_code,
+            initialCodeMap: @initial_code,
+            initialCode: "glugma",
             functionTransformsEnabled: Sequin.feature_enabled?(:function_transforms),
             functionCompletions: @function_completions
           }
@@ -262,6 +277,12 @@ defmodule SequinWeb.TransformsLive.Edit do
       legacy_transform: :none
     }
 
+    consumer =
+      case transform do
+        %RoutingTransform{} -> %{consumer | type: transform.sink_type}
+        _ -> consumer
+      end
+
     base_messages = Enum.map(test_messages, &prepare_test_message/1)
 
     if is_struct(transform) do
@@ -281,7 +302,8 @@ defmodule SequinWeb.TransformsLive.Edit do
         end
     end
   rescue
-    ex -> %{error: MiniElixir.encode_error(ex), time: nil}
+    ex ->
+      %{error: MiniElixir.encode_error(ex), time: nil}
   end
 
   defp prepare_test_message(m) do
@@ -354,6 +376,10 @@ defmodule SequinWeb.TransformsLive.Edit do
 
   defp decode_transform(%{"type" => "function"} = transform) do
     %{"type" => "function", "code" => transform["code"]}
+  end
+
+  defp decode_transform(%{"type" => "routing"} = transform) do
+    %{"type" => "routing", "code" => transform["code"], "sink_type" => transform["sink_type"]}
   end
 
   defp decode_transform(%{}), do: nil

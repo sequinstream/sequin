@@ -19,6 +19,7 @@
   import { cn } from "$lib/utils";
   import FilterForm from "../components/FilterForm.svelte";
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
+  import TransformPicker from "$lib/consumers/TransformPicker.svelte";
   import SinkHttpPushForm from "$lib/consumers/SinkHttpPushForm.svelte";
   import SqsSinkForm from "$lib/sinks/sqs/SqsSinkForm.svelte";
   import SnsSinkForm from "$lib/sinks/sns/SnsSinkForm.svelte";
@@ -351,10 +352,15 @@
   let selectedExampleType: "change" | "record" = "change";
 
   let transformSectionExpanded = false;
+  let routingSectionExpanded = false;
+
   let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   function handleTransformChange(event: { value: string }) {
     form.transform = event.value;
+  }
+  function handleRoutingChange(event: { value: string }) {
+    form.routing = event.value;
   }
 
   function refreshTransforms() {
@@ -557,6 +563,7 @@
           </button>
         {/if}
       </CardHeader>
+
       <CardContent>
         <div class="space-y-2">
           {#if consumer.type === "redis_stream"}
@@ -589,76 +596,16 @@
               Please select a table first.
             </p>
           {:else}
-            <div class="space-y-4">
-              <div class="">
-                <div class="flex justify-end gap-2 mb-4">
-                  <Button
-                    variant="outline"
-                    class="whitespace-nowrap"
-                    on:click={refreshTransforms}
-                    disabled={transformRefreshState === "refreshing"}
-                    aria-label="Refresh Transforms"
-                  >
-                    {#if transformRefreshState === "refreshing"}
-                      <RotateCwIcon class="h-4 w-4 animate-spin" />
-                    {:else if transformRefreshState === "done"}
-                      <CheckIcon class="h-4 w-4 text-green-500" />
-                    {:else}
-                      <RotateCwIcon class="h-4 w-4" />
-                    {/if}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    class="whitespace-nowrap"
-                    on:click={() => window.open("/transforms/new", "_blank")}
-                  >
-                    <Plus class="h-4 w-4 mr-2" />
-                    Create new transform
-                  </Button>
-                </div>
-
-                <div class="border rounded-lg overflow-hidden">
-                  <div class="max-h-[400px] overflow-y-auto">
-                    <Table>
-                      <TableBody>
-                        <TableRow
-                          on:click={() =>
-                            handleTransformChange({ value: "none" })}
-                          class="cursor-pointer {form.transform === 'none'
-                            ? 'bg-blue-50 hover:bg-blue-100'
-                            : 'hover:bg-gray-100'}"
-                        >
-                          <TableCell>
-                            <div class="font-medium">None</div>
-                            <div class="text-sm text-muted-foreground">
-                              No transform applied. Messages will be sent as-is.
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                        {#each transforms as transform}
-                          <TableRow
-                            on:click={() =>
-                              handleTransformChange({ value: transform.id })}
-                            class="cursor-pointer {transform.id ===
-                            form.transform
-                              ? 'bg-blue-50 hover:bg-blue-100'
-                              : 'hover:bg-gray-100'}"
-                          >
-                            <TableCell>
-                              <div class="font-medium">{transform.name}</div>
-                              <div class="text-sm text-muted-foreground">
-                                {transform.description ||
-                                  "No description provided."}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        {/each}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TransformPicker
+              {transforms}
+              selectedTransformId={form.transform}
+              title="Transform"
+              onTransformChange={(transformId) =>
+                (form.transform = transformId)}
+              {refreshTransforms}
+              transformTypes={["function", "path"]}
+              bind:refreshState={transformRefreshState}
+            />
           {/if}
         </div>
       </CardContent>
@@ -761,6 +708,9 @@
         bind:form
         {live}
         {parent}
+        {transforms}
+        {refreshTransforms}
+        bind:refreshState={transformRefreshState}
       />
     {:else if consumer.type === "sqs"}
       <SqsSinkForm errors={errors.consumer} bind:form />

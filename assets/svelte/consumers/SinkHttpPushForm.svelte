@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
+  import TransformPicker from "$lib/consumers/TransformPicker.svelte";
   import { Input } from "$lib/components/ui/input";
   import {
     Select,
@@ -45,6 +46,10 @@
   export let parent;
   export let httpEndpoints;
   export let errors: any = {};
+
+  export let transforms: Array<any> = [];
+  export let refreshTransforms: () => void;
+  export let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   const pushEvent = (event, payload = {}, cb = (result: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
@@ -100,6 +105,8 @@
   $: fullUrl = selectedHttpEndpoint?.baseUrl
     ? concatenateUrl(selectedHttpEndpoint?.baseUrl, form.sink.httpEndpointPath)
     : "";
+
+  let activeTab = "static";
 </script>
 
 <Card>
@@ -278,50 +285,152 @@
         </DropdownMenu>
       </div>
     </div>
-
     {#if errors.sink?.http_endpoint_id}
       <p class="text-destructive text-sm">Please select an HTTP endpoint</p>
     {/if}
 
-    {#if form.sink.httpEndpointId && selectedHttpEndpoint}
-      <div class="space-y-2">
-        <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
-        <div class="flex flex-row bg-white">
-          <div
-            class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
-          >
-            {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
-          </div>
-          <Input
-            id="http-endpoint-path"
-            bind:value={form.sink.httpEndpointPath}
-            placeholder="/some-path"
-            class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
-            style="border-left: none;"
-          />
+    {#if selectedHttpEndpoint?.name}
+      <div class="mt-4">
+        <div class="border-b border-gray-200">
+          <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+            <button
+              type="button"
+              class="px-3 py-2 text-sm font-medium {activeTab === 'static'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:border-b-2 hover:border-gray-300'}"
+              on:click={() => (activeTab = "static")}
+            >
+              Static
+            </button>
+            <button
+              type="button"
+              class="px-3 py-2 text-sm font-medium {activeTab === 'dynamic'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-muted-foreground hover:text-foreground hover:border-b-2 hover:border-gray-300'}"
+              on:click={() => (activeTab = "dynamic")}
+            >
+              Dynamic
+            </button>
+          </nav>
         </div>
-        <p class="text-sm text-muted-foreground">
-          The path to append to the base URL for this consumer's requests.
-        </p>
-        {#if errors.sink?.http_endpoint_path}
-          {#each errors.sink.http_endpoint_path as error}
-            <p class="text-destructive text-sm">
-              {error}
-            </p>
-          {/each}
-        {/if}
-      </div>
-    {/if}
 
-    {#if form.sink.httpEndpointId && fullUrl && fullUrl !== ""}
-      <div class="mt-4 space-y-2">
-        <Label>Fully qualified URL</Label>
-        <div class="flex items-center space-x-2 overflow-x-auto">
-          <p
-            class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-          >
-            {fullUrl}
-          </p>
+        <div class="mt-4">
+          {#if activeTab === "static"}
+            {#if form.sink.httpEndpointId && selectedHttpEndpoint}
+              <div class="space-y-2">
+                <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
+                <div class="flex flex-row bg-white">
+                  <div
+                    class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+                  >
+                    {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
+                  </div>
+                  <Input
+                    id="http-endpoint-path"
+                    bind:value={form.sink.httpEndpointPath}
+                    placeholder="/some-path"
+                    class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                    style="border-left: none;"
+                  />
+                </div>
+                <p class="text-sm text-muted-foreground">
+                  The path to append to the base URL for this consumer's
+                  requests.
+                </p>
+                {#if errors.sink?.http_endpoint_path}
+                  {#each errors.sink.http_endpoint_path as error}
+                    <p class="text-destructive text-sm">
+                      {error}
+                    </p>
+                  {/each}
+                {/if}
+              </div>
+            {/if}
+
+            {#if form.sink.httpEndpointId && fullUrl && fullUrl !== ""}
+              <div class="mt-4 space-y-2">
+                <Label>Fully qualified URL</Label>
+                <div class="flex items-center space-x-2 overflow-x-auto">
+                  <p
+                    class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+                  >
+                    {fullUrl}
+                  </p>
+                </div>
+              </div>
+            {/if}
+          {:else if activeTab === "dynamic"}
+            <div class="space-y-4">
+              {#if form.sink.httpEndpointId && selectedHttpEndpoint}
+                <div class="space-y-2">
+                  <Label for="http-endpoint-url">HTTP Endpoint Base URL</Label>
+                  <div class="flex flex-row bg-white">
+                    <div
+                      class="text-sm rounded px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+                    >
+                      {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
+                    </div>
+                  </div>
+                </div>
+              {/if}
+
+              <TransformPicker
+                {transforms}
+                selectedTransformId={form.sink.routingTransformId || "none"}
+                title="Router"
+                onTransformChange={(transformId) =>
+                  (form.sink.routingTransformId =
+                    transformId === "none" ? null : transformId)}
+                {refreshTransforms}
+                transformTypes={["routing"]}
+                typeLabelKey="sink_type"
+                createNewQueryParams="?type=routing&sink_type=http_push"
+                bind:refreshState={transformRefreshState}
+              >
+                <p class="text-sm text-muted-foreground">
+                  Select a routing transform to dynamically set request
+                  parameters:
+                </p>
+              </TransformPicker>
+
+              <div class="mt-4 space-y-4">
+                <div class="p-4">
+                  <p class="text-sm text-muted-foreground">
+                    HTTP Endpoint routing transform allows you to dynamically
+                    set:
+                  </p>
+                  <ul
+                    class="list-disc pl-5 mt-2 space-y-1 text-sm text-muted-foreground"
+                  >
+                    <li>
+                      <span class="font-mono text-xs bg-stone-100 px-1 rounded"
+                        >method</span
+                      >
+                      - HTTP method (<code>GET</code>, <code>POST</code>,
+                      <code>PUT</code>, etc.)
+                    </li>
+                    <li>
+                      <span class="font-mono text-xs bg-stone-100 px-1 rounded"
+                        >endpoint_path</span
+                      >
+                      - Path portion of the URL
+                    </li>
+                  </ul>
+                  <p class="text-sm text-muted-foreground mt-3">
+                    <strong>Note:</strong> The base URL cannot be changed dynamically.
+                  </p>
+                  <p class="text-sm text-muted-foreground mt-3">
+                    Your transform needs to return a map with these keys to
+                    route the message.
+                  </p>
+                  <p class="text-sm text-muted-foreground mt-3">
+                    For missing or nil keys, the default values from the static
+                    configuration will be used.
+                  </p>
+                </div>
+              </div>
+            </div>
+          {/if}
         </div>
       </div>
     {/if}

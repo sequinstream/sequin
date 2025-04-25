@@ -18,15 +18,15 @@ defmodule SequinWeb.TransformsLive.Index do
 
     ~H"""
     <div id="transforms-index">
-    <.svelte
-    name="transforms/Index"
-    props={
-    %{
-    transforms: @encoded_transforms
-    }
-    }
-    socket={@socket}
-    />
+      <.svelte
+        name="transforms/Index"
+        props={
+          %{
+            transforms: @encoded_transforms
+          }
+        }
+        socket={@socket}
+      />
     </div>
     """
   end

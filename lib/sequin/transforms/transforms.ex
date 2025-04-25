@@ -7,6 +7,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.FunctionTransform
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -290,6 +291,19 @@ defmodule Sequin.Transforms do
       }
     }
   end
+
+  def to_external(%Transform{transform: %RoutingTransform{}} = transform, _show_sensitive) do
+    %{
+      name: transform.name,
+      description: transform.description,
+      transform: %{
+        type: transform.type,
+        sink_type: transform.transform.sink_type,
+        code: transform.transform.code,
+      }
+    }
+  end
+
 
   def to_external(%ColumnFilter{} = column_filter, _show_sensitive) do
     %{

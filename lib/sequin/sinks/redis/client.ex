@@ -2,9 +2,12 @@ defmodule Sequin.Sinks.Redis.Client do
   @moduledoc false
   @behaviour Sequin.Sinks.Redis
 
+  import Sequin.Consumers.Guards, only: [is_redis_sink: 1]
+
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.NetworkUtils
@@ -29,6 +32,22 @@ defmodule Sequin.Sinks.Redis.Client do
   end
 
   @impl Redis
+  def set_messages(%RedisStringSink{} = sink, messages) do
+    with {:ok, connection} <- ConnectionCache.connection(sink) do
+      commands =
+        Enum.map(messages, fn
+          %{key: key, value: value, expire_ms: nil} ->
+            ["SET", key, value]
+
+          %{key: key, value: value, expire_ms: expire_ms} ->
+            ["SET", key, value, "PX", expire_ms]
+        end)
+
+      qp(connection, commands)
+    end
+  end
+
+  @impl Redis
   def message_count(%RedisStreamSink{} = sink) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       case q(connection, ["XLEN", sink.stream_key]) do
@@ -39,25 +58,25 @@ defmodule Sequin.Sinks.Redis.Client do
   end
 
   @impl Redis
-  def client_info(%RedisStreamSink{} = sink) do
-    with {:ok, connection} <- ConnectionCache.connection(sink) do
+  def client_info(redis_sink) when is_redis_sink(redis_sink) do
+    with {:ok, connection} <- ConnectionCache.connection(redis_sink) do
       q(connection, ["INFO"])
     end
   end
 
   @impl Redis
-  def test_connection(%RedisStreamSink{} = sink) do
-    with {:ok, ipv6} <- NetworkUtils.check_ipv6(sink.host),
+  def test_connection(redis_sink) when is_redis_sink(redis_sink) do
+    with {:ok, ipv6} <- NetworkUtils.check_ipv6(redis_sink.host),
          :ok <-
-           NetworkUtils.test_tcp_reachability(sink.host, sink.port, ipv6, :timer.seconds(10)),
-         {:ok, connection} <- ConnectionCache.connection(sink) do
+           NetworkUtils.test_tcp_reachability(redis_sink.host, redis_sink.port, ipv6, :timer.seconds(10)),
+         {:ok, connection} <- ConnectionCache.connection(redis_sink) do
       case q(connection, ["PING"]) do
         {:ok, "PONG"} ->
           :ok
 
         {:error, error} ->
           # Clear the cache
-          ConnectionCache.invalidate_connection(sink)
+          ConnectionCache.invalidate_connection(redis_sink)
           {:error, error}
       end
     end

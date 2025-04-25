@@ -16,6 +16,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -52,6 +53,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         Enum.random([
           :http_push,
           :redis_stream,
+          :redis_string,
           :sqs,
           :sns,
           :kafka,
@@ -290,6 +292,22 @@ defmodule Sequin.Factory.ConsumersFactory do
         auth_type: Enum.random([:api_key, :basic, :bearer]),
         auth_value: Factory.word(),
         batch_size: Enum.random(50..500)
+      },
+      attrs
+    )
+  end
+
+  defp sink(:redis_string, _account_id, attrs) do
+    merge_attributes(
+      %RedisStringSink{
+        type: :redis_string,
+        host: "redis-string.example.com",
+        port: 6379,
+        database: 0,
+        tls: false,
+        username: Factory.word(),
+        password: Factory.word(),
+        expire_ms: Enum.random([nil, 1000, 10_000, 100_000])
       },
       attrs
     )

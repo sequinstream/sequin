@@ -1,0 +1,199 @@
+---
+title: 'Get started with Redis Strings'
+sidebarTitle: 'Redis Strings'
+description: 'Stream Postgres changes to Redis key/values in minutes. Build real-time data pipelines with Redis and Postgres change data capture (CDC).'
+---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Redis stream. You'll:
+
+- Boot Sequin
+- Connect to a sample playground database 
+- Configure a Redis stream to receive database changes
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin. This same pattern can be used to setup your own Postgres CDC pipeline with Redis.
+
+<Steps titleSize="h2">
+ <Step title="Boot Redis" icon="database">
+  If you don't already have Redis running, start Redis with Docker:
+
+  ```bash
+  docker run --name redis -p 6379:6379 -d redis:latest
+  ```
+
+  <Note>
+    If you're using another Redis instance, be sure you're using Redis 5.0+ (required for streams).
+  </Note>
+ </Step>
+
+ <QuickstartInitialSteps />
+ <Step title="Create a Redis String Sink" icon="database">
+  With the playground database connected, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to your Redis stream:
+
+  <Steps>
+    <Step title="Navigate to Sinks">
+      Click "Sinks" in the sidebar navigation, then click "Create Sink".
+    </Step>
+
+    <Step title="Select sink type">
+      Select "Redis String" as the sink type and click "Continue".
+    </Step>
+
+    <Step title='Note "Source" configuration'>
+      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
+
+      <Frame>
+        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
+      </Frame>
+    </Step>
+
+    <Step title="Setup a backfill">
+      Toggle open the "Initial backfill" card and select "Backfill all rows":
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
+      </Frame>
+    </Step>
+
+    <Step title='Configure "Redis Configuration"'>
+      In the "Redis Configuration" card, enter your Redis connection details.
+
+      - Host: If running locally with Docker, use `host.docker.internal`
+      - Port: The port Redis is listening on (default: 6379)
+      - Username: Required if Redis authentication is enabled
+      - Password: Required if Redis authentication is enabled
+      - Stream Key: The Redis stream to write to (e.g., `products-stream`)
+      - Database: The Redis database number (default: 0)
+      - TLS: Toggle on if your Redis instance requires TLS
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis-stream/redis-config-card.png" alt="Redis configuration card" />
+      </Frame>
+    </Step>
+
+    <Step title="Test the connection">
+      At the bottom of the form, click the "Test Connection" button. If you provided proper credentials, it should succeed.
+
+      <Check>
+        Sequin can connect to your Redis instance.
+      </Check>
+    </Step>
+
+    <Step title="Create the sink">
+      You can leave the rest of the defaults. As configured, the Redis stream will first receive a backfill of all rows currently in the `products` table. Then, it will receive all changes to the `products` table in real-time.
+
+      Click "Create Sink" to finish setting up your Redis String sink.
+    </Step>
+  </Steps>
+ </Step>
+
+  <Step title="See changes flow to your Redis stream" icon="waveform-lines">
+    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to your Redis stream.
+
+    Let's confirm messages are flowing:
+
+    <Steps>
+    <Step title="Messages tab">
+      Click the "Messages" tab. You'll see a list of the recently delivered messages:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis-stream/messages-tab.png" alt="List of recently delivered messages" />
+      </Frame>
+
+      <Check>
+        Sequin indicates it backfilled the `products` table to your Redis stream.
+      </Check>
+    </Step>
+      <Step title="View in Redis CLI">
+        Connect to your Redis instance using the Redis CLI and read from the stream:
+
+        ```bash
+        redis-cli
+        > xread count 5 streams playground-stream 0
+        ```
+
+        You should see the messages that were sent from Sequin. These are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table.
+
+        <Check>
+          Messages are flowing from Sequin to your Redis stream.
+        </Check>
+      </Step>
+
+      <Step title="Make some changes">
+        Let's make some changes to the `products` table and see them flow to your stream.
+
+        In your terminal, run the following command to insert a new row into the `products` table:
+
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+        ```
+
+        In Redis CLI, read the latest messages from the stream:
+
+        ```bash
+        xrevrange playground-stream + - count 1
+        ```
+
+        You should see a message corresponding to the inserted row.
+
+        Feel free to try other changes:
+
+        <AccordionGroup>
+          <Accordion title="Update a product's price">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Change a product's name">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Delete a product">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "delete from products where name = 'Blueberries (6 oz)';"
+            ```
+          </Accordion>
+        </AccordionGroup>
+
+        Each change will appear in your Redis stream within a few seconds.
+      </Step>
+    </Steps>
+  </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Set up a complete Postgres change data capture pipeline
+- Loaded existing data through a backfill
+- Made changes to the `products` table
+- Verified changes are flowing to your Redis stream
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  <Card title="Guide: Setting up a Redis sink" icon="database" href="/how-to/stream-postgres-to-redis-stream">
+    Setup a Redis sink to send changes to your stream.
+  </Card>
+</CardGroup>

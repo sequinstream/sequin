@@ -15,6 +15,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -188,6 +189,19 @@ defmodule Sequin.Transforms do
       tls: sink.tls,
       username: sink.username,
       password: maybe_obfuscate(sink.password, show_sensitive)
+    })
+  end
+
+  def to_external(%RedisStringSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "redis_string",
+      host: sink.host,
+      port: sink.port,
+      database: sink.database,
+      tls: sink.tls,
+      username: sink.username,
+      password: maybe_obfuscate(sink.password, show_sensitive),
+      expire_ms: sink.expire_ms
     })
   end
 
@@ -678,6 +692,20 @@ defmodule Sequin.Transforms do
        tls: attrs["tls"] || false,
        username: attrs["username"],
        password: attrs["password"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "redis_string"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :redis_string,
+       host: attrs["host"],
+       port: attrs["port"],
+       database: attrs["database"] || 0,
+       tls: attrs["tls"] || false,
+       username: attrs["username"],
+       password: attrs["password"],
+       expire_ms: attrs["expire_ms"]
      }}
   end
 

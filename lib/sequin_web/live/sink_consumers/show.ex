@@ -21,6 +21,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -695,6 +696,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sink(%SinkConsumer{sink: %RedisStringSink{} = sink}) do
+    default_host = if env() == :dev, do: "localhost"
+
+    %{
+      type: :redis_string,
+      host: sink.host || default_host,
+      port: sink.port || 6379,
+      database: sink.database,
+      tls: sink.tls,
+      url: RedisStringSink.redis_url(sink),
+      expireMs: sink.expire_ms
+    }
+  end
+
   defp encode_sink(%SinkConsumer{sink: %GcpPubsubSink{} = sink}) do
     %{
       type: :gcp_pubsub,
@@ -1204,6 +1219,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :nats}}), do: "NATS Sink"
   defp consumer_title(%{sink: %{type: :rabbitmq}}), do: "RabbitMQ Sink"
   defp consumer_title(%{sink: %{type: :redis_stream}}), do: "Redis Stream Sink"
+  defp consumer_title(%{sink: %{type: :redis_string}}), do: "Redis String Sink"
   defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"
   defp consumer_title(%{sink: %{type: :sns}}), do: "SNS Sink"
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"

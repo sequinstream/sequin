@@ -18,7 +18,7 @@
     HttpPushConsumer,
     SqsConsumer,
     SnsConsumer,
-    RedisConsumer,
+    RedisStreamConsumer,
     KafkaConsumer,
     SequinStreamConsumer,
     GcpPubsubConsumer,
@@ -26,11 +26,12 @@
     RabbitMqConsumer,
     TypesenseConsumer,
     ElasticsearchConsumer,
+    RedisStringConsumer,
   } from "./types";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
   import SnsSinkCard from "../sinks/sns/SnsSinkCard.svelte";
-  import RedisStreamSinkCard from "../sinks/redis/RedisStreamSinkCard.svelte";
+  import RedisStreamSinkCard from "../sinks/redis-stream/RedisStreamSinkCard.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SequinStreamSinkCard from "../sinks/sequin_stream/SequinStreamSinkCard.svelte";
   import GcpPubsubSinkCard from "../sinks/gcp_pubsub/GcpPubsubSinkCard.svelte";
@@ -38,6 +39,7 @@
   import RabbitMqSinkCard from "../sinks/rabbitmq/RabbitMqSinkCard.svelte";
   import TypesenseSinkCard from "../sinks/typesense/TypesenseSinkCard.svelte";
   import ElasticsearchSinkCard from "../sinks/elasticsearch/ElasticsearchSinkCard.svelte";
+  import RedisStringSinkCard from "../sinks/redis-string/RedisStringSinkCard.svelte";
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
@@ -107,7 +109,7 @@
 
   function isRedisStreamConsumer(
     consumer: Consumer,
-  ): consumer is RedisConsumer {
+  ): consumer is RedisStreamConsumer {
     return consumer.sink.type === "redis_stream";
   }
 
@@ -125,6 +127,12 @@
     consumer: Consumer,
   ): consumer is ElasticsearchConsumer {
     return consumer.sink.type === "elasticsearch";
+  }
+
+  function isRedisStringConsumer(
+    consumer: Consumer,
+  ): consumer is RedisStringConsumer {
+    return consumer.sink.type === "redis_string";
   }
 
   function isNatsConsumer(consumer: Consumer): consumer is NatsConsumer {
@@ -1140,6 +1148,8 @@
         <TypesenseSinkCard {consumer} />
       {:else if isElasticsearchConsumer(consumer)}
         <ElasticsearchSinkCard {consumer} />
+      {:else if isRedisStringConsumer(consumer)}
+        <RedisStringSinkCard {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

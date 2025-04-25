@@ -17,10 +17,10 @@ defmodule Sequin.Transforms.MiniElixir do
     Agent.start_link(fn -> :no_state end, name: __MODULE__)
   end
 
-  def run_compiled(transform, data, funname \\ :transform) do
+  def run_compiled(transform, data) do
     if Sequin.feature_enabled?(:function_transforms) do
       __MODULE__
-      |> Task.async(:run_compiled_inner, [transform, data, funname])
+      |> Task.async(:run_compiled_inner, [transform, data])
       |> Task.await(@timeout)
       |> case do
         {:ok, answer} -> answer
@@ -32,10 +32,10 @@ defmodule Sequin.Transforms.MiniElixir do
     end
   end
 
-  def run_interpreted(transform, data, funname \\ :transform) do
+  def run_interpreted(transform, data) do
     if Sequin.feature_enabled?(:function_transforms) do
       __MODULE__
-      |> Task.async(:run_interpreted_inner, [transform, data, funname])
+      |> Task.async(:run_interpreted_inner, [transform, data])
       |> Task.await(@timeout)
       |> case do
         {:ok, answer} ->
@@ -53,7 +53,7 @@ defmodule Sequin.Transforms.MiniElixir do
     end
   end
 
-  def run_interpreted_inner(%Transform{id: id, transform: %_s{code: code}}, data, _funname) do
+  def run_interpreted_inner(%Transform{id: id, transform: %_s{code: code}}, data) do
     changes =
       case data do
         %ConsumerRecordData{} -> %{}
@@ -86,7 +86,7 @@ defmodule Sequin.Transforms.MiniElixir do
       {:error, error}
   end
 
-  def run_compiled_inner(%Transform{id: id}, data, funname) do
+  def run_compiled_inner(%Transform{id: id}, data) do
     changes =
       case data do
         %ConsumerRecordData{} -> %{}
@@ -94,8 +94,7 @@ defmodule Sequin.Transforms.MiniElixir do
       end
 
     {:ok, mod} = ensure_code_is_loaded(id)
-    args = [to_string(data.action), data.record, changes, Sequin.Map.from_struct_deep(data.metadata)]
-    {:ok, apply(mod, funname, args)}
+    {:ok, mod.transform(to_string(data.action), data.record, changes, Sequin.Map.from_struct_deep(data.metadata))}
   rescue
     error ->
       :telemetry.execute([:minielixir, :compile, :exception], %{id: id})

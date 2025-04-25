@@ -255,11 +255,6 @@
     form.transform.sink_type = event.value;
   }
 
-  function handleRoutingSinkTypeSelect(event: any) {
-    form.transform.sink_type = event.value;
-    // form.transform.code ||= initialCode;
-  }
-
   function handleDelete() {
     if (usedByConsumers.length > 0) {
       showDeleteDialog = true;

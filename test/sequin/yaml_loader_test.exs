@@ -1320,6 +1320,176 @@ defmodule Sequin.YamlLoaderTest do
         """)
       end
     end
+
+    test "creates webhook subscription with routing function reference" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               transforms:
+                 - name: "my-routing"
+                   transform:
+                     type: "routing"
+                     sink_type: "http_push"
+                     code: |-
+                       def route(action, record, changes, metadata) do
+                         %{
+                           method: "POST",
+                           endpoint_path: "/custom/\#{record["id"]}"
+                         }
+                       end
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                   routing: "my-routing"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, [:sequence, :routing])
+
+      assert consumer.name == "sequin-playground-webhook"
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      # Check routing function reference was used
+      assert consumer.routing
+      assert consumer.routing.name == "my-routing"
+      assert consumer.routing.transform.type == :routing
+      assert consumer.routing.transform.sink_type == :http_push
+      assert consumer.routing.transform.code =~ "def route(action, record, changes, metadata)"
+      assert consumer.routing.transform.code =~ "/custom/"
+    end
+
+    test "creates webhook subscription with new yaml names" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               functions:
+                 - name: "my-routing"
+                   function:
+                     type: "routing"
+                     sink_type: "http_push"
+                     code: |-
+                       def route(action, record, changes, metadata) do
+                         %{
+                           method: "POST",
+                           endpoint_path: "/custom/\#{record["id"]}"
+                         }
+                       end
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                   routing: "my-routing"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, [:sequence, :routing])
+
+      assert consumer.routing.name == "my-routing"
+    end
+
+    test "creates webhook subscription with FLAT YAML" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               functions:
+                 - name: "my-routing"
+                   type: "routing"
+                   sink_type: "http_push"
+                   code: |-
+                     def route(action, record, changes, metadata) do
+                       %{
+                         method: "POST",
+                         endpoint_path: "/custom/\#{record["id"]}"
+                       }
+                     end
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                   routing: "my-routing"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, [:sequence, :routing])
+
+      assert consumer.routing.name == "my-routing"
+    end
+
+    test "errors when routing transform doesn't exist" do
+      assert_raise RuntimeError, ~r/[Tt]ransform 'non-existent-routing' not found/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_db_and_sequence_yml()}
+
+        http_endpoints:
+          - name: "sequin-playground-http"
+            url: "https://api.example.com/webhook"
+
+        sinks:
+          - name: "sequin-playground-webhook"
+            database: "test-db"
+            table: "Characters"
+            destination:
+              type: "webhook"
+              http_endpoint: "sequin-playground-http"
+            routing: "non-existent-routing"
+        """)
+      end
+    end
+
+    test "errors when transform referenced for routing is not a routing transform" do
+      assert_raise RuntimeError, "`routing` must reference a transform with type `routing`", fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_db_and_sequence_yml()}
+
+        transforms:
+          - name: "regular-transform"
+            transform:
+              type: "path"
+              path: "record"
+
+        http_endpoints:
+          - name: "sequin-playground-http"
+            url: "https://api.example.com/webhook"
+
+        sinks:
+          - name: "sequin-playground-webhook"
+            database: "test-db"
+            table: "Characters"
+            destination:
+              type: "webhook"
+              http_endpoint: "sequin-playground-http"
+            routing: "regular-transform"
+        """)
+      end
+    end
   end
 
   describe "await_database" do

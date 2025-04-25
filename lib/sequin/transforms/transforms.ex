@@ -15,6 +15,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
@@ -273,10 +274,8 @@ defmodule Sequin.Transforms do
     %{
       name: transform.name,
       description: transform.description,
-      transform: %{
-        type: transform.type,
-        path: transform.transform.path
-      }
+      type: transform.type,
+      path: transform.transform.path
     }
   end
 
@@ -284,10 +283,18 @@ defmodule Sequin.Transforms do
     %{
       name: transform.name,
       description: transform.description,
-      transform: %{
-        type: transform.type,
-        code: transform.transform.code
-      }
+      type: transform.type,
+      code: transform.transform.code
+    }
+  end
+
+  def to_external(%Transform{transform: %RoutingTransform{}} = transform, _show_sensitive) do
+    %{
+      name: transform.name,
+      description: transform.description,
+      type: transform.type,
+      sink_type: transform.transform.sink_type,
+      code: transform.transform.code
     }
   end
 
@@ -556,6 +563,15 @@ defmodule Sequin.Transforms do
           case parse_transform_id(account_id, value) do
             {:ok, transform_id} -> {:cont, {:ok, Map.put(acc, :transform_id, transform_id)}}
             {:error, error} -> {:halt, {:error, error}}
+          end
+
+        "routing" ->
+          case parse_transform_id(account_id, value) do
+            {:ok, transform_id} ->
+              {:cont, {:ok, Map.merge(acc, %{routing_mode: "dynamic", routing_id: transform_id})}}
+
+            {:error, error} ->
+              {:halt, {:error, error}}
           end
 
         "timestamp_format" ->

@@ -739,6 +739,15 @@ defmodule Sequin.YamlLoader do
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
+  rescue
+    e in Postgrex.Error ->
+      case e do
+        %_{postgres: %{message: "routing_id must reference a transform with type 'routing'"}} ->
+          raise "`routing` must reference a transform with type `routing`"
+
+        _ ->
+          reraise e, __STACKTRACE__
+      end
   end
 
   defp upsert_sink_consumers(_account_id, %{}, _databases, _http_endpoints), do: {:ok, []}
@@ -803,7 +812,15 @@ defmodule Sequin.YamlLoader do
     end
   end
 
+  defp upsert_transforms(_, %{"transforms" => _, "functions" => _}) do
+    {:error, "Cannot specify both `functions` and `transforms`"}
+  end
+
   defp upsert_transforms(account_id, %{"transforms" => transforms}) do
+    upsert_transforms(account_id, %{"functions" => transforms})
+  end
+
+  defp upsert_transforms(account_id, %{"functions" => transforms}) do
     Logger.info("Upserting transforms: #{inspect(transforms, pretty: true)}")
 
     Enum.reduce_while(transforms, {:ok, []}, fn transform_attrs, {:ok, acc} ->
@@ -816,13 +833,15 @@ defmodule Sequin.YamlLoader do
 
   defp upsert_transforms(_account_id, %{}), do: {:ok, []}
 
-  defp upsert_transform(account_id, %{"name" => name} = transform_attrs) do
-    case Consumers.find_transform(account_id, name: name) do
-      {:ok, transform} ->
-        update_transform(account_id, transform.id, transform_attrs)
+  defp upsert_transform(account_id, %{"name" => name} = raw_attrs) do
+    with {:ok, transform_attrs} <- coerce_transform_attrs(raw_attrs) do
+      case Consumers.find_transform(account_id, name: name) do
+        {:ok, transform} ->
+          update_transform(account_id, transform.id, transform_attrs)
 
-      {:error, %NotFoundError{}} ->
-        create_transform(account_id, transform_attrs)
+        {:error, %NotFoundError{}} ->
+          create_transform(account_id, transform_attrs)
+      end
     end
   end
 
@@ -857,4 +876,37 @@ defmodule Sequin.YamlLoader do
          Error.bad_request(message: "Error updating transform '#{attrs["name"]}': #{inspect(error, pretty: true)}")}
     end
   end
+
+  defp coerce_transform_attrs(%{"function" => _, "transform" => _}) do
+    {:error, "Cannot specify both `function` and `transform`"}
+  end
+
+  defp coerce_transform_attrs(%{"function" => transform} = raw_attrs) do
+    attrs =
+      raw_attrs
+      |> Map.delete("function")
+      |> Map.put("transform", coerce_transform_inner(transform))
+
+    {:ok, attrs}
+  end
+
+  defp coerce_transform_attrs(%{"transform" => _} = attrs) do
+    {:ok, Map.update!(attrs, "transform", &coerce_transform_inner/1)}
+  end
+
+  # Assume that if you don't have "function" or "transform" that you used flat structure
+  defp coerce_transform_attrs(flat) do
+    nested_attrs =
+      flat
+      |> Map.take(["id", "name"])
+      |> Map.put("transform", Map.take(flat, ["type", "sink_type", "code", "description"]))
+
+    {:ok, nested_attrs}
+  end
+
+  defp coerce_transform_inner(%{"sink_type" => "webhook"} = attrs) do
+    Map.put(attrs, "sink_type", "http_push")
+  end
+
+  defp coerce_transform_inner(attrs), do: attrs
 end

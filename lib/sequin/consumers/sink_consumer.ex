@@ -186,12 +186,14 @@ defmodule Sequin.Consumers.SinkConsumer do
         # Both unchanged, this is fine
         cs
 
-      {"static", {_, nil}} -> cs
+      {"static", {_, nil}} ->
+        cs
 
       {"static", {_, id}} when not is_nil(id) ->
         add_error(cs, :routing_id, "static routing cannot have linked router!")
 
-      {"dynamic", {_, id}} when not is_nil(id) -> cs
+      {"dynamic", {_, id}} when not is_nil(id) ->
+        cs
 
       {"dynamic", {_, nil}} ->
         add_error(cs, :routing_id, "dynamic routing requires linked router!")

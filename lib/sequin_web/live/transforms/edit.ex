@@ -30,6 +30,27 @@ defmodule SequinWeb.TransformsLive.Edit do
     }
   end
   """
+  @initial_route_no_sink_type """
+  def route(action, record, changes, metadata) do
+    # TODO: Choose a sink type for your router function
+  end
+  """
+
+  @initial_route_http """
+  def route(action, record, changes, metadata) do
+    %{
+      method: "POST",
+      endpoint_path: "/entities/\#{record["id"]}"
+    }
+  end
+  """
+
+  @initial_code_map %{
+    "path" => "",
+    "function" => @initial_transform,
+    "routing_undefined" => @initial_route_no_sink_type,
+    "routing_http_push" => @initial_route_http
+  }
 
   @initial_route_http """
   def transform(action, record, changes, metadata) do
@@ -59,7 +80,13 @@ defmodule SequinWeb.TransformsLive.Edit do
     changeset =
       case id do
         nil ->
-          Transform.changeset(%Transform{}, %{"transform" => %{}})
+          transform =
+            Sequin.Map.reject_nil_values(%{
+              type: params["type"],
+              sink_type: params["sink_type"]
+            })
+
+          Transform.changeset(%Transform{}, %{"transform" => transform})
 
         id ->
           transform = Consumers.get_transform_for_account!(current_account_id(socket), id)
@@ -167,7 +194,7 @@ defmodule SequinWeb.TransformsLive.Edit do
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :info, title: "Transform created successfully"})
-         |> push_navigate(to: ~p"/transforms")}
+         |> push_navigate(to: ~p"/functions")}
 
       {:ok, :updated} ->
         socket.assigns.used_by_consumers
@@ -178,7 +205,7 @@ defmodule SequinWeb.TransformsLive.Edit do
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :info, title: "Transform updated successfully"})
-         |> push_navigate(to: ~p"/transforms")}
+         |> push_navigate(to: ~p"/functions")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         form_data = changeset_to_form_data(changeset)
@@ -199,7 +226,7 @@ defmodule SequinWeb.TransformsLive.Edit do
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :info, title: "Transform deleted successfully"})
-         |> push_navigate(to: ~p"/transforms")}
+         |> push_navigate(to: ~p"/functions")}
 
       {:error, error} ->
         Logger.error("[Transform.Edit] Failed to delete transform", error: error)

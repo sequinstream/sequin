@@ -279,7 +279,7 @@ defmodule Sequin.Runtime.SinkPipeline do
     pmod = pipeline_mod_for_consumer(sc)
 
     if function_exported?(pmod, :apply_routing, 2) do
-      # Stupid
+      # Have to use apply to avoid warnings from elixir about undefined impls of optional callback
       apply(pmod, :apply_routing, [sc, rinfo])
     end
   end

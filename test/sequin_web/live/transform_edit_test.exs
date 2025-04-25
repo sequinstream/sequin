@@ -6,6 +6,7 @@ defmodule SequinWeb.TransformEditTest do
   alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.Transform
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Transforms.MiniElixir
 
   test "Do not try to run obviously-invalid function transforms", %{conn: conn} do
@@ -16,7 +17,7 @@ defmodule SequinWeb.TransformEditTest do
       ])
 
     conn = log_in_user(conn, AccountsFactory.insert_user!())
-    {:ok, lv, _} = live(conn, ~p"/transforms/new")
+    {:ok, lv, _} = live(conn, ~p"/functions/new")
 
     p1 = %{"description" => nil, "id" => nil, "name" => nil, "transform" => %{"type" => "function"}}
 
@@ -38,12 +39,15 @@ defmodule SequinWeb.TransformEditTest do
 
     MiniElixir.run_interpreted_inner(
       %Transform{id: "fake", transform: %FunctionTransform{code: "{"}},
-      %{action: 1, record: 2, changes: 3, metadata: 4}
+      ConsumersFactory.consumer_event_data(
+        action: :insert,
+        record: %{"id" => "xyz"}
+      )
     )
 
     assert_receive {[:minielixir, _, :exception], ^telref, _, _}, 10
     :telemetry.detach(telref)
   end
 
-  # TEST `end` to prvide proper validation error for ecto 
+  # TEST `end` to prvide proper validation error for ecto
 end

@@ -8,6 +8,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
     max_attempts: 3
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.Transform
   alias Sequin.Databases
   alias Sequin.Health
   alias Sequin.Health.CheckHttpEndpointHealthWorker
@@ -145,38 +146,42 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
     end
   end
 
-  defp handle_transform_event(event, id) do
+  defp handle_transform_event(event, id) when is_binary(id) do
     Logger.metadata(transform_id: id)
     Logger.info("[LifecycleEventWorker] Handling event `#{event}` for transform")
 
+    case Consumers.get_transform(id) do
+      {:ok, %Transform{type: "path"}} -> :ok
+      {:ok, transform} -> handle_transform_event(event, transform)
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp handle_transform_event(event, %Transform{} = transform) do
     case event do
       "create" ->
-        with {:ok, transform} <- Consumers.get_transform(id) do
-          case MiniElixir.create(id, transform.transform.code) do
-            {:ok, _} ->
-              :ok
+        case MiniElixir.create(transform.id, transform.transform.code) do
+          {:ok, _} ->
+            :ok
 
-            {:error, error} ->
-              Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
-              {:error, error}
-          end
+          {:error, error} ->
+            Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
+            {:error, error}
         end
 
       "update" ->
-        with {:ok, transform} <- Consumers.get_transform(id) do
-          consumers = Consumers.list_consumers_for_transform(transform.account_id, transform.id, [:replication_slot])
-          replication_slots = consumers |> Enum.map(& &1.replication_slot) |> Enum.uniq_by(& &1.id)
-          Enum.each(replication_slots, &RuntimeSupervisor.stop_replication/1)
+        consumers = Consumers.list_consumers_for_transform(transform.account_id, transform.id, [:replication_slot])
+        replication_slots = consumers |> Enum.map(& &1.replication_slot) |> Enum.uniq_by(& &1.id)
+        Enum.each(replication_slots, &RuntimeSupervisor.stop_replication/1)
 
-          case MiniElixir.create(id, transform.transform.code) do
-            {:ok, _} ->
-              Enum.each(replication_slots, &RuntimeSupervisor.restart_replication/1)
-              :ok
+        case MiniElixir.create(transform.id, transform.transform.code) do
+          {:ok, _} ->
+            Enum.each(replication_slots, &RuntimeSupervisor.restart_replication/1)
+            :ok
 
-            {:error, error} ->
-              Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
-              {:error, error}
-          end
+          {:error, error} ->
+            Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
+            {:error, error}
         end
     end
   end

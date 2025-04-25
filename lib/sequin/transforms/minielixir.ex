@@ -25,6 +25,7 @@ defmodule Sequin.Transforms.MiniElixir do
       |> case do
         {:ok, answer} -> answer
         {:error, error} -> raise error
+        {:error, :validator, error} -> raise error
       end
     else
       raise Error.invariant(message: "Function transforms are not enabled. Talk to the Sequin team to enable them.")
@@ -37,8 +38,15 @@ defmodule Sequin.Transforms.MiniElixir do
       |> Task.async(:run_interpreted_inner, [transform, data])
       |> Task.await(@timeout)
       |> case do
-        {:ok, answer} -> answer
-        {:error, error} -> raise error
+        {:ok, answer} ->
+          answer
+
+        {:error, error} ->
+          raise error
+
+        {:error, :validator, error} ->
+          dbg(transform)
+          raise error
       end
     else
       raise Error.invariant(message: "Function transforms are not enabled. Talk to the Sequin team to enable them.")
@@ -86,7 +94,7 @@ defmodule Sequin.Transforms.MiniElixir do
       end
 
     {:ok, mod} = ensure_code_is_loaded(id)
-    {:ok, mod.transform(to_string(data.action), data.record, changes, Sequin.Map.from_struct_deep(data.metadata))}
+    {:ok, mod.run(to_string(data.action), data.record, changes, Sequin.Map.from_struct_deep(data.metadata))}
   rescue
     error ->
       :telemetry.execute([:minielixir, :compile, :exception], %{id: id})

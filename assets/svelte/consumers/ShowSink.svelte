@@ -1048,7 +1048,7 @@
             </h2>
             {#if transform && !isRedisStreamConsumer(consumer)}
               <a
-                href="/transforms/{transform.id}"
+                href="/functions/{transform.id}"
                 data-phx-link="redirect"
                 data-phx-link-state="push"
               >

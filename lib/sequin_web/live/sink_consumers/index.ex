@@ -33,7 +33,6 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
     consumers = load_consumers(socket)
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
-    has_sequences? = account.id |> Databases.list_sequences_for_account() |> Enum.any?()
 
     socket =
       if connected?(socket) do
@@ -56,9 +55,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     socket =
       socket
       |> assign(:consumers, consumers)
-      |> assign(:form_errors, %{})
       |> assign(:has_databases?, has_databases?)
-      |> assign(:has_sequences?, has_sequences?)
       |> assign(:self_hosted, Application.get_env(:sequin, :self_hosted))
 
     {:ok, socket}
@@ -92,9 +89,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
         props={
           %{
             consumers: @encoded_consumers,
-            formErrors: @form_errors,
             hasDatabases: @has_databases?,
-            hasSequences: @has_sequences?,
             selfHosted: @self_hosted
           }
         }

@@ -226,6 +226,7 @@ defmodule Sequin.Consumers do
       transform
       |> Transform.changeset(%{})
       |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_transform_id_fkey")
+      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_routing_id_fkey")
       |> Repo.delete()
     end
   end
@@ -288,7 +289,7 @@ defmodule Sequin.Consumers do
   def list_consumers_for_transform(account_id, transform_id, preload \\ []) do
     account_id
     |> SinkConsumer.where_account_id()
-    |> SinkConsumer.where_transform_id(transform_id)
+    |> SinkConsumer.where_transform_or_function_id(transform_id)
     |> preload(^preload)
     |> Repo.all()
   end

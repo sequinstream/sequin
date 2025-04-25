@@ -77,8 +77,8 @@
           beta: false,
         } as NavItem,
         {
-          path: "/transforms",
-          text: "Transforms",
+          path: "/functions",
+          text: "Functions",
           icon: Code,
           beta: true,
         } as NavItem,

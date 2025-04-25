@@ -19,7 +19,7 @@
   import { cn } from "$lib/utils";
   import FilterForm from "../components/FilterForm.svelte";
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
-  import TransformPicker from "$lib/consumers/TransformPicker.svelte";
+  import FunctionPicker from "$lib/consumers/FunctionPicker.svelte";
   import SinkHttpPushForm from "$lib/consumers/SinkHttpPushForm.svelte";
   import SqsSinkForm from "$lib/sinks/sqs/SqsSinkForm.svelte";
   import SnsSinkForm from "$lib/sinks/sns/SnsSinkForm.svelte";
@@ -107,6 +107,8 @@
     batchSize: number;
     transform: string;
     timestampFormat: string;
+    routingId: string;
+    routingMode: string;
   }
 
   let initialForm: FormState = {
@@ -132,6 +134,8 @@
     batchSize: Number(consumer.batch_size) || 1,
     transform: consumer.transform_id || "none",
     timestampFormat: consumer.timestamp_format || "iso8601",
+    routingId: consumer.routing_id || "none",
+    routingMode: consumer.routing_mode,
   };
 
   let form: FormState = { ...initialForm };
@@ -352,18 +356,10 @@
   let selectedExampleType: "change" | "record" = "change";
 
   let transformSectionExpanded = false;
-  let routingSectionExpanded = false;
 
   let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
-  function handleTransformChange(event: { value: string }) {
-    form.transform = event.value;
-  }
-  function handleRoutingChange(event: { value: string }) {
-    form.routing = event.value;
-  }
-
-  function refreshTransforms() {
+  function refreshFunctions() {
     transformRefreshState = "refreshing";
     pushEvent("refresh_transforms", {}, () => {
       transformRefreshState = "done";
@@ -596,14 +592,14 @@
               Please select a table first.
             </p>
           {:else}
-            <TransformPicker
+            <FunctionPicker
               {transforms}
-              selectedTransformId={form.transform}
+              selectedFunctionId={form.transform}
               title="Transform"
-              onTransformChange={(transformId) =>
-                (form.transform = transformId)}
-              {refreshTransforms}
+              onFunctionChange={(transformId) => (form.transform = transformId)}
+              {refreshFunctions}
               transformTypes={["function", "path"]}
+              createNewQueryParams="?type=function"
               bind:refreshState={transformRefreshState}
             />
           {/if}
@@ -709,8 +705,8 @@
         {live}
         {parent}
         {transforms}
-        {refreshTransforms}
-        bind:refreshState={transformRefreshState}
+        {refreshFunctions}
+        bind:transformRefreshState
       />
     {:else if consumer.type === "sqs"}
       <SqsSinkForm errors={errors.consumer} bind:form />

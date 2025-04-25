@@ -52,35 +52,70 @@
       </div>
     </div>
 
-    <div class="space-y-4 grid xl:grid-cols-2">
-      <div>
-        <span class="text-sm text-gray-500">HTTP Endpoint Path</span>
-        {#if consumer.sink.http_endpoint_path === "" || consumer.sink.http_endpoint_path === null}
-          <div class="mt-2">
-            <span
-              class="bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
-              >No path configured</span
-            >
-          </div>
-        {:else}
-          <div class="mt-2 overflow-x-auto overflow-y-hidden">
-            <span
-              class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
-              >{consumer.sink.http_endpoint_path}</span
-            >
-          </div>
-        {/if}
-      </div>
-
-      <div>
-        <span class="text-sm text-gray-500">Full Endpoint URL</span>
+    <div class="space-y-4 grid xl:grid-cols-3">
+      <div class="xl:col-span-3">
+        <span class="text-sm text-gray-500">Base URL</span>
         <div class="mt-2 overflow-x-auto overflow-y-hidden">
           <span
             class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
-            >{fullEndpointUrl}</span
+            >{consumer.sink.http_endpoint.url}</span
           >
         </div>
       </div>
+
+      <div>
+        <span class="text-sm text-gray-500">HTTP Method</span>
+        <div class="mt-2">
+          <span
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
+          >
+            {#if consumer.routing_id}
+              Determined by <a
+                href={`/functions/${consumer.routing_id}`}
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+                class="underline">router</a
+              >
+              <ExternalLink class="h-4 w-4 inline" />
+            {:else}
+              POST
+            {/if}
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <span class="text-sm text-gray-500">Path</span>
+        <div class="mt-2">
+          <span
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
+          >
+            {#if consumer.routing_id}
+              Determined by <a
+                href={`/functions/${consumer.routing_id}`}
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+                class="underline">router</a
+              >
+              <ExternalLink class="h-4 w-4 inline" />
+            {:else}
+              {consumer.sink.http_endpoint_path}
+            {/if}
+          </span>
+        </div>
+      </div>
+
+      {#if !consumer.routing_id}
+        <div class="xl:col-span-3">
+          <span class="text-sm text-gray-500">Full Endpoint URL</span>
+          <div class="mt-2 overflow-x-auto overflow-y-hidden">
+            <span
+              class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
+              >{fullEndpointUrl}</span
+            >
+          </div>
+        </div>
+      {/if}
     </div>
   </CardContent>
 </Card>

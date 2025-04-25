@@ -36,6 +36,7 @@ defmodule Sequin.Transforms.Message do
     record.data.record
   end
 
+  # TODO: move this / refactor functions elsewhere
   def to_external(%SinkConsumer{transform: %Transform{id: id, transform: %FunctionTransform{}} = transform}, %c{
         data: data
       })
@@ -48,17 +49,9 @@ defmodule Sequin.Transforms.Message do
     end
   end
 
-  def to_external(
-        %SinkConsumer{transform: %Transform{id: id, transform: %RoutingTransform{}} = transform} = sc,
-        %ConsumerEvent{data: data}
-      ) do
-    res =
-      if id do
-        MiniElixir.run_compiled(transform, data)
-      else
-        MiniElixir.run_interpreted(transform, data)
-      end
-
+  def to_external(%SinkConsumer{transform: %Transform{transform: %RoutingTransform{}} = transform} = sc, %c{data: data})
+      when c in [ConsumerEvent, ConsumerRecord] do
+    res = MiniElixir.run_interpreted(transform, data)
     SinkPipeline.apply_routing(sc, res)
   end
 

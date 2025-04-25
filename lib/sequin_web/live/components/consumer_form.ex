@@ -542,7 +542,8 @@ defmodule SequinWeb.Components.ConsumerForm do
         "batch_size" => form["batchSize"],
         "initial_backfill" => decode_initial_backfill(form),
         "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
-        "routing_id" => if(form["routing"] === "none", do: nil, else: form["routing"]),
+        "routing_id" => if(form["routingId"] === "none", do: nil, else: form["routingId"]),
+        "routing_mode" => form["routingMode"],
         "timestamp_format" => form["timestampFormat"]
       }
 
@@ -744,6 +745,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter),
       "sequence_id" => consumer.sequence_id,
       "sink" => encode_sink(consumer.sink),
+      "routing_mode" => if(consumer.routing_id, do: "dynamic", else: "static"),
+      "routing_id" => consumer.routing_id,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete],
       "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
       "status" => consumer.status,

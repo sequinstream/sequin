@@ -478,7 +478,7 @@ defmodule SequinWeb.DatabasesLive.Show do
     end)
   end
 
-  defp maybe_augment_alert(%{slug: :replication_messages, error: %{code: :replication_lag_high} = error} = check) do
+  defp maybe_augment_alert(%{slug: :replication_messages, error: %{code: "replication_lag_high"} = error} = check) do
     lag_bytes = error.details.lag_bytes
     lag_mb = Float.round(lag_bytes / 1024 / 1024, 0)
 
@@ -498,6 +498,22 @@ defmodule SequinWeb.DatabasesLive.Show do
         3. Sequin is applying back-pressure because the message buffer for one or more sinks is full. If this is the case, you'll see an error on the corresponding sink.
 
         Note: A temporarily high replication slot size is normal. However, if it grows too large, you risk running out of storage on your Postgres database.
+        """,
+        refreshable: false,
+        dismissable: false
+      }
+    )
+  end
+
+  defp maybe_augment_alert(%{slug: :reachable, error: %{code: "unsupported_pg_version"}} = check) do
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Notice: Unsupported Postgres Version",
+        alertMessage: """
+        The Postgres version on this database is not supported. Sequin is compatible with Postgres 14 or higher.
+
+        Note that the PostgreSQL Global Development Group will stop supporting Postgres 13 in November 2025.
         """,
         refreshable: false,
         dismissable: false

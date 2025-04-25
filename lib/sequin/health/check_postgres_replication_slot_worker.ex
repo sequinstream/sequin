@@ -66,11 +66,22 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
     with :ok <- Databases.test_tcp_reachability(database),
          :ok <- Databases.test_connect(database),
          :ok <- Databases.test_permissions(database),
+         {:ok, major_version} <- Databases.get_major_pg_version(database),
+         :ok <- check_postgres_version(major_version),
          {:ok, latency} <- NetworkUtils.measure_latency(database.hostname, database.port) do
       Health.put_event(database.replication_slot, %Event{slug: :db_connectivity_checked, status: :success})
       Metrics.measure_database_avg_latency(database, latency)
       :ok
     else
+      {:error, :unsupported_pg_version} ->
+        Health.put_event(database.replication_slot, %Event{
+          slug: :db_connectivity_checked,
+          status: :fail,
+          error: Error.validation(summary: "Unsupported PostgreSQL version", code: :unsupported_pg_version)
+        })
+
+        :error
+
       {:error, error} when is_error(error) ->
         Health.put_event(database.replication_slot, %Event{slug: :db_connectivity_checked, status: :fail, error: error})
         :error
@@ -85,6 +96,12 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
       error = Error.service(service: :postgres_database, message: Exception.message(error))
       Health.put_event(database.replication_slot, %Event{slug: :db_connectivity_checked, status: :fail, error: error})
       :error
+  end
+
+  defp check_postgres_version(major_version) when major_version >= 14, do: :ok
+
+  defp check_postgres_version(_major_version) do
+    {:error, :unsupported_pg_version}
   end
 
   defp check_replication_slot(database) do

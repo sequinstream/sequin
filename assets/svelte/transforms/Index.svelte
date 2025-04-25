@@ -14,6 +14,16 @@
     insertedAt: string;
     updatedAt: string;
   }>;
+
+  let docBase = "https://sequinstream.com/docs";
+
+  let typeToDocPath = {
+    function: "/reference/transforms",
+    path: "/reference/transforms",
+    routing: "/reference/routing",
+  };
+
+  let getHref = (transform) => docBase + typeToDocPath[transform.type];
 </script>
 
 <div class="container mx-auto py-10">
@@ -76,7 +86,14 @@
             }}
           >
             <Table.Cell>{transform.name}</Table.Cell>
-            <Table.Cell>{transform.type}</Table.Cell>
+            <Table.Cell>
+              <a href={getHref(transform)}
+                 target="_blank" class="text-blue-500 hover:text-blue-700 underline"
+                 on:click|stopPropagation
+                 >
+                {transform.type}
+              </a>
+            </Table.Cell>
             <Table.Cell>
               <a
                 href={`/functions/${transform.id}`}

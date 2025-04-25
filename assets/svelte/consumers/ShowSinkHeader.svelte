@@ -18,7 +18,7 @@
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
   import SnsIcon from "../sinks/sns/SnsIcon.svelte";
-  import RedisIcon from "../sinks/redis/RedisIcon.svelte";
+  import RedisIcon from "../sinks/redis_shared/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
   import SequinStreamIcon from "../sinks/sequin_stream/SequinStreamIcon.svelte";
@@ -135,6 +135,8 @@
           {:else if consumer.sink.type === "sqs"}
             <SqsIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "redis_stream"}
+            <RedisIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "redis_string"}
             <RedisIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "kafka"}
             <KafkaIcon class="h-6 w-6 mr-2" />

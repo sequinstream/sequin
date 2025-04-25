@@ -13,6 +13,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -266,7 +267,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         end
 
       :redis_stream ->
-        case test_redis_connection(socket) do
+        case test_redis_stream_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
@@ -297,6 +298,12 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       :elasticsearch ->
         case test_elasticsearch_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
+
+      :redis_string ->
+        case test_redis_string_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
@@ -347,13 +354,34 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp test_redis_connection(socket) do
+  defp test_redis_stream_connection(socket) do
     sink_changeset =
       socket.assigns.changeset
       |> Ecto.Changeset.get_field(:sink)
       |> case do
         %Ecto.Changeset{} = changeset -> changeset
         %RedisStreamSink{} = sink -> RedisStreamSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+
+      case Redis.test_connection(sink) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
+  defp test_redis_string_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %RedisStringSink{} = sink -> RedisStringSink.changeset(sink, %{})
       end
 
     if sink_changeset.valid? do
@@ -621,6 +649,21 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp decode_sink(:redis_string, sink) do
+    dbg(sink)
+
+    %{
+      "type" => "redis_string",
+      "host" => sink["host"],
+      "port" => sink["port"],
+      "database" => sink["database"],
+      "tls" => sink["tls"],
+      "username" => sink["username"],
+      "password" => sink["password"],
+      "expire_ms" => sink["expireMs"]
+    }
+  end
+
   defp decode_sink(:rabbitmq, sink) do
     %{
       "type" => "rabbitmq",
@@ -821,6 +864,19 @@ defmodule SequinWeb.Components.ConsumerForm do
       "tls" => sink.tls,
       "username" => sink.username,
       "password" => sink.password
+    }
+  end
+
+  defp encode_sink(%RedisStringSink{} = sink) do
+    %{
+      "type" => "redis_string",
+      "host" => sink.host,
+      "port" => sink.port,
+      "database" => sink.database,
+      "tls" => sink.tls,
+      "username" => sink.username,
+      "password" => sink.password,
+      "expireMs" => sink.expire_ms
     }
   end
 
@@ -1193,6 +1249,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :kafka -> "Kafka Sink"
       :pull -> "Consumer Group"
       :redis_stream -> "Redis Stream Sink"
+      :redis_string -> "Redis String Sink"
       :sqs -> "SQS Sink"
       :sns -> "SNS Sink"
       :sequin_stream -> "Sequin Stream Sink"

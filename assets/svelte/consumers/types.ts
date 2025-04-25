@@ -14,7 +14,8 @@ export type BaseConsumer = {
     | "nats"
     | "rabbitmq"
     | "typesense"
-    | "elasticsearch";
+    | "elasticsearch"
+    | "redis_string";
   name: string;
   annotations: Record<string, boolean>;
   status: "active" | "paused" | "disabled";
@@ -71,7 +72,7 @@ export type SqsConsumer = BaseConsumer & {
 };
 
 // Redis specific sink
-export type RedisConsumer = BaseConsumer & {
+export type RedisStreamConsumer = BaseConsumer & {
   sink: {
     type: "redis_stream";
     host: string;
@@ -80,6 +81,19 @@ export type RedisConsumer = BaseConsumer & {
     database: number;
     tls: boolean;
     url: string;
+  };
+};
+
+// RedisString specific sink
+export type RedisStringConsumer = BaseConsumer & {
+  sink: {
+    type: "redis_string";
+    host: string;
+    port: number;
+    database: number;
+    tls: boolean;
+    url: string;
+    expireMs: number | null;
   };
 };
 
@@ -196,7 +210,7 @@ export type ElasticsearchConsumer = BaseConsumer & {
 export type Consumer =
   | HttpPushConsumer
   | SqsConsumer
-  | RedisConsumer
+  | RedisStreamConsumer
   | KafkaConsumer
   | SequinStreamConsumer
   | GcpPubsubConsumer
@@ -205,4 +219,5 @@ export type Consumer =
   | RabbitMqConsumer
   | TypesenseConsumer
   | SnsConsumer
-  | ElasticsearchConsumer;
+  | ElasticsearchConsumer
+  | RedisStringConsumer;

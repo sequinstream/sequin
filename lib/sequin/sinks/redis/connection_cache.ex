@@ -19,7 +19,10 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
 
   use GenServer
 
+  import Sequin.Consumers.Guards, only: [is_redis_sink: 1]
+
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Error.NotFoundError
 
   require Logger
@@ -27,7 +30,7 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
   defmodule Cache do
     @moduledoc false
 
-    @type sink :: RedisStreamSink.t()
+    @type sink :: RedisStreamSink.t() | RedisStringSink.t()
     @type entry :: %{
             conn: pid() | atom(),
             options_hash: binary()
@@ -77,8 +80,12 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
       Map.put(cache, sink.connection_id, entry)
     end
 
-    defp options_hash(sink) do
+    defp options_hash(%RedisStreamSink{} = sink) do
       :erlang.phash2(RedisStreamSink.redis_url(sink, obscure_password: false))
+    end
+
+    defp options_hash(%RedisStringSink{} = sink) do
+      :erlang.phash2(RedisStringSink.redis_url(sink, obscure_password: false))
     end
   end
 
@@ -87,8 +94,9 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
     use TypedStruct
 
     alias Sequin.Consumers.RedisStreamSink
+    alias Sequin.Consumers.RedisStringSink
 
-    @type sink :: RedisStreamSink.t()
+    @type sink :: RedisStreamSink.t() | RedisStringSink.t()
     @type opt :: {:start_fn, State.start_function()} | {:stop_fn, State.stop_function()}
     @type start_function :: (sink() -> start_result())
     @type start_result ::
@@ -152,12 +160,16 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
       %{state | cache: new_cache}
     end
 
-    defp default_start(%RedisStreamSink{} = sink) do
-      :eredis.start_link(RedisStreamSink.start_opts(sink))
+    defp default_start(%RedisStreamSink{} = redis_sink) do
+      :eredis.start_link(RedisStreamSink.start_opts(redis_sink))
+    end
+
+    defp default_start(%RedisStringSink{} = redis_sink) do
+      :eredis.start_link(RedisStringSink.start_opts(redis_sink))
     end
   end
 
-  @type sink :: RedisStreamSink.t()
+  @type sink :: RedisStreamSink.t() | RedisStringSink.t()
   @type opt :: State.opt()
   @type start_result :: State.start_result()
 
@@ -169,24 +181,24 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
 
   @spec connection(sink()) :: start_result()
   @spec connection(GenServer.server(), sink()) :: start_result()
-  def connection(server \\ __MODULE__, %RedisStreamSink{} = sink) do
-    GenServer.call(server, {:connection, sink, true})
+  def connection(server \\ __MODULE__, redis_sink) when is_redis_sink(redis_sink) do
+    GenServer.call(server, {:connection, redis_sink, true})
   end
 
   @spec existing_connection(GenServer.server(), sink()) :: start_result() | {:error, NotFoundError.t()}
-  def existing_connection(server \\ __MODULE__, %RedisStreamSink{} = sink) do
-    GenServer.call(server, {:connection, sink, false})
+  def existing_connection(server \\ __MODULE__, redis_sink) when is_redis_sink(redis_sink) do
+    GenServer.call(server, {:connection, redis_sink, false})
   end
 
   @spec invalidate_connection(GenServer.server(), sink()) :: :ok
-  def invalidate_connection(server \\ __MODULE__, %RedisStreamSink{} = sink) do
-    GenServer.cast(server, {:invalidate_connection, sink})
+  def invalidate_connection(server \\ __MODULE__, redis_sink) when is_redis_sink(redis_sink) do
+    GenServer.cast(server, {:invalidate_connection, redis_sink})
   end
 
   # This function is intended for test purposes only
   @spec cache_connection(GenServer.server(), sink(), pid()) :: :ok
-  def cache_connection(server \\ __MODULE__, %RedisStreamSink{} = sink, conn) do
-    GenServer.call(server, {:cache_connection, sink, conn})
+  def cache_connection(server \\ __MODULE__, redis_sink, conn) when is_redis_sink(redis_sink) do
+    GenServer.call(server, {:cache_connection, redis_sink, conn})
   end
 
   @impl GenServer
@@ -197,8 +209,8 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
   end
 
   @impl GenServer
-  def handle_call({:connection, %RedisStreamSink{} = sink, create_on_miss}, _from, %State{} = state) do
-    case State.find_or_create_connection(state, sink, create_on_miss) do
+  def handle_call({:connection, redis_sink, create_on_miss}, _from, %State{} = state) when is_redis_sink(redis_sink) do
+    case State.find_or_create_connection(state, redis_sink, create_on_miss) do
       {:ok, conn, new_state} ->
         {:reply, {:ok, conn}, new_state}
 
@@ -212,15 +224,15 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
 
   # This function is intended for test purposes only
   @impl GenServer
-  def handle_call({:cache_connection, %RedisStreamSink{} = sink, conn}, _from, %State{} = state) do
-    new_cache = Cache.store(state.cache, sink, conn)
+  def handle_call({:cache_connection, redis_sink, conn}, _from, %State{} = state) when is_redis_sink(redis_sink) do
+    new_cache = Cache.store(state.cache, redis_sink, conn)
     new_state = %{state | cache: new_cache}
     {:reply, :ok, new_state}
   end
 
   @impl GenServer
-  def handle_cast({:invalidate_connection, %RedisStreamSink{} = sink}, %State{} = state) do
-    new_state = State.invalidate_connection(state, sink)
+  def handle_cast({:invalidate_connection, redis_sink}, %State{} = state) when is_redis_sink(redis_sink) do
+    new_state = State.invalidate_connection(state, redis_sink)
     {:noreply, new_state}
   end
 

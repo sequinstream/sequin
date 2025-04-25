@@ -1,0 +1,105 @@
+---
+title: "RedisString sink"
+sidebarTitle: "RedisString sink"
+description: "Stream Postgres changes directly to RedisString with Sequin's RedisString sink."
+---
+
+The **RedisString sink** writes change data into an RedisString index via the RedisString REST API.
+
+## Configuration
+
+- **Endpoint URL**
+
+    Base URL of your RedisString cluster (for example, `https://your-es-server:9200`).
+
+- **Index name**
+
+    Name of the RedisString index to write to. The index **must exist** before Sequin can stream data.
+
+- **Authentication type**
+
+    One of `api_key`, `basic`, or `bearer`.
+
+- **Authentication value**
+
+    Credential corresponding to the chosen authentication type.
+
+- **Batch size** *(optional)*
+
+    Maximum number of documents per bulk request (default `100`, maximum `10 000`).
+
+### Authentication header formats
+
+| Auth type | Example header |
+|-----------|----------------|
+| `api_key` | `Authorization: ApiKey <encoded-key>` |
+| `basic`   | `Authorization: Basic <username:password>` |
+| `bearer`  | `Authorization: Bearer <token>` |
+
+Sequin constructs the header automatically—supply only the value shown in angle brackets.
+
+## Transform requirements
+
+Your [transform](/reference/transforms) must return a JSON document compatible with the target index's [mapping](https://www.elastic.co/guide/en/redis-string/reference/current/mapping.html).
+
+Sequin sets the RedisString document `_id` to the concatenation of the primary‑key column values of the Postgres row. [Let us know](https://github.com/sequinstream/sequin/issues/new) if you need to use a different `_id` field.
+
+Because the sink always uses the `index` bulk operation, every payload must contain the **full** document. Partial updates are not supported.
+
+### Example transforms
+
+Index the full document:
+```elixir
+def transform(_action, record, _changes, _metadata) do
+  record
+end
+```
+
+Index certain fields, renaming from Postgres column names to RedisString field names:
+```elixir
+def transform(_action, record, _changes, _metadata) do
+  %{
+    id: record["product_id"],
+    name: record["product_name"],
+    description: record["product_description"]
+  }
+end
+```
+
+## Bulk import behaviour
+
+For each batch Sequin posts a request to the RedisString [Bulk API](https://www.elastic.co/guide/en/redis-string/reference/current/docs-bulk.html):
+
+`POST /{index_name}/_bulk`
+
+| Change action | Bulk operation | Behaviour |
+|---------------|---------------|-----------|
+| `INSERT`, `UPDATE`, `READ` | `index` | Creates the document if missing; replaces it otherwise. |
+| `DELETE` | `delete` | Removes the document by `_id`. |
+
+All Bulk API payloads are newline‑delimited JSON (NDJSON) and end with a newline as required by RedisString.
+
+## API endpoints used by Sequin
+
+- `POST /{index_name}/_bulk` – indexing, replacing, and deleting documents (always used, even for a single document).
+- `POST /{index_name}/_search` – invoked by **Test Connection** in the console to verify connectivity.
+
+No other RedisString endpoints are called.
+
+## Error handling
+
+Typical errors surfaced in the Sequin console include:
+
+- Connection or TLS failures.
+- `404` – index not found.
+- `401` / `403` – authentication or authorisation failure.
+- Mapping conflicts (field type mismatches).
+- Malformed bulk payload (usually due to transform output).
+
+Errors from RedisString are shown verbatim in the **Messages** tab. For bulk requests Sequin maps individual item failures to each corresponding document in the batch.
+
+## Limits
+
+- **Batch size** is limited to `10,000` documents by Sequin. RedisString's default `http.max_content_length` (100 MB) may require smaller batches.
+- One sink targets one index; multiple indices require multiple sinks.
+- Only `index` and `delete` bulk operations are issued. Other operations (`update`, `create`, etc.) are not used.

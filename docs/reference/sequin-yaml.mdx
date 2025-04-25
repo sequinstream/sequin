@@ -230,7 +230,7 @@ The `region` field is optional. If not provided, Sequin will automatically infer
 For publishing changes to Redis streams:
 ```yaml
 destination:
-  type: "redis"                 # Required
+  type: "redis_stream"                 # Required
   host: "localhost"             # Required
   port: 6379                    # Required
   stream_key: "my-stream"       # Required

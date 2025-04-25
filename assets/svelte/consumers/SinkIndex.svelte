@@ -43,7 +43,7 @@
       | "http_push"
       | "sqs"
       | "sns"
-      | "redis"
+      | "redis_stream"
       | "kafka"
       | "gcp_pubsub"
       | "sequin_stream"
@@ -87,8 +87,8 @@
       icon: SnsIcon,
     },
     {
-      id: "redis",
-      name: "Redis",
+      id: "redis_stream",
+      name: "Redis Stream",
       icon: RedisIcon,
     },
     {

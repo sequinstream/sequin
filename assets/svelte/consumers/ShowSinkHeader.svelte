@@ -134,7 +134,7 @@
             <Webhook class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "sqs"}
             <SqsIcon class="h-6 w-6 mr-2" />
-          {:else if consumer.sink.type === "redis"}
+          {:else if consumer.sink.type === "redis_stream"}
             <RedisIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "kafka"}
             <KafkaIcon class="h-6 w-6 mr-2" />

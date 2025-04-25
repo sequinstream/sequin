@@ -7,7 +7,7 @@ export type BaseConsumer = {
     | "http_push"
     | "sqs"
     | "sns"
-    | "redis"
+    | "redis_stream"
     | "kafka"
     | "sequin_stream"
     | "gcp_pubsub"
@@ -72,7 +72,7 @@ export type SqsConsumer = BaseConsumer & {
 // Redis specific sink
 export type RedisConsumer = BaseConsumer & {
   sink: {
-    type: "redis";
+    type: "redis_stream";
     host: string;
     port: number;
     streamKey: string;

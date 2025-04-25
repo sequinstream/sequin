@@ -22,7 +22,7 @@
   import SinkHttpPushForm from "$lib/consumers/SinkHttpPushForm.svelte";
   import SqsSinkForm from "$lib/sinks/sqs/SqsSinkForm.svelte";
   import SnsSinkForm from "$lib/sinks/sns/SnsSinkForm.svelte";
-  import RedisSinkForm from "$lib/sinks/redis/RedisSinkForm.svelte";
+  import RedisStreamSinkForm from "$lib/sinks/redis/RedisStreamSinkForm.svelte";
   import KafkaSinkForm from "$lib/sinks/kafka/KafkaSinkForm.svelte";
   import GcpPubsubSinkForm from "$lib/sinks/gcp_pubsub/GcpPubsubSinkForm.svelte";
   import SequinStreamSinkForm from "$lib/sinks/sequin_stream/SequinStreamSinkForm.svelte";
@@ -540,7 +540,7 @@
           </Popover.Root>
           <Beta size="sm" variant="subtle" />
         </CardTitle>
-        {#if consumer.type !== "redis"}
+        {#if consumer.type !== "redis_stream"}
           <button
             type="button"
             class="flex items-center space-x-2 text-sm hover:text-primary transition-colors disabled:opacity-50"
@@ -559,9 +559,9 @@
       </CardHeader>
       <CardContent>
         <div class="space-y-2">
-          {#if consumer.type === "redis"}
+          {#if consumer.type === "redis_stream"}
             <p class="text-sm text-muted-foreground">
-              Transforms are coming soon for Redis sinks. <a
+              Transforms are coming soon for Redis Stream sinks. <a
                 href="https://github.com/sequinstream/sequin/issues/1186"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -766,8 +766,8 @@
       <SqsSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "sns"}
       <SnsSinkForm errors={errors.consumer} bind:form />
-    {:else if consumer.type === "redis"}
-      <RedisSinkForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "redis_stream"}
+      <RedisStreamSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "kafka"}
       <KafkaSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "gcp_pubsub"}

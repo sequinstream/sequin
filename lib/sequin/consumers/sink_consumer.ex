@@ -181,7 +181,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   end
 
   defp validate_routing(cs, attrs) do
-    case {attrs["routing_mode"], fetch_field(cs, :routing_id)} do
+    case {attrs["routing_mode"] || attrs[:routing_mode], fetch_field(cs, :routing_id)} do
       {nil, {:data, _}} ->
         # Both unchanged, this is fine
         cs
@@ -197,10 +197,6 @@ defmodule Sequin.Consumers.SinkConsumer do
 
       {"dynamic", {_, nil}} ->
         add_error(cs, :routing_id, "dynamic routing requires linked router!")
-
-        # XXX HACK TODO: this is for testing, it's probably wrong in real life  
-      {nil, {:changes, _}} ->
-        cs
 
       zz ->
         add_error(cs, :routing_id, "unknown routing mode! #{inspect(zz)}")

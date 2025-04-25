@@ -23,7 +23,7 @@ defmodule Sequin.RoutingTest do
       account = AccountsFactory.insert_account!()
       {:ok, %{account: account}}
     end
-    
+
     test "creating a routing transform with valid code", %{account: account} do
       routing_code = """
       def route(action, record, changes, metadata) do
@@ -34,26 +34,25 @@ defmodule Sequin.RoutingTest do
       end
       """
 
-      assert {:ok, transform} = 
-        Consumers.create_transform(
-          account.id,
-          %{
-            name: Factory.unique_word(),
-            transform: %{
-              type: :routing,
-              sink_type: :http_push,
-              code: routing_code
-            }
-          }
-        )
+      assert {:ok, transform} =
+               Consumers.create_transform(
+                 account.id,
+                 %{
+                   name: Factory.unique_word(),
+                   transform: %{
+                     type: :routing,
+                     sink_type: :http_push,
+                     code: routing_code
+                   }
+                 }
+               )
 
       assert %Transform{transform: %RoutingTransform{}} = transform
       assert transform.transform.sink_type == :http_push
       assert transform.transform.code == routing_code
     end
-
   end
-  
+
   describe "using routing transforms in HTTP push pipeline" do
     setup do
       account = AccountsFactory.insert_account!()
@@ -68,7 +67,7 @@ defmodule Sequin.RoutingTest do
       end
       """
 
-      {:ok, transform} = 
+      {:ok, transform} =
         Consumers.create_transform(
           account.id,
           %{
@@ -90,6 +89,7 @@ defmodule Sequin.RoutingTest do
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           message_kind: :event,
           routing_id: transform.id,
+          routing_mode: :dynamic
         )
 
       %{
@@ -97,7 +97,6 @@ defmodule Sequin.RoutingTest do
         transform: transform,
         http_endpoint: http_endpoint
       }
-
     end
 
     test "HTTP request uses routing transform to determine method and path", %{
@@ -105,32 +104,39 @@ defmodule Sequin.RoutingTest do
       http_endpoint: http_endpoint
     } do
       test_pid = self()
-      event = ConsumersFactory.insert_consumer_event!(
-        consumer_id: consumer.id, 
-        action: :insert,
-        data: ConsumersFactory.consumer_event_data(
+
+      event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
           action: :insert,
-          record: record = %{"id" => "xyz"}
+          data:
+            ConsumersFactory.consumer_event_data(
+              action: :insert,
+              record: record = %{"id" => "xyz"}
+            )
         )
-      )
 
       adapter = fn %Req.Request{} = req ->
         send(test_pid, {:http_request, req})
         {req, Req.Response.new(status: 200)}
       end
 
-      start_supervised!({SinkPipeline, [
-        consumer: consumer,
-        req_opts: [adapter: adapter],
-        producer: Broadway.DummyProducer,
-        test_pid: test_pid
-      ]})
-
-      ref = Broadway.test_message(
-        SinkPipeline.via_tuple(consumer.id),
-        event,
-        metadata: %{topic: "test_topic", headers: []}
+      start_supervised!(
+        {SinkPipeline,
+         [
+           consumer: consumer,
+           req_opts: [adapter: adapter],
+           producer: Broadway.DummyProducer,
+           test_pid: test_pid
+         ]}
       )
+
+      ref =
+        Broadway.test_message(
+          SinkPipeline.via_tuple(consumer.id),
+          event,
+          metadata: %{topic: "test_topic", headers: []}
+        )
 
       assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
       assert_receive {:http_request, req}, 1_000
@@ -140,5 +146,4 @@ defmodule Sequin.RoutingTest do
       assert to_string(req.url) == "#{HttpEndpoint.url(http_endpoint)}/api/ROUTED/#{record["id"]}"
     end
   end
-
 end

@@ -158,8 +158,6 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   end
 
   defp handle_transform_event(event, %Transform{} = transform) do
-    dbg(transform)
-
     case event do
       "create" ->
         case MiniElixir.create(transform.id, transform.transform.code) do

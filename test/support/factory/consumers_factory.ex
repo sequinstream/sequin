@@ -158,10 +158,13 @@ defmodule Sequin.Factory.ConsumersFactory do
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
+    {routing_mode, attrs} = Map.pop(attrs, :routing_mode, :static)
+
     attrs =
       attrs
       |> Map.put(:account_id, account_id)
       |> sink_consumer_attrs()
+      |> Map.put(:routing_mode, to_string(routing_mode))
 
     case Consumers.create_sink_consumer(account_id, attrs, skip_lifecycle: true) do
       {:ok, consumer} ->

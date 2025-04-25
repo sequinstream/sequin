@@ -16,7 +16,7 @@ defmodule SequinWeb.TransformEditTest do
       ])
 
     conn = log_in_user(conn, AccountsFactory.insert_user!())
-    {:ok, lv, _} = live(conn, ~p"/transforms/new")
+    {:ok, lv, _} = live(conn, ~p"/functions/new")
 
     p1 = %{"description" => nil, "id" => nil, "name" => nil, "transform" => %{"type" => "function"}}
 
@@ -45,5 +45,5 @@ defmodule SequinWeb.TransformEditTest do
     :telemetry.detach(telref)
   end
 
-  # TEST `end` to prvide proper validation error for ecto 
+  # TEST `end` to prvide proper validation error for ecto
 end

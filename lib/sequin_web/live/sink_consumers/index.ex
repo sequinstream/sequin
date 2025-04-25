@@ -33,7 +33,6 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
     consumers = load_consumers(socket)
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
-    has_sequences? = account.id |> Databases.list_sequences_for_account() |> Enum.any?()
 
     socket =
       if connected?(socket) do

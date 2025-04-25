@@ -733,7 +733,6 @@ defmodule Sequin.YamlLoader do
       {:ok, existing_consumer} ->
         with {:ok, params} <-
                Transforms.from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints),
-             {:ok, params} <- maybe_add_routing(account_id, params, consumer_attrs),
              {:ok, consumer} <- Sequin.Consumers.update_sink_consumer(existing_consumer, params) do
           Logger.info("Updated HTTP push consumer: #{inspect(consumer, pretty: true)}")
           {:ok, consumer}
@@ -742,7 +741,6 @@ defmodule Sequin.YamlLoader do
       {:error, %NotFoundError{}} ->
         with {:ok, params} <-
                Transforms.from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints),
-             {:ok, params} <- maybe_add_routing(account_id, params, consumer_attrs),
              {:ok, consumer} <-
                Sequin.Consumers.create_sink_consumer(account_id, params) do
           Logger.info("Created HTTP push consumer: #{inspect(consumer, pretty: true)}")
@@ -789,7 +787,15 @@ defmodule Sequin.YamlLoader do
     end
   end
 
+  defp upsert_transforms(_, %{"transforms" => _, "functions" => _ }) do
+    {:error, "Cannot specify both `functions` and `transforms`"}
+  end
+
   defp upsert_transforms(account_id, %{"transforms" => transforms}) do
+    upsert_transforms(account_id, %{"functions" => transforms})
+  end
+
+  defp upsert_transforms(account_id, %{"functions" => transforms}) do
     Logger.info("Upserting transforms: #{inspect(transforms, pretty: true)}")
 
     Enum.reduce_while(transforms, {:ok, []}, fn transform_attrs, {:ok, acc} ->
@@ -802,13 +808,15 @@ defmodule Sequin.YamlLoader do
 
   defp upsert_transforms(_account_id, %{}), do: {:ok, []}
 
-  defp upsert_transform(account_id, %{"name" => name} = transform_attrs) do
-    case Consumers.find_transform(account_id, name: name) do
-      {:ok, transform} ->
-        update_transform(account_id, transform.id, transform_attrs)
+  defp upsert_transform(account_id, %{"name" => name} = raw_attrs) do
+    with {:ok, transform_attrs} <- coerce_transform_attrs(raw_attrs) do
+      case Consumers.find_transform(account_id, name: name) do
+        {:ok, transform} ->
+          update_transform(account_id, transform.id, transform_attrs)
 
-      {:error, %NotFoundError{}} ->
-        create_transform(account_id, transform_attrs)
+        {:error, %NotFoundError{}} ->
+          create_transform(account_id, transform_attrs)
+      end
     end
   end
 
@@ -844,25 +852,36 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  defp maybe_add_routing(account_id, params, %{"routing" => routing_name}) when is_binary(routing_name) do
-    case Consumers.find_transform(account_id, name: routing_name) do
-      {:ok, transform} ->
-        if transform.type == "routing" do
-          {:ok, Map.put(params, :routing_id, transform.id)}
-        else
-          {:error,
-           Error.bad_request(
-             message: "Transform '#{routing_name}' is not a routing transform (has type: #{transform.type})"
-           )}
-        end
-
-      {:error, %NotFoundError{}} ->
-        {:error, Error.bad_request(message: "Routing transform '#{routing_name}' not found")}
-    end
+  defp coerce_transform_attrs(%{"function" => _, "transform" => _}) do
+    {:error, "Cannot specify both `function` and `transform`"}
   end
 
-  defp maybe_add_routing(_account_id, params, _consumer_attrs) do
-    # No routing specified, just return the params unchanged
-    {:ok, params}
+  defp coerce_transform_attrs(raw_attrs = %{"function" => transform}) do
+    attrs =
+      raw_attrs
+      |> Map.delete("function")
+      |> Map.put("transform", coerce_transform_inner(transform))
+
+    {:ok, attrs}
   end
+
+  defp coerce_transform_attrs(attrs = %{"transform" => _}) do
+    {:ok, Map.update!(attrs, "transform", &coerce_transform_inner/1)}
+  end
+
+  # Assume that if you don't have "function" or "transform" that you used flat structure
+  defp coerce_transform_attrs(flat) do
+    nested_attrs =
+      flat
+      |> Map.take(["id", "name"])
+      |> Map.put("transform", Map.take(flat, ["type", "sink_type", "code", "description"]))
+
+    {:ok, nested_attrs}
+  end
+
+  defp coerce_transform_inner(attrs = %{"sink_type" => "webhook"}) do
+    Map.put(attrs, "sink_type", "http_push")
+  end
+  defp coerce_transform_inner(attrs), do: attrs
+
 end

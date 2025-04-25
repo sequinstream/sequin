@@ -1368,6 +1368,83 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.routing.transform.code =~ "/custom/"
     end
 
+    test "creates webhook subscription with new yaml names" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               functions:
+                 - name: "my-routing"
+                   function:
+                     type: "routing"
+                     sink_type: "http_push"
+                     code: |-
+                       def route(action, record, changes, metadata) do
+                         %{
+                           method: "POST",
+                           endpoint_path: "/custom/\#{record["id"]}"
+                         }
+                       end
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                   routing: "my-routing"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, [:sequence, :routing])
+
+      assert consumer.routing.name == "my-routing"
+    end
+
+    test "creates webhook subscription with FLAT YAML" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               functions:
+                 - name: "my-routing"
+                   type: "routing"
+                   sink_type: "http_push"
+                   code: |-
+                     def route(action, record, changes, metadata) do
+                       %{
+                         method: "POST",
+                         endpoint_path: "/custom/\#{record["id"]}"
+                       }
+                     end
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                   routing: "my-routing"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, [:sequence, :routing])
+
+      assert consumer.routing.name == "my-routing"
+    end
+
+
+
     test "errors when routing transform doesn't exist" do
       assert_raise RuntimeError, ~r/[Tt]ransform 'non-existent-routing' not found/, fn ->
         YamlLoader.apply_from_yml!("""
@@ -1390,7 +1467,8 @@ defmodule Sequin.YamlLoaderTest do
     end
 
     test "errors when transform referenced for routing is not a routing transform" do
-      assert_raise RuntimeError, ~r/Transform 'regular-transform' is not a routing transform/, fn ->
+      assert_raise RuntimeError, "`routing` must reference a transform with type `routing`",
+      fn ->
         YamlLoader.apply_from_yml!("""
         #{account_db_and_sequence_yml()}
 

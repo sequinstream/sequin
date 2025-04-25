@@ -14,7 +14,7 @@ Currently, routing functions are available for HTTP webhook destinations.  Routi
 
 ## How routing functions work
 
-When you create a routing function, you define an Elixir function that inspects the message and returns routing information. Sequin will use this information to determine the destination for each message.
+When you create a routing function, you define an Elixir function that returns routing information. Sequin will use this information to determine the destination for each message.
 
 For each message, your routing function receives the same parameters as a [transform function](/reference/transforms) and must return a map containing the sink-specific routing information:
 

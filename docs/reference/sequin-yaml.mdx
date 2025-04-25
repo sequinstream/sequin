@@ -168,6 +168,18 @@ destination:
   timeout_seconds: 5               # Optional, seconds to wait for response, default: 5, max: 300
 ```
 
+#### Elasticsearch sink
+For indexing documents into an Elasticsearch index:
+```yaml
+destination:
+  type: "elasticsearch"            # Required
+  endpoint_url: "https://your-elasticsearch-cluster:9200"  # Required
+  index_name: "products"           # Required
+  auth_type: "api_key"             # Optional: api_key, basic, bearer, default: api_key
+  auth_value: "your-auth-key"      # Required: API key, basic auth (username:password), or bearer token
+  batch_size: 100                  # Optional, messages per batch, default: 100, max: 10000
+```
+
 #### Sequin Stream sink
 [Sequin Stream](/reference/sinks/sequin-stream) is a durable, scalable, and fault-tolerant message stream that you can use with Sequin in place of additional infrastructure like Kafka or SQS.
 
@@ -218,7 +230,7 @@ The `region` field is optional. If not provided, Sequin will automatically infer
 For publishing changes to Redis streams:
 ```yaml
 destination:
-  type: "redis"                 # Required
+  type: "redis_stream"                 # Required
   host: "localhost"             # Required
   port: 6379                    # Required
   stream_key: "my-stream"       # Required

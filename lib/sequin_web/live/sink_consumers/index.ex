@@ -10,7 +10,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
-  alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
@@ -175,14 +175,14 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     """
   end
 
-  defp render_consumer_form(%{form_kind: "redis"} = assigns) do
+  defp render_consumer_form(%{form_kind: "redis_stream"} = assigns) do
     ~H"""
     <.live_component
       current_user={@current_user}
       module={ConsumerForm}
       id="new-consumer"
       action={:new}
-      consumer={%SinkConsumer{type: :redis, batch_size: 10, sink: %RedisSink{}}}
+      consumer={%SinkConsumer{type: :redis_stream, batch_size: 10, sink: %RedisStreamSink{}}}
     />
     """
   end

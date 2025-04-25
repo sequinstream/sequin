@@ -1,10 +1,10 @@
 ---
-title: "Redis sink"
-sidebarTitle: "Redis sink"
-description: "Reference for configuring and using the Redis sink with Sequin."
+title: "Redis Stream sink"
+sidebarTitle: "Redis Stream sink"
+description: "Reference for configuring and using the Redis Stream sink with Sequin."
 ---
 
-The Redis sink sends messages to a Redis stream using the `XADD` command.
+The Redis Stream sink sends messages to a Redis stream using the `XADD` command.
 
 ## Configuration
 
@@ -89,7 +89,7 @@ Make sure your Redis server is properly configured to accept the security settin
 
 ## Debugging
 
-You can view the status of your Redis sink in the Sequin web console.
+You can view the status of your Redis Stream sink in the Sequin web console.
 
 On the "Messages" tab, you can see which messages are in-flight to Redis, which messages Sequin is unable to deliver, and recently delivered messages.
 

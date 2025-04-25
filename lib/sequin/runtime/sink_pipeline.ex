@@ -293,7 +293,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       :kafka -> Sequin.Runtime.KafkaPipeline
       :nats -> Sequin.Runtime.NatsPipeline
       :rabbitmq -> Sequin.Runtime.RabbitMqPipeline
-      :redis -> Sequin.Runtime.RedisPipeline
+      :redis_stream -> Sequin.Runtime.RedisStreamPipeline
       :sequin_stream -> Sequin.Runtime.SequinStreamPipeline
       :sqs -> Sequin.Runtime.SqsPipeline
       :typesense -> Sequin.Runtime.TypesensePipeline

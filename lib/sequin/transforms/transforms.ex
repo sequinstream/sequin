@@ -274,10 +274,8 @@ defmodule Sequin.Transforms do
     %{
       name: transform.name,
       description: transform.description,
-      transform: %{
-        type: transform.type,
-        path: transform.transform.path
-      }
+      type: transform.type,
+      path: transform.transform.path
     }
   end
 
@@ -285,10 +283,8 @@ defmodule Sequin.Transforms do
     %{
       name: transform.name,
       description: transform.description,
-      transform: %{
-        type: transform.type,
-        code: transform.transform.code
-      }
+      type: transform.type,
+      code: transform.transform.code
     }
   end
 
@@ -296,11 +292,9 @@ defmodule Sequin.Transforms do
     %{
       name: transform.name,
       description: transform.description,
-      transform: %{
-        type: transform.type,
-        sink_type: transform.transform.sink_type,
-        code: transform.transform.code,
-      }
+      type: transform.type,
+      sink_type: transform.transform.sink_type,
+      code: transform.transform.code,
     }
   end
 

@@ -5,7 +5,7 @@ defmodule Sequin.Repo.Migrations.AddRoutingToSinkconsumer do
 
   def change do
     execute """
-            alter table #{@config_schema}.sink_consumers add column routing_id uuid references #{@config_schema}.transforms(id)
+            alter table #{@config_schema}.sink_consumers add column routing_id uuid references #{@config_schema}.transforms(id) on delete restrict
             """,
             """
             alter table #{@config_schema}.sink_consumers drop column routing_id

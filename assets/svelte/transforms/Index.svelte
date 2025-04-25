@@ -69,7 +69,6 @@
         <Table.Row>
           <Table.Head>Name</Table.Head>
           <Table.Head>Type</Table.Head>
-          <Table.Head></Table.Head>
           <Table.Head>Function</Table.Head>
           <Table.Head>Created</Table.Head>
           <Table.Head>Last updated</Table.Head>
@@ -88,22 +87,12 @@
             <Table.Cell>{transform.name}</Table.Cell>
             <Table.Cell>
               <a href={getHref(transform)}
-                 target="_blank" class="text-blue-500 hover:text-blue-700 underline"
+                 target="_blank"
                  on:click|stopPropagation
                  >
-                {transform.type}
-              </a>
-            </Table.Cell>
-            <Table.Cell>
-              <a
-                href={`/functions/${transform.id}`}
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-                class="underline"
-              >
                 <Button variant="outline" size="sm">
                   <ExternalLink class="h-4 w-4 mr-2" />
-                  Edit
+                {transform.type}
                 </Button>
               </a>
             </Table.Cell>

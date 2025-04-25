@@ -12,6 +12,11 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
   require Logger
 
+  defmodule RoutingInfo do
+    @derive Jason.Encoder
+    defstruct [method: "POST", endpoint_path: ""]
+  end
+
   @impl SinkPipeline
   def init(context, opts) do
     consumer = Map.fetch!(context, :consumer)
@@ -27,23 +32,11 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   end
 
   @impl SinkPipeline
-  def apply_routing(me, rinfo) when is_map(rinfo) do
-    path = rinfo[:endpoint_path]
-    method = rinfo[:method]
-
-    me
-    |> apply_routing(nil)
-    |> case do
-      m when is_binary(path) -> Map.put(m, :endpoint_path, path)
-      m -> m
-    end
-    |> case do
-      m when is_binary(method) -> Map.put(m, :method, method)
-      m -> m
-    end
+  def apply_routing(_consumer, rinfo) when is_map(rinfo) do
+    struct(RoutingInfo, rinfo)
   end
 
-  def apply_routing(_, _), do: %{endpoint_path: "", method: "POST"}
+  def apply_routing(_, v), do: raise "Routing transform must return a map! Got: #{inspect(v)}"
 
   @impl SinkPipeline
   def handle_message(message, context) do

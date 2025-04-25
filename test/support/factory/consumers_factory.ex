@@ -15,7 +15,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
-  alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -51,7 +51,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       attrs[:type] || get_in(attrs, [:sink, :type]) ||
         Enum.random([
           :http_push,
-          :redis,
+          :redis_stream,
           :sqs,
           :sns,
           :kafka,
@@ -217,10 +217,10 @@ defmodule Sequin.Factory.ConsumersFactory do
     )
   end
 
-  defp sink(:redis, _account_id, attrs) do
+  defp sink(:redis_stream, _account_id, attrs) do
     merge_attributes(
-      %RedisSink{
-        type: :redis,
+      %RedisStreamSink{
+        type: :redis_stream,
         host: "localhost",
         port: 6379,
         database: 0,

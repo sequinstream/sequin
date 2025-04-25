@@ -3,7 +3,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
@@ -43,7 +43,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
-          type: :redis,
+          type: :redis_stream,
           message_kind: :record,
           batch_size: 10,
           sequence_filter: ConsumersFactory.sequence_filter_attrs(group_column_attnums: [1]),
@@ -73,7 +73,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
       ref = send_test_event(consumer, record)
       assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
-      assert_receive {:redis_request, %SinkConsumer{sink: %RedisSink{}}, [data]}, 1_000
+      assert_receive {:redis_request, %SinkConsumer{sink: %RedisStreamSink{}}, [data]}, 1_000
       assert is_map(data)
     end
 
@@ -139,7 +139,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
         ConsumersFactory.sink_consumer(
           id: UUID.uuid4(),
           account_id: account.id,
-          type: :redis,
+          type: :redis_stream,
           replication_slot_id: replication.id,
           sequence_id: sequence.id,
           sequence: sequence,

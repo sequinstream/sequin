@@ -18,6 +18,7 @@ type ctxCommand struct {
 	hostname      string
 	portalBaseURL string
 	tls           bool
+	tlsProvided   bool // Track whether --tls flag was explicitly provided
 	setDefault    bool
 	apiToken      string
 	tunnelPorts   string // New field for tunnel ports
@@ -37,7 +38,9 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 		StringVar(&cmd.hostname)
 	add.Flag("portal-base-url", "The Portal hostname for this context").
 		StringVar(&cmd.portalBaseURL)
-	add.Flag("tls", "Enable TLS for this context").BoolVar(&cmd.tls)
+	add.Flag("tls", "Enable TLS for this context").
+		IsSetByUser(&cmd.tlsProvided).
+		BoolVar(&cmd.tls)
 	add.Flag("set-default", "Set this context as the default").
 		BoolVar(&cmd.setDefault)
 	add.Flag("api-token", "The API Token for this context").
@@ -48,6 +51,7 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 	ctx.Command("ls", "List all contexts").Action(cmd.listAction)
 
 	info := ctx.Command("info", "Show details of a specific context").Action(cmd.infoAction)
+	info.Alias("show")
 	info.Arg("name", "The context name").StringVar(&cmd.name)
 
 	rm := ctx.Command("rm", "Remove a context").Action(cmd.removeAction)
@@ -60,7 +64,9 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 	edit.Arg("name", "The context name to edit").StringVar(&cmd.name)
 	edit.Flag("hostname", "The API hostname for this context").StringVar(&cmd.hostname)
 	edit.Flag("portal-base-url", "The Portal hostname for this context").StringVar(&cmd.portalBaseURL)
-	edit.Flag("tls", "Enable TLS for this context").BoolVar(&cmd.tls)
+	edit.Flag("tls", "Enable TLS for this context").
+		IsSetByUser(&cmd.tlsProvided).
+		BoolVar(&cmd.tls)
 	edit.Flag("api-token", "The API Token for this context").StringVar(&cmd.apiToken)
 	edit.Flag("tunnel-ports", "Comma-separated list of tunnel ports in the format port:nameOrId").StringVar(&cmd.tunnelPorts)
 	edit.Flag("force", "Force edit without confirmation").BoolVar(&cmd.force)
@@ -85,6 +91,15 @@ func (c *ctxCommand) addAction(pctx *fisk.ParseContext) error {
 		err := survey.AskOne(prompt, &c.apiToken)
 		if err != nil {
 			return fmt.Errorf("failed to get API Token: %w", err)
+		}
+	}
+
+	// Decide the default *only* if --tls was not on the CLI
+	if !c.tlsProvided {
+		if isLocalHostname(c.hostname) {
+			c.tls = false // local ⇒ plain-HTTP
+		} else {
+			c.tls = true // remote ⇒ HTTPS
 		}
 	}
 
@@ -133,6 +148,20 @@ func (c *ctxCommand) addAction(pctx *fisk.ParseContext) error {
 	}
 
 	return nil
+}
+
+// Add a helper function to check if a hostname is local
+func isLocalHostname(hostname string) bool {
+	hostname = strings.ToLower(hostname)
+	hostname = strings.Split(hostname, ":")[0] // Remove port if present
+
+	return hostname == "localhost" ||
+		hostname == "127.0.0.1" ||
+		hostname == "::1" ||
+		hostname == "host.docker.internal" ||
+		strings.HasPrefix(hostname, "192.168.") ||
+		strings.HasPrefix(hostname, "10.") ||
+		strings.HasPrefix(hostname, "172.16.")
 }
 
 func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
@@ -353,7 +382,7 @@ func (c *ctxCommand) editAction(_ *fisk.ParseContext) error {
 	if c.portalBaseURL != "" {
 		newCtx.PortalBaseURL = c.portalBaseURL
 	}
-	if c.tls {
+	if c.tlsProvided { // user asked to change it
 		newCtx.TLS = c.tls
 	}
 	if c.apiToken != "" {

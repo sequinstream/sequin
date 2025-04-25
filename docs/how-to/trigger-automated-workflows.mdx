@@ -55,7 +55,7 @@ First, create a sink to receive database changes. In the Sequin console, navigat
     The default setting for "Message grouping" groups changes by their primary key(s). That means that changes pertaining to the same row are sent to the destination sink in order. This is usually what you want in workflows, so you don't process changes out-of-order.
 
     <Note>
-      This ordering applies to how Sequin _writes_ changes to your sink. All sinks except [Redis streams](/reference/sinks/redis) support ordered _processing_ as well.
+      This ordering applies to how Sequin _writes_ changes to your sink. All sinks except [Redis Streams](/reference/sinks/redis-stream) support ordered _processing_ as well.
     </Note>
   </Step>
 

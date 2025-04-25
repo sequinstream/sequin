@@ -53,9 +53,19 @@ defmodule Sequin.YamlLoader do
 
   def apply_from_yml!(yml) do
     case apply_from_yml(yml) do
-      {:ok, {:ok, _resources}} -> :ok
-      {:ok, {:error, error}} -> raise "Failed to apply config: #{inspect(error)}"
-      {:error, error} -> raise "Failed to apply config: #{inspect(error)}"
+      {:ok, {:ok, _resources}} ->
+        :ok
+
+      # Hack to give a better error message when table is missing
+      {:ok, {:error, %NotFoundError{entity: :sequence} = error}} ->
+        error = %{error | entity: :postgres_table}
+        raise "Failed to apply config: #{inspect(error)}"
+
+      {:ok, {:error, error}} ->
+        raise "Failed to apply config: #{inspect(error)}"
+
+      {:error, error} ->
+        raise "Failed to apply config: #{inspect(error)}"
     end
   end
 
@@ -116,9 +126,15 @@ defmodule Sequin.YamlLoader do
             {:error, error}
         end
 
+      {:error, %YamlElixir.ParsingError{} = error} ->
+        {:error, Error.bad_request(message: "Invalid YAML: #{Exception.message(error)}")}
+
+      {:error, error} when is_exception(error) ->
+        {:error, Error.bad_request(message: "Error reading config file: #{Exception.message(error)}")}
+
       {:error, error} ->
         Logger.error("Error reading config file: #{inspect(error)}")
-        {:error, error}
+        {:error, Error.bad_request(message: "Error reading config file: #{inspect(error, pretty: true)}")}
     end
   end
 

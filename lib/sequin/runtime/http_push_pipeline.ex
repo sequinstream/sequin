@@ -46,7 +46,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     if is_nil(routing) do
       {:ok, message, context}
     else
-      res = MiniElixir.run_compiled(routing, message.data.data)
+      res = MiniElixir.run_compiled(routing, message.data.data, :route)
       message = Broadway.Message.put_batch_key(message, apply_routing(context.consumer, res))
       {:ok, message, context}
     end

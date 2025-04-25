@@ -51,7 +51,7 @@ defmodule Sequin.Transforms.Message do
 
   def to_external(%SinkConsumer{transform: %Transform{transform: %RoutingTransform{}} = transform} = sc, %c{data: data})
       when c in [ConsumerEvent, ConsumerRecord] do
-    res = MiniElixir.run_interpreted(transform, data)
+    res = MiniElixir.run_interpreted(transform, data, :route)
     SinkPipeline.apply_routing(sc, res)
   end
 

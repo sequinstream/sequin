@@ -233,6 +233,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: c.transform_id == ^transform_id)
   end
 
+  def where_transform_or_function_id(query \\ base_query(), transform_id) do
+    from([consumer: c] in query, where: c.transform_id == ^transform_id or c.routing_id == ^transform_id)
+  end
+
   def where_type(query \\ base_query(), type) do
     from([consumer: c] in query, where: c.type == ^type)
   end

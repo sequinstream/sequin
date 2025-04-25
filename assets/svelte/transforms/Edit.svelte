@@ -854,7 +854,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                 <AlertDialogHeader>
                   <AlertDialogTitle>Cannot Delete Function</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This transform cannot be deleted because it is currently
+                    This function cannot be deleted because it is currently
                     being used by the following consumers:
                     <ul class="list-disc pl-4 mt-2 space-y-1">
                       {#each usedByConsumers as consumer}
@@ -862,7 +862,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                       {/each}
                     </ul>
                     <p class="mt-2">
-                      Please remove this transform from all consumers before
+                      Please remove this function from all consumers before
                       deleting it.
                     </p>
                   </AlertDialogDescription>

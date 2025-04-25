@@ -124,6 +124,7 @@
         "reference/messages",
         "reference/filters",
         "reference/transforms",
+        "reference/routing",
         "reference/backfills",
         "reference/change-retention",
         "reference/annotations",

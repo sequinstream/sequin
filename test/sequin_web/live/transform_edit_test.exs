@@ -41,7 +41,7 @@ defmodule SequinWeb.TransformEditTest do
       %Transform{id: "fake", transform: %FunctionTransform{code: "{"}},
       ConsumersFactory.consumer_event_data(
         action: :insert,
-        record: record = %{"id" => "xyz"}
+        record: %{"id" => "xyz"}
       )
     )
 

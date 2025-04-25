@@ -723,6 +723,13 @@ defmodule Sequin.YamlLoader do
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
+  rescue
+    e in Postgrex.Error ->
+      case e do
+        %_{postgres: %{message: "routing_id must reference a transform with type 'routing'"}} ->
+          raise "`routing` must reference a transform with type `routing`"
+        _ -> reraise e, __STACKTRACE__
+      end
   end
 
   defp upsert_sink_consumers(_account_id, %{}, _databases, _http_endpoints), do: {:ok, []}

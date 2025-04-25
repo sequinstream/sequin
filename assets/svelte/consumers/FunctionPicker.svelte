@@ -132,7 +132,6 @@
     <div
       class="border rounded-lg p-8 flex flex-col items-center justify-center text-center space-y-4"
     >
-      <AlertCircle class="h-12 w-12 text-gray-300 mb-2" />
       <h3 class="text-lg font-medium">No {title.toLowerCase()}s</h3>
       <p class="text-muted-foreground max-w-md">
         You don't have any {title.toLowerCase()}s yet. Create one to get

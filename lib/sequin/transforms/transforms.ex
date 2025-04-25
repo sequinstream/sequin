@@ -558,6 +558,13 @@ defmodule Sequin.Transforms do
             {:error, error} -> {:halt, {:error, error}}
           end
 
+        "routing" ->
+          case parse_transform_id(account_id, value) do
+            {:ok, transform_id} ->
+              {:cont, {:ok, Map.merge(acc, %{routing_mode: "dynamic", routing_id: transform_id})}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+
         "timestamp_format" ->
           {:cont, {:ok, Map.put(acc, :timestamp_format, value)}}
 

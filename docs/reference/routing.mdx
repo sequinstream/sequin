@@ -12,7 +12,7 @@ Routing functions allow you to dynamically direct messages to different destinat
 
 Currently, routing functions are available for HTTP webhook destinations.  Routing for other sinks is planned but not yet generally available. 
 
-## How Routing Functions Work
+## How routing functions work
 
 When you create a routing function, you define an Elixir function that inspects the message and returns routing information. Sequin will use this information to determine the destination for each message.
 
@@ -30,11 +30,11 @@ end
 In general, some details of how the message is processed will be static and fixed by the sink.  Routing functions enable you to customize the behavior of a sink, but they are not intended to replace the idea of multiple sinks where necessary.
 For example, for the HTTP Webhook sink, the base URL is a static property - this improves batching and enables other performance optimizations such as connection pooling and request pipelining.
 
-## Supported Sinks
+## Supported sinks
 
 Currently, routing functions are supported by the following sinks:
 
-### HTTP Webhook Sink
+### HTTP Webhook sink
 
 For HTTP webhooks, your routing function must return a map with these keys:
 
@@ -45,7 +45,7 @@ For HTTP webhooks, your routing function must return a map with these keys:
 
 The `endpoint_path` you specify will be appended to the base URL of your webhook endpoint. For example, if your webhook endpoint is `https://api.example.com` and your routing function returns `endpoint_path: "/users/123"`, the message will be sent to `https://api.example.com/users/123`.
 
-## Common Routing Patterns
+## Common routing patterns
 
 ### Routing to REST APIs
 
@@ -69,7 +69,7 @@ def route(action, record, changes, metadata) do
 end
 ```
 
-### Content-Based Routing
+### Content-based routing
 
 Route messages based on their content:
 
@@ -90,7 +90,7 @@ def route(action, record, changes, metadata) do
 end
 ```
 
-## Testing Routing Functions
+## Testing routing functions
 
 When creating or editing a routing function, you can test it with real data from your database. Sequin will capture recent events and show you the effective routing parameters for each message.
 
@@ -100,7 +100,7 @@ When creating or editing a routing function, you can test it with real data from
   <img style={{maxWidth: '600px'}} src="/images/reference/routing-function-test.jpg" alt="Testing a routing function" />
 </Frame>
 
-## Limitations and Considerations
+## Limitations and considerations
 
 - Currently, routing functions are only available for HTTP webhook destinations.
 - Routing can impact batching if your routing function generates different destinations for each message.

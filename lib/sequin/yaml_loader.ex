@@ -728,7 +728,9 @@ defmodule Sequin.YamlLoader do
       case e do
         %_{postgres: %{message: "routing_id must reference a transform with type 'routing'"}} ->
           raise "`routing` must reference a transform with type `routing`"
-        _ -> reraise e, __STACKTRACE__
+
+        _ ->
+          reraise e, __STACKTRACE__
       end
   end
 
@@ -794,7 +796,7 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  defp upsert_transforms(_, %{"transforms" => _, "functions" => _ }) do
+  defp upsert_transforms(_, %{"transforms" => _, "functions" => _}) do
     {:error, "Cannot specify both `functions` and `transforms`"}
   end
 
@@ -863,7 +865,7 @@ defmodule Sequin.YamlLoader do
     {:error, "Cannot specify both `function` and `transform`"}
   end
 
-  defp coerce_transform_attrs(raw_attrs = %{"function" => transform}) do
+  defp coerce_transform_attrs(%{"function" => transform} = raw_attrs) do
     attrs =
       raw_attrs
       |> Map.delete("function")
@@ -872,7 +874,7 @@ defmodule Sequin.YamlLoader do
     {:ok, attrs}
   end
 
-  defp coerce_transform_attrs(attrs = %{"transform" => _}) do
+  defp coerce_transform_attrs(%{"transform" => _} = attrs) do
     {:ok, Map.update!(attrs, "transform", &coerce_transform_inner/1)}
   end
 
@@ -886,9 +888,9 @@ defmodule Sequin.YamlLoader do
     {:ok, nested_attrs}
   end
 
-  defp coerce_transform_inner(attrs = %{"sink_type" => "webhook"}) do
+  defp coerce_transform_inner(%{"sink_type" => "webhook"} = attrs) do
     Map.put(attrs, "sink_type", "http_push")
   end
-  defp coerce_transform_inner(attrs), do: attrs
 
+  defp coerce_transform_inner(attrs), do: attrs
 end

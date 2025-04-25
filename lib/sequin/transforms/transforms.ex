@@ -7,7 +7,6 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.FunctionTransform
-  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -16,6 +15,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
@@ -294,10 +294,9 @@ defmodule Sequin.Transforms do
       description: transform.description,
       type: transform.type,
       sink_type: transform.transform.sink_type,
-      code: transform.transform.code,
+      code: transform.transform.code
     }
   end
-
 
   def to_external(%ColumnFilter{} = column_filter, _show_sensitive) do
     %{
@@ -570,7 +569,9 @@ defmodule Sequin.Transforms do
           case parse_transform_id(account_id, value) do
             {:ok, transform_id} ->
               {:cont, {:ok, Map.merge(acc, %{routing_mode: "dynamic", routing_id: transform_id})}}
-            {:error, error} -> {:halt, {:error, error}}
+
+            {:error, error} ->
+              {:halt, {:error, error}}
           end
 
         "timestamp_format" ->

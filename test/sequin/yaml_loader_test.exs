@@ -1443,8 +1443,6 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.routing.name == "my-routing"
     end
 
-
-
     test "errors when routing transform doesn't exist" do
       assert_raise RuntimeError, ~r/[Tt]ransform 'non-existent-routing' not found/, fn ->
         YamlLoader.apply_from_yml!("""
@@ -1467,8 +1465,7 @@ defmodule Sequin.YamlLoaderTest do
     end
 
     test "errors when transform referenced for routing is not a routing transform" do
-      assert_raise RuntimeError, "`routing` must reference a transform with type `routing`",
-      fn ->
+      assert_raise RuntimeError, "`routing` must reference a transform with type `routing`", fn ->
         YamlLoader.apply_from_yml!("""
         #{account_db_and_sequence_yml()}
 

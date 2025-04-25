@@ -20,7 +20,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
-  alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter

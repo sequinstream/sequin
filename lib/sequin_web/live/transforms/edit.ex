@@ -52,20 +52,6 @@ defmodule SequinWeb.TransformsLive.Edit do
     "routing_http_push" => @initial_route_http
   }
 
-  @initial_route_http """
-  def transform(action, record, changes, metadata) do
-    %{
-      method: "PATCH",
-      endpoint_url: "/entities/\#{record["id"]}"
-    }
-  end
-  """
-
-  @initial_code_map %{
-    "transform" => @initial_transform,
-    "routing_http_push" => @initial_route_http
-  }
-
   # We generate the function completions at compile time because
   # docs are not available at runtime in our release.
   @function_completions AutoComplete.function_completions()

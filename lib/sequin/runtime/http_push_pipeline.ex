@@ -13,8 +13,9 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   require Logger
 
   defmodule RoutingInfo do
+    @moduledoc false
     @derive Jason.Encoder
-    defstruct [method: "POST", endpoint_path: ""]
+    defstruct method: "POST", endpoint_path: ""
   end
 
   @impl SinkPipeline
@@ -36,7 +37,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     struct(RoutingInfo, rinfo)
   end
 
-  def apply_routing(_, v), do: raise "Routing transform must return a map! Got: #{inspect(v)}"
+  def apply_routing(_, v), do: raise("Routing transform must return a map! Got: #{inspect(v)}")
 
   @impl SinkPipeline
   def handle_message(message, context) do

@@ -5,7 +5,6 @@ defmodule Sequin.Transforms.MiniElixir do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.Transform
   alias Sequin.Error
   alias Sequin.Transforms.MiniElixir.Validator

@@ -14,8 +14,8 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
-  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer

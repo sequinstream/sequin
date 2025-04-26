@@ -83,7 +83,7 @@ delete-branch: ## Delete the current branch and its non‑origin remote
 	@./scripts/delete_branch.sh
 
 spellcheck: ## Run cspell to check spelling in .md and .mdx files
-	@npx -y cspell "**/*.{md,mdx}" --config spellcheck/.cspell.json
+	@npx -y cspell "**/*.{md,mdx}" --config spellcheck/.cspell.json --exclude "**/node_modules/**"
 
 addword: ## Add a word to project-words.txt
 	@if [ -z "$(word)" ]; then \

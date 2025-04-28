@@ -774,6 +774,72 @@ defmodule Sequin.AccountsTest do
       {:ok, updated_account} = Accounts.remove_feature(updated_account, "feature_c")
       assert length(updated_account.features) == 1
     end
+
+    test "cached_has_feature?/2 initializes cache when it's not set" do
+      account = AccountsFactory.insert_account!(%{features: ["feature_a", "feature_b"]})
+
+      # First call should initialize the cache
+      assert Accounts.cached_has_feature?(account.id, "feature_a")
+      assert Accounts.cached_has_feature?(account.id, "feature_b")
+      refute Accounts.cached_has_feature?(account.id, "feature_c")
+
+      # Verify cache was set
+      {:ok, features} = Accounts.get_cached_features(account.id)
+      assert_lists_equal(features, ["feature_a", "feature_b"])
+    end
+
+    test "cached_has_feature?/2 returns correct answer from initialized cache" do
+      account = AccountsFactory.insert_account!(%{features: ["feature_a", "feature_b"]})
+
+      # Initialize cache
+      Accounts.set_cached_features(account)
+
+      # Should use the cache
+      assert Accounts.cached_has_feature?(account.id, "feature_a")
+      assert Accounts.cached_has_feature?(account.id, "feature_b")
+      refute Accounts.cached_has_feature?(account.id, "feature_c")
+    end
+
+    test "add_feature/2 invalidates and updates the cache" do
+      account = AccountsFactory.insert_account!(%{features: ["feature_a"]})
+
+      # Initialize cache
+      Accounts.set_cached_features(account)
+
+      # Add a new feature
+      {:ok, updated_account} = Accounts.add_feature(account, "feature_b")
+
+      # Cache should be updated
+      assert Accounts.cached_has_feature?(updated_account.id, "feature_b")
+
+      # Verify cache contains both features
+      {:ok, features} = Accounts.get_cached_features(updated_account.id)
+      assert_lists_equal(features, ["feature_b", "feature_a"])
+    end
+
+    test "remove_feature/2 invalidates and updates the cache" do
+      account = AccountsFactory.insert_account!(%{features: ["feature_a", "feature_b"]})
+
+      # Initialize cache
+      Accounts.set_cached_features(account)
+
+      # Remove a feature
+      {:ok, updated_account} = Accounts.remove_feature(account, "feature_a")
+
+      # Cache should be updated
+      refute Accounts.cached_has_feature?(updated_account.id, "feature_a")
+      assert Accounts.cached_has_feature?(updated_account.id, "feature_b")
+
+      # Verify cache only contains remaining feature
+      {:ok, features} = Accounts.get_cached_features(updated_account.id)
+      assert_lists_equal(features, ["feature_b"])
+    end
+
+    test "cached_has_feature? works with atoms and strings" do
+      account = AccountsFactory.insert_account!(%{features: ["feature_a"]})
+      assert Accounts.cached_has_feature?(account.id, :feature_a)
+      assert Accounts.cached_has_feature?(account.id, "feature_a")
+    end
   end
 
   describe "invite_user/4" do

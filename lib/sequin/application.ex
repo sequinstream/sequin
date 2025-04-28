@@ -4,6 +4,7 @@ defmodule Sequin.Application do
   @moduledoc false
   use Application
 
+  alias Sequin.Accounts
   alias Sequin.CheckSystemHealthWorker
   alias Sequin.Health.KickoffCheckPostgresReplicationSlotWorker
   alias Sequin.Health.KickoffCheckSinkConfigurationWorker
@@ -29,6 +30,7 @@ defmodule Sequin.Application do
     :syn.add_node_to_scopes([:account, :replication, :consumers])
 
     TestMessages.create_ets_table()
+    Accounts.initialize_account_features_cache()
 
     Sequin.Sentry.init()
 

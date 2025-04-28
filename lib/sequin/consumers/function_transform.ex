@@ -15,10 +15,10 @@ defmodule Sequin.Consumers.FunctionTransform do
     field :code, :string
   end
 
-  def changeset(struct, params) do
+  def changeset(struct, params, account_id) do
     changeset = cast(struct, params, [:code])
 
-    if Sequin.feature_enabled?(:function_transforms) do
+    if Sequin.feature_enabled?(account_id, :function_transforms) do
       changeset
       |> validate_required([:code])
       |> validate_change(:code, fn :code, code ->

@@ -12,7 +12,7 @@ defmodule Sequin.Consumers.PathTransform do
     field :path, :string
   end
 
-  def changeset(struct, params) do
+  def changeset(struct, params, _account_id) do
     struct
     |> cast(params, [:path])
     |> validate_required([:path])

@@ -72,7 +72,7 @@ defmodule SequinWeb.TransformsLive.Edit do
               sink_type: params["sink_type"]
             })
 
-          Transform.changeset(%Transform{}, %{"transform" => transform})
+          Transform.changeset(%Transform{account_id: current_account_id(socket)}, %{"transform" => transform})
 
         id ->
           transform = Consumers.get_transform_for_account!(current_account_id(socket), id)
@@ -90,6 +90,7 @@ defmodule SequinWeb.TransformsLive.Edit do
       socket
       |> assign(
         id: id,
+        account_id: current_account_id(socket),
         changeset: changeset,
         form_data: changeset_to_form_data(changeset),
         used_by_consumers: used_by_consumers,
@@ -101,7 +102,8 @@ defmodule SequinWeb.TransformsLive.Edit do
         selected_table_oid: nil,
         synthetic_test_message: Consumers.synthetic_message(),
         initial_code: @initial_code_map,
-        function_completions: @function_completions
+        function_completions: @function_completions,
+        function_transforms_enabled: Sequin.feature_enabled?(current_account_id(socket), :function_transforms)
       )
       |> assign_databases()
 
@@ -118,16 +120,27 @@ defmodule SequinWeb.TransformsLive.Edit do
             formData: @form_data,
             showErrors: @show_errors?,
             formErrors: @form_errors,
-            testMessages: encode_test_messages(@test_messages, @form_data, @form_errors),
+            testMessages:
+              encode_test_messages(
+                @test_messages,
+                @form_data,
+                @form_errors,
+                @account_id
+              ),
             syntheticTestMessages:
-              encode_synthetic_test_message(@synthetic_test_message, @form_data, @form_errors),
+              encode_synthetic_test_message(
+                @synthetic_test_message,
+                @form_data,
+                @form_errors,
+                @account_id
+              ),
             usedByConsumers: Enum.map(@used_by_consumers, &encode_consumer/1),
             databases: Enum.map(@databases, &encode_database/1),
             validating: @validating,
             parent: "transform_new",
             initialCodeMap: @initial_code,
             initialCode: "glugma",
-            functionTransformsEnabled: Sequin.feature_enabled?(:function_transforms),
+            functionTransformsEnabled: @function_transforms_enabled,
             functionCompletions: @function_completions
           }
         }
@@ -158,7 +171,7 @@ defmodule SequinWeb.TransformsLive.Edit do
 
   def handle_event("validate", %{"transform" => params}, socket) do
     changeset =
-      %Transform{}
+      %Transform{account_id: current_account_id(socket)}
       |> Transform.changeset(params)
       |> Map.put(:action, :validate)
 
@@ -268,25 +281,25 @@ defmodule SequinWeb.TransformsLive.Edit do
     }
   end
 
-  defp encode_synthetic_test_message(synthetic_message, form_data, form_errors) do
+  defp encode_synthetic_test_message(synthetic_message, form_data, form_errors, account_id) do
     [synthetic_message]
-    |> encode_test_messages(form_data, form_errors)
+    |> encode_test_messages(form_data, form_errors, account_id)
     |> Enum.map(&Map.put(&1, :isSynthetic, true))
   end
 
-  defp encode_test_messages(test_messages, form_data, form_errors) do
+  defp encode_test_messages(test_messages, form_data, form_errors, account_id) do
     if is_nil(get_in(form_errors, [:transform, :code])) do
-      do_encode_test_messages(test_messages, form_data)
+      do_encode_test_messages(test_messages, form_data, account_id)
     else
       Enum.map(test_messages, &prepare_test_message/1)
     end
   end
 
-  defp do_encode_test_messages(test_messages, form_data) do
+  defp do_encode_test_messages(test_messages, form_data, account_id) do
     transform = form_data[:transform]
 
     consumer = %SinkConsumer{
-      transform: %Transform{transform: transform},
+      transform: %Transform{account_id: account_id, transform: transform},
       legacy_transform: :none
     }
 

@@ -2,7 +2,6 @@ defmodule Sequin.Transforms.MiniElixir do
   @moduledoc false
   use Agent
 
-  alias Sequin.Accounts
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
@@ -19,7 +18,7 @@ defmodule Sequin.Transforms.MiniElixir do
   end
 
   def run_compiled(%Transform{account_id: account_id} = transform, data) do
-    if Sequin.feature_enabled?(:function_transforms) or Accounts.cached_has_feature?(account_id, :function_transforms) do
+    if Sequin.feature_enabled?(account_id, :function_transforms) do
       __MODULE__
       |> Task.async(:run_compiled_inner, [transform, data])
       |> Task.await(@timeout)
@@ -34,7 +33,7 @@ defmodule Sequin.Transforms.MiniElixir do
   end
 
   def run_interpreted(%Transform{account_id: account_id} = transform, data) do
-    if Sequin.feature_enabled?(:function_transforms) or Accounts.cached_has_feature?(account_id, :function_transforms) do
+    if Sequin.feature_enabled?(account_id, :function_transforms) do
       __MODULE__
       |> Task.async(:run_interpreted_inner, [transform, data])
       |> Task.await(@timeout)

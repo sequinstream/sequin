@@ -15,6 +15,7 @@ defmodule Sequin.Accounts do
   alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Error
+  alias Sequin.Error.NotFoundError
   alias Sequin.Posthog
   alias Sequin.Replication
   alias Sequin.Repo
@@ -567,6 +568,15 @@ defmodule Sequin.Accounts do
     account
     |> Account.changeset(attrs)
     |> Repo.update()
+    |> case do
+      {:ok, account} ->
+        invalidate_cached_features(account.id)
+        set_cached_features(account)
+        {:ok, account}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   def delete_account(%Account{} = account) do
@@ -764,7 +774,11 @@ defmodule Sequin.Accounts do
     Enum.any?(account.features, &(&1 == feature))
   end
 
-  def add_feature(%Account{} = account, feature) do
+  def add_feature(%Account{} = account, feature) when is_atom(feature) do
+    add_feature(account, to_string(feature))
+  end
+
+  def add_feature(%Account{} = account, feature) when is_binary(feature) do
     if has_feature?(account, feature) do
       {:ok, account}
     else
@@ -776,6 +790,51 @@ defmodule Sequin.Accounts do
     features = Enum.filter(account.features, &(&1 != feature))
 
     update_account(account, %{features: features})
+  end
+
+  def cached_has_feature?(account_id, feature) do
+    feature = to_string(feature)
+
+    case get_cached_features(account_id) do
+      {:ok, features} ->
+        Enum.any?(features, &(&1 == feature))
+
+      {:error, %NotFoundError{entity: :account_features}} ->
+        case get_account(account_id) do
+          {:ok, %Account{} = account} ->
+            set_cached_features(account)
+            has_feature?(account, feature)
+
+          {:error, _} ->
+            false
+        end
+    end
+  end
+
+  def initialize_account_features_cache do
+    ConCache.start_link(
+      name: :account_features,
+      ttl_check_interval: :timer.minutes(1),
+      global_ttl: :timer.hours(1)
+    )
+  end
+
+  def get_cached_features(account_id) do
+    case ConCache.get(:account_features, account_id) do
+      %{features: features} ->
+        {:ok, features}
+
+      nil ->
+        {:error, Error.not_found(entity: :account_features)}
+    end
+  end
+
+  def set_cached_features(%Account{id: account_id, features: features}) do
+    ConCache.put(:account_features, account_id, %{features: features})
+  end
+
+  def invalidate_cached_features(account_id) do
+    ConCache.delete(:account_features, account_id)
   end
 
   def invite_user(%User{} = inviting_user, %Account{} = account, send_to, url_fun) when is_function(url_fun, 1) do

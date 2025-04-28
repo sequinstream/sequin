@@ -189,4 +189,6 @@ Sequin uses Postgres for node discovery and Redis for distributed locking and le
 
 #### Redis
 
-Sequin requires Redis to be persistent. Redis alternatives like KeyDB are supported.
+Sequin requires Redis to be persistent and durable between restarts (i.e. Redis won't be wiped when you restart Sequin).
+
+Any key-value store that works with the Redis protocol (e.g. [KeyDB](https://keydb.dev/)) will work with Sequin.

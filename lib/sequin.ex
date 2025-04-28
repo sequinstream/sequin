@@ -6,6 +6,8 @@ defmodule Sequin do
   Contexts are also responsible for managing your data, regardless
   if it comes from the database, an external API or others.
   """
+  alias Sequin.Accounts
+
   @datetime_mod Application.compile_env(:sequin, [Sequin, :datetime_mod], DateTime)
   @uuid_mod Application.compile_env(:sequin, [Sequin, :uuid_mod], UUID)
   @enum_mod Application.compile_env(:sequin, [Sequin, :enum_mod], Enum)
@@ -42,5 +44,12 @@ defmodule Sequin do
       |> Keyword.get(feature, :disabled)
 
     value == :enabled
+  end
+
+  @doc """
+  Returns true if the feature is enabled either globally or for the given account.
+  """
+  def feature_enabled?(account_id, feature) do
+    feature_enabled?(feature) or Accounts.cached_has_feature?(account_id, feature)
   end
 end

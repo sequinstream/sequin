@@ -16,10 +16,10 @@ defmodule Sequin.Consumers.RoutingTransform do
     field :code, :string
   end
 
-  def changeset(struct, params) do
+  def changeset(struct, params, account_id) do
     changeset = cast(struct, params, [:code, :sink_type])
 
-    if Sequin.feature_enabled?(:function_transforms) do
+    if Sequin.feature_enabled?(account_id, :function_transforms) do
       changeset
       |> validate_required([:sink_type])
       |> validate_required([:code])

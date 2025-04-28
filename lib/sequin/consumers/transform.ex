@@ -10,6 +10,7 @@ defmodule Sequin.Consumers.Transform do
   alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RoutingTransform
+  alias Sequin.Consumers.Transform
 
   @derive {Jason.Encoder, only: [:name, :type, :description, :transform]}
   schema "transforms" do
@@ -44,9 +45,18 @@ defmodule Sequin.Consumers.Transform do
   end
 
   def changeset(transform, attrs) do
+    account_id = if is_struct(transform, Transform), do: transform.account_id, else: transform.data.account_id
+
     transform
     |> cast(attrs, [:name, :description])
-    |> cast_polymorphic_embed(:transform, required: true)
+    |> cast_polymorphic_embed(:transform,
+      required: true,
+      with: [
+        function: &FunctionTransform.changeset(&1, &2, account_id),
+        routing: &RoutingTransform.changeset(&1, &2, account_id),
+        path: &PathTransform.changeset(&1, &2, account_id)
+      ]
+    )
     |> validate_required([:name])
     |> validate_exclusion(:name, ["none", "null", "nil"])
     |> Sequin.Changeset.validate_name()

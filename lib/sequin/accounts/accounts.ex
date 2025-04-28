@@ -774,6 +774,12 @@ defmodule Sequin.Accounts do
     Enum.any?(account.features, &(&1 == feature))
   end
 
+  def add_feature(account_id, feature) when is_binary(account_id) do
+    with {:ok, %Account{} = account} <- get_account(account_id) do
+      add_feature(account, feature)
+    end
+  end
+
   def add_feature(%Account{} = account, feature) when is_atom(feature) do
     add_feature(account, to_string(feature))
   end

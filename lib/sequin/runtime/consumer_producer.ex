@@ -39,7 +39,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
       Mox.allow(Sequin.Runtime.SlotMessageStoreMock, test_pid, self())
     end
 
-    :syn.join(:consumers, {:messages_ingested, consumer.id}, self())
+    :syn.join(:consumers, {:messages_maybe_available, consumer.id}, self())
 
     state = %{
       demand: 0,
@@ -96,14 +96,8 @@ defmodule Sequin.Runtime.ConsumerProducer do
   end
 
   @impl GenStage
-  def handle_info(:messages_ingested, state) do
+  def handle_info(:messages_maybe_available, state) do
     new_state = maybe_schedule_demand(state)
-    {:noreply, [], new_state}
-  end
-
-  @impl GenStage
-  def handle_info(:messages_processed, state) do
-    new_state = schedule_receive_messages(state)
     {:noreply, [], new_state}
   end
 

@@ -473,7 +473,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
             state = State.put_persisted_messages(state, to_persist)
 
             Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
-            :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
+            :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
 
             if state.test_pid do
               send(state.test_pid, {:put_messages_done, state.consumer.id})
@@ -502,7 +502,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
            :ok <- upsert_messages(state, to_persist) do
         state = State.put_persisted_messages(state, to_persist)
         Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
-        :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
+        :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
 
         {:reply, :ok, state}
       else
@@ -555,7 +555,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
         Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
         {:reply, {:ok, messages}, state}
       else
-        :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_processed)
+        :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
         {:reply, {:ok, []}, state, :hibernate}
       end
     end)
@@ -581,6 +581,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
       maybe_finish_table_reader_batch(prev_state, state)
+
+      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
 
       if return_messages? do
         {:reply, {:ok, dropped_messages}, state}
@@ -613,6 +615,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
       maybe_finish_table_reader_batch(prev_state, state)
+
+      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
+
       {:reply, {:ok, count}, state}
     end)
   end
@@ -661,7 +666,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   def handle_call({:reset_message_visibilities, ack_ids}, _from, state) do
     execute_timed(:reset_message_visibilities, fn ->
-      :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
+      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
       {state, reset_messages} = State.reset_message_visibilities(state, ack_ids)
       {:reply, {:ok, reset_messages}, state}
     end)
@@ -669,7 +674,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   def handle_call(:reset_all_message_visibilities, _from, state) do
     execute_timed(:reset_all_message_visibilities, fn ->
-      :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
+      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
       {:reply, :ok, State.reset_all_message_visibilities(state)}
     end)
   end

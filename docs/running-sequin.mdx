@@ -121,7 +121,7 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
     <Step title="View metrics in Grafana">
       Sequin exports  [various metrics](/reference/metrics) in Prometheus format.
 
-      Using the Grafana service from Docker Compose, you can view our [example dashboard here](http://localhost:3000/d/behuozial454wc/sequin). 
+      Using the Grafana service from Docker Compose, you can view our [example dashboard here](http://localhost:3000/d/behuozial454wc/sequin).
 
       Sign in with Grafana's default credentials:
       - Username: `admin`
@@ -135,7 +135,13 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
 
 Sequin uses a Postgres database for configuration and to assist with its change data capture process.
 
-If you have an existing Postgres database you want Sequin to use for config, modify your `docker-compose.yaml`:
+We recommend creating a new logical database for Sequin in your existing Postgres instance:
+
+```sql
+create database {DB-NAME};
+```
+
+Then, modify your `docker-compose.yaml`:
 
 1. Remove the `postgres` service section
 2. Update the Sequin service configuration:

@@ -10,9 +10,9 @@ ARG RUNNER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${
 ARG SELF_HOSTED=0
 
 # ---- CLI Build Stage ----
-FROM golang:1.24-bullseye AS cli-builder
+FROM golang:1.24.2-bullseye AS cli-builder
 
-ARG SEQUIN_CLI_VERSION=0.6.97
+ARG SEQUIN_CLI_VERSION=${RELEASE_VERSION}
 RUN git clone --depth 1 --branch v${SEQUIN_CLI_VERSION} https://github.com/sequinstream/sequin.git /tmp/sequin \
     && cd /tmp/sequin/cli \
     && go build -o /sequin-cli

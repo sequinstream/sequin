@@ -15,6 +15,8 @@ defmodule Sequin.Health.Event do
 
   use TypedStruct
 
+  import Sequin.Error.Guards, only: [is_error: 1]
+
   alias __MODULE__
   alias Sequin.Error
   alias Sequin.JSON
@@ -174,7 +176,7 @@ defmodule Sequin.Health.Event do
     map
     |> JSON.decode_atom("slug")
     |> JSON.decode_atom("status")
-    |> JSON.decode_polymorphic("error")
+    |> maybe_decode_error()
     |> JSON.decode_timestamp("initial_event_at")
     |> JSON.decode_timestamp("last_event_at")
     |> JSON.decode_timestamp("last_success_at")
@@ -185,12 +187,45 @@ defmodule Sequin.Health.Event do
 
   defimpl Jason.Encoder do
     def encode(%Event{} = event, opts) do
+      error =
+        event.error
+        |> maybe_to_sequin_error()
+        |> JSON.encode_struct_with_type()
+
       # If you need special encoding logic (like your `Error` field),
       # you can do that here before delegating to `Jason.Encode.map/2`.
       event
       |> Map.from_struct()
-      |> JSON.encode_polymorphic(:error)
+      |> Map.put(:error, error)
       |> Jason.Encode.map(opts)
     end
+
+    defp maybe_to_sequin_error(error) when is_error(error), do: error
+
+    defp maybe_to_sequin_error(error) do
+      Logger.warning(
+        "[Health.Event] Wrapping an error that is not a Sequin.Error. Inform the Sequin team of this logline, and they can fix this noisy logline for you: #{inspect(error)}"
+      )
+
+      stringified =
+        if is_exception(error) do
+          %struct_name{} = error
+          "[#{struct_name}] " <> Exception.message(error)
+        else
+          inspect(error)
+        end
+
+      Error.service(message: stringified, service: :unknown)
+    end
+  end
+
+  # We previously stored some errors that were NOT Sequin.Errors in Redis
+  # This is a temp fallback, for those older errors that were stored before this change
+  defp maybe_decode_error(%{"error" => %{"_kind" => _kind, "_struct" => _original}} = map) do
+    JSON.decode_polymorphic(map, "error")
+  end
+
+  defp maybe_decode_error(map) do
+    map
   end
 end

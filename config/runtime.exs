@@ -160,9 +160,14 @@ if config_env() == :prod and self_hosted do
 
   config :sequin, SequinWeb.MetricsEndpoint,
     url: [host: metrics_host, port: metrics_port, scheme: "https"],
+    check_origin: check_origin,
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: metrics_port
+    ],
+    secret_key_base: secret_key_base,
+    live_view: [
+      long_poll_fallback_ms: String.to_integer(System.get_env("LONG_POLL_FALLBACK_MS", "3000"))
     ]
 
   config :sequin, :features,

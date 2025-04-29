@@ -135,7 +135,13 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
 
 Sequin uses a Postgres database for configuration and to assist with its change data capture process.
 
-If you have an existing Postgres database you want Sequin to use for config, modify your `docker-compose.yaml`:
+We recommend creating a new logical database for Sequin in your existing Postgres instance:
+
+```sql
+create database {DB-NAME};
+```
+
+Then, modify your `docker-compose.yaml`:
 
 1. Remove the `postgres` service section
 2. Update the Sequin service configuration:
@@ -150,31 +156,6 @@ services:
       - PG_USERNAME=<username>
       - PG_PASSWORD=<password>
 ```
-
-<Accordion title="Optional: Creating a dedicated user for Sequin">
-  If you want to create a dedicated user for Sequin on your existing Postgres database, you can do so by running the following SQL:
-
-  ```sql
-  -- Create user with a secure password. Be sure to use these credentials in your docker-compose.yaml file.
-  create user sequin_user with password 'REPLACE_WITH_SECURE_PASSWORD';
-
-  -- Grant necessary permissions and schema creation
-  grant connect, create on database your_database to sequin_user;
-
-  -- Allow creating tables in sequin_config and sequin_streams schemas
-  -- Note: schemas will be created by Sequin on first run
-  grant create, usage on schema sequin_config to sequin_user;
-  grant create, usage on schema sequin_streams to sequin_user;
-
-  -- Allow full access to all tables in these schemas
-  alter default privileges in schema sequin_config grant all on tables to sequin_user;
-  alter default privileges in schema sequin_streams grant all on tables to sequin_user;
-
-  -- Grant permissions on existing tables
-  grant select, insert, update, delete on all tables in schema sequin_config to sequin_user;
-  grant select, insert, update, delete on all tables in schema sequin_streams to sequin_user;
-  ```
-</Accordion>
 
 ### Using existing Redis
 

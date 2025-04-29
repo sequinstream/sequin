@@ -326,6 +326,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:reply, %{logs: logs}, socket}
 
       {:error, reason} ->
+        Logger.error("Failed to fetch message logs: #{inspect(reason)}", error: reason)
         {:reply, %{error: reason}, socket}
     end
   end

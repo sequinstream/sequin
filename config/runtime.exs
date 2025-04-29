@@ -33,6 +33,7 @@ end
 server_port = String.to_integer(System.get_env("SERVER_PORT") || System.get_env("PORT") || "7376")
 metrics_port = String.to_integer(System.get_env("SEQUIN_METRICS_PORT") || "8376")
 server_host = System.get_env("SERVER_HOST") || System.get_env("PHX_HOST") || "localhost"
+metrics_host = System.get_env("METRICS_HOST") || "localhost"
 
 if System.get_env("PORT") do
   Logger.warning("PORT environment variable is deprecated. Please use SERVER_PORT instead.")
@@ -158,6 +159,7 @@ if config_env() == :prod and self_hosted do
     ]
 
   config :sequin, SequinWeb.MetricsEndpoint,
+    url: [host: metrics_host, port: metrics_port, scheme: "https"],
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: metrics_port

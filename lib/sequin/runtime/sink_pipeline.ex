@@ -259,12 +259,13 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   defp batchers_config(pipeline_mod, consumer) do
     concurrency = min(System.schedulers_online() * 2, 80)
+    batch_timeout = consumer.batch_timeout_ms || 50
 
     default = [
       default: [
         concurrency: concurrency,
         batch_size: consumer.batch_size,
-        batch_timeout: 50
+        batch_timeout: batch_timeout
       ]
     ]
 

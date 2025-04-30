@@ -141,7 +141,8 @@ defmodule SequinWeb.Router do
   scope "/api", SequinWeb do
     pipe_through(:api)
 
-    resources("/databases", DatabaseController, except: [:new, :edit], param: "id_or_name")
+    # Postgres Database routes
+    resources("/postgres_databases", PostgresDatabaseController, except: [:new, :edit], param: "id_or_name")
     resources("/api_keys", ApiKeyController, only: [:index, :create, :delete])
 
     resources("/postgres_replications", PostgresReplicationController, except: [:new, :edit])
@@ -155,11 +156,10 @@ defmodule SequinWeb.Router do
     # Backfill routes
     resources("/sinks/:sink_id_or_name/backfills", BackfillController, except: [:new, :edit, :delete])
 
-    post("/databases/:id_or_name/test_connection", DatabaseController, :test_connection)
-    post("/databases/:id_or_name/setup_replication", DatabaseController, :setup_replication)
-    get("/databases/:id_or_name/schemas", DatabaseController, :list_schemas)
-    get("/databases/:id_or_name/schemas/:schema/tables", DatabaseController, :list_tables)
-    post("/databases/test_connection", DatabaseController, :test_connection_params)
+    post("/postgres_databases/:id_or_name/test_connection", PostgresDatabaseController, :test_connection)
+    post("/postgres_databases/:id_or_name/refresh_tables", PostgresDatabaseController, :refresh_tables)
+    # get("/postgres_databases/:id_or_name/schemas", PostgresDatabaseController, :list_schemas)
+    # get("/postgres_databases/:id_or_name/schemas/:schema/tables", PostgresDatabaseController, :list_tables)
 
     post("/sequin_streams/:id_or_name/receive", PullController, :receive)
     get("/sequin_streams/:id_or_name/receive", PullController, :receive)

@@ -1,0 +1,53 @@
+---
+title: 'Refresh tables'
+description: "Synchronously refresh Sequin's cache of all of a Postgres database's tables."
+api: 'POST /postgres_databases/{id_or_name}/refresh_tables'
+---
+
+<Note>
+  Sequin is able to detect schema changes right away. Use this endpoint only if you want to eliminate race conditions.
+  
+  For example, in test you might want to add a table to your source database and then make an immediate call to setup a sink with that table. It could be a good idea to call this endpoint after creating the table to ensure the table has propagated to Sequin.
+</Note>
+
+### Path parameters
+
+<ParamField path="id_or_name" type="string" required>
+  The ID or name of the Postgres database connection.
+</ParamField>
+
+### Example request
+
+```bash curl
+curl -X POST 'https://api.sequinstream.com/api/postgres_databases/production_rds/refresh_tables' \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -H 'Content-Type: application/json'
+```
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether the table refresh operation was successful (`true`) or failed (`false`).
+</ResponseField>
+
+<ResponseExample>
+```json 200 OK
+{
+    "success": true
+}
+```
+
+```json 422 Unprocessable Entity
+{
+    "success": false
+}
+```
+
+```json 404 Not Found
+{
+    "errors": {
+        "detail": "Postgres Database not found"
+    }
+}
+```
+</ResponseExample>

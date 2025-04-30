@@ -1,0 +1,53 @@
+<ResponseField name="id" type="string (uuid)">
+  The ID of the database connection.
+</ResponseField>
+<ResponseField name="name" type="string">
+  The user-defined name for the database connection.
+</ResponseField>
+<ResponseField name="hostname" type="string">
+  The hostname of the database server.
+</ResponseField>
+<ResponseField name="port" type="integer">
+  The port number for the database connection.
+</ResponseField>
+<ResponseField name="database" type="string">
+  The name of the logical Postgres database to connect to.
+</ResponseField>
+<ResponseField name="username" type="string">
+  The username for authenticating with the database.
+</ResponseField>
+<ResponseField name="password" type="string">
+  The password for authenticating with the database. This will be obfuscated unless `show_sensitive=true` is used.
+</ResponseField>
+<ResponseField name="ssl" type="boolean">
+  Indicates whether SSL is enabled for the connection.
+</ResponseField>
+<ResponseField name="ipv6" type="boolean">
+  Indicates whether the hostname resolves to an IPv6 address.
+</ResponseField>
+<ResponseField name="use_local_tunnel" type="boolean">
+  Indicates whether this database connection uses the [Sequin local tunnel](/reference/cli#tunnel-sequin-cloud-only).
+</ResponseField>
+<ResponseField name="pool_size" type="integer">
+  Database connection pool size (internal setting).
+</ResponseField>
+ <ResponseField name="queue_interval" type="integer">
+  Database connection pool queue interval (internal setting).
+</ResponseField>
+<ResponseField name="queue_target" type="integer">
+  Database connection pool queue target (internal setting).
+</ResponseField>
+<ResponseField name="replication_slots" type="array">
+  Details about the associated replication slot. Will be an empty array if no slot exists.
+  <Expandable title="properties" defaultOpen={true}>
+    <ResponseField name="publication_name" type="string">
+      The name of the Postgres publication used for replication.
+    </ResponseField>
+    <ResponseField name="slot_name" type="string">
+      The name of the Postgres replication slot.
+    </ResponseField>
+    <ResponseField name="status" type="string (enum: active | disabled)">
+      The current status of the replication slot.
+    </ResponseField>
+  </Expandable>
+</ResponseField> 

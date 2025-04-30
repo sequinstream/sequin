@@ -1,0 +1,63 @@
+---
+title: 'List databases'
+description: 'Lists all Postgres database connections in your account.'
+api: 'GET /postgres_databases'
+---
+
+import DatabaseListResponseExample from '/snippets/postgres-database-response-snippet.mdx'
+
+### Query parameters
+
+<ParamField path="show_sensitive" type="boolean" default="false">
+  Set to `true` to include the database password in the response. Defaults to `false`, which obfuscates the password.
+</ParamField>
+
+### Example request
+
+```bash curl
+curl -X GET 'https://api.sequinstream.com/api/postgres_databases?show_sensitive=false' \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -H 'Content-Type: application/json'
+```
+
+## Response
+
+Returns a list of Postgres database objects.
+
+<ResponseField name="data" type="array">
+  A list containing Postgres database objects.
+  <Expandable title="properties" defaultOpen={true}>
+    <DatabaseListResponseExample />
+  </Expandable>
+</ResponseField>
+
+<ResponseExample>
+```json 200 OK
+{
+  "data": [
+    {
+      "database": "sequin_prod",
+      "hostname": "db.abc123xyz.us-east-1.rds.amazonaws.com",
+      "id": "2593a3fc-9afe-4ea8-8ede-cffc8ae57c89",
+      "ipv6": false,
+      "name": "production_rds",
+      "password": "post**********", // Obfuscated by default
+      "pool_size": 10,
+      "port": 5432,
+      "queue_interval": 1000,
+      "queue_target": 50,
+      "replication_slots": [
+          {
+              "publication_name": "sequin_pub",
+              "slot_name": "sequin_slot",
+              "status": "active"
+          }
+      ],
+      "ssl": true,
+      "username": "sequin_user"
+    }
+    // ... other databases
+  ]
+}
+```
+</ResponseExample>

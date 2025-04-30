@@ -193,7 +193,16 @@
         "management-api/introduction",
         "management-api/authentication",
         {
-          "group": "HTTP Endpoints",
+          "group": "Postgres databases",
+          "pages": [
+            "management-api/postgres_databases/list",
+            "management-api/postgres_databases/get",
+            "management-api/postgres_databases/test-connection",
+            "management-api/postgres_databases/refresh-tables"
+          ]
+        },
+        {
+          "group": "HTTP endpoints",
           "pages": [
             "management-api/http-endpoints/list",
             "management-api/http-endpoints/get",
@@ -203,7 +212,7 @@
           ]
         },
         {
-          "group": "Sink Consumers",
+          "group": "Sink consumers",
           "pages": [
             "management-api/sink-consumers/list",
             "management-api/sink-consumers/get",

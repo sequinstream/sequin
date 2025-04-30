@@ -1,0 +1,73 @@
+---
+title: 'Test connection'
+description: 'Tests the connectivity and permissions for a configured Postgres database.'
+api: 'POST /postgres_databases/{id_or_name}/test_connection'
+---
+
+Tests an existing Postgres connection. This verifies:
+
+*  network reachability
+*  authentication
+*  connect permissions
+*  replication slot validity
+
+### Path parameters
+
+<ParamField path="id_or_name" type="string" required>
+  The ID or the name of the Postgres database connection to test.
+</ParamField>
+
+### Example request
+
+```bash curl
+curl -X POST 'https://api.sequinstream.com/api/postgres_databases/production_rds/test_connection' \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -H 'Content-Type: application/json'
+```
+
+## Response
+
+<ResponseField name="success" type="boolean">
+  Indicates whether all connection tests passed (`true`) or if any test failed (`false`).
+</ResponseField>
+
+<ResponseField name="reason" type="string" optional>
+  If `success` is `false`, this field provides a human-readable reason for the failure.
+</ResponseField>
+
+<ResponseExample>
+```json 200 OK
+{
+    "success": true
+}
+```
+
+```json 422 Connection Timeout
+{
+    "success": false,
+    "reason": "Connection timed out. Please verify the hostname and port are correct."
+}
+```
+
+```json 422 Auth Failure
+{
+    "success": false,
+    "reason": "Error from Postgres: password authentication failed for user \"sequin_user\" (code=28P01)"
+}
+```
+
+```json 422 Permission Denied
+{
+    "success": false,
+    "reason": "User does not have connect permission on database"
+}
+```
+
+```json 404 Not Found
+{
+    "errors": {
+        "detail": "Postgres Database not found"
+    }
+}
+```
+</ResponseExample>

@@ -52,7 +52,8 @@ defmodule SequinWeb.PostgresDatabaseControllerTest do
                %{
                  "publication_name" => slot.publication_name,
                  "slot_name" => slot.slot_name,
-                 "status" => to_string(slot.status)
+                 "status" => to_string(slot.status),
+                 "id" => slot.id
                }
              ]
 
@@ -95,7 +96,8 @@ defmodule SequinWeb.PostgresDatabaseControllerTest do
                %{
                  "publication_name" => slot.publication_name,
                  "slot_name" => slot.slot_name,
-                 "status" => to_string(slot.status)
+                 "status" => to_string(slot.status),
+                 "id" => slot.id
                }
              ]
     end

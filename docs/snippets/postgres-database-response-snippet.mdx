@@ -40,6 +40,9 @@
 <ResponseField name="replication_slots" type="array">
   Details about the associated replication slot. Will be an empty array if no slot exists.
   <Expandable title="properties" defaultOpen={true}>
+    <ResponseField name="id" type="string (uuid)">
+      The ID of the replication slot.
+    </ResponseField>
     <ResponseField name="publication_name" type="string">
       The name of the Postgres publication used for replication.
     </ResponseField>

@@ -58,7 +58,12 @@ defmodule SequinWeb.PostgresDatabaseJSON do
         []
       else
         [
-          %{publication_name: slot.publication_name, slot_name: slot.slot_name, status: slot.status}
+          %{
+            publication_name: slot.publication_name,
+            slot_name: slot.slot_name,
+            status: slot.status,
+            id: slot.id
+          }
         ]
       end
 

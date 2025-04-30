@@ -48,7 +48,8 @@ defmodule Sequin.Consumers.SinkConsumer do
              :health,
              :max_memory_mb,
              :legacy_transform,
-             :timestamp_format
+             :timestamp_format,
+             :batch_timeout_ms
            ]}
   typed_schema "sink_consumers" do
     field :name, :string
@@ -61,6 +62,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :status, Ecto.Enum, values: [:active, :disabled, :paused], default: :active
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
+    field :batch_timeout_ms, :integer, default: nil
     field :annotations, :map, default: %{}
     field :max_memory_mb, :integer, default: 1024
     field :partition_count, :integer, default: 1
@@ -165,7 +167,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :legacy_transform,
       :transform_id,
       :routing_id,
-      :timestamp_format
+      :timestamp_format,
+      :batch_timeout_ms
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)

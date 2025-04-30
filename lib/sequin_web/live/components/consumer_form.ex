@@ -540,6 +540,7 @@ defmodule SequinWeb.Components.ConsumerForm do
           "group_column_attnums" => form["groupColumnAttnums"]
         },
         "batch_size" => form["batchSize"],
+        "batch_timeout_ms" => form["batchTimeoutMs"],
         "initial_backfill" => decode_initial_backfill(form),
         "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
         "routing_id" => if(form["routingId"] === "none", do: nil, else: form["routingId"]),
@@ -734,7 +735,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "id" => consumer.id,
       "name" => consumer.name || Name.generate(999),
       "ack_wait_ms" => consumer.ack_wait_ms,
-      "batch_size" => Map.get(consumer, :batch_size),
+      "batch_size" => consumer.batch_size,
+      "batch_timeout_ms" => consumer.batch_timeout_ms,
       "max_memory_mb" => consumer.max_memory_mb,
       "group_column_attnums" => source_table && source_table.group_column_attnums,
       "max_ack_pending" => consumer.max_ack_pending,

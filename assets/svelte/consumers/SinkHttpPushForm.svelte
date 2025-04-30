@@ -171,6 +171,29 @@
         <AccordionContent>
           <div class="space-y-4 pt-4">
             <div class="space-y-2">
+              <Label for="batch-timeout">Batch timeout</Label>
+              <div class="flex items-center space-x-2">
+                <Input
+                  id="batch-timeout"
+                  type="number"
+                  bind:value={form.batchTimeoutMs}
+                  class="w-24"
+                  min="1"
+                />
+                <span class="text-sm text-muted-foreground">ms</span>
+              </div>
+              <p class="text-sm text-muted-foreground">
+                The maximum time to wait for a batch to reach its full size
+                before sending. Defaults to 50ms.
+              </p>
+              {#if errors.batch_timeout_ms}
+                <p class="text-destructive text-sm">
+                  {errors.batch_timeout_ms}
+                </p>
+              {/if}
+            </div>
+
+            <div class="space-y-2">
               <Label for="max-ack-pending">Max ack pending</Label>
               <Input
                 id="max-ack-pending"

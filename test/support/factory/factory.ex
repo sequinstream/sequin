@@ -35,7 +35,7 @@ defmodule Sequin.Factory do
   def iso_timestamp, do: DateTime.to_iso8601(timestamp())
   def last_name, do: Faker.Person.last_name()
   def milliseconds, do: Faker.random_between(1, 300_000)
-  def naive_timestamp, do: NaiveDateTime.truncate(Faker.NaiveDateTime.backward(365), :second)
+  def naive_timestamp, do: Faker.NaiveDateTime.backward(365)
   def one_of(module) when is_atom(module), do: one_of(module.__valid_values__())
   def one_of(opts), do: Enum.random(opts)
   def password, do: Faker.String.base64(12)

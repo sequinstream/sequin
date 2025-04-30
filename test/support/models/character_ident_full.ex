@@ -13,7 +13,7 @@ defmodule Sequin.TestSupport.Models.CharacterIdentFull do
     field :is_active, :boolean
     field :tags, {:array, :string}
 
-    timestamps()
+    timestamps(type: :naive_datetime_usec)
   end
 
   def table_oid do

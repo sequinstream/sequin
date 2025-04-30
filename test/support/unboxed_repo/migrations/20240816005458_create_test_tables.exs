@@ -11,7 +11,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :tags, {:array, :text}
       add :metadata, :map
 
-      timestamps()
+      timestamps(type: :naive_datetime_usec)
     end
 
     create table(:characters_ident_full) do
@@ -21,7 +21,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :is_active, :boolean
       add :tags, {:array, :text}
 
-      timestamps()
+      timestamps(type: :naive_datetime_usec)
     end
 
     execute "alter table characters_ident_full replica identity full"
@@ -34,7 +34,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :name, :text
       add :house, :text
 
-      timestamps()
+      timestamps(type: :naive_datetime_usec)
     end
 
     execute "CREATE EXTENSION IF NOT EXISTS pg_trgm"
@@ -69,7 +69,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :active_period, :daterange
       add :embedding, :vector, size: 3
 
-      timestamps()
+      timestamps(type: :naive_datetime_usec)
     end
 
     # Older version without transaction_annotations
@@ -84,8 +84,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :record, :map, null: false
       add :changes, :map
       add :action, :string, null: false
-      add :committed_at, :utc_datetime, null: false
-      add :inserted_at, :utc_datetime, null: false, default: fragment("NOW()")
+      add :committed_at, :naive_datetime_usec, null: false
+      add :inserted_at, :naive_datetime_usec, null: false, default: fragment("NOW()")
     end
 
     create unique_index(:test_event_logs_v0, [:source_database_id, :committed_at, :seq, :record_pk])
@@ -106,8 +106,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :changes, :map
       add :action, :string, null: false
       add :transaction_annotations, :map
-      add :committed_at, :utc_datetime, null: false
-      add :inserted_at, :utc_datetime, null: false, default: fragment("NOW()")
+      add :committed_at, :naive_datetime_usec, null: false
+      add :inserted_at, :naive_datetime_usec, null: false, default: fragment("NOW()")
     end
 
     create unique_index(:test_event_logs, [:source_database_id, :committed_at, :seq, :record_pk])
@@ -127,8 +127,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :record, :map, null: false
       add :changes, :map
       add :action, :string, null: false
-      add :committed_at, :utc_datetime, null: false, primary_key: true
-      add :inserted_at, :utc_datetime, null: false, default: fragment("NOW()")
+      add :committed_at, :naive_datetime_usec, null: false, primary_key: true
+      add :inserted_at, :naive_datetime_usec, null: false, default: fragment("NOW()")
     end
 
     execute "CREATE TABLE test_event_logs_partitioned_default PARTITION OF test_event_logs_partitioned DEFAULT"
@@ -153,8 +153,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :record, :map, null: false
       add :changes, :map
       add :action, :text, null: false
-      add :committed_at, :utc_datetime, null: false
-      add :inserted_at, :utc_datetime, null: false, default: fragment("NOW()")
+      add :committed_at, :naive_datetime_usec, null: false
+      add :inserted_at, :naive_datetime_usec, null: false, default: fragment("NOW()")
     end
 
     create unique_index(:sequin_events, [:source_database_id, :committed_at, :seq, :record_pk])

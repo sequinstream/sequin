@@ -14,7 +14,7 @@ defmodule Sequin.TestSupport.Models.CharacterMultiPK do
     field :name, :string
     field :house, :string
 
-    timestamps()
+    timestamps(type: :naive_datetime_usec)
   end
 
   def table_oid do

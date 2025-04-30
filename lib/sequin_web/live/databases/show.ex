@@ -105,7 +105,7 @@ defmodule SequinWeb.DatabasesLive.Show do
     %{database: database} = socket.assigns
 
     case Databases.delete_db_with_replication_slot(database) do
-      {:ok, _} ->
+      :ok ->
         {:noreply, push_navigate(socket, to: ~p"/databases")}
 
       {:error, error} ->

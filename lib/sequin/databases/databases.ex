@@ -83,6 +83,12 @@ defmodule Sequin.Databases do
         {:error, %Ecto.Changeset{} = changeset} ->
           {:error, Error.validation(changeset: changeset)}
 
+        {:error, %DBConnection.ConnectionError{} = error} ->
+          message = Exception.message(error)
+
+          {:error,
+           Error.validation(summary: "Failed to connect to database. Please check connection details. (error=#{message})")}
+
         error ->
           error
       end
@@ -150,27 +156,32 @@ defmodule Sequin.Databases do
   end
 
   def delete_db_with_replication_slot(%PostgresDatabase{} = db) do
-    Repo.transact(fn ->
-      db = Repo.preload(db, [:replication_slot, :sequences])
+    res =
+      Repo.transact(fn ->
+        db = Repo.preload(db, [:replication_slot, :sequences])
 
-      health_checker_query =
-        Oban.Job
-        |> ObanQuery.where_args(%{postgres_database_id: db.id})
-        |> ObanQuery.where_worker(Sequin.Health.CheckPostgresReplicationSlotWorker)
+        health_checker_query =
+          Oban.Job
+          |> ObanQuery.where_args(%{postgres_database_id: db.id})
+          |> ObanQuery.where_worker(Sequin.Health.CheckPostgresReplicationSlotWorker)
 
-      # Check for related entities that need to be removed first
-      with :ok <- check_related_entities(db),
-           {:ok, _} <- Replication.delete_pg_replication(db.replication_slot),
-           {:ok, _} <- delete_sequences(db),
-           {:ok, _} <- Repo.delete(db),
-           {:ok, _} <- Oban.cancel_all_jobs(health_checker_query) do
-        DatabaseLifecycleEventWorker.enqueue(:delete, :postgres_database, db.id, %{
-          replication_slot_id: db.replication_slot.id
-        })
+        # Check for related entities that need to be removed first
+        with :ok <- check_related_entities(db),
+             {:ok, _} <- Replication.delete_pg_replication(db.replication_slot),
+             {:ok, _} <- delete_sequences(db),
+             {:ok, _} <- Repo.delete(db),
+             {:ok, _} <- Oban.cancel_all_jobs(health_checker_query) do
+          DatabaseLifecycleEventWorker.enqueue(:delete, :postgres_database, db.id, %{
+            replication_slot_id: db.replication_slot.id
+          })
 
-        :ok
-      end
-    end)
+          :ok
+        end
+      end)
+
+    with {:ok, _res} <- res do
+      :ok
+    end
   end
 
   defp check_related_entities(db) do

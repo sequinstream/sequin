@@ -1,7 +1,9 @@
 defmodule SequinWeb.PostgresDatabaseControllerTest do
   use SequinWeb.ConnCase, async: true
 
+  alias Sequin.Databases
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Replication
@@ -113,110 +115,228 @@ defmodule SequinWeb.PostgresDatabaseControllerTest do
     end
   end
 
-  # describe "create" do
-  #   setup do
-  #     database_attrs = DatabasesFactory.configured_postgres_database_attrs()
-  #     %{database_attrs: database_attrs}
-  #   end
+  describe "create" do
+    setup do
+      database_attrs = DatabasesFactory.configured_postgres_database_attrs()
 
-  #   test "creates a database under the authenticated account", %{
-  #     conn: conn,
-  #     account: account,
-  #     database_attrs: database_attrs
-  #   } do
-  #     conn = post(conn, ~p"/api/postgres_databases", database_attrs)
-  #     assert %{"id" => id, "name" => name} = json_response(conn, 200)
-  #     assert name == database_attrs.name
+      slot_attrs =
+        Map.take(ReplicationFactory.configured_postgres_replication_attrs(), [:publication_name, :slot_name, :status])
 
-  #     {:ok, database} = Databases.get_db_for_account(account.id, id)
-  #     assert database.account_id == account.id
-  #   end
+      %{database_attrs: database_attrs, slot_attrs: slot_attrs}
+    end
 
-  #   test "returns validation error for invalid attributes", %{conn: conn} do
-  #     invalid_attrs = %{hostname: nil}
-  #     conn = post(conn, ~p"/api/postgres_databases", invalid_attrs)
-  #     assert json_response(conn, 422)["errors"] != %{}
-  #   end
+    test "creates a database and slot under the authenticated account", %{
+      conn: conn,
+      account: account,
+      database_attrs: database_attrs,
+      slot_attrs: slot_attrs
+    } do
+      payload = Map.put(database_attrs, "replication_slots", [slot_attrs])
 
-  #   test "ignores provided account_id and uses authenticated account", %{
-  #     conn: conn,
-  #     account: account,
-  #     other_account: other_account,
-  #     database_attrs: database_attrs
-  #   } do
-  #     conn =
-  #       post(conn, ~p"/api/postgres_databases", Map.put(database_attrs, :account_id, other_account.id))
+      conn = post(conn, ~p"/api/postgres_databases", payload)
+      assert response = json_response(conn, 201)
+      assert response["id"]
+      assert response["name"] == database_attrs.name
+      assert is_list(response["replication_slots"])
+      assert length(response["replication_slots"]) == 1
+      [slot_response] = response["replication_slots"]
+      assert slot_response["slot_name"] == slot_attrs.slot_name
 
-  #     assert %{"id" => id, "name" => name} = json_response(conn, 200)
-  #     assert name == database_attrs.name
+      {:ok, database} = Databases.get_db_for_account(account.id, response["id"])
+      assert database.account_id == account.id
+      database = Sequin.Repo.preload(database, :replication_slot)
+      assert database.replication_slot.slot_name == slot_attrs.slot_name
+      assert database.replication_slot.publication_name == slot_attrs.publication_name
+    end
 
-  #     {:ok, database} = Databases.get_db_for_account(account.id, id)
-  #     assert database.account_id == account.id
-  #     assert database.account_id != other_account.id
-  #   end
+    test "returns validation error for invalid database attributes", %{conn: conn, slot_attrs: slot_attrs} do
+      payload = %{
+        "hostname" => nil,
+        "replication_slots" => [slot_attrs]
+      }
 
-  #   @tag capture_log: true
-  #   test "rejects creation if database is not reachable", %{
-  #     conn: conn,
-  #     database_attrs: database_attrs
-  #   } do
-  #     unreachable_attrs = Map.merge(database_attrs, %{hostname: "unreachable.host", port: 5432})
-  #     conn = post(conn, ~p"/api/postgres_databases", unreachable_attrs)
-  #     assert json_response(conn, 200)["id"]
-  #   end
-  # end
+      conn = post(conn, ~p"/api/postgres_databases", payload)
+      assert is_map(json_response(conn, 422)["validation_errors"])
+    end
 
-  # describe "update" do
-  #   test "updates the database with valid attributes", %{conn: conn, database: database} do
-  #     hostname = database.hostname
-  #     {:ok, _} = Databases.update_db(database, %{hostname: "some-old-host.com"})
-  #     update_attrs = %{hostname: hostname}
-  #     conn = put(conn, ~p"/api/postgres_databases/#{database.id}", update_attrs)
-  #     assert %{"id" => id, "hostname" => updated_hostname} = json_response(conn, 200)
-  #     assert updated_hostname == hostname
+    test "returns validation error if replication_slots key is missing", %{conn: conn, database_attrs: database_attrs} do
+      conn = post(conn, ~p"/api/postgres_databases", database_attrs)
+      assert json_response(conn, 422)["summary"] =~ "`replication_slots`"
+    end
 
-  #     {:ok, updated_database} = Databases.get_db(id)
-  #     assert updated_database.hostname == hostname
-  #   end
+    test "returns validation error if replication_slots is not a list", %{
+      conn: conn,
+      database_attrs: database_attrs,
+      slot_attrs: slot_attrs
+    } do
+      payload = Map.put(database_attrs, "replication_slots", slot_attrs)
 
-  #   test "returns validation error for invalid attributes", %{conn: conn, database: database} do
-  #     invalid_attrs = %{port: "invalid"}
-  #     conn = put(conn, ~p"/api/postgres_databases/#{database.id}", invalid_attrs)
-  #     assert json_response(conn, 422)["errors"] != %{}
-  #   end
+      conn = post(conn, ~p"/api/postgres_databases", payload)
+      assert json_response(conn, 422)["summary"] =~ "`replication_slots` field with exactly one slot is required"
+    end
 
-  #   test "returns 404 if database belongs to another account", %{
-  #     conn: conn,
-  #     other_database: other_database
-  #   } do
-  #     conn = put(conn, ~p"/api/postgres_databases/#{other_database.id}", %{hostname: "new.hostname.com"})
-  #     assert json_response(conn, 404)
-  #   end
+    test "returns validation error if replication_slots list has more than one element", %{
+      conn: conn,
+      database_attrs: database_attrs,
+      slot_attrs: slot_attrs
+    } do
+      payload = Map.put(database_attrs, "replication_slots", [slot_attrs, slot_attrs])
 
-  #   @tag capture_log: true
-  #   test "rejects update if new configuration is not reachable", %{conn: conn, database: database} do
-  #     unreachable_attrs = %{hostname: "unreachable.host"}
-  #     conn = put(conn, ~p"/api/postgres_databases/#{database.id}", unreachable_attrs)
-  #     assert json_response(conn, 200)["hostname"] == "unreachable.host"
-  #   end
-  # end
+      conn = post(conn, ~p"/api/postgres_databases", payload)
+      assert json_response(conn, 422)["summary"] =~ "`replication_slots` field with exactly one slot is required"
+    end
 
-  # describe "delete" do
-  #   test "deletes the database", %{conn: conn, database: database} do
-  #     conn = delete(conn, ~p"/api/postgres_databases/#{database.id}")
-  #     assert %{"id" => id, "deleted" => true} = json_response(conn, 200)
+    test "returns validation error if replication_slots list is empty", %{conn: conn, database_attrs: database_attrs} do
+      payload = Map.put(database_attrs, "replication_slots", [])
 
-  #     assert {:error, _} = Databases.get_db_for_account(database.account_id, id)
-  #   end
+      conn = post(conn, ~p"/api/postgres_databases", payload)
+      assert json_response(conn, 422)["summary"] =~ "`replication_slots` field with exactly one slot is required"
+    end
+  end
 
-  #   test "returns 404 if database belongs to another account", %{
-  #     conn: conn,
-  #     other_database: other_database
-  #   } do
-  #     conn = delete(conn, ~p"/api/postgres_databases/#{other_database.id}")
-  #     assert json_response(conn, 404)
-  #   end
-  # end
+  describe "update" do
+    test "updates only the database attributes when replication_slots are not provided", %{conn: conn, database: database} do
+      new_hostname = "new-db.example.com"
+      payload = %{"hostname" => new_hostname}
+
+      conn = put(conn, ~p"/api/postgres_databases/#{database.id}", payload)
+      assert response = json_response(conn, 200)
+      assert response["id"] == database.id
+      assert response["hostname"] == new_hostname
+
+      {:ok, updated_database} = Databases.get_db(database.id)
+      assert updated_database.hostname == new_hostname
+    end
+
+    test "updates only the database attributes when replication_slots list is empty", %{
+      conn: conn,
+      database: database,
+      slot: slot
+    } do
+      new_hostname = "new-db-empty-slots.example.com"
+
+      payload = %{
+        "hostname" => new_hostname,
+        "replication_slots" => []
+      }
+
+      conn = put(conn, ~p"/api/postgres_databases/#{database.id}", payload)
+      assert response = json_response(conn, 200)
+      assert response["id"] == database.id
+      assert response["hostname"] == new_hostname
+
+      {:ok, updated_database} = Databases.get_db(database.id)
+      assert updated_database.hostname == new_hostname
+      reloaded_slot = Repo.reload(slot)
+      assert reloaded_slot.publication_name == slot.publication_name
+      assert reloaded_slot.slot_name == slot.slot_name
+    end
+
+    test "updates both database and slot attributes", %{conn: conn, database: database, slot: slot} do
+      new_hostname = "updated-db-and-slot.example.com"
+      new_slot_name = "updated_sequin_slot"
+      new_pub_name = "updated_sequin_pub"
+
+      payload = %{
+        "hostname" => new_hostname,
+        "replication_slots" => [%{"id" => slot.id, "slot_name" => new_slot_name, "publication_name" => new_pub_name}]
+      }
+
+      conn = put(conn, ~p"/api/postgres_databases/#{database.id}", payload)
+      assert response = json_response(conn, 200)
+      assert response["id"] == database.id
+      assert response["hostname"] == new_hostname
+      assert is_list(response["replication_slots"])
+      assert length(response["replication_slots"]) == 1
+      [slot_response] = response["replication_slots"]
+      assert slot_response["id"] == slot.id
+      assert slot_response["slot_name"] == new_slot_name
+      assert slot_response["publication_name"] == new_pub_name
+
+      {:ok, updated_database} = Databases.get_db(database.id)
+      assert updated_database.hostname == new_hostname
+      updated_database = Sequin.Repo.preload(updated_database, :replication_slot)
+      assert updated_database.replication_slot.slot_name == new_slot_name
+      assert updated_database.replication_slot.publication_name == new_pub_name
+    end
+
+    test "returns validation error for invalid database attributes", %{conn: conn, database: database} do
+      payload = %{"database" => %{"port" => "invalid"}}
+      conn = put(conn, ~p"/api/postgres_databases/#{database.id}", payload)
+      assert is_map(json_response(conn, 422)["validation_errors"])
+    end
+
+    test "returns validation error if replication_slots list contains more than one slot", %{
+      conn: conn,
+      database: database,
+      slot: slot
+    } do
+      payload = %{
+        "name" => "new-name",
+        "replication_slots" => [
+          %{"id" => slot.id, "slot_name" => "new_slot"},
+          %{"id" => "fake-id", "slot_name" => "another_slot"}
+        ]
+      }
+
+      conn = put(conn, ~p"/api/postgres_databases/#{database.id}", payload)
+
+      assert json_response(conn, 422)["summary"] =~ "`replication_slots`"
+    end
+
+    test "returns validation error if slot in list is missing id", %{conn: conn, database: database} do
+      payload = %{
+        "name" => "new-name",
+        "replication_slots" => [%{"slot_name" => "new_slot"}]
+      }
+
+      conn = put(conn, ~p"/api/postgres_databases/#{database.id}", payload)
+
+      assert json_response(conn, 422)["summary"] =~ "must have an `id` field"
+    end
+
+    test "returns 404 if database belongs to another account", %{
+      conn: conn,
+      other_database: other_database
+    } do
+      conn =
+        put(conn, ~p"/api/postgres_databases/#{other_database.id}", %{"database" => %{"hostname" => "new.hostname.com"}})
+
+      assert json_response(conn, 404)
+    end
+  end
+
+  describe "delete" do
+    test "deletes the database and its replication slot", %{conn: conn, database: database} do
+      conn = delete(conn, ~p"/api/postgres_databases/#{database.id}")
+      assert %{"success" => true, "id" => id} = json_response(conn, 200)
+      assert id == database.id
+
+      assert {:error, _} = Databases.get_db_for_account(database.account_id, id)
+    end
+
+    test "returns 404 if database belongs to another account", %{
+      conn: conn,
+      other_database: other_database
+    } do
+      conn = delete(conn, ~p"/api/postgres_databases/#{other_database.id}")
+      assert json_response(conn, 404)
+    end
+
+    @tag capture_log: true
+    test "returns validation error if database has associated sink consumers", %{conn: conn, database: database} do
+      database = Repo.preload(database, :replication_slot)
+
+      ConsumersFactory.insert_sink_consumer!(
+        account_id: database.account_id,
+        replication_slot_id: database.replication_slot.id
+      )
+
+      conn = delete(conn, ~p"/api/postgres_databases/#{database.id}")
+      assert response = json_response(conn, 422)
+      assert response["error"] =~ "Cannot delete database that's used by sink consumers"
+    end
+  end
 
   describe "test_connection" do
     test "succeeds for a reachable database", %{conn: conn, database: database} do

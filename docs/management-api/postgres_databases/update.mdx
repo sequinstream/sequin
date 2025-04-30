@@ -1,0 +1,127 @@
+---
+title: "Update database"
+api: "PUT /api/postgres_databases/{id_or_name}"
+description: "Update an existing Postgres database connection and optionally its replication slot."
+---
+
+import DatabaseResponseExample from '/snippets/postgres-database-response-snippet.mdx'
+
+### Path parameters
+
+<ParamField path="id_or_name" type="string" required>
+  The database ID or name to update
+</ParamField>
+
+### Request body
+
+<Note>
+  For updates, the `replication_slots` array is optional. If provided, it must contain a single replication slot object. If you include a replication slot, it must have an `id` field to identify which slot to update.
+</Note>
+
+<ParamField body="name" type="string">
+  A name for this database connection. You can use this name to identify the database across the API.
+</ParamField>
+<ParamField body="hostname" type="string">
+  The database server hostname.
+</ParamField>
+<ParamField body="database" type="string">
+  The name of the logical database in Postgres.
+</ParamField>
+<ParamField body="username" type="string">
+  The database username.
+</ParamField>
+<ParamField body="password" type="string">
+  The database password.
+</ParamField>
+<ParamField body="port" type="integer">
+  The database server port.
+</ParamField>
+<ParamField body="ssl" type="boolean">
+  Whether to use SSL for the connection.
+</ParamField>
+<ParamField body="ipv6" type="boolean">
+  Whether to use IPv6 for the connection.
+</ParamField>
+<ParamField body="annotations" type="object">
+  Optional metadata as key-value pairs.
+</ParamField>
+
+<ParamField body="replication_slots" type="array">
+  <Expandable title="properties" defaultOpen={true}>
+    <ParamField body="id" type="string" required>
+      The ID of the replication slot to update.
+    </ParamField>
+    <ParamField body="publication_name" type="string">
+      The name of the publication to use for this replication slot.
+    </ParamField>
+    <ParamField body="slot_name" type="string">
+      The name of the replication slot.
+    </ParamField>
+    <ParamField body="status" type="string">
+      The replication slot status. Possible values: "active", "disabled".
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+
+### Response
+
+<Expandable title="properties" defaultOpen={false}>
+  <DatabaseResponseExample />
+</Expandable>
+
+<RequestExample>
+```bash 
+# Update database only
+curl --request PUT \
+  --url https://api.sequinstream.com/api/postgres_databases/example-db \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_API_KEY' \
+  --data '{
+    "name": "example-db-renamed",
+    "hostname": "new-db.example.com"
+  }'
+
+# Update database and slot
+curl --request PUT \
+  --url https://api.sequinstream.com/api/postgres_databases/example-db \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_API_KEY' \
+  --data '{
+    "name": "example-db-renamed",
+    "hostname": "new-db.example.com",
+    "replication_slots": [
+      {
+        "id": "rs_01HRMW3ZNE5EFGW9SDXW01TT93",
+        "publication_name": "new_sequin_pub",
+        "slot_name": "new_sequin_slot"
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "id": "db_01HRMW3ZNE5EFGW9SDXW01TT92",
+  "name": "example-db-renamed",
+  "hostname": "new-db.example.com",
+  "database": "postgres",
+  "username": "postgres",
+  "password": "************",
+  "port": 5432,
+  "ssl": true,
+  "use_local_tunnel": false,
+  "ipv6": false,
+  "replication_slots": [
+    {
+      "id": "rs_01HRMW3ZNE5EFGW9SDXW01TT93",
+      "publication_name": "new_sequin_pub",
+      "slot_name": "new_sequin_slot",
+      "status": "active"
+    }
+  ]
+}
+```
+</ResponseExample> 

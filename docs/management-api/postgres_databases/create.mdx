@@ -1,0 +1,108 @@
+---
+title: "Create database"
+api: "POST /api/postgres_databases"
+description: "Create a new Postgres database connection with a replication slot."
+---
+
+import DatabaseResponseExample from '/snippets/postgres-database-response-snippet.mdx'
+
+### Request body
+
+<Note>
+  For creates, the `replication_slots` array must exist and contain exactly one replication slot object.
+</Note>
+
+<ParamField body="name" type="string" required>
+  A name for this database connection. You can use this name to identify the database across the API.
+</ParamField>
+<ParamField body="hostname" type="string" required>
+  The database server hostname.
+</ParamField>
+<ParamField body="database" type="string" required>
+  The name of the logical database in Postgres.
+</ParamField>
+<ParamField body="username" type="string" required>
+  The database username.
+</ParamField>
+<ParamField body="password" type="string" required>
+  The database password.
+</ParamField>
+<ParamField body="port" type="integer">
+  The database server port. Defaults to `5432`.
+</ParamField>
+<ParamField body="ssl" type="boolean">
+  Whether to use SSL for the connection. Defaults to `true`.
+</ParamField>
+<ParamField body="ipv6" type="boolean">
+  Whether to use IPv6 for the connection. Defaults to `false`.
+</ParamField>
+<ParamField body="replication_slots" type="array" required={true}>
+  <Expandable title="properties" defaultOpen={true}>
+    <ParamField body="publication_name" type="string" required>
+      The name of the publication to use for this replication slot.
+    </ParamField>
+    <ParamField body="slot_name" type="string" required>
+      The name of the replication slot.
+    </ParamField>
+    <ParamField body="status" type="string">
+      The replication slot status. Possible values: `active`, `disabled`. Defaults to `active`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+A database object is returned in the response.
+
+<Expandable title="properties" defaultOpen={false}>
+  <DatabaseResponseExample />
+</Expandable>
+
+<RequestExample>
+```bash
+curl --request POST \
+  --url https://api.sequinstream.com/api/postgres_databases \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_API_KEY' \
+  --data '{
+    "name": "example-db",
+    "hostname": "db.example.com",
+    "database": "postgres",
+    "username": "postgres",
+    "password": "secret-password",
+    "port": 5432,
+    "ssl": true,
+    "replication_slots": [
+      {
+        "publication_name": "sequin_pub",
+        "slot_name": "sequin_slot"
+      }
+    ]
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "id": "db_01HRMW3ZNE5EFGW9SDXW01TT92",
+  "name": "example-db",
+  "hostname": "db.example.com",
+  "database": "postgres",
+  "username": "postgres",
+  "password": "************",
+  "port": 5432,
+  "ssl": true,
+  "use_local_tunnel": false,
+  "ipv6": false,
+  "replication_slots": [
+    {
+      "id": "rs_01HRMW3ZNE5EFGW9SDXW01TT93",
+      "publication_name": "sequin_pub",
+      "slot_name": "sequin_slot",
+      "status": "active"
+    }
+  ]
+}
+```
+</ResponseExample> 

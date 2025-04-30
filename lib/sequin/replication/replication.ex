@@ -63,21 +63,21 @@ defmodule Sequin.Replication do
     attrs = Sequin.Map.atomize_keys(attrs)
     attrs = Map.put(attrs, :status, :active)
 
-    Repo.transact(fn ->
-      with {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
-           :ok <- validate_replication_config(postgres_database, attrs) do
-        pg_replication =
-          %PostgresReplicationSlot{account_id: account_id}
-          |> PostgresReplicationSlot.create_changeset(attrs)
-          |> Repo.insert()
+    changeset = PostgresReplicationSlot.create_changeset(%PostgresReplicationSlot{account_id: account_id}, attrs)
 
-        with {:ok, pg_replication} <- pg_replication do
-          DatabaseLifecycleEventWorker.enqueue(:create, :postgres_replication_slot, pg_replication.id)
-          {:ok, pg_replication}
-        end
+    Repo.transact(fn ->
+      with %{valid?: true} = changeset <- changeset,
+           {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
+           :ok <- validate_replication_config(postgres_database, attrs),
+           {:ok, pg_replication} <- Repo.insert(changeset) do
+        DatabaseLifecycleEventWorker.enqueue(:create, :postgres_replication_slot, pg_replication.id)
+        {:ok, pg_replication}
       else
         {:error, %NotFoundError{}} ->
           {:error, Error.validation(summary: "Database with id #{attrs[:postgres_database_id]} not found")}
+
+        %{valid?: false} = changeset ->
+          {:error, changeset}
 
         error ->
           error

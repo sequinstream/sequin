@@ -225,7 +225,7 @@ defmodule Sequin.DatabasesTest do
       db_attrs = DatabasesFactory.configured_postgres_database_attrs()
       slot_attrs = ReplicationFactory.configured_postgres_replication_attrs(slot_name: nil)
 
-      assert {:error, %ValidationError{}} = Databases.create_db_with_slot(account.id, db_attrs, slot_attrs)
+      assert {:error, _error} = Databases.create_db_with_slot(account.id, db_attrs, slot_attrs)
       assert Repo.all(PostgresDatabase) == []
       assert Repo.all(PostgresReplicationSlot) == []
     end

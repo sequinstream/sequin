@@ -197,6 +197,9 @@
           "pages": [
             "management-api/postgres_databases/list",
             "management-api/postgres_databases/get",
+            "management-api/postgres_databases/create",
+            "management-api/postgres_databases/update",
+            "management-api/postgres_databases/delete",
             "management-api/postgres_databases/test-connection",
             "management-api/postgres_databases/refresh-tables"
           ]

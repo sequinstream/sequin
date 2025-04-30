@@ -2,6 +2,7 @@ defmodule SequinWeb.DatabaseController do
   use SequinWeb, :controller
 
   alias Sequin.Databases
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
@@ -49,6 +50,7 @@ defmodule SequinWeb.DatabaseController do
 
     with {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
          {:ok, _database} <- Databases.delete_db(database) do
+      ConnectionCache.invalidate_connection(database.id)
       render(conn, "delete.json", database: database)
     end
   end

@@ -92,8 +92,8 @@ defmodule Sequin.Postgres.ValueCaster do
     # Binary Data Types
     "bytea" => :binary,
     # Date/Time Types
-    "timestamp" => :naive_datetime,
-    "timestamptz" => :utc_datetime,
+    "timestamp" => :naive_datetime_usec,
+    "timestamptz" => :utc_datetime_usec,
     "date" => :date,
     "time" => :time,
     "timetz" => :time,

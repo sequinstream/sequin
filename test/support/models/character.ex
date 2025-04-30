@@ -14,7 +14,7 @@ defmodule Sequin.TestSupport.Models.Character do
     field :tags, {:array, :string}
     field :metadata, :map
 
-    timestamps()
+    timestamps(type: :naive_datetime_usec)
   end
 
   def quoted_table_name do

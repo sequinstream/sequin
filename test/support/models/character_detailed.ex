@@ -28,7 +28,7 @@ defmodule Sequin.TestSupport.Models.CharacterDetailed do
     field :power_level, :integer
     field :embedding, {:array, :float}
 
-    timestamps()
+    timestamps(type: :utc_datetime_usec)
   end
 
   def table_oid do

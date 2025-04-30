@@ -54,6 +54,50 @@ defmodule Sequin.Factory.ReplicationFactory do
     |> Repo.insert!()
   end
 
+  @doc """
+  Returns attributes for a pre-configured replication slot used in tests.
+
+  This uses the slot name defined in `Sequin.TestSupport.ReplicationSlots` for the factory module
+  and a known publication name.
+  """
+  def configured_postgres_replication_attrs(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %{
+        slot_name: Sequin.TestSupport.ReplicationSlots.slot_name(Sequin.Factory.ReplicationFactory),
+        # This is the name of the publication in the test database.
+        # See the "CreateTestTables" migration.
+        publication_name: "characters_publication"
+      },
+      attrs
+    )
+  end
+
+  @doc """
+  Inserts a `PostgresReplicationSlot` record pointing to a pre-configured replication slot.
+  """
+  def insert_configured_postgres_replication!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {postgres_database_id, attrs} =
+      Map.pop_lazy(attrs, :postgres_database_id, fn ->
+        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+      end)
+
+    # Get configured attrs first, then merge explicit attrs, allowing overrides
+    configured_attrs = configured_postgres_replication_attrs(attrs)
+
+    configured_attrs
+    |> Map.put(:account_id, account_id)
+    |> Map.put(:postgres_database_id, postgres_database_id)
+    # Build the final struct with all attributes
+    |> postgres_replication()
+    |> Repo.insert!()
+  end
+
   def postgres_message(attrs \\ []) do
     case attrs[:action] || Enum.random([:insert, :update, :delete]) do
       :insert -> postgres_insert(attrs)

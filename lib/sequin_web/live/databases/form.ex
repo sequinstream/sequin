@@ -13,10 +13,8 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Error.NotFoundError
   alias Sequin.Name
   alias Sequin.Posthog
-  alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
-  alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
 
   require Logger
 
@@ -357,24 +355,11 @@ defmodule SequinWeb.DatabasesLive.Form do
 
     replication_params = params["replication_slot"]
 
-    Repo.transact(
-      fn ->
-        res =
-          if socket.assigns.is_edit? do
-            update_database(socket.assigns.database, db_params, replication_params)
-          else
-            create_database(account_id, db_params, replication_params)
-          end
-
-        with {:ok, db} <- res do
-          # It's now safe to start the replication slot
-          RuntimeSupervisor.start_replication(db.replication_slot)
-
-          {:ok, db}
-        end
-      end,
-      timeout: :timer.seconds(30)
-    )
+    if socket.assigns.is_edit? do
+      Databases.update_db_with_slot(socket.assigns.database, db_params, replication_params)
+    else
+      Databases.create_db_with_slot(account_id, db_params, replication_params)
+    end
   end
 
   defp test_db_conn(params, socket) do
@@ -407,41 +392,6 @@ defmodule SequinWeb.DatabasesLive.Form do
       {:ok, true} -> Map.put(db_params, "ipv6", true)
       {:ok, false} -> Map.put(db_params, "ipv6", false)
       {:error, _error} -> db_params
-    end
-  end
-
-  defp update_database(database, db_params, replication_params) do
-    database
-    |> Databases.update_db(db_params)
-    |> case do
-      {:ok, updated_db} ->
-        replication_slot = Repo.preload(updated_db, :replication_slot).replication_slot
-
-        case Replication.update_pg_replication(replication_slot, replication_params) do
-          {:ok, replication} -> {:ok, %PostgresDatabase{updated_db | replication_slot: replication}}
-          {:error, error} -> {:error, error}
-        end
-
-      {:error, error} ->
-        {:error, error}
-    end
-  end
-
-  defp create_database(account_id, db_params, replication_params) do
-    account_id
-    |> Databases.create_db(db_params)
-    |> case do
-      {:ok, db} ->
-        case Replication.create_pg_replication(
-               account_id,
-               Map.put(replication_params, "postgres_database_id", db.id)
-             ) do
-          {:ok, replication} -> {:ok, %PostgresDatabase{db | replication_slot: replication}}
-          {:error, error} -> {:error, error}
-        end
-
-      {:error, error} ->
-        {:error, error}
     end
   end
 

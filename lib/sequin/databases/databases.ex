@@ -112,6 +112,39 @@ defmodule Sequin.Databases do
     end)
   end
 
+  @doc """
+  Creates a PostgresDatabase and its associated PostgresReplicationSlot transactionally.
+  """
+  def create_db_with_slot(account_id, db_params, replication_params) do
+    Repo.transact(fn ->
+      with {:ok, db} <- create_db(account_id, db_params),
+           replication_params = Map.put(replication_params, "postgres_database_id", db.id),
+           {:ok, replication} <-
+             Replication.create_pg_replication(
+               account_id,
+               replication_params
+             ) do
+        # Preload the slot association after successful creation
+        db_with_slot = Repo.preload(db, :replication_slot)
+        {:ok, %PostgresDatabase{db_with_slot | replication_slot: replication}}
+      end
+    end)
+  end
+
+  @doc """
+  Updates a PostgresDatabase and its associated PostgresReplicationSlot transactionally.
+  """
+  def update_db_with_slot(%PostgresDatabase{} = database, db_params, replication_params) do
+    Repo.transact(fn ->
+      with {:ok, updated_db} <- update_db(database, db_params),
+           # Preload the slot association after successful update for the next step
+           replication_slot = Repo.preload(updated_db, :replication_slot).replication_slot,
+           {:ok, replication} <- Replication.update_pg_replication(replication_slot, replication_params) do
+        {:ok, %PostgresDatabase{updated_db | replication_slot: replication}}
+      end
+    end)
+  end
+
   def delete_db(%PostgresDatabase{} = db) do
     Repo.delete(db)
   end

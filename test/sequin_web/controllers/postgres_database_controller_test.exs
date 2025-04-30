@@ -5,22 +5,17 @@ defmodule SequinWeb.PostgresDatabaseControllerTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Replication
-  alias Sequin.TestSupport.ReplicationSlots
 
   setup :authenticated_conn
-
-  @slot_name ReplicationSlots.slot_name(__MODULE__)
 
   setup %{account: account} do
     other_account = AccountsFactory.insert_account!()
     database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
 
     slot =
-      ReplicationFactory.insert_postgres_replication!(
+      ReplicationFactory.insert_configured_postgres_replication!(
         postgres_database_id: database.id,
-        account_id: account.id,
-        publication_name: "characters_publication",
-        slot_name: @slot_name
+        account_id: account.id
       )
 
     other_database =

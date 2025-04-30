@@ -5,9 +5,12 @@ defmodule Sequin.DatabasesTest do
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
+  alias Sequin.Error.ValidationError
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.TestSupport.Models.Character
 
   describe "tables/1" do
@@ -180,6 +183,114 @@ defmodule Sequin.DatabasesTest do
       DatabasesFactory.insert_sequence!(account_id: account.id, postgres_database_id: database.id)
       assert {:ok, 2} = Databases.delete_sequences(database)
       assert Databases.list_sequences_for_account(account.id) == []
+    end
+  end
+
+  describe "create_db_with_slot/3" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      {:ok, account: account}
+    end
+
+    test "successfully creates a database and replication slot", %{account: account} do
+      db_attrs = DatabasesFactory.configured_postgres_database_attrs()
+      slot_attrs = ReplicationFactory.configured_postgres_replication_attrs()
+
+      assert {:ok, db} = Databases.create_db_with_slot(account.id, db_attrs, slot_attrs)
+
+      assert db.id
+      assert %Sequin.Replication.PostgresReplicationSlot{} = db.replication_slot
+      assert db.replication_slot.id
+
+      # Verify they exist in DB
+      assert [db] = Repo.all(PostgresDatabase)
+      assert [slot] = Repo.all(PostgresReplicationSlot)
+
+      assert slot.postgres_database_id == db.id
+      assert db.name == db_attrs.name
+      assert slot.slot_name == slot_attrs.slot_name
+      assert slot.publication_name == slot_attrs.publication_name
+    end
+
+    test "returns error and rolls back if db creation fails", %{account: account} do
+      db_attrs = DatabasesFactory.configured_postgres_database_attrs(name: nil)
+      slot_attrs = ReplicationFactory.configured_postgres_replication_attrs()
+
+      assert {:error, %ValidationError{}} = Databases.create_db_with_slot(account.id, db_attrs, slot_attrs)
+      assert Repo.all(PostgresDatabase) == []
+      assert Repo.all(PostgresReplicationSlot) == []
+    end
+
+    test "returns error and rolls back if slot creation fails", %{account: account} do
+      db_attrs = DatabasesFactory.configured_postgres_database_attrs()
+      slot_attrs = ReplicationFactory.configured_postgres_replication_attrs(slot_name: nil)
+
+      assert {:error, %ValidationError{}} = Databases.create_db_with_slot(account.id, db_attrs, slot_attrs)
+      assert Repo.all(PostgresDatabase) == []
+      assert Repo.all(PostgresReplicationSlot) == []
+    end
+  end
+
+  describe "update_db_with_slot/3" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      _slot =
+        ReplicationFactory.insert_postgres_replication!(postgres_database_id: db.id, account_id: account.id)
+
+      db = Repo.preload(db, :replication_slot)
+      {:ok, account: account, db: db}
+    end
+
+    test "successfully updates a database and replication slot", %{db: db} do
+      new_db_attrs = DatabasesFactory.configured_postgres_database_attrs()
+      new_slot_attrs = ReplicationFactory.configured_postgres_replication_attrs()
+      db_attrs = %{name: new_db_attrs.name}
+      slot_attrs = %{slot_name: new_slot_attrs.slot_name, publication_name: new_slot_attrs.publication_name}
+
+      assert {:ok, updated_db} = Databases.update_db_with_slot(db, db_attrs, slot_attrs)
+
+      assert updated_db.name == new_db_attrs.name
+      assert updated_db.replication_slot.slot_name == new_slot_attrs.slot_name
+      assert updated_db.replication_slot.publication_name == new_slot_attrs.publication_name
+
+      # Verify changes in DB
+      reloaded_db = Repo.get!(PostgresDatabase, db.id)
+      reloaded_slot = Repo.get!(Sequin.Replication.PostgresReplicationSlot, db.replication_slot.id)
+      assert reloaded_db.name == new_db_attrs.name
+      assert reloaded_slot.slot_name == new_slot_attrs.slot_name
+      assert reloaded_slot.publication_name == new_slot_attrs.publication_name
+    end
+
+    test "returns error and rolls back if db update fails", %{db: db} do
+      original_name = db.name
+      original_slot_name = db.replication_slot.slot_name
+
+      db_attrs = DatabasesFactory.postgres_database_attrs(name: 1)
+      slot_attrs = ReplicationFactory.configured_postgres_replication_attrs()
+
+      assert {:error, %ValidationError{}} = Databases.update_db_with_slot(db, db_attrs, slot_attrs)
+
+      reloaded_db = Repo.get!(PostgresDatabase, db.id)
+      reloaded_slot = Repo.get!(Sequin.Replication.PostgresReplicationSlot, db.replication_slot.id)
+      assert reloaded_db.name == original_name
+      assert reloaded_slot.slot_name == original_slot_name
+    end
+
+    test "returns error and rolls back if slot update fails", %{db: db} do
+      original_name = db.name
+      original_slot_name = db.replication_slot.slot_name
+
+      db_attrs = DatabasesFactory.configured_postgres_database_attrs()
+      slot_attrs = ReplicationFactory.postgres_replication_attrs(slot_name: 1)
+
+      assert {:error, %Ecto.Changeset{}} = Databases.update_db_with_slot(db, db_attrs, slot_attrs)
+
+      reloaded_db = Repo.get!(PostgresDatabase, db.id)
+      reloaded_slot = Repo.get!(Sequin.Replication.PostgresReplicationSlot, db.replication_slot.id)
+      assert reloaded_db.name == original_name
+      assert reloaded_slot.slot_name == original_slot_name
     end
   end
 

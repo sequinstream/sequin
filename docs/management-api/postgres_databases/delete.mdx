@@ -1,0 +1,59 @@
+---
+title: "Delete database"
+api: "DELETE /api/postgres_databases/{id_or_name}"
+description: "Delete a Postgres database connection and its associated replication slot."
+---
+
+### Path Parameters
+
+<ParamField path="id_or_name" type="string" required>
+  The database ID or name to delete
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the deletion was successful
+</ResponseField>
+
+<ResponseField name="id" type="string">
+  The ID of the deleted database
+</ResponseField>
+
+### Notes
+
+- This action cannot be undone.
+- The database connection and its associated replication slot will be deleted.
+- If the database has any associated sink consumers, the deletion will fail with a validation error.
+- If the database has any associated WAL pipelines, the deletion will fail with a validation error.
+
+<RequestExample>
+```bash
+curl --request DELETE \
+  --url https://api.sequinstream.com/api/postgres_databases/example-db \
+  --header 'Authorization: Bearer YOUR_API_KEY'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 200 OK
+{
+  "success": true,
+  "id": "db_01HRMW3ZNE5EFGW9SDXW01TT92"
+}
+```
+
+```json 422 Unprocessable Entity
+{
+  "error": "Cannot delete database that's used by sink consumers. Please delete associated sink consumers first."
+}
+```
+
+```json 404 Not Found
+{
+  "errors": {
+    "detail": "Postgres Database not found"
+  }
+}
+```
+</ResponseExample> 

@@ -6,6 +6,7 @@ defmodule SequinWeb.Router do
 
   alias SequinWeb.Plugs.AssignCurrentPath
   alias SequinWeb.Plugs.VerifyApiToken
+  alias SequinWeb.Plugs.VerifyContentType
 
   @self_hosted Application.compile_env!(:sequin, :self_hosted)
 
@@ -23,6 +24,7 @@ defmodule SequinWeb.Router do
   pipeline :api do
     plug :accepts, ["json"]
     plug VerifyApiToken
+    plug VerifyContentType
   end
 
   pipeline :admins_only do

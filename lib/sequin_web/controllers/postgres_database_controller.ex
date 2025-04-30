@@ -1,9 +1,12 @@
 defmodule SequinWeb.PostgresDatabaseController do
   use SequinWeb, :controller
 
+  import Sequin.Error.Guards, only: [is_error: 1]
+
   alias Sequin.Databases
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias SequinWeb.ApiFallbackPlug
 
@@ -24,6 +27,62 @@ defmodule SequinWeb.PostgresDatabaseController do
     with {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name) do
       database = Repo.preload(database, :replication_slot)
       render(conn, "show.json", database: database, show_sensitive: show_sensitive)
+    end
+  end
+
+  def create(conn, params) when is_map(params) do
+    account_id = conn.assigns.account_id
+
+    with {:ok, db_params} <- parse_db_params(params),
+         {:ok, slot_params} <- parse_slot_params(params, :create),
+         :ok <- test_db_conn(db_params, slot_params, account_id),
+         {:ok, database} <- Databases.create_db_with_slot(account_id, db_params, slot_params) do
+      conn
+      |> put_status(:created)
+      |> render("show.json", database: database, show_sensitive: false)
+    else
+      # Special handling/wrapping for replication slot changeset errors
+      {:error, %Ecto.Changeset{data: %PostgresReplicationSlot{}} = error} ->
+        render_slot_error(error)
+
+      error ->
+        error
+    end
+  end
+
+  def update(conn, %{"id_or_name" => id_or_name} = params) do
+    account_id = conn.assigns.account_id
+
+    with {:ok, db_params} <- parse_db_params(params),
+         {:ok, slot_params} <- parse_slot_params(params, :update),
+         {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
+         database = Repo.preload(database, :replication_slot),
+         {:ok, updated_database} <- update_database_with_slot(database, db_params, slot_params) do
+      render(conn, "show.json", database: updated_database, show_sensitive: false)
+    else
+      # Special handling/wrapping for replication slot changeset errors
+      {:error, %Ecto.Changeset{data: %PostgresReplicationSlot{}} = error} ->
+        render_slot_error(error)
+
+      error ->
+        error
+    end
+  end
+
+  def delete(conn, %{"id_or_name" => id_or_name}) do
+    account_id = conn.assigns.account_id
+
+    with {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
+         :ok <- Databases.delete_db_with_replication_slot(database) do
+      render(conn, "delete.json", success: true, id: database.id)
+    else
+      {:error, %NotFoundError{}} = error ->
+        error
+
+      {:error, %Error.ValidationError{} = error} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> render("error.json", error: error.summary)
     end
   end
 
@@ -83,6 +142,119 @@ defmodule SequinWeb.PostgresDatabaseController do
     end
   end
 
+  # Test database connection with parameters
+  defp test_db_conn(db_params, slot_params, account_id) do
+    db = params_to_db(db_params, account_id)
+
+    replication_slot =
+      slot_params
+      |> Sequin.Map.atomize_keys()
+      |> then(&struct(PostgresReplicationSlot, &1))
+
+    with :ok <- Databases.test_tcp_reachability(db),
+         :ok <- Databases.test_connect(db, 10_000),
+         :ok <- Databases.test_permissions(db) do
+      Databases.verify_slot(db, replication_slot)
+    else
+      {:error, error} when is_error(error) ->
+        {:error, error}
+
+      {:error, %DBConnection.ConnectionError{message: message}} ->
+        {:error,
+         Error.validation(summary: "Failed to connect to database. Please check connection details. (error=#{message})")}
+
+      {:error, %Postgrex.Error{postgres: %{code: code, message: msg}}} ->
+        {:error,
+         Error.validation(
+           summary: "Failed to connect to database. Please check connection details. (error=#{code} #{msg})"
+         )}
+    end
+  end
+
+  # Convert params to a PostgresDatabase struct
+  defp params_to_db(params, account_id) do
+    params
+    |> Sequin.Map.atomize_keys()
+    |> Map.put(:account_id, account_id)
+    |> then(&struct(Sequin.Databases.PostgresDatabase, &1))
+  end
+
+  # Extract and validate database parameters
+  defp parse_db_params(db_params) do
+    # Only allow specific fields to be set by the API
+    allowed_params =
+      db_params
+      |> Map.take([
+        "database",
+        "hostname",
+        "name",
+        "port",
+        "username",
+        "password",
+        "ssl",
+        "use_local_tunnel",
+        "ipv6",
+        "annotations"
+      ])
+      |> Map.put_new("port", 5432)
+
+    {:ok, allowed_params}
+  end
+
+  # Extract and validate slot parameters
+  defp parse_slot_params(%{"replication_slots" => [slot]}, :create) when is_map(slot) do
+    # For creation, we only allow these specific fields
+    slot_params = Map.take(slot, ["publication_name", "slot_name", "status"])
+    {:ok, slot_params}
+  end
+
+  defp parse_slot_params(_, :create) do
+    {:error, Error.validation(summary: "A `replication_slots` field with exactly one slot is required")}
+  end
+
+  defp parse_slot_params(%{"replication_slots" => [slot]}, :update) when is_map(slot) do
+    if Map.has_key?(slot, "id") do
+      # For updates, we only allow these specific fields
+      slot_params = Map.take(slot, ["id", "publication_name", "slot_name", "status"])
+      {:ok, slot_params}
+    else
+      {
+        :error,
+        # Forwards compatible with multiple slots
+        Error.validation(
+          summary:
+            "Slot in `replication_slots` must have an `id` field for updates. Alternatively, if you don't want to change the slot, you can omit the `replication_slots` key on the request body."
+        )
+      }
+    end
+  end
+
+  defp parse_slot_params(%{"replication_slots" => []}, :update) do
+    # Empty array is allowed for updates
+    {:ok, %{}}
+  end
+
+  defp parse_slot_params(%{"replication_slots" => slots}, :update) when is_list(slots) do
+    {:error,
+     Error.validation(
+       summary: "For updates, you can omit the `replication_slots` field or provide a list with exactly one slot"
+     )}
+  end
+
+  defp parse_slot_params(_, :update) do
+    # Not required for updates
+    {:ok, %{}}
+  end
+
+  # Update database with slot if slot params are provided, otherwise just update the database
+  defp update_database_with_slot(database, db_params, slot_params) when slot_params == %{} do
+    Databases.update_db(database, db_params)
+  end
+
+  defp update_database_with_slot(database, db_params, slot_params) do
+    Databases.update_db_with_slot(database, db_params, slot_params)
+  end
+
   defp format_error_reason(reason) do
     case reason do
       %Error.ValidationError{summary: summary} ->
@@ -109,5 +281,12 @@ defmodule SequinWeb.PostgresDatabaseController do
       _ ->
         "An unexpected error occurred: #{inspect(reason)}"
     end
+  end
+
+  defp render_slot_error(changeset) do
+    # Wrap the keys for the replication slot, as it's nested
+    errors = Sequin.Error.errors_on(changeset)
+
+    {:error, Error.validation(errors: %{replication_slots: errors}, summary: "Validation failed")}
   end
 end

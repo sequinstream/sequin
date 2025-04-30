@@ -12,8 +12,8 @@ defmodule SequinWeb.PostgresDatabaseJSON do
     render_db(database, show_sensitive)
   end
 
-  def render("delete.json", %{database: database}) do
-    %{id: database.id, deleted: true}
+  def render("delete.json", %{success: true, id: id}) do
+    %{success: true, id: id}
   end
 
   def render("test_connection.json", %{success: true}) do
@@ -47,6 +47,10 @@ defmodule SequinWeb.PostgresDatabaseJSON do
 
   def render("error.json", %{success: false}) do
     %{success: false}
+  end
+
+  def render("error.json", %{error: error}) do
+    %{success: false, error: error}
   end
 
   defp render_db(%PostgresDatabase{replication_slot: slot} = database, show_sensitive) do

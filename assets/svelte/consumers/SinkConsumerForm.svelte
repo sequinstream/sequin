@@ -115,7 +115,7 @@
   let initialForm: FormState = {
     type: consumer.type,
     messageKind: (consumer.message_kind || "event") as MessageKind,
-    maxMemoryMb: Number(consumer.max_memory_mb) || 1024,
+    maxMemoryMb: Number(consumer.max_memory_mb),
     postgresDatabaseId: consumer.postgres_database_id,
     tableOid: consumer.table_oid,
     sourceTableFilters: consumer.source_table_filters || [],
@@ -794,7 +794,7 @@
                       </div>
                       <p class="text-xs font-light">
                         The soft memory limit for this specific sink. Defaults
-                        to 1GB, which is a good starting point.
+                        to 128MB, which is a good starting point.
                       </p>
                     </div>
                     {#if errors.consumer.max_memory_mb}

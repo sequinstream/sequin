@@ -8,6 +8,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Error
   alias Sequin.Metrics
   alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Transforms
   alias Sequin.Transforms.MiniElixir
 
   require Logger
@@ -111,8 +112,12 @@ defmodule Sequin.Runtime.HttpPushPipeline do
         [message] = messages
         message.data
 
+      consumer.sink.batch == false ->
+        [message] = messages
+        Transforms.Message.to_external(consumer, message)
+
       true ->
-        %{data: Enum.map(messages, &Sequin.Transforms.Message.to_external(consumer, &1))}
+        %{data: Enum.map(messages, &Transforms.Message.to_external(consumer, &1))}
     end
   end
 

@@ -522,11 +522,13 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp decode_params(form, socket) do
+    sink = decode_sink(socket.assigns.consumer.type, form["sink"])
+
     params =
       %{
         "consumer_kind" => form["consumerKind"],
         "ack_wait_ms" => form["ackWaitMs"],
-        "sink" => decode_sink(socket.assigns.consumer.type, form["sink"]),
+        "sink" => sink,
         "max_ack_pending" => form["maxAckPending"],
         "max_waiting" => form["maxWaiting"],
         "max_memory_mb" => form["maxMemoryMb"],
@@ -548,8 +550,17 @@ defmodule SequinWeb.Components.ConsumerForm do
         "timestamp_format" => form["timestampFormat"]
       }
 
-    maybe_put_replication_slot_id(params, socket)
+    socket.assigns.consumer.type
+    |> update_params_for_sink(params, sink)
+    |> maybe_put_replication_slot_id(socket)
   end
+
+  # Update SinkConsumer parameters based on changes in the sink sub-struct
+  defp update_params_for_sink(:http_push, params, %{"batch" => false}) do
+    Map.merge(params, %{"batch_size" => 1, "batch_timeout_ms" => 1})
+  end
+
+  defp update_params_for_sink(_, params, _), do: params
 
   defp decode_initial_backfill(%{"backfill" => %{"startPosition" => "none"}}), do: nil
 
@@ -568,7 +579,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "http_push",
       "http_endpoint_id" => sink["httpEndpointId"],
       "http_endpoint_path" => sink["httpEndpointPath"],
-      "mode" => sink["mode"]
+      "mode" => sink["mode"],
+      "batch" => sink["batch"]
     }
   end
 
@@ -770,7 +782,8 @@ defmodule SequinWeb.Components.ConsumerForm do
     %{
       "type" => "http_push",
       "httpEndpointId" => sink.http_endpoint_id,
-      "httpEndpointPath" => sink.http_endpoint_path
+      "httpEndpointPath" => sink.http_endpoint_path,
+      "batch" => sink.batch
     }
   end
 

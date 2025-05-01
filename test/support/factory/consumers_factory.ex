@@ -184,7 +184,8 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     merge_attributes(
       %HttpPushSink{
-        http_endpoint_id: http_endpoint_id
+        http_endpoint_id: http_endpoint_id,
+        batch: true
       },
       attrs
     )

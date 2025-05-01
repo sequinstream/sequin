@@ -24,7 +24,17 @@ The webhook sink sends messages to a webhook endpoint. This can be a webhook end
 
     If your programming platform allows it, we recommend wrapping the webhook request handler in your application with a hard timeout limit below the "Request timeout" specified here. That way, if your handler is taking too long, it will be killed before Sequin retries the message.
 
+- **Batch messages**
+
+    Whether to batch multiple messages into a single HTTP request. Defaults to `false`.
+
+    When `false`, each HTTP request will contain a single message object as its body. You can use a [transform](/reference/transforms) to customize the shape of this object.
+
+    When `true`, messages will be batched according to the "Batch size" and "Batch timeout" settings, and the request body will be a JSON object [containing one or more messages](#change-messages).
+
 - **Batch size**
+
+    *Only applicable when "Batch messages" is enabled.*
 
     The maximum number of messages to include in a single HTTP request. Default is 1.
 
@@ -36,6 +46,12 @@ The webhook sink sends messages to a webhook endpoint. This can be a webhook end
 
     Batching can increase throughput, but increases the payload size of each request.
 
+- **Batch timeout (advanced)**
+
+    *Only applicable when "Batch messages" is enabled.*
+
+    The maximum time (in milliseconds) to wait for a batch to reach its full size before sending. Defaults to 50ms.
+
 - **Max ack pending (advanced)**
 
     The maximum number of messages allowed in a pending state (delivered but not yet acknowledged) for this sink. Note this includes failed messages that Sequin is backing off and will retry.
@@ -46,32 +62,60 @@ The webhook sink sends messages to a webhook endpoint. This can be a webhook end
 
 ## Request format
 
-The webhook sink sends HTTP POST requests with JSON bodies. The body contains an array of messages wrapped in a `data` field.
+The webhook sink sends HTTP POST requests with JSON bodies.
 
-The format of messages depends on whether you've configured the sink for change messages or row messages:
+- **When "Batch messages" is disabled (default):**
+    The request body will contain a single message object. The format depends on whether the sink is configured for change messages or row messages (see below). You can also use a [transform](/reference/transforms) to customize the shape of the message.
+
+- **When "Batch messages" is enabled:**
+    The request body will contain a JSON object with a `data` field, which is an array of message objects.
+
+The format of the individual *message objects* depends on whether you've configured the sink for change messages or row messages:
 
 ### Change Messages
 
 ```typescript
 {
-  data: Array<{
-    record: Record<string, any>;  // The row data
-    changes: Record<string, any> | null;  // Previous values for changed fields
-    action: "insert" | "update" | "delete" | "read";
-    metadata: {
-      table_schema: string;
-      table_name: string;
-      commit_timestamp: string;  // ISO timestamp
-      consumer: {
-        id: string;
-        name: string;
-      };
+  record: Record<string, any>;  // The row data
+  changes: Record<string, any> | null;  // Previous values for changed fields
+  action: "insert" | "update" | "delete" | "read";
+  metadata: {
+    table_schema: string;
+    table_name: string;
+    commit_timestamp: string;  // ISO timestamp
+    consumer: {
+      id: string;
+      name: string;
     };
-  }>;
+  };
 }
 ```
 
 Example:
+```json
+{
+  "record": {
+    "id": 1234,
+    "customer_id": 789,
+    "status": "shipped"
+  },
+  "changes": {
+    "status": "pending"
+  },
+  "action": "update",
+  "metadata": {
+    "table_schema": "public",
+    "table_name": "orders",
+    "commit_timestamp": "2024-03-20T15:30:00Z",
+    "consumer": {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "name": "orders_webhook"
+    }
+  }
+}
+```
+
+Example (when batching is enabled):
 ```json
 {
   "data": [
@@ -103,21 +147,38 @@ Example:
 
 ```typescript
 {
-  data: Array<{
-    record: Record<string, any>;  // The row data
-    metadata: {
-      table_schema: string;
-      table_name: string;
-      consumer: {
-        id: string;
-        name: string;
-      };
+  record: Record<string, any>;  // The row data
+  metadata: {
+    table_schema: string;
+    table_name: string;
+    consumer: {
+      id: string;
+      name: string;
     };
-  }>;
+  };
 }
 ```
 
 Example:
+```json
+{
+  "record": {
+    "id": 1234,
+    "customer_id": 789,
+    "status": "shipped"
+  },
+  "metadata": {
+    "table_schema": "public",
+    "table_name": "orders",
+    "consumer": {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "name": "orders_webhook"
+    }
+  }
+}
+```
+
+Example (when batching is enabled):
 ```json
 {
   "data": [
@@ -142,10 +203,10 @@ Example:
 
 ## Response format
 
-Your webhook endpoint must return a `2XX OK` response after successfully processing a batch of messages. Sequin will consider any response code outside the range of `200` to `299` a failure, and will [mark the message for re-delivery](#retry-behavior).
+Your webhook endpoint must return a `2XX OK` response after successfully processing the received message or batch of messages. Sequin will consider any response code outside the range of `200` to `299` a failure, and will [mark the message(s) for re-delivery](#retry-behavior).
 
 <Note>
-  All messages in a batch are either acknowledged together or fail together. There is no way to send Sequin a response that partially acknowledges a batch.
+  When batching is enabled, all messages in a batch are either acknowledged together or fail together. There is no way to send Sequin a response that partially acknowledges a batch.
 </Note>
 
 ## Authentication
@@ -181,7 +242,7 @@ What's more, Sequin will order the delivery of messages with the same group acco
 
 ### Batch behavior
 
-When you specify a "Batch size" greater than `1`, Sequin may include more than one message for the same group in a single request. For clarity, Sequin will never include more than the specified "Batch size" messages in a single request, but may include fewer.
+When "Batch messages" is enabled and you specify a "Batch size" greater than `1`, Sequin may include more than one message for the same group in a single request. For clarity, Sequin will never include more than the specified "Batch size" messages in a single request, but may include fewer based on the "Batch timeout".
 
 ## Debugging
 

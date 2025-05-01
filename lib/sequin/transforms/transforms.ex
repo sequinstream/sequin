@@ -142,7 +142,8 @@ defmodule Sequin.Transforms do
     %{
       type: "webhook",
       http_endpoint: sink.http_endpoint.name,
-      http_endpoint_path: sink.http_endpoint_path
+      http_endpoint_path: sink.http_endpoint_path,
+      batch: sink.batch
     }
   end
 
@@ -606,7 +607,8 @@ defmodule Sequin.Transforms do
        %{
          type: :http_push,
          http_endpoint_id: http_endpoint.id,
-         http_endpoint_path: attrs["http_endpoint_path"]
+         http_endpoint_path: attrs["http_endpoint_path"],
+         batch: Map.get(attrs, "batch", true)
        }}
     end
   end

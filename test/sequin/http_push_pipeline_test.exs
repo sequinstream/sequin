@@ -24,11 +24,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
 
+      batch = Map.get(ctx, :batch, true)
+
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :http_push,
-          sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
+          sink: %{type: :http_push, http_endpoint_id: http_endpoint.id, batch: batch},
           message_kind: :event,
           legacy_transform: ctx[:legacy_transform] || :none
         )
@@ -243,6 +245,28 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       # Verify that the consumer record has been processed (deleted on ack)
       assert [] == SlotMessageStore.peek_messages(consumer, 10)
+    end
+
+    @tag batch: false
+    test "events are sent to the HTTP endpoint with batch=false", %{
+      consumer: consumer
+    } do
+      test_pid = self()
+      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+
+      adapter = fn %Req.Request{} = req ->
+        event_data_as_json = event.data |> Jason.encode!() |> Jason.decode!()
+        assert Jason.decode!(req.body) == event_data_as_json
+
+        send(test_pid, :sent)
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
+      assert_receive :sent, 1_000
     end
 
     @tag capture_log: true

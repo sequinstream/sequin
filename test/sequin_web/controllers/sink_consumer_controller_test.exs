@@ -26,13 +26,38 @@ defmodule SequinWeb.SinkConsumerControllerTest do
 
     ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: database.id)
 
+    http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
+
+    valid_attrs = %{
+      name: "inventore_6730",
+      status: "active",
+      table: "#{table.schema}.#{table.name}",
+      filters: [
+        %{
+          operator: "==",
+          column_name: column.name,
+          comparison_value: "Recusandae iure dicta iure?"
+        }
+      ],
+      destination: %{
+        type: "webhook",
+        http_endpoint: http_endpoint.name
+      },
+      database: database.name,
+      transform: "none",
+      batch_size: 1,
+      actions: ["insert", "update", "delete"],
+      group_column_names: [column.name]
+    }
+
     %{
       database: database,
       table: table,
       column: column,
       sink_consumer: sink_consumer,
       other_sink_consumer: other_sink_consumer,
-      other_account: other_account
+      other_account: other_account,
+      valid_attrs: valid_attrs
     }
   end
 
@@ -82,39 +107,51 @@ defmodule SequinWeb.SinkConsumerControllerTest do
     test "creates a webhook sink consumer under the authenticated account", %{
       conn: conn,
       account: account,
-      database: database,
-      table: table,
-      column: column
+      valid_attrs: valid_attrs
     } do
-      http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
-
-      create_attrs = %{
-        name: "inventore_6730",
-        status: "active",
-        table: "#{table.schema}.#{table.name}",
-        filters: [
-          %{
-            operator: "==",
-            column_name: column.name,
-            comparison_value: "Recusandae iure dicta iure?"
-          }
-        ],
-        destination: %{
-          type: "webhook",
-          http_endpoint: http_endpoint.name
-        },
-        database: database.name,
-        transform: "none",
-        batch_size: 1,
-        actions: ["insert", "update", "delete"],
-        group_column_names: [column.name]
-      }
-
-      conn = post(conn, ~p"/api/sinks", create_attrs)
+      conn = post(conn, ~p"/api/sinks", valid_attrs)
       assert %{"name" => name} = json_response(conn, 200)
 
       {:ok, sink_consumer} = Consumers.find_sink_consumer(account.id, name: name)
       assert sink_consumer.account_id == account.id
+    end
+
+    test "creates a webhook sink consumer defaulting batch to true", %{
+      conn: conn,
+      account: account,
+      valid_attrs: valid_attrs
+    } do
+      conn = post(conn, ~p"/api/sinks", valid_attrs)
+      assert %{"name" => name} = json_response(conn, 200)
+
+      {:ok, sink_consumer} = Consumers.find_sink_consumer(account.id, name: name)
+      assert sink_consumer.sink.batch == true
+    end
+
+    test "creates a webhook sink consumer with batch set to false", %{
+      conn: conn,
+      account: account,
+      valid_attrs: valid_attrs
+    } do
+      valid_attrs = put_in(valid_attrs, [:destination, :batch], false)
+      conn = post(conn, ~p"/api/sinks", valid_attrs)
+      assert %{"name" => name} = json_response(conn, 200)
+
+      {:ok, sink_consumer} = Consumers.find_sink_consumer(account.id, name: name)
+      assert sink_consumer.sink.batch == false
+    end
+
+    test "can't create a webhook sink consumer with batch set to false and batch size set to > 1", %{
+      conn: conn,
+      valid_attrs: valid_attrs
+    } do
+      valid_attrs =
+        valid_attrs
+        |> put_in([:destination, :batch], false)
+        |> Map.put(:batch_size, 100)
+
+      conn = post(conn, ~p"/api/sinks", valid_attrs)
+      assert json_response(conn, 422)
     end
 
     test "creates a sink consumer with an existing sequence", %{
@@ -208,6 +245,33 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       assert updated_consumer.sink == sink_consumer.sink
       assert updated_consumer.transform == sink_consumer.transform
       assert updated_consumer.batch_size == sink_consumer.batch_size
+    end
+
+    test "updates the sink consumer to set batch=false", %{
+      conn: conn,
+      sink_consumer: sink_consumer,
+      valid_attrs: valid_attrs
+    } do
+      conn =
+        put(conn, ~p"/api/sinks/#{sink_consumer.id}", %{destination: Map.put(valid_attrs.destination, :batch, false)})
+
+      assert %{"id" => id} = json_response(conn, 200)
+
+      {:ok, updated_consumer} = Consumers.find_sink_consumer(sink_consumer.account_id, id: id)
+      assert updated_consumer.sink.batch == false
+    end
+
+    test "cannot update a sink consumer to set batch=false if batch_size > 1", %{
+      conn: conn,
+      sink_consumer: sink_consumer,
+      valid_attrs: valid_attrs
+    } do
+      Consumers.update_sink_consumer(sink_consumer, %{batch_size: 100})
+
+      conn =
+        put(conn, ~p"/api/sinks/#{sink_consumer.id}", %{destination: Map.put(valid_attrs.destination, :batch, false)})
+
+      assert json_response(conn, 422)
     end
 
     test "returns validation error for invalid attributes", %{conn: conn, sink_consumer: sink_consumer} do

@@ -144,54 +144,97 @@
       {/if}
     </div>
 
-    <div class="space-y-2">
-      <Label for="batch-size">Batch size</Label>
-      <div class="flex items-center space-x-2">
-        <Input
-          id="batch-size"
-          type="number"
-          bind:value={form.batchSize}
-          class="w-24"
-          min="1"
-        />
-        <span class="text-sm text-muted-foreground">records</span>
-      </div>
-      <p class="text-sm text-muted-foreground">
-        The number of records to include in each webhook request. Default is 1
-        record per request.
-      </p>
-      {#if errors.batch_size}
-        <p class="text-destructive text-sm">{errors.batch_size}</p>
-      {/if}
+    <div class="flex items-center space-x-2">
+      <Switch id="batch-messages" bind:checked={form.sink.batch} />
+      <Label for="batch-messages">Batch messages</Label>
     </div>
+    {#if form.sink.batch}
+      <p class="text-sm text-muted-foreground">
+        The endpoint will receive a batch of messages under a <code
+          class="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm"
+          >data</code
+        >
+        key:
+        <a
+          href="https://sequinstream.com/docs/reference/sinks/webhooks#change-messages"
+          target="_blank"
+          class="inline-flex text-link hover:underline items-center"
+          >Learn more <ExternalLink class="h-3 w-3 ml-1" /></a
+        >
+      </p>
+      <pre
+        class="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm"><code
+          >{`{
+  "data": [
+    message_1,
+    message_2,
+    // ...
+  ]
+}
+`}</code
+        ></pre>
+    {:else}
+      <p class="text-sm text-muted-foreground">
+        To control the shape of messages the endpoint will receive, <a
+          href="https://sequinstream.com/docs/reference/transforms"
+          target="_blank"
+          class="text-link hover:underline">use a transform</a
+        >.
+      </p>
+    {/if}
+
+    {#if form.sink.batch}
+      <div class="space-y-2">
+        <Label for="batch-size">Batch size</Label>
+        <div class="flex items-center space-x-2">
+          <Input
+            id="batch-size"
+            type="number"
+            bind:value={form.batchSize}
+            class="w-24"
+            min="1"
+          />
+          <span class="text-sm text-muted-foreground">records</span>
+        </div>
+        <p class="text-sm text-muted-foreground">
+          The number of records to include in each webhook request. Default is 1
+          record per request.
+        </p>
+        {#if errors.batch_size}
+          <p class="text-destructive text-sm">{errors.batch_size}</p>
+        {/if}
+      </div>
+    {/if}
 
     <Accordion class="w-full">
       <AccordionItem value="advanced">
         <AccordionTrigger>Advanced configuration</AccordionTrigger>
         <AccordionContent>
           <div class="space-y-4 pt-4">
-            <div class="space-y-2">
-              <Label for="batch-timeout">Batch timeout</Label>
-              <div class="flex items-center space-x-2">
-                <Input
-                  id="batch-timeout"
-                  type="number"
-                  bind:value={form.batchTimeoutMs}
-                  class="w-24"
-                  min="1"
-                />
-                <span class="text-sm text-muted-foreground">ms</span>
-              </div>
-              <p class="text-sm text-muted-foreground">
-                The maximum time to wait for a batch to reach its full size
-                before sending. Defaults to 50ms.
-              </p>
-              {#if errors.batch_timeout_ms}
-                <p class="text-destructive text-sm">
-                  {errors.batch_timeout_ms}
+            {#if form.sink.batch}
+              <div class="space-y-2">
+                <Label for="batch-timeout">Batch timeout</Label>
+                <div class="flex items-center space-x-2">
+                  <Input
+                    id="batch-timeout"
+                    type="number"
+                    bind:value={form.batchTimeoutMs}
+                    class="w-24"
+                    min="1"
+                  />
+                  <span class="text-sm text-muted-foreground">ms</span>
+                </div>
+                <p class="text-sm text-muted-foreground">
+                  The maximum time to wait for a batch to reach its full size
+                  before sending. Defaults to 50ms.
                 </p>
-              {/if}
-            </div>
+                {#if errors.batch_timeout_ms}
+                  <p class="text-destructive text-sm">
+                    {errors.batch_timeout_ms}
+                  </p>
+                {/if}
+              </div>
+            {/if}
 
             <div class="space-y-2">
               <Label for="max-ack-pending">Max ack pending</Label>

@@ -402,4 +402,101 @@ defmodule SequinWeb.PostgresDatabaseControllerTest do
       assert json_response(conn, 404)
     end
   end
+
+  describe "create with connection URL" do
+    setup %{account: _} do
+      slot_attrs =
+        Map.take(
+          ReplicationFactory.configured_postgres_replication_attrs(),
+          [:publication_name, :slot_name, :status]
+        )
+
+      database_attrs = DatabasesFactory.configured_postgres_database_attrs()
+
+      %{slot_attrs: slot_attrs, database_attrs: database_attrs}
+    end
+
+    test "creates a database from a valid connection URL", %{
+      conn: conn,
+      account: account,
+      slot_attrs: slot_attrs,
+      database_attrs: database_attrs
+    } do
+      url =
+        "postgresql://#{database_attrs.username}:#{database_attrs.password}@#{database_attrs.hostname}:#{database_attrs.port}/#{database_attrs.database}"
+
+      payload = %{
+        "url" => url,
+        "name" => "URLTestDB",
+        "replication_slots" => [slot_attrs]
+      }
+
+      conn = post(conn, ~p"/api/postgres_databases", payload)
+      assert response = json_response(conn, 201)
+      assert response["id"]
+      assert response["name"] == "URLTestDB"
+      assert response["hostname"] == database_attrs.hostname
+      assert response["port"] == database_attrs.port
+      assert response["database"] == database_attrs.database
+      assert Sequin.String.obfuscate(response["password"]) == response["password"]
+
+      # Verify the database was created properly
+      {:ok, database} = Databases.get_db_for_account(account.id, response["id"])
+      assert database.hostname == database_attrs.hostname
+      assert database.port == database_attrs.port
+      assert database.database == database_attrs.database
+      assert database.username == database_attrs.username
+      assert database.password == database_attrs.password
+    end
+
+    test "returns error when URL is missing required components", %{conn: conn, slot_attrs: slot_attrs} do
+      # Missing path (database name)
+      url = "postgresql://user:pass@localhost:5432"
+
+      payload = %{
+        "url" => url,
+        "name" => "Bad URL DB",
+        "replication_slots" => [slot_attrs]
+      }
+
+      conn = post(conn, ~p"/api/postgres_databases", payload)
+      assert response = json_response(conn, 422)
+      assert response["summary"] =~ "Parameters missing from `url`"
+      assert response["summary"] =~ "database"
+    end
+
+    test "returns error when URL has query parameters", %{conn: conn, slot_attrs: slot_attrs} do
+      url = "postgresql://user:pass@localhost:5432/mydb?sslmode=require"
+
+      payload = %{
+        "url" => url,
+        "name" => "Query Params DB",
+        "replication_slots" => [slot_attrs]
+      }
+
+      conn = post(conn, ~p"/api/postgres_databases", payload)
+      assert response = json_response(conn, 422)
+      assert response["summary"] =~ "Query parameters not allowed in `url`"
+    end
+
+    test "returns error when URL is provided with other connection params", %{
+      conn: conn,
+      slot_attrs: slot_attrs,
+      database_attrs: database_attrs
+    } do
+      url =
+        "postgresql://#{database_attrs.username}:#{database_attrs.password}@#{database_attrs.hostname}:#{database_attrs.port}/#{database_attrs.database}"
+
+      payload = %{
+        "url" => url,
+        "hostname" => "another-host.example.com",
+        "name" => "Conflicting Params DB",
+        "replication_slots" => [slot_attrs]
+      }
+
+      conn = post(conn, ~p"/api/postgres_databases", payload)
+      assert response = json_response(conn, 422)
+      assert response["summary"] =~ "If `url` is specified, no other connection params are allowed"
+    end
+  end
 end

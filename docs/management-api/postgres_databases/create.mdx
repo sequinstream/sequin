@@ -15,6 +15,13 @@ import DatabaseResponseExample from '/snippets/postgres-database-response-snippe
 <ParamField body="name" type="string" required>
   A name for this database connection. You can use this name to identify the database across the API.
 </ParamField>
+<ParamField body="url" type="string">
+  The full connection URL for the database (e.g. `postgresql://postgres:secret-password@db.example.com:5432/postgres`).
+
+  Pass in either this parameter or `database`, `hostname`, `port`, `username`, `password`.
+
+  To specify SSL, use the separate `ssl` field.
+</ParamField>
 <ParamField body="hostname" type="string" required>
   The database server hostname.
 </ParamField>
@@ -59,7 +66,24 @@ A database object is returned in the response.
 </Expandable>
 
 <RequestExample>
-```bash
+```bash Using URL
+curl --request POST \
+  --url https://api.sequinstream.com/api/postgres_databases \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_API_KEY' \
+  --data '{
+    "name": "example-db",
+    "url": "postgresql://postgres:secret-password@db.example.com:5432/postgres",
+    "ssl": true,
+    "replication_slots": [
+      {
+        "publication_name": "sequin_pub",
+        "slot_name": "sequin_slot"
+      }
+    ]
+  }'
+```
+```bash Using connection params
 curl --request POST \
   --url https://api.sequinstream.com/api/postgres_databases \
   --header 'Content-Type: application/json' \
@@ -80,6 +104,7 @@ curl --request POST \
     ]
   }'
 ```
+
 </RequestExample>
 
 <ResponseExample>
@@ -105,4 +130,4 @@ curl --request POST \
   ]
 }
 ```
-</ResponseExample> 
+</ResponseExample>

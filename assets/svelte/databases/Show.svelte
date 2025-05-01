@@ -19,6 +19,7 @@
   import { writable } from "svelte/store";
   import { formatRelativeTimestamp } from "$lib/utils";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
+  import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
 
   interface Table {
     schema_name: string;
@@ -46,6 +47,7 @@
     pool_size: number;
     queue_interval: number;
     queue_target: number;
+    pg_major_version: number;
     tables: Table[];
     tables_refreshed_at: string;
     inserted_at: string;
@@ -62,16 +64,16 @@
     replication_lag_bytes: number;
   };
 
-  let refreshingTables = writable(false);
+  let refreshingPostgresInfo = writable(false);
 
   function pushEvent(event: string, params = {}, callback: any = () => {}) {
     live.pushEventTo("#" + parent, event, params, callback);
   }
 
-  function handleRefreshTables() {
-    $refreshingTables = true;
-    pushEvent("refresh_tables", {}, (res) => {
-      $refreshingTables = false;
+  function handleRefreshPostgresInfo() {
+    $refreshingPostgresInfo = true;
+    pushEvent("refresh_postgres_info", {}, (res) => {
+      $refreshingPostgresInfo = false;
     });
   }
 </script>
@@ -85,24 +87,38 @@
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-2">
-            <span class="text-sm font-medium text-gray-500">Tables</span>
+            <span class="text-sm font-medium text-gray-500">Postgres Info</span>
             <Button
               variant="outline"
               size="sm"
-              on:click={handleRefreshTables}
-              disabled={$refreshingTables}
+              on:click={handleRefreshPostgresInfo}
+              disabled={$refreshingPostgresInfo}
             >
-              {#if $refreshingTables}
-                <Loader2 class="h-4 w-4 mr-2 animate-spin" />
+              {#if $refreshingPostgresInfo}
+                <Loader2 class="h-4 w-4 animate-spin" />
               {:else}
-                <RotateCw class="h-4 w-4 mr-2" />
+                <RotateCw class="h-4 w-4" />
               {/if}
-              Update
             </Button>
           </div>
-          <div class="text-4xl font-bold mb-1">{database.tables.length}</div>
+          <div class="space-y-3">
+            <div>
+              <div class="text-sm text-gray-500">Version</div>
+              {#if database.pg_major_version}
+                <div class="text-xl font-bold">{database.pg_major_version}</div>
+              {:else}
+                <div class="flex items-center">
+                  <Loader2 class="h-4 w-4 text-gray-400 animate-spin mr-2" />
+                </div>
+              {/if}
+            </div>
+            <div>
+              <div class="text-sm text-gray-500">Tables</div>
+              <div class="text-xl font-bold">{database.tables.length}</div>
+            </div>
+          </div>
           <div
-            class="text-sm text-gray-500"
+            class="text-sm text-gray-500 mt-2"
             class:hidden={!database.tables_refreshed_at}
           >
             Last updated {formatRelativeTimestamp(database.tables_refreshed_at)}
@@ -123,7 +139,7 @@
                 <div class="text-l font-bold">{metrics.avg_latency} ms</div>
               {:else}
                 <div class="flex items-center">
-                  <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
+                  <Loader2 class="h-4 w-4 text-gray-400 animate-spin mr-2" />
                   <span class="text-l font-bold text-gray-500">ms</span>
                 </div>
               {/if}
@@ -136,7 +152,7 @@
                 </div>
               {:else}
                 <div class="flex items-center">
-                  <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
+                  <Loader2 class="h-4 w-4 text-gray-400 animate-spin mr-2" />
                   <span class="text-l font-bold text-gray-500">mb</span>
                 </div>
               {/if}

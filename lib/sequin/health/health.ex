@@ -29,11 +29,11 @@ defmodule Sequin.Health do
 
   2. **Check computation**:
      When `health/1` is called, the system retrieves the relevant `Event` structs from Redis. It builds
-     a list of `Check` structs, each representing a different aspect of the entity’s health.
+     a list of `Check` structs, each representing a different aspect of the entity's health.
 
   3. **Health computation**:
      Finally, overall health is derived from checks. `health/1` returns a `%Sequin.Health{}` struct
-     with the entity’s checks, aggregated status, and extra fields like `:last_healthy_at` or
+     with the entity's checks, aggregated status, and extra fields like `:last_healthy_at` or
      `:erroring_since`.
 
      This structured data can be exposed to other parts of the system or serialized
@@ -465,6 +465,8 @@ defmodule Sequin.Health do
   defp check(:replication_configuration, %PostgresReplicationSlot{} = slot, events) do
     base_check = %Check{slug: :replication_configuration, status: :initializing}
     config_checked_event = find_event(events, :replication_slot_checked)
+    logical_messages_table_existence_event = find_event(events, :db_logical_messages_table_existence)
+    logical_messages_table_in_publication_event = find_event(events, :db_logical_messages_table_in_publication)
 
     cond do
       is_nil(config_checked_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
@@ -473,6 +475,33 @@ defmodule Sequin.Health do
 
       is_nil(config_checked_event) ->
         base_check
+
+      not is_nil(logical_messages_table_existence_event) and logical_messages_table_existence_event.status == :fail ->
+        error =
+          Error.service(
+            service: :postgres_database,
+            message:
+              "The sequin_logical_messages table is missing. This table is required for proper function of Sequin with older PostgreSQL versions (< 14).",
+            code: :logical_messages_table_missing
+          )
+
+        put_check_timestamps(%{base_check | status: :error, error: error, error_slug: :logical_messages_table_missing}, [
+          logical_messages_table_existence_event
+        ])
+
+      not is_nil(logical_messages_table_in_publication_event) and
+          logical_messages_table_in_publication_event.status == :fail ->
+        put_check_timestamps(
+          %{
+            base_check
+            | status: :error,
+              error: logical_messages_table_in_publication_event.error,
+              error_slug: :logical_messages_table_in_publication
+          },
+          [
+            logical_messages_table_in_publication_event
+          ]
+        )
 
       config_checked_event.status != :success ->
         put_check_timestamps(%{base_check | status: :error, error: config_checked_event.error}, [config_checked_event])
@@ -490,6 +519,15 @@ defmodule Sequin.Health do
     connected_event = find_event(events, :replication_connected)
     heartbeat_verification_event = find_event(events, :replication_heartbeat_verification)
     memory_limit_exceeded_event = find_event(events, :replication_memory_limit_exceeded)
+    logical_messages_table_existence_event = find_event(events, :db_logical_messages_table_existence)
+
+    logical_messages_table_succeeded_recently? =
+      not is_nil(logical_messages_table_existence_event) and
+        logical_messages_table_existence_event.status == :success and
+        DateTime.after?(
+          logical_messages_table_existence_event.in_status_since,
+          DateTime.add(DateTime.utc_now(), -30, :second)
+        )
 
     cond do
       is_nil(connected_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
@@ -509,7 +547,8 @@ defmodule Sequin.Health do
           connected_event
         ])
 
-      not is_nil(heartbeat_verification_event) and heartbeat_verification_event.status == :fail ->
+      not is_nil(heartbeat_verification_event) and heartbeat_verification_event.status == :fail and
+          not logical_messages_table_succeeded_recently? ->
         error =
           Error.service(
             message:

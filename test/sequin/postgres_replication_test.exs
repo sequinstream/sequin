@@ -61,7 +61,7 @@ defmodule Sequin.PostgresReplicationTest do
     setup do
       # Create source database
       account_id = AccountsFactory.insert_account!().id
-      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
+      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id, pg_major_version: 17)
 
       ConnectionCache.cache_connection(source_db, UnboxedRepo)
 
@@ -1110,14 +1110,35 @@ defmodule Sequin.PostgresReplicationTest do
       stop_replication!()
     end
 
-    test "emits heartbeat messages" do
+    test "emits heartbeat messages for latest postgres version" do
       # Attempt to start replication with the non-existent slot
       id = Faker.UUID.v4()
-      start_replication!(heartbeat_interval: 5, id: id)
+      start_replication!(heartbeat_interval: 5, id: id, pg_major_version: 17)
 
       stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
       stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, [] ->
+        :ok
+      end)
+
+      assert_receive {SlotProcessorServer, :heartbeat_received}, 1000
+      assert_receive {SlotProcessorServer, :heartbeat_received}, 1000
+
+      # Verify that the Health status was updated
+      {:ok, health} = Sequin.Health.health(%PostgresReplicationSlot{id: id, inserted_at: DateTime.utc_now()})
+
+      check = Enum.find(health.checks, &(&1.slug == :replication_messages))
+      assert check.status == :healthy
+    end
+
+    test "emits heartbeat messages for older postgres version" do
+      # Attempt to start replication with the non-existent slot
+      id = Faker.UUID.v4()
+      start_replication!(heartbeat_interval: 5, id: id, pg_major_version: 13)
+
+      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+
+      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_heartbeat_msg] ->
         :ok
       end)
 
@@ -1178,7 +1199,7 @@ defmodule Sequin.PostgresReplicationTest do
     setup do
       # Create source database
       account_id = AccountsFactory.insert_account!().id
-      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
+      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id, pg_major_version: 17)
 
       ConnectionCache.cache_connection(source_db, UnboxedRepo)
 
@@ -1593,7 +1614,7 @@ defmodule Sequin.PostgresReplicationTest do
     setup do
       # Create source database
       account_id = AccountsFactory.insert_account!().id
-      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
+      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id, pg_major_version: 17)
 
       ConnectionCache.cache_connection(source_db, UnboxedRepo)
 
@@ -1794,7 +1815,8 @@ defmodule Sequin.PostgresReplicationTest do
 
   defp start_replication!(opts) do
     id = Keyword.get(opts, :id, "test_slot_id")
-    db = DatabasesFactory.postgres_database()
+    pg_major_version = Keyword.get(opts, :pg_major_version, 17)
+    db = DatabasesFactory.postgres_database(pg_major_version: pg_major_version)
     ConnectionCache.cache_connection(db, UnboxedRepo)
 
     opts =

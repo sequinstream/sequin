@@ -8,6 +8,10 @@ description: 'Reference for connecting databases to Sequin'
 
 Sequin works with any PostgreSQL database version 14 or higher that supports [Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html).
 
+<Note>
+  Sequin soft-supports PostgresSQL 12 and 13 with [some limitations](/reference/databases#postgresql-12-and-13).
+</Note>
+
 You can find guides for connecting to local and hosted databases in the [connect postgres](/connect-postgres) guide.
 
 ## Database connection details
@@ -218,6 +222,40 @@ To set `REPLICA IDENTITY` to `FULL` for a table:
 ```sql
 ALTER TABLE your_table REPLICA IDENTITY FULL;
 ```
+
+## PostgreSQL 12 and 13
+
+Sequin relies on the `pg_logical_emit_message` function for heartbeat messages and backfills. This function is included automatically in Postgres 14 and later.
+
+For Postgres 12 and 13, we support a table-based replacement: `public.sequin_logical_messages`.
+
+You can create this table in your database with the following SQL:
+
+```sql
+CREATE TABLE IF NOT EXISTS public.sequin_logical_messages (
+  id SERIAL PRIMARY KEY,
+  slot_id TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  content JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(slot_id, subject)
+)
+```
+
+This table is used by Sequin to replace the `pg_logical_emit_message` function. It experiences very low write throughput and will not accumulate significant storage or IOPS.
+
+This table **must be included in your publication** so that Sequin receives messages written to it. If you have created your publication with `ALL TABLES`, then this is done automatically. Otherwise, you can add the table to your publication with the following SQL:
+
+```sql
+ALTER PUBLICATION sequin_publication ADD TABLE public.sequin_logical_messages;
+```
+
+### Backfills
+
+For Postgres 12 and 13, we do not support backfills, which rely heavily on the `pg_logical_emit_message` function.
+
+If you require backfills, we recommend upgrading to Postgres 14 or later. If this is not an option, please [contact support](mailto:support@sequinstream.com) to discuss alternative approaches.
 
 ## Monitoring
 

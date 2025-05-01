@@ -5,12 +5,13 @@
   export let code: string = "";
   export let maxWidth: string = "100%";
   export let copyIconPosition: "center" | "top" = "center";
+  export let codeClass: string = "";
 
   $: codeContent = code.trim();
 </script>
 
 <div
-  class="flex flex-row bg-muted p-4 rounded-md overflow-hidden"
+  class={`flex flex-row bg-muted p-4 rounded-md overflow-hidden ${codeClass}`}
   style="max-width: {maxWidth}"
 >
   <pre class="text-sm overflow-x-auto flex flex-grow"><code class={language}

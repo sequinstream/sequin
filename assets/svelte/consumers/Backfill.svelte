@@ -29,11 +29,21 @@
     } | null;
   }
 
+  interface Database {
+    id: string;
+    name: string;
+    pg_major_version: number;
+  }
+
+  export let database: Database;
   export let cursor_position: BackfillProps["cursor_position"];
   export let onRun: () => void;
   export let onCancel: (callback: (reply: any) => void) => void;
 
   let isCancelling = false;
+
+  // Check if backfills are supported based on PostgreSQL version
+  $: isBackfillSupported = database.pg_major_version >= 14;
 
   function handleRun() {
     onRun();
@@ -135,12 +145,37 @@
           Cancel Backfill
         </Button>
       {:else}
-        <Button variant="outline" size="sm" on:click={handleRun}>
+        <Button
+          variant="outline"
+          size="sm"
+          on:click={handleRun}
+          disabled={!isBackfillSupported}
+        >
           <ArrowDownSquare class="mr-2 h-4 w-4" />
           Run Backfill
         </Button>
       {/if}
     </div>
+
+    {#if !isBackfillSupported}
+      <div
+        class="flex items-start gap-2 p-3 rounded-md bg-amber-50 text-amber-800 mb-4"
+      >
+        <div>
+          <p class="text-sm">
+            Backfills are not supported for PostgreSQL 12 and 13.
+            <a
+              href="https://docs.sequinstream.com/reference/databases#postgresql-12-and-13"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="underline font-medium"
+            >
+              Learn more
+            </a>
+          </p>
+        </div>
+      </div>
+    {/if}
 
     {#if cursor_position?.is_backfilling && cursor_position.backfill}
       <div class="space-y-4">
@@ -196,7 +231,7 @@
           cursor_position.last_completed_backfill.completed_at,
         )}
       </p>
-    {:else}
+    {:else if isBackfillSupported}
       <p class="text-sm text-gray-500">
         Run a backfill to process existing records in the table.
       </p>

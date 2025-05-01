@@ -42,7 +42,9 @@ defmodule Sequin.Runtime.DatabaseLifecycleEventWorker do
 
     case event do
       "create" ->
-        :ok
+        with {:ok, %PostgresDatabase{} = db} <- Databases.get_db(id) do
+          Databases.update_pg_major_version(db)
+        end
 
       "update" ->
         with {:ok, %PostgresDatabase{} = db} <- Databases.get_db(id) do

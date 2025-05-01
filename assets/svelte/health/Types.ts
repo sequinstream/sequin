@@ -19,6 +19,10 @@ export type Check = {
   alertMessage?: string;
   refreshable?: boolean;
   dismissable?: boolean;
+  code?: {
+    language: string;
+    code: string;
+  };
 };
 
 export type Health = {

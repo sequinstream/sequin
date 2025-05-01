@@ -14,14 +14,15 @@ defmodule Sequin.Databases.DatabaseUpdateWorker do
     Logger.metadata(database_id: postgres_database_id)
 
     with {:ok, database} <- Databases.get_db(postgres_database_id),
-         {:ok, updated_database} <- Databases.update_tables(database) do
+         {:ok, database} <- Databases.update_pg_major_version(database),
+         {:ok, database} <- Databases.update_tables(database) do
       :syn.publish(
         :account,
         {:database_tables_updated, database.account_id},
-        {:database_tables_updated, updated_database}
+        {:database_tables_updated, database}
       )
 
-      {:ok, updated_database}
+      {:ok, database}
     else
       {:error, %DBConnection.ConnectionError{}} ->
         Logger.error(

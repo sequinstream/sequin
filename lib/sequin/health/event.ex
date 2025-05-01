@@ -27,6 +27,8 @@ defmodule Sequin.Health.Event do
 
   @postgres_replication_slot_event_slugs [
     :db_connectivity_checked,
+    :db_logical_messages_table_existence,
+    :db_logical_messages_table_in_publication,
     :replication_slot_checked,
     :replication_connected,
     :replication_message_processed,

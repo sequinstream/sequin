@@ -4,6 +4,7 @@ defmodule Sequin.Postgres do
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Type
+  alias Sequin.Constants
   alias Sequin.Consumers.SourceTable
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
@@ -201,7 +202,7 @@ defmodule Sequin.Postgres do
     end
   end
 
-  def get_major_pg_version(conn) do
+  def get_pg_major_version(conn) do
     with {:ok, %{rows: [[version]]}} <- query(conn, "select version()") do
       # Extract major version number from version string
       case Regex.run(~r/PostgreSQL (\d+)/, version) do
@@ -1058,6 +1059,95 @@ defmodule Sequin.Postgres do
     case query(conn, query, [slot_name]) do
       {:ok, %{rows: [[bytes]]}} -> {:ok, Decimal.to_integer(bytes)}
       {:ok, %{rows: []}} -> {:error, Error.not_found(entity: :replication_slot, params: %{slot_name: slot_name})}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @logical_message_table_name Constants.logical_messages_table_name()
+
+  def logical_messages_table_ddl do
+    """
+    CREATE TABLE IF NOT EXISTS public.#{@logical_message_table_name} (
+      id SERIAL PRIMARY KEY,
+      slot_id TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      content JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(slot_id, subject)
+    );
+    """
+  end
+
+  @doc """
+  Creates the logical_messages table used for heartbeats in Postgres < 14.
+  This table should have a primary key on (slot_id, subject) for efficient upserts.
+  """
+  @spec create_logical_messages_table(database :: PostgresDatabase.t()) :: :ok | {:error, Error.t()}
+  def create_logical_messages_table(%PostgresDatabase{} = database) do
+    case query(database, logical_messages_table_ddl()) do
+      {:ok, _} ->
+        :ok
+
+      {:error, error} ->
+        {:error,
+         Error.service(
+           service: :postgres,
+           message: "Failed to create pubblic.#{@logical_message_table_name} table",
+           details: error
+         )}
+    end
+  end
+
+  @doc """
+  Checks if the #{@logical_message_table_name} table exists.
+  """
+  @spec has_sequin_logical_messages_table?(PostgresDatabase.t()) :: boolean()
+  def has_sequin_logical_messages_table?(%PostgresDatabase{} = database) do
+    query = """
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_name = '#{@logical_message_table_name}'
+      AND table_schema = 'public'
+    )
+    """
+
+    case query(database, query) do
+      {:ok, %{rows: [[true]]}} -> true
+      {:ok, %{rows: [[false]]}} -> false
+    end
+  end
+
+  @spec sequin_logical_messages_table_in_publication?(PostgresDatabase.t()) :: boolean()
+  def sequin_logical_messages_table_in_publication?(%PostgresDatabase{} = database) do
+    pub_name = database.replication_slot.publication_name
+
+    query = """
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_publication_tables
+      WHERE pubname = '#{pub_name}'
+      AND tablename = '#{@logical_message_table_name}'
+      AND schemaname = 'public'
+    )
+    """
+
+    case query(database, query) do
+      {:ok, %{rows: [[true]]}} -> true
+      {:ok, %{rows: [[false]]}} -> false
+    end
+  end
+
+  def upsert_logical_message(database_or_conn, slot_id, subject, content) do
+    query = """
+    INSERT INTO public.#{@logical_message_table_name} (slot_id, subject, content)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (slot_id, subject) DO UPDATE SET content = $3, updated_at = NOW()
+    """
+
+    case query(database_or_conn, query, [slot_id, subject, content]) do
+      {:ok, _} -> :ok
       {:error, error} -> {:error, error}
     end
   end

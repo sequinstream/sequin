@@ -2,6 +2,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
   @moduledoc false
   use Ecto.Migration
 
+  alias Sequin.Constants
+
   def change do
     create table(:Characters) do
       add :name, :text
@@ -140,7 +142,10 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
 
     execute "COMMENT ON TABLE test_event_logs_partitioned IS '$sequin-events$'"
 
-    execute "create publication characters_publication for table \"Characters\", characters_ident_full, characters_multi_pk, characters_detailed, test_event_logs_partitioned",
+    execute Sequin.Postgres.logical_messages_table_ddl(),
+            "drop table if exists #{Constants.logical_messages_table_name()}"
+
+    execute "create publication characters_publication for table \"Characters\", characters_ident_full, characters_multi_pk, characters_detailed, test_event_logs_partitioned, #{Constants.logical_messages_table_name()}",
             "drop publication characters_publication"
 
     create table(:sequin_events) do

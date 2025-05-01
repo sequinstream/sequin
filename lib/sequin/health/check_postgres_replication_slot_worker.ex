@@ -15,6 +15,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   alias Sequin.Health.Event
   alias Sequin.Metrics
   alias Sequin.NetworkUtils
+  alias Sequin.Postgres
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Statsd
@@ -67,6 +68,43 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
          :ok <- Databases.test_connect(database),
          :ok <- Databases.test_permissions(database),
          {:ok, latency} <- NetworkUtils.measure_latency(database.hostname, database.port) do
+      case database.pg_major_version do
+        nil ->
+          Logger.warning("Database #{database.id} has no pg_major_version")
+          :ok
+
+        pg_major_version when pg_major_version < 14 ->
+          if Postgres.has_sequin_logical_messages_table?(database) do
+            Health.put_event(database.replication_slot, %Event{
+              slug: :db_logical_messages_table_existence,
+              status: :success
+            })
+
+            if Postgres.sequin_logical_messages_table_in_publication?(database) do
+              Health.put_event(database.replication_slot, %Event{
+                slug: :db_logical_messages_table_in_publication,
+                status: :success
+              })
+            else
+              Health.put_event(database.replication_slot, %Event{
+                slug: :db_logical_messages_table_in_publication,
+                status: :fail
+              })
+            end
+          else
+            Health.put_event(database.replication_slot, %Event{slug: :db_logical_messages_table_existence, status: :fail})
+          end
+
+        pg_major_version when pg_major_version >= 14 ->
+          # We mark success in case a database version is upgraded from below 14 to 14 or above
+          Health.put_event(database.replication_slot, %Event{slug: :db_logical_messages_table_existence, status: :success})
+
+          Health.put_event(database.replication_slot, %Event{
+            slug: :db_logical_messages_table_in_publication,
+            status: :success
+          })
+      end
+
       Health.put_event(database.replication_slot, %Event{slug: :db_connectivity_checked, status: :success})
       Metrics.measure_database_avg_latency(database, latency)
       :ok

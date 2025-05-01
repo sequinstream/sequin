@@ -21,6 +21,13 @@ import DatabaseResponseExample from '/snippets/postgres-database-response-snippe
 <ParamField body="name" type="string">
   A name for this database connection. You can use this name to identify the database across the API.
 </ParamField>
+<ParamField body="url" type="string">
+  The full connection URL for the database, e.g. `postgresql://postgres:secret-password@db.example.com:5432/postgres`.
+
+  Pass in either this parameter or `database`, `hostname`, `port`, `username`, `password`.
+
+  To specify SSL, use the separate `ssl` field.
+</ParamField>
 <ParamField body="hostname" type="string">
   The database server hostname.
 </ParamField>
@@ -65,24 +72,23 @@ import DatabaseResponseExample from '/snippets/postgres-database-response-snippe
 
 
 ### Response
-
 <Expandable title="properties" defaultOpen={false}>
   <DatabaseResponseExample />
 </Expandable>
 
 <RequestExample>
-```bash 
-# Update database only
+```bash Using URL
 curl --request PUT \
   --url https://api.sequinstream.com/api/postgres_databases/example-db \
   --header 'Content-Type: application/json' \
   --header 'Authorization: Bearer YOUR_API_KEY' \
   --data '{
     "name": "example-db-renamed",
-    "hostname": "new-db.example.com"
+    "url": "postgresql://postgres:secret-password@new-db.example.com:5432/postgres"
   }'
+```
 
-# Update database and slot
+```bash Updating database and replication slot
 curl --request PUT \
   --url https://api.sequinstream.com/api/postgres_databases/example-db \
   --header 'Content-Type: application/json' \
@@ -97,6 +103,17 @@ curl --request PUT \
         "slot_name": "new_sequin_slot"
       }
     ]
+  }'
+```
+
+```bash Using connection params
+curl --request PUT \
+  --url https://api.sequinstream.com/api/postgres_databases/example-db \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_API_KEY' \
+  --data '{
+    "name": "example-db-renamed",
+    "hostname": "new-db.example.com"
   }'
 ```
 </RequestExample>
@@ -124,4 +141,4 @@ curl --request PUT \
   ]
 }
 ```
-</ResponseExample> 
+</ResponseExample>

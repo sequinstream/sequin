@@ -1030,6 +1030,7 @@
       {/if}
 
       <Backfill
+        database={consumer.database}
         {cursor_position}
         onRun={() => openBackfillDialog()}
         onCancel={(callback) => {

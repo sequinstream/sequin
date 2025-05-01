@@ -88,7 +88,7 @@ defmodule SequinWeb.DatabasesLive.Form do
         }
       )
       |> assign(:show_local_tunnel_prompt, not Application.get_env(:sequin, :self_hosted))
-      |> assign(:show_pg_version_warning, assigns.pg_major_version && assigns.pg_major_version < 14)
+      |> assign(:show_pg_version_warning, assigns.pg_major_version && assigns.pg_major_version < 12)
 
     ~H"""
     <div id={@parent_id}>
@@ -131,7 +131,7 @@ defmodule SequinWeb.DatabasesLive.Form do
     params = decode_params(form)
 
     with :ok <- test_db_conn(params, socket),
-         {:ok, major_version} <- Databases.get_major_pg_version(params_to_db(params, socket)) do
+         {:ok, major_version} <- Databases.get_pg_major_version(params_to_db(params, socket)) do
       {:reply, %{ok: true}, assign(socket, :pg_major_version, major_version)}
     else
       {:error, error} ->

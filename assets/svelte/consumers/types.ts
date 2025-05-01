@@ -40,6 +40,7 @@ export type BaseConsumer = {
   postgres_database: {
     id: string;
     name: string;
+    pg_major_version: number;
   };
   health: any;
   href: string;

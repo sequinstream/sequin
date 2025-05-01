@@ -50,6 +50,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
 
+  @logical_message_table_name Constants.logical_messages_table_name()
+
   @slots_ids_with_old_postgres [
     "59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1",
     "dcfba45f-d503-4fef-bb11-9221b9efa70a"
@@ -279,10 +281,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     Logger.info("[SlotProcessorServer] Low watermark wal cursor for slot: #{inspect(low_watermark_wal_cursor)}")
 
     query =
-      if state.id in @slots_ids_with_old_postgres do
-        "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
-      else
-        "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}', messages 'true')"
+      case state.postgres_database.pg_major_version do
+        nil ->
+          # Assume Postgres 14+ if we don't know the version
+          Logger.warning(
+            "[SlotProcessorServer] No PG major version found for database #{state.postgres_database.id}, assuming Postgres 14+"
+          )
+
+          "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}', messages 'true')"
+
+        pg_major_version when pg_major_version < 14 ->
+          "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
+
+        pg_major_version when pg_major_version >= 14 ->
+          "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}', messages 'true')"
       end
 
     current_memory = state.check_memory_fn.()
@@ -588,7 +600,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   def handle_info(:emit_heartbeat, %State{} = state) do
     execute_timed(:emit_heartbeat, fn ->
-      conn = get_cached_conn(state)
       heartbeat_id = UUID.uuid4()
       emitted_at = Sequin.utc_now()
 
@@ -599,8 +610,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           version: "1.0"
         })
 
-      case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.1', $1)", [payload]) do
-        {:ok, _res} ->
+      case send_heartbeat(state, payload) do
+        :ok ->
           Logger.info("Emitted heartbeat", heartbeat_id: heartbeat_id, emitted_at: emitted_at)
 
           {:keep_state,
@@ -611,6 +622,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
                heartbeat_emitted_at: emitted_at,
                message_received_since_last_heartbeat: false
            }}
+
+        {:error,
+         %Postgrex.Error{
+           postgres: %{code: :undefined_table, message: "relation \"public.sequin_logical_messages\" does not exist"}
+         }} ->
+          Logger.warning("Heartbeat table does not exist.")
+          {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(30))}
 
         {:error, error} ->
           Logger.error("Error emitting heartbeat: #{inspect(error)}")
@@ -897,6 +915,24 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     :ok
   end
 
+  @heartbeat_message_prefix "sequin.heartbeat.1"
+  defp send_heartbeat(%State{} = state, payload) do
+    conn = get_cached_conn(state)
+    pg_major_version = state.postgres_database.pg_major_version
+
+    if is_integer(pg_major_version) and pg_major_version < 14 do
+      case Postgres.upsert_logical_message(conn, state.id, @heartbeat_message_prefix, payload) do
+        :ok -> :ok
+        {:error, error} -> {:error, error}
+      end
+    else
+      case Postgres.query(conn, "SELECT pg_logical_emit_message(true, '#{@heartbeat_message_prefix}', $1)", [payload]) do
+        {:ok, _res} -> :ok
+        {:error, error} -> {:error, error}
+      end
+    end
+  end
+
   defp maybe_schedule_flush(%State{flush_timer: nil} = state) do
     ref = Process.send_after(self(), :flush_messages, max_accumulated_messages_time_ms())
     %{state | flush_timer: ref}
@@ -1128,6 +1164,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp process_message(%State{} = state, %Message{} = msg) do
+    state =
+      if is_logical_message_table_upsert?(state, msg) do
+        content = Enum.find(msg.fields, fn field -> field.column_name == "content" end)
+        handle_logical_message_content(state, content.value)
+      else
+        state
+      end
+
     msg = %Message{
       msg
       | commit_lsn: state.current_xaction_lsn,
@@ -1150,6 +1194,40 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.1", content: content}) do
+    handle_logical_message_content(state, content)
+  end
+
+  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
+    Logger.info("[SlotProcessorServer] Legacy heartbeat received", emitted_at: emitted_at)
+    state
+  end
+
+  defp process_message(%State{} = state, %LogicalMessage{prefix: @backfill_batch_high_watermark} = msg) do
+    %State{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}
+  end
+
+  # Ignore other logical messages
+  defp process_message(%State{} = state, %LogicalMessage{}) do
+    state
+  end
+
+  # It's important we assert this message is not a message that we *should* have a handler for
+  defp process_message(%State{} = state, %struct{} = msg)
+       when struct not in [Begin, Commit, Message, LogicalMessage, Relation] do
+    Logger.error("Unknown message: #{inspect(msg)}")
+    state
+  end
+
+  defp is_logical_message_table_upsert?(%State{postgres_database: %{pg_major_version: pg_major_version}}, %Message{
+         table_name: @logical_message_table_name
+       })
+       when pg_major_version < 14 do
+    true
+  end
+
+  defp is_logical_message_table_upsert?(%State{}, %Message{}), do: false
+
+  defp handle_logical_message_content(%State{} = state, content) do
     case Jason.decode(content) do
       {:ok, %{"id" => heartbeat_id, "emitted_at" => emitted_at, "version" => "1.0"}} ->
         # Only log if this is the current heartbeat we're waiting for
@@ -1187,27 +1265,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         Logger.error("Error decoding heartbeat message: #{inspect(error)}")
         state
     end
-  end
-
-  defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
-    Logger.info("[SlotProcessorServer] Legacy heartbeat received", emitted_at: emitted_at)
-    state
-  end
-
-  defp process_message(%State{} = state, %LogicalMessage{prefix: @backfill_batch_high_watermark} = msg) do
-    %State{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}
-  end
-
-  # Ignore other logical messages
-  defp process_message(%State{} = state, %LogicalMessage{}) do
-    state
-  end
-
-  # It's important we assert this message is not a message that we *should* have a handler for
-  defp process_message(%State{} = state, %struct{} = msg)
-       when struct not in [Begin, Commit, Message, LogicalMessage, Relation] do
-    Logger.error("Unknown message: #{inspect(msg)}")
-    state
   end
 
   @spec cast_message(decoded_message :: map(), schemas :: map()) :: Message.t() | map()

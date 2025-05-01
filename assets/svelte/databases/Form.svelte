@@ -734,16 +734,15 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
             <AlertCircle class="h-4 w-4" />
             <AlertTitle>Unsupported PostgreSQL version</AlertTitle>
             <AlertDescription>
-              Sequin requires PostgreSQL 14 or higher. If you need support for
-              an earlier version of Postgres, please
-              <a
-                href="https://github.com/sequinstream/sequin/issues/789"
+              Sequin fully supports PostgreSQL 14+. PostgreSQL 12 and 13 are
+              supported with <a
+                href="https://docs.sequinstream.com/reference/databases#postgresql-12-and-13"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="inline-flex items-center text-link hover:underline"
               >
-                see this GitHub issue</a
-              >.
+                some limitations.
+              </a>
             </AlertDescription>
           </Alert>
         {/if}

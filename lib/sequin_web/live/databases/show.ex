@@ -2,14 +2,16 @@ defmodule SequinWeb.DatabasesLive.Show do
   @moduledoc false
   use SequinWeb, :live_view
 
+  alias Sequin.Constants
   alias Sequin.Consumers
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Health
   alias Sequin.Health.CheckPostgresReplicationSlotWorker
   alias Sequin.Metrics
+  alias Sequin.Postgres
   alias Sequin.Replication
   alias Sequin.Repo
-  # alias Sequin.Tracer
   alias Sequin.Tracer.Server
   alias Sequin.Tracer.State, as: TracerState
   alias SequinWeb.RouteHelpers
@@ -23,10 +25,6 @@ defmodule SequinWeb.DatabasesLive.Show do
     case Databases.get_db_for_account(account_id, id) do
       {:ok, database} ->
         database = preload_database(database)
-
-        # Fetch initial health
-        {:ok, health} = Health.health(database.replication_slot)
-        database = Map.put(database, :health, health)
 
         socket = assign(socket, database: database, refreshing_tables: false)
         socket = assign_metrics(socket)
@@ -51,9 +49,7 @@ defmodule SequinWeb.DatabasesLive.Show do
         if connected?(socket) do
           # Tracer.DynamicSupervisor.start_for_account(account_id)
 
-          Process.send_after(self(), :update_health, 1000)
-          Process.send_after(self(), :update_metrics, 1000)
-          Process.send_after(self(), :update_messages, 1000)
+          Process.send_after(self(), :update, 1000)
         end
 
         :syn.join(:replication, {:postgres_replication_slot_checked, database.id}, self())
@@ -89,12 +85,14 @@ defmodule SequinWeb.DatabasesLive.Show do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("refresh_tables", _, socket) do
+  def handle_event("refresh_postgres_info", _, socket) do
     %{database: database} = socket.assigns
+    database = preload_database(database)
+    {:ok, database} = Databases.update_pg_major_version(database)
 
     case Databases.update_tables(database) do
-      {:ok, updated_database} ->
-        {:reply, %{}, assign(socket, database: updated_database)}
+      {:ok, database} ->
+        {:reply, %{}, assign(socket, database: database)}
 
       {:error, _reason} ->
         {:reply, %{}, socket}
@@ -163,32 +161,22 @@ defmodule SequinWeb.DatabasesLive.Show do
     {:noreply, assign_health(socket)}
   end
 
-  @impl Phoenix.LiveView
-  def handle_info(:update_health, socket) do
-    Process.send_after(self(), :update_health, 5_000)
-    {:noreply, assign_health(socket)}
-  end
-
-  def handle_info(:update_messages, %{assigns: %{paused: true}} = socket) do
-    Process.send_after(self(), :update_messages, 1000)
+  def handle_event("refresh_check", %{"slug" => "replication_configuration"}, socket) do
+    CheckPostgresReplicationSlotWorker.enqueue(socket.assigns.database.id, unique: false)
     {:noreply, socket}
   end
 
-  def handle_info(:update_messages, %{assigns: %{paused: false}} = socket) do
-    account_id = current_account_id(socket)
-
-    consumers = Consumers.list_consumers_for_account(account_id)
-    trace_state = get_trace_state(account_id)
-
-    Process.send_after(self(), :update_messages, 1000)
-
-    {:noreply, assign(socket, consumers: consumers, trace_state: trace_state)}
-  end
-
   @impl Phoenix.LiveView
-  def handle_info(:update_metrics, socket) do
-    Process.send_after(self(), :update_metrics, 1000)
-    {:noreply, assign_metrics(socket)}
+  def handle_info(:update, socket) do
+    database = socket.assigns.database
+    database = preload_database(database)
+
+    {:noreply,
+     socket
+     |> assign(:database, database)
+     |> assign_health()
+     |> assign_metrics()
+     |> assign_messages()}
   end
 
   def handle_info({ref, {:ok, updated_db}}, socket) do
@@ -300,6 +288,17 @@ defmodule SequinWeb.DatabasesLive.Show do
     end
   end
 
+  def assign_messages(%{assigns: %{paused: true}} = socket), do: socket
+
+  def assign_messages(%{assigns: %{paused: false}} = socket) do
+    account_id = current_account_id(socket)
+
+    consumers = Consumers.list_consumers_for_account(account_id)
+    trace_state = get_trace_state(account_id)
+
+    assign(socket, consumers: consumers, trace_state: trace_state)
+  end
+
   defp handle_edit_finish(updated_database) do
     send(self(), {:updated_database, updated_database})
   end
@@ -317,12 +316,13 @@ defmodule SequinWeb.DatabasesLive.Show do
       pool_size: database.pool_size,
       queue_interval: database.queue_interval,
       queue_target: database.queue_target,
+      pg_major_version: database.pg_major_version,
       tables: encode_tables(database.tables),
       tables_refreshed_at: database.tables_refreshed_at,
       inserted_at: database.inserted_at,
       updated_at: database.updated_at,
       consumers: encode_consumers(database.replication_slot.sink_consumers, database),
-      health: encode_health(database.health)
+      health: encode_health(database)
     }
   end
 
@@ -468,17 +468,20 @@ defmodule SequinWeb.DatabasesLive.Show do
   defp encode_table(nil), do: nil
   defp encode_table(%{name: name}), do: name
 
-  defp encode_health(%Health{} = health) do
+  defp encode_health(%PostgresDatabase{health: %Health{} = health} = database) do
     health
     |> Health.to_external()
     |> Map.update!(:checks, fn checks ->
       Enum.map(checks, fn check ->
-        maybe_augment_alert(check)
+        maybe_augment_alert(check, database)
       end)
     end)
   end
 
-  defp maybe_augment_alert(%{slug: :replication_messages, error: %{code: :replication_lag_high} = error} = check) do
+  defp maybe_augment_alert(
+         %{slug: :replication_messages, error: %{code: :replication_lag_high} = error} = check,
+         _database
+       ) do
     lag_bytes = error.details.lag_bytes
     lag_mb = Float.round(lag_bytes / 1024 / 1024, 0)
 
@@ -505,7 +508,46 @@ defmodule SequinWeb.DatabasesLive.Show do
     )
   end
 
-  defp maybe_augment_alert(check), do: check
+  defp maybe_augment_alert(%{error_slug: :logical_messages_table_missing} = check, _database) do
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Missing Required Table",
+        alertMessage: """
+        The `sequin_logical_messages` table is missing in your database. This table is required for Sequin with PostgreSQL versions older than 14.  <a href="https://docs.sequinstream.com/reference/databases#postgresql-12-and-13">Read more</a> about Sequin's support for PostgreSQL 12 and 13.
+
+        Please create this table using the below SQL. Ensure also that this table is added to your publication.
+        """,
+        refreshable: true,
+        dismissable: false,
+        code: %{language: "sql", code: Postgres.logical_messages_table_ddl()}
+      }
+    )
+  end
+
+  defp maybe_augment_alert(%{error_slug: :logical_messages_table_in_publication} = check, database) do
+    publication_name = database.replication_slot.publication_name
+
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Missing Required Table",
+        alertMessage: """
+        The `sequin_logical_messages` table is missing from your publication. This table is required for Sequin with PostgreSQL versions older than 14.  <a href="https://docs.sequinstream.com/reference/databases#postgresql-12-and-13">Read more</a> about Sequin's support for PostgreSQL 12 and 13.
+
+        Please add this table to your publication.
+        """,
+        refreshable: true,
+        dismissable: false,
+        code: %{
+          language: "sql",
+          code: "ALTER PUBLICATION #{publication_name} ADD TABLE public.#{Constants.logical_messages_table_name()};"
+        }
+      }
+    )
+  end
+
+  defp maybe_augment_alert(check, _database), do: check
 
   defp get_trace_state(account_id) do
     case Server.get_state(account_id) do
@@ -524,6 +566,12 @@ defmodule SequinWeb.DatabasesLive.Show do
   defp table_match?(trace, table), do: trace.table == table
 
   defp preload_database(database) do
-    Repo.preload(database, replication_slot: [:sink_consumers])
+    database =
+      database
+      |> Repo.reload!()
+      |> Repo.preload(replication_slot: [:sink_consumers])
+
+    {:ok, health} = Health.health(database.replication_slot)
+    Map.put(database, :health, health)
   end
 end

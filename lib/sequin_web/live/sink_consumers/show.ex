@@ -628,6 +628,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       max_waiting: consumer.max_waiting,
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
+      database: encode_database(consumer.postgres_database),
       sink: encode_sink(consumer),
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
@@ -777,6 +778,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_sink(%SinkConsumer{sink: %SequinStreamSink{}}) do
     %{type: :sequin_stream}
+  end
+
+  defp encode_database(%PostgresDatabase{} = database) do
+    %{
+      id: database.id,
+      name: database.name,
+      pg_major_version: database.pg_major_version
+    }
   end
 
   defp encode_http_endpoint(%HttpEndpoint{} = http_endpoint) do
@@ -1236,13 +1245,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         The replica identity for either your partition root table or one or more of its child tables is not set to `full`. This means the `changes` field in message payloads may be empty.
 
         If you want the `changes` field to appear in message payloads, run the following SQL command on the root table and on each partition table:
-
-        ```sql
-        alter table #{table_name} replica identity full;
-        ```
         """,
         refreshable: true,
-        dismissable: true
+        dismissable: true,
+        code: %{
+          language: "sql",
+          code: """
+          alter table #{table_name} replica identity full;
+          """
+        }
       }
     )
   end
@@ -1258,13 +1269,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         The replica identity for your table is not set to `full`. This means the `changes` field in message payloads will be empty.
 
         If you want the `changes` field to appear in message payloads, run the following SQL command:
-
-        ```sql
-        alter table #{table_name} replica identity full;
-        ```
         """,
         refreshable: true,
-        dismissable: true
+        dismissable: true,
+        code: %{
+          language: "sql",
+          code: """
+          alter table #{table_name} replica identity full;
+          """
+        }
       }
     )
   end
@@ -1298,14 +1311,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
       To fix this, you can add the table to the publication with the following SQL command:
 
-      ```sql
-      alter publication #{consumer.replication_slot.publication_name} add table #{table_name};
-      ```
-
       For more information on publications, <a href="https://sequinstream.com/docs/reference/databases#publications" target="_blank">see the docs</a>.
       """,
       refreshable: true,
-      dismissable: false
+      dismissable: false,
+      code: %{
+        language: "sql",
+        code: """
+        alter publication #{consumer.replication_slot.publication_name} add table #{table_name};
+        """
+      }
     })
   end
 

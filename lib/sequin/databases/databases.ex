@@ -76,6 +76,7 @@ defmodule Sequin.Databases do
 
       with {:ok, db} <- res,
            {:ok, db} <- update_tables(db) do
+        DatabaseLifecycleEventWorker.enqueue(:create, :postgres_database, db.id)
         CheckPostgresReplicationSlotWorker.enqueue(db.id)
 
         {:ok, db}
@@ -208,7 +209,10 @@ defmodule Sequin.Databases do
 
   def reject_sequin_internal_tables(tables) do
     Enum.reject(tables, fn %PostgresDatabaseTable{} = table ->
-      table.schema != "public" and table.schema in [@config_schema, @stream_schema]
+      in_sequin_schema? = table.schema != "public" and table.schema in [@config_schema, @stream_schema]
+      is_logical_messages_table? = table.name == Sequin.Constants.logical_messages_table_name()
+
+      in_sequin_schema? or is_logical_messages_table?
     end)
   end
 
@@ -434,9 +438,9 @@ defmodule Sequin.Databases do
     end
   end
 
-  def get_major_pg_version(%PostgresDatabase{} = database) do
+  def get_pg_major_version(%PostgresDatabase{} = database) do
     with_uncached_connection(database, fn conn ->
-      Postgres.get_major_pg_version(conn)
+      Postgres.get_pg_major_version(conn)
     end)
   end
 
@@ -540,6 +544,20 @@ defmodule Sequin.Databases do
     case Enum.find(tables, fn t -> t.oid == oid end) do
       nil -> {:error, Error.not_found(entity: :table, params: [oid: oid])}
       table -> {:ok, table}
+    end
+  end
+
+  @spec update_pg_major_version(%PostgresDatabase{}) :: {:ok, %PostgresDatabase{}} | {:error, term()}
+  def update_pg_major_version(%PostgresDatabase{} = db) do
+    current_pg_major_version = db.pg_major_version
+
+    with {:ok, pg_major_version} <- get_pg_major_version(db) do
+      if current_pg_major_version == pg_major_version do
+        {:ok, db}
+      else
+        # If the pg_major_version is different, update the database and emit lifecycle events
+        update_db(db, %{pg_major_version: pg_major_version})
+      end
     end
   end
 

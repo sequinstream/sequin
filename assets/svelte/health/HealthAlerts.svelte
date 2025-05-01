@@ -4,6 +4,7 @@
   import * as Alert from "$lib/components/ui/alert";
   import type { Check } from "./Types";
   import { marked } from "marked";
+  import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
 
   export let checks: Check[];
   export let pushEvent: (
@@ -75,6 +76,13 @@
           <div class="prose prose-sm max-w-none">
             {@html marked(check.alertMessage)}
           </div>
+        {/if}
+        {#if check.code}
+          <CodeWithCopy
+            codeClass="mt-4 text-gray-600"
+            language={check.code.language}
+            code={check.code.code}
+          />
         {/if}
         {#if check.error && check.status === "error"}
           <p class="text-sm text-red-600 bg-red-50 p-2 rounded mt-2">

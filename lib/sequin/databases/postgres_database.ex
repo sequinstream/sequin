@@ -31,7 +31,8 @@ defmodule Sequin.Databases.PostgresDatabase do
              :username,
              :password,
              :ipv6,
-             :use_local_tunnel
+             :use_local_tunnel,
+             :pg_major_version
            ]}
   @derive {Inspect, except: [:tables, :password]}
   typed_schema "postgres_databases" do
@@ -50,6 +51,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :ipv6, :boolean, default: false
     field :use_local_tunnel, :boolean, default: false
     field :annotations, :map, default: %{}
+    field :pg_major_version, :integer
 
     embeds_many :tables, PostgresDatabaseTable, on_replace: :delete
 
@@ -80,7 +82,8 @@ defmodule Sequin.Databases.PostgresDatabase do
       :username,
       :ipv6,
       :use_local_tunnel,
-      :annotations
+      :annotations,
+      :pg_major_version
     ])
     |> validate_required([:database, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)

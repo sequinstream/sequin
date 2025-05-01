@@ -144,6 +144,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> foreign_key_constraint(:routing_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:sequence_filter, name: "sequence_filter_check")
+    |> check_constraint(:batch_size,
+      name: "ensure_batch_size_one",
+      message: "batch_size must be 1 when batch is false for webhook sinks"
+    )
     |> Sequin.Changeset.validate_name()
   end
 
@@ -151,6 +155,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     consumer
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
+    |> check_constraint(:batch_size,
+      name: "ensure_batch_size_one",
+      message: "batch_size must be 1 when batch is false for webhook sinks"
+    )
   end
 
   def changeset(consumer, attrs) do
@@ -180,6 +188,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
     |> validate_number(:batch_size, less_than_or_equal_to: 1_000)
+    |> validate_number(:batch_timeout_ms, greater_than: 0)
     |> validate_number(:max_memory_mb, greater_than_or_equal_to: 128)
     |> validate_number(:partition_count, greater_than_or_equal_to: 1)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])

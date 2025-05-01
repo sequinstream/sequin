@@ -581,12 +581,36 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "test-db.public.Characters"
       assert consumer.transform.name == "record_only"
+      assert consumer.sink.batch == true
 
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
                column_filters: [],
                group_column_attnums: [1]
              }
+    end
+
+    test "creates webhook subscription with batch=false" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                     batch: false
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.sink.batch == false
     end
 
     test "creates sink consumer with filters" do

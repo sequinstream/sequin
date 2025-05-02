@@ -1033,6 +1033,9 @@ defmodule Sequin.Postgres do
       {:ok, %{rows: [[relkind]]}} ->
         {:ok, relkind}
 
+      {:ok, %{rows: []}} ->
+        {:error, Error.not_found(entity: :table, params: %{oid: table_oid})}
+
       {:error, error} ->
         {:error,
          Error.service(

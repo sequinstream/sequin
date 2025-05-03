@@ -650,8 +650,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp decode_sink(:redis_string, sink) do
-    dbg(sink)
-
     %{
       "type" => "redis_string",
       "host" => sink["host"],

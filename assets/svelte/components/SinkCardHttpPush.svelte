@@ -69,9 +69,9 @@
           <span
             class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
           >
-            {#if consumer.routing_id}
+            {#if consumer.routing}
               Determined by <a
-                href={`/functions/${consumer.routing_id}`}
+                href={`/functions/${consumer.routing.id}`}
                 data-phx-link="redirect"
                 data-phx-link-state="push"
                 class="underline">router</a

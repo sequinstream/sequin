@@ -45,11 +45,21 @@ defmodule SequinWeb.TransformsLive.Edit do
   end
   """
 
+  @initial_route_redis_string """
+  def route(action, record, changes, metadata) do
+    prefix = "sequin:\#{metadata.table_name}"
+    key = "\#{prefix}:\#{record["id"]}"
+
+    %{key: key}
+  end
+  """
+
   @initial_code_map %{
     "path" => "",
     "function" => @initial_transform,
     "routing_undefined" => @initial_route_no_sink_type,
-    "routing_http_push" => @initial_route_http
+    "routing_http_push" => @initial_route_http,
+    "routing_redis_string" => @initial_route_redis_string
   }
 
   # We generate the function completions at compile time because

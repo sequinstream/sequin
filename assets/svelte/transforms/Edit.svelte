@@ -103,6 +103,7 @@
 
   let sinkTypeInternalToExternal = {
     http_push: "Webhook sink",
+    redis_string: "Redis string sink",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];
@@ -632,6 +633,10 @@ Please help me create or modify the Elixir function transform to achieve the des
                 <SelectItem
                   value="http_push"
                   label={sinkTypeInternalToExternal.http_push}
+                />
+                <SelectItem
+                  value="redis_string"
+                  label={sinkTypeInternalToExternal.redis_string}
                 />
               </SelectContent>
             </Select>

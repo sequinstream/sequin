@@ -518,8 +518,14 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> Map.new()
     |> consumer_event()
-    |> Map.update!(:data, fn data ->
-      data |> Map.from_struct() |> consumer_event_data_attrs()
+    |> Map.update!(:data, fn
+      data when is_struct(data) ->
+        data
+        |> Map.from_struct()
+        |> consumer_event_data_attrs()
+
+      data when is_map(data) ->
+        consumer_event_data_attrs(data)
     end)
     |> Sequin.Map.from_ecto()
   end
@@ -597,8 +603,14 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> Map.new()
     |> consumer_record()
-    |> Map.update!(:data, fn data ->
-      data |> Map.from_struct() |> consumer_record_data_attrs()
+    |> Map.update!(:data, fn
+      data when is_struct(data) ->
+        data
+        |> Map.from_struct()
+        |> consumer_record_data_attrs()
+
+      data when is_map(data) ->
+        consumer_record_data_attrs(data)
     end)
     |> Sequin.Map.from_ecto()
   end

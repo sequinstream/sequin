@@ -1,4 +1,5 @@
 import type { Table } from "../databases/types";
+import type { Transform } from "../transforms/types";
 
 // Base consumer type with shared properties
 export type BaseConsumer = {
@@ -37,6 +38,8 @@ export type BaseConsumer = {
       jsonb_path: string;
     }>;
   };
+  routing_id: string | null;
+  routing: Transform | null;
   table: Table;
   postgres_database: {
     id: string;
@@ -95,6 +98,7 @@ export type RedisStringConsumer = BaseConsumer & {
     url: string;
     expireMs: number | null;
   };
+  routing_mode?: "static" | "dynamic";
 };
 
 // NATS specific sink

@@ -716,7 +716,13 @@
     {:else if consumer.type === "redis_stream"}
       <RedisStreamSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "redis_string"}
-      <RedisStringSinkForm errors={errors.consumer} bind:form />
+      <RedisStringSinkForm
+        errors={errors.consumer}
+        bind:form
+        {refreshFunctions}
+        {transforms}
+        {transformRefreshState}
+      />
     {:else if consumer.type === "kafka"}
       <KafkaSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "gcp_pubsub"}

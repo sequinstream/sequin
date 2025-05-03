@@ -99,7 +99,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
-        |> Repo.preload([:postgres_database, :sequence, :active_backfill, :replication_slot, :transform], force: true)
+        |> Repo.preload([:postgres_database, :sequence, :active_backfill, :replication_slot, :transform, :routing],
+          force: true
+        )
         |> SinkConsumer.preload_http_endpoint()
         |> put_health()
 
@@ -639,7 +641,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       batch_size: consumer.batch_size,
       table: encode_table(table),
       transform_id: consumer.transform_id,
-      routing_id: consumer.routing_id
+      routing_id: consumer.routing_id,
+      routing: encode_transform(consumer.routing)
     }
   end
 
@@ -869,7 +872,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_postgres_database(postgres_database) do
     %{
       id: postgres_database.id,
-      name: postgres_database.name
+      name: postgres_database.name,
+      pg_major_version: postgres_database.pg_major_version
     }
   end
 

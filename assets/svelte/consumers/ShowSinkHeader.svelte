@@ -164,7 +164,7 @@
       </div>
       <div class="flex items-center space-x-4">
         <div
-          class="hidden lg:flex flex-col items-left gap-1 text-xs text-gray-500"
+          class="hidden xl:flex flex-col items-left gap-1 text-xs text-gray-500"
         >
           <div class="flex items-center gap-2">
             <Clock class="h-4 w-4" />

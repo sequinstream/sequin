@@ -156,6 +156,9 @@ defmodule Sequin.Runtime.SinkPipeline do
     context = context(context)
     message = format_timestamps(message, context.consumer)
 
+    # Have to ensure module is loaded to trust function_exported?
+    Code.ensure_loaded?(pipeline_mod)
+
     if function_exported?(pipeline_mod, :handle_message, 2) do
       case pipeline_mod.handle_message(message, context) do
         {:ok, message, next_context} ->
@@ -250,6 +253,9 @@ defmodule Sequin.Runtime.SinkPipeline do
       ]
     ]
 
+    # Have to ensure module is loaded to trust function_exported?
+    Code.ensure_loaded?(pipeline_mod)
+
     if function_exported?(pipeline_mod, :processors_config, 1) do
       Keyword.merge(default, pipeline_mod.processors_config(consumer))
     else
@@ -269,6 +275,9 @@ defmodule Sequin.Runtime.SinkPipeline do
       ]
     ]
 
+    # Have to ensure module is loaded to trust function_exported?
+    Code.ensure_loaded?(pipeline_mod)
+
     if function_exported?(pipeline_mod, :batchers_config, 1) do
       Keyword.merge(default, pipeline_mod.batchers_config(consumer))
     else
@@ -276,12 +285,15 @@ defmodule Sequin.Runtime.SinkPipeline do
     end
   end
 
-  def apply_routing(sc, rinfo) do
-    pmod = pipeline_mod_for_consumer(sc)
+  def apply_routing(consumer, rinfo) do
+    pipeline_mod = pipeline_mod_for_consumer(consumer)
 
-    if function_exported?(pmod, :apply_routing, 2) do
+    # Have to ensure module is loaded to trust function_exported?
+    Code.ensure_loaded?(pipeline_mod)
+
+    if function_exported?(pipeline_mod, :apply_routing, 2) do
       # Have to use apply to avoid warnings from elixir about undefined impls of optional callback
-      apply(pmod, :apply_routing, [sc, rinfo])
+      apply(pipeline_mod, :apply_routing, [consumer, rinfo])
     end
   end
 

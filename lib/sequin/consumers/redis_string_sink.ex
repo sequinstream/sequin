@@ -19,11 +19,12 @@ defmodule Sequin.Consumers.RedisStringSink do
     field :database, :integer, default: 0
     field :expire_ms, :integer
     field :connection_id, :string
+    field :mode, Ecto.Enum, values: [:static, :dynamic], default: :static
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:host, :port, :username, :password, :tls, :database, :expire_ms])
+    |> cast(params, [:host, :port, :username, :password, :tls, :database, :expire_ms, :mode])
     |> validate_required([:host, :port, :database])
     |> validate_number(:port, greater_than: 0, less_than: 65_536)
     |> validate_number(:database, greater_than_or_equal_to: 0)

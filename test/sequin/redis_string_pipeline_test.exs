@@ -17,14 +17,15 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
           account_id: account.id,
           batch_size: 10,
           type: :redis_string,
-          sink: %{type: :redis_string}
+          sink: %{type: :redis_string},
+          message_kind: :event
         )
 
       {:ok, %{consumer: consumer}}
     end
 
     test "sends message to redis", %{consumer: consumer} do
-      message = ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id, message_kind: consumer.message_kind)
+      message = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
 
       start_pipeline!(consumer)
 
@@ -37,8 +38,8 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
     end
 
     test "sends messages to redis", %{consumer: consumer} do
-      message1 = ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id, message_kind: consumer.message_kind)
-      message2 = ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id, message_kind: consumer.message_kind)
+      message1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      message2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
 
       start_pipeline!(consumer)
 
@@ -53,7 +54,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
 
     test "sends message with expire ms set with px", %{consumer: consumer} do
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{sink: %{expire_ms: 1000}})
-      message = ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id, message_kind: consumer.message_kind)
+      message = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
 
       start_pipeline!(consumer)
 
@@ -85,10 +86,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{transform_id: transform.id})
 
       message =
-        ConsumersFactory.insert_consumer_message!(
-          consumer_id: consumer.id,
-          message_kind: consumer.message_kind
-        )
+        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
 
       column_value = message.data.record["column"]
 
@@ -97,6 +95,58 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
       ref = send_test_message(consumer, message)
 
       Mox.expect(RedisMock, :set_messages, fn _, [%{key: _, value: ^column_value}] -> :ok end)
+
+      assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
+      assert data == message.data
+    end
+
+    test "routes messages with routing transforms", %{consumer: consumer} do
+      routing_code = """
+      def transform(action, record, changes, metadata) do
+        %{key: "custom:\#{metadata.table_name}:\#{record["id"]}"}
+      end
+      """
+
+      assert {:ok, routing} =
+               Consumers.create_transform(consumer.account_id, %{
+                 name: "routing_test",
+                 transform: %{
+                   type: "routing",
+                   sink_type: :redis_string,
+                   code: routing_code
+                 }
+               })
+
+      assert MiniElixir.create(routing.id, routing.transform.code)
+      {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{routing_id: routing.id, routing_mode: "dynamic"})
+
+      message =
+        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+
+      custom_key = "custom:#{message.data.metadata.table_name}:#{message.data.record["id"]}"
+
+      start_pipeline!(consumer)
+
+      ref = send_test_message(consumer, message)
+
+      Mox.expect(RedisMock, :set_messages, fn _, [%{key: ^custom_key, value: _}] -> :ok end)
+
+      assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
+      assert data == message.data
+    end
+
+    test "handles delete actions by sending del command to redis", %{consumer: consumer} do
+      message =
+        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+
+      # Delete message
+      message = put_in(message.data.action, :delete)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_message(consumer, message)
+
+      Mox.expect(RedisMock, :set_messages, fn _, [%{action: :del}] -> :ok end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data

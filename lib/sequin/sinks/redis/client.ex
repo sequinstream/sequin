@@ -36,6 +36,9 @@ defmodule Sequin.Sinks.Redis.Client do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       commands =
         Enum.map(messages, fn
+          %{action: :del, key: key} ->
+            ["DEL", key]
+
           %{key: key, value: value, expire_ms: nil} ->
             ["SET", key, value]
 

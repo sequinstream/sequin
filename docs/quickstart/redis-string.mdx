@@ -65,7 +65,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       </Frame>
     </Step>
 
-    <Step title="Add a transform">
+    <Step title="Add a transform function">
       Open the **Transform** card, click **+ Create new transform** and use the following Elixir function in a [Function transform](/reference/transforms#function-transform):
 
       ```elixir
@@ -74,14 +74,14 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       end
       ```
 
-      Name the transform `record-only` and click **Create transform**.
+      Name the transform `record-only` and click **Create function**.
     </Step>
 
     <Step title="Select the transform">
-      Navigate back to the **Sinks** tab and select the transform you just created.
+      Navigate back to the **Sinks** tab and select the transform function you just created.
 
       <Info>
-        If you don't see the transform you just created, click the refresh button.
+        If you don't see the transform function you just created, click the refresh button.
       </Info>
     </Step>
 

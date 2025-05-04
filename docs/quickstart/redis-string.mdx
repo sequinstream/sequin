@@ -1,19 +1,23 @@
 ---
 title: 'Get started with Redis Strings'
 sidebarTitle: 'Redis Strings'
-description: 'Stream Postgres changes to Redis key/values in minutes. Build real-time data pipelines with Redis and Postgres change data capture (CDC).'
+description: '`SET` and `DEL` Postgres changes to Redis key/values in minutes. Build a real-time Redis cache from your Postgres data with change data capture (CDC).'
 ---
 
 import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
 
-In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Redis stream. You'll:
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Redis database. You'll:
 
 - Boot Sequin
 - Connect to a sample playground database 
-- Configure a Redis stream to receive database changes
+- Configure Redis to receive database changes
 - See your changes flow in real-time
 
-By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin. This same pattern can be used to setup your own Postgres CDC pipeline with Redis.
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) to Redis with Sequin.
+
+<Info>
+  This guide is for Redis Strings which use `SET` and `DEL` to maintain a cache. If you want to use Redis Streams, see our [Redis Streams quickstart](/quickstart/redis-stream).
+</Info>
 
 <Steps titleSize="h2">
  <Step title="Boot Redis" icon="database">
@@ -23,14 +27,18 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
   docker run --name redis -p 6379:6379 -d redis:latest
   ```
 
-  <Note>
-    If you're using another Redis instance, be sure you're using Redis 5.0+ (required for streams).
-  </Note>
+  Test your Redis connection with:
+  
+  ```bash
+  redis-cli ping
+  ```
+  
+  You should see "PONG" in response.
  </Step>
 
  <QuickstartInitialSteps />
  <Step title="Create a Redis String Sink" icon="database">
-  With the playground database connected, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to your Redis stream:
+  With the playground database connected, you can create a [sink](/reference/sinks/overview). This sink will maintain a Redis cache that mirrors your Postgres `products` table:
 
   <Steps>
     <Step title="Navigate to Sinks">
@@ -57,24 +65,41 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       </Frame>
     </Step>
 
+    <Step title="Add a transform">
+      Open the **Transform** card, click **+ Create new transform** and use the following Elixir function in a [Function transform](/reference/transforms#function-transform):
+
+      ```elixir
+      def transform(action, record, changes, metadata) do
+        record
+      end
+      ```
+
+      Name the transform `record-only` and click **Create transform**.
+    </Step>
+
+    <Step title="Select the transform">
+      Navigate back to the **Sinks** tab and select the transform you just created.
+
+      <Info>
+        If you don't see the transform you just created, click the refresh button.
+      </Info>
+    </Step>
+
     <Step title='Configure "Redis Configuration"'>
       In the "Redis Configuration" card, enter your Redis connection details.
 
       - Host: If running locally with Docker, use `host.docker.internal`
       - Port: The port Redis is listening on (default: 6379)
-      - Username: Required if Redis authentication is enabled
-      - Password: Required if Redis authentication is enabled
-      - Stream Key: The Redis stream to write to (e.g., `products-stream`)
-      - Database: The Redis database number (default: 0)
-      - TLS: Toggle on if your Redis instance requires TLS
+
+      Leave the rest of the fields with their default values.
 
       <Frame>
-        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis-stream/redis-config-card.png" alt="Redis configuration card" />
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis-string/redis-config-card.png" alt="Redis configuration card" />
       </Frame>
     </Step>
 
     <Step title="Test the connection">
-      At the bottom of the form, click the "Test Connection" button. If you provided proper credentials, it should succeed.
+      At the bottom of the form, click the "Test Connection" button. With the above configuration, it should succeed.
 
       <Check>
         Sequin can connect to your Redis instance.
@@ -82,47 +107,64 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
     </Step>
 
     <Step title="Create the sink">
-      You can leave the rest of the defaults. As configured, the Redis stream will first receive a backfill of all rows currently in the `products` table. Then, it will receive all changes to the `products` table in real-time.
+      As configured, Sequin will:
+      
+      1. Backfill all current rows into Redis as key/value pairs
+      2. Set up real-time replication so any changes to the `products` table will be reflected in Redis immediately
+      3. Use primary keys from Postgres to form Redis keys (e.g., `sequin:products:1`, `sequin:products:2`)
 
       Click "Create Sink" to finish setting up your Redis String sink.
     </Step>
   </Steps>
  </Step>
 
-  <Step title="See changes flow to your Redis stream" icon="waveform-lines">
-    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to your Redis stream.
+  <Step title="See changes flow to your Redis cache" icon="waveform-lines">
+    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to your Redis cache.
 
-    Let's confirm messages are flowing:
+    Let's confirm the cache is working:
 
     <Steps>
     <Step title="Messages tab">
       Click the "Messages" tab. You'll see a list of the recently delivered messages:
 
       <Frame>
-        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis-stream/messages-tab.png" alt="List of recently delivered messages" />
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/redis-string/messages-tab.png" alt="List of recently delivered messages" />
       </Frame>
 
       <Check>
-        Sequin indicates it backfilled the `products` table to your Redis stream.
+        Sequin indicates it backfilled the `products` table to your Redis cache.
       </Check>
     </Step>
       <Step title="View in Redis CLI">
-        Connect to your Redis instance using the Redis CLI and read from the stream:
+        Connect to your Redis instance using the Redis CLI:
 
         ```bash
         redis-cli
-        > xread count 5 streams playground-stream 0
         ```
 
-        You should see the messages that were sent from Sequin. These are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table.
+        Then list the products in your Redis cache:
+
+        ```bash
+        KEYS sequin:products:*
+        ```
+
+        You should see a list of keys corresponding to products from your Postgres table.
+
+        Now, let's look at the actual data for one product:
+
+        ```bash
+        GET sequin:products:1
+        ```
+
+        You should see a JSON representation of the product data.
 
         <Check>
-          Messages are flowing from Sequin to your Redis stream.
+          Data from Postgres is now cached in Redis as strings.
         </Check>
       </Step>
 
       <Step title="Make some changes">
-        Let's make some changes to the `products` table and see them flow to your stream.
+        Let's make some changes to the `products` table and see them reflected in your Redis cache.
 
         In your terminal, run the following command to insert a new row into the `products` table:
 
@@ -132,13 +174,19 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
           "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
         ```
 
-        In Redis CLI, read the latest messages from the stream:
+        In Redis CLI, check if the new product was added to the cache:
 
         ```bash
-        xrevrange playground-stream + - count 1
+        KEYS sequin:products:*
         ```
 
-        You should see a message corresponding to the inserted row.
+        You should see a new key for the product you just added. View its contents:
+
+        ```bash
+        GET sequin:products:[new-id]
+        ```
+
+        Replace `[new-id]` with the ID of the newly inserted product.
 
         Feel free to try other changes:
 
@@ -149,6 +197,15 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
               psql -U postgres -d sequin_playground -c \
               "update products set price = 7.99 where name = 'Avocados (3 pack)';"
             ```
+            
+            Then check the updated value in Redis:
+            ```bash
+            # Find the product ID first
+            redis-cli --raw KEYS "sequin:products:*" | xargs -I {} redis-cli --raw GET {} | grep "Avocados (3 pack)"
+            
+            # Then get the specific product (replace ID with the one you found)
+            GET sequin:products:[id]
+            ```
           </Accordion>
 
           <Accordion title="Change a product's name">
@@ -156,6 +213,12 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
             docker exec -i sequin-sequin_postgres-1 \
               psql -U postgres -d sequin_playground -c \
               "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+            ```
+            
+            Verify the change in Redis:
+            ```bash
+            # Use the same product ID from the previous example
+            GET sequin:products:[id]
             ```
           </Accordion>
 
@@ -165,10 +228,18 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
               psql -U postgres -d sequin_playground -c \
               "delete from products where name = 'Blueberries (6 oz)';"
             ```
+            
+            Check that the key was removed from Redis:
+            ```bash
+            # Find the product ID first (if you don't already know it)
+            redis-cli --raw KEYS "sequin:products:*" | xargs -I {} redis-cli --raw GET {} | grep "Blueberries"
+            ```
+            
+            This should return an empty list, indicating the key was removed.
           </Accordion>
         </AccordionGroup>
 
-        Each change will appear in your Redis stream within a few seconds.
+        Each change to your Postgres database will be automatically reflected in your Redis cache within a few seconds.
       </Step>
     </Steps>
   </Step>
@@ -180,10 +251,18 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
 
 You've successfully:
 
-- Set up a complete Postgres change data capture pipeline
+- Set up a complete Postgres to Redis cache synchronization pipeline
 - Loaded existing data through a backfill
 - Made changes to the `products` table
-- Verified changes are flowing to your Redis stream
+- Verified Redis cache updates automatically with your database changes
+
+## Applications of Redis Strings Sink
+
+Redis Strings are incredibly versatile and can be used for various caching scenarios:
+
+- **Fast lookups**: Redis can serve product details much faster than a database query
+- **Multi-region caching**: Use Sequin to sync records from your primary database to Redis in multiple regions
+- **Cache invalidation**: Configure your Redis cache with infinite retention and rely on Sequin to SET and DEL keys as records are updated or deleted
 
 ## Ready to stream
 
@@ -193,7 +272,10 @@ Now you're ready to connect your own database to Sequin and start streaming chan
   <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
     Connect your Postgres database to Sequin.
   </Card>
-  <Card title="Guide: Setting up a Redis sink" icon="database" href="/how-to/stream-postgres-to-redis-stream">
-    Setup a Redis sink to send changes to your stream.
+  <Card title="Guide: Setting up a Redis sink" icon="database" href="/how-to/stream-postgres-to-redis-string">
+    Set up a Redis sink to sync your database with Redis.
+  </Card>
+  <Card title="Redis String reference" icon="database" href="/reference/sinks/redis-string">
+    Learn more about the Redis String sink.
   </Card>
 </CardGroup>

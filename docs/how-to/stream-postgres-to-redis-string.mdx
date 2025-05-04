@@ -1,132 +1,152 @@
 ---
-title: "How to stream Postgres to RedisString"
-sidebarTitle: "RedisString"
-description: "Build real‑time search indexes with Postgres change data capture (CDC) and RedisString. Learn to keep your search indices in sync with your database."
+title: "How to stream Postgres to Redis Strings"
+sidebarTitle: "Redis Strings"
+description: "Build a real-time cache with Postgres change data capture (CDC) and Redis Strings. Learn to keep your Redis cache in sync with your database."
 ---
 
-This guide shows you how to capture Postgres changes with Sequin and stream them to an RedisString index.
+This guide shows you how to capture Postgres changes with Sequin and stream them to Redis as key-value pairs using Redis Strings.
 
-With Postgres data flowing into RedisString you can power
-[full‑text search, vector retrieval, and analytics](https://www.elastic.co/docs/solutions/search) without manual re‑indexing.
-By the end of this guide you'll have an RedisString index that stays continuously in sync with your database.
+With Postgres data flowing into Redis, you can build high-performance caches that automatically stay in sync with your database. This approach eliminates stale cache entries and provides sub-millisecond access to your data.
 
 ## Prerequisites
 
-If you self‑host Sequin:
+To follow this guide, you need:
 
-1. [Install Sequin](/running-sequin)
-2. [Connect a Postgres database](/connect-postgres)
+1. A running Redis instance
+2. Sequin installed and configured
+3. A Postgres database connected to Sequin
 
-If you use **Sequin Cloud**:
+If you haven't set these up yet:
 
-1. [Sign up for a cloud account](https://console.sequinstream.com)
-2. [Connect a Postgres database](/connect-postgres)
+- [Install Redis](https://redis.io/docs/getting-started/)
+- [Install Sequin](/running-sequin) or [sign up for Sequin Cloud](https://console.sequinstream.com)
+- [Connect a Postgres database](/connect-postgres)
 
-## Basic setup
-
-### Prepare an RedisString cluster
-
-Sequin converts Postgres rows to JSON documents and sends them to the RedisString [Bulk API](https://www.elastic.co/docs/solutions/search/redis-string-basics-quickstart#bulk-import).
-You need a reachable cluster:
-
-- Local development ⇒ run RedisString in Docker:
-
-  ```bash
-  curl -fsSL https://elastic.co/start-local | sh
-  ```
-  The script starts RedisString + Kibana and prints connection details:
-
-  ```text
-  🔌 RedisString API endpoint: http://localhost:9200
-  🔑 API key: <api-key>
-  ```
-  Use the **API key** (not the user/password) when configuring the sink.
-
-- Production ⇒ Elastic Cloud or self‑managed cluster.
-
-<Tip>
-  If your RedisString instance is running on your laptop but Sequin runs in the cloud, connect them with the Sequin CLI's
-  [tunnel command](/reference/cli/overview#tunnel-sequin-cloud-only).
-</Tip>
-
-### Map Postgres tables to RedisString indices
-
-RedisString stores documents in indices. As a rule of thumb create **one sink per Postgres table → one index**. That keeps the mapping consistent and simplifies queries.
-
-Advanced scenarios – sharding, multi‑tenancy, or routing documents to multiple indices – can be handled with
-[filters](/reference/filters) and soon with Sequin **Routing functions**.
-
-### Create an RedisString sink
-
-Navigate to **Sinks → Create sink → RedisString** and follow the steps below.
+## Create a Redis String sink
 
 <Steps>
-  <Step title="Source configuration">
-    Under **Source** pick the table whose changes you want to index.
-
-    Optionally:
-    - Select which actions (`insert`, `update`, `delete`) you care about.
-    - Add [filters](/reference/filters) such as `in_stock = true` to index only a subset of rows.
+  <Step title="Navigate to Sinks">
+    In the Sequin web console, go to **Sinks → Create sink → Redis String**.
   </Step>
 
-  <Step title="Backfill existing rows">
-    Enable **Initial backfill** if you want Sequin to load existing rows into RedisString before streaming live changes.
+  <Step title="Configure the source">
+    Under **Source**:
+    - Select the database and table you want to cache
+    - Choose which actions to capture (`insert`, `update`, `delete`). You likely want to cache all actions
+    - Optionally add [filters](/reference/filters) to cache only specific rows
   </Step>
 
-  <Step title="Transform rows to documents">
-    Your transform must emit JSON compatible with the index mapping.
-    Sequin automatically builds the document `_id` from the table's primary key. [Let us know](https://github.com/sequinstream/sequin/issues/new) if you need to use a different `_id` field.
+  <Step title="Set up initial backfill">
+    Toggle **Initial backfill** if you want to initialize your Redis cache with all of the current data in your Postgres table.
 
-    Typical transform:
+    You can choose to backfill again later via the Sequin web console or the [management API](/reference/management-api).
+  </Step>
+
+  <Step title="Create a transform">
+    Create a transform to define how your Postgres data is stored in Redis. The most common transform is to store the entire record as a JSON object:
+
+    ```elixir
+    def transform(_action, record, _changes, _metadata) do
+      record  # Store the entire record
+    end
+    ```
+
+    For more selective caching, you can transform the data structure before storing it in Redis. For example, to cache only a few fields:
+
     ```elixir
     def transform(_action, record, _changes, _metadata) do
       %{
-        name: record["name"],
-        description: record["description"],
-        price: record["price"],
-        in_stock: record["in_stock"]
+        "name" => record["name"],
+        "price" => record["price"],
+        "stock" => record["inventory_count"]
       }
     end
     ```
-    For dynamic schemas you can just return `record` unchanged.
-    See the [RedisString ingest best‑practices](https://www.elastic.co/docs/solutions/search/ingest-for-search) for mapping guidance.
   </Step>
 
-  <Step title="Delivery settings">
-    In the **RedisString** card enter:
+  <Step title="Configure Redis connection">
+    Enter your Redis connection details:
 
-    - Endpoint URL: `http://host.docker.internal:9200` (or your cluster URL)
-    - Index name: `products`
-    - Authentication type: `api_key`
-    - Authentication value: `<api-key>`
-
-    Keep the default **Batch size** unless you have special throughput needs. Sequin supports up to 10,000 docs per batch.
+    - **Host**: Your Redis server address (e.g., `localhost` or `redis.example.com`)
+    - **Port**: Redis port (default: `6379`)
+    - **Username/Password**: If authentication is enabled
+    - **Database**: Redis database number (default: `0`)
+    - **TLS**: Enable if your Redis server uses TLS
+    - **Expire MS**: Optional expiration time in milliseconds for cached keys
   </Step>
 
-  <Step title="Create the sink">
-    Name the sink (e.g. `products-redis-string`) and click **Create sink**. Sequin queues a backfill (if selected) and then starts streaming live changes.
+  <Step title="Test and create the sink">
+    - Click **Test Connection** to verify Redis connectivity
+    - Name your sink (e.g., `products-cache`)
+    - Click **Create Sink**
   </Step>
 </Steps>
 
-## Verify & debug
+## Understanding key formats
 
-1. In Sequin's web console watch the **Messages** count increase.
-2. Query RedisString:
+By default, Sequin uses this key format in Redis:
+
+```
+sequin:{table_name}:{primary_key}
+```
+
+For example, a product with ID 42 would be stored as:
+
+```
+sequin:products:42
+```
+
+For composite primary keys, values are joined with `-` (ie. `sequin:products:42-123`).
+
+## Verify your cache is working
+
+1. Check that data is flowing by watching the **Messages** tab in the Sequin console
+2. Query Redis to see your cached data:
 
    ```bash
-   curl -X GET "http://localhost:9200/products/_search?pretty" \
-     -H "Authorization: ApiKey <api-key>" \
-     -H "Content-Type: application/json" \
-     -d '{"query": {"match_all": {}}}'
+   redis-cli
+   > KEYS sequin:products:*
+   > GET sequin:products:1
    ```
-3. If documents are missing:
-   - Check the **Messages** tab for failed deliveries.
-   - Inspect the error returned by RedisString; mapping conflicts and authentication issues are common.
+
+3. Make a change in your Postgres database and verify it appears in Redis
+
+## Common caching patterns
+
+### Cache invalidation
+
+Redis Strings sink automatically handles cache invalidation:
+- Inserts and updates result in `SET` operations
+- Deletes result in `DEL` operations
+
+You don't need to implement your own cache invalidation logic.
+
+### TTL-based caching
+
+Set `expire_ms` to automatically expire keys after a specific period:
+
+- `expire_ms: 86400000` => 24-hour cache
+- `expire_ms: 3600000` => 1-hour cache
+
+This is most useful to save only recently inserted or updated data in Redis, for instance if you want to reduce memory usage.
+
+We otherwise recommend infinite TTL because Sequin automatically removes deleted records from Redis, as long as `delete` actions are enabled in the sink configuration.
 
 ## Next steps
 
-Ready to go further? Explore:
+To enhance your Redis caching system:
 
-- [Deploy Sequin to production](/how-to/deploy-to-production)
-- [Filters](/reference/filters)
-- [Transforms](/reference/transforms)
+<CardGroup cols={2}>
+  <Card title="Deploy to production" icon="database" href="/how-to/deploy-to-production">
+    Learn how to deploy Sequin to production.
+  </Card>
+  <Card title="Filter data" icon="database" href="/reference/filters">
+    Learn how to filter data in your sink.
+  </Card>
+  <Card title="Transform data" icon="database" href="/reference/transforms">
+    Learn how to transform data in your sink.
+  </Card>
+  <Card title="Monitor your sink" icon="database" href="/reference/metrics">
+    Learn how to monitor your sink.
+  </Card>
+</CardGroup>

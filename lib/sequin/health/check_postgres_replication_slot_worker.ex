@@ -63,17 +63,27 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
     |> Oban.insert()
   end
 
+  @legacy_pg13_database_ids ["dbbdcca6-b62c-458b-bc12-ebfe056374b9", "e1b5e9be-9886-41a3-98e9-bca3fd5f971b"]
   defp check_database(%PostgresDatabase{} = database) do
     with :ok <- Databases.test_tcp_reachability(database),
          :ok <- Databases.test_connect(database),
          :ok <- Databases.test_permissions(database),
          {:ok, latency} <- NetworkUtils.measure_latency(database.hostname, database.port) do
-      case database.pg_major_version do
-        nil ->
+      cond do
+        is_nil(database.pg_major_version) ->
           Logger.warning("Database #{database.id} has no pg_major_version")
           :ok
 
-        pg_major_version when pg_major_version < 14 ->
+        database.pg_major_version >= 14 or database.id in @legacy_pg13_database_ids ->
+          # We mark success in case a database version is upgraded from below 14 to 14 or above
+          Health.put_event(database.replication_slot, %Event{slug: :db_logical_messages_table_existence, status: :success})
+
+          Health.put_event(database.replication_slot, %Event{
+            slug: :db_logical_messages_table_in_publication,
+            status: :success
+          })
+
+        database.pg_major_version < 14 ->
           if Postgres.has_sequin_logical_messages_table?(database) do
             Health.put_event(database.replication_slot, %Event{
               slug: :db_logical_messages_table_existence,
@@ -94,15 +104,6 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
           else
             Health.put_event(database.replication_slot, %Event{slug: :db_logical_messages_table_existence, status: :fail})
           end
-
-        pg_major_version when pg_major_version >= 14 ->
-          # We mark success in case a database version is upgraded from below 14 to 14 or above
-          Health.put_event(database.replication_slot, %Event{slug: :db_logical_messages_table_existence, status: :success})
-
-          Health.put_event(database.replication_slot, %Event{
-            slug: :db_logical_messages_table_in_publication,
-            status: :success
-          })
       end
 
       Health.put_event(database.replication_slot, %Event{slug: :db_connectivity_checked, status: :success})

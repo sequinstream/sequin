@@ -197,6 +197,9 @@
             <ResponseField name="http_endpoint_path" type="string" >
                 HTTP endpoint path
             </ResponseField>
+            <ResponseField name="batch" type="boolean" >
+                Whether the webhook body [should be wrapped in a list](/reference/sinks/webhooks#request-format) to support batching.
+            </ResponseField>
         </Expandable>
     </Expandable>
 </ResponseField>

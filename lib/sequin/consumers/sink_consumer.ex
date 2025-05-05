@@ -65,7 +65,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :batch_size, :integer, default: 1
     field :batch_timeout_ms, :integer, default: nil
     field :annotations, :map, default: %{}
-    field :max_memory_mb, :integer, default: 1024
+    field :max_memory_mb, :integer, default: 128
     field :partition_count, :integer, default: 1
     field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
@@ -224,7 +224,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> put_change(:ack_wait_ms, get_field(changeset, :ack_wait_ms) || 30_000)
     |> put_change(:max_waiting, get_field(changeset, :max_waiting) || 20)
     |> put_change(:max_ack_pending, get_field(changeset, :max_ack_pending) || 10_000)
-    |> put_change(:max_memory_mb, get_field(changeset, :max_memory_mb) || 1024)
+    |> put_change(:max_memory_mb, get_field(changeset, :max_memory_mb) || 128)
     |> put_change(:partition_count, get_field(changeset, :partition_count) || 1)
     |> put_change(:legacy_transform, get_field(changeset, :legacy_transform) || :none)
     |> put_change(:message_kind, get_field(changeset, :message_kind) || :event)

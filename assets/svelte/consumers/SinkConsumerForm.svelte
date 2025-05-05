@@ -13,6 +13,7 @@
     CardContent,
     CardHeader,
     CardTitle,
+    ExpandableCard,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import FullPageModal from "../components/FullPageModal.svelte";
@@ -31,7 +32,7 @@
   import NatsSinkForm from "$lib/sinks/nats/NatsSinkForm.svelte";
   import RabbitMqSinkForm from "$lib/sinks/rabbitmq/RabbitMqSinkForm.svelte";
   import AzureEventHubSinkForm from "$lib/sinks/azure_event_hub/AzureEventHubSinkForm.svelte";
-  import { CircleAlert, Info, ChevronDown, Plus } from "lucide-svelte";
+  import { CircleAlert, Info, Plus } from "lucide-svelte";
   import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
   import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
@@ -356,7 +357,12 @@
   let showMessageTypeExampleModal = false;
   let selectedExampleType: "change" | "record" = "change";
 
-  let transformSectionExpanded = false;
+  let transformSectionEnabled = false;
+  let backfillSectionEnabled = false;
+  $: {
+    transformSectionEnabled = selectedTable && consumer.type !== "redis_stream";
+    backfillSectionEnabled = selectedTable && !isEditMode;
+  }
 
   let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
@@ -516,10 +522,10 @@
       </CardContent>
     </Card>
 
-    <Card>
-      <CardHeader class="flex flex-row items-center justify-between">
-        <CardTitle class="flex items-center gap-2">
-          Transforms
+    <ExpandableCard disabled={!transformSectionEnabled}>
+      <svelte:fragment slot="title">
+        Transforms
+        <button on:click|stopPropagation>
           <Popover.Root>
             <Popover.Trigger asChild let:builder>
               <Button
@@ -541,78 +547,59 @@
               </div>
             </Popover.Content>
           </Popover.Root>
-          <Beta size="sm" variant="subtle" />
-        </CardTitle>
-        {#if consumer.type !== "redis_stream"}
-          <button
-            type="button"
-            class="flex items-center space-x-2 text-sm hover:text-primary transition-colors disabled:opacity-50"
-            on:click={() =>
-              (transformSectionExpanded = !transformSectionExpanded)}
-            disabled={!selectedTable}
-          >
-            <div
-              class="transition-transform duration-200"
-              class:rotate-180={transformSectionExpanded}
-            >
-              <ChevronDown class="h-4 w-4" />
-            </div>
-          </button>
-        {/if}
-      </CardHeader>
+        </button>
+        <Beta size="sm" variant="subtle" />
+      </svelte:fragment>
 
-      <CardContent>
-        <div class="space-y-2">
-          {#if consumer.type === "redis_stream"}
-            <p class="text-sm text-muted-foreground">
-              Transforms are coming soon for Redis Stream sinks. <a
-                href="https://github.com/sequinstream/sequin/issues/1186"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-primary underline">Let us know</a
-              > if you want this.
-            </p>
-          {:else if !transformSectionExpanded}
-            <p class="text-sm text-muted-foreground">
-              {#if form.transform === "none"}
-                No transform. Messages will be sent as-is to the sink
-                destination.
-              {:else}
-                <div class="font-medium">
-                  {transforms.find((t) => t.id === form.transform)?.name ||
-                    form.transform}
-                </div>
-                <div class="text-sm text-muted-foreground">
-                  {transforms.find((t) => t.id === form.transform)
-                    ?.description || ""}
-                </div>
-              {/if}
-            </p>
-          {:else if !selectedTable}
-            <p class="text-sm text-muted-foreground">
-              Please select a table first.
-            </p>
-          {:else}
-            <FunctionPicker
-              {transforms}
-              selectedFunctionId={form.transform}
-              title="Transform"
-              onFunctionChange={(transformId) => (form.transform = transformId)}
-              {refreshFunctions}
-              transformTypes={["function", "path"]}
-              createNewQueryParams="?type=function"
-              bind:refreshState={transformRefreshState}
-            />
-          {/if}
-        </div>
-      </CardContent>
-    </Card>
+      <svelte:fragment slot="summary">
+        {#if consumer.type === "redis_stream"}
+          <p class="text-sm text-muted-foreground">
+            Transforms are coming soon for Redis Stream sinks. <a
+              href="https://github.com/sequinstream/sequin/issues/1186"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-primary underline">Let us know</a
+            > if you want this.
+          </p>
+        {:else if !selectedTable}
+          <p class="text-sm text-muted-foreground">
+            Please select a table first.
+          </p>
+        {:else if form.transform === "none"}
+          <p class="text-sm text-muted-foreground">
+            No transform. Messages will be sent as-is to the sink destination.
+          </p>
+        {:else}
+          <p class="font-medium">
+            {transforms.find((t) => t.id === form.transform)?.name ||
+              form.transform}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {transforms.find((t) => t.id === form.transform)?.description || ""}
+          </p>
+        {/if}
+      </svelte:fragment>
+
+      <svelte:fragment slot="content">
+        <FunctionPicker
+          {transforms}
+          selectedFunctionId={form.transform}
+          title="Transform"
+          onFunctionChange={(transformId) => (form.transform = transformId)}
+          {refreshFunctions}
+          transformTypes={["function", "path"]}
+          createNewQueryParams="?type=function"
+          bind:refreshState={transformRefreshState}
+        />
+      </svelte:fragment>
+    </ExpandableCard>
 
     {#if !isEditMode}
-      <Card>
-        <CardHeader class="flex flex-row items-center justify-between">
-          <CardTitle class="flex items-center gap-2"
-            >Initial backfill
+      <ExpandableCard disabled={!backfillSectionEnabled}>
+        <svelte:fragment slot="title">
+          Initial backfill
+
+          <button on:click|stopPropagation>
             <Popover.Root>
               <Popover.Trigger asChild let:builder>
                 <Button
@@ -640,52 +627,37 @@
                 </div>
               </Popover.Content>
             </Popover.Root>
-          </CardTitle>
-          <button
-            type="button"
-            class="flex items-center space-x-2 text-sm hover:text-primary transition-colors disabled:opacity-50"
-            on:click={() =>
-              (backfillSectionExpanded = !backfillSectionExpanded)}
-            disabled={isEditMode || !selectedTable}
-          >
-            <div
-              class="transition-transform duration-200"
-              class:rotate-180={backfillSectionExpanded}
-            >
-              <ChevronDown class="h-4 w-4" />
-            </div>
           </button>
-        </CardHeader>
-        <CardContent>
-          <div class="space-y-2">
-            {#if !backfillSectionExpanded}
-              <p class="text-sm text-muted-foreground">
-                {#if form.backfill.startPosition === "none"}
-                  No initial backfill. You can run backfills at any time in the
-                  future.
-                {:else if form.backfill.startPosition === "beginning"}
-                  Backfilling all rows in the table.
-                {:else if form.backfill.startPosition === "specific"}
-                  Backfilling from:
-                  <div class="mt-2">
-                    <code>{form.backfill.initialSortColumnValue}</code>
-                  </div>
-                {/if}
-              </p>
-            {:else if !selectedTable}
+        </svelte:fragment>
+
+        <svelte:fragment slot="summary">
+          <p class="text-sm text-muted-foreground">
+            {#if !selectedTable}
               <p class="text-sm text-muted-foreground">
                 Please select a table first.
               </p>
-            {:else}
-              <BackfillForm
-                table={selectedTable}
-                form={form.backfill}
-                formErrors={errors.backfill}
-              />
+            {:else if form.backfill.startPosition === "none"}
+              No initial backfill. You can run backfills at any time in the
+              future.
+            {:else if form.backfill.startPosition === "beginning"}
+              Backfilling all rows in the table.
+            {:else if form.backfill.startPosition === "specific"}
+              Backfilling from:
+              <div class="mt-2">
+                <code>{form.backfill.initialSortColumnValue}</code>
+              </div>
             {/if}
-          </div>
-        </CardContent>
-      </Card>
+          </p>
+        </svelte:fragment>
+
+        <svelte:fragment slot="content">
+          <BackfillForm
+            table={selectedTable}
+            form={form.backfill}
+            formErrors={errors.backfill}
+          />
+        </svelte:fragment>
+      </ExpandableCard>
     {/if}
 
     <GroupColumnsForm

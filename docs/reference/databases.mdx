@@ -225,7 +225,7 @@ ALTER TABLE your_table REPLICA IDENTITY FULL;
 
 ## PostgreSQL 12 and 13
 
-Sequin relies on the `pg_logical_emit_message` function for heartbeat messages and backfills. This function is included automatically in Postgres 14 and later.
+Sequin relies on the `pg_logical_emit_message` function for heartbeat messages and backfills. This function is included in Postgres 14 and later.
 
 For Postgres 12 and 13, we support a table-based replacement: `public.sequin_logical_messages`.
 
@@ -240,7 +240,11 @@ CREATE TABLE IF NOT EXISTS public.sequin_logical_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(slot_id, subject)
-)
+);
+
+-- Grant permissions to Sequin
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.sequin_logical_messages TO sequin_user;
+GRANT USAGE ON SEQUENCE sequin_logical_messages_id_seq TO sequin_user;
 ```
 
 This table is used by Sequin to replace the `pg_logical_emit_message` function. It experiences very low write throughput and will not accumulate significant storage or IOPS.
@@ -255,7 +259,7 @@ ALTER PUBLICATION sequin_publication ADD TABLE public.sequin_logical_messages;
 
 For Postgres 12 and 13, we do not support backfills, which rely heavily on the `pg_logical_emit_message` function.
 
-If you require backfills, we recommend upgrading to Postgres 14 or later. If this is not an option, please [contact support](mailto:support@sequinstream.com) to discuss alternative approaches.
+If you require backfills, we recommend upgrading to Postgres 14 or later. If this is not an option, please [contact us](mailto:support@sequinstream.com) to discuss alternative approaches.
 
 ## Monitoring
 

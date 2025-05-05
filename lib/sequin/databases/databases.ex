@@ -454,12 +454,11 @@ defmodule Sequin.Databases do
   def test_maybe_replica(%PostgresDatabase{} = db, db_primary) do
     with true <- replica?(db),
          true <- not is_nil(db_primary),
-         {:ok, version} <- get_pg_major_version(db),
-         true <- version >= 16,
+         {:ok, version} when version >= 16 <- get_pg_major_version(db),
          :ok <- test_connect(db_primary) do
       :ok
     else
-      {:ok, version} when version < 16 ->
+      {:ok, _not_16_or_higher} ->
         {:error, Error.validation(summary: "PostgreSQL version 16 or higher is required for replica databases")}
 
       false when not is_nil(db_primary) ->

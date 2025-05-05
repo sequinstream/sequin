@@ -167,6 +167,26 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     publication = Keyword.fetch!(opts, :publication)
     slot_name = Keyword.fetch!(opts, :slot_name)
     postgres_database = Keyword.fetch!(opts, :postgres_database)
+
+    primary_database = postgres_database.primary_database
+    # Convert PostgresDatabasePrimary to a PostgresDatabase struct to use the same functions for checking connections
+    postgres_database =
+      if primary_database do
+        %{
+          postgres_database
+          | primary_database: %PostgresDatabase{
+              hostname: primary_database.hostname,
+              port: primary_database.port,
+              database: primary_database.database,
+              username: primary_database.username,
+              password: primary_database.password,
+              ssl: primary_database.ssl
+            }
+        }
+      else
+        postgres_database
+      end
+
     replication_slot = Keyword.fetch!(opts, :replication_slot)
     test_pid = Keyword.get(opts, :test_pid)
     message_handler_ctx = Keyword.fetch!(opts, :message_handler_ctx)
@@ -578,7 +598,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     execute_timed(:handle_info_emit_heartbeat, fn ->
       # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
       # This heartbeat is not used for health, but rather to advance the slot even if tables are dormant.
-      conn = get_cached_conn(state)
+      conn = get_cached_conn(state, true)
 
       # We can schedule right away, as we'll not be receiving a heartbeat message
       state = schedule_heartbeat(%{state | heartbeat_timer: nil})
@@ -885,7 +905,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp on_connect_failure(%State{} = state, error) do
-    conn = get_cached_conn(state)
+    conn = get_cached_conn(state, true)
 
     error_msg =
       case Postgres.fetch_replication_slot(conn, state.slot_name) do
@@ -917,7 +937,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   @heartbeat_message_prefix "sequin.heartbeat.1"
   defp send_heartbeat(%State{} = state, payload) do
-    conn = get_cached_conn(state)
+    conn = get_cached_conn(state, true)
     pg_major_version = state.postgres_database.pg_major_version
 
     if is_integer(pg_major_version) and pg_major_version < 14 do
@@ -1629,8 +1649,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  defp get_cached_conn(%State{} = state) do
-    {:ok, conn} = ConnectionCache.connection(state.postgres_database)
+  @spec get_cached_conn(State.t(), boolean()) :: pid()
+  defp get_cached_conn(%State{postgres_database: database}, maybe_primary? \\ false) do
+    database =
+      if maybe_primary? and not is_nil(database.primary_database),
+        do: database.primary_database,
+        else: database
+
+    {:ok, conn} = ConnectionCache.connection(database)
     conn
   end
 

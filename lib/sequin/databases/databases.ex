@@ -391,8 +391,10 @@ defmodule Sequin.Databases do
     NetworkUtils.test_tcp_reachability(db.hostname, db.port, db.ipv6, timeout)
   end
 
-  @spec test_connect(%PostgresDatabase{}, integer()) :: :ok | {:error, term()}
-  def test_connect(%PostgresDatabase{} = db, timeout \\ 30_000) do
+  @spec test_connect(%PostgresDatabase{} | %PostgresDatabasePrimary{}, integer()) :: :ok | {:error, term()}
+  def test_connect(db, timeout \\ 30_000)
+
+  def test_connect(%PostgresDatabase{} = db, timeout) do
     db
     |> PostgresDatabase.to_postgrex_opts()
     |> Postgrex.Utils.default_opts()
@@ -418,6 +420,18 @@ defmodule Sequin.Databases do
       {:error, error} when is_exception(error) ->
         {:error, error}
     end
+  end
+
+  def test_connect(%PostgresDatabasePrimary{} = db, timeout) do
+    test_connect(%PostgresDatabase{
+      hostname: db.hostname,
+      port: db.port,
+      database: db.database,
+      username: db.username,
+      password: db.password,
+      ssl: db.ssl,
+      ipv6: db.ipv6
+    }, timeout)
   end
 
   # This query checks on db $1, if user has grant $2
@@ -627,7 +641,7 @@ defmodule Sequin.Databases do
   end
 
   @spec replica?(%PostgresDatabase{}) :: boolean()
-  defp replica?(%PostgresDatabase{} = db) do
+  def replica?(%PostgresDatabase{} = db) do
     with_uncached_connection(db, fn conn ->
       query = """
         SELECT

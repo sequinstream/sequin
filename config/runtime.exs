@@ -1,5 +1,6 @@
 import Config
 
+alias LoggerJSON.Formatters.Datadog
 alias Sequin.ConfigParser
 
 require Logger
@@ -73,6 +74,8 @@ end
 # Deprecate ECTO_IPV6 in favor of PG_IPV6
 ecto_socket_opts = if (System.get_env("ECTO_IPV6") || System.get_env("PG_IPV6")) in ~w(true 1), do: [:inet6], else: []
 
+config :logger, default_handler: [formatter: {Datadog, metadata: :all}]
+
 if config_env() == :prod and self_hosted do
   account_self_signup =
     if System.get_env("FEATURE_ACCOUNT_SELF_SIGNUP", "enabled") in enabled_feature_values, do: :enabled, else: :disabled
@@ -130,6 +133,14 @@ if config_env() == :prod and self_hosted do
       "0" -> false
       other -> raise("Invalid SERVER_CHECK_ORIGIN: #{other}, must be true or false or 1 or 0")
     end
+
+  case System.get_env("SEQUIN_LOG_FORMAT") do
+    "DATADOG_JSON" ->
+      config :logger, default_handler: [formatter: {Datadog, metadata: :all}]
+
+    _ ->
+      config :sequin, Sequin.ConsoleLogger, drop_metadata_keys: [:mfa]
+  end
 
   config :sequin, Sequin.Posthog,
     req_opts: [base_url: "https://us.i.posthog.com"],

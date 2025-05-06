@@ -72,7 +72,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   Should return the effective values of all relevant keys.
   It's intended that the return value become the batch key.
   """
-  @callback apply_routing(self :: SinkConsumer.t(), rinfo :: Map.t()) :: Map.t()
+  @callback apply_routing(self :: SinkConsumer.t(), rinfo :: map()) :: map()
 
   @optional_callbacks [
     processors_config: 1,

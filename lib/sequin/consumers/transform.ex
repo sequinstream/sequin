@@ -13,7 +13,7 @@ defmodule Sequin.Consumers.Transform do
   alias Sequin.Consumers.Transform
 
   @derive {Jason.Encoder, only: [:name, :type, :description, :transform]}
-  schema "transforms" do
+  typed_schema "transforms" do
     field :name, :string
     field :type, :string, read_after_writes: true
     field :description, :string

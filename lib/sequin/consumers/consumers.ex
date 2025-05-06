@@ -931,6 +931,7 @@ defmodule Sequin.Consumers do
 
   # HttpEndpoint
 
+  @spec get_http_endpoint(String.t()) :: {:ok, HttpEndpoint.t()} | {:error, Error.t()}
   def get_http_endpoint(id) do
     case Repo.get(HttpEndpoint, id) do
       nil -> {:error, Error.not_found(entity: :http_endpoint)}

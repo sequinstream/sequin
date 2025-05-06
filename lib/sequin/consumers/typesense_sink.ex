@@ -33,11 +33,8 @@ defmodule Sequin.Consumers.TypesenseSink do
     changeset
     |> validate_change(:endpoint_url, fn :endpoint_url, url ->
       case URI.parse(url) do
-        %URI{} ->
-          []
-
-        _ ->
-          [endpoint_url: "must be a valid URL"]
+        %URI{scheme: scheme, host: host} when not is_nil(scheme) and not is_nil(host) -> []
+        _ -> [endpoint_url: "must be a valid URL"]
       end
     end)
     |> validate_length(:endpoint_url, max: 4096)

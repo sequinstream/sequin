@@ -182,7 +182,7 @@ defmodule Sequin.Replication do
   end
 
   # Replication runtime lifecycle
-  @spec put_low_watermark_wal_cursor!(replication_slot_id :: String.t(), wal_cursor :: wal_cursor()) :: :ok
+  @spec put_low_watermark_wal_cursor!(replication_slot_id :: String.t(), wal_cursor :: wal_cursor()) :: Redis.redis_value()
   def put_low_watermark_wal_cursor!(replication_slot_id, %{commit_lsn: lsn, commit_idx: idx}) do
     Redis.command!(["SET", low_watermark_wal_cursor_key(replication_slot_id), "#{lsn}:#{idx}"])
   end

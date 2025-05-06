@@ -1822,6 +1822,7 @@ defmodule Sequin.PostgresReplicationTest do
         end)
 
       # Wait for message handling
+      # TODO: fix race! heartbeat may cause a flush which doesn't include the insert?
       assert_receive {SlotProcessorServer, :flush_messages}, 500
 
       # Verify message was created and matched case-insensitively

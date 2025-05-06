@@ -28,6 +28,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
       field :commit_lsn, :integer
       field :database_name, :string
       field :transaction_annotations, :map
+      field :idempotency_key, :string
 
       embeds_one :consumer, Sink, primary_key: false do
         @derive Jason.Encoder

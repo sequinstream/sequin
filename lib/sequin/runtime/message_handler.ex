@@ -314,7 +314,8 @@ defmodule Sequin.Runtime.MessageHandler do
         id: consumer.id,
         name: consumer.name
       },
-      transaction_annotations: nil
+      transaction_annotations: nil,
+      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}")
     }
 
     if consumer.message_kind == :event do

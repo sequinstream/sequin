@@ -23,6 +23,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
       field :commit_timestamp, :utc_datetime_usec
       field :commit_lsn, :integer
       field :database_name, :string
+      field :idempotency_key, :string
 
       embeds_one :consumer, Sink, primary_key: false do
         @derive Jason.Encoder

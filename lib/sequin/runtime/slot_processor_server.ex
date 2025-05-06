@@ -1375,7 +1375,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         |> Enum.filter(fn msg ->
           with true <- not is_nil(state.filter_table_oids),
                {:ok, relid} <- Decoder.extract_relation_id(msg) do
-          MapSet.member?(state.filter_table_oids, relid)
+            %{parent_table_id: parent_oid} = Map.fetch!(state.schemas, relid)
+            MapSet.member?(state.filter_table_oids, parent_oid)
           else
             _ -> true
           end

@@ -522,7 +522,7 @@
       </CardContent>
     </Card>
 
-    <ExpandableCard disabled={!transformSectionEnabled}>
+    <ExpandableCard disabled={!transformSectionEnabled} expanded={!isEditMode}>
       <svelte:fragment slot="title">
         Transforms
         <button on:click|stopPropagation>
@@ -595,7 +595,7 @@
     </ExpandableCard>
 
     {#if !isEditMode}
-      <ExpandableCard disabled={!backfillSectionEnabled}>
+      <ExpandableCard disabled={!backfillSectionEnabled} expanded={!isEditMode}>
         <svelte:fragment slot="title">
           Initial backfill
 

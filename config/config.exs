@@ -60,8 +60,6 @@ config :sequin, Oban,
      ]}
   ]
 
-config :sequin, Sequin.ConsoleLogger, drop_metadata_keys: [:file, :domain, :application]
-
 # Configures the mailer
 #
 # By default it uses the "Local" adapter which stores the emails

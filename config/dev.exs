@@ -21,6 +21,8 @@ config :phoenix_live_view,
   debug_heex_annotations: true,
   enable_expensive_runtime_checks: true
 
+config :sequin, Sequin.ConsoleLogger, drop_metadata_keys: [:file, :domain, :application]
+
 config :sequin, Sequin.Repo,
   username: "postgres",
   password: "postgres",

@@ -21,6 +21,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -98,7 +99,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
-        |> Repo.preload([:postgres_database, :sequence, :active_backfill, :replication_slot, :transform], force: true)
+        |> Repo.preload([:postgres_database, :sequence, :active_backfill, :replication_slot, :transform, :routing],
+          force: true
+        )
         |> SinkConsumer.preload_http_endpoint()
         |> put_health()
 
@@ -638,7 +641,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       batch_size: consumer.batch_size,
       table: encode_table(table),
       transform_id: consumer.transform_id,
-      routing_id: consumer.routing_id
+      routing_id: consumer.routing_id,
+      routing: encode_transform(consumer.routing)
     }
   end
 
@@ -692,6 +696,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       database: sink.database,
       tls: sink.tls,
       url: RedisStreamSink.redis_url(sink)
+    }
+  end
+
+  defp encode_sink(%SinkConsumer{sink: %RedisStringSink{} = sink}) do
+    default_host = if env() == :dev, do: "localhost"
+
+    %{
+      type: :redis_string,
+      host: sink.host || default_host,
+      port: sink.port || 6379,
+      database: sink.database,
+      tls: sink.tls,
+      url: RedisStringSink.redis_url(sink),
+      expireMs: sink.expire_ms
     }
   end
 
@@ -854,7 +872,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_postgres_database(postgres_database) do
     %{
       id: postgres_database.id,
-      name: postgres_database.name
+      name: postgres_database.name,
+      pg_major_version: postgres_database.pg_major_version
     }
   end
 
@@ -1204,6 +1223,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :nats}}), do: "NATS Sink"
   defp consumer_title(%{sink: %{type: :rabbitmq}}), do: "RabbitMQ Sink"
   defp consumer_title(%{sink: %{type: :redis_stream}}), do: "Redis Stream Sink"
+  defp consumer_title(%{sink: %{type: :redis_string}}), do: "Redis String Sink"
   defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"
   defp consumer_title(%{sink: %{type: :sns}}), do: "SNS Sink"
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"

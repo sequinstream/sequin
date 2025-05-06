@@ -1,0 +1,152 @@
+---
+title: "How to stream Postgres to Redis Strings"
+sidebarTitle: "Redis Strings"
+description: "Build a real-time cache with Postgres change data capture (CDC) and Redis Strings. Learn to keep your Redis cache in sync with your database."
+---
+
+This guide shows you how to capture Postgres changes with Sequin and stream them to Redis as key-value pairs using Redis Strings.
+
+With Postgres data flowing into Redis, you can build high-performance caches that automatically stay in sync with your database. This approach eliminates stale cache entries and provides sub-millisecond access to your data.
+
+## Prerequisites
+
+To follow this guide, you need:
+
+1. A running Redis instance
+2. Sequin installed and configured
+3. A Postgres database connected to Sequin
+
+If you haven't set these up yet:
+
+- [Install Redis](https://redis.io/docs/getting-started/)
+- [Install Sequin](/running-sequin) or [sign up for Sequin Cloud](https://console.sequinstream.com)
+- [Connect a Postgres database](/connect-postgres)
+
+## Create a Redis String sink
+
+<Steps>
+  <Step title="Navigate to Sinks">
+    In the Sequin web console, go to **Sinks → Create sink → Redis String**.
+  </Step>
+
+  <Step title="Configure the source">
+    Under **Source**:
+    - Select the database and table you want to cache
+    - Choose which actions to capture (`insert`, `update`, `delete`). You likely want to cache all actions
+    - Optionally add [filters](/reference/filters) to cache only specific rows
+  </Step>
+
+  <Step title="Set up initial backfill">
+    Toggle **Initial backfill** if you want to initialize your Redis cache with all of the current data in your Postgres table.
+
+    You can choose to backfill again later via the Sequin web console or the [management API](/reference/management-api).
+  </Step>
+
+  <Step title="Create a transform">
+    Create a transform to define how your Postgres data is stored in Redis. The most common transform is to store the entire record as a JSON object:
+
+    ```elixir
+    def transform(_action, record, _changes, _metadata) do
+      record  # Store the entire record
+    end
+    ```
+
+    For more selective caching, you can transform the data structure before storing it in Redis. For example, to cache only a few fields:
+
+    ```elixir
+    def transform(_action, record, _changes, _metadata) do
+      %{
+        "name" => record["name"],
+        "price" => record["price"],
+        "stock" => record["inventory_count"]
+      }
+    end
+    ```
+  </Step>
+
+  <Step title="Configure Redis connection">
+    Enter your Redis connection details:
+
+    - **Host**: Your Redis server address (e.g., `localhost` or `redis.example.com`)
+    - **Port**: Redis port (default: `6379`)
+    - **Username/Password**: If authentication is enabled
+    - **Database**: Redis database number (default: `0`)
+    - **TLS**: Enable if your Redis server uses TLS
+    - **Expire MS**: Optional expiration time in milliseconds for cached keys
+  </Step>
+
+  <Step title="Test and create the sink">
+    - Click **Test Connection** to verify Redis connectivity
+    - Name your sink (e.g., `products-cache`)
+    - Click **Create Sink**
+  </Step>
+</Steps>
+
+## Understanding key formats
+
+By default, Sequin uses this key format in Redis:
+
+```
+sequin:{table_name}:{primary_key}
+```
+
+For example, a product with ID 42 would be stored as:
+
+```
+sequin:products:42
+```
+
+For composite primary keys, values are joined with `-` (ie. `sequin:products:42-123`).
+
+## Verify your cache is working
+
+1. Check that data is flowing by watching the **Messages** tab in the Sequin console
+2. Query Redis to see your cached data:
+
+   ```bash
+   redis-cli
+   > KEYS sequin:products:*
+   > GET sequin:products:1
+   ```
+
+3. Make a change in your Postgres database and verify it appears in Redis
+
+## Common caching patterns
+
+### Cache invalidation
+
+Redis Strings sink automatically handles cache invalidation:
+- Inserts and updates result in `SET` operations
+- Deletes result in `DEL` operations
+
+You don't need to implement your own cache invalidation logic.
+
+### TTL-based caching
+
+Set `expire_ms` to automatically expire keys after a specific period:
+
+- `expire_ms: 86400000` => 24-hour cache
+- `expire_ms: 3600000` => 1-hour cache
+
+This is most useful to save only recently inserted or updated data in Redis, for instance if you want to reduce memory usage.
+
+We otherwise recommend infinite TTL because Sequin automatically removes deleted records from Redis, as long as `delete` actions are enabled in the sink configuration.
+
+## Next steps
+
+To enhance your Redis caching system:
+
+<CardGroup cols={2}>
+  <Card title="Deploy to production" icon="database" href="/how-to/deploy-to-production">
+    Learn how to deploy Sequin to production.
+  </Card>
+  <Card title="Filter data" icon="database" href="/reference/filters">
+    Learn how to filter data in your sink.
+  </Card>
+  <Card title="Transform data" icon="database" href="/reference/transforms">
+    Learn how to transform data in your sink.
+  </Card>
+  <Card title="Monitor your sink" icon="database" href="/reference/metrics">
+    Learn how to monitor your sink.
+  </Card>
+</CardGroup>

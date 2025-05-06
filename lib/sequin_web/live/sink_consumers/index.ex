@@ -11,6 +11,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
@@ -267,6 +268,18 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       id="new-consumer"
       action={:new}
       consumer={%SinkConsumer{type: :elasticsearch, sink: %ElasticsearchSink{}}}
+    />
+    """
+  end
+
+  defp render_consumer_form(%{form_kind: "redis_string"} = assigns) do
+    ~H"""
+    <.live_component
+      current_user={@current_user}
+      module={ConsumerForm}
+      id="new-consumer"
+      action={:new}
+      consumer={%SinkConsumer{type: :redis_string, batch_size: 10, sink: %RedisStringSink{}}}
     />
     """
   end

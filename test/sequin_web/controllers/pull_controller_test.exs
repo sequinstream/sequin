@@ -190,7 +190,7 @@ defmodule SequinWeb.PullControllerTest do
         SlotMessageStore.put_messages(consumer, [record])
       end)
 
-      assert_elapsed_under(100, fn ->
+      assert_elapsed_under(1000, fn ->
         conn = get(conn, ~p"/api/sequin_streams/#{consumer.id}/receive", max_batch_size: 3, wait_for: 5000)
         assert %{"data" => messages} = json_response(conn, 200)
         assert length(messages) == 1

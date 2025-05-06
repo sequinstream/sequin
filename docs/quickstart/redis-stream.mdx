@@ -1,7 +1,7 @@
 ---
 title: 'Get started with Redis Streams'
 sidebarTitle: 'Redis Streams'
-description: 'Stream Postgres changes to a Redis stream in minutes. Build real-time data pipelines with Redis and Postgres change data capture (CDC).'
+description: '`XADD` Postgres changes to Redis Streams in minutes. Build real-time data pipelines with Redis and Postgres change data capture (CDC).'
 ---
 
 import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
@@ -13,7 +13,11 @@ In this quickstart, you'll create a real-time data pipeline that streams changes
 - Configure a Redis stream to receive database changes
 - See your changes flow in real-time
 
-By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin. This same pattern can be used to setup your own Postgres CDC pipeline with Redis.
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) to Redis Streams with Sequin.
+
+<Info>
+  This guide is for Redis Streams which use `XADD` to build a stream. If you are want to use Redis key/values, see our [Redis String quickstart](/quickstart/redis-string).
+</Info>
 
 <Steps titleSize="h2">
  <Step title="Boot Redis" icon="database">

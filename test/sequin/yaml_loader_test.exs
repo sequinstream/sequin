@@ -10,6 +10,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.StringValue
@@ -580,12 +581,36 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "test-db.public.Characters"
       assert consumer.transform.name == "record_only"
+      assert consumer.sink.batch == true
 
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
                column_filters: [],
                group_column_attnums: [1]
              }
+    end
+
+    test "creates webhook subscription with batch=false" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "sequin-playground-webhook"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                     batch: false
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.sink.batch == false
     end
 
     test "creates sink consumer with filters" do
@@ -995,6 +1020,42 @@ defmodule Sequin.YamlLoaderTest do
                auth_type: :api_key,
                auth_value: "sensitive-api-key",
                batch_size: 100
+             } = consumer.sink
+    end
+
+    test "creates redis string sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "redis-string-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "redis_string"
+                     host: "redis-string.example.com"
+                     port: 6379
+                     username: "test-user"
+                     password: "test-pass"
+                     tls: false
+                     database: 0
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "redis-string-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      assert %RedisStringSink{
+               type: :redis_string,
+               host: "redis-string.example.com",
+               port: 6379,
+               username: "test-user",
+               password: "test-pass",
+               tls: false,
+               database: 0
              } = consumer.sink
     end
 

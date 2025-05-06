@@ -1,4 +1,5 @@
 import type { Table } from "../databases/types";
+import type { Transform } from "../transforms/types";
 
 // Base consumer type with shared properties
 export type BaseConsumer = {
@@ -14,7 +15,8 @@ export type BaseConsumer = {
     | "nats"
     | "rabbitmq"
     | "typesense"
-    | "elasticsearch";
+    | "elasticsearch"
+    | "redis_string";
   name: string;
   annotations: Record<string, boolean>;
   status: "active" | "paused" | "disabled";
@@ -36,6 +38,8 @@ export type BaseConsumer = {
       jsonb_path: string;
     }>;
   };
+  routing_id: string | null;
+  routing: Transform | null;
   table: Table;
   postgres_database: {
     id: string;
@@ -71,7 +75,7 @@ export type SqsConsumer = BaseConsumer & {
 };
 
 // Redis specific sink
-export type RedisConsumer = BaseConsumer & {
+export type RedisStreamConsumer = BaseConsumer & {
   sink: {
     type: "redis_stream";
     host: string;
@@ -81,6 +85,20 @@ export type RedisConsumer = BaseConsumer & {
     tls: boolean;
     url: string;
   };
+};
+
+// RedisString specific sink
+export type RedisStringConsumer = BaseConsumer & {
+  sink: {
+    type: "redis_string";
+    host: string;
+    port: number;
+    database: number;
+    tls: boolean;
+    url: string;
+    expireMs: number | null;
+  };
+  routing_mode?: "static" | "dynamic";
 };
 
 // NATS specific sink
@@ -196,7 +214,7 @@ export type ElasticsearchConsumer = BaseConsumer & {
 export type Consumer =
   | HttpPushConsumer
   | SqsConsumer
-  | RedisConsumer
+  | RedisStreamConsumer
   | KafkaConsumer
   | SequinStreamConsumer
   | GcpPubsubConsumer
@@ -205,4 +223,5 @@ export type Consumer =
   | RabbitMqConsumer
   | TypesenseConsumer
   | SnsConsumer
-  | ElasticsearchConsumer;
+  | ElasticsearchConsumer
+  | RedisStringConsumer;

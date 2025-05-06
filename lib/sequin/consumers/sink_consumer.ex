@@ -18,6 +18,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
+  alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SnsSink
@@ -64,7 +65,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :batch_size, :integer, default: 1
     field :batch_timeout_ms, :integer, default: nil
     field :annotations, :map, default: %{}
-    field :max_memory_mb, :integer, default: 1024
+    field :max_memory_mb, :integer, default: 128
     field :partition_count, :integer, default: 1
     field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
@@ -74,6 +75,7 @@ defmodule Sequin.Consumers.SinkConsumer do
         :http_push,
         :sqs,
         :redis_stream,
+        :redis_string,
         :kafka,
         :sequin_stream,
         :gcp_pubsub,
@@ -107,6 +109,7 @@ defmodule Sequin.Consumers.SinkConsumer do
         sqs: SqsSink,
         sns: SnsSink,
         redis_stream: RedisStreamSink,
+        redis_string: RedisStringSink,
         kafka: KafkaSink,
         sequin_stream: SequinStreamSink,
         gcp_pubsub: GcpPubsubSink,
@@ -141,6 +144,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> foreign_key_constraint(:routing_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:sequence_filter, name: "sequence_filter_check")
+    |> check_constraint(:batch_size,
+      name: "ensure_batch_size_one",
+      message: "batch_size must be 1 when batch is false for webhook sinks"
+    )
     |> Sequin.Changeset.validate_name()
   end
 
@@ -148,6 +155,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     consumer
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
+    |> check_constraint(:batch_size,
+      name: "ensure_batch_size_one",
+      message: "batch_size must be 1 when batch is false for webhook sinks"
+    )
   end
 
   def changeset(consumer, attrs) do
@@ -177,6 +188,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
     |> validate_number(:batch_size, less_than_or_equal_to: 1_000)
+    |> validate_number(:batch_timeout_ms, greater_than: 0)
     |> validate_number(:max_memory_mb, greater_than_or_equal_to: 128)
     |> validate_number(:partition_count, greater_than_or_equal_to: 1)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
@@ -212,7 +224,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> put_change(:ack_wait_ms, get_field(changeset, :ack_wait_ms) || 30_000)
     |> put_change(:max_waiting, get_field(changeset, :max_waiting) || 20)
     |> put_change(:max_ack_pending, get_field(changeset, :max_ack_pending) || 10_000)
-    |> put_change(:max_memory_mb, get_field(changeset, :max_memory_mb) || 1024)
+    |> put_change(:max_memory_mb, get_field(changeset, :max_memory_mb) || 128)
     |> put_change(:partition_count, get_field(changeset, :partition_count) || 1)
     |> put_change(:legacy_transform, get_field(changeset, :legacy_transform) || :none)
     |> put_change(:message_kind, get_field(changeset, :message_kind) || :event)

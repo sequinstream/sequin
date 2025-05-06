@@ -12,7 +12,7 @@ defmodule Sequin.Consumers.RoutingTransform do
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:routing], default: :routing
-    field :sink_type, Ecto.Enum, values: [:http_push]
+    field :sink_type, Ecto.Enum, values: [:http_push, :redis_string]
     field :code, :string
   end
 

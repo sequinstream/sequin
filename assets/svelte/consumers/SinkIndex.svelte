@@ -21,7 +21,7 @@
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
   import SnsIcon from "../sinks/sns/SnsIcon.svelte";
-  import RedisIcon from "../sinks/redis/RedisIcon.svelte";
+  import RedisIcon from "../sinks/redis_shared/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
   import SequinStreamIcon from "../sinks/sequin_stream/SequinStreamIcon.svelte";
@@ -89,6 +89,11 @@
     {
       id: "redis_stream",
       name: "Redis Stream",
+      icon: RedisIcon,
+    },
+    {
+      id: "redis_string",
+      name: "Redis String",
       icon: RedisIcon,
     },
     {

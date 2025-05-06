@@ -1,0 +1,64 @@
+---
+title: "Redis String sink"
+sidebarTitle: "Redis String sink"
+description: "Stream Postgres changes to Redis Strings with Sequin's Redis String sink."
+---
+
+The **Redis String sink** writes database changes to a Redis instance as key-value pairs using the Redis [String data type](https://redis.io/docs/latest/develop/data-types/strings/).
+
+## Configuration parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `host` | string | Yes | - | Hostname or IP address of the Redis server |
+| `port` | integer | Yes | - | Port number of the Redis server (1-65535) |
+| `username` | string | No | - | Username for Redis authentication |
+| `password` | string | No | - | Password for Redis authentication |
+| `tls` | boolean | No | `false` | Enable TLS/SSL for the connection |
+| `database` | integer | No | `0` | Redis database number (≥ 0) |
+| `expire_ms` | integer | No | - | Key expiration time in milliseconds (≥ 0, omit for no expiration) |
+
+## Redis connection
+
+The sink connects to Redis using the following URL format:
+
+```
+redis[s]://[username:password@]host:port/database
+```
+
+Where:
+- `rediss://` is used when `tls` is enabled, otherwise `redis://`
+- Authentication credentials are included when provided
+
+## Key format and operations
+
+For each change to the source table, the sink performs the following Redis operations:
+
+| Change action | Redis operation | Behavior |
+|---------------|----------------|-----------|
+| `INSERT`, `UPDATE`, `READ` | `SET` | Sets the key to the JSON representation of the record |
+| `DELETE` | `DEL` | Removes the key from Redis |
+
+By default, keys are generated using the format:
+
+```
+sequin:{table_name}:{primary_key}
+```
+
+For composite primary keys, values are joined with a colon.
+
+## Data format
+
+Records are stored as JSON strings. The specific format depends on the transform applied to the data:
+
+With no transform, the [**entire message payload**](/reference/messages) is stored as a JSON object
+
+This may not be preferred for most caching use cases. We [**recommend using a transform**](/reference/transforms) to modify the structure and content before storage.
+
+If your transform returns a string or binary-coercible value (such as an integer or boolean), the value is stored directly in Redis.
+
+Otherwise, Sequin will JSON encode the value before storing it in Redis.
+
+## Key expiration
+
+When `expire_ms` is specified, each key is set with an expiration time using Redis' `PX` operation during `SET`. This allows for automatic key cleanup.

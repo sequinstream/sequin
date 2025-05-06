@@ -103,6 +103,7 @@
 
   let sinkTypeInternalToExternal = {
     http_push: "Webhook sink",
+    redis_string: "Redis string sink",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];
@@ -462,7 +463,7 @@ Test Message:
 ${showSyntheticMessages ? "Warning ⚠️: This is a synthetic test message. The actual data in your database may differ. If the specific data in the test message is important for the behavior of the transform, please capture test messages from your database." : ""}
 
 Documentation:
-${FunctionFunctionSnippet}
+${FunctionTransformSnippet}
 
 Please help me create or modify the Elixir function transform to achieve the desired transformation. The function should take the record, changes, action, and metadata as arguments and return the transformed data.`;
 
@@ -632,6 +633,10 @@ Please help me create or modify the Elixir function transform to achieve the des
                 <SelectItem
                   value="http_push"
                   label={sinkTypeInternalToExternal.http_push}
+                />
+                <SelectItem
+                  value="redis_string"
+                  label={sinkTypeInternalToExternal.redis_string}
                 />
               </SelectContent>
             </Select>

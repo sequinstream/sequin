@@ -206,6 +206,9 @@ Creates a new sink consumer.
     <ParamField body="http_endpoint_path" type="string" required>
       HTTP endpoint path
     </ParamField>
+    <ParamField body="batch" type="boolean">
+      Whether the webhook body [should be wrapped in a list](/reference/sinks/webhooks#request-format) to support batching. Defaults to `true`.
+    </ParamField>
   </Expandable>
 </ParamField>
 

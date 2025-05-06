@@ -16,7 +16,7 @@ help: ## Prints target: [dep1 dep1 ...]  and what it does
 	@grep -E '^[a-zA-Z_-]+.*## .*$$' $(MAKEFILE_LIST) |  sed 's/^Makefile://' | column -t -s"##"
 
 dev: ## Run the app locally
-	elixir --name sequin-stream-dev@127.0.0.1 --cookie sequin-stream-dev -S mix phx.server
+	iex --name sequin-stream-dev@127.0.0.1 --cookie sequin-stream-dev -S mix phx.server
 
 dev2: ## Run a second node locally
 	SERVER_PORT=4001 elixir --name sequin-stream-dev2@127.0.0.1 --cookie sequin-stream-dev -S mix phx.server

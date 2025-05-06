@@ -13,11 +13,12 @@ defmodule Sequin.Consumers.HttpPushSink do
     field :http_endpoint_path, :string
     field :http_endpoint, :map, virtual: true
     field :mode, Ecto.Enum, values: [:static, :dynamic], default: :static
+    field :batch, :boolean, default: true
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:http_endpoint_id, :http_endpoint_path])
+    |> cast(params, [:http_endpoint_id, :http_endpoint_path, :batch])
     |> validate_required([:http_endpoint_id])
     |> validate_http_endpoint_path()
   end

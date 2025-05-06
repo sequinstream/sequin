@@ -44,8 +44,9 @@ services:
         condition: service_healthy
     command: >
       postgres
+      -c wal_level=logical
       -c hot_standby=on
 
 volumes:
   postgres-primary-data:
-  postgres-replica-data: 
+  postgres-replica-data:

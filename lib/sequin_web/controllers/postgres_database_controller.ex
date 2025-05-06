@@ -146,7 +146,6 @@ defmodule SequinWeb.PostgresDatabaseController do
   # Test database connection with parameters
   defp test_db_conn(db_params, slot_params, account_id) do
     db = params_to_db(db_params, account_id)
-    db_primary = params_to_db(db_params["primary"], account_id)
 
     replication_slot =
       slot_params
@@ -156,7 +155,8 @@ defmodule SequinWeb.PostgresDatabaseController do
     with :ok <- Databases.test_tcp_reachability(db),
          :ok <- Databases.test_connect(db, 10_000),
          :ok <- Databases.test_permissions(db),
-         :ok <- Databases.test_maybe_replica(db, db_primary) do
+         {:ok, primary} <- parse_primary_params(db_params, account_id),
+         :ok <- Databases.test_maybe_replica(db, primary) do
       Databases.verify_slot(db, replication_slot)
     else
       {:error, error} when is_error(error) ->
@@ -171,6 +171,14 @@ defmodule SequinWeb.PostgresDatabaseController do
          Error.validation(
            summary: "Failed to connect to database. Please check connection details. (error=#{code} #{msg})"
          )}
+    end
+  end
+
+  defp parse_primary_params(nil, _), do: {:ok, nil}
+
+  defp parse_primary_params(ps, account_id) do
+    with {:ok, pp} <- parse_db_params(ps) do
+      params_to_db(pp, account_id)
     end
   end
 

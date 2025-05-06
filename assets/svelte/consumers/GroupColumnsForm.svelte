@@ -4,6 +4,7 @@
     CardContent,
     CardHeader,
     CardTitle,
+    ExpandableCard,
   } from "$lib/components/ui/card";
   import ChevronDown from "lucide-svelte/icons/chevron-down";
   import ColumnList from "./ColumnList.svelte";
@@ -107,60 +108,52 @@
   </Card>
 
   <!-- Create Mode - Normal -->
-{:else if selectedTable}
-  <Card>
-    <CardHeader>
+{:else}
+  <ExpandableCard disabled={!selectedTable} expanded={!isEditMode}>
+    <svelte:fragment slot="title">
       <div class="flex items-center justify-between">
         <CardTitle>Message grouping</CardTitle>
-        <button
-          type="button"
-          class="flex items-center space-x-2 text-sm hover:text-primary transition-colors"
-          on:click={() => (isExpanded = !isExpanded)}
-          disabled={!selectedTable}
-        >
-          <div
-            class="transition-transform duration-200"
-            class:rotate-180={isExpanded}
-          >
-            <ChevronDown class="h-4 w-4" />
-          </div>
-        </button>
       </div>
-    </CardHeader>
-    <CardContent>
-      <div class="space-y-4">
-        {#if !isExpanded}
-          <p class="text-sm text-muted-foreground">
-            {summaryText}
-          </p>
-        {:else}
-          <p class="text-sm text-muted-foreground">
-            {selectedTable.is_event_table
-              ? "By default, Sequin uses these columns to group event table messages: source_database_id, source_table_oid, and record_pk. This ensures that records are processed serially."
-              : "By default, Sequin uses primary keys to group messages. This ensures that records are processed serially for each individual record."}
-          </p>
-          <p class="text-sm text-muted-foreground">
-            Alternatively, select custom columns to use for grouping.
-          </p>
+    </svelte:fragment>
 
-          <ColumnList
-            columns={selectedTable.columns}
-            selectedAttnums={groupColumnAttnums}
-            onToggle={toggleColumnGrouping}
-            readonly={isEditMode}
-          />
+    <svelte:fragment slot="summary">
+      {#if !selectedTable}
+        <p class="text-sm text-muted-foreground">
+          Please select a table first.
+        </p>
+      {:else}
+        <p class="text-sm text-muted-foreground">
+          {summaryText}
+        </p>
+      {/if}
+    </svelte:fragment>
 
-          {#if infoText}
-            <p class="text-sm text-muted-foreground">
-              {infoText}
-            </p>
-          {/if}
+    <svelte:fragment slot="content">
+      <p class="text-sm text-muted-foreground">
+        {selectedTable.is_event_table
+          ? "By default, Sequin uses these columns to group event table messages: source_database_id, source_table_oid, and record_pk. This ensures that records are processed serially."
+          : "By default, Sequin uses primary keys to group messages. This ensures that records are processed serially for each individual record."}
+      </p>
+      <p class="text-sm text-muted-foreground">
+        Alternatively, select custom columns to use for grouping.
+      </p>
 
-          {#if groupColumnError}
-            <p class="text-destructive text-sm">{groupColumnError}</p>
-          {/if}
-        {/if}
-      </div>
-    </CardContent>
-  </Card>
+      <ColumnList
+        columns={selectedTable.columns}
+        selectedAttnums={groupColumnAttnums}
+        onToggle={toggleColumnGrouping}
+        readonly={isEditMode}
+      />
+
+      {#if infoText}
+        <p class="text-sm text-muted-foreground">
+          {infoText}
+        </p>
+      {/if}
+
+      {#if groupColumnError}
+        <p class="text-destructive text-sm">{groupColumnError}</p>
+      {/if}
+    </svelte:fragment>
+  </ExpandableCard>
 {/if}

@@ -116,14 +116,14 @@ defmodule Sequin.TableReaderTest do
         [:sequence, :postgres_database]
       )
 
-      ConsumersFactory.insert_active_backfill!(
-        account_id: db.account_id,
-        sink_consumer_id: character_detailed_consumer.id,
-        initial_min_cursor: %{characters_table.sort_column_attnum => NaiveDateTime.utc_now()},
-        sort_column_attnum: characters_table.sort_column_attnum
-      )
+    ConsumersFactory.insert_active_backfill!(
+      account_id: db.account_id,
+      sink_consumer_id: character_detailed_consumer.id,
+      initial_min_cursor: %{characters_table.sort_column_attnum => NaiveDateTime.utc_now()},
+      sort_column_attnum: characters_table.sort_column_attnum
+    )
 
-      character_detailed_consumer = Repo.preload(character_detailed_consumer, :active_backfill)
+    character_detailed_consumer = Repo.preload(character_detailed_consumer, :active_backfill)
 
     %{
       db: db,

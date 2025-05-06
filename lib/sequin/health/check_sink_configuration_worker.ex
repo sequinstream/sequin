@@ -21,8 +21,7 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
       {:ok, consumer} ->
         consumer = Repo.preload(consumer, [:postgres_database, :sequence, :replication_slot])
 
-        with {:ok, tables} <- Databases.tables(consumer.postgres_database),
-             {:ok, relation_kind} <- Postgres.get_relation_kind(consumer.postgres_database, consumer.sequence.table_oid),
+        with {:ok, relation_kind} <- Postgres.get_relation_kind(consumer.postgres_database, consumer.sequence.table_oid),
              {:ok, event} <- check_replica_identity(consumer, relation_kind),
              {:ok, event} <- check_publication(consumer, event, relation_kind) do
           Health.put_event(consumer, event)

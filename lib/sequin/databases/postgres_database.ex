@@ -58,9 +58,10 @@ defmodule Sequin.Databases.PostgresDatabase do
 
     field :health, :map, virtual: true
 
+    embeds_one :primary, PostgresDatabasePrimary, on_replace: :update
+
     belongs_to(:account, Sequin.Accounts.Account)
     has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
-    has_one(:primary_database, PostgresDatabasePrimary, foreign_key: :postgres_database_id)
     has_many(:wal_pipelines, through: [:replication_slot, :wal_pipelines])
     has_many(:sequences, Sequence)
     has_many(:sink_consumers, through: [:sequences, :sink_consumers])
@@ -91,6 +92,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> validate_not_supabase_pooled()
     |> cast_embed(:tables, with: &PostgresDatabaseTable.changeset/2, required: false)
+    |> cast_embed(:primary, with: &PostgresDatabasePrimary.changeset/2, required: false)
     |> unique_constraint([:account_id, :name],
       name: :postgres_databases_account_id_name_index,
       message: "Database name must be unique",
@@ -204,5 +206,17 @@ defmodule Sequin.Databases.PostgresDatabase do
     else
       opts
     end
+  end
+
+  def from_primary(pri) do
+    %__MODULE__{
+      database: pri.database,
+      hostname: pri.hostname,
+      password: pri.password,
+      port: pri.port,
+      ssl: pri.ssl,
+      username: pri.username,
+      ipv6: pri.ipv6
+    }
   end
 end

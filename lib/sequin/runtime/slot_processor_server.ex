@@ -33,6 +33,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Delete
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Insert
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
+  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Origin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Runtime.PostgresRelationHashCache
@@ -158,6 +159,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :heartbeat_timer, nil | reference()
       field :heartbeat_verification_timer, nil | reference()
       field :message_received_since_last_heartbeat, boolean(), default: false
+
+      # Reference to primary in case slot lives on replica
+      field :primary_database, nil | PostgresDatabase.t()
     end
   end
 
@@ -167,26 +171,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     publication = Keyword.fetch!(opts, :publication)
     slot_name = Keyword.fetch!(opts, :slot_name)
     postgres_database = Keyword.fetch!(opts, :postgres_database)
-
-    primary_database = postgres_database.primary_database
-    # Convert PostgresDatabasePrimary to a PostgresDatabase struct to use the same functions for checking connections
-    postgres_database =
-      if primary_database do
-        %{
-          postgres_database
-          | primary_database: %PostgresDatabase{
-              hostname: primary_database.hostname,
-              port: primary_database.port,
-              database: primary_database.database,
-              username: primary_database.username,
-              password: primary_database.password,
-              ssl: primary_database.ssl
-            }
-        }
-      else
-        postgres_database
-      end
-
+    primary_database = postgres_database.primary && PostgresDatabase.from_primary(postgres_database.primary)
     replication_slot = Keyword.fetch!(opts, :replication_slot)
     test_pid = Keyword.get(opts, :test_pid)
     message_handler_ctx = Keyword.fetch!(opts, :message_handler_ctx)
@@ -206,6 +191,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       publication: publication,
       slot_name: slot_name,
       postgres_database: postgres_database,
+      primary_database: primary_database,
       replication_slot: replication_slot,
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
@@ -598,7 +584,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     execute_timed(:handle_info_emit_heartbeat, fn ->
       # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
       # This heartbeat is not used for health, but rather to advance the slot even if tables are dormant.
-      conn = get_cached_conn(state, true)
+      conn = get_cached_conn(state)
 
       # We can schedule right away, as we'll not be receiving a heartbeat message
       state = schedule_heartbeat(%{state | heartbeat_timer: nil})
@@ -905,7 +891,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp on_connect_failure(%State{} = state, error) do
-    conn = get_cached_conn(state, true)
+    conn = get_cached_conn(state)
 
     error_msg =
       case Postgres.fetch_replication_slot(conn, state.slot_name) do
@@ -937,7 +923,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   @heartbeat_message_prefix "sequin.heartbeat.1"
   defp send_heartbeat(%State{} = state, payload) do
-    conn = get_cached_conn(state, true)
+    conn = get_cached_conn(state)
     pg_major_version = state.postgres_database.pg_major_version
 
     if is_integer(pg_major_version) and pg_major_version < 14 do
@@ -1029,7 +1015,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
          %Relation{id: id, columns: columns, namespace: schema, name: table} = relation,
          %State{} = state
        ) do
-    conn = get_cached_conn(state)
+    conn = get_primary_conn(state)
 
     # First, determine if this is a partition and get its parent table info
     partition_query = """
@@ -1228,6 +1214,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   # Ignore other logical messages
   defp process_message(%State{} = state, %LogicalMessage{}) do
+    state
+  end
+
+  defp process_message(%State{} = state, %Origin{}) do
     state
   end
 
@@ -1649,15 +1639,19 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  @spec get_cached_conn(State.t(), boolean()) :: pid()
-  defp get_cached_conn(%State{postgres_database: database}, maybe_primary? \\ false) do
-    database =
-      if maybe_primary? and not is_nil(database.primary_database),
-        do: database.primary_database,
-        else: database
-
-    {:ok, conn} = ConnectionCache.connection(database)
+  defp get_cached_conn(%State{} = state) do
+    {:ok, conn} = ConnectionCache.connection(state.postgres_database)
     conn
+  end
+
+  defp get_primary_conn(%State{} = state) do
+    if is_nil(state.primary_database) do
+      {:ok, conn} = ConnectionCache.connection(state.postgres_database)
+      conn
+    else
+      {:ok, conn} = ConnectionCache.connection(state.primary_database)
+      conn
+    end
   end
 
   # Give the system 3 seconds to lower memory

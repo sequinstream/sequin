@@ -134,7 +134,7 @@ defmodule Sequin.Databases do
                replication_params
              ),
            {:ok, db} <- maybe_create_primary_db(db, db_params) do
-        db_with_associations = Repo.preload(db, [:replication_slot, :primary_database])
+        db_with_associations = Repo.preload(db, [:replication_slot])
         {:ok, %PostgresDatabase{db_with_associations | replication_slot: replication}}
       end
     end)
@@ -394,6 +394,10 @@ defmodule Sequin.Databases do
   @spec test_connect(%PostgresDatabase{} | %PostgresDatabasePrimary{}, integer()) :: :ok | {:error, term()}
   def test_connect(db, timeout \\ 30_000)
 
+  def test_connect(%PostgresDatabasePrimary{} = db, timeout) do
+    test_connect(PostgresDatabase.from_primary(db), timeout)
+  end
+
   def test_connect(%PostgresDatabase{} = db, timeout) do
     db
     |> PostgresDatabase.to_postgrex_opts()
@@ -422,18 +426,6 @@ defmodule Sequin.Databases do
     end
   end
 
-  def test_connect(%PostgresDatabasePrimary{} = db, timeout) do
-    test_connect(%PostgresDatabase{
-      hostname: db.hostname,
-      port: db.port,
-      database: db.database,
-      username: db.username,
-      password: db.password,
-      ssl: db.ssl,
-      ipv6: db.ipv6
-    }, timeout)
-  end
-
   # This query checks on db $1, if user has grant $2
   @db_privilege_query "select has_database_privilege($1, $2);"
 
@@ -450,7 +442,10 @@ defmodule Sequin.Databases do
     end)
   end
 
-  @spec test_maybe_replica(%PostgresDatabase{}, %PostgresDatabase{} | nil) :: :ok | {:error, Error.t()}
+  def test_maybe_replica(%PostgresDatabase{} = db, %PostgresDatabasePrimary{} = db_primary) do
+    test_maybe_replica(db, PostgresDatabase.from_primary(db_primary))
+  end
+
   def test_maybe_replica(%PostgresDatabase{} = db, db_primary) do
     with true <- replica?(db),
          true <- not is_nil(db_primary),
@@ -649,8 +644,11 @@ defmodule Sequin.Databases do
       """
 
       case Postgres.query(conn, query, []) do
-        {:ok, %{rows: [[is_physical, has_logical]]}} -> is_physical or has_logical
-        _ -> false
+        {:ok, %{rows: [[is_physical, has_logical]]}} ->
+          is_physical or has_logical
+
+        _ ->
+          false
       end
     end)
   end

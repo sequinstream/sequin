@@ -7,7 +7,6 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
 
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication.PostgresReplicationSlot
-  alias Sequin.Repo
   alias Sequin.Runtime.MessageHandler
   alias Sequin.Runtime.SlotMessageHandler
   alias Sequin.Runtime.SlotProcessorServer
@@ -34,7 +33,6 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
 
   def init(opts) do
     {slot, opts} = Keyword.pop!(opts, :replication_slot)
-    slot = Repo.preload(slot, postgres_database: [:primary_database])
     message_handler_module = Keyword.get_lazy(opts, :message_handler_module, &default_message_handler_module/0)
 
     default_opts =

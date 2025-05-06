@@ -53,8 +53,8 @@ defmodule SequinWeb.PostgresDatabaseJSON do
     %{success: false, error: error}
   end
 
-  defp render_db(%PostgresDatabase{replication_slot: slot, primary_database: primary} = database, show_sensitive) do
-    %{
+  defp render_db(%PostgresDatabase{replication_slot: slot, primary: primary} = database, show_sensitive) do
+    r = %{
       id: database.id,
       name: database.name,
       hostname: database.hostname,
@@ -68,9 +68,10 @@ defmodule SequinWeb.PostgresDatabaseJSON do
       pool_size: database.pool_size,
       queue_interval: database.queue_interval,
       queue_target: database.queue_target,
-      replication_slots: render_replication_slots(slot),
-      primary_database: render_primary_database(primary)
+      replication_slots: render_replication_slots(slot)
     }
+
+    Sequin.Map.put_if_present(r, :primary, render_primary_database(primary))
   end
 
   defp render_password(password, true), do: password
@@ -90,7 +91,7 @@ defmodule SequinWeb.PostgresDatabaseJSON do
     ]
   end
 
-  defp render_primary_database(nil), do: []
+  defp render_primary_database(nil), do: nil
 
   defp render_primary_database(%{
          id: id,

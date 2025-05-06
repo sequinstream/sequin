@@ -74,7 +74,9 @@ end
 # Deprecate ECTO_IPV6 in favor of PG_IPV6
 ecto_socket_opts = if (System.get_env("ECTO_IPV6") || System.get_env("PG_IPV6")) in ~w(true 1), do: [:inet6], else: []
 
-config :logger, default_handler: [formatter: {Datadog, metadata: :all}]
+if config_env() == :prod do
+  config :logger, default_handler: [formatter: {Datadog, metadata: :all}]
+end
 
 if config_env() == :prod and self_hosted do
   account_self_signup =

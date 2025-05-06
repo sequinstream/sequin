@@ -69,7 +69,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       field :table_reader, module()
       field :message_handler, module()
 
-      field :setting_retry_deliver_interval, :timer.seconds(1)
+      field :setting_retry_deliver_interval, non_neg_integer(), default: :timer.seconds(1)
     end
   end
 

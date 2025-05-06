@@ -141,7 +141,8 @@ if config_env() == :prod and self_hosted do
       config :logger, default_handler: [formatter: {Datadog, metadata: :all}]
 
     _ ->
-      config :sequin, Sequin.ConsoleLogger, drop_metadata_keys: [:mfa]
+      # Fallback to ConsoleLogger, set in prod.exs
+      :ok
   end
 
   config :sequin, Sequin.Posthog,

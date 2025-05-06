@@ -158,6 +158,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :heartbeat_timer, nil | reference()
       field :heartbeat_verification_timer, nil | reference()
       field :message_received_since_last_heartbeat, boolean(), default: false
+
+      # Filter table oids
+      field :filter_table_oids, nil | Map.t()
     end
   end
 
@@ -173,6 +176,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
     max_memory_bytes = Keyword.get_lazy(opts, :max_memory_bytes, &default_max_memory_bytes/0)
     bytes_between_limit_checks = Keyword.get(opts, :bytes_between_limit_checks, div(max_memory_bytes, 100))
+    filter_table_oids = Keyword.get(opts, :filter_table_oids, nil)
 
     rep_conn_opts =
       [name: via_tuple(id)]
@@ -197,7 +201,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       bytes_between_limit_checks: bytes_between_limit_checks,
       check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
       safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
-      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10))
+      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
+      filter_table_oids: filter_table_oids
     }
 
     ReplicationConnection.start_link(SlotProcessorServer, init, rep_conn_opts)
@@ -1367,6 +1372,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       messages =
         accumulated_binares
+        |> Enum.filter(fn msg ->
+          with true <- not is_nil(state.filter_table_oids),
+               {:ok, relid} <- Decoder.extract_relation_id(msg) do
+            state.filter_table_oids[relid]
+          else
+            _ -> true
+          end
+        end)
         |> Enum.reverse()
         |> Enum.with_index()
         |> Flow.from_enumerable(max_demand: 50, min_demand: 25)

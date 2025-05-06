@@ -34,8 +34,15 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
 
   def init(opts) do
     {slot, opts} = Keyword.pop!(opts, :replication_slot)
-    slot = Repo.preload(slot, :postgres_database)
+    slot = Repo.preload(slot, [:postgres_database, :not_disabled_sink_consumers])
     message_handler_module = Keyword.get_lazy(opts, :message_handler_module, &default_message_handler_module/0)
+
+    for_result =
+      for sc <- slot.not_disabled_sink_consumers, into: %{} do
+        {sc.sequence.table_oid, true}
+      end
+
+    dbg(for_result)
 
     default_opts =
       [

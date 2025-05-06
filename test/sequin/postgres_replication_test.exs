@@ -1856,7 +1856,8 @@ defmodule Sequin.PostgresReplicationTest do
             table_reader_mod: TableReaderServer
           },
           postgres_database: db,
-          replication_slot: %PostgresReplicationSlot{id: id}
+          replication_slot: %PostgresReplicationSlot{id: id},
+          should_filter_table_oids: false
         ],
         opts
       )

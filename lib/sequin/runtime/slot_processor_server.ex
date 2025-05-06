@@ -160,7 +160,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :message_received_since_last_heartbeat, boolean(), default: false
 
       # Filter table oids
-      field :filter_table_oids, nil | Map.t()
+      field :should_filter_table_oids, boolean(), default: true
+      field :filter_table_oids, nil | MapSet.t()
     end
   end
 
@@ -201,7 +202,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         bytes_between_limit_checks: bytes_between_limit_checks,
         check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
         safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
-        setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10))
+        setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
+        should_filter_table_oids: Keyword.get(opts, :should_filter_table_oids, true)
       })
 
     ReplicationConnection.start_link(SlotProcessorServer, init, rep_conn_opts)
@@ -900,8 +902,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp put_refreshed_filter_table_oids(state) do
-    new_oids = Replication.get_oids_for_slot(state.replication_slot)
-    %{state | filter_table_oids: new_oids}
+    if state.should_filter_table_oids do
+      new_oids = Replication.get_oids_for_slot(state.replication_slot)
+      %{state | filter_table_oids: new_oids}
+    else
+      state
+    end
   end
 
   defp on_connect_failure(%State{} = state, error) do

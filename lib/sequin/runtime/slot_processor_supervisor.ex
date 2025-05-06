@@ -34,13 +34,8 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
 
   def init(opts) do
     {slot, opts} = Keyword.pop!(opts, :replication_slot)
-    slot = Repo.preload(slot, [:postgres_database, :not_disabled_sink_consumers])
+    slot = Repo.preload(slot, :postgres_database)
     message_handler_module = Keyword.get_lazy(opts, :message_handler_module, &default_message_handler_module/0)
-
-    included_oids =
-      for sc <- slot.not_disabled_sink_consumers, into: MapSet.new() do
-        sc.sequence.table_oid
-      end
 
     default_opts =
       [
@@ -52,8 +47,7 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
         message_handler_ctx: MessageHandler.context(slot),
         message_handler_module: message_handler_module,
         connection: PostgresDatabase.to_postgrex_opts(slot.postgres_database),
-        ipv6: slot.postgres_database.ipv6,
-        filter_table_oids: included_oids
+        ipv6: slot.postgres_database.ipv6
       ]
 
     slot_opts = Keyword.merge(default_opts, opts)

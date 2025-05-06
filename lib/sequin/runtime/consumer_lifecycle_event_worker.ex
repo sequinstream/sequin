@@ -66,6 +66,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
           RuntimeSupervisor.start_for_sink_consumer(consumer)
           :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
           RuntimeSupervisor.maybe_start_table_reader(consumer)
+          SlotProcessorServer.refresh_filter_table_oids(consumer.replication_slot_id)
           :ok
         end
 
@@ -84,6 +85,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
 
         :ok = RuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id)
         :ok = SlotProcessorServer.demonitor_message_store(replication_slot_id, id)
+        :ok = SlotProcessorServer.refresh_filter_table_oids(replication_slot_id)
         :ok = RuntimeSupervisor.stop_for_sink_consumer(replication_slot_id, id)
         :ok = MessageLedgers.drop_for_consumer(id)
     end

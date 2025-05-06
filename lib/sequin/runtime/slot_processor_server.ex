@@ -176,7 +176,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
     max_memory_bytes = Keyword.get_lazy(opts, :max_memory_bytes, &default_max_memory_bytes/0)
     bytes_between_limit_checks = Keyword.get(opts, :bytes_between_limit_checks, div(max_memory_bytes, 100))
-    filter_table_oids = Keyword.get(opts, :filter_table_oids, nil)
 
     rep_conn_opts =
       [name: via_tuple(id)]
@@ -185,25 +184,25 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       # calling process!) while it connects.
       |> Keyword.put(:sync_connect, false)
 
-    init = %State{
-      id: id,
-      publication: publication,
-      slot_name: slot_name,
-      postgres_database: postgres_database,
-      replication_slot: replication_slot,
-      test_pid: test_pid,
-      message_handler_ctx: message_handler_ctx,
-      message_handler_module: message_handler_module,
-      connection: connection,
-      last_commit_lsn: nil,
-      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15)),
-      max_memory_bytes: max_memory_bytes,
-      bytes_between_limit_checks: bytes_between_limit_checks,
-      check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
-      safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
-      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
-      filter_table_oids: filter_table_oids
-    }
+    init =
+      put_refreshed_filter_table_oids(%State{
+        id: id,
+        publication: publication,
+        slot_name: slot_name,
+        postgres_database: postgres_database,
+        replication_slot: replication_slot,
+        test_pid: test_pid,
+        message_handler_ctx: message_handler_ctx,
+        message_handler_module: message_handler_module,
+        connection: connection,
+        last_commit_lsn: nil,
+        heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15)),
+        max_memory_bytes: max_memory_bytes,
+        bytes_between_limit_checks: bytes_between_limit_checks,
+        check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
+        safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
+        setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10))
+      })
 
     ReplicationConnection.start_link(SlotProcessorServer, init, rep_conn_opts)
   end
@@ -240,6 +239,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   def via_tuple(id) do
     {:via, :syn, {:replication, {__MODULE__, id}}}
+  end
+
+  def refresh_filter_table_oids(id) do
+    GenServer.call(via_tuple(id), :refresh_filter_table_oids)
   end
 
   @impl ReplicationConnection
@@ -531,6 +534,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           {:keep_state, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
       end
     end)
+  end
+
+  @impl ReplicationConnection
+  def handle_call(:refresh_filter_table_oids, from, state) do
+    new_state = put_refreshed_filter_table_oids(state)
+    GenServer.reply(from, :ok)
+    {:keep_state, new_state}
   end
 
   @impl ReplicationConnection
@@ -887,6 +897,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     schedule_observe_ingestion_latency()
 
     {:keep_state, state}
+  end
+
+  defp put_refreshed_filter_table_oids(state) do
+    new_oids = Replication.get_oids_for_slot(state.replication_slot)
+    %{state | filter_table_oids: new_oids}
   end
 
   defp on_connect_failure(%State{} = state, error) do

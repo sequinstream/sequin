@@ -935,6 +935,25 @@ defmodule Sequin.PostgresReplicationTest do
       assert fields_equal?(change.fields, record)
     end
 
+    test "operations on non-published tables are not captured" do
+      test_pid = self()
+
+      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+
+      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:change, msgs})
+        :ok
+      end)
+
+      start_replication!(message_handler_module: SlotMessageHandlerMock)
+
+      # Insert into non-published table
+      {:ok, _} = UnboxedRepo.query("INSERT INTO my_non_published_table DEFAULT VALUES RETURNING id", [])
+      assert_receive {SlotProcessorServer, :flush_messages}, 500
+      # No message should be received for the non-published table
+      assert_received {:change, []}, 500
+    end
+
     test "creates, updates, and deletes are captured" do
       test_pid = self()
 
@@ -1803,6 +1822,7 @@ defmodule Sequin.PostgresReplicationTest do
         end)
 
       # Wait for message handling
+      # TODO: fix race! heartbeat may cause a flush which doesn't include the insert?
       assert_receive {SlotProcessorServer, :flush_messages}, 500
 
       # Verify message was created and matched case-insensitively
@@ -1836,7 +1856,8 @@ defmodule Sequin.PostgresReplicationTest do
             table_reader_mod: TableReaderServer
           },
           postgres_database: db,
-          replication_slot: %PostgresReplicationSlot{id: id}
+          replication_slot: %PostgresReplicationSlot{id: id},
+          should_filter_table_oids: false
         ],
         opts
       )

@@ -206,6 +206,14 @@ defmodule Sequin.Replication do
     "sequin:replication:last_processed_commit_tuple:#{replication_slot_id}"
   end
 
+  def get_oids_for_slot(%PostgresReplicationSlot{} = slot) do
+    slot = Repo.preload(slot, [not_disabled_sink_consumers: :sequence], force: true)
+
+    for sc <- slot.not_disabled_sink_consumers, into: MapSet.new() do
+      sc.sequence.table_oid
+    end
+  end
+
   # WAL Pipeline
 
   def list_wal_pipelines do

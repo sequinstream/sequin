@@ -158,6 +158,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :heartbeat_timer, nil | reference()
       field :heartbeat_verification_timer, nil | reference()
       field :message_received_since_last_heartbeat, boolean(), default: false
+
+      # Filter table oids
+      field :should_filter_table_oids, boolean(), default: true
+      field :filter_table_oids, nil | MapSet.t()
     end
   end
 
@@ -181,24 +185,26 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       # calling process!) while it connects.
       |> Keyword.put(:sync_connect, false)
 
-    init = %State{
-      id: id,
-      publication: publication,
-      slot_name: slot_name,
-      postgres_database: postgres_database,
-      replication_slot: replication_slot,
-      test_pid: test_pid,
-      message_handler_ctx: message_handler_ctx,
-      message_handler_module: message_handler_module,
-      connection: connection,
-      last_commit_lsn: nil,
-      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15)),
-      max_memory_bytes: max_memory_bytes,
-      bytes_between_limit_checks: bytes_between_limit_checks,
-      check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
-      safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
-      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10))
-    }
+    init =
+      put_refreshed_filter_table_oids(%State{
+        id: id,
+        publication: publication,
+        slot_name: slot_name,
+        postgres_database: postgres_database,
+        replication_slot: replication_slot,
+        test_pid: test_pid,
+        message_handler_ctx: message_handler_ctx,
+        message_handler_module: message_handler_module,
+        connection: connection,
+        last_commit_lsn: nil,
+        heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15)),
+        max_memory_bytes: max_memory_bytes,
+        bytes_between_limit_checks: bytes_between_limit_checks,
+        check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
+        safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
+        setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
+        should_filter_table_oids: Keyword.get(opts, :should_filter_table_oids, true)
+      })
 
     ReplicationConnection.start_link(SlotProcessorServer, init, rep_conn_opts)
   end
@@ -235,6 +241,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   def via_tuple(id) do
     {:via, :syn, {:replication, {__MODULE__, id}}}
+  end
+
+  def refresh_filter_table_oids(id) do
+    GenServer.call(via_tuple(id), :refresh_filter_table_oids)
   end
 
   @impl ReplicationConnection
@@ -526,6 +536,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           {:keep_state, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
       end
     end)
+  end
+
+  @impl ReplicationConnection
+  def handle_call(:refresh_filter_table_oids, from, state) do
+    new_state = put_refreshed_filter_table_oids(state)
+    GenServer.reply(from, :ok)
+    {:keep_state, new_state}
   end
 
   @impl ReplicationConnection
@@ -882,6 +899,15 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     schedule_observe_ingestion_latency()
 
     {:keep_state, state}
+  end
+
+  defp put_refreshed_filter_table_oids(state) do
+    if state.should_filter_table_oids do
+      new_oids = Replication.get_oids_for_slot(state.replication_slot)
+      %{state | filter_table_oids: new_oids}
+    else
+      state
+    end
   end
 
   defp on_connect_failure(%State{} = state, error) do
@@ -1367,6 +1393,15 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       messages =
         accumulated_binares
+        |> Enum.filter(fn msg ->
+          with true <- not is_nil(state.filter_table_oids),
+               {:ok, relid} <- Decoder.extract_relation_id(msg) do
+            %{parent_table_id: parent_oid} = Map.fetch!(state.schemas, relid)
+            MapSet.member?(state.filter_table_oids, parent_oid)
+          else
+            _ -> true
+          end
+        end)
         |> Enum.reverse()
         |> Enum.with_index()
         |> Flow.from_enumerable(max_demand: 50, min_demand: 25)

@@ -12,6 +12,8 @@ config :sentry,
   dsn: System.get_env("SENTRY_DSN"),
   release: System.get_env("RELEASE_VERSION")
 
+config :sequin, Sequin.ConsoleLogger, drop_metadata_keys: [:mfa]
+
 config :sequin,
   self_hosted: self_hosted,
   portal_hostname: "portal.sequin.local",

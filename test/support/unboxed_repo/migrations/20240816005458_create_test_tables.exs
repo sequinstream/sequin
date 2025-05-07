@@ -4,7 +4,27 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
 
   alias Sequin.Constants
 
+  def my_version, do: 1
+  def check_version!(repo) do
+    unless my_version() == get_version(repo) do
+      IO.puts(:stderr,
+        [IO.ANSI.red(), "UnboxedRepo version has been updated!", IO.ANSI.reset(), "\n",
+         IO.ANSI.bright(), "Please run the following command to re-create:", IO.ANSI.reset(), "\n\n",
+         "MIX_ENV=test mix ecto.reset\n"])
+      :erlang.halt(1)
+    end
+  end
+
+  defp get_version(repo) do
+    case repo.query("select my_version from my_version_info") do
+      {:error, _} -> nil
+      {:ok, res} -> hd(hd(res.rows))
+    end
+  end
+
   def change do
+    execute "create table my_version_info as select #{my_version()} as my_version"
+
     create table(:Characters) do
       add :name, :text
       add :house, :text

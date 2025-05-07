@@ -37,6 +37,7 @@
   import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import TableSelector from "../components/TableSelector.svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
   import MessageExamples from "$lib/components/MessageExamples.svelte";
@@ -525,29 +526,17 @@
     <ExpandableCard disabled={!transformSectionEnabled} expanded={!isEditMode}>
       <svelte:fragment slot="title">
         Transforms
-        <button on:click|stopPropagation>
-          <Popover.Root>
-            <Popover.Trigger asChild let:builder>
-              <Button
-                builders={[builder]}
-                variant="link"
-                class="text-muted-foreground hover:text-foreground p-0"
-              >
-                <Info class="h-4 w-4" />
-              </Button>
-            </Popover.Trigger>
-            <Popover.Content class="w-80">
-              <div class="grid gap-4">
-                <div class="space-y-2">
-                  <p class="text-sm text-muted-foreground font-normal">
-                    Transform your messages before they are sent to the sink
-                    destination.
-                  </p>
-                </div>
-              </div>
-            </Popover.Content>
-          </Popover.Root>
-        </button>
+        <Tooltip.Root openDelay={200}>
+          <Tooltip.Trigger>
+            <Info class="h-4 w-4 text-gray-400 cursor-help" />
+          </Tooltip.Trigger>
+          <Tooltip.Content class="p-4 max-w-xs">
+            <p class="text-sm text-muted-foreground font-normal">
+              Transform your messages before they are sent to the sink
+              destination.
+            </p>
+          </Tooltip.Content>
+        </Tooltip.Root>
         <Beta size="sm" variant="subtle" />
       </svelte:fragment>
 
@@ -598,36 +587,23 @@
       <ExpandableCard disabled={!backfillSectionEnabled} expanded={!isEditMode}>
         <svelte:fragment slot="title">
           Initial backfill
-
-          <button on:click|stopPropagation>
-            <Popover.Root>
-              <Popover.Trigger asChild let:builder>
-                <Button
-                  builders={[builder]}
-                  variant="link"
-                  class="text-muted-foreground hover:text-foreground p-0"
+          <Tooltip.Root openDelay={200}>
+            <Tooltip.Trigger>
+              <Info class="h-4 w-4 text-gray-400 cursor-help" />
+            </Tooltip.Trigger>
+            <Tooltip.Content class="p-4 max-w-xs">
+              <p class="text-sm text-muted-foreground font-normal">
+                Sequin will run an initial <a
+                  href="https://sequinstream.com/docs/reference/backfills"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-primary underline"
                 >
-                  <Info class="h-4 w-4" />
-                </Button>
-              </Popover.Trigger>
-              <Popover.Content class="w-80">
-                <div class="grid gap-4">
-                  <div class="space-y-2">
-                    <p class="text-sm text-muted-foreground font-normal">
-                      Sequin will run an initial <a
-                        href="https://sequinstream.com/docs/reference/backfills"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="text-primary underline"
-                      >
-                        backfill
-                      </a> of data from the selected table to the sink destination.
-                    </p>
-                  </div>
-                </div>
-              </Popover.Content>
-            </Popover.Root>
-          </button>
+                  backfill
+                </a> of data from the selected table to the sink destination.
+              </p>
+            </Tooltip.Content>
+          </Tooltip.Root>
         </svelte:fragment>
 
         <svelte:fragment slot="summary">

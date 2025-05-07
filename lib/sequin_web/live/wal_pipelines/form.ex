@@ -30,10 +30,10 @@ defmodule SequinWeb.WalPipelinesLive.Form do
          |> assign(is_edit: is_edit)
          |> assign(show_errors?: false)
          |> assign(submit_error: nil)
-         |> assign_changeset(%{})}
+         |> assign_changeset(%{}), layout: {SequinWeb.Layouts, :app_no_sidenav}}
 
       {:ok, nil} ->
-        {:ok, push_navigate(socket, to: ~p"/change-capture-pipelines")}
+        {:ok, push_navigate(socket, to: ~p"/change-capture-pipelines"), layout: {SequinWeb.Layouts, :app_no_sidenav}}
     end
   end
 

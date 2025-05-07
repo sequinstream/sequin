@@ -35,10 +35,10 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
           |> assign(:api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(current_account.id)))
           |> put_changeset(%{"http_endpoint" => %{}})
 
-        {:ok, socket}
+        {:ok, socket, layout: {SequinWeb.Layouts, :app_no_sidenav}}
 
       {:error, _} ->
-        {:ok, push_navigate(socket, to: ~p"/http-endpoints")}
+        {:ok, push_navigate(socket, to: ~p"/http-endpoints"), layout: {SequinWeb.Layouts, :app_no_sidenav}}
     end
   end
 

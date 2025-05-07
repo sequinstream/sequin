@@ -15,7 +15,7 @@
   } from "$lib/components/ui/card";
   import TableSelector from "../components/TableSelector.svelte";
   import FilterForm from "../components/FilterForm.svelte";
-  import FullPageModal from "../components/FullPageModal.svelte";
+  import FullPageForm from "../components/FullPageForm.svelte";
   import { cn } from "$lib/utils";
 
   export let walPipeline: any;
@@ -87,15 +87,13 @@
   }
 </script>
 
-<FullPageModal
+<FullPageForm
   title={isEdit ? "Edit Change Retention" : "Setup Change Retention"}
-  bind:open={dialogOpen}
-  bind:showConfirmDialog
   on:close={handleClose}
 >
   <form
     on:submit|preventDefault={handleSubmit}
-    class="space-y-6 max-w-3xl mx-auto mt-6"
+    class="space-y-6 max-w-3xl mx-auto"
   >
     <Card>
       <CardHeader>
@@ -253,4 +251,4 @@
       </CardContent>
     </Card>
   </form>
-</FullPageModal>
+</FullPageForm>

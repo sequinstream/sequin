@@ -56,6 +56,7 @@ defmodule Sequin.Runtime.SqsPipeline do
   defp build_sqs_message(consumer, record_or_event) do
     message = %{
       message_body: Sequin.Transforms.Message.to_external(consumer, record_or_event),
+      message_deduplication_id: record_or_event.data.metadata.idempotency_key,
       id: UUID.uuid4()
     }
 

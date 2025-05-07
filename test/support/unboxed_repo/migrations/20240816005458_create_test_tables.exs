@@ -163,5 +163,9 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
     end
 
     create unique_index(:sequin_events, [:source_database_id, :committed_at, :seq, :record_pk])
+
+    # Not included in the publication
+    create table(:my_non_published_table) do
+    end
   end
 end

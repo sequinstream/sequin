@@ -5,6 +5,12 @@ description: Reference for Sequin's metrics. Use metrics to monitor health and p
 
 Sequin exposes a metrics endpoint, using Prometheus text format, which can be integrated into your existing observability workflows. By default, this endpoint is at `/metrics` on port `8376`.
 
+<Note>
+  For production deployments, consider securing the metrics endpoint with HTTP Basic Authentication.
+
+  Set `SEQUIN_METRICS_USERNAME` and `SEQUIN_METRICS_PASSWORD` environment variables and Sequin will automatically require these credentials. See the [Configuration](/reference/configuration) reference for details.
+</Note>
+
 Metrics are designed to answer:
 
 - Is Sequin keeping up with the database? (Ingestion metrics)

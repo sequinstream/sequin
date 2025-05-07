@@ -268,6 +268,12 @@ if config_env() == :prod do
   datadog_api_key = get_env.("DATADOG_API_KEY")
   datadog_app_key = get_env.("DATADOG_APP_KEY")
 
+  prometheus_auth =
+    case {System.get_env("SEQUIN_METRICS_USERNAME"), System.get_env("SEQUIN_METRICS_PASSWORD")} do
+      {nil, nil} -> false
+      {u, p} -> {:basic, u || "", p || ""}
+    end
+
   config :libcluster,
     topologies: [
       sequin: [
@@ -277,6 +283,8 @@ if config_env() == :prod do
         ]
       ]
     ]
+
+  config :prometheus, Sequin.PrometheusExporter, auth: prometheus_auth
 
   config :sequin, Sequin.Mailer, adapter: Sequin.Swoosh.Adapters.Loops, api_key: System.get_env("LOOPS_API_KEY")
   config :sequin, Sequin.Redis, ConfigParser.redis_config(env_vars)

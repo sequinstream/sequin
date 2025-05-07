@@ -425,13 +425,13 @@ defmodule Sequin.YamlLoader do
           {:error, error} when is_exception(error) ->
             {:error,
              Error.bad_request(
-               message: "Error creating replication slot for database '#{db.name}': #{Exception.message(error)}"
+               message: "Error creating Sequin replication slot for database '#{db.name}': #{Exception.message(error)}"
              )}
 
           {:error, %Ecto.Changeset{} = changeset} ->
             {:error,
              Error.bad_request(
-               message: "Error creating replication slot for database '#{db.name}': #{inspect(changeset, pretty: true)}"
+               message: "Error creating Sequin replication slot for database '#{db.name}': #{inspect(changeset, pretty: true)}"
              )}
         end
 

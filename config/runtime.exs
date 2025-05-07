@@ -302,6 +302,11 @@ if config_env() == :prod do
       client_secret: get_env.("GITHUB_CLIENT_SECRET")
     ]
 
+  config :sequin, :metrics_basic_auth,
+    username: System.get_env("METRICS_USERNAME") || "sequin",
+    password: System.get_env("METRICS_PASSWORD") || "sequin",
+    realm: "Sequin Metrics"
+
   config :sequin, :retool_workflow_key, System.get_env("RETOOL_WORKFLOW_KEY")
 
   config :sequin,

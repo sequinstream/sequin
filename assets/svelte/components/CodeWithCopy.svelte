@@ -11,10 +11,10 @@
 </script>
 
 <div
-  class={`flex flex-row bg-muted p-4 rounded-md overflow-hidden ${codeClass}`}
+  class={`flex flex-row bg-muted rounded-md overflow-hidden ${codeClass}`}
   style="max-width: {maxWidth}"
 >
-  <pre class="text-sm overflow-x-auto flex flex-grow"><code class={language}
+  <pre class="p-4 text-sm overflow-x-auto flex flex-grow"><code class={language}
       >{codeContent}</code
     >
   </pre>

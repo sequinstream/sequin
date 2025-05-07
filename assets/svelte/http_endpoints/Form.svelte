@@ -1,5 +1,5 @@
 <script lang="ts">
-  import FullPageModal from "../components/FullPageModal.svelte";
+  import FullPageForm from "../components/FullPageForm.svelte";
   import { Button } from "$lib/components/ui/button";
   import {
     Card,
@@ -10,6 +10,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { PlusCircle, Eye, EyeOff } from "lucide-svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import {
     Popover,
     PopoverContent,
@@ -39,8 +40,6 @@
 
   let form = { ...httpEndpoint, baseUrl };
   let isEdit = !!form.id;
-  let dialogOpen = true;
-  let showConfirmDialog = false;
   let validating = false;
   let showEncryptedValues: Record<string, boolean> = {};
   let showLocalhostWarningDialog = false;
@@ -143,14 +142,12 @@ sequin context add default --api-token={{secret}} --set-default
 sequin tunnel --ports=[your-local-port]:${form.name}`;
 </script>
 
-<FullPageModal
+<FullPageForm
   title={isEdit ? "Edit HTTP Endpoint" : "Create HTTP Endpoint"}
-  bind:open={dialogOpen}
-  bind:showConfirmDialog
   on:close={handleClose}
 >
   <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto">
-    <Card class="mt-12">
+    <Card>
       <CardHeader>
         <CardTitle>HTTP Endpoint Configuration</CardTitle>
       </CardHeader>
@@ -191,15 +188,18 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
                   disabled={isEdit}
                 />
                 <Label for="use-localhost">Use localhost</Label>
-                <Popover>
-                  <PopoverTrigger>
-                    <Info class="w-4 h-4 text-muted-foreground" />
-                  </PopoverTrigger>
-                  <PopoverContent>
-                    You can use the Sequin CLI to connect Sequin to an HTTP
-                    endpoint running on your local machine.
-                  </PopoverContent>
-                </Popover>
+
+                <Tooltip.Root openDelay={200}>
+                  <Tooltip.Trigger>
+                    <Info class="h-4 w-4 text-gray-400 cursor-help" />
+                  </Tooltip.Trigger>
+                  <Tooltip.Content class="p-4 max-w-xs">
+                    <p class="text-sm text-muted-foreground font-normal">
+                      You can use the Sequin CLI to connect Sequin to an HTTP
+                      endpoint running on your local machine.
+                    </p>
+                  </Tooltip.Content>
+                </Tooltip.Root>
               </div>
             </div>
             {#if form.useLocalTunnel}
@@ -357,15 +357,21 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       </CardHeader>
       <CardContent class="space-y-4">
         <Popover bind:open={showLocalhostWarningDialog}>
-          <PopoverTrigger />
-          <Button type="submit" loading={validating} variant="default">
-            <span slot="loading"> Validating... </span>
-            {#if isEdit}
-              Update HTTP Endpoint
-            {:else}
-              Create HTTP Endpoint
-            {/if}
-          </Button>
+          <PopoverTrigger asChild let:builder>
+            <Button
+              type="submit"
+              loading={validating}
+              variant="default"
+              builders={[builder]}
+            >
+              <span slot="loading"> Validating... </span>
+              {#if isEdit}
+                Update HTTP Endpoint
+              {:else}
+                Create HTTP Endpoint
+              {/if}
+            </Button>
+          </PopoverTrigger>
           <PopoverContent class="w-80">
             <div class="grid gap-4">
               <div class="space-y-2">
@@ -404,4 +410,4 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       </CardContent>
     </Card>
   </form>
-</FullPageModal>
+</FullPageForm>

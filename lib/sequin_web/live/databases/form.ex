@@ -43,11 +43,11 @@ defmodule SequinWeb.DatabasesLive.Form do
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
           |> assign(:pooler_type, nil)
 
-        {:ok, socket}
+        {:ok, socket, layout: {SequinWeb.Layouts, :app_no_sidenav}}
 
       {:error, %NotFoundError{}} ->
         Logger.error("Database not found (id=#{id})")
-        {:ok, push_navigate(socket, to: ~p"/databases")}
+        {:ok, push_navigate(socket, to: ~p"/databases"), layout: {SequinWeb.Layouts, :app_no_sidenav}}
     end
   end
 

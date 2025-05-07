@@ -58,7 +58,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
     GenServer.start_link(__MODULE__, opts, id: via_tuple(consumer_id, partition), name: via_tuple(consumer_id, partition))
   end
 
-  @spec via_tuple(consumer_id(), non_neg_integer()) :: {:via, :syn, {:replication, {module(), consumer_id()}}}
+  @spec via_tuple(consumer_id(), non_neg_integer()) ::
+          {:via, :syn, {:replication, {module(), {consumer_id(), non_neg_integer()}}}}
   def via_tuple(consumer_id, partition) when is_integer(partition) do
     {:via, :syn, {:replication, {__MODULE__, {consumer_id, partition}}}}
   end

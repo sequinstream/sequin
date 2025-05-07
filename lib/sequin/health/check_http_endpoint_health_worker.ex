@@ -17,14 +17,8 @@ defmodule Sequin.Health.CheckHttpEndpointHealthWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"http_endpoint_id" => http_endpoint_id}}) do
     case Consumers.get_http_endpoint(http_endpoint_id) do
-      {:ok, endpoint} ->
-        check_endpoint(endpoint)
-
-      {:error, %Error.NotFoundError{}} ->
-        :ok
-
-      error ->
-        error
+      {:ok, endpoint} -> check_endpoint(endpoint)
+      {:error, %Error.NotFoundError{}} -> :ok
     end
   end
 

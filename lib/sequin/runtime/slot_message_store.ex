@@ -384,7 +384,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       setting_system_max_memory_bytes:
         Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
       partition: partition,
-      flush_interval: Keyword.get(opts, :flush_interval, :timer.minutes(10)),
+      flush_interval: Keyword.get(opts, :flush_interval, :timer.minutes(1)),
       message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2)),
       visibility_check_interval: Keyword.get(opts, :visibility_check_interval, :timer.minutes(5)),
       max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2))

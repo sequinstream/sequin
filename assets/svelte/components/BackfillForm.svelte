@@ -21,6 +21,7 @@
   };
   export let formErrors: Record<string, string>;
   export let table: Table;
+  export let showNoBackfill: boolean = true;
 
   $: {
     if (!form.sortColumnAttnum) {
@@ -100,10 +101,12 @@
 
 <div class="space-y-4">
   <RadioGroup bind:value={form.startPosition}>
-    <div class="flex items-center space-x-2">
-      <RadioGroupItem value="none" id="none" />
-      <Label for="none">No backfill</Label>
-    </div>
+    {#if showNoBackfill}
+      <div class="flex items-center space-x-2">
+        <RadioGroupItem value="none" id="none" />
+        <Label for="none">No backfill</Label>
+      </div>
+    {/if}
     <div class="flex items-center space-x-2">
       <RadioGroupItem value="beginning" id="beginning" />
       <Label for="beginning">Backfill all rows</Label>

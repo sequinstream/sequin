@@ -1171,6 +1171,7 @@
           table={consumer.table}
           form={backfillForm}
           formErrors={backfillFormErrors}
+          showNoBackfill={false}
         />
       {:else}
         <p class="text-sm text-muted-foreground">

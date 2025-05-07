@@ -629,6 +629,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       max_ack_pending: consumer.max_ack_pending,
       max_deliver: consumer.max_deliver,
       max_waiting: consumer.max_waiting,
+      max_retry_count: consumer.max_retry_count,
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
       database: encode_database(consumer.postgres_database),

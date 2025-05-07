@@ -954,7 +954,7 @@
             <div class="flex items-center space-x-4 mb-4">
               <h2 class="text-lg font-semibold">Configuration</h2>
             </div>
-            <div class="grid lg:grid-cols-3 gap-4">
+            <div class="grid lg:grid-cols-4 gap-4">
               <div>
                 <span class="text-sm text-gray-500"> Request Timeout </span>
                 <Tooltip.Root openDelay={200}>
@@ -1030,6 +1030,35 @@
                 </Tooltip.Root>
                 <p class="font-medium">
                   {formatNumberWithCommas(consumer.max_ack_pending)}
+                </p>
+              </div>
+
+              <div>
+                <span class="text-sm text-gray-500">Max Retry Count</span>
+                <Tooltip.Root openDelay={200}>
+                  <Tooltip.Trigger>
+                    <HelpCircle
+                      class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
+                    />
+                  </Tooltip.Trigger>
+                  <Tooltip.Content class="max-w-xs">
+                    <p class="text-xs text-gray-500">
+                      <b>Max Retry Count</b>
+                      <br />
+                      The maximum number of times a message will be retried if delivery
+                      fails. Once this limit is reached, the message will be discarded.
+                      <br />
+                      <br />
+                      This helps prevent messages from being retried indefinitely
+                      when there are persistent delivery issues. Each retry attempt
+                      uses exponential backoff to avoid overwhelming the target system.
+                    </p>
+                  </Tooltip.Content>
+                </Tooltip.Root>
+                <p class="font-medium">
+                  {consumer.max_retry_count == null
+                    ? "∞"
+                    : formatNumberWithCommas(consumer.max_retry_count)}
                 </p>
               </div>
             </div>

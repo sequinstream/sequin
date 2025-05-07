@@ -98,6 +98,7 @@
     ackWaitMs: number;
     maxAckPending: number;
     maxWaiting: number;
+    maxRetryCount: number | null;
     sink: any;
     runInitialBackfill: boolean;
     backfill: {
@@ -125,6 +126,7 @@
     ackWaitMs: Number(consumer.ack_wait_ms) || 30000,
     maxAckPending: Number(consumer.max_ack_pending) || 10000,
     maxWaiting: Number(consumer.max_waiting) || 20,
+    maxRetryCount: Number(consumer.max_retry_count) || null,
     sink: consumer.sink,
     runInitialBackfill: false,
     backfill: {

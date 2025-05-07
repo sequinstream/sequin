@@ -254,6 +254,24 @@
                 </p>
               {/if}
             </div>
+
+            <div class="space-y-2">
+              <Label for="max-retry-count">Max Retry Count</Label>
+              <Input
+                id="max-retry-count"
+                type="number"
+                bind:value={form.maxRetryCount}
+              />
+              <p class="text-sm text-muted-foreground">
+                Maximum number of retry attempts for failed message deliveries.
+                Messages exceeding this limit will be discarded.
+              </p>
+              {#if errors.max_retry_count}
+                <p class="text-destructive text-sm">
+                  {errors.max_retry_count}
+                </p>
+              {/if}
+            </div>
           </div>
         </AccordionContent>
       </AccordionItem>

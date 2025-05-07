@@ -50,7 +50,8 @@ defmodule Sequin.Consumers.SinkConsumer do
              :max_memory_mb,
              :legacy_transform,
              :timestamp_format,
-             :batch_timeout_ms
+             :batch_timeout_ms,
+             :max_retry_count
            ]}
   typed_schema "sink_consumers" do
     field :name, :string
@@ -59,6 +60,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :max_ack_pending, :integer, default: 10_000
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
+    field :max_retry_count, :integer, default: nil
     field :message_kind, Ecto.Enum, values: [:event, :record], default: :event
     field :status, Ecto.Enum, values: [:active, :disabled, :paused], default: :active
     field :seq, :integer, read_after_writes: true
@@ -170,6 +172,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_waiting,
       :max_ack_pending,
       :max_deliver,
+      :max_retry_count,
       :backfill_completed_at,
       :status,
       :annotations,
@@ -191,6 +194,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:batch_timeout_ms, greater_than: 0)
     |> validate_number(:max_memory_mb, greater_than_or_equal_to: 128)
     |> validate_number(:partition_count, greater_than_or_equal_to: 1)
+    |> validate_number(:max_retry_count, greater_than: 0)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
     |> validate_routing(attrs)
   end

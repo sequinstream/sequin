@@ -381,11 +381,12 @@ defmodule Sequin.Runtime.TableReader do
   end
 
   defp message_from_row(%SinkConsumer{message_kind: :event} = consumer, %PostgresDatabaseTable{} = table, record) do
-    data = build_event_data(table, consumer, record)
+    record_pks = record_pks(table, record)
+    data = build_event_data(table, consumer, record, record_pks)
 
     %ConsumerEvent{
       consumer_id: consumer.id,
-      record_pks: record_pks(table, record),
+      record_pks: record_pks,
       group_id: generate_group_id(consumer, table, record),
       table_oid: table.oid,
       deliver_count: 0,
@@ -412,7 +413,7 @@ defmodule Sequin.Runtime.TableReader do
     }
   end
 
-  defp build_event_data(table, consumer, record_attnums_to_values) do
+  defp build_event_data(table, consumer, record_attnums_to_values, record_pks) do
     %ConsumerEventData{
       action: :read,
       record: build_record_payload(table, record_attnums_to_values),
@@ -424,7 +425,8 @@ defmodule Sequin.Runtime.TableReader do
           id: consumer.id,
           name: consumer.name
         },
-        commit_timestamp: DateTime.utc_now()
+        commit_timestamp: DateTime.utc_now(),
+        idempotency_key: Base.encode64("#{consumer.active_backfill.id}:#{record_pks}")
       }
     }
   end

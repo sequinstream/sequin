@@ -18,7 +18,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
   defp get_version(repo) do
     case repo.query("select my_version from my_version_info") do
       {:error, _} -> nil
-      {:ok, res} -> hd(hd(res.rows))
+      {:ok, %Postgrex.Result{rows: [[version]]}} -> version
     end
   end
 

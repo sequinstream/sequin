@@ -16,6 +16,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   alias Sequin.Metrics
   alias Sequin.NetworkUtils
   alias Sequin.Postgres
+  alias Sequin.Prometheus
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Statsd
@@ -151,6 +152,8 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
         if lag_bytes > Replication.lag_bytes_alert_threshold(slot) do
           Logger.warning("Replication lag is #{lag_mb}MB")
         else
+          Prometheus.set_replication_lag(slot.id, slot.slot_name, lag_mb)
+
           Statsd.gauge("sequin.db.replication_lag_mb", lag_mb,
             tags: %{replication_slot_id: slot.id, account_id: slot.account_id}
           )

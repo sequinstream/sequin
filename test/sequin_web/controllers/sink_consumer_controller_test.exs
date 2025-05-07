@@ -154,6 +154,17 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       assert json_response(conn, 422)
     end
 
+    test "can't create a webhook sink consumer referencing a table not in the database", %{
+      conn: conn,
+      valid_attrs: valid_attrs
+    } do
+      valid_attrs = Map.put(valid_attrs, :table, "non_existent_table")
+
+      conn = post(conn, ~p"/api/sinks", valid_attrs)
+      assert res = json_response(conn, 422)
+      assert res["error"]["summary"] =~ "non_existent_table"
+    end
+
     test "creates a sink consumer with an existing sequence", %{
       conn: conn,
       account: account,
@@ -286,6 +297,18 @@ defmodule SequinWeb.SinkConsumerControllerTest do
     } do
       conn = put(conn, ~p"/api/sinks/#{other_sink_consumer.id}", %{name: "new-name"})
       assert json_response(conn, 404)
+    end
+
+    test "can't update a webhook sink consumer referencing a table not in the database", %{
+      conn: conn,
+      sink_consumer: sink_consumer,
+      valid_attrs: valid_attrs
+    } do
+      valid_attrs = Map.put(valid_attrs, :table, "non_existent_table")
+
+      conn = put(conn, ~p"/api/sinks/#{sink_consumer.id}", valid_attrs)
+      assert res = json_response(conn, 422)
+      assert res["error"]["summary"] =~ "non_existent_table"
     end
   end
 

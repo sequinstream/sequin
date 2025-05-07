@@ -13,6 +13,10 @@ defmodule SequinWeb.SinkConsumerJSON do
     Sequin.Transforms.to_external(sink_consumer)
   end
 
+  def render("error.json", %{error: error}) do
+    %{success: false, error: error}
+  end
+
   @doc """
   Renders a deleted sink consumer.
   """

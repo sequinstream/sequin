@@ -3,6 +3,7 @@ defmodule SequinWeb.SinkConsumerController do
 
   alias Sequin.Consumers
   alias Sequin.Databases
+  alias Sequin.Error.NotFoundError
   alias Sequin.Transforms
   alias SequinWeb.ApiFallbackPlug
 
@@ -30,6 +31,19 @@ defmodule SequinWeb.SinkConsumerController do
     with {:ok, cleaned_params} <- Transforms.from_external_sink_consumer(account_id, params, databases, http_endpoints),
          {:ok, sink_consumer} <- Consumers.create_sink_consumer(account_id, cleaned_params) do
       render(conn, "show.json", sink_consumer: sink_consumer)
+    else
+      {:error, %NotFoundError{entity: :sequence}} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> render("error.json",
+          error: %{
+            "summary" =>
+              "Reference to table that does not exist or Sequin does not have access to in the source database: `#{params["table"]}`"
+          }
+        )
+
+      error ->
+        error
     end
   end
 
@@ -43,6 +57,19 @@ defmodule SequinWeb.SinkConsumerController do
          {:ok, cleaned_params} <- Transforms.from_external_sink_consumer(account_id, params, databases, http_endpoints),
          {:ok, updated_consumer} <- Consumers.update_sink_consumer(existing_consumer, cleaned_params) do
       render(conn, "show.json", sink_consumer: updated_consumer)
+    else
+      {:error, %NotFoundError{entity: :sequence}} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> render("error.json",
+          error: %{
+            "summary" =>
+              "Reference to table that does not exist or Sequin does not have access to in the source database: `#{params["table"]}`"
+          }
+        )
+
+      error ->
+        error
     end
   end
 

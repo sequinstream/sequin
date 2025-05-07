@@ -203,10 +203,6 @@ defmodule Sequin.Health.Event do
     defp maybe_to_sequin_error(error) when is_error(error), do: error
 
     defp maybe_to_sequin_error(error) do
-      Logger.warning(
-        "[Health.Event] Wrapping an error that is not a Sequin.Error. Inform the Sequin team of this logline, and they can fix this noisy logline for you: #{inspect(error)}"
-      )
-
       stringified =
         if is_exception(error) do
           %struct_name{} = error

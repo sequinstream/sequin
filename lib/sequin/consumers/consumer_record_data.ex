@@ -36,7 +36,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
 
   def changeset(data, attrs) do
     data
-    |> cast(attrs, [:record])
+    |> cast(attrs, [:record, :action])
     |> cast_embed(:metadata, required: true, with: &metadata_changeset/2)
     |> validate_required([:record, :metadata])
   end

@@ -126,7 +126,8 @@ defmodule Sequin.MixProject do
       {:rexbug, "~> 1.0"},
       {:decorator, "~> 1.4"},
       {:floki, ">= 0.30.0", only: :test},
-      {:uuid, "~> 1.1"}
+      {:uuid, "~> 1.1"},
+      {:tidewave, "~> 0.1", only: :dev}
     ]
   end
 

@@ -21,9 +21,7 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
       {:ok, consumer} ->
         consumer = Repo.preload(consumer, [:postgres_database, :sequence, :replication_slot])
 
-        with {:ok, tables} <- Databases.tables(consumer.postgres_database),
-             :ok <- check_table_exists(tables, consumer.sequence.table_oid),
-             {:ok, relation_kind} <- Postgres.get_relation_kind(consumer.postgres_database, consumer.sequence.table_oid),
+        with {:ok, relation_kind} <- Postgres.get_relation_kind(consumer.postgres_database, consumer.sequence.table_oid),
              {:ok, event} <- check_replica_identity(consumer, relation_kind),
              {:ok, event} <- check_publication(consumer, event, relation_kind) do
           Health.put_event(consumer, event)
@@ -75,13 +73,6 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     %{sink_consumer_id: sink_consumer_id}
     |> new(schedule_in: delay_seconds)
     |> Oban.insert()
-  end
-
-  defp check_table_exists(tables, table_oid) do
-    case Enum.find(tables, fn t -> t.oid == table_oid end) do
-      nil -> {:error, Error.not_found(entity: :table, params: %{oid: table_oid})}
-      _ -> :ok
-    end
   end
 
   defp check_replica_identity(%SinkConsumer{} = consumer, relation_kind) do

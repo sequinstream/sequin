@@ -297,8 +297,30 @@ cd "$current_dir" || exit
 latest_tag=$(get_latest_tag)
 echo "Current version: $latest_tag"
 
+# Calculate default next version (increment patch version)
+if [[ $latest_tag =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    major="${BASH_REMATCH[1]}"
+    minor="${BASH_REMATCH[2]}"
+    patch="${BASH_REMATCH[3]}"
+    # Increment patch version
+    new_patch=$((patch + 1))
+    default_new_tag="$major.$minor.$new_patch"
+    # If original tag had a 'v' prefix, add it to the default
+    if [[ $latest_tag == v* ]]; then
+        default_new_tag="v$default_new_tag"
+    fi
+else
+    # If we can't parse the version, don't provide a default
+    default_new_tag=""
+fi
+
 # Prompt for the new version
-read -p "Enter the new version: " new_version
+read -p "Enter the new version${default_new_tag:+ ($default_new_tag)}: " new_version
+
+# Use default if user didn't enter anything
+if [ -z "$new_version" ] && [ -n "$default_new_tag" ]; then
+    new_version="$default_new_tag"
+fi
 
 # Build the CLI
 build_cli "$new_version"

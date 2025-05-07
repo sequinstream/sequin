@@ -39,6 +39,24 @@
   onMount(() => {
     window.addEventListener("keydown", handleEscapeKey);
     listening = true;
+
+    // NOTE: This is an ugly hack to avoid page being scrolled to the top whenever a Popover is closed within a Dialog window
+    window.setTimeout(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      window.setTimeout(() => {
+        let overlay = (element = document.querySelector(
+          "[data-melt-dialog-overlay]",
+        ));
+        overlay.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        const cancelButton = document.querySelector(
+          "[data-alert-dialog-cancel]",
+        );
+        cancelButton.dispatchEvent(
+          new MouseEvent("mousedown", { bubbles: true }),
+        );
+        cancelButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      }, 20);
+    }, 20);
   });
 
   onDestroy(() => {

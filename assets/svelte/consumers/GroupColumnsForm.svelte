@@ -109,7 +109,7 @@
 
   <!-- Create Mode - Normal -->
 {:else}
-  <ExpandableCard disabled={!selectedTable} expanded={!isEditMode}>
+  <ExpandableCard disabled={!selectedTable}>
     <svelte:fragment slot="title">
       <div class="flex items-center justify-between">
         <CardTitle>Message grouping</CardTitle>

@@ -56,6 +56,7 @@ defmodule Sequin.Runtime.SnsPipeline do
   defp build_sns_message(consumer, record_or_event) do
     message = %{
       message: Sequin.Transforms.Message.to_external(consumer, record_or_event),
+      message_deduplication_id: record_or_event.data.metadata.idempotency_key,
       message_id: UUID.uuid4()
     }
 

@@ -155,6 +155,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       # Heartbeats
       field :current_heartbeat_id, nil | String.t()
       field :heartbeat_emitted_at, nil | DateTime.t()
+      field :heartbeat_emitted_lsn, nil | integer()
       field :heartbeat_timer, nil | reference()
       field :heartbeat_verification_timer, nil | reference()
       field :message_received_since_last_heartbeat, boolean(), default: false
@@ -620,6 +621,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
              | heartbeat_timer: nil,
                current_heartbeat_id: heartbeat_id,
                heartbeat_emitted_at: emitted_at,
+               heartbeat_emitted_lsn: state.last_commit_lsn,
                message_received_since_last_heartbeat: false
            }}
 
@@ -691,6 +693,28 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         )
 
         {:stop, :heartbeat_verification_failed, next_state}
+
+      not is_nil(state.heartbeat_emitted_lsn) and state.last_committed_lsn > state.heartbeat_emitted_lsn ->
+        Logger.error(
+          "[SlotProcessorServer] Heartbeat verification failed - LSN has advanced past outsanding heartbeat LSN?",
+          heartbeat_id: state.current_heartbeat_id
+        )
+
+        Health.put_event(
+          state.replication_slot,
+          %Event{
+            slug: :replication_heartbeat_verification,
+            status: :fail,
+            error:
+              Error.service(
+                service: :replication,
+                message:
+                  "Replication slot connection not receiving heartbeats - LSN has advanced past outstanding heartbeat LSN?"
+              )
+          }
+        )
+
+        {:keep_state, next_state}
 
       # We have an outstanding heartbeat and we have received a message since it was emitted
       # This occurs when there is significant replication lag

@@ -651,7 +651,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
       with {newly_blocked_messages, state} <- State.pop_blocked_messages(state),
            :ok <- delete_messages(state, Enum.map(discarded_messages, & &1.ack_id)),
-           :ok <- AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages),
+           :ok <-
+             if(length(discarded_messages) > 0,
+               do: AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages),
+               else: :ok
+             ),
            # Now put the blocked messages into persisted_messages
            state = State.put_persisted_messages(state, newly_blocked_messages),
            :ok <- upsert_messages(state, messages ++ newly_blocked_messages) do

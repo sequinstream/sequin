@@ -15,7 +15,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   @spec store_messages(String.t(), list(ConsumerEvent.t() | ConsumerRecord.t()), non_neg_integer()) ::
           :ok | {:error, Error.t()}
 
-  def store_messages(consumer_id, messages, max_messages \\ @max_messages) when length(messages) > 0 do
+  def store_messages(consumer_id, messages, max_messages \\ @max_messages) do
     key = "acknowledged_messages:#{consumer_id}"
     now = :os.system_time(:nanosecond)
 
@@ -37,8 +37,6 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
       error -> error
     end
   end
-
-  def store_messages(_, [], _), do: :ok
 
   @doc """
   Fetches messages for a given consumer_id from a Redis sorted set, sorted by descending score.

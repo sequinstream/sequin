@@ -127,9 +127,9 @@ defmodule Sequin.Prometheus do
     )
 
     Gauge.new(
-      name: :sequin_replication_lag_mb,
+      name: :sequin_replication_slot_size,
       labels: [:replication_slot_id, :slot_name],
-      help: "Replication lag between Postgres and Sequin in megabytes."
+      help: "Replication slot size in bytes."
     )
 
     ## Ecto
@@ -338,9 +338,9 @@ defmodule Sequin.Prometheus do
     Gauge.set([name: :sequin_delivery_saturation_percent, labels: [consumer_id, consumer_name]], percent)
   end
 
-  @spec set_replication_lag(replication_slot_id :: String.t(), slot_name :: String.t(), lag_mb :: number()) :: :ok
-  def set_replication_lag(replication_slot_id, slot_name, lag_mb) do
-    Gauge.set([name: :sequin_replication_lag_mb, labels: [replication_slot_id, slot_name]], lag_mb)
+  @spec set_replication_slot_size(replication_slot_id :: String.t(), slot_name :: String.t(), size :: number()) :: :ok
+  def set_replication_slot_size(replication_slot_id, slot_name, size) do
+    Gauge.set([name: :sequin_replication_slot_size, labels: [replication_slot_id, slot_name]], size)
   end
 
   defp validate_success(:ok), do: :ok

@@ -36,6 +36,21 @@ metrics_port = String.to_integer(System.get_env("SEQUIN_METRICS_PORT") || "8376"
 server_host = System.get_env("SERVER_HOST") || System.get_env("PHX_HOST") || "localhost"
 metrics_host = System.get_env("METRICS_HOST") || "localhost"
 
+metrics_auth =
+  case {System.get_env("SEQUIN_METRICS_USER"), System.get_env("SEQUIN_METRICS_PASSWORD")} do
+    {nil, nil} ->
+      nil
+
+    {u, p} ->
+      [
+        username: u || "",
+        password: p || "",
+        realm: "Sequin Metrics"
+      ]
+  end
+
+config :sequin, :metrics_basic_auth, metrics_auth
+
 if System.get_env("PORT") do
   Logger.warning("PORT environment variable is deprecated. Please use SERVER_PORT instead.")
 end
@@ -268,12 +283,6 @@ if config_env() == :prod do
   datadog_api_key = get_env.("DATADOG_API_KEY")
   datadog_app_key = get_env.("DATADOG_APP_KEY")
 
-  prometheus_auth =
-    case {System.get_env("SEQUIN_METRICS_USERNAME"), System.get_env("SEQUIN_METRICS_PASSWORD")} do
-      {nil, nil} -> false
-      {u, p} -> {:basic, u || "", p || ""}
-    end
-
   config :libcluster,
     topologies: [
       sequin: [
@@ -283,8 +292,6 @@ if config_env() == :prod do
         ]
       ]
     ]
-
-  config :prometheus, Sequin.PrometheusExporter, auth: prometheus_auth
 
   config :sequin, Sequin.Mailer, adapter: Sequin.Swoosh.Adapters.Loops, api_key: System.get_env("LOOPS_API_KEY")
   config :sequin, Sequin.Redis, ConfigParser.redis_config(env_vars)

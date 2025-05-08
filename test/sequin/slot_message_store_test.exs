@@ -2,13 +2,13 @@ defmodule Sequin.SlotMessageStoreTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Error.InvariantError
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotMessageStore.State
   alias Sequin.Runtime.SlotMessageStoreSupervisor
-  alias Sequin.Consumers.AcknowledgedMessages
 
   @moduletag :capture_log
 
@@ -644,13 +644,12 @@ defmodule Sequin.SlotMessageStoreTest do
   describe "SlotMessageStore max_retry_count behavior" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!(max_retry_count: 2, type: :http_push, partition_count: 3)
+
       start_supervised!(
         {SlotMessageStoreSupervisor,
-         consumer: consumer,
-         test_pid: self(),
-         visibility_check_interval: 100,
-         max_time_since_delivered_ms: 500}
+         consumer: consumer, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
       )
+
       %{consumer: consumer}
     end
 
@@ -685,6 +684,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # First delivery and failure
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
+
       meta = %{
         ack_id: delivered.ack_id,
         deliver_count: 1,
@@ -692,6 +692,7 @@ defmodule Sequin.SlotMessageStoreTest do
         last_delivered_at: DateTime.utc_now(),
         not_visible_until: DateTime.add(DateTime.utc_now(), 1, :second)
       }
+
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
       # Wait for visibility timeout and verify message is still in store
@@ -701,6 +702,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Second delivery and failure should discard the message
       {:ok, [redelivered]} = SlotMessageStore.produce(consumer, 1, self())
+
       meta = %{
         ack_id: redelivered.ack_id,
         deliver_count: 2,
@@ -708,6 +710,7 @@ defmodule Sequin.SlotMessageStoreTest do
         last_delivered_at: DateTime.utc_now(),
         not_visible_until: DateTime.add(DateTime.utc_now(), 1, :second)
       }
+
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
       # Wait for visibility timeout and verify message is discarded
@@ -731,6 +734,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Deliver and fail the message once
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
+
       meta = %{
         ack_id: delivered.ack_id,
         deliver_count: 1,
@@ -738,6 +742,7 @@ defmodule Sequin.SlotMessageStoreTest do
         last_delivered_at: DateTime.utc_now(),
         not_visible_until: DateTime.add(DateTime.utc_now(), 1, :second)
       }
+
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
       # Message should still be in the store
@@ -765,6 +770,7 @@ defmodule Sequin.SlotMessageStoreTest do
       # Deliver and fail the message multiple times
       for i <- 1..5 do
         {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
+
         meta = %{
           ack_id: delivered.ack_id,
           deliver_count: i,
@@ -772,6 +778,7 @@ defmodule Sequin.SlotMessageStoreTest do
           last_delivered_at: DateTime.utc_now(),
           not_visible_until: DateTime.add(DateTime.utc_now(), 1, :second)
         }
+
         :ok = SlotMessageStore.messages_failed(consumer, [meta])
         Process.sleep(1100)
       end

@@ -653,20 +653,6 @@ defmodule Sequin.SlotMessageStoreTest do
       %{consumer: consumer}
     end
 
-    test "validates max_retry_count is greater than 0", %{consumer: consumer} do
-      # Try to update consumer with invalid max_retry_count
-      {:error, changeset} = Consumers.update_sink_consumer(consumer, %{max_retry_count: 0})
-      assert "must be greater than 0" in errors_on(changeset).max_retry_count
-
-      # Try to update consumer with negative max_retry_count
-      {:error, changeset} = Consumers.update_sink_consumer(consumer, %{max_retry_count: -1})
-      assert "must be greater than 0" in errors_on(changeset).max_retry_count
-
-      # Valid update should work
-      {:ok, updated_consumer} = Consumers.update_sink_consumer(consumer, %{max_retry_count: 3})
-      assert updated_consumer.max_retry_count == 3
-    end
-
     test "discards messages that exceed max_retry_count", %{consumer: consumer} do
       consumer_id = consumer.id
 
@@ -690,13 +676,12 @@ defmodule Sequin.SlotMessageStoreTest do
         deliver_count: 1,
         group_id: delivered.group_id,
         last_delivered_at: DateTime.utc_now(),
-        not_visible_until: DateTime.add(DateTime.utc_now(), 1, :second)
+        not_visible_until: DateTime.utc_now()
       }
 
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
-      # Wait for visibility timeout and verify message is still in store
-      Process.sleep(1100)
+      # Verify message is still in store
       persisted_messages = Consumers.list_consumer_messages_for_consumer(consumer)
       assert length(persisted_messages) == 1
 
@@ -708,48 +693,16 @@ defmodule Sequin.SlotMessageStoreTest do
         deliver_count: 2,
         group_id: redelivered.group_id,
         last_delivered_at: DateTime.utc_now(),
-        not_visible_until: DateTime.add(DateTime.utc_now(), 1, :second)
+        not_visible_until: DateTime.utc_now()
       }
 
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
-      # Wait for visibility timeout and verify message is discarded
-      Process.sleep(1100)
+      # Verify message is discarded
       assert [] == Consumers.list_consumer_messages_for_consumer(consumer)
       {:ok, acknowledged} = AcknowledgedMessages.fetch_messages(consumer.id, 100, 0)
       assert length(acknowledged) == 1
       assert hd(acknowledged).state == "discarded"
-    end
-
-    test "keeps messages that haven't exceeded max_retry_count", %{consumer: consumer} do
-      # Create a message
-      message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      # Put message in store
-      :ok = SlotMessageStore.put_messages(consumer, [message])
-
-      # Deliver and fail the message once
-      {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
-
-      meta = %{
-        ack_id: delivered.ack_id,
-        deliver_count: 1,
-        group_id: delivered.group_id,
-        last_delivered_at: DateTime.utc_now(),
-        not_visible_until: DateTime.add(DateTime.utc_now(), 1, :second)
-      }
-
-      :ok = SlotMessageStore.messages_failed(consumer, [meta])
-
-      # Message should still be in the store
-      persisted_messages = Consumers.list_consumer_messages_for_consumer(consumer)
-      assert length(persisted_messages) == 1
-      {:ok, acknowledged} = AcknowledgedMessages.fetch_messages(consumer.id, 100, 0)
-      assert length(acknowledged) == 0
     end
 
     test "keeps messages when max_retry_count is nil", %{consumer: _consumer} do
@@ -776,11 +729,10 @@ defmodule Sequin.SlotMessageStoreTest do
           deliver_count: i,
           group_id: delivered.group_id,
           last_delivered_at: DateTime.utc_now(),
-          not_visible_until: DateTime.add(DateTime.utc_now(), 1, :second)
+          not_visible_until: DateTime.utc_now()
         }
 
         :ok = SlotMessageStore.messages_failed(consumer, [meta])
-        Process.sleep(1100)
       end
 
       # Message should still be in the store

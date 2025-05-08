@@ -164,6 +164,8 @@
         return "bg-yellow-200";
       case "green":
         return "bg-green-200";
+      case "red":
+        return "bg-red-200";
       default:
         return "bg-gray-200";
     }

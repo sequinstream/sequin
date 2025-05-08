@@ -256,7 +256,7 @@
             </div>
 
             <div class="space-y-2">
-              <Label for="max-retry-count">Max Retry Count</Label>
+              <Label for="max-retry-count">Max retry count</Label>
               <Input
                 id="max-retry-count"
                 type="number"

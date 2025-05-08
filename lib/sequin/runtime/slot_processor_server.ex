@@ -657,7 +657,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
         {:keep_state, next_state}
 
-      {:error, no_heartbeat} ->
+      {:error, :no_heartbeat} ->
         Logger.error(
           "[SlotProcessorServer] Heartbeat verification failed (no heartbeat emitted in last #{@max_time_between_heartbeat_emissions_min} min)",
           heartbeat_id: state.current_heartbeat_id
@@ -748,7 +748,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       # We have no outstanding heartbeat and it has been too long since we emitted one !
       # This is a bug, as we should always either be regularly emitting heartbeats or have one outstanding
       is_nil(state.current_heartbeat_id) ->
-        {:error, no_heartbeat}
+        {:error, :no_heartbeat}
 
       not is_nil(state.heartbeat_emitted_lsn) and state.last_committed_lsn > state.heartbeat_emitted_lsn ->
         {:error, :lsn_advanced}

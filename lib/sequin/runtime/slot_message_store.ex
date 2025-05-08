@@ -30,6 +30,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   use GenServer
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
@@ -644,9 +645,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
           }
         end)
 
+      {discarded_messages, messages} =
+        maybe_discard_messages(messages, state.consumer.type, state.consumer.max_retry_count)
+
       state = State.put_persisted_messages(state, messages)
 
       with {newly_blocked_messages, state} <- State.pop_blocked_messages(state),
+           :ok <- handle_discarded_messages(state, discarded_messages),
            # Now put the blocked messages into persisted_messages
            state = State.put_persisted_messages(state, newly_blocked_messages),
            :ok <- upsert_messages(state, messages ++ newly_blocked_messages) do
@@ -980,5 +985,25 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   defp message_partition(message, partition_count) do
     :erlang.phash2(message.group_id, partition_count)
+  end
+
+  @spec maybe_discard_messages([State.message()], :http_push, non_neg_integer()) :: {[State.message()], [State.message()]}
+  defp maybe_discard_messages(messages, :http_push, max_retry_count) when max_retry_count != nil do
+    Enum.reduce(messages, {[], []}, fn message, {discarded_messages, kept_messages} ->
+      if message.deliver_count >= max_retry_count,
+        do: {[%{message | state: :discarded, not_visible_until: nil} | discarded_messages], kept_messages},
+        else: {discarded_messages, [message | kept_messages]}
+    end)
+  end
+
+  defp maybe_discard_messages(messages, _, _), do: {[], messages}
+
+  @spec handle_discarded_messages(State.t(), [State.message()]) :: :ok | {:error, Error.t()}
+  defp handle_discarded_messages(_, []), do: :ok
+
+  defp handle_discarded_messages(%State{} = state, discarded_messages) do
+    with :ok <- delete_messages(state, Enum.map(discarded_messages, & &1.ack_id)) do
+      AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages)
+    end
   end
 end

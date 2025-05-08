@@ -559,7 +559,7 @@ defmodule Sequin.Consumers do
   end
 
   @exponential_backoff_max :timer.minutes(10)
-  def advance_delivery_state_for_failure(message) do
+  def advance_delivery_state_for_failure(%{data: message}) do
     deliver_count = message.deliver_count + 1
     backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
     not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)

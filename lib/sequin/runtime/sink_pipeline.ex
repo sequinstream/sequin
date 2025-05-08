@@ -358,10 +358,8 @@ defmodule Sequin.Runtime.SinkPipeline do
   defp ack_failed(_consumer, _sms, []), do: :ok
 
   defp ack_failed(%SinkConsumer{} = consumer, slot_message_store_mod, failed) do
-    failed_message_datas = Enum.map(failed, & &1.data)
-
     failed_message_metadatas =
-      failed_message_datas
+      failed
       |> Stream.map(&Consumers.advance_delivery_state_for_failure/1)
       |> Enum.map(&%{&1 | data: nil})
 

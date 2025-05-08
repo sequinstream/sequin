@@ -21,6 +21,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage do
     field :inserted_at, DateTime.t()
     field :commit_timestamp, DateTime.t()
     field :trace_id, String.t()
+    field :state, :discarded | :acknowledged
   end
 
   def encode(%AcknowledgedMessage{} = acknowledged_message) do
@@ -42,6 +43,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage do
     json
     |> JSON.decode_timestamp("last_delivered_at")
     |> JSON.decode_timestamp("inserted_at")
+    |> JSON.decode_atom(:state)
     |> JSON.struct(AcknowledgedMessage)
   end
 

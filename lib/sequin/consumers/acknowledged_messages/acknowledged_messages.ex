@@ -83,7 +83,8 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
       table_oid: record.table_oid,
       not_visible_until: record.not_visible_until,
       inserted_at: record.inserted_at,
-      trace_id: record.replication_message_trace_id
+      trace_id: record.replication_message_trace_id,
+      state: record.state
     }
   end
 
@@ -104,7 +105,8 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
       table_oid: event.table_oid,
       not_visible_until: event.not_visible_until,
       inserted_at: event.inserted_at,
-      trace_id: event.replication_message_trace_id
+      trace_id: event.replication_message_trace_id,
+      state: event.state
     }
   end
 end

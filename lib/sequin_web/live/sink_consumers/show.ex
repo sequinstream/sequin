@@ -629,6 +629,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       max_ack_pending: consumer.max_ack_pending,
       max_deliver: consumer.max_deliver,
       max_waiting: consumer.max_waiting,
+      max_retry_count: consumer.max_retry_count,
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
       database: encode_database(consumer.postgres_database),
@@ -1176,6 +1177,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp get_message_state(%{type: :sequin_stream}, %AcknowledgedMessage{}), do: "acknowledged"
+  defp get_message_state(_consumer, %AcknowledgedMessage{state: "discarded"}), do: "discarded"
   defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "delivered"
   defp get_message_state(_consumer, %{deliver_count: 0}), do: "not delivered"
 
@@ -1211,6 +1213,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     case state do
       "delivered" -> "green"
       "backing off" -> "yellow"
+      "discarded" -> "red"
       _ -> "gray"
     end
   end

@@ -997,9 +997,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   defp maybe_discard_messages(messages, _, _), do: {[], messages}
 
-  defp handle_discarded_messages(%State{} = _state, []), do: :ok
-
   @spec handle_discarded_messages(State.t(), [State.message()]) :: :ok | {:error, Error.t()}
+  defp handle_discarded_messages(_, []), do: :ok
+
   defp handle_discarded_messages(%State{} = state, discarded_messages) do
     with :ok <- delete_messages(state, Enum.map(discarded_messages, & &1.ack_id)) do
       AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages)

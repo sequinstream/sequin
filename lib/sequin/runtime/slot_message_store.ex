@@ -650,12 +650,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       state = State.put_persisted_messages(state, messages)
 
       with {newly_blocked_messages, state} <- State.pop_blocked_messages(state),
-           :ok <- delete_messages(state, Enum.map(discarded_messages, & &1.ack_id)),
-           :ok <-
-             if(length(discarded_messages) > 0,
-               do: AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages),
-               else: :ok
-             ),
+           :ok <- handle_discarded_messages(state, discarded_messages),
            # Now put the blocked messages into persisted_messages
            state = State.put_persisted_messages(state, newly_blocked_messages),
            :ok <- upsert_messages(state, messages ++ newly_blocked_messages) do
@@ -1002,4 +997,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   defp maybe_discard_messages(messages, _, _), do: {[], messages}
+
+  defp handle_discarded_messages(%State{} = _state, []), do: :ok
+
+  defp handle_discarded_messages(%State{} = state, discarded_messages) do
+    with :ok <- delete_messages(state, Enum.map(discarded_messages, & &1.ack_id)) do
+      AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages)
+    end
+  end
 end

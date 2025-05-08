@@ -14,7 +14,6 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   """
   @spec store_messages(String.t(), list(ConsumerEvent.t() | ConsumerRecord.t()), non_neg_integer()) ::
           :ok | {:error, Error.t()}
-
   def store_messages(consumer_id, messages, max_messages \\ @max_messages) do
     key = "acknowledged_messages:#{consumer_id}"
     now = :os.system_time(:nanosecond)

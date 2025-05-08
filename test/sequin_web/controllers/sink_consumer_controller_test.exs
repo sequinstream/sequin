@@ -47,13 +47,15 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       transform: "none",
       batch_size: 1,
       actions: ["insert", "update", "delete"],
-      group_column_names: [column.name]
+      group_column_names: [column.name],
+      max_retry_count: 5
     }
 
     %{
       database: database,
       table: table,
       column: column,
+      http_endpoint: http_endpoint,
       sink_consumer: sink_consumer,
       other_sink_consumer: other_sink_consumer,
       other_account: other_account,
@@ -104,9 +106,10 @@ defmodule SequinWeb.SinkConsumerControllerTest do
   end
 
   describe "create" do
-    test "creates a webhook sink consumer under the authenticated account", %{
+    test "creates a webhook sink consumer with valid attributes", %{
       conn: conn,
       account: account,
+      column: column,
       valid_attrs: valid_attrs
     } do
       conn = post(conn, ~p"/api/sinks", valid_attrs)
@@ -114,6 +117,26 @@ defmodule SequinWeb.SinkConsumerControllerTest do
 
       {:ok, sink_consumer} = Consumers.find_sink_consumer(account.id, name: name)
       assert sink_consumer.account_id == account.id
+      assert sink_consumer.name == valid_attrs.name
+      assert sink_consumer.status == String.to_atom(valid_attrs.status)
+
+      [filter] = sink_consumer.sequence_filter.column_filters
+
+      assert_maps_equal(
+        filter,
+        %{
+          operator: :==,
+          column_attnum: column.attnum
+        },
+        [:operator, :column_attnum]
+      )
+
+      assert sink_consumer.sink.type == :http_push
+      assert is_nil(sink_consumer.transform_id)
+      assert sink_consumer.batch_size == valid_attrs.batch_size
+      assert sink_consumer.sequence_filter.actions == Enum.map(valid_attrs.actions, &String.to_atom/1)
+      assert sink_consumer.sequence_filter.group_column_attnums == [column.attnum]
+      assert sink_consumer.max_retry_count == valid_attrs.max_retry_count
     end
 
     test "creates a webhook sink consumer defaulting batch to true", %{
@@ -256,6 +279,15 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       assert updated_consumer.sink == sink_consumer.sink
       assert updated_consumer.transform == sink_consumer.transform
       assert updated_consumer.batch_size == sink_consumer.batch_size
+    end
+
+    test "updates the sink consumer with max_retry_count", %{conn: conn, sink_consumer: sink_consumer} do
+      update_attrs = %{max_retry_count: 5}
+      conn = put(conn, ~p"/api/sinks/#{sink_consumer.id}", update_attrs)
+      assert %{"id" => id} = json_response(conn, 200)
+
+      {:ok, updated_consumer} = Consumers.find_sink_consumer(sink_consumer.account_id, id: id)
+      assert updated_consumer.max_retry_count == 5
     end
 
     test "updates the sink consumer to set batch=false", %{

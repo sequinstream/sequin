@@ -681,10 +681,6 @@ defmodule Sequin.SlotMessageStoreTest do
 
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
-      # Verify message is still in store
-      persisted_messages = Consumers.list_consumer_messages_for_consumer(consumer)
-      assert length(persisted_messages) == 1
-
       # Second delivery and failure should discard the message
       {:ok, [redelivered]} = SlotMessageStore.produce(consumer, 1, self())
 

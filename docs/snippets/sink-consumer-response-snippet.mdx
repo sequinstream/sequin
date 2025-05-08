@@ -231,6 +231,11 @@
 <ResponseField name="group_column_names" type="array" >
     Column names used for grouping records
 </ResponseField>
+<ResponseField name="max_retry_count" type="integer" >
+    The maximum number of times a message will be retried if delivery fails. Once this limit is reached, the message will be discarded.
+
+    Defaults to `null`, meaning messages are retried indefinitely.
+</ResponseField>
 <ResponseField name="timestamp_format" type="string" >
     The format of the timestamp in the source data.
 

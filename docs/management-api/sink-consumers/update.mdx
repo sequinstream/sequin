@@ -46,6 +46,11 @@ The request body can include any of the following fields:
   Possible values include `insert`, `update`, `delete`.
 </ParamField>
 
+<ParamField body="max_retry_count" type="integer">
+  The maximum number of times a message will be retried if delivery fails. Once this limit is reached, the message will be discarded.
+
+  Defaults to `null`, meaning messages are retried indefinitely.
+</ParamField>
 
 <ParamField body="timestamp_format" type="string">
   The format of the timestamp in the source data.

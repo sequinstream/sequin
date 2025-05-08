@@ -471,11 +471,4 @@ defmodule Sequin.Runtime.PostgresAdapter.Decoder do
   end
 
   defp decode_lsn(<<xlog_file::integer-32, xlog_offset::integer-32>>), do: {xlog_file, xlog_offset}
-
-  def extract_relation_id(<<"I", relation_id::integer-32, _rest::binary>>), do: {:ok, relation_id}
-  def extract_relation_id(<<"U", relation_id::integer-32, _rest::binary>>), do: {:ok, relation_id}
-  def extract_relation_id(<<"D", relation_id::integer-32, _rest::binary>>), do: {:ok, relation_id}
-  def extract_relation_id(<<"R", relation_id::integer-32, _rest::binary>>), do: {:ok, relation_id}
-  # truncate?
-  def extract_relation_id(_), do: :no_relation_id
 end

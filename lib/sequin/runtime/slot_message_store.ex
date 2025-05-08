@@ -986,13 +986,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
     :erlang.phash2(message.group_id, partition_count)
   end
 
+  @spec maybe_discard_messages([State.message()], :http_push, non_neg_integer()) :: {[State.message()], [State.message()]}
   defp maybe_discard_messages(messages, :http_push, max_retry_count) when max_retry_count != nil do
     Enum.reduce(messages, {[], []}, fn message, {acc1, acc2} ->
-      if message.deliver_count >= max_retry_count do
-        {[%{message | state: "discarded"} | acc1], acc2}
-      else
-        {acc1, [message | acc2]}
-      end
+      if message.deliver_count >= max_retry_count,
+        do: {[%{message | state: "discarded"} | acc1], acc2},
+        else: {acc1, [message | acc2]}
     end)
   end
 
@@ -1000,6 +999,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   defp handle_discarded_messages(%State{} = _state, []), do: :ok
 
+  @spec handle_discarded_messages(State.t(), [State.message()]) :: :ok | {:error, Error.t()}
   defp handle_discarded_messages(%State{} = state, discarded_messages) do
     with :ok <- delete_messages(state, Enum.map(discarded_messages, & &1.ack_id)) do
       AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages)

@@ -30,7 +30,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
          Logger.metadata(database_id: database.id, replication_id: database.replication_slot.id),
          :ok <- check_database(database) do
       check_replication_slot(database)
-      measure_replication_lag(database.replication_slot)
+      measure_replication_lag(database)
 
       :syn.publish(:replication, {:postgres_replication_slot_checked, database.id}, :postgres_replication_slot_checked)
 
@@ -144,12 +144,14 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
     end
   end
 
-  defp measure_replication_lag(slot) do
+  defp measure_replication_lag(%PostgresDatabase{} = db) do
+    slot = db.replication_slot
+
     case Replication.measure_replication_lag(slot) do
       {:ok, lag_bytes} ->
         lag_mb = Float.round(lag_bytes / 1024 / 1024, 0)
 
-        Prometheus.set_replication_slot_size(slot.id, slot.slot_name, lag_bytes)
+        Prometheus.set_replication_slot_size(slot.id, slot.name, db.name, lag_bytes)
 
         Statsd.gauge("sequin.db.replication_lag_mb", lag_mb,
           tags: %{replication_slot_id: slot.id, account_id: slot.account_id}

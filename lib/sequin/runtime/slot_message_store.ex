@@ -990,7 +990,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   defp maybe_discard_messages(messages, :http_push, max_retry_count) when max_retry_count != nil do
     Enum.reduce(messages, {[], []}, fn message, {discarded_messages, kept_messages} ->
       if message.deliver_count >= max_retry_count,
-        do: {[%{message | state: "discarded"} | discarded_messages], kept_messages},
+        do: {[%{message | state: :discarded} | discarded_messages], kept_messages},
         else: {discarded_messages, [message | kept_messages]}
     end)
   end

@@ -956,7 +956,7 @@
             </div>
             <div class="grid lg:grid-cols-4 gap-4">
               <div>
-                <span class="text-sm text-gray-500"> Request Timeout </span>
+                <span class="text-sm text-gray-500"> Request timeout </span>
                 <Tooltip.Root openDelay={200}>
                   <Tooltip.Trigger>
                     <HelpCircle
@@ -965,7 +965,7 @@
                   </Tooltip.Trigger>
                   <Tooltip.Content class="max-w-xs">
                     <p class="text-xs text-gray-500">
-                      <b>Request Timeout</b>
+                      <b>Request timeout</b>
                       <br />
                       Defines the time limit for a message to be successfully acknowledged
                       (i.e. return a status 200) by the webhook endpoint. Exceeding
@@ -979,7 +979,7 @@
               </div>
 
               <div hidden={!isHttpPushConsumer(consumer)}>
-                <span class="text-sm text-gray-500">Batch Size</span>
+                <span class="text-sm text-gray-500">Batch size</span>
                 <Tooltip.Root openDelay={200}>
                   <Tooltip.Trigger>
                     <HelpCircle
@@ -988,7 +988,7 @@
                   </Tooltip.Trigger>
                   <Tooltip.Content class="max-w-xs">
                     <p class="text-xs text-gray-500">
-                      <b>Batch Size</b>
+                      <b>Batch size</b>
                       <br />
                       The number of records included in each webhook request. A larger
                       batch size can improve throughput but increases the payload
@@ -1002,7 +1002,7 @@
               </div>
 
               <div>
-                <span class="text-sm text-gray-500">Max Pending Messages</span>
+                <span class="text-sm text-gray-500">Max pending messages</span>
                 <Tooltip.Root openDelay={200}>
                   <Tooltip.Trigger>
                     <HelpCircle
@@ -1011,7 +1011,7 @@
                   </Tooltip.Trigger>
                   <Tooltip.Content class="max-w-xs">
                     <p class="text-xs text-gray-500">
-                      <b>Max Pending Messages</b>
+                      <b>Max pending messages</b>
                       <br />
                       The maximum number of messages that can be outstanding (delivered,
                       not yet acknowledged). Once this limit is reached, delivery
@@ -1034,7 +1034,7 @@
               </div>
 
               <div>
-                <span class="text-sm text-gray-500">Max Retry Count</span>
+                <span class="text-sm text-gray-500">Max retry count</span>
                 <Tooltip.Root openDelay={200}>
                   <Tooltip.Trigger>
                     <HelpCircle
@@ -1043,7 +1043,7 @@
                   </Tooltip.Trigger>
                   <Tooltip.Content class="max-w-xs">
                     <p class="text-xs text-gray-500">
-                      <b>Max Retry Count</b>
+                      <b>Max retry count</b>
                       <br />
                       The maximum number of times a message will be retried if delivery
                       fails. Once this limit is reached, the message will be discarded.

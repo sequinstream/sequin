@@ -149,15 +149,15 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
       {:ok, lag_bytes} ->
         lag_mb = Float.round(lag_bytes / 1024 / 1024, 0)
 
+        Prometheus.set_replication_slot_size(slot.id, slot.slot_name, lag_bytes)
+
+        Statsd.gauge("sequin.db.replication_lag_mb", lag_mb,
+          tags: %{replication_slot_id: slot.id, account_id: slot.account_id}
+        )
+
         if lag_bytes > Replication.lag_bytes_alert_threshold(slot) do
           Logger.warning("Replication lag is #{lag_mb}MB")
         else
-          Prometheus.set_replication_lag(slot.id, slot.slot_name, lag_mb)
-
-          Statsd.gauge("sequin.db.replication_lag_mb", lag_mb,
-            tags: %{replication_slot_id: slot.id, account_id: slot.account_id}
-          )
-
           Logger.info("Replication lag is #{lag_mb}MB")
         end
 

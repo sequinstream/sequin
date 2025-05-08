@@ -12,6 +12,8 @@ A **sink** in Sequin is a destination for your Postgres data.
 
 Sequin guarantees delivery of messages to sinks. If a message is not delivered successfully, Sequin will retry. Sequin will expontentially backoff the retry interval, up to a maximum of roughly 3 minutes.
 
+By default, Sequin retries messages indefinitely. You can configure a maximum number of retries for a sink by setting the `max_retry_count` parameter. If a message fails delivery after the specified number of retries, it will be discarded.
+
 ### Message grouping and ordering
 
 Sequin has the ability to group messages by one or more fields. Changes for rows in the same group are guaranteed to arrive in the order they occurred (i.e. the order they were committed in Postgres) to your sink.

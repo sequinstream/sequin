@@ -573,6 +573,7 @@ defmodule Sequin.YamlLoaderTest do
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
                    transform: "record_only"
+                   max_retry_count: 5
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
@@ -582,6 +583,7 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.sequence.name == "test-db.public.Characters"
       assert consumer.transform.name == "record_only"
       assert consumer.sink.batch == true
+      assert consumer.max_retry_count == 5
 
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
@@ -611,6 +613,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert [consumer] = Repo.all(SinkConsumer)
       assert consumer.sink.batch == false
+      assert is_nil(consumer.max_retry_count)
     end
 
     test "creates sink consumer with filters" do

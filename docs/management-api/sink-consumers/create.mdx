@@ -232,6 +232,12 @@ Creates a new sink consumer.
   Column names used for grouping records
 </ParamField>
 
+<ParamField body="max_retry_count" type="integer">
+  The maximum number of times a message will be retried if delivery fails. Once this limit is reached, the message will be discarded.
+
+  Defaults to `null`, meaning messages are retried indefinitely.
+</ParamField>
+
 <ParamField body="ack_wait_ms" type="integer">
   Acknowledgement timeout in milliseconds (minimum 500ms)
 </ParamField>

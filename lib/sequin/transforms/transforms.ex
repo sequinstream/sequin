@@ -133,7 +133,8 @@ defmodule Sequin.Transforms do
       batch_size: consumer.batch_size,
       transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
       timestamp_format: consumer.timestamp_format,
-      active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive))
+      active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
+      max_retry_count: consumer.max_retry_count
     }
   end
 
@@ -591,6 +592,12 @@ defmodule Sequin.Transforms do
 
         "timestamp_format" ->
           {:cont, {:ok, Map.put(acc, :timestamp_format, value)}}
+
+        "max_retry_count" when is_integer(value) and value >= 0 ->
+          {:cont, {:ok, Map.put(acc, :max_retry_count, value)}}
+
+        "max_retry_count" ->
+          {:halt, {:error, Error.validation(summary: "max_retry_count must be a non-negative integer")}}
 
         # temporary for backwards compatibility
         "consumer_start" ->

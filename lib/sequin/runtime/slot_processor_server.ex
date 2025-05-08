@@ -732,45 +732,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  defp verify_heartbeat(%State{} = state) do
-    cond do
-      # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
-      state.id in @slots_ids_with_old_postgres ->
-        :ok
-
-      # No outstanding heartbeat but we have emitted one in the last few minutes
-      # This is the most likely clause we hit because we usually receive the heartbeat message
-      # pretty quickly after emitting it
-      is_nil(state.current_heartbeat_id) and not is_nil(state.heartbeat_emitted_at) and
-          Sequin.Time.after_min_ago?(state.heartbeat_emitted_at, @max_time_between_heartbeat_emissions_min) ->
-        :ok
-
-      # We have no outstanding heartbeat and it has been too long since we emitted one !
-      # This is a bug, as we should always either be regularly emitting heartbeats or have one outstanding
-      is_nil(state.current_heartbeat_id) ->
-        {:error, :no_heartbeat}
-
-      not is_nil(state.heartbeat_emitted_lsn) and state.last_committed_lsn > state.heartbeat_emitted_lsn ->
-        {:error, :lsn_advanced}
-
-      # We have an outstanding heartbeat and we have received a message since it was emitted
-      # This occurs when there is significant replication lag
-      not is_nil(state.current_heartbeat_id) and state.message_received_since_last_heartbeat ->
-        :ok
-
-      # We have an outstanding heartbeat but it was emitted less than 20s ago (too recent to verify)
-      # This should only occur when latency between Sequin and the Postgres is high
-      not is_nil(state.current_heartbeat_id) and
-          Sequin.Time.after_min_ago?(state.heartbeat_emitted_at, @max_time_between_heartbeat_emit_and_receive_min) ->
-        {:error, :too_soon}
-
-      # We have an outstanding heartbeat but have not received the heartbeat or any other messages recently
-      # This means the replication slot is somehow disconnected
-      not is_nil(state.current_heartbeat_id) ->
-        {:error, :stale_connection}
-    end
-  end
-
   @impl ReplicationConnection
   def handle_info(:process_logging, state) do
     info =
@@ -911,6 +872,45 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     schedule_observe_ingestion_latency()
 
     {:keep_state, state}
+  end
+
+  defp verify_heartbeat(%State{} = state) do
+    cond do
+      # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
+      state.id in @slots_ids_with_old_postgres ->
+        :ok
+
+      # No outstanding heartbeat but we have emitted one in the last few minutes
+      # This is the most likely clause we hit because we usually receive the heartbeat message
+      # pretty quickly after emitting it
+      is_nil(state.current_heartbeat_id) and not is_nil(state.heartbeat_emitted_at) and
+          Sequin.Time.after_min_ago?(state.heartbeat_emitted_at, @max_time_between_heartbeat_emissions_min) ->
+        :ok
+
+      # We have no outstanding heartbeat and it has been too long since we emitted one !
+      # This is a bug, as we should always either be regularly emitting heartbeats or have one outstanding
+      is_nil(state.current_heartbeat_id) ->
+        {:error, :no_heartbeat}
+
+      not is_nil(state.heartbeat_emitted_lsn) and state.last_commit_lsn > state.heartbeat_emitted_lsn ->
+        {:error, :lsn_advanced}
+
+      # We have an outstanding heartbeat and we have received a message since it was emitted
+      # This occurs when there is significant replication lag
+      not is_nil(state.current_heartbeat_id) and state.message_received_since_last_heartbeat ->
+        :ok
+
+      # We have an outstanding heartbeat but it was emitted less than 20s ago (too recent to verify)
+      # This should only occur when latency between Sequin and the Postgres is high
+      not is_nil(state.current_heartbeat_id) and
+          Sequin.Time.after_min_ago?(state.heartbeat_emitted_at, @max_time_between_heartbeat_emit_and_receive_min) ->
+        {:error, :too_soon}
+
+      # We have an outstanding heartbeat but have not received the heartbeat or any other messages recently
+      # This means the replication slot is somehow disconnected
+      not is_nil(state.current_heartbeat_id) ->
+        {:error, :stale_connection}
+    end
   end
 
   defp on_connect_failure(%State{} = state, error) do

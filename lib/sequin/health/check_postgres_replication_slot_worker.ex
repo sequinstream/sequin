@@ -18,6 +18,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   alias Sequin.Postgres
   alias Sequin.Prometheus
   alias Sequin.Replication
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Statsd
 
@@ -145,13 +146,13 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   end
 
   defp measure_replication_lag(%PostgresDatabase{} = db) do
-    slot = db.replication_slot
+    %PostgresReplicationSlot{} = slot = db.replication_slot
 
     case Replication.measure_replication_lag(slot) do
       {:ok, lag_bytes} ->
         lag_mb = Float.round(lag_bytes / 1024 / 1024, 0)
 
-        Prometheus.set_replication_slot_size(slot.id, slot.name, db.name, lag_bytes)
+        Prometheus.set_replication_slot_size(slot.id, slot.slot_name, db.name, lag_bytes)
 
         Statsd.gauge("sequin.db.replication_lag_mb", lag_mb,
           tags: %{replication_slot_id: slot.id, account_id: slot.account_id}

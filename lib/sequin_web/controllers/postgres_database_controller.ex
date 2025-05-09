@@ -146,7 +146,6 @@ defmodule SequinWeb.PostgresDatabaseController do
 
   # Test database connection with parameters
   defp test_db_conn(db_params, slot_params, account_id) do
-
     replication_slot =
       slot_params
       |> Sequin.Map.atomize_keys()

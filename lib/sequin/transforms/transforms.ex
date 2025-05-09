@@ -428,10 +428,10 @@ defmodule Sequin.Transforms do
   defp maybe_obfuscate(value, true), do: value
   defp maybe_obfuscate(_value, false), do: "********"
 
-
   def from_external_postgres_database(params, account_id) do
     with {:ok, db_params} <- parse_db_params(params) do
-      sparams = db_params
+      sparams =
+        db_params
         |> Map.put("account_id", account_id)
         |> Sequin.Map.atomize_keys()
 
@@ -471,7 +471,7 @@ defmodule Sequin.Transforms do
         {:error,
          Error.validation(
            summary:
-           "Parameters missing from `url`: #{Enum.join(missing_params, ", ")}. It should look like: #{example_url}"
+             "Parameters missing from `url`: #{Enum.join(missing_params, ", ")}. It should look like: #{example_url}"
          )}
 
       not is_nil(uri.query) ->
@@ -491,27 +491,27 @@ defmodule Sequin.Transforms do
     allowed_params =
       db_params
       |> Map.take([
-      "database",
-      "hostname",
-      "name",
-      "port",
-      "username",
-      "password",
-      "ssl",
-      "use_local_tunnel",
-      "ipv6",
-      "annotations",
-      "primary"
-    ])
-    |> Map.put_new("port", 5432)
+        "database",
+        "hostname",
+        "name",
+        "port",
+        "username",
+        "password",
+        "ssl",
+        "use_local_tunnel",
+        "ipv6",
+        "annotations",
+        "primary"
+      ])
+      |> Map.put_new("port", 5432)
 
-      with {:ok, primary} <- parse_primary_params(db_params) do
-        if is_map_key(allowed_params, "primary") do
-          {:ok, Map.put(allowed_params, "primary", primary)}
-        else
-          {:ok, allowed_params}
-        end
+    with {:ok, primary} <- parse_primary_params(db_params) do
+      if is_map_key(allowed_params, "primary") do
+        {:ok, Map.put(allowed_params, "primary", primary)}
+      else
+        {:ok, allowed_params}
       end
+    end
   end
 
   # Helper functions for database parameter parsing

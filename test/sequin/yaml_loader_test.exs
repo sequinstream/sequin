@@ -22,6 +22,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.Transform
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabasePrimary
   alias Sequin.Databases.Sequence
   alias Sequin.Error.BadRequestError
   alias Sequin.Replication.PostgresReplicationSlot
@@ -1668,6 +1669,190 @@ defmodule Sequin.YamlLoaderTest do
                  - name: "mytoken"
                    token: "secret"
                """)
+    end
+  end
+
+  describe "replica with primary" do
+    test "creates a database with primary connection parameters" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "replica-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
+                   primary:
+                     username: "primary_user"
+                     password: "primary_password"
+                     hostname: "primary.example.com"
+                     port: 5432
+                     database: "primary_db"
+               """)
+
+      assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
+
+      assert db.name == "replica-db"
+      assert db.hostname == "localhost"
+      assert db.database == "sequin_test"
+
+      # Verify primary connection
+      assert %PostgresDatabasePrimary{} = db.primary
+      assert db.primary.username == "primary_user"
+      assert db.primary.password == "primary_password"
+      assert db.primary.hostname == "primary.example.com"
+      assert db.primary.port == 5432
+      assert db.primary.database == "primary_db"
+    end
+
+    test "updates a database to add primary connection" do
+      # First create a database without primary
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "replica-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
+               """)
+
+      # Verify initial state
+      assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
+      assert is_nil(db.primary)
+
+      # Now update to add primary
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "replica-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
+                   primary:
+                     username: "primary_user"
+                     password: "primary_password"
+                     hostname: "primary.example.com"
+                     port: 5432
+                     database: "primary_db"
+               """)
+
+      # Verify primary was added
+      assert [%PostgresDatabase{} = updated_db] = Repo.all(PostgresDatabase)
+
+      assert updated_db.name == "replica-db"
+      assert %PostgresDatabasePrimary{} = updated_db.primary
+      assert updated_db.primary.username == "primary_user"
+      assert updated_db.primary.hostname == "primary.example.com"
+    end
+
+    test "updates existing primary connection parameters" do
+      # First create a database with primary
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "replica-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
+                   primary:
+                     username: "primary_user"
+                     password: "primary_password"
+                     hostname: "primary.example.com"
+                     port: 5432
+                     database: "primary_db"
+               """)
+
+      # Verify initial state
+      assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
+      assert db.primary.hostname == "primary.example.com"
+      assert db.primary.port == 5432
+
+      # Now update primary parameters
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "replica-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
+                   primary:
+                     username: "updated_user"
+                     password: "updated_password"
+                     hostname: "new-primary.example.com"
+                     port: 6432
+                     database: "primary_db"
+               """)
+
+      # Verify primary was updated
+      assert [%PostgresDatabase{} = updated_db] = Repo.all(PostgresDatabase)
+
+      assert updated_db.name == "replica-db"
+      assert %PostgresDatabasePrimary{} = updated_db.primary
+      assert updated_db.primary.username == "updated_user"
+      assert updated_db.primary.password == "updated_password"
+      assert updated_db.primary.hostname == "new-primary.example.com"
+      assert updated_db.primary.port == 6432
+    end
+
+    test "creates a database with connection url and primary" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "url-replica-db"
+                   url: "postgresql://postgres:postgres@localhost:5432/sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
+                   primary:
+                     url: "postgresql://primary_user:primary_password@primary.example.com:5432/primary_db"
+               """)
+
+      assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
+
+      assert db.name == "url-replica-db"
+      assert db.hostname == "localhost"
+      assert db.database == "sequin_test"
+      assert db.username == "postgres"
+      assert db.password == "postgres"
+
+      # Verify primary connection
+      assert %PostgresDatabasePrimary{} = db.primary
+      assert db.primary.username == "primary_user"
+      assert db.primary.password == "primary_password"
+      assert db.primary.hostname == "primary.example.com"
+      assert db.primary.port == 5432
+      assert db.primary.database == "primary_db"
     end
   end
 end

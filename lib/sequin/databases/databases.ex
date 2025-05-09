@@ -450,13 +450,18 @@ defmodule Sequin.Databases do
     cond do
       not replica?(db) ->
         :ok
+
       is_nil(db_primary) ->
         {:error, Error.validation(summary: "Primary connection parameters are required for replica databases")}
+
       not match?({:ok, version} when version >= 16, get_pg_major_version(db)) ->
         {:error, Error.validation(summary: "PostgreSQL version 16 or higher is required for replica databases")}
+
       true ->
         case test_connect(db_primary) do
-          :ok -> :ok
+          :ok ->
+            :ok
+
           {:error, error} ->
             {:error, Error.validation(summary: "Failed to connect to primary database: #{inspect(error)}")}
         end

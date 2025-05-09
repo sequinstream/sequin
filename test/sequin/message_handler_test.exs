@@ -85,6 +85,8 @@ defmodule Sequin.MessageHandlerTest do
       assert event.data.metadata.table_schema == message.table_schema
       assert event.data.metadata.commit_timestamp == message.commit_timestamp
       assert event.data.metadata.database_name == consumer.postgres_database.name
+      assert is_binary(event.data.metadata.idempotency_key)
+      assert event.data.metadata.idempotency_key != ""
 
       assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
       assert {:ok, [wal_cursor]} = MessageLedgers.list_undelivered_wal_cursors(consumer.id, DateTime.utc_now())

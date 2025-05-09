@@ -52,7 +52,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%PostgresDatabase{} = database, show_sensitive) do
-    database = Repo.preload(database, [:replication_slot, :sequences, :primary_connection])
+    database = Repo.preload(database, [:replication_slot, :sequences, :primary])
 
     result = %{
       id: database.id,
@@ -70,15 +70,15 @@ defmodule Sequin.Transforms do
       use_local_tunnel: database.use_local_tunnel
     }
 
-    if is_nil(database.primary_connection) do
+    if is_nil(database.primary) do
       result
     else
       Map.put(result, :primary, %{
-        username: database.primary_connection.username,
-        password: maybe_obfuscate(database.primary_connection.password, show_sensitive),
-        hostname: database.primary_connection.hostname,
-        port: database.primary_connection.port,
-        database: database.primary_connection.database
+        username: database.primary.username,
+        password: maybe_obfuscate(database.primary.password, show_sensitive),
+        hostname: database.primary.hostname,
+        port: database.primary.port,
+        database: database.primary.database
       })
     end
   end

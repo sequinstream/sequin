@@ -497,13 +497,9 @@ defmodule Sequin.YamlLoader do
   end
 
   defp create_wal_pipeline(account_id, attrs, databases) do
-    params = parse_wal_pipeline_attrs(attrs, databases)
-
-    account_id
-    |> Replication.create_wal_pipeline_with_lifecycle(params)
-    |> case do
-      {:ok, wal_pipeline} ->
-        {:ok, wal_pipeline}
+    case parse_wal_pipeline_attrs(attrs, databases) do
+      {:ok, params} ->
+        Replication.create_wal_pipeline_with_lifecycle(account_id, params)
 
       {:error, error} when is_exception(error) ->
         {:error,
@@ -514,17 +510,18 @@ defmodule Sequin.YamlLoader do
          Error.bad_request(
            message: "Error setting up change retention '#{attrs["name"]}': #{inspect(changeset, pretty: true)}"
          )}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 
   defp update_wal_pipeline(wal_pipeline, attrs, databases) do
-    params = parse_wal_pipeline_attrs(attrs, databases)
-
-    case Replication.update_wal_pipeline_with_lifecycle(wal_pipeline, params) do
-      {:ok, wal_pipeline} ->
-        Logger.info("Updated change retention: #{inspect(wal_pipeline, pretty: true)}")
-        {:ok, wal_pipeline}
-
+    with {:ok, params} <- parse_wal_pipeline_attrs(attrs, databases),
+         {:ok, wal_pipeline} <- Replication.update_wal_pipeline_with_lifecycle(wal_pipeline, params) do
+      Logger.info("Updated change retention: #{inspect(wal_pipeline, pretty: true)}")
+      {:ok, wal_pipeline}
+    else
       {:error, error} when is_exception(error) ->
         {:error,
          Error.bad_request(message: "Error updating change retention '#{wal_pipeline.name}': #{Exception.message(error)}")}
@@ -534,6 +531,9 @@ defmodule Sequin.YamlLoader do
          Error.bad_request(
            message: "Error updating change retention '#{wal_pipeline.name}': #{inspect(changeset, pretty: true)}"
          )}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -549,64 +549,70 @@ defmodule Sequin.YamlLoader do
          } = attrs,
          databases
        ) do
-    # Find source database
-    source_database = Enum.find(databases, &(&1.name == source_db_name))
-    unless source_database, do: raise("Source database '#{source_db_name}' not found")
+    with {:ok, source_database} <- fetch_database(databases, source_db_name, :source_database),
+         {:ok, destination_database} <- fetch_database(databases, dest_db_name, :destination_database),
+         {:ok, destination_table} <-
+           fetch_table(destination_database.tables, dest_schema, dest_table, :destination_table),
+         {:ok, source_table_struct} <-
+           fetch_table(source_database.tables, source_schema, source_table, :source_table),
+         {:ok, column_filters} <-
+           parse_column_filters(attrs["filters"], source_database, source_schema, source_table) do
+      source_table_config = %{
+        "schema_name" => source_schema,
+        "table_name" => source_table,
+        "oid" => source_table_struct.oid,
+        "actions" => attrs["actions"] || [:insert, :update, :delete],
+        "column_filters" => column_filters
+      }
 
-    # Find destination database
-    destination_database = Enum.find(databases, &(&1.name == dest_db_name))
-    unless destination_database, do: raise("Destination database '#{dest_db_name}' not found")
+      params = %{
+        name: name,
+        status: Transforms.parse_status(attrs["status"]),
+        replication_slot_id: source_database.replication_slot.id,
+        destination_database_id: destination_database.id,
+        destination_oid: destination_table.oid,
+        source_tables: [source_table_config]
+      }
 
-    # Find destination table
-    destination_table =
-      Enum.find(destination_database.tables, fn table ->
-        table.schema == dest_schema && table.name == dest_table
-      end)
-
-    unless destination_table, do: raise("Destination table '#{dest_schema}.#{dest_table}' not found")
-
-    # Find source table
-    source_table_struct =
-      Enum.find(source_database.tables, fn t ->
-        t.schema == source_schema && t.name == source_table
-      end)
-
-    unless source_table_struct, do: raise("Table '#{source_schema}.#{source_table}' not found")
-
-    # Build source_tables config
-    source_table_config = %{
-      "schema_name" => source_schema,
-      "table_name" => source_table,
-      "oid" => source_table_struct.oid,
-      # Default to all actions
-      "actions" => attrs["actions"] || [:insert, :update, :delete],
-      "column_filters" => parse_column_filters(attrs["filters"], source_database, source_schema, source_table)
-    }
-
-    %{
-      name: name,
-      status: Transforms.parse_status(attrs["status"]),
-      replication_slot_id: source_database.replication_slot.id,
-      destination_database_id: destination_database.id,
-      destination_oid: destination_table.oid,
-      source_tables: [source_table_config]
-    }
+      {:ok, params}
+    end
   end
 
   # Helper to parse column filters for WAL pipeline
-  defp parse_column_filters(nil, _database, _schema, _table), do: []
+  defp parse_column_filters(nil, _database, _schema, _table), do: {:ok, []}
 
   defp parse_column_filters(filters, database, schema, table_name) when is_list(filters) do
-    # Find the table
-    table =
-      Enum.find(database.tables, fn t ->
-        t.schema == schema && t.name == table_name
+    with {:ok, table} <- fetch_table(database.tables, schema, table_name, :filter_table) do
+      filters
+      |> Enum.reduce_while({:ok, []}, fn filter, {:ok, acc} ->
+        try do
+          {:cont, {:ok, [Transforms.parse_column_filter(filter, table) | acc]}}
+        rescue
+          error -> {:halt, {:error, Error.bad_request(message: Exception.message(error))}}
+        end
       end)
+      |> case do
+        {:ok, parsed} -> {:ok, Enum.reverse(parsed)}
+        {:error, error} -> {:error, error}
+      end
+    end
+  end
 
-    unless table, do: raise("Table '#{schema}.#{table_name}' not found")
+  defp parse_column_filters(_, _database, _schema, _table),
+    do: {:error, Error.bad_request(message: "`filters` must be a list")}
 
-    # Parse each filter
-    Enum.map(filters, &Transforms.parse_column_filter(&1, table))
+  defp fetch_database(databases, name, _role) do
+    case Enum.find(databases, &(&1.name == name)) do
+      nil -> {:error, Error.not_found(entity: :database, params: %{name: name})}
+      db -> {:ok, db}
+    end
+  end
+
+  defp fetch_table(tables, schema, table_name, _role) do
+    case Enum.find(tables, &(&1.schema == schema && &1.name == table_name)) do
+      nil -> {:error, Error.not_found(entity: :table, params: %{schema: schema, name: table_name})}
+      table -> {:ok, table}
+    end
   end
 
   ####################

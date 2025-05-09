@@ -35,7 +35,7 @@ defmodule SequinWeb.PostgresDatabaseController do
   def create(conn, params) when is_map(params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, db_params} <- parse_db_params(params),
+    with {:ok, db_params} <- Transforms.parse_db_params(params),
          {:ok, slot_params} <- parse_slot_params(params, :create),
          :ok <- test_db_conn(db_params, slot_params, account_id),
          {:ok, database} <- Databases.create_db_with_slot(account_id, db_params, slot_params) do
@@ -55,7 +55,7 @@ defmodule SequinWeb.PostgresDatabaseController do
   def update(conn, %{"id_or_name" => id_or_name} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, db_params} <- parse_db_params(params),
+    with {:ok, db_params} <- Transforms.parse_db_params(params),
          {:ok, slot_params} <- parse_slot_params(params, :update),
          {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
          database = Repo.preload(database, :replication_slot),
@@ -146,18 +146,17 @@ defmodule SequinWeb.PostgresDatabaseController do
 
   # Test database connection with parameters
   defp test_db_conn(db_params, slot_params, account_id) do
-    db = Transforms.from_external_postgres_database(params, account_id)
 
     replication_slot =
       slot_params
       |> Sequin.Map.atomize_keys()
       |> then(&struct(PostgresReplicationSlot, &1))
 
-    with :ok <- Databases.test_tcp_reachability(db),
+    with {:ok, db} <- Transforms.from_external_postgres_database(db_params, account_id),
+         :ok <- Databases.test_tcp_reachability(db),
          :ok <- Databases.test_connect(db, 10_000),
          :ok <- Databases.test_permissions(db),
-         {:ok, primary} <- parse_primary_params(db_params, account_id),
-         :ok <- Databases.test_maybe_replica(db, primary) do
+         :ok <- Databases.test_maybe_replica(db, db.primary) do
       Databases.verify_slot(db, replication_slot)
     else
       {:error, error} when is_error(error) ->

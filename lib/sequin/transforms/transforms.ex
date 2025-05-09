@@ -83,106 +83,6 @@ defmodule Sequin.Transforms do
     end
   end
 
-  def from_external_postgres_database(params, account_id) do
-    %{account_id: account_id | from_external_postgres_database(params)}
-  end
-
-  # Add this function after the to_external for PostgresDatabase
-  def from_external_postgres_database(%{"url" => url} = params) do
-    uri = URI.parse(url)
-
-    uri_params = %{
-      "hostname" => uri.host,
-      "port" => uri.port,
-      "database" =>
-        case uri.path do
-          "/" <> dbname -> dbname
-          dbname -> dbname
-        end
-    }
-
-    uri_params = maybe_add_userinfo(uri_params, uri.userinfo)
-
-    missing_params = for {k, nil} <- uri_params, do: k
-    overlapping_url_params = ["database", "hostname", "port", "username", "password"]
-    example_url = "postgresql://user:password@localhost:5432/mydb"
-
-    cond do
-      Enum.any?(overlapping_url_params, fn p -> Map.get(params, p) end) ->
-        {:error,
-         Error.validation(
-           summary: "Bad connection details. If `url` is specified, no other connection params are allowed"
-         )}
-
-      not Enum.empty?(missing_params) ->
-        {:error,
-         Error.validation(
-           summary:
-           "Parameters missing from `url`: #{Enum.join(missing_params, ", ")}. It should look like: #{example_url}"
-         )}
-
-      not is_nil(uri.query) ->
-        {:error, Error.validation(summary: "Query parameters not allowed in `url` - specify e.g. ssl with `ssl` key")}
-
-      true ->
-        params
-        |> Map.delete("url")
-        |> Map.merge(uri_params)
-        |> from_external_postgres_database()
-    end
-  end
-
-  # General case for parsing database parameters
-  def from_external_postgres_database(db_params) when is_map(db_params) do
-    # Only allow specific fields to be set by the API
-    allowed_params =
-      db_params
-      |> Map.take([
-      "database",
-      "hostname",
-      "name",
-      "port",
-      "username",
-      "password",
-      "ssl",
-      "use_local_tunnel",
-      "ipv6",
-      "annotations",
-      "primary"
-    ])
-    |> Map.put_new("port", 5432)
-
-      with {:ok, primary} <- parse_primary_params(db_params) do
-        if is_map_key(allowed_params, "primary") do
-          {:ok, Map.put(allowed_params, "primary", primary)}
-        else
-          {:ok, allowed_params}
-        end
-      end
-  end
-
-  # Helper functions for database parameter parsing
-  defp parse_primary_params(%{"primary" => primary}) when is_map(primary) do
-    from_external_postgres_database(primary)
-  end
-
-  defp parse_primary_params(_) do
-    {:ok, nil}
-  end
-
-  defp maybe_add_userinfo(uri_params, nil), do: uri_params
-
-  defp maybe_add_userinfo(uri_params, userinfo) do
-    case String.split(userinfo, ":", parts: 2) do
-      [username, password] ->
-        Map.merge(uri_params, %{"username" => username, "password" => password})
-
-      _ ->
-        uri_params
-    end
-  end
-
-
   def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint, _show_sensitive) do
     %{
       id: http_endpoint.id,
@@ -527,6 +427,113 @@ defmodule Sequin.Transforms do
   defp maybe_obfuscate(nil, _), do: nil
   defp maybe_obfuscate(value, true), do: value
   defp maybe_obfuscate(_value, false), do: "********"
+
+
+  def from_external_postgres_database(params, account_id) do
+    with {:ok, db_params} <- parse_db_params(params) do
+      sparams = db_params
+        |> Map.put("account_id", account_id)
+        |> Sequin.Map.atomize_keys()
+
+      {:ok, struct(PostgresDatabase, sparams)}
+      # {:ok, struct(PostgresDatabase, Map.put(db_params, "account_id", account_id))}
+    end
+  end
+
+  # Add this function after the to_external for PostgresDatabase
+  def parse_db_params(%{"url" => url} = params) do
+    uri = URI.parse(url)
+
+    uri_params = %{
+      "hostname" => uri.host,
+      "port" => uri.port,
+      "database" =>
+        case uri.path do
+          "/" <> dbname -> dbname
+          dbname -> dbname
+        end
+    }
+
+    uri_params = maybe_add_userinfo(uri_params, uri.userinfo)
+
+    missing_params = for {k, nil} <- uri_params, do: k
+    overlapping_url_params = ["database", "hostname", "port", "username", "password"]
+    example_url = "postgresql://user:password@localhost:5432/mydb"
+
+    cond do
+      Enum.any?(overlapping_url_params, fn p -> Map.get(params, p) end) ->
+        {:error,
+         Error.validation(
+           summary: "Bad connection details. If `url` is specified, no other connection params are allowed"
+         )}
+
+      not Enum.empty?(missing_params) ->
+        {:error,
+         Error.validation(
+           summary:
+           "Parameters missing from `url`: #{Enum.join(missing_params, ", ")}. It should look like: #{example_url}"
+         )}
+
+      not is_nil(uri.query) ->
+        {:error, Error.validation(summary: "Query parameters not allowed in `url` - specify e.g. ssl with `ssl` key")}
+
+      true ->
+        params
+        |> Map.delete("url")
+        |> Map.merge(uri_params)
+        |> parse_db_params()
+    end
+  end
+
+  # General case for parsing database parameters
+  def parse_db_params(db_params) when is_map(db_params) do
+    # Only allow specific fields to be set by the API
+    allowed_params =
+      db_params
+      |> Map.take([
+      "database",
+      "hostname",
+      "name",
+      "port",
+      "username",
+      "password",
+      "ssl",
+      "use_local_tunnel",
+      "ipv6",
+      "annotations",
+      "primary"
+    ])
+    |> Map.put_new("port", 5432)
+
+      with {:ok, primary} <- parse_primary_params(db_params) do
+        if is_map_key(allowed_params, "primary") do
+          {:ok, Map.put(allowed_params, "primary", primary)}
+        else
+          {:ok, allowed_params}
+        end
+      end
+  end
+
+  # Helper functions for database parameter parsing
+  defp parse_primary_params(%{"primary" => primary}) when is_map(primary) do
+    parse_db_params(primary)
+  end
+
+  defp parse_primary_params(_) do
+    {:ok, nil}
+  end
+
+  defp maybe_add_userinfo(uri_params, nil), do: uri_params
+
+  defp maybe_add_userinfo(uri_params, userinfo) do
+    case String.split(userinfo, ":", parts: 2) do
+      [username, password] ->
+        Map.merge(uri_params, %{"username" => username, "password" => password})
+
+      _ ->
+        uri_params
+    end
+  end
 
   def from_external_http_endpoint(attrs) do
     Enum.reduce_while(attrs, {:ok, %{}}, fn {key, value}, {:ok, acc} ->

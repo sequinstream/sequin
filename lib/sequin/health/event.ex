@@ -52,7 +52,9 @@ defmodule Sequin.Health.Event do
     :backfill_fetch_batch,
     :backfill_finished,
     :invalid_transaction_annotation_received,
-    :invalid_transaction_annotation_received_dismissed
+    :invalid_transaction_annotation_received_dismissed,
+    :load_shedding_policy_discarded,
+    :load_shedding_policy_discarded_dismissed
   ]
 
   @http_endpoint_event_slugs [

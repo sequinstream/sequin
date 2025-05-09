@@ -4,6 +4,7 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   @args [:action, :record, :changes, :metadata]
   @error_bad_toplevel "Expecting only `def transform` or `def route` at the top level"
   @error_invalid_name "Only function names `transform` or `route` are allowed"
+  @error_bad_args "The parameter list `#{Enum.join(@args, ", ")}` is required"
 
   def create_expr(body_ast, modname) do
     :ok = check(body_ast)
@@ -39,11 +40,27 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   defp unwrap_fnname(fnname) when fnname in @allowed_funname, do: :ok
   defp unwrap_fnname(_), do: {:error, :validator, @error_invalid_name}
 
-  defp unwrap_params(args) do
-    case Enum.map(args, &elem(&1, 0)) do
+  defp unwrap_params(args, acc \\ [])
+
+  defp unwrap_params([], acc) do
+    case Enum.reverse(acc) do
       @args -> :ok
-      _ -> {:error, :validator, "The parameter list `#{Enum.join(@args, ", ")}` is required"}
+      _otherwise -> {:error, :validator, @error_bad_args}
     end
+  end
+
+  for arg <- @args do
+    defp unwrap_params([{unquote(arg), _meta, _context} | rest], acc) do
+      unwrap_params(rest, [unquote(arg) | acc])
+    end
+
+    defp unwrap_params([{unquote(:"_#{arg}"), _meta, _context} | rest], acc) do
+      unwrap_params(rest, [unquote(arg) | acc])
+    end
+  end
+
+  defp unwrap_params(_args, _acc) do
+    {:error, :validator, @error_bad_args}
   end
 
   @goodop [

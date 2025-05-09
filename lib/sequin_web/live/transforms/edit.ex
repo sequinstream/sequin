@@ -330,12 +330,11 @@ defmodule SequinWeb.TransformsLive.Edit do
   end
 
   defp encode_one(message, consumer) do
-    case :timer.tc(fn -> Message.to_external(consumer, message) end, :microsecond) do
-      {time, value} ->
-        case Jason.encode(value) do
-          {:ok, _} -> %{transformed: value, time: time}
-          {:error, error} -> %{error: MiniElixir.encode_error(error), time: time}
-        end
+    {time, value} = :timer.tc(Message, :to_external, [consumer, message], :microsecond)
+
+    case Jason.encode(value) do
+      {:ok, _} -> %{transformed: value, time: time}
+      {:error, error} -> %{error: MiniElixir.encode_error(error), time: time}
     end
   rescue
     ex ->

@@ -536,13 +536,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   def handle_call({:produce, count, producer_pid}, _from, %State{} = state) do
     execute_timed(:produce, fn ->
-      {time, {messages, state}} =
-        :timer.tc(
-          fn ->
-            {_messages, _state} = State.produce_messages(state, count)
-          end,
-          :millisecond
-        )
+      {time, {messages, state}} = :timer.tc(State, :produce_messages, [state, count], :millisecond)
 
       messages
       |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)

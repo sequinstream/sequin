@@ -80,16 +80,16 @@ defmodule Sequin.MixProject do
       # Logging and JSON
       {:logger_json, "~> 6.0"},
       {:jason, "~> 1.2"},
+
+      # Internationalization
       {:gettext, "~> 0.20"},
 
-      # HTTP and API
+      # HTTP and API Clients
       {:finch, "~> 0.13"},
       {:req, "~> 0.5"},
       {:swoosh, "~> 1.5"},
 
-      # Message Queuing and PubSub
-      {:broadway, "~> 1.0"},
-      {:broadway_dashboard, "~> 0.4.0"},
+      # Messaging / PubSub / Queues
       {:gnat, "~> 1.9"},
       {:amqp, "~> 4.0"},
       {:brod, "~> 4.3"},
@@ -99,7 +99,7 @@ defmodule Sequin.MixProject do
       {:syn, "~> 3.3"},
       {:gen_state_machine, "~> 3.0"},
 
-      # Redis
+      # Redis Clients
       {:eredis_cluster, github: "Nordix/eredis_cluster", override: true},
       {:eredis, github: "acco/eredis", override: true},
 
@@ -107,14 +107,19 @@ defmodule Sequin.MixProject do
       {:libcluster, "~> 3.3"},
       {:dns_cluster, "~> 0.1.1"},
 
-      # Data Processing
+      # Data Processing and Types
       {:flow, "~> 1.2"},
       {:typed_struct, "~> 0.3.0"},
       {:yaml_elixir, "~> 2.11"},
       {:ymlr, "~> 5.0"},
+      {:broadway, "~> 1.0"},
+      {:broadway_dashboard, "~> 0.4.0"},
 
       # Background Jobs
       {:oban, "~> 2.17"},
+
+      # Metaprogramming and Enhancements
+      {:decorator, "~> 1.4"},
 
       # Development and Testing
       {:styler, "~> 1.0.0-rc.1", only: [:dev, :test], runtime: false},
@@ -124,7 +129,6 @@ defmodule Sequin.MixProject do
       {:hammox, "~> 0.7", only: :test},
       {:benchee, "~> 1.0", only: :dev},
       {:rexbug, "~> 1.0"},
-      {:decorator, "~> 1.4"},
       {:floki, ">= 0.30.0", only: :test},
       {:uuid, "~> 1.1"}
     ]

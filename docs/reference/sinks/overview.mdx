@@ -12,7 +12,7 @@ A **sink** in Sequin is a destination for your Postgres data.
 
 # Delivery Guarantees
 
-Sequin provides exactly-once delivery under most circumstances, but [exactly-once delivery is not always possible](https://blog.sequinstream.com/at-most-once-at-least-once-and-exactly-once-delivery/). Therefore, Sequin implements at-least-once delivery with [idempotency keys](/references/messages#idempotency). 
+Sequin provides exactly-once delivery under most circumstances, but [exactly-once delivery is not always possible](https://blog.sequinstream.com/at-most-once-at-least-once-and-exactly-once-delivery/). Therefore, Sequin implements at-least-once delivery with [idempotency keys](/reference/messages#idempotency). 
 
 If a message is not delivered successfully, Sequin will automatically retry with exponential backoff, increasing the retry interval up to a maximum of 3 minutes between attempts.
 

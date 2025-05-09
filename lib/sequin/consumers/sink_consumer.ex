@@ -51,7 +51,8 @@ defmodule Sequin.Consumers.SinkConsumer do
              :legacy_transform,
              :timestamp_format,
              :batch_timeout_ms,
-             :max_retry_count
+             :max_retry_count,
+             :load_shedding_policy
            ]}
   typed_schema "sink_consumers" do
     field :name, :string
@@ -71,6 +72,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :partition_count, :integer, default: 1
     field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
+    field :load_shedding_policy, Ecto.Enum, values: [:pause_on_full, :discard_on_full], default: :pause_on_full
 
     field :type, Ecto.Enum,
       values: [
@@ -182,7 +184,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :transform_id,
       :routing_id,
       :timestamp_format,
-      :batch_timeout_ms
+      :batch_timeout_ms,
+      :load_shedding_policy
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)

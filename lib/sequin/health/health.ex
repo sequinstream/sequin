@@ -391,7 +391,7 @@ defmodule Sequin.Health do
     filter_check = basic_check(:messages_filtered, events, :waiting)
     ingestion_check = check(:messages_ingested, consumer, events)
     delivery_check = basic_check(:messages_pending_delivery, events, :waiting)
-    acknowledge_check = basic_check(:messages_delivered, events, :waiting)
+    acknowledge_check = check(:messages_delivered, consumer, events)
 
     if config_check.status == :error do
       [
@@ -748,6 +748,47 @@ defmodule Sequin.Health do
       true ->
         status = if ingested_event.status == :success, do: :healthy, else: :warning
         put_check_timestamps(%{base_check | status: status}, [ingested_event])
+    end
+  end
+
+  defp check(:messages_delivered, %SinkConsumer{}, events) do
+    base_check = %Check{slug: :messages_delivered, status: :waiting}
+    delivered_event = find_event(events, :messages_delivered)
+    load_shedding_policy_discarded_event = find_event(events, :load_shedding_policy_discarded)
+    load_shedding_policy_discarded_dismissed_event = find_event(events, :load_shedding_policy_discarded_dismissed)
+
+    show_load_shedding_policy_error =
+      unless is_nil(load_shedding_policy_discarded_event) do
+        is_nil(load_shedding_policy_discarded_dismissed_event) or
+          DateTime.after?(
+            load_shedding_policy_discarded_event.last_event_at,
+            load_shedding_policy_discarded_dismissed_event.last_event_at
+          )
+      end
+
+    cond do
+      is_nil(delivered_event) ->
+        base_check
+
+      show_load_shedding_policy_error ->
+        put_check_timestamps(
+          %{
+            base_check
+            | status: :warning,
+              error_slug: :load_shedding_policy_discarded
+          },
+          [load_shedding_policy_discarded_event]
+        )
+
+      delivered_event.status == :fail ->
+        put_check_timestamps(
+          %{base_check | status: :error, error: delivered_event.error},
+          [delivered_event]
+        )
+
+      true ->
+        status = if delivered_event.status == :success, do: :healthy, else: :warning
+        put_check_timestamps(%{base_check | status: status}, [delivered_event])
     end
   end
 

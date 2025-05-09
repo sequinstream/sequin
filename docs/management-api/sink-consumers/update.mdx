@@ -52,6 +52,16 @@ The request body can include any of the following fields:
   Defaults to `null`, meaning messages are retried indefinitely.
 </ParamField>
 
+<ParamField body="load_shedding_policy" type="string">
+  Determines how Sequin handles overload when sink consumers can't keep up with incoming messages.
+
+  Options are:
+  - `pause_on_full` (default) — pauses replication until the buffer has room again
+  - `discard_on_full` — drops messages for overloaded consumers to avoid pausing replication
+
+  For more details, see [load shedding policy](/reference/sinks/overview#load_shedding_policy).
+</ParamField>
+
 <ParamField body="timestamp_format" type="string">
   The format of the timestamp in the source data.
 

@@ -48,7 +48,8 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       batch_size: 1,
       actions: ["insert", "update", "delete"],
       group_column_names: [column.name],
-      max_retry_count: 5
+      max_retry_count: 5,
+      load_shedding_policy: "pause_on_full"
     }
 
     %{
@@ -137,6 +138,7 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       assert sink_consumer.sequence_filter.actions == Enum.map(valid_attrs.actions, &String.to_atom/1)
       assert sink_consumer.sequence_filter.group_column_attnums == [column.attnum]
       assert sink_consumer.max_retry_count == valid_attrs.max_retry_count
+      assert sink_consumer.load_shedding_policy == String.to_atom(valid_attrs.load_shedding_policy)
     end
 
     test "creates a webhook sink consumer defaulting batch to true", %{
@@ -281,13 +283,14 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       assert updated_consumer.batch_size == sink_consumer.batch_size
     end
 
-    test "updates the sink consumer with max_retry_count", %{conn: conn, sink_consumer: sink_consumer} do
-      update_attrs = %{max_retry_count: 5}
+    test "updates the sink consumer with advance config", %{conn: conn, sink_consumer: sink_consumer} do
+      update_attrs = %{max_retry_count: 5, load_shedding_policy: "discard_on_full"}
       conn = put(conn, ~p"/api/sinks/#{sink_consumer.id}", update_attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
       {:ok, updated_consumer} = Consumers.find_sink_consumer(sink_consumer.account_id, id: id)
       assert updated_consumer.max_retry_count == 5
+      assert updated_consumer.load_shedding_policy == :discard_on_full
     end
 
     test "updates the sink consumer to set batch=false", %{

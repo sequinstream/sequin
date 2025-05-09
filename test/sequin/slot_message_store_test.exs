@@ -3,6 +3,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
+  alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
@@ -736,6 +737,46 @@ defmodule Sequin.SlotMessageStoreTest do
       assert length(persisted_messages) == 1
       {:ok, acknowledged} = AcknowledgedMessages.fetch_messages(consumer.id, 100, 0)
       assert length(acknowledged) == 0
+    end
+  end
+
+  describe "SlotMessageStore load shedding behavior" do
+    test "returns error when load_shedding_policy=pause_on_full" do
+      consumer = ConsumersFactory.insert_sink_consumer!(load_shedding_policy: :pause_on_full)
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor, consumer: consumer, test_pid: self(), setting_system_max_memory_bytes: 1}
+      )
+
+      # Create a message with a specific group_id to ensure consistent partitioning
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          group_id: "test-group"
+        )
+
+      # Put message in store
+      assert {:error, %Error.InvariantError{}} = SlotMessageStore.put_messages(consumer, [message])
+    end
+
+    test "returns ok when load_shedding_policy=discard_on_full" do
+      consumer = ConsumersFactory.insert_sink_consumer!(load_shedding_policy: :discard_on_full)
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor, consumer: consumer, test_pid: self(), setting_system_max_memory_bytes: 1}
+      )
+
+      # Create a message with a specific group_id to ensure consistent partitioning
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          group_id: "test-group"
+        )
+
+      # Put message in store
+      assert :ok = SlotMessageStore.put_messages(consumer, [message])
     end
   end
 end

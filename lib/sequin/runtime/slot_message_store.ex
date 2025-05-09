@@ -485,8 +485,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
           end)
 
         {:error, error} ->
-          # Reply with error if validation fails
-          {:reply, {:error, error}, state}
+          if state.consumer.load_shedding_policy == :discard_on_full do
+            Health.put_event(state.consumer, %Event{slug: :load_shedding_policy_discarded, status: :fail})
+
+            {:reply, :ok, state}
+          else
+            # Reply with error if validation fails
+            {:reply, {:error, error}, state}
+          end
       end
     end)
   end

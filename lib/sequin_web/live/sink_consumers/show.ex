@@ -453,6 +453,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         :replica_identity_not_full_partitioned -> :alert_replica_identity_not_full_dismissed
         :toast_columns_detected -> :alert_toast_columns_detected_dismissed
         :invalid_transaction_annotation_received -> :invalid_transaction_annotation_received_dismissed
+        :load_shedding_policy_discarded -> :load_shedding_policy_discarded_dismissed
       end
 
     Health.put_event(consumer, %Health.Event{slug: event_slug})
@@ -1371,6 +1372,22 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         Transaction annotations were not included on these messages.
 
         Please check your application code to ensure that transaction annotations are being set correctly. See the [docs on annotations](https://sequinstream.com/docs/reference/annotations) for more information.
+        """,
+        refreshable: false,
+        dismissable: true
+      }
+    )
+  end
+
+  defp maybe_augment_alert(%{error_slug: :load_shedding_policy_discarded} = check, _consumer) do
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Notice: Messages were discarded for this sink",
+        alertMessage: """
+        This sink is configured with a [load shedding policy](https://sequinstream.com/docs/reference/sinks/overview#load-shedding-policy) of `discard_on_full`. The sink buffer reached its limit and messages were dropped.
+
+        If the sink is still failing, please address the root cause of messages not being delivered or disable the sink.
         """,
         refreshable: false,
         dismissable: true

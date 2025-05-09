@@ -134,7 +134,8 @@ defmodule Sequin.Transforms do
       transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
       timestamp_format: consumer.timestamp_format,
       active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
-      max_retry_count: consumer.max_retry_count
+      max_retry_count: consumer.max_retry_count,
+      load_shedding_policy: consumer.load_shedding_policy
     }
   end
 
@@ -598,6 +599,13 @@ defmodule Sequin.Transforms do
 
         "max_retry_count" ->
           {:halt, {:error, Error.validation(summary: "max_retry_count must be a non-negative integer")}}
+
+        "load_shedding_policy" when value in ~w(pause_on_full discard_on_full) ->
+          {:cont, {:ok, Map.put(acc, :load_shedding_policy, value)}}
+
+        "load_shedding_policy" ->
+          {:halt,
+           {:error, Error.validation(summary: "load_shedding_policy must be one of: 'pause_on_full', 'discard_on_full'")}}
 
         # temporary for backwards compatibility
         "consumer_start" ->

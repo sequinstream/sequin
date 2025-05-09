@@ -9,6 +9,7 @@ defmodule SequinWeb.PostgresDatabaseController do
   alias Sequin.Error.NotFoundError
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
+  alias Sequin.Transforms
   alias SequinWeb.ApiFallbackPlug
 
   action_fallback ApiFallbackPlug
@@ -145,7 +146,7 @@ defmodule SequinWeb.PostgresDatabaseController do
 
   # Test database connection with parameters
   defp test_db_conn(db_params, slot_params, account_id) do
-    db = params_to_db(db_params, account_id)
+    db = Transforms.from_external_postgres_database(params, account_id)
 
     replication_slot =
       slot_params
@@ -171,107 +172,6 @@ defmodule SequinWeb.PostgresDatabaseController do
          Error.validation(
            summary: "Failed to connect to database. Please check connection details. (error=#{code} #{msg})"
          )}
-    end
-  end
-
-  defp parse_primary_params(nil, _), do: {:ok, nil}
-
-  defp parse_primary_params(ps, account_id) do
-    with {:ok, pp} <- parse_db_params(ps) do
-      params_to_db(pp, account_id)
-    end
-  end
-
-  @spec params_to_db(map() | nil, String.t()) :: PostgresDatabase.t() | nil
-  # Ignore nil params
-  defp params_to_db(nil, _), do: nil
-
-  # Convert params to a PostgresDatabase struct
-  defp params_to_db(params, account_id) do
-    params
-    |> Sequin.Map.atomize_keys()
-    |> Map.put(:account_id, account_id)
-    |> then(&struct(PostgresDatabase, &1))
-  end
-
-  @overlapping_url_params ["database", "hostname", "port", "username", "password"]
-
-  @example_url "postgresql://user:password@localhost:5432/mydb"
-
-  defp parse_db_params(%{"url" => url} = params) do
-    uri = URI.parse(url)
-
-    uri_params = %{
-      "hostname" => uri.host,
-      "port" => uri.port,
-      "database" =>
-        case uri.path do
-          "/" <> dbname -> dbname
-          dbname -> dbname
-        end
-    }
-
-    uri_params = maybe_add_userinfo(uri_params, uri.userinfo)
-
-    missing_params = for {k, nil} <- uri_params, do: k
-
-    cond do
-      Enum.any?(@overlapping_url_params, fn p -> Map.get(params, p) end) ->
-        {:error,
-         Error.validation(
-           summary: "Bad connection details. If `url` is specified, no other connection params are allowed"
-         )}
-
-      not Enum.empty?(missing_params) ->
-        {:error,
-         Error.validation(
-           summary:
-             "Parameters missing from `url`: #{Enum.join(missing_params, ", ")}. It should look like: #{@example_url}"
-         )}
-
-      not is_nil(uri.query) ->
-        {:error, Error.validation(summary: "Query parameters not allowed in `url` - specify e.g. ssl with `ssl` key")}
-
-      true ->
-        params
-        |> Map.delete("url")
-        |> Map.merge(uri_params)
-        |> parse_db_params()
-    end
-  end
-
-  # Extract and validate database parameters
-  defp parse_db_params(db_params) do
-    # Only allow specific fields to be set by the API
-    allowed_params =
-      db_params
-      |> Map.take([
-        "database",
-        "hostname",
-        "name",
-        "port",
-        "username",
-        "password",
-        "ssl",
-        "use_local_tunnel",
-        "ipv6",
-        "annotations",
-        "primary"
-      ])
-      |> Map.put_new("port", 5432)
-
-    {:ok, allowed_params}
-  end
-
-  defp maybe_add_userinfo(uri_params, nil), do: uri_params
-
-  defp maybe_add_userinfo(uri_params, userinfo) do
-    case String.split(userinfo, ":", parts: 2) do
-      [username, password] ->
-        Map.merge(uri_params, %{"username" => username, "password" => password})
-
-      _ ->
-        uri_params
     end
   end
 

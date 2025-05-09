@@ -16,9 +16,6 @@ jobs:
     name: Signoff Checks
     runs-on: ubuntu-latest
 
-    # this workflow runs for external forks only, org members have `make signoff`
-    if: ${{ github.event.pull_request.base.repo.clone_url != github.event.pull_request.head.repo.clone_url }}
-
     services:
       postgres:
         # make sure to change this in the shell query later in this file

@@ -223,6 +223,15 @@ To set `REPLICA IDENTITY` to `FULL` for a table:
 ALTER TABLE your_table REPLICA IDENTITY FULL;
 ```
 
+## Using Sequin with a replica
+
+Sequin supports connecting to a replica database, however in this case Sequin also needs to connect to the primary database.
+
+The only operation that Sequin will perform on the primary database is to call the function `pg_logical_emit_message` to ensure proper WAL checkpointing.
+
+The only permission required for this is `CONNECT` on the primary database.
+
+
 ## PostgreSQL 12 and 13
 
 Sequin relies on the `pg_logical_emit_message` function for heartbeat messages and backfills. This function is included automatically in Postgres 14 and later.

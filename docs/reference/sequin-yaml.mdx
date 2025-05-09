@@ -67,6 +67,34 @@ databases:
       interval_ms: 3000         # Default: 3000 (3 seconds)
 ```
 
+#### Replica database configuration
+
+When [connecting a replica to Sequin](/reference/databases#using-sequin-with-a-replica), Sequin also needs to connect to the primary database.
+
+```yaml
+databases:
+  - name: "my-database"          # Required, unique identifier
+    username: "postgres"         # Default: postgres
+    password: "postgres"         # Default: postgres
+    hostname: "localhost"        # Required
+    port: 5432                  # Default: 5432
+    database: "my_database"     # Required
+    pool_size: 10               # Default: 3
+    slot_name: "sequin_slot"    # Required
+    publication_name: "sequin_pub" # Required
+    await_database:             # Optional, configuration for database connection retry behavior
+      timeout_ms: 30000         # Default: 30000 (30 seconds)
+      interval_ms: 3000         # Default: 3000 (3 seconds)
+    # Primary database connection details
+    primary:
+      username: "postgres"         # Default: postgres
+      password: "postgres"         # Default: postgres
+      hostname: "localhost"        # Required
+      port: 5432                   # Default: 5432
+      database: "my_database"      # Required
+```
+
+
 #### Database connection retry
 
 When creating a database, Sequin needs to be able to connect to the database in order to read the database's schema. The `await_database` configuration allows you to control how Sequin attempts to connect to your database during startup. This option is most relevant in development environments, where you might be provisioning Sequin and your database at the same time.

@@ -1451,12 +1451,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       state.message_handler_module.before_handle_messages(state.message_handler_ctx, messages)
 
       {time_ms, res} =
-        :timer.tc(
-          fn ->
-            state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
-          end,
-          :millisecond
-        )
+        :timer.tc(state.message_handler_module, :handle_messages, [state.message_handler_ctx, messages], :millisecond)
 
       state.backfill_watermark_messages
       |> Enum.reverse()

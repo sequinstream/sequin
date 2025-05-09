@@ -116,7 +116,7 @@ defmodule SequinWeb.PullController do
   defp maybe_wait(_params, _consumer), do: :ok
 
   defp wait(consumer, wait_for) do
-    {duration, res} = :timer.tc(fn -> SlotMessageStore.count_messages(consumer) end, :millisecond)
+    {duration, res} = :timer.tc(SlotMessageStore, :count_messages, [consumer], :millisecond)
 
     count =
       case res do

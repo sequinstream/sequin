@@ -28,6 +28,7 @@ A change message has this shape:
     table_name: string;
     commit_timestamp: string;  // ISO timestamp
     commit_lsn: integer;  // Logical replication LSN of the transaction
+    idempotency_key: string; // Opaque token
     transaction_annotations: null | {
       [key: string]: any;  // User-provided transaction context
     };
@@ -73,6 +74,10 @@ A change message has this shape:
   ISO 8601 timestamp when the change was committed to the database.
 </ResponseField>
 
+<ResponseField name="metadata.idempotency_key" type="string">
+  Opaque string which is [unique to this record/transaction](#idempotency).
+</ResponseField>
+
 <ResponseField name="metadata.transaction_annotations" type="object">
   User-provided context about the transaction. Contains arbitrary JSON data set via `pg_logical_emit_message`. See [Transaction annotations](/reference/annotations) for details.
 </ResponseField>
@@ -108,6 +113,7 @@ A change message has this shape:
       "metadata": {
         "table_schema": "public",
         "table_name": "orders",
+        "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
         "commit_timestamp": "2024-10-28T21:37:01.127470Z",
         "sink": {
           "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
@@ -144,6 +150,7 @@ A change message has this shape:
       "metadata": {
         "table_schema": "public",
         "table_name": "orders",
+        "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
         "commit_timestamp": "2024-10-28T21:39:21.127470Z",
         "sink": {
           "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
@@ -172,6 +179,7 @@ A change message has this shape:
       "metadata": {
         "table_schema": "public",
         "table_name": "orders",
+        "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
         "commit_timestamp": "2024-10-28T21:40:00.127470Z",
         "sink": {
           "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
@@ -200,6 +208,7 @@ A change message has this shape:
       "metadata": {
         "table_schema": "public",
         "table_name": "orders",
+        "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
         "commit_timestamp": "2024-10-28T21:39:21.127470Z",
         "sink": {
           "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
@@ -225,6 +234,7 @@ A row message has this shape:
   metadata: {
     table_schema: string;
     table_name: string;
+    idempotency_key: string;
     sink: {
       id: string;
       name: string;
@@ -277,6 +287,7 @@ For example:
   "metadata": {
     "table_schema": "public", 
     "table_name": "house_atreides_members",
+    "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
     "sink": {
       "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       "name": "dune_characters_kafka"
@@ -288,6 +299,14 @@ For example:
 <Info>
   At the moment, row messages only support `insert` and `update` operations. Soon, we'll support `delete` operations by adding a `deleted` boolean column to the message.
 </Info>
+
+### Idempotency
+
+The `metadata` of each message includes an `idempotency_key` which your application can use to reject any [possible duplicate messages](/reference/sinks/overview#guaranteed-delivery).
+
+For regular changes (non-backfill), the idempotency key is based on the transaction's position in the database log and its position within that transaction.
+
+For backfill messages, the key is based on the backfill's unique identifier and the primary key values of the record being processed.
 
 ### Which message shape should you use?
 

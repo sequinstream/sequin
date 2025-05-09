@@ -130,7 +130,8 @@ defmodule Sequin.MixProject do
       {:benchee, "~> 1.0", only: :dev},
       {:rexbug, "~> 1.0"},
       {:floki, ">= 0.30.0", only: :test},
-      {:uuid, "~> 1.1"}
+      {:uuid, "~> 1.1"},
+      {:tidewave, "~> 0.1", only: :dev}
     ]
   end
 

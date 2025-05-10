@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  postgres-primary:
+    image: postgres:17.4
+    container_name: postgres-primary
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      # Enable logical replication
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports:
+      - "7432:5432"
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+      - ./init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c hot_standby=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: postgres:17.4
+    container_name: postgres-replica
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "7452:5432"
+    volumes:
+      - postgres-replica-data:/var/lib/postgresql/data
+      - ./init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    command: >
+      postgres
+      -c wal_level=logical
+      -c hot_standby=on
+
+volumes:
+  postgres-primary-data:
+  postgres-replica-data:

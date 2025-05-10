@@ -8,6 +8,7 @@ defmodule SequinWeb.PostgresDatabaseController do
   alias Sequin.Error.NotFoundError
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
+  alias Sequin.Transforms
   alias SequinWeb.ApiFallbackPlug
 
   action_fallback ApiFallbackPlug
@@ -33,7 +34,7 @@ defmodule SequinWeb.PostgresDatabaseController do
   def create(conn, params) when is_map(params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, db_params} <- parse_db_params(params),
+    with {:ok, db_params} <- Transforms.parse_db_params(params),
          {:ok, slot_params} <- parse_slot_params(params, :create),
          :ok <- test_db_conn(db_params, slot_params, account_id),
          {:ok, database} <- Databases.create_db_with_slot(account_id, db_params, slot_params) do
@@ -53,7 +54,7 @@ defmodule SequinWeb.PostgresDatabaseController do
   def update(conn, %{"id_or_name" => id_or_name} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, db_params} <- parse_db_params(params),
+    with {:ok, db_params} <- Transforms.parse_db_params(params),
          {:ok, slot_params} <- parse_slot_params(params, :update),
          {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
          database = Repo.preload(database, :replication_slot),
@@ -144,16 +145,16 @@ defmodule SequinWeb.PostgresDatabaseController do
 
   # Test database connection with parameters
   defp test_db_conn(db_params, slot_params, account_id) do
-    db = params_to_db(db_params, account_id)
-
     replication_slot =
       slot_params
       |> Sequin.Map.atomize_keys()
       |> then(&struct(PostgresReplicationSlot, &1))
 
-    with :ok <- Databases.test_tcp_reachability(db),
+    with {:ok, db} <- Transforms.from_external_postgres_database(db_params, account_id),
+         :ok <- Databases.test_tcp_reachability(db),
          :ok <- Databases.test_connect(db, 10_000),
-         :ok <- Databases.test_permissions(db) do
+         :ok <- Databases.test_permissions(db),
+         :ok <- Databases.test_maybe_replica(db, db.primary) do
       Databases.verify_slot(db, replication_slot)
     else
       {:error, error} when is_error(error) ->
@@ -168,94 +169,6 @@ defmodule SequinWeb.PostgresDatabaseController do
          Error.validation(
            summary: "Failed to connect to database. Please check connection details. (error=#{code} #{msg})"
          )}
-    end
-  end
-
-  # Convert params to a PostgresDatabase struct
-  defp params_to_db(params, account_id) do
-    params
-    |> Sequin.Map.atomize_keys()
-    |> Map.put(:account_id, account_id)
-    |> then(&struct(Sequin.Databases.PostgresDatabase, &1))
-  end
-
-  @overlapping_url_params ["database", "hostname", "port", "username", "password"]
-
-  @example_url "postgresql://user:password@localhost:5432/mydb"
-
-  defp parse_db_params(%{"url" => url} = params) do
-    uri = URI.parse(url)
-
-    uri_params = %{
-      "hostname" => uri.host,
-      "port" => uri.port,
-      "database" =>
-        case uri.path do
-          "/" <> dbname -> dbname
-          dbname -> dbname
-        end
-    }
-
-    uri_params = maybe_add_userinfo(uri_params, uri.userinfo)
-
-    missing_params = for {k, nil} <- uri_params, do: k
-
-    cond do
-      Enum.any?(@overlapping_url_params, fn p -> Map.get(params, p) end) ->
-        {:error,
-         Error.validation(
-           summary: "Bad connection details. If `url` is specified, no other connection params are allowed"
-         )}
-
-      not Enum.empty?(missing_params) ->
-        {:error,
-         Error.validation(
-           summary:
-             "Parameters missing from `url`: #{Enum.join(missing_params, ", ")}. It should look like: #{@example_url}"
-         )}
-
-      not is_nil(uri.query) ->
-        {:error, Error.validation(summary: "Query parameters not allowed in `url` - specify e.g. ssl with `ssl` key")}
-
-      true ->
-        params
-        |> Map.delete("url")
-        |> Map.merge(uri_params)
-        |> parse_db_params()
-    end
-  end
-
-  # Extract and validate database parameters
-  defp parse_db_params(db_params) do
-    # Only allow specific fields to be set by the API
-    allowed_params =
-      db_params
-      |> Map.take([
-        "database",
-        "hostname",
-        "name",
-        "port",
-        "username",
-        "password",
-        "ssl",
-        "use_local_tunnel",
-        "ipv6",
-        "annotations"
-      ])
-      |> Map.put_new("port", 5432)
-
-    {:ok, allowed_params}
-  end
-
-  defp maybe_add_userinfo(uri_params, nil), do: uri_params
-
-  defp maybe_add_userinfo(uri_params, userinfo) do
-    case String.split(userinfo, ":", parts: 2) do
-      [username, password] ->
-        Map.merge(uri_params, %{"username" => username, "password" => password})
-
-      _ ->
-        uri_params
     end
   end
 

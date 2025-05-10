@@ -233,23 +233,23 @@ defmodule Sequin.Databases.ConnectionCache do
 
   @spec connection(database()) :: start_result()
   @spec connection(GenServer.server(), database()) :: start_result()
-  def connection(server \\ __MODULE__, %PostgresDatabase{} = db) do
+  def connection(server \\ __MODULE__, %PostgresDatabase{id: id} = db) when is_binary(id) do
     GenServer.call(server, {:connection, db, true})
   end
 
   @spec existing_connection(GenServer.server(), database()) :: start_result() | {:error, NotFoundError.t()}
-  def existing_connection(server \\ __MODULE__, %PostgresDatabase{} = db) do
+  def existing_connection(server \\ __MODULE__, %PostgresDatabase{id: id} = db) when is_binary(id) do
     GenServer.call(server, {:connection, db, false})
   end
 
   @spec invalidate_connection(GenServer.server(), database()) :: :ok
-  def invalidate_connection(server \\ __MODULE__, %PostgresDatabase{} = db) do
+  def invalidate_connection(server \\ __MODULE__, %PostgresDatabase{id: id} = db) when is_binary(id) do
     GenServer.cast(server, {:invalidate_connection, db})
   end
 
   # This function is intended for test purposes only
   @spec cache_connection(GenServer.server(), database(), pid()) :: :ok
-  def cache_connection(server \\ __MODULE__, %PostgresDatabase{} = db, conn) do
+  def cache_connection(server \\ __MODULE__, %PostgresDatabase{id: id} = db, conn) when is_binary(id) do
     GenServer.call(server, {:cache_connection, db, conn})
   end
 

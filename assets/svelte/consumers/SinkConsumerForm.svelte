@@ -796,38 +796,36 @@
         <div class="flex justify-end items-center gap-2">
           {#if consumer.type !== "http_push" && consumer.type !== "sequin_stream"}
             <Popover.Root bind:open={showLocalhostWarningDialog}>
-              <Popover.Trigger asChild let:builder>
-                <Button
-                  loading={testConnectionState.status === "loading"}
-                  variant="outline"
-                  class="self-end"
-                  builders={[builder]}
-                  on:click={onTestConnection}
-                >
-                  {#if testConnectionState.status === "success" && testConnectionState.displayStatus}
-                    <span
-                      class="flex items-center p-1 gap-1 mr-2 bg-green-500 rounded-full"
-                    ></span>
-                    Connection succeeded
-                  {:else if testConnectionState.status === "error" && testConnectionState.displayStatus}
-                    <span
-                      class="flex items-center p-1 gap-1 mr-2 bg-red-500 rounded-full"
-                    ></span>
-                    Connection failed
-                  {:else}
-                    <span
-                      class="flex items-center w-2 h-2 mr-2 rounded-full"
-                      class:bg-green-500={testConnectionState.lastTestStatus ===
-                        "success"}
-                      class:bg-red-500={testConnectionState.lastTestStatus ===
-                        "error"}
-                      class:bg-gray-300={testConnectionState.lastTestStatus ===
-                        "none"}
-                    ></span>
-                    Test Connection
-                  {/if}
-                </Button>
-              </Popover.Trigger>
+              <Popover.Trigger />
+              <Button
+                loading={testConnectionState.status === "loading"}
+                variant="outline"
+                class="self-end"
+                on:click={onTestConnection}
+              >
+                {#if testConnectionState.status === "success" && testConnectionState.displayStatus}
+                  <span
+                    class="flex items-center p-1 gap-1 mr-2 bg-green-500 rounded-full"
+                  ></span>
+                  Connection succeeded
+                {:else if testConnectionState.status === "error" && testConnectionState.displayStatus}
+                  <span
+                    class="flex items-center p-1 gap-1 mr-2 bg-red-500 rounded-full"
+                  ></span>
+                  Connection failed
+                {:else}
+                  <span
+                    class="flex items-center w-2 h-2 mr-2 rounded-full"
+                    class:bg-green-500={testConnectionState.lastTestStatus ===
+                      "success"}
+                    class:bg-red-500={testConnectionState.lastTestStatus ===
+                      "error"}
+                    class:bg-gray-300={testConnectionState.lastTestStatus ===
+                      "none"}
+                  ></span>
+                  Test Connection
+                {/if}
+              </Button>
               <Popover.Content class="w-80">
                 <div class="grid gap-4">
                   <div class="space-y-2">

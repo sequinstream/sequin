@@ -516,7 +516,7 @@ defmodule Sequin.Runtime.MessageHandler do
   # Carve-out for specific customer that needs strict ordering *per table*.
   # Replace with a grouping function when that feature ships.
   defp generate_group_id(%SinkConsumer{account_id: "88a83ac5-16bd-4f38-89d2-31375e660f6f"}, %Message{} = message) do
-    message.table_oid
+    to_string(message.table_oid)
   end
 
   defp generate_group_id(consumer, message) do

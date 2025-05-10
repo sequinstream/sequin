@@ -10,13 +10,13 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabasePrimary
-  alias Sequin.Transforms
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Name
   alias Sequin.Posthog
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
+  alias Sequin.Transforms
 
   require Logger
 
@@ -411,12 +411,17 @@ defmodule SequinWeb.DatabasesLive.Form do
       "slot_name" => database.replication_slot.slot_name || "sequin_slot",
       "useLocalTunnel" => database.use_local_tunnel || false,
       "is_replica" => not is_nil(database.primary),
-      "primary" => case database.primary do
-                     nil -> %{"url" => nil, "ssl" => true}
-                     _ -> %{
-                          "url" => PostgresDatabasePrimary.connection_url(database.primary),
-                          "ssl" => database.primary.ssl}
-                   end
+      "primary" =>
+        case database.primary do
+          nil ->
+            %{"url" => nil, "ssl" => true}
+
+          _ ->
+            %{
+              "url" => PostgresDatabasePrimary.connection_url(database.primary),
+              "ssl" => database.primary.ssl
+            }
+        end
     }
   end
 

@@ -53,5 +53,4 @@ defmodule Sequin.Databases.PostgresDatabasePrimary do
   def connection_url(%__MODULE__{} = pd) do
     "postgres://#{pd.username}:#{pd.password}@#{pd.hostname}:#{pd.port}/#{pd.database}"
   end
-
 end

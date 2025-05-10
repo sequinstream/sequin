@@ -24,13 +24,15 @@ defmodule SequinWeb.WalPipelinesLive.Form do
 
     case fetch_or_build_wal_pipeline(socket, wal_pipeline_id) do
       {:ok, %WalPipeline{} = wal_pipeline} ->
-        {:ok,
-         socket
-         |> assign(wal_pipeline: wal_pipeline)
-         |> assign(is_edit: is_edit)
-         |> assign(show_errors?: false)
-         |> assign(submit_error: nil)
-         |> assign_changeset(%{}), layout: {SequinWeb.Layouts, :app_no_sidenav}}
+        socket =
+          socket
+          |> assign(wal_pipeline: wal_pipeline)
+          |> assign(is_edit: is_edit)
+          |> assign(show_errors?: false)
+          |> assign(submit_error: nil)
+          |> assign_changeset(%{})
+
+        {:ok, socket, layout: {SequinWeb.Layouts, :app_no_sidenav}}
 
       {:ok, nil} ->
         {:ok, push_navigate(socket, to: ~p"/change-capture-pipelines"), layout: {SequinWeb.Layouts, :app_no_sidenav}}

@@ -357,21 +357,20 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       </CardHeader>
       <CardContent class="space-y-4">
         <Popover bind:open={showLocalhostWarningDialog}>
-          <PopoverTrigger asChild let:builder>
-            <Button
-              type="submit"
-              loading={validating}
-              variant="default"
-              builders={[builder]}
-            >
-              <span slot="loading"> Validating... </span>
-              {#if isEdit}
-                Update HTTP Endpoint
-              {:else}
-                Create HTTP Endpoint
-              {/if}
-            </Button>
-          </PopoverTrigger>
+          <PopoverTrigger />
+          <Button
+            type="submit"
+            loading={validating}
+            variant="default"
+            on:click={checkForLocalhost}
+          >
+            <span slot="loading"> Validating... </span>
+            {#if isEdit}
+              Update HTTP Endpoint
+            {:else}
+              Create HTTP Endpoint
+            {/if}
+          </Button>
           <PopoverContent class="w-80">
             <div class="grid gap-4">
               <div class="space-y-2">

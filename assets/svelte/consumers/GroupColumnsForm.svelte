@@ -65,7 +65,10 @@
 
 <!-- Edit Mode Card -->
 {#if isEditMode}
-  <ExpandableCard disabled={true}>
+  <ExpandableCard
+    disabled={true}
+    titleTooltip="Message grouping can’t be changed for an active sink."
+  >
     <svelte:fragment slot="title">
       <CardTitle>Message grouping</CardTitle>
     </svelte:fragment>
@@ -87,7 +90,7 @@
 
   <!-- Create Mode - No PKs Available -->
 {:else if selectedTable && defaultGroupColumns.length === 0}
-  <ExpandableCard>
+  <ExpandableCard expanded={!isEditMode}>
     <svelte:fragment slot="title">
       <CardTitle>Message grouping</CardTitle>
     </svelte:fragment>
@@ -115,7 +118,7 @@
 
   <!-- Create Mode - Normal -->
 {:else}
-  <ExpandableCard disabled={!selectedTable}>
+  <ExpandableCard disabled={!selectedTable} expanded={!isEditMode}>
     <svelte:fragment slot="title">
       <CardTitle>Message grouping</CardTitle>
     </svelte:fragment>

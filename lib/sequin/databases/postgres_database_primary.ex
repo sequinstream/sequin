@@ -49,4 +49,9 @@ defmodule Sequin.Databases.PostgresDatabasePrimary do
     ])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
   end
+
+  def connection_url(%__MODULE__{} = pd) do
+    "postgres://#{pd.username}:#{pd.password}@#{pd.hostname}:#{pd.port}/#{pd.database}"
+  end
+
 end

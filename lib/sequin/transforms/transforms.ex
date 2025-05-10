@@ -52,7 +52,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%PostgresDatabase{} = database, show_sensitive) do
-    database = Repo.preload(database, [:replication_slot, :sequences, :primary])
+    database = Repo.preload(database, [:replication_slot, :sequences])
 
     result = %{
       id: database.id,

@@ -4,7 +4,6 @@ defmodule SequinWeb.PostgresDatabaseController do
   import Sequin.Error.Guards, only: [is_error: 1]
 
   alias Sequin.Databases
-  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Replication.PostgresReplicationSlot

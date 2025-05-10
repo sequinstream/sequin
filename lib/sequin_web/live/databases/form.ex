@@ -16,7 +16,6 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Posthog
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
-  alias Sequin.Transforms
 
   require Logger
 

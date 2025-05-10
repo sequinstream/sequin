@@ -33,6 +33,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Delete
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Insert
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
+  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Origin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Runtime.PostgresRelationHashCache
@@ -159,6 +160,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :heartbeat_timer, nil | reference()
       field :heartbeat_verification_timer, nil | reference()
       field :message_received_since_last_heartbeat, boolean(), default: false
+
+      # Reference to primary in case slot lives on replica
+      field :primary_database, nil | PostgresDatabase.t()
     end
   end
 
@@ -168,6 +172,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     publication = Keyword.fetch!(opts, :publication)
     slot_name = Keyword.fetch!(opts, :slot_name)
     postgres_database = Keyword.fetch!(opts, :postgres_database)
+    primary_database = postgres_database.primary && PostgresDatabase.from_primary(postgres_database.primary)
     replication_slot = Keyword.fetch!(opts, :replication_slot)
     test_pid = Keyword.get(opts, :test_pid)
     message_handler_ctx = Keyword.fetch!(opts, :message_handler_ctx)
@@ -187,6 +192,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       publication: publication,
       slot_name: slot_name,
       postgres_database: postgres_database,
+      primary_database: primary_database,
       replication_slot: replication_slot,
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
@@ -1038,7 +1044,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
          %Relation{id: id, columns: columns, namespace: schema, name: table} = relation,
          %State{} = state
        ) do
-    conn = get_cached_conn(state)
+    conn = get_primary_conn(state)
 
     # First, determine if this is a partition and get its parent table info
     partition_query = """
@@ -1237,6 +1243,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   # Ignore other logical messages
   defp process_message(%State{} = state, %LogicalMessage{}) do
+    state
+  end
+
+  defp process_message(%State{} = state, %Origin{}) do
     state
   end
 
@@ -1656,6 +1666,16 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp get_cached_conn(%State{} = state) do
     {:ok, conn} = ConnectionCache.connection(state.postgres_database)
     conn
+  end
+
+  defp get_primary_conn(%State{} = state) do
+    if is_nil(state.primary_database) do
+      {:ok, conn} = ConnectionCache.connection(state.postgres_database)
+      conn
+    else
+      {:ok, conn} = ConnectionCache.connection(state.primary_database)
+      conn
+    end
   end
 
   # Give the system 3 seconds to lower memory

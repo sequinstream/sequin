@@ -4,6 +4,7 @@ defmodule SequinWeb.PostgresDatabaseController do
   import Sequin.Error.Guards, only: [is_error: 1]
 
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Replication.PostgresReplicationSlot
@@ -153,7 +154,9 @@ defmodule SequinWeb.PostgresDatabaseController do
 
     with :ok <- Databases.test_tcp_reachability(db),
          :ok <- Databases.test_connect(db, 10_000),
-         :ok <- Databases.test_permissions(db) do
+         :ok <- Databases.test_permissions(db),
+         {:ok, primary} <- parse_primary_params(db_params, account_id),
+         :ok <- Databases.test_maybe_replica(db, primary) do
       Databases.verify_slot(db, replication_slot)
     else
       {:error, error} when is_error(error) ->
@@ -171,12 +174,24 @@ defmodule SequinWeb.PostgresDatabaseController do
     end
   end
 
+  defp parse_primary_params(nil, _), do: {:ok, nil}
+
+  defp parse_primary_params(ps, account_id) do
+    with {:ok, pp} <- parse_db_params(ps) do
+      params_to_db(pp, account_id)
+    end
+  end
+
+  @spec params_to_db(map() | nil, String.t()) :: PostgresDatabase.t() | nil
+  # Ignore nil params
+  defp params_to_db(nil, _), do: nil
+
   # Convert params to a PostgresDatabase struct
   defp params_to_db(params, account_id) do
     params
     |> Sequin.Map.atomize_keys()
     |> Map.put(:account_id, account_id)
-    |> then(&struct(Sequin.Databases.PostgresDatabase, &1))
+    |> then(&struct(PostgresDatabase, &1))
   end
 
   @overlapping_url_params ["database", "hostname", "port", "username", "password"]
@@ -240,7 +255,8 @@ defmodule SequinWeb.PostgresDatabaseController do
         "ssl",
         "use_local_tunnel",
         "ipv6",
-        "annotations"
+        "annotations",
+        "primary"
       ])
       |> Map.put_new("port", 5432)
 

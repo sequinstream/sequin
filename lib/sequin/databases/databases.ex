@@ -5,6 +5,7 @@ defmodule Sequin.Databases do
   alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabasePrimary
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.Error
@@ -121,6 +122,7 @@ defmodule Sequin.Databases do
 
   @doc """
   Creates a PostgresDatabase and its associated PostgresReplicationSlot transactionally.
+  If primary database parameters are provided, also creates a PostgresDatabasePrimary record.
   """
   def create_db_with_slot(account_id, db_params, replication_params) do
     Repo.transact(fn ->
@@ -130,13 +132,27 @@ defmodule Sequin.Databases do
              Replication.create_pg_replication(
                account_id,
                replication_params
-             ) do
-        # Preload the slot association after successful creation
-        db_with_slot = Repo.preload(db, :replication_slot)
-        {:ok, %PostgresDatabase{db_with_slot | replication_slot: replication}}
+             ),
+           {:ok, db} <- maybe_create_primary_db(db, db_params) do
+        db_with_associations = Repo.preload(db, [:replication_slot])
+        {:ok, %PostgresDatabase{db_with_associations | replication_slot: replication}}
       end
     end)
   end
+
+  defp maybe_create_primary_db(db, %{"primary" => primary_params}) when is_map(primary_params) do
+    primary_params = Map.put(primary_params, "postgres_database_id", db.id)
+
+    %PostgresDatabasePrimary{}
+    |> PostgresDatabasePrimary.changeset(primary_params)
+    |> Repo.insert()
+    |> case do
+      {:ok, _primary} -> {:ok, db}
+      {:error, changeset} -> {:error, Error.validation(changeset: changeset)}
+    end
+  end
+
+  defp maybe_create_primary_db(db, _), do: {:ok, db}
 
   @doc """
   Updates a PostgresDatabase and its associated PostgresReplicationSlot transactionally.
@@ -375,8 +391,14 @@ defmodule Sequin.Databases do
     NetworkUtils.test_tcp_reachability(db.hostname, db.port, db.ipv6, timeout)
   end
 
-  @spec test_connect(%PostgresDatabase{}, integer()) :: :ok | {:error, term()}
-  def test_connect(%PostgresDatabase{} = db, timeout \\ 30_000) do
+  @spec test_connect(%PostgresDatabase{} | %PostgresDatabasePrimary{}, integer()) :: :ok | {:error, term()}
+  def test_connect(db, timeout \\ 30_000)
+
+  def test_connect(%PostgresDatabasePrimary{} = db, timeout) do
+    test_connect(PostgresDatabase.from_primary(db), timeout)
+  end
+
+  def test_connect(%PostgresDatabase{} = db, timeout) do
     db
     |> PostgresDatabase.to_postgrex_opts()
     |> Postgrex.Utils.default_opts()
@@ -418,6 +440,31 @@ defmodule Sequin.Databases do
         end
       end
     end)
+  end
+
+  def test_maybe_replica(%PostgresDatabase{} = db, %PostgresDatabasePrimary{} = db_primary) do
+    test_maybe_replica(db, PostgresDatabase.from_primary(db_primary))
+  end
+
+  def test_maybe_replica(%PostgresDatabase{} = db, db_primary) do
+    with true <- replica?(db),
+         true <- not is_nil(db_primary),
+         {:ok, version} when version >= 16 <- get_pg_major_version(db),
+         :ok <- test_connect(db_primary) do
+      :ok
+    else
+      {:ok, _not_16_or_higher} ->
+        {:error, Error.validation(summary: "PostgreSQL version 16 or higher is required for replica databases")}
+
+      false when not is_nil(db_primary) ->
+        :ok
+
+      false ->
+        {:error, Error.validation(summary: "Primary connection parameters are required for replica databases")}
+
+      {:error, error} ->
+        {:error, Error.validation(summary: "Failed to connect to primary database: #{inspect(error)}")}
+    end
   end
 
   def verify_slot(%PostgresDatabase{} = database, %PostgresReplicationSlot{} = slot) do
@@ -585,6 +632,25 @@ defmodule Sequin.Databases do
           error
       end
     end
+  end
+
+  @spec replica?(%PostgresDatabase{}) :: boolean()
+  def replica?(%PostgresDatabase{} = db) do
+    with_uncached_connection(db, fn conn ->
+      query = """
+        SELECT
+          pg_is_in_recovery() AS is_physical_replica,
+          EXISTS (SELECT 1 FROM pg_subscription) AS has_logical_replication
+      """
+
+      case Postgres.query(conn, query, []) do
+        {:ok, %{rows: [[is_physical, has_logical]]}} ->
+          is_physical or has_logical
+
+        _ ->
+          false
+      end
+    end)
   end
 
   def update_tables!(%PostgresDatabase{} = db) do

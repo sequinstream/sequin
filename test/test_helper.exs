@@ -6,7 +6,6 @@ Sequin.TestSupport.ReplicationSlots.setup_all()
 ExUnit.start()
 Ecto.Adapters.SQL.Sandbox.mode(Sequin.Repo, :manual)
 
-
 migrations_dir = Path.join(UnboxedRepo.config()[:priv], "migrations")
 [{create_mod, _}] = Code.require_file(Path.join(migrations_dir, "20240816005458_create_test_tables.exs"))
 create_mod.check_version!(UnboxedRepo)

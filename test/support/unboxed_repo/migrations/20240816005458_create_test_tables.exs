@@ -5,12 +5,24 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
   alias Sequin.Constants
 
   def my_version, do: 1
+
   def check_version!(repo) do
-    if my_version() != get_version(repo) do
-      IO.puts(:stderr,
-        [IO.ANSI.red(), "UnboxedRepo version has been updated!", IO.ANSI.reset(), "\n",
-         IO.ANSI.bright(), "Please run the following command to re-create:", IO.ANSI.reset(), "\n\n",
-         "MIX_ENV=test mix ecto.reset\n"])
+    unless my_version() == get_version(repo) do
+      IO.puts(
+        :stderr,
+        [
+          IO.ANSI.red(),
+          "UnboxedRepo version has been updated!",
+          IO.ANSI.reset(),
+          "\n",
+          IO.ANSI.bright(),
+          "Please run the following command to re-create:",
+          IO.ANSI.reset(),
+          "\n\n",
+          "MIX_ENV=test mix ecto.reset\n"
+        ]
+      )
+
       System.halt(1)
     end
   end

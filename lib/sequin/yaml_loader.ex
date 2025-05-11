@@ -906,7 +906,7 @@ defmodule Sequin.YamlLoader do
     nested_attrs =
       flat
       |> Map.take(["id", "name"])
-      |> Map.put("transform", Map.take(flat, ["type", "sink_type", "code", "description"]))
+      |> Map.put("transform", Map.take(flat, ["type", "sink_type", "code", "description", "path"]))
 
     {:ok, nested_attrs}
   end

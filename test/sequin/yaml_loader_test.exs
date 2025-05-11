@@ -422,6 +422,24 @@ defmodule Sequin.YamlLoaderTest do
       assert transform.transform.path == "record"
     end
 
+    test "creates a transform flat format" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               transforms:
+                 - name: "my-record-only"
+                   type: "path"
+                   path: "record"
+               """)
+
+      assert [transform] = Repo.all(Transform)
+      assert transform.name == "my-record-only"
+      assert transform.type == "path"
+      assert transform.transform.path == "record"
+    end
+
     test "updates an existing transform" do
       # First create the transform
       assert :ok =

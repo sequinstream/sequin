@@ -440,7 +440,6 @@ defmodule Sequin.YamlLoaderTest do
       assert transform.transform.path == "record"
     end
 
-
     test "updates an existing transform" do
       # First create the transform
       assert :ok =

@@ -21,7 +21,7 @@ defmodule Sequin.Sinks.Redis.Client do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       commands = xadd_commands(consumer, messages)
 
-      {time, res} = :timer.tc(__MODULE__, :qp, [connection, commands], :millisecond)
+      {time, res} = :timer.tc(fn -> qp(connection, commands) end, :millisecond)
 
       if time > 200 do
         Logger.warning("[Sequin.Sinks.Redis] Slow command execution", duration_ms: time)

@@ -550,11 +550,9 @@ defmodule Sequin.Transforms do
             {:error, error} -> {:halt, {:error, error}}
           end
 
+        # Ignore encrypted_headers until encryption/decryption works
         "encrypted_headers" ->
-          case parse_headers(value) do
-            {:ok, headers} -> {:cont, {:ok, Map.put(acc, :encrypted_headers, headers)}}
-            {:error, error} -> {:halt, {:error, error}}
-          end
+          {:cont, {:ok, acc}}
 
         "webhook.site" ->
           if value in [true, "true"] do
@@ -716,6 +714,9 @@ defmodule Sequin.Transforms do
         "max_retry_count" when is_integer(value) and value >= 0 ->
           {:cont, {:ok, Map.put(acc, :max_retry_count, value)}}
 
+        "max_retry_count" when is_nil(value) ->
+          {:cont, {:ok, acc}}
+
         "max_retry_count" ->
           {:halt, {:error, Error.validation(summary: "max_retry_count must be a non-negative integer")}}
 
@@ -728,6 +729,10 @@ defmodule Sequin.Transforms do
 
         # temporary for backwards compatibility
         "consumer_start" ->
+          {:cont, {:ok, acc}}
+
+        # Ignore until it is properly implemented
+        "active_backfill" ->
           {:cont, {:ok, acc}}
 
         # Ignore internal fields that might be present in the external data

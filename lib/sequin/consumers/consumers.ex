@@ -1427,9 +1427,9 @@ defmodule Sequin.Consumers do
     sequence.table_oid == message.table_oid
   end
 
-  def validate_code(code, opts \\ []) do
-    if byte_size(code) > Keyword.get(opts, :maxlen, 2000) do
-      [code: "too long"]
+  def validate_code(code) do
+    if byte_size(code) > 10_000 do
+      [code: "too long, the maximum is 10 kilobytes"]
     else
       with {:ok, ast} <- Code.string_to_quoted(code),
            {:ok, body} <- Validator.unwrap(ast),

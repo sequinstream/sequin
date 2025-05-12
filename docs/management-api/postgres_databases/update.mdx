@@ -49,6 +49,29 @@ import DatabaseResponseExample from '/snippets/postgres-database-response-snippe
 <ParamField body="ipv6" type="boolean">
   Whether to use IPv6 for the connection.
 </ParamField>
+<ParamField body="primary" type="object">
+  Connection details for the primary database, only needed when connecting to a replica.
+  <Expandable title="primary properties">
+    <ParamField body="hostname" type="string" required>
+      The primary database server hostname.
+    </ParamField>
+    <ParamField body="database" type="string" required>
+      The name of the logical database in the primary Postgres instance.
+    </ParamField>
+    <ParamField body="username" type="string" required>
+      The primary database username.
+    </ParamField>
+    <ParamField body="password" type="string" required>
+      The primary database password.
+    </ParamField>
+    <ParamField body="port" type="integer">
+      The primary database server port. Defaults to `5432`.
+    </ParamField>
+    <ParamField body="ssl" type="boolean">
+      Whether to use SSL for the primary connection. Defaults to `true`.
+    </ParamField>
+  </Expandable>
+</ParamField>
 <ParamField body="annotations" type="object">
   Optional metadata as key-value pairs.
 </ParamField>
@@ -114,6 +137,20 @@ curl --request PUT \
   --data '{
     "name": "example-db-renamed",
     "hostname": "new-db.example.com"
+  }'
+```
+
+```bash Updating replica connection
+curl --request PUT \
+  --url https://api.sequinstream.com/api/postgres_databases/replica-db \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_API_KEY' \
+  --data '{
+    "name": "replica-db-renamed",
+    "hostname": "new-replica.example.com",
+    "primary": {
+      "hostname": "new-primary.example.com"
+    }
   }'
 ```
 </RequestExample>

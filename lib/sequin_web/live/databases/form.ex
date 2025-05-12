@@ -9,6 +9,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.ApiTokens
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabasePrimary
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Name
@@ -407,7 +408,19 @@ defmodule SequinWeb.DatabasesLive.Form do
       "ssl" => database.ssl || true,
       "publication_name" => database.replication_slot.publication_name || "sequin_pub",
       "slot_name" => database.replication_slot.slot_name || "sequin_slot",
-      "useLocalTunnel" => database.use_local_tunnel || false
+      "useLocalTunnel" => database.use_local_tunnel || false,
+      "is_replica" => not is_nil(database.primary),
+      "primary" =>
+        case database.primary do
+          nil ->
+            %{"url" => nil, "ssl" => true}
+
+          _ ->
+            %{
+              "url" => PostgresDatabasePrimary.connection_url(database.primary),
+              "ssl" => database.primary.ssl
+            }
+        end
     }
   end
 
@@ -434,6 +447,8 @@ defmodule SequinWeb.DatabasesLive.Form do
     ssl = if form["useLocalTunnel"], do: false, else: form["ssl"]
     hostname = if form["useLocalTunnel"], do: Application.get_env(:sequin, :portal_hostname), else: form["hostname"]
 
+    primary = if form["is_replica"], do: form["primary"]
+
     %{
       "database" => %{
         "name" => form["name"],
@@ -443,7 +458,8 @@ defmodule SequinWeb.DatabasesLive.Form do
         "username" => maybe_trim(form["username"]),
         "password" => form["password"],
         "ssl" => ssl,
-        "use_local_tunnel" => form["useLocalTunnel"]
+        "use_local_tunnel" => form["useLocalTunnel"],
+        "primary" => primary
       },
       "replication_slot" => %{
         "publication_name" => maybe_trim(form["publication_name"]),

@@ -53,39 +53,63 @@ defmodule SequinWeb.PostgresDatabaseJSON do
     %{success: false, error: error}
   end
 
-  defp render_db(%PostgresDatabase{replication_slot: slot} = database, show_sensitive) do
-    password = if show_sensitive, do: database.password, else: String.obfuscate(database.password)
-
-    # Only nil in test atm
-    replication_slots_data =
-      if is_nil(slot) do
-        []
-      else
-        [
-          %{
-            publication_name: slot.publication_name,
-            slot_name: slot.slot_name,
-            status: slot.status,
-            id: slot.id
-          }
-        ]
-      end
-
-    %{
+  defp render_db(%PostgresDatabase{replication_slot: slot, primary: primary} = database, show_sensitive) do
+    r = %{
       id: database.id,
       name: database.name,
       hostname: database.hostname,
       port: database.port,
       database: database.database,
       username: database.username,
-      password: password,
+      password: render_password(database.password, show_sensitive),
       ssl: database.ssl,
       ipv6: database.ipv6,
       use_local_tunnel: database.use_local_tunnel,
       pool_size: database.pool_size,
       queue_interval: database.queue_interval,
       queue_target: database.queue_target,
-      replication_slots: replication_slots_data
+      replication_slots: render_replication_slots(slot)
+    }
+
+    Sequin.Map.put_if_present(r, :primary, render_primary_database(primary))
+  end
+
+  defp render_password(password, true), do: password
+  defp render_password(password, false), do: String.obfuscate(password)
+
+  # Only nil in test atm
+  defp render_replication_slots(nil), do: []
+
+  defp render_replication_slots(%{publication_name: publication_name, slot_name: slot_name, status: status, id: id}) do
+    [
+      %{
+        publication_name: publication_name,
+        slot_name: slot_name,
+        status: status,
+        id: id
+      }
+    ]
+  end
+
+  defp render_primary_database(nil), do: nil
+
+  defp render_primary_database(%{
+         id: id,
+         hostname: hostname,
+         port: port,
+         database: database_name,
+         username: username,
+         ssl: ssl,
+         ipv6: ipv6
+       }) do
+    %{
+      id: id,
+      hostname: hostname,
+      port: port,
+      database: database_name,
+      username: username,
+      ssl: ssl,
+      ipv6: ipv6
     }
   end
 end

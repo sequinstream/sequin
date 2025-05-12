@@ -27,7 +27,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"postgres_database_id" => postgres_database_id}}) do
     with {:ok, database} <- Databases.get_db(postgres_database_id),
-         database = Repo.preload(database, :replication_slot),
+         database = Repo.preload(database, [:replication_slot]),
          Logger.metadata(database_id: database.id, replication_id: database.replication_slot.id),
          :ok <- check_database(database) do
       check_replication_slot(database)
@@ -70,6 +70,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
     with :ok <- Databases.test_tcp_reachability(database),
          :ok <- Databases.test_connect(database),
          :ok <- Databases.test_permissions(database),
+         :ok <- Databases.test_maybe_replica(database, database.primary),
          {:ok, latency} <- NetworkUtils.measure_latency(database.hostname, database.port) do
       cond do
         is_nil(database.pg_major_version) ->

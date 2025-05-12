@@ -43,6 +43,29 @@ import DatabaseResponseExample from '/snippets/postgres-database-response-snippe
 <ParamField body="ipv6" type="boolean">
   Whether to use IPv6 for the connection. Defaults to `false`.
 </ParamField>
+<ParamField body="primary" type="object">
+  Connection details for the primary database, only needed when connecting to a replica.
+  <Expandable title="primary properties">
+    <ParamField body="hostname" type="string" required>
+      The primary database server hostname.
+    </ParamField>
+    <ParamField body="database" type="string" required>
+      The name of the logical database in the primary Postgres instance.
+    </ParamField>
+    <ParamField body="username" type="string" required>
+      The primary database username.
+    </ParamField>
+    <ParamField body="password" type="string" required>
+      The primary database password.
+    </ParamField>
+    <ParamField body="port" type="integer">
+      The primary database server port. Defaults to `5432`.
+    </ParamField>
+    <ParamField body="ssl" type="boolean">
+      Whether to use SSL for the primary connection. Defaults to `true`.
+    </ParamField>
+  </Expandable>
+</ParamField>
 <ParamField body="replication_slots" type="array" required={true}>
   <Expandable title="properties" defaultOpen={true}>
     <ParamField body="publication_name" type="string" required>
@@ -96,6 +119,35 @@ curl --request POST \
     "password": "secret-password",
     "port": 5432,
     "ssl": true,
+    "replication_slots": [
+      {
+        "publication_name": "sequin_pub",
+        "slot_name": "sequin_slot"
+      }
+    ]
+  }'
+```
+```bash Connecting to a replica
+curl --request POST \
+  --url https://api.sequinstream.com/api/postgres_databases \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer YOUR_API_KEY' \
+  --data '{
+    "name": "replica-db",
+    "hostname": "replica.example.com",
+    "database": "postgres",
+    "username": "postgres",
+    "password": "replica-password",
+    "port": 5432,
+    "ssl": true,
+    "primary": {
+      "hostname": "primary.example.com",
+      "database": "postgres",
+      "username": "postgres",
+      "password": "primary-password",
+      "port": 5432,
+      "ssl": true
+    },
     "replication_slots": [
       {
         "publication_name": "sequin_pub",

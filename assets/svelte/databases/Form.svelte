@@ -58,6 +58,15 @@
     publication_name: string;
     slot_name: string;
     useLocalTunnel: boolean;
+    is_replica: boolean;
+    primary: {
+      ssl: boolean;
+      database: string;
+      hostname: string;
+      port: number;
+      username: string;
+      password: string;
+    };
   };
   export let errors: Record<string, any> = {};
   export let submitError: string | null = null;
@@ -69,7 +78,7 @@
   export let showPgVersionWarning: boolean = false;
   export let selfHosted: boolean = false;
 
-  let form = { ...database, ssl: true }; // Set default SSL to true
+  let form = { ...database };
 
   const isEdit = !!form.id;
 
@@ -490,6 +499,133 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
         {#if databaseErrors.ssl}
           <p class="text-destructive text-sm">{databaseErrors.ssl}</p>
         {/if}
+
+        <div class="flex items-center gap-2">
+          <Switch id="is_replica" bind:checked={form.is_replica} />
+          <Label for="is_replica" class="flex items-center">
+            Replica
+            <Tooltip.Root openDelay={200}>
+              <Tooltip.Trigger>
+                <HelpCircle class="inline-block h-4 w-4 text-gray-400 ml-1" />
+              </Tooltip.Trigger>
+              <Tooltip.Content class="max-w-xs">
+                <p class="text-sm text-gray-500">
+                  <b>Replica</b>
+                  <br />
+                  When connecting a replica to Sequin, Sequin also needs to connect
+                  to the primary database.
+                  <a
+                    href="https://docs.sequinstream.com/reference/databases#using-sequin-with-a-replica"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center text-link hover:underline"
+                  >
+                    Learn more
+                    <ExternalLinkIcon class="w-3 h-3 ml-1" />
+                  </a>
+                </p>
+              </Tooltip.Content>
+            </Tooltip.Root>
+          </Label>
+        </div>
+
+        {#if form.is_replica}
+          <div transition:slide class="space-y-4 mt-2 bg-muted p-4 rounded-md">
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <Label for="primary_hostname">Primary host</Label>
+                <Input
+                  type="text"
+                  id="primary_hostname"
+                  placeholder="example.com"
+                  bind:value={form.primary.hostname}
+                />
+                {#if databaseErrors.primary?.hostname}
+                  <p class="text-destructive text-sm">
+                    {databaseErrors.primary?.hostname}
+                  </p>
+                {/if}
+              </div>
+
+              <div class="space-y-2">
+                <Label for="primary_port">Primary port</Label>
+                <Input
+                  type="number"
+                  id="primary_port"
+                  placeholder="5432"
+                  bind:value={form.primary.port}
+                />
+                {#if databaseErrors.primary?.port}
+                  <p class="text-destructive text-sm">
+                    {databaseErrors.primary?.port}
+                  </p>
+                {/if}
+              </div>
+
+              <div class="space-y-2">
+                <Label for="primary_database">Primary database</Label>
+                <Input
+                  type="text"
+                  id="primary_database"
+                  placeholder="postgres"
+                  bind:value={form.primary.database}
+                />
+                {#if databaseErrors.primary?.database}
+                  <p class="text-destructive text-sm">
+                    {databaseErrors.primary?.database}
+                  </p>
+                {/if}
+              </div>
+
+              <div class="space-y-2">
+                <Label for="primary_username">Primary username</Label>
+                <Input
+                  type="text"
+                  id="primary_username"
+                  bind:value={form.primary.username}
+                />
+                {#if databaseErrors.primary?.username}
+                  <p class="text-destructive text-sm">
+                    {databaseErrors.primary?.username}
+                  </p>
+                {/if}
+              </div>
+
+              <div class="space-y-2">
+                <Label for="primary_password">Primary password</Label>
+                <div class="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    id="primary_password"
+                    bind:value={form.primary.password}
+                  />
+                  <button
+                    type="button"
+                    class="absolute inset-y-0 right-0 flex items-center pr-3"
+                    on:click={togglePasswordVisibility}
+                  >
+                    {#if showPassword}
+                      <EyeOff class="h-4 w-4 text-gray-400" />
+                    {:else}
+                      <Eye class="h-4 w-4 text-gray-400" />
+                    {/if}
+                  </button>
+                </div>
+                {#if databaseErrors.primary?.password}
+                  <p class="text-destructive text-sm">
+                    {databaseErrors.primary?.password}
+                  </p>
+                {/if}
+              </div>
+
+              <div class="flex items-center gap-2">
+                <Switch id="primary_ssl" bind:checked={form.primary.ssl} />
+                <Label for="primary_ssl">Primary SSL</Label>
+              </div>
+            </div>
+          </div>
+        {/if}
+
         {#if poolerType}
           <div transition:slide>
             <Alert variant="default">
@@ -544,26 +680,26 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       </CardHeader>
       <CardContent>
         <div class="space-y-2">
+          <Label for="publication_name">Publication name</Label>
+          <Input
+            type="text"
+            id="publication_name"
+            bind:value={form.publication_name}
+          />
+          {#if replicationErrors.publication_name}
+            <p class="text-destructive text-sm">
+              {replicationErrors.publication_name}
+            </p>
+          {/if}
+        </div>
+
+        <div class="space-y-2">
           <div class="space-y-2">
             <Label for="slot_name">Slot name</Label>
             <Input type="text" id="slot_name" bind:value={form.slot_name} />
             {#if replicationErrors.slot_name}
               <p class="text-destructive text-sm">
                 {replicationErrors.slot_name}
-              </p>
-            {/if}
-          </div>
-
-          <div class="space-y-2">
-            <Label for="publication_name">Publication name</Label>
-            <Input
-              type="text"
-              id="publication_name"
-              bind:value={form.publication_name}
-            />
-            {#if replicationErrors.publication_name}
-              <p class="text-destructive text-sm">
-                {replicationErrors.publication_name}
               </p>
             {/if}
           </div>

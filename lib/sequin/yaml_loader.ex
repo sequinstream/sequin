@@ -328,33 +328,34 @@ defmodule Sequin.YamlLoader do
   defp upsert_database(account_id, %{"name" => name} = database_attrs, opts) when is_binary(name) do
     test_connect_fun = Keyword.get(opts, :test_connect_fun, &Databases.test_connect/1)
 
-    account_id
-    |> Databases.get_db_for_account(name)
-    |> case do
-      {:ok, database} ->
-        Logger.info("Found database: #{inspect(database, pretty: true)}")
-        update_database(database, database_attrs)
+    with {:ok, parsed_params} <- Sequin.Transforms.parse_db_params(database_attrs) do
+      db_params = Map.merge(database_attrs, parsed_params)
 
-      {:error, %NotFoundError{}} ->
-        database_attrs = Map.merge(@database_defaults, database_attrs)
+      account_id
+      |> Databases.get_db_for_account(name)
+      |> case do
+        {:ok, database} ->
+          Logger.info("Found database: #{inspect(database, pretty: true)}")
+          update_database(database, db_params)
 
-        with %Ecto.Changeset{valid?: true} <-
-               Databases.create_db_changeset(account_id, database_attrs),
-             :ok <- await_database(database_attrs, test_connect_fun) do
-          create_database_with_replication(account_id, database_attrs)
-        else
-          %Ecto.Changeset{valid?: false} = changeset ->
-            # To get well-formatted errors, convert to ValidationError first
-            error = Error.validation(changeset: changeset)
+        {:error, %NotFoundError{}} ->
+          db_params_with_defaults = Map.merge(@database_defaults, db_params)
 
-            {:error,
-             Error.bad_request(
-               message: "Error creating database '#{database_attrs["name"]}': #{Exception.message(error)}"
-             )}
+          with %Ecto.Changeset{valid?: true} <-
+                 Databases.create_db_changeset(account_id, db_params_with_defaults),
+               :ok <- await_database(db_params_with_defaults, test_connect_fun) do
+            create_database_with_replication(account_id, db_params_with_defaults)
+          else
+            %Ecto.Changeset{valid?: false} = changeset ->
+              # To get well-formatted errors, convert to ValidationError first
+              error = Error.validation(changeset: changeset)
 
-          error ->
-            error
-        end
+              {:error, Error.bad_request(message: "Error creating database '#{name}': #{Exception.message(error)}")}
+
+            error ->
+              error
+          end
+      end
     end
   end
 

@@ -118,6 +118,8 @@ defmodule SequinWeb.Router do
       live "/change-capture-pipelines/:id", WalPipelinesLive.Show, :show
       live "/change-capture-pipelines/:id/edit", WalPipelinesLive.Form, :edit
 
+      live "/cli", CliLive, :index
+
       live "/logout", UserLogoutLive, :index
 
       get "/easter-egg", EasterEggController, :home

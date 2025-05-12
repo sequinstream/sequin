@@ -23,6 +23,7 @@
     ArrowUpCircle,
     UserCog,
     Code,
+    Terminal,
   } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import Beta from "./Beta.svelte";
@@ -227,6 +228,20 @@
     </div>
 
     <div class="mx-4 mb-4">
+      <a href="/cli" data-phx-link="redirect" data-phx-link-state="push">
+        <div
+          class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
+            '/cli',
+          )}"
+        >
+          <Terminal
+            class="h-4 w-4 flex-shrink-0 {$isNavCollapsed ? '' : 'mr-2'}"
+          />
+          {#if !$isNavCollapsed}
+            <span class="text-sm leading-tight truncate">CLI</span>
+          {/if}
+        </div>
+      </a>
       <a
         href="https://discord.gg/BV8wFXvNtY"
         target="_blank"

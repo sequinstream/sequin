@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { slide, fade } from "svelte/transition";
-  import FullPageModal from "../components/FullPageModal.svelte";
+  import FullPageForm from "../components/FullPageForm.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -172,8 +172,6 @@
     }
   }
 
-  let dialogOpen = true;
-  let showConfirmDialog = false;
   let validating = false;
 
   const progress = tweened(0, { duration: 10000, easing: cubicOut });
@@ -318,13 +316,8 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
   }
 </script>
 
-<FullPageModal
-  title="Connect Database"
-  bind:open={dialogOpen}
-  bind:showConfirmDialog
-  on:close={handleClose}
->
-  <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto mt-6">
+<FullPageForm title="Connect Database" on:close={handleClose}>
+  <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto">
     <Card>
       <CardHeader class="flex flex-row items-center">
         <CardTitle class="flex-grow">Database connection details</CardTitle>
@@ -332,8 +325,8 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       <CardContent class="space-y-4">
         <div class="flex items-center space-x-2 mb-2">
           <Popover bind:open={popoverOpen}>
-            <PopoverTrigger>
-              <Button variant="magic">
+            <PopoverTrigger asChild let:builder>
+              <Button variant="magic" builders={[builder]}>
                 <Wand class="inline-block h-4 w-4 mr-2" /> Autofill with Connection
                 String
               </Button>
@@ -372,15 +365,18 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
                   disabled={isEdit}
                 />
                 <Label for="use-localhost">Use localhost</Label>
-                <Popover>
-                  <PopoverTrigger>
-                    <Info class="w-4 h-4 text-muted-foreground" />
-                  </PopoverTrigger>
-                  <PopoverContent>
-                    You can use the Sequin CLI to connect Sequin to a database
-                    running on your local machine.
-                  </PopoverContent>
-                </Popover>
+
+                <Tooltip.Root openDelay={200}>
+                  <Tooltip.Trigger>
+                    <Info class="h-4 w-4 text-gray-400 cursor-help" />
+                  </Tooltip.Trigger>
+                  <Tooltip.Content class="p-4 max-w-xs">
+                    <p class="text-sm text-muted-foreground font-normal">
+                      You can use the Sequin CLI to connect Sequin to a database
+                      running on your local machine.
+                    </p>
+                  </Tooltip.Content>
+                </Tooltip.Root>
               {/if}
             </div>
           </div>
@@ -899,4 +895,4 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       </CardContent>
     </Card>
   </form>
-</FullPageModal>
+</FullPageForm>

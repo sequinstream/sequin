@@ -33,8 +33,23 @@ defmodule Sequin.Consumers.TypesenseSink do
     changeset
     |> validate_change(:endpoint_url, fn :endpoint_url, url ->
       case URI.parse(url) do
-        %URI{scheme: scheme, host: host} when not is_nil(scheme) and not is_nil(host) -> []
-        _ -> [endpoint_url: "must be a valid URL"]
+        %URI{scheme: nil} ->
+          [endpoint_url: "must include a scheme, ie. https://"]
+
+        %URI{scheme: scheme} when scheme not in ["http", "https"] ->
+          [endpoint_url: "must include a valid scheme, ie. http or https"]
+
+        %URI{host: host} when is_nil(host) or host == "" ->
+          [endpoint_url: "must include a host"]
+
+        %URI{query: query} when not is_nil(query) ->
+          [endpoint_url: "must not include query params, found: #{query}"]
+
+        %URI{fragment: fragment} when not is_nil(fragment) ->
+          [endpoint_url: "must not include a fragment, found: #{fragment}"]
+
+        _ ->
+          []
       end
     end)
     |> validate_length(:endpoint_url, max: 4096)

@@ -461,6 +461,9 @@ defmodule Sequin.MiniElixirTest do
       ast = quote do: {x, {y, _}, z}
       assert get_vars(ast) == [:x, :y, :z]
 
+      ast = quote do: {x, q = {y, _}, z}
+      assert get_vars(ast) == [:q, :x, :y, :z]
+
       ast = quote do: {:ok, val}
       assert get_vars(ast) == [:val]
 
@@ -468,7 +471,7 @@ defmodule Sequin.MiniElixirTest do
       assert get_vars(ast) == []
     end
 
-    test "map patterns (atom/string keys only, as per current implementation)" do
+    test "map patterns" do
       ast = quote do: %{"key2" => val2, key1: val1}
 
       assert get_vars(ast) == [:val1, :val2]
@@ -523,8 +526,8 @@ defmodule Sequin.MiniElixirTest do
       ast = quote do: x when is_integer(x) and x > 0
       assert get_vars(ast) == [:x]
 
+      # suppose c is from an enclosing scope
       ast = quote do: {a, b} when a > c and map_size(b) == 2
-      # c is from an outer scope, not bound by this pattern
       assert get_vars(ast) == [:a, :b]
     end
 
@@ -562,7 +565,6 @@ defmodule Sequin.MiniElixirTest do
 
       assert get_vars(ast) == [:data_val, :error_code, :status]
 
-      # More complex, including a match inside
       complex_pattern =
         quote do
           [first_el = {inner_a, _}, %{"payload" => payload_b, :options => [%Opt{opt_val: c} | _opts]}, _ | tail_d]

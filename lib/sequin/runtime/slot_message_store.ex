@@ -903,15 +903,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   defp put_max_memory_bytes(%State{} = state) do
     consumer = state.consumer
 
-    max_memory_bytes =
-      if state.setting_system_max_memory_bytes do
-        # Must be self-hosted/dev. Check consumer's max_memory_mb setting
-        consumer_count = Consumers.count_non_disabled_sink_consumers()
-
-        Consumers.max_system_memory_bytes_for_consumer(consumer, consumer_count, state.setting_system_max_memory_bytes)
-      else
-        Consumers.max_memory_bytes_for_consumer(consumer)
-      end
+    max_memory_bytes = Consumers.max_memory_bytes_for_consumer(consumer)
 
     %{state | max_memory_bytes: div(max_memory_bytes, consumer.partition_count)}
   end

@@ -17,6 +17,10 @@ defmodule Sequin.TestSupport.Models.Character do
     timestamps(type: :naive_datetime_usec)
   end
 
+  def table_name do
+    "Characters"
+  end
+
   def quoted_table_name do
     ~s{"Characters"}
   end

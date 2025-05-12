@@ -554,9 +554,11 @@ defmodule Sequin.Transforms do
             {:error, error} -> {:halt, {:error, error}}
           end
 
-        # Ignore encrypted_headers until encryption/decryption works
         "encrypted_headers" ->
-          {:cont, {:ok, acc}}
+          case parse_headers(value) do
+            {:ok, headers} -> {:cont, {:ok, Map.put(acc, :encrypted_headers, headers)}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
 
         "webhook.site" ->
           if value in [true, "true"] do

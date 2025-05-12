@@ -216,7 +216,11 @@ defmodule Sequin.Databases.PostgresDatabase do
       port: pri.port,
       ssl: pri.ssl,
       username: pri.username,
-      ipv6: pri.ipv6
+      ipv6: pri.ipv6,
+      # Default to a smaller pool_size of 3 for primary connection pool
+      # There should only ever be ~2 writers at a time: the SlotProcessorServer synchronously writes
+      # WAL messages via the primary, as does the TableReaderServer
+      pool_size: 3
     }
   end
 end

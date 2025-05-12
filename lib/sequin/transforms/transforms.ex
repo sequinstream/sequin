@@ -403,6 +403,10 @@ defmodule Sequin.Transforms do
 
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: nil}), do: %{}
 
+  defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers})
+       when is_map(encrypted_headers) and map_size(encrypted_headers) == 0,
+       do: %{}
+
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}) do
     "(#{map_size(encrypted_headers)} encrypted header(s)) - sha256sum: #{sha256sum(encrypted_headers)}"
   end

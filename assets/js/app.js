@@ -97,6 +97,7 @@ window.addEventListener("phx:ph-identify", (event) => {
   posthog.identify(userId, {
     email: userEmail,
     name: userName,
+    socket_id: liveSocket.getSocket().id,
     $groups: { account: accountId },
   });
 

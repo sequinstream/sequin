@@ -78,7 +78,7 @@
   export let showPgVersionWarning: boolean = false;
   export let selfHosted: boolean = false;
 
-  let form = { ...database};
+  let form = { ...database };
 
   const isEdit = !!form.id;
 
@@ -579,7 +579,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
 
               <div class="space-y-2">
                 <Label for="primary_username">Primary username</Label>
-               <Input
+                <Input
                   type="text"
                   id="primary_username"
                   bind:value={form.primary.username}
@@ -680,26 +680,26 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       </CardHeader>
       <CardContent>
         <div class="space-y-2">
+          <Label for="publication_name">Publication name</Label>
+          <Input
+            type="text"
+            id="publication_name"
+            bind:value={form.publication_name}
+          />
+          {#if replicationErrors.publication_name}
+            <p class="text-destructive text-sm">
+              {replicationErrors.publication_name}
+            </p>
+          {/if}
+        </div>
+
+        <div class="space-y-2">
           <div class="space-y-2">
             <Label for="slot_name">Slot name</Label>
             <Input type="text" id="slot_name" bind:value={form.slot_name} />
             {#if replicationErrors.slot_name}
               <p class="text-destructive text-sm">
                 {replicationErrors.slot_name}
-              </p>
-            {/if}
-          </div>
-
-          <div class="space-y-2">
-            <Label for="publication_name">Publication name</Label>
-            <Input
-              type="text"
-              id="publication_name"
-              bind:value={form.publication_name}
-            />
-            {#if replicationErrors.publication_name}
-              <p class="text-destructive text-sm">
-                {replicationErrors.publication_name}
               </p>
             {/if}
           </div>

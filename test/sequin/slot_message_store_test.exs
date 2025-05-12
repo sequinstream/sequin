@@ -742,18 +742,17 @@ defmodule Sequin.SlotMessageStoreTest do
 
   describe "SlotMessageStore load shedding behavior" do
     test "returns error when load_shedding_policy=pause_on_full" do
-      consumer = ConsumersFactory.insert_sink_consumer!(load_shedding_policy: :pause_on_full)
+      consumer = ConsumersFactory.insert_sink_consumer!(load_shedding_policy: :pause_on_full, max_memory_mb: 128)
 
-      start_supervised!(
-        {SlotMessageStoreSupervisor, consumer: consumer, test_pid: self(), setting_system_max_memory_bytes: 1}
-      )
+      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
 
       # Create a message with a specific group_id to ensure consistent partitioning
       message =
         ConsumersFactory.consumer_message(
           message_kind: consumer.message_kind,
           consumer_id: consumer.id,
-          group_id: "test-group"
+          group_id: "test-group",
+          payload_size_bytes: 130 * 1000 * 1000
         )
 
       # Put message in store

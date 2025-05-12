@@ -108,6 +108,76 @@ defmodule SequinWeb.YamlControllerTest do
                "summary" => "Error creating database 'test-db': - database: can't be blank"
              }
     end
+
+    test "successfully plans configuration with wider set of fields", %{conn: conn} do
+      yaml = """
+      change_retentions:
+        - name: test_retention
+          filters: []
+          destination_database: sequin_test
+          source_database: sequin_test
+          actions:
+            - insert
+            - update
+            - delete
+          source_table_name: accounts
+          source_table_schema: public
+          destination_table_name: sequin_events
+          destination_table_schema: public
+      databases:
+        - name: sequin_test
+          port: 5432
+          ssl: false
+          ipv6: false
+          hostname: localhost
+          pool_size: 10
+          username: postgres
+          password: '********'
+          database: sequin_example
+          slot_name: sequin_slot
+          use_local_tunnel: false
+          publication_name: sequin_pub
+      http_endpoints:
+        - name: test_http_endpoint
+          url: http://localhost:4000/something
+          headers: {}
+          encrypted_headers: '(0 encrypted header(s)) - sha256sum: b4a8f200'
+      sinks:
+        - name: accounts_sink
+          status: active
+          table: public.accounts
+          filters: []
+          destination:
+            port: 4222
+            type: nats
+            host: localhost
+            tls: false
+          database: sequin_test
+          transform: record-transform
+          active_backfill:
+          batch_size: 1
+          load_shedding_policy: pause_on_full
+          max_retry_count:
+          timestamp_format: iso8601
+          actions:
+            - insert
+            - update
+            - delete
+          group_column_names:
+            - user_id
+      transforms:
+        - name: record-transform
+          type: path
+          path: record
+          description: Extracts just the record from the Sequin message shape.
+      """
+
+      conn = post(conn, ~p"/api/config/plan", %{yaml: yaml})
+
+      response = json_response(conn, 200)
+      assert %{"changes" => changes} = response
+      assert is_list(changes)
+    end
   end
 
   describe "apply/2" do

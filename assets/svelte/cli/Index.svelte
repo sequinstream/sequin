@@ -81,7 +81,7 @@
                   class="absolute right-2 top-2"
                 >
                   <CopyIcon
-                    content={`brew tap sequinstream/sequin git@github.com:sequinstream/homebrew-sequin\nbrew install sequinstream/sequin/sequin`}
+                    content={`brew install sequinstream/sequin/sequin`}
                   />
                 </Button>
               </div>

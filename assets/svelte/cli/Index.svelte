@@ -72,9 +72,7 @@
               <div class="relative">
                 <div class="bg-muted p-4 rounded-md">
                   <code class="text-sm"
-                    >brew tap sequinstream/sequin
-                    git@github.com:sequinstream/homebrew-sequin<br />brew
-                    install sequinstream/sequin/sequin</code
+                    >brew install sequinstream/sequin/sequin</code
                   >
                 </div>
                 <Button
@@ -195,7 +193,7 @@
               href="/settings/accounts"
               target="_blank"
               rel="noopener noreferrer"
-              class="underline font-mono">account settings</a
+              class="underline">account settings</a
             >
           </p>
           <div class="relative">

@@ -171,9 +171,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     publication = Keyword.fetch!(opts, :publication)
     slot_name = Keyword.fetch!(opts, :slot_name)
     postgres_database = Keyword.fetch!(opts, :postgres_database)
-    primary_database = postgres_database.primary && PostgresDatabase.from_primary(postgres_database.primary)
-    # Make sure to avoid aliasing in connectioncache!
-    primary_database = %{primary_database | id: "primaryof-#{postgres_database.id}"}
+
+    primary_database =
+      if postgres_database.primary do
+        # Make sure to avoid aliasing in connectioncache!
+        Map.put(PostgresDatabase.from_primary(postgres_database.primary), :id, "primaryof-#{postgres_database.id}")
+      end
+
     replication_slot = Keyword.fetch!(opts, :replication_slot)
     test_pid = Keyword.get(opts, :test_pid)
     message_handler_ctx = Keyword.fetch!(opts, :message_handler_ctx)

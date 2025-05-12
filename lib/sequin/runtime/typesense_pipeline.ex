@@ -82,8 +82,19 @@ defmodule Sequin.Runtime.TypesensePipeline do
         jsonl = encode_as_jsonl(external_messages)
 
         case Client.import_documents(client, sink.collection_name, jsonl, action: sink.import_action) do
-          {:error, error} -> {:error, error}
-          {:ok, _} -> {:ok, messages, context}
+          {:error, error} ->
+            {:error, error}
+
+          {:ok, results} ->
+            messages =
+              Enum.zip_with(messages, results, fn message, result ->
+                case result do
+                  :ok -> message
+                  {:error, error_message} -> Broadway.Message.failed(message, error_message)
+                end
+              end)
+
+            {:ok, messages, context}
         end
     end
   end

@@ -4,6 +4,7 @@ defmodule SequinWeb.YamlControllerTest do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Test.UnboxedRepo
+  alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.ReplicationSlots
 
   @moduletag :unboxed
@@ -120,7 +121,7 @@ defmodule SequinWeb.YamlControllerTest do
             - insert
             - update
             - delete
-          source_table_name: accounts
+          source_table_name: #{Character.table_name()}
           source_table_schema: public
           destination_table_name: sequin_events
           destination_table_schema: public
@@ -133,19 +134,18 @@ defmodule SequinWeb.YamlControllerTest do
           pool_size: 10
           username: postgres
           password: '********'
-          database: sequin_example
+          database: sequin_test
           slot_name: sequin_slot
           use_local_tunnel: false
-          publication_name: sequin_pub
+          publication_name: characters_publication
       http_endpoints:
         - name: test_http_endpoint
           url: http://localhost:4000/something
           headers: {}
-          encrypted_headers: '(0 encrypted header(s)) - sha256sum: b4a8f200'
       sinks:
         - name: accounts_sink
           status: active
-          table: public.accounts
+          table: public.#{Character.table_name()}
           filters: []
           destination:
             port: 4222
@@ -164,7 +164,7 @@ defmodule SequinWeb.YamlControllerTest do
             - update
             - delete
           group_column_names:
-            - user_id
+            - id
       transforms:
         - name: record-transform
           type: path

@@ -101,8 +101,7 @@ defmodule Sequin.Transforms.MiniElixir do
       error =
         Sequin.Error.service(
           service: "transform",
-          message: Exception.message(error),
-          details: try_extract_linenum(id, __STACKTRACE__)
+          message: format_error(id, error, __STACKTRACE__)
         )
 
       Logger.error("[MiniElixir] Transform failed: #{Exception.message(error)}", transform_id: id)
@@ -239,6 +238,19 @@ defmodule Sequin.Transforms.MiniElixir do
 
   defp generate_module_name(id) when is_binary(id) do
     <<"UserTransform.", id::binary>>
+  end
+
+  defp format_error(id, error, stacktrace) do
+    msg = Exception.message(error)
+
+    id
+    |> try_extract_linenum(stacktrace)
+    |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)
+    |> Enum.join(",")
+    |> case do
+         "" -> msg
+         ds -> "#{msg} (#{ds})"
+       end
   end
 
   defp try_extract_linenum(id, stacktrace) do

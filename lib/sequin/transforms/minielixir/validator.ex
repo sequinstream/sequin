@@ -35,7 +35,7 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   end
 
   def format_stacktrace(myself, stk) do
-    for {^myself, _f, _a, info} = ste <- stk do
+    for {^myself, _f, _a, _info} = ste <- stk do
       ste
     end
   end

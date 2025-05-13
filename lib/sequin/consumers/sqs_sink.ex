@@ -54,11 +54,8 @@ defmodule Sequin.Consumers.SqsSink do
   end
 
   defp put_is_fifo(changeset) do
-    if changeset |> get_field(:queue_url) |> ends_with_fifo?() do
-      put_change(changeset, :is_fifo, true)
-    else
-      changeset
-    end
+    is_fifo = changeset |> get_field(:queue_url) |> ends_with_fifo?()
+    put_change(changeset, :is_fifo, is_fifo)
   end
 
   defp ends_with_fifo?(nil), do: false

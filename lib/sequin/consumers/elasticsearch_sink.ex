@@ -6,6 +6,7 @@ defmodule Sequin.Consumers.ElasticsearchSink do
   import Ecto.Changeset
 
   @derive {Jason.Encoder, only: [:endpoint_url, :index_name, :auth_type]}
+  @derive {Inspect, except: [:auth_value]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:elasticsearch], default: :elasticsearch

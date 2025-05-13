@@ -7,7 +7,11 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   @error_bad_args "The parameter list `#{Enum.join(@args, ", ")}` is required"
 
   def create_expr(body_ast, modname) do
-    :ok = check(body_ast)
+    case check(body_ast) do
+      :ok -> :ok
+      # You are supposed to have checked beforehand!
+      {:error, :validator, msg} -> raise msg
+    end
 
     arglist = Enum.map(@args, fn a -> Macro.var(a, :"Elixir") end)
 
@@ -101,7 +105,6 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
     :|>,
     :__block__,
     :->,
-    :=,
     :fn,
     :{},
     :when
@@ -180,8 +183,6 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
     end
   end
 
-  defp good({op, _, body}) when op in @goodop, do: check_body(body)
-
   defp good({:%{}, _, body}) do
     Enum.reduce_while(body, :ok, fn
       {k, v}, :ok ->
@@ -212,12 +213,23 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   defp good(body) when is_list(body), do: check_body(body)
   defp good({l, r}), do: with(:ok <- check(l), do: check(r))
   defp good({sigil, _, body}) when sigil in @kernel_sigils, do: check(body)
-  defp good({kernel_function, l, r}) when kernel_function in @kernel_functions, do: with(:ok <- check(l), do: check(r))
+  defp good({kernel_function, _, args}) when kernel_function in @kernel_functions, do: check_body(args)
+  defp good({kernel_guard, _, args}) when kernel_guard in @kernel_guards, do: check_body(args)
+
   defp good({:match?, _, [l, r]}), do: with(:ok <- check(l), do: check(r))
   defp good({:defmodule, _, _}), do: {:error, :validator, "defining modules is not allowed"}
   defp good({:def, _, _}), do: {:error, :validator, "defining functions is not allowed"}
   defp good({:defp, _, _}), do: {:error, :validator, "defining functions is not allowed"}
   defp good({:cond, _meta, [[{:do, body}]]}), do: check_body(body)
+
+  defp good({:=, _meta, [l, r]}) do
+    with {:ok, bound} = __MODULE__.PatternChecker.extract_bound_vars(l) do
+      case Enum.find(bound, fn b -> b in @args end) do
+        nil -> check(r)
+        b -> {:error, :validator, "can't assign to argument: #{to_string(b)}"}
+      end
+    end
+  end
 
   # Variable
   defp good({f, _, ctx}) when is_atom(f) and is_atom(ctx), do: :ok
@@ -226,6 +238,9 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   defp good({{:., _, [fun]}, _, body}) when is_list(body) do
     with :ok <- check(fun), do: check_body(body)
   end
+
+  # Operators / not otherwise handled
+  defp good({op, _, body}) when op in @goodop, do: check_body(body)
 
   # Function call
   defp good({f, _, body}) when is_list(body) do
@@ -238,7 +253,9 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
     end
   end
 
-  defp good(bad), do: {:error, :validator, format_error(bad)}
+  defp good(bad) do
+    {:error, :validator, format_error(bad)}
+  end
 
   defp warn_record_dot_access([:record | path]) do
     good =
@@ -302,4 +319,98 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   defp dedot(l, acc) when is_atom(l), do: [l | acc]
 
   defp redot(xs), do: Enum.join(xs, ".")
+
+  defmodule PatternChecker do
+    @moduledoc false
+
+    defmodule BadPattern do
+      @moduledoc false
+      defexception [:node]
+      def message(me), do: "Bad pattern: #{inspect(me.node)}"
+    end
+
+    def extract_bound_vars(pattern) do
+      {:ok, pattern |> extract_vars([]) |> Enum.uniq()}
+    rescue
+      ex in BadPattern ->
+        {:error, Exception.message(ex)}
+    end
+
+    # Variable
+    defp extract_vars({name, _meta, context}, acc) when is_atom(name) and is_atom(context) do
+      # Skip underscore variables which don't actually bind
+      case Atom.to_string(name) do
+        <<"_", _::binary>> -> acc
+        _ -> [name | acc]
+      end
+    end
+
+    # Pin
+    defp extract_vars({:^, _meta, [_pin]}, acc) do
+      acc
+    end
+
+    # Sub-pattern matching
+    defp extract_vars({:=, _meta, [left, right]}, acc) do
+      acc = extract_vars(left, acc)
+      extract_vars(right, acc)
+    end
+
+    # Struct patterns
+    defp extract_vars({:%, _meta, [s, body]}, acc) do
+      Enum.reduce([s, body], acc, &extract_vars/2)
+    end
+
+    # Map patterns
+    defp extract_vars({:%{}, _meta, pairs}, acc) do
+      Enum.reduce(pairs, acc, fn {_key, value}, acc ->
+        extract_vars(value, acc)
+      end)
+    end
+
+    # List patterns
+    defp extract_vars(elements, acc) when is_list(elements) do
+      Enum.reduce(elements, acc, &extract_vars/2)
+    end
+
+    # List cons pattern [head | tail]
+    defp extract_vars({:|, _meta, [head, tail]}, acc) do
+      acc = extract_vars(head, acc)
+      extract_vars(tail, acc)
+    end
+
+    # Tuple patterns
+    defp extract_vars({:{}, _meta, elements}, acc) do
+      Enum.reduce(elements, acc, &extract_vars/2)
+    end
+
+    # 2-element tuple gotcha!
+    defp extract_vars({x, y}, acc) do
+      Enum.reduce([x, y], acc, &extract_vars/2)
+    end
+
+    # Binary patterns
+    defp extract_vars({:<<>>, _meta, segments}, acc) do
+      Enum.reduce(segments, acc, fn
+        {:"::", _meta, [var, _type]}, inner_acc -> extract_vars(var, inner_acc)
+        segment, inner_acc -> extract_vars(segment, inner_acc)
+      end)
+    end
+
+    # Guards
+    defp extract_vars({:when, _meta, [pattern, _guard]}, acc) do
+      # guards can't introduce new bindings
+      extract_vars(pattern, acc)
+    end
+
+    # Literals and other patterns don't bind variables
+    defp extract_vars(literal, acc)
+         when is_number(literal) or is_binary(literal) or is_boolean(literal) or is_nil(literal),
+         do: acc
+
+    defp extract_vars(e, acc) when is_number(e) or is_atom(e) or is_binary(e), do: acc
+    defp extract_vars({:__aliases__, _, _}, acc), do: acc
+
+    defp extract_vars(other, _acc), do: raise(BadPattern, node: other)
+  end
 end

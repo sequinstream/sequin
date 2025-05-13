@@ -8,6 +8,7 @@ defmodule Sequin.Consumers.RabbitMqSink do
   alias Sequin.Encrypted.Binary, as: EncryptedBinary
 
   @derive {Jason.Encoder, only: [:host, :port, :exchange]}
+  @derive {Inspect, except: [:password]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:rabbitmq], default: :rabbitmq

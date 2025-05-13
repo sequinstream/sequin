@@ -76,6 +76,7 @@ The `PG_POOL_SIZE` variable controls the maximum number of concurrent connection
 - `REDIS_URL`: Redis connection URL (required)
   - Format: `redis://localhost:6379` or `rediss://localhost:6379`
   - Using `rediss://` automatically enables SSL
+  - Using `redis://localhost:6379/1` will connect to Redis database 1
 - `REDIS_SSL`: Enable SSL for Redis connection (optional)
   - Valid values: `"true"`, `"1"`
   - Default: disabled

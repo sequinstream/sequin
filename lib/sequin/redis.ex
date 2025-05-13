@@ -3,6 +3,7 @@ defmodule Sequin.Redis do
   alias __MODULE__
   alias Sequin.Error
   alias Sequin.Error.ServiceError
+  alias Sequin.Redis.RedisClient
   alias Sequin.Statsd
 
   require Logger
@@ -12,37 +13,61 @@ defmodule Sequin.Redis do
   @type pipeline_return_value :: redis_value() | ServiceError.t()
   @type command_opt :: {:query_name, String.t()}
 
+  defmodule ClusterClient do
+    @moduledoc false
+    def connect(index, %{host: host, port: port} = opts) do
+      opts =
+        opts
+        |> Map.drop([:host, :port, :database])
+        |> Keyword.new()
+
+      cluster_nodes = [{host, port}]
+      :ok = :eredis_cluster.connect(Sequin.Redis.connection(index), cluster_nodes, opts)
+    end
+
+    def q(connection, command) do
+      :eredis_cluster.q(connection, command)
+    end
+
+    def qp(connection, commands) do
+      :eredis_cluster.q(connection, commands)
+    end
+  end
+
+  defmodule Client do
+    @moduledoc false
+    def connect(index, opts) do
+      opts =
+        opts
+        |> Keyword.new()
+        |> Keyword.put(:name, {:local, Sequin.Redis.connection(index)})
+        |> Keyword.delete(:pool_size)
+
+      {:ok, _pid} = :eredis.start_link(opts)
+      :ok
+    end
+
+    def q(connection, command) do
+      :eredis.q(connection, command)
+    end
+
+    def qp(connection, commands) do
+      :eredis.qp(connection, commands)
+    end
+  end
+
   @doc """
   :eredis_cluster_sup_sup has already been started elsewhere. To start nodes underneath it,
   we need to call the connect/3 function.
   connect/3 calls :eredis_cluster_sup_sup.start_child
   """
   def connect_cluster do
-    {url, opts} = Keyword.pop!(config(), :url)
-    %{host: host, port: port, userinfo: userinfo} = URI.parse(url)
-    cluster_nodes = [{to_charlist(host), port}]
-
-    # Parse username and password from userinfo
-    opts =
-      case userinfo do
-        nil ->
-          opts
-
-        info ->
-          {username, password} =
-            case String.split(info, ":") do
-              [user, pass] -> {user, pass}
-              [pass] -> {nil, pass}
-            end
-
-          opts
-          |> Keyword.put(:username, username)
-          |> Keyword.put(:password, password)
-      end
+    :ok = set_redis_client()
+    opts = parse_redis_connection_opts()
 
     # Start connections for each pool member
     for index <- 0..(pool_size() - 1) do
-      :ok = :eredis_cluster.connect(connection(index), cluster_nodes, opts)
+      redis_client().connect(index, opts)
     end
   rescue
     error ->
@@ -55,7 +80,7 @@ defmodule Sequin.Redis do
     maybe_time(command, opts[:query_name], fn ->
       res =
         connection()
-        |> :eredis_cluster.q(command)
+        |> redis_client().q(command)
         |> parse_result()
 
       case res do
@@ -79,7 +104,7 @@ defmodule Sequin.Redis do
         when opt: command_opt()
   def command!(command, opts \\ []) do
     maybe_time(command, opts[:query_name], fn ->
-      res = connection() |> :eredis_cluster.q(command) |> parse_result()
+      res = connection() |> redis_client().q(command) |> parse_result()
 
       case res do
         {:ok, result} -> result
@@ -92,7 +117,7 @@ defmodule Sequin.Redis do
         when opt: command_opt()
   def pipeline(commands, opts \\ []) do
     maybe_time(commands, opts[:query_name], fn ->
-      case :eredis_cluster.q(connection(), commands) do
+      case redis_client().qp(connection(), commands) do
         results when is_list(results) ->
           # Convert eredis results to Redix-style results
           {:ok,
@@ -131,7 +156,7 @@ defmodule Sequin.Redis do
     |> Sequin.Keyword.reject_nils()
   end
 
-  defp connection(index \\ random_index()) do
+  def connection(index \\ random_index()) do
     :"#{Redis}_#{index}"
   end
 
@@ -154,5 +179,49 @@ defmodule Sequin.Redis do
     end
 
     result
+  end
+
+  defp parse_redis_connection_opts do
+    {url, opts} = Keyword.pop!(config(), :url)
+    opts = Map.new(opts)
+
+    %{host: host, port: port, userinfo: userinfo, path: path} = URI.parse(url)
+    opts = Map.merge(opts, %{host: to_charlist(host), port: port})
+
+    opts =
+      case path do
+        "/" <> database -> Map.put(opts, :database, String.to_integer(database))
+        _ -> Map.put(opts, :database, 0)
+      end
+
+    # Parse username and password from userinfo
+    case userinfo do
+      nil ->
+        opts
+
+      info ->
+        {username, password} =
+          case String.split(info, ":") do
+            [user, pass] -> {user, pass}
+            [pass] -> {nil, pass}
+          end
+
+        opts
+        |> Map.put(:username, username)
+        |> Map.put(:password, password)
+    end
+  end
+
+  defp set_redis_client do
+    case parse_redis_connection_opts() do
+      %{database: 0} -> Application.put_env(:sequin, RedisClient, ClusterClient)
+      %{database: database} when database > 0 and database < 16 -> Application.put_env(:sequin, RedisClient, Client)
+    end
+
+    :ok
+  end
+
+  defp redis_client do
+    Application.get_env(:sequin, RedisClient)
   end
 end

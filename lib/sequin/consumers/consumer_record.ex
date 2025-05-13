@@ -5,6 +5,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
   import Ecto.Changeset
   import Ecto.Query
 
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
 
   @primary_key false
@@ -196,5 +197,12 @@ defmodule Sequin.Consumers.ConsumerRecord do
 
   defp base_query(query \\ __MODULE__) do
     from(cr in query, as: :consumer_record)
+  end
+
+  def deserialize(%ConsumerRecord{} = consumer_record) do
+    %ConsumerRecord{
+      consumer_record
+      | data: ConsumerRecordData.deserialize(consumer_record.data)
+    }
   end
 end

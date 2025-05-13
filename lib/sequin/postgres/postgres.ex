@@ -212,6 +212,8 @@ defmodule Sequin.Postgres do
     end
   end
 
+  # If you add a new type here, you may need to modify deserializers in changeset.ex
+  # See: https://github.com/sequinstream/sequin/issues/1465
   def pg_type_to_ecto_type(pg_type) do
     case pg_type do
       "integer" -> :integer

@@ -4,15 +4,18 @@ defmodule Sequin.Consumers.ConsumerRecordData do
 
   import Ecto.Changeset
 
+  alias __MODULE__
+
   @type t :: %__MODULE__{
           record: map(),
           metadata: map()
         }
 
   @primary_key false
-  @derive {Jason.Encoder, except: [:action]}
+  @derive {Jason.Encoder, except: [:action, :record_deserializers]}
   embedded_schema do
     field :record, :map
+    field :record_deserializers, :map
     field :action, Ecto.Enum, values: [:insert, :update, :delete, :read]
 
     embeds_one :metadata, Metadata, primary_key: false do
@@ -39,11 +42,16 @@ defmodule Sequin.Consumers.ConsumerRecordData do
     |> cast(attrs, [:record, :action])
     |> cast_embed(:metadata, required: true, with: &metadata_changeset/2)
     |> validate_required([:record, :metadata])
+    |> Sequin.Changeset.put_deserializers(:record, :record_deserializers)
   end
 
   def metadata_changeset(metadata, attrs) do
     metadata
     |> cast(attrs, [:table_schema, :table_name, :commit_timestamp, :commit_lsn, :database_name])
     |> validate_required([:table_schema, :table_name, :commit_timestamp, :commit_lsn])
+  end
+
+  def deserialize(%ConsumerRecordData{} = data) do
+    %ConsumerRecordData{data | record: Sequin.Changeset.deserialize(data.record, data.record_deserializers)}
   end
 end

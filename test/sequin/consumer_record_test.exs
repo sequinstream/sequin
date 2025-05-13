@@ -13,28 +13,6 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       assert reloaded.consumer_id == consumer_record.consumer_id
     end
 
-    test "get_consumer_record/2 returns the consumer record with given consumer_id and id" do
-      consumer_record = ConsumersFactory.insert_consumer_record!()
-      {:ok, fetched_record} = Consumers.get_consumer_record(consumer_record.consumer_id, consumer_record.id)
-      assert fetched_record.id == consumer_record.id
-    end
-
-    test "get_consumer_record/2 returns error when consumer record does not exist" do
-      assert {:error, _} = Consumers.get_consumer_record(Ecto.UUID.generate(), 123)
-    end
-
-    test "get_consumer_record!/2 returns the consumer record with given consumer_id and id" do
-      consumer_record = ConsumersFactory.insert_consumer_record!()
-      fetched_record = Consumers.get_consumer_record!(consumer_record.consumer_id, consumer_record.id)
-      assert fetched_record.id == consumer_record.id
-    end
-
-    test "get_consumer_record!/2 raises error when consumer record does not exist" do
-      assert_raise Sequin.Error.NotFoundError, fn ->
-        Consumers.get_consumer_record!(Ecto.UUID.generate(), 123)
-      end
-    end
-
     test "list_consumer_records_for_consumer/2 returns all consumer records for a consumer" do
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       consumer_record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id)

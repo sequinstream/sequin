@@ -1,40 +1,40 @@
 <script lang="ts">
-  import { Card, CardContent, CardHeader, CardTitle } from ".";
-  import { ChevronDown } from "lucide-svelte";
+  import { Card, CardContent } from ".";
+  import * as Tooltip from "$lib/components/ui/tooltip";
+  import { Info } from "lucide-svelte";
+  import ExpandableCardHeader from "./expandable-card-header.svelte";
 
   export let expanded: boolean = false;
   export let disabled: boolean = false;
-
-  function handleClick() {
-    if (disabled) return;
-    expanded = !expanded;
-  }
+  export let titleTooltip: string | null = null;
 </script>
 
 <Card>
-  <CardHeader class="flex flex-row items-center justify-between">
-    <button
-      type="button"
-      class="flex flex-row items-center justify-between w-full"
-      on:click={handleClick}
-      {disabled}
+  {#if titleTooltip}
+    <Tooltip.Root
+      openDelay={10}
+      class="flex flex-row items-center justify-between"
     >
-      <CardTitle class="flex items-center gap-2">
-        <slot name="title" />
-      </CardTitle>
-      <div
-        class="transition-transform duration-200"
-        class:rotate-180={expanded}
-        class:text-gray-300={disabled}
-      >
-        <ChevronDown class="h-4 w-4" />
-      </div>
-    </button>
-  </CardHeader>
+      <Tooltip.Trigger asChild let:builder>
+        <ExpandableCardHeader builders={[builder]} bind:expanded {disabled}>
+          <slot name="title" />
+        </ExpandableCardHeader>
+      </Tooltip.Trigger>
+      <Tooltip.Content class="max-w-xs space-y-2">
+        <p class="text-xs text-gray-500">
+          {titleTooltip}
+        </p>
+      </Tooltip.Content>
+    </Tooltip.Root>
+  {:else}
+    <ExpandableCardHeader bind:expanded {disabled}>
+      <slot name="title" />
+    </ExpandableCardHeader>
+  {/if}
 
   <CardContent>
     <div class="space-y-2">
-      {#if disabled || !expanded}
+      {#if !expanded}
         <slot name="summary" />
       {:else}
         <slot name="content" />

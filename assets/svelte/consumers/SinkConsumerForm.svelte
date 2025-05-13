@@ -354,15 +354,19 @@
     });
   }
 
-  let backfillSectionExpanded = false;
   let showMessageTypeExampleModal = false;
   let selectedExampleType: "change" | "record" = "change";
 
   let transformSectionEnabled = false;
+  let transformSectionExpanded = false;
   let backfillSectionEnabled = false;
+  let backfillSectionExpanded = false;
   $: {
     transformSectionEnabled = selectedTable && consumer.type !== "redis_stream";
+    transformSectionExpanded = transformSectionEnabled && !isEditMode;
+
     backfillSectionEnabled = selectedTable && !isEditMode;
+    backfillSectionExpanded = backfillSectionEnabled && !isEditMode;
   }
 
   let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
@@ -521,7 +525,10 @@
       </CardContent>
     </Card>
 
-    <ExpandableCard disabled={!transformSectionEnabled} expanded={!isEditMode}>
+    <ExpandableCard
+      disabled={!transformSectionEnabled}
+      expanded={transformSectionExpanded}
+    >
       <svelte:fragment slot="title">
         Transforms
         <Tooltip.Root openDelay={200}>
@@ -582,7 +589,10 @@
     </ExpandableCard>
 
     {#if !isEditMode}
-      <ExpandableCard disabled={!backfillSectionEnabled} expanded={!isEditMode}>
+      <ExpandableCard
+        disabled={!backfillSectionEnabled}
+        expanded={!isEditMode && backfillSectionEnabled}
+      >
         <svelte:fragment slot="title">
           Initial backfill
 

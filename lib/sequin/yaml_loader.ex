@@ -735,13 +735,14 @@ defmodule Sequin.YamlLoader do
   #########################
 
   defp upsert_sink_consumers(account_id, %{"sinks" => consumers}, databases, http_endpoints) do
-    Logger.info("Upserting sink consumers: #{inspect(consumers, pretty: true)}")
+
 
     Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
       # This is a hack while sequences might be created while we create sinks
       # TODO: Excise this once sequences are removed
       databases = Repo.preload(databases, [:sequences], force: true)
 
+      Logger.info("Upserting sink consumer", consumer_id: consumer.id)
       case upsert_sink_consumer(account_id, consumer, databases, http_endpoints) do
         {:ok, consumer} -> {:cont, {:ok, [consumer | acc]}}
         {:error, error} -> {:halt, {:error, error}}
@@ -767,7 +768,7 @@ defmodule Sequin.YamlLoader do
         with {:ok, params} <-
                Transforms.from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints),
              {:ok, consumer} <- Sequin.Consumers.update_sink_consumer(existing_consumer, params) do
-          Logger.info("Updated HTTP push consumer: #{inspect(consumer, pretty: true)}")
+          Logger.info("Updated HTTP push consumer", consumer_id: consumer.id)
           {:ok, consumer}
         end
 
@@ -776,7 +777,7 @@ defmodule Sequin.YamlLoader do
                Transforms.from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints),
              {:ok, consumer} <-
                Sequin.Consumers.create_sink_consumer(account_id, params) do
-          Logger.info("Created HTTP push consumer: #{inspect(consumer, pretty: true)}")
+          Logger.info("Created HTTP push consumer", consumer_id: consumer.id)
           {:ok, consumer}
         end
     end

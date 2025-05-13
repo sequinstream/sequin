@@ -42,7 +42,7 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
         publication: slot.publication_name,
         postgres_database: slot.postgres_database,
         replication_slot: slot,
-        message_handler_ctx: MessageHandler.context(slot),
+        message_handler_ctx_fn: &MessageHandler.context/1,
         message_handler_module: message_handler_module,
         connection: PostgresDatabase.to_postgrex_opts(slot.postgres_database),
         ipv6: slot.postgres_database.ipv6

@@ -25,6 +25,10 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
       defmodule unquote(modname) do
         def run(unquote_splicing(arglist)) do
           unquote(body_ast)
+          # this is important to propagate the stacktrace
+        rescue
+          ex ->
+            reraise ex, __STACKTRACE__
         end
       end
     end

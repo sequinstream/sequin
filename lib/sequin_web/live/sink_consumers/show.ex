@@ -975,7 +975,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     messages =
       (store_messages ++ redis_messages)
-      |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, :asc)
+      |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, :desc)
       |> Enum.uniq_by(&{&1.commit_lsn, &1.commit_idx})
       |> Enum.drop(offset)
       |> Enum.take(page_size)

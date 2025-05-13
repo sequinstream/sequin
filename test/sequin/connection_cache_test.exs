@@ -132,15 +132,15 @@ defmodule Sequin.Databases.ConnectionCacheTest do
     test "if start_fn fails, returns the error to the callers" do
       test_pid = self()
       db = DatabasesFactory.postgres_database()
-      error = {:error, %Postgrex.Error{message: "Failed to start"}}
+      expected_error = %Postgrex.Error{message: "Failed to start"}
 
       start_fn = fn _db ->
         send(test_pid, {:started, self()})
 
         receive do
-          :go -> error
+          :go -> {:error, expected_error}
         after
-          1_000 -> raise "Timed out waiting for go signal"
+          5_000 -> raise "Timed out waiting for go signal"
         end
       end
 
@@ -154,7 +154,8 @@ defmodule Sequin.Databases.ConnectionCacheTest do
       send(pid, :go)
 
       res = Task.await_many([task1, task2])
-      [{:error, error}, {:error, error}] = res
+      assert length(res) == 2
+      assert [{:error, ^expected_error}, {:error, ^expected_error}] = res
     end
 
     defp start_cache(overrides \\ []) do

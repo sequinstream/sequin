@@ -227,12 +227,11 @@ defmodule Sequin.MiniElixirTest do
     test "attempt to use macros" do
       assert {:error, :validator, _} =
                Validator.check(
-                 quote(
-                   do:
-                     defmacro evil() do
-                       quote(do: :erlang.halt())
-                     end
-                 )
+                 quote do
+                   defmacro evil() do
+                     quote(do: :erlang.halt())
+                   end
+                 end
                )
     end
 
@@ -269,45 +268,42 @@ defmodule Sequin.MiniElixirTest do
     test "attempt to use try/rescue for control flow manipulation" do
       assert {:error, :validator, _} =
                Validator.check(
-                 quote(
-                   do:
-                     try do
-                       :erlang.halt()
-                     rescue
-                       _ -> :ok
-                     end
-                 )
+                 quote do
+                   try do
+                     :erlang.halt()
+                   rescue
+                     _ -> :ok
+                   end
+                 end
                )
     end
 
     test "attempt to define inline macro with malicious intent" do
       assert {:error, :validator, _} =
                Validator.check(
-                 quote(
-                   do:
-                     defmodule EvilMacro do
-                       @moduledoc false
-                       defmacro __using__(_) do
-                         quote do
-                           def evil_function do
-                             :erlang.halt()
-                           end
+                 quote do
+                   defmodule EvilMacro do
+                     @moduledoc false
+                     defmacro __using__(_) do
+                       quote do
+                         def evil_function do
+                           :erlang.halt()
                          end
                        end
                      end
-                 )
+                   end
+                 end
                )
     end
 
     test "attempt to define direct inline macro" do
       assert {:error, :validator, _} =
                Validator.check(
-                 quote(
-                   do:
-                     defmacro evil() do
-                       quote(do: :erlang.halt())
-                     end
-                 )
+                 quote do
+                   defmacro evil() do
+                     quote(do: :erlang.halt())
+                   end
+                 end
                )
     end
 
@@ -349,13 +345,12 @@ defmodule Sequin.MiniElixirTest do
     test "Allows kernel guards" do
       assert :ok =
                Validator.check(
-                 quote(
-                   do:
-                     case 1 do
-                       x when is_number(x) -> :ok
-                       y when is_binary(y) -> :ok
-                     end
-                 )
+                 quote do
+                   case 1 do
+                     x when is_number(x) -> :ok
+                     y when is_binary(y) -> :ok
+                   end
+                 end
                )
     end
 

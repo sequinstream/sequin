@@ -7,7 +7,11 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   @error_bad_args "The parameter list `#{Enum.join(@args, ", ")}` is required"
 
   def create_expr(body_ast, modname) do
-    :ok = check(body_ast)
+    case check(body_ast) do
+      :ok -> :ok
+      # You are supposed to have checked beforehand!
+      {:error, :validator, msg} -> raise msg
+    end
 
     arglist = Enum.map(@args, fn a -> Macro.var(a, :"Elixir") end)
 

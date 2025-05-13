@@ -28,15 +28,9 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
           # this is important to propagate the stacktrace
         rescue
           ex ->
-            reraise ex, unquote(__MODULE__).format_stacktrace(__MODULE__, __STACKTRACE__)
+            reraise ex, __STACKTRACE__
         end
       end
-    end
-  end
-
-  def format_stacktrace(myself, stk) do
-    for {^myself, _f, _a, _info} = ste <- stk do
-      ste
     end
   end
 

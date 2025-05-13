@@ -243,19 +243,12 @@ defmodule Sequin.Transforms.MiniElixir do
   defp format_error(id, error, stacktrace) do
     msg = Exception.message(error)
 
-    id
-    |> try_extract_linenum(stacktrace)
-    |> Enum.map_join(",", fn {k, v} -> "#{k}: #{v}" end)
-    |> case do
-      "" -> msg
-      ds -> "#{msg} (#{ds})"
-    end
-  end
-
-  defp try_extract_linenum(id, stacktrace) do
     with {:ok, mod} <- module_name_from_id(id),
-         [info | _] <- for({^mod, _f, _a, info} <- stacktrace, do: info) do
-      Keyword.delete(info, :file)
+         [info | _] <- for({^mod, _f, _a, info} <- stacktrace, do: info),
+         line when is_integer(line) <- info[:line] do
+      "#{msg} (line: #{line})"
+    else
+      _ -> msg
     end
   end
 end

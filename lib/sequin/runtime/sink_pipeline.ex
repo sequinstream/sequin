@@ -385,7 +385,14 @@ defmodule Sequin.Runtime.SinkPipeline do
       error_message = Exception.message(error)
 
       Logger.warning("Failed to deliver messages to sink: #{error_message}")
-      Health.put_event(consumer, %Health.Event{slug: :messages_delivered, status: :fail, error: error})
+      [%{ack_id: failed_ack_id} | _] = failed_message_metadatas
+
+      Health.put_event(consumer, %Health.Event{
+        slug: :messages_delivered,
+        status: :fail,
+        error: error,
+        extra: %{ack_id: failed_ack_id}
+      })
 
       Sequin.Logs.log_for_consumer_message(
         :error,

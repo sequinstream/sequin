@@ -8,6 +8,7 @@ defmodule Sequin.Consumers.RedisStreamSink do
   alias __MODULE__
 
   @derive {Jason.Encoder, only: [:host, :port, :stream_key]}
+  @derive {Inspect, except: [:password]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:redis_stream], default: :redis_stream

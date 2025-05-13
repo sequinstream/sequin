@@ -9,6 +9,7 @@ defmodule Sequin.Consumers.SnsSink do
   alias Sequin.Encrypted
 
   @derive {Jason.Encoder, only: [:topic_arn, :region]}
+  @derive {Inspect, except: [:secret_access_key]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:sns], default: :sns

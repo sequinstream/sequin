@@ -9,6 +9,7 @@ defmodule Sequin.Consumers.SqsSink do
   alias Sequin.Encrypted
 
   @derive {Jason.Encoder, only: [:queue_url, :region]}
+  @derive {Inspect, except: [:secret_access_key]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:sqs], default: :sqs

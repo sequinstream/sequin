@@ -1275,7 +1275,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp maybe_augment_alert(%{slug: :messages_delivered, status: :error, extra: %{"ack_id" => ack_id}} = check, consumer) do
-    link_id = ~p"/sinks/#{consumer.type}/#{consumer.id}/messages/#{ack_id}"
+    link_id = ~p"/sinks/#{consumer.type}/#{consumer.id}/messages/#{ack_id}?showAcked=false"
 
     Map.merge(check, %{
       alertTitle: "Error: Message not delivered",

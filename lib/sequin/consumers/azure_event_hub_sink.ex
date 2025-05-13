@@ -9,6 +9,7 @@ defmodule Sequin.Consumers.AzureEventHubSink do
   alias Sequin.Sinks.Azure.EventHub
 
   @derive {Jason.Encoder, only: [:namespace, :event_hub_name, :shared_access_key_name]}
+  @derive {Inspect, except: [:shared_access_key]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:azure_event_hub], default: :azure_event_hub

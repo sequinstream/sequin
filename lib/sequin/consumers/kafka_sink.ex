@@ -10,6 +10,7 @@ defmodule Sequin.Consumers.KafkaSink do
   alias Sequin.Sinks.Kafka.AwsMskIam
 
   @derive {Jason.Encoder, only: [:hosts, :topic]}
+  @derive {Inspect, except: [:password]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:kafka], default: :kafka

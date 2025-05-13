@@ -432,33 +432,6 @@ defmodule Sequin.Consumers do
 
   # ConsumerEvent
 
-  def get_consumer_event(consumer_id, ack_id: ack_id) do
-    consumer_id
-    |> ConsumerEvent.where_consumer_id()
-    |> ConsumerEvent.where_ack_id(ack_id)
-    |> Repo.one()
-  end
-
-  def get_consumer_event(consumer_id, commit_lsn) do
-    consumer_event =
-      consumer_id
-      |> ConsumerEvent.where_consumer_id()
-      |> ConsumerEvent.where_commit_lsn(commit_lsn)
-      |> Repo.one()
-
-    case consumer_event do
-      nil -> {:error, Error.not_found(entity: :consumer_event)}
-      consumer_event -> {:ok, consumer_event}
-    end
-  end
-
-  def get_consumer_event!(consumer_id, commit_lsn) do
-    case get_consumer_event(consumer_id, commit_lsn) do
-      {:ok, consumer_event} -> consumer_event
-      {:error, _} -> raise Error.not_found(entity: :consumer_event)
-    end
-  end
-
   def list_consumer_messages_for_consumer(%SinkConsumer{} = consumer, params \\ [], opts \\ []) do
     case consumer.message_kind do
       :event -> list_consumer_events_for_consumer(consumer.id, params, opts)
@@ -496,7 +469,9 @@ defmodule Sequin.Consumers do
           ConsumerEvent.where_wal_cursor_in(query, wal_cursors)
       end)
 
-    Repo.all(query, opts)
+    query
+    |> Repo.all(opts)
+    |> Enum.map(&ConsumerEvent.deserialize/1)
   end
 
   def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
@@ -541,40 +516,11 @@ defmodule Sequin.Consumers do
 
   # ConsumerRecord
 
-  def get_consumer_record(consumer_id, id) when is_integer(id) do
-    consumer_record =
-      consumer_id
-      |> ConsumerRecord.where_consumer_id()
-      |> ConsumerRecord.where_id(id)
-      |> Repo.one()
-
-    case consumer_record do
-      nil -> {:error, Error.not_found(entity: :consumer_record)}
-      consumer_record -> {:ok, consumer_record}
-    end
-  end
-
-  def get_consumer_record(consumer_id, params) when is_list(params) or is_map(params) do
-    consumer_id
-    |> consumer_record_query(params)
-    |> Repo.one()
-    |> case do
-      %ConsumerRecord{} = consumer_record -> {:ok, consumer_record}
-      nil -> {:error, Error.not_found(entity: :consumer_record)}
-    end
-  end
-
-  def get_consumer_record!(consumer_id, id) when is_integer(id) do
-    case get_consumer_record(consumer_id, id) do
-      {:ok, consumer_record} -> consumer_record
-      {:error, error} -> raise error
-    end
-  end
-
   def list_consumer_records_for_consumer(consumer_id, params \\ [], opts \\ []) do
     consumer_id
     |> consumer_record_query(params)
     |> Repo.all(opts)
+    |> Enum.map(&ConsumerRecord.deserialize/1)
   end
 
   defp consumer_record_query(consumer_id, params) do

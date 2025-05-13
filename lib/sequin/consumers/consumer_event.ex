@@ -5,6 +5,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
   import Ecto.Changeset
   import Ecto.Query
 
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
 
   @primary_key false
@@ -106,21 +107,6 @@ defmodule Sequin.Consumers.ConsumerEvent do
     Enum.map(pks, &to_string/1)
   end
 
-  def from_map(attrs) do
-    attrs =
-      attrs
-      |> Sequin.Map.atomize_keys()
-      |> Map.update!(:record_pks, &stringify_record_pks/1)
-      |> Map.update!(:data, fn data ->
-        data = Sequin.Map.atomize_keys(data)
-        metadata = Sequin.Map.atomize_keys(data.metadata)
-        data = Map.put(data, :metadata, struct!(ConsumerEventData.Metadata, metadata))
-        struct!(ConsumerEventData, data)
-      end)
-
-    struct!(__MODULE__, attrs)
-  end
-
   def where_consumer_id(query \\ base_query(), consumer_id) do
     from([consumer_event: ce] in query, where: ce.consumer_id == ^consumer_id)
   end
@@ -189,5 +175,12 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
   defp base_query(query \\ __MODULE__) do
     from(ce in query, as: :consumer_event)
+  end
+
+  def deserialize(%ConsumerEvent{} = consumer_event) do
+    %ConsumerEvent{
+      consumer_event
+      | data: ConsumerEventData.deserialize(consumer_event.data)
+    }
   end
 end

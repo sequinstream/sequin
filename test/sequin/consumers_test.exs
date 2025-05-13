@@ -2304,4 +2304,66 @@ defmodule Sequin.ConsumersTest do
       assert Enum.all?(messages, &(&1.consumer_id == consumer1.id))
     end
   end
+
+  describe "list_consumer_messages_for_consumer/3" do
+    test "correctly loads Date, DateTime, NaiveDateTime, and Decimal types from Postgres" do
+      # Create a consumer
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      # Set up sample data with different types
+      now = DateTime.utc_now()
+      today = Date.utc_today()
+      naive_now = NaiveDateTime.utc_now()
+      decimal_value = Decimal.new("123.45")
+
+      # Create a record with these types in the record field
+      record_data = %{
+        "date_field" => today,
+        "datetime_field" => now,
+        "naive_datetime_field" => naive_now,
+        "decimal_field" => decimal_value,
+        "regular_field" => "test"
+      }
+
+      # Insert the consumer message
+      ConsumersFactory.insert_consumer_message!(
+        consumer_id: consumer.id,
+        message_kind: consumer.message_kind,
+        data: %{
+          record: record_data,
+          action: :insert,
+          metadata: %{
+            database_name: "test_db",
+            table_schema: "public",
+            table_name: "test_table",
+            commit_timestamp: now,
+            commit_lsn: 123_456,
+            consumer: %{
+              id: consumer.id,
+              name: consumer.name
+            }
+          }
+        }
+      )
+
+      # Retrieve the message
+      [retrieved_message] = Consumers.list_consumer_messages_for_consumer(consumer)
+
+      # Verify the retrieved message has proper types
+      retrieved_record = retrieved_message.data.record
+
+      # Check that each field has the correct type
+      assert retrieved_record["date_field"] == today
+      assert retrieved_record["datetime_field"] == now
+      assert retrieved_record["naive_datetime_field"] == naive_now
+      assert retrieved_record["decimal_field"] == decimal_value
+      assert retrieved_record["regular_field"] == "test"
+
+      # Check the specific struct types to ensure proper deserialization
+      assert is_struct(retrieved_record["date_field"], Date)
+      assert is_struct(retrieved_record["datetime_field"], DateTime)
+      assert is_struct(retrieved_record["naive_datetime_field"], NaiveDateTime)
+      assert is_struct(retrieved_record["decimal_field"], Decimal)
+    end
+  end
 end

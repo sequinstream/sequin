@@ -17,7 +17,6 @@
   let defaultGroupColumns = selectedTable?.default_group_columns || [];
   let groupColumnError: string | null = null;
   let useCustomGrouping = false;
-  let isExpanded = false;
 
   $: groupColumnError = errors.sequence_filter?.group_column_attnums?.[0];
   $: defaultGroupColumns = selectedTable?.default_group_columns || [];
@@ -60,18 +59,22 @@
         .join(", ")}`
     : selectedTable?.is_event_table
       ? "Using source_database_id, source_table_oid, and record_pk for grouping, which is the default"
-      : "Using primary keys for grouping, which is the default";
+      : defaultGroupColumns.length === 0
+        ? "No primary keys available. Custom grouping is required."
+        : "Using primary keys for grouping, which is the default";
 </script>
 
 <!-- Edit Mode Card -->
 {#if isEditMode}
-  <Card>
-    <CardHeader>
-      <div class="flex items-center justify-between">
-        <CardTitle>Message grouping</CardTitle>
-      </div>
-    </CardHeader>
-    <CardContent>
+  <ExpandableCard
+    disabled={true}
+    titleTooltip="Message grouping can’t be changed for an active sink."
+  >
+    <svelte:fragment slot="title">
+      <CardTitle>Message grouping</CardTitle>
+    </svelte:fragment>
+
+    <svelte:fragment slot="summary">
       {#if !useCustomGrouping && !selectedTable.is_event_table}
         <p class="text-sm text-muted-foreground">
           Using primary keys for grouping.
@@ -83,16 +86,26 @@
           readonly={true}
         />
       {/if}
-    </CardContent>
-  </Card>
+    </svelte:fragment>
+  </ExpandableCard>
 
   <!-- Create Mode - No PKs Available -->
 {:else if selectedTable && defaultGroupColumns.length === 0}
-  <Card>
-    <CardHeader>
+  <ExpandableCard
+    expanded={!isEditMode}
+    disabled={defaultGroupColumns.length === 0}
+  >
+    <svelte:fragment slot="title">
       <CardTitle>Message grouping</CardTitle>
-    </CardHeader>
-    <CardContent>
+    </svelte:fragment>
+
+    <svelte:fragment slot="summary">
+      <p class="text-sm text-muted-foreground">
+        {summaryText}
+      </p>
+    </svelte:fragment>
+
+    <svelte:fragment slot="content">
       <p class="text-sm text-info mb-4">
         No primary keys available. Custom grouping is required.
       </p>
@@ -104,16 +117,14 @@
       {#if groupColumnError}
         <p class="text-destructive text-sm mt-2">{groupColumnError}</p>
       {/if}
-    </CardContent>
-  </Card>
+    </svelte:fragment>
+  </ExpandableCard>
 
   <!-- Create Mode - Normal -->
 {:else}
   <ExpandableCard disabled={!selectedTable}>
     <svelte:fragment slot="title">
-      <div class="flex items-center justify-between">
-        <CardTitle>Message grouping</CardTitle>
-      </div>
+      <CardTitle>Message grouping</CardTitle>
     </svelte:fragment>
 
     <svelte:fragment slot="summary">

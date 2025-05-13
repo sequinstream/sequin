@@ -1,14 +1,11 @@
 <script lang="ts">
-  import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { createEventDispatcher, onMount, onDestroy } from "svelte";
 
   export let title: string = "";
-  export let open = true;
-  export let showConfirmDialog = false;
-  export let showConfirmOnExit = false;
-  export let bodyPadding = 6;
+  let showConfirmDialog = false;
+  export let showConfirmOnExit = true;
 
   const dispatch = createEventDispatcher();
 
@@ -20,17 +17,16 @@
       if (showConfirmOnExit) {
         showConfirmDialog = true;
       } else {
-        open = false;
         dispatch("close");
       }
     }
   }
 
   $: {
-    if (open && !listening) {
+    if (!listening) {
       window.addEventListener("keydown", handleEscapeKey);
       listening = true;
-    } else if (!open && listening) {
+    } else {
       window.removeEventListener("keydown", handleEscapeKey);
       listening = false;
     }
@@ -47,7 +43,6 @@
 
   function confirmClose() {
     showConfirmDialog = false;
-    open = false;
     dispatch("close");
   }
 
@@ -56,54 +51,40 @@
   }
 </script>
 
-<Dialog.Root bind:open preventScroll={false} closeOnEscape={false}>
-  <Dialog.Portal>
-    <Dialog.Content
-      closeButton={false}
-      class="w-full h-full max-w-full max-h-full min-h-screen"
-    >
-      <div id="full-page-modal"></div>
-      <div class="flex flex-col h-full bg-background">
-        <div class="flex justify-between items-center p-6 border-b">
-          {#if $$slots.header}
-            <slot name="header" />
-          {:else}
-            <Dialog.Title class="text-2xl font-semibold">{title}</Dialog.Title>
-          {/if}
+<div class="fixed inset-0 bg-background">
+  <div class="flex flex-col h-full overflow-y-auto">
+    <div class="flex justify-between items-center p-6 border-b">
+      {#if $$slots.header}
+        <slot name="header" />
+      {:else}
+        <h2 class="text-2xl font-semibold">{title}</h2>
+      {/if}
 
-          <Dialog.Close asChild>
-            <Button
-              variant="outline"
-              on:click={() => {
-                if (showConfirmOnExit) {
-                  showConfirmDialog = true;
-                } else {
-                  open = false;
-                  dispatch("close");
-                }
-              }}
-            >
-              Exit
-            </Button>
-          </Dialog.Close>
-        </div>
+      <Button
+        variant="outline"
+        on:click={() => {
+          if (showConfirmOnExit) {
+            showConfirmDialog = true;
+          } else {
+            dispatch("close");
+          }
+        }}
+      >
+        Exit
+      </Button>
+    </div>
 
-        <div
-          class="flex-grow overflow-y-auto"
-          style="padding: {bodyPadding}px;"
-        >
-          <slot />
-        </div>
+    <div class="pt-8 pb-12">
+      <slot />
+    </div>
 
-        {#if $$slots.footer}
-          <div class="flex-shrink-0 border-t">
-            <slot name="footer" />
-          </div>
-        {/if}
+    {#if $$slots.footer}
+      <div class="flex-shrink-0 border-t">
+        <slot name="footer" />
       </div>
-    </Dialog.Content>
-  </Dialog.Portal>
-</Dialog.Root>
+    {/if}
+  </div>
+</div>
 
 <AlertDialog.Root bind:open={showConfirmDialog}>
   <AlertDialog.Content>

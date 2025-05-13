@@ -93,9 +93,10 @@ defmodule SequinWeb.Router do
 
     live_session :default, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
       live "/sinks", SinkConsumersLive.Index, :index
-      live "/sinks/new", SinkConsumersLive.Index, :new
+      live "/sinks/new", SinkConsumersLive.Form, :new
       live "/sinks/:type/:id", SinkConsumersLive.Show, :show
       live "/sinks/:type/:id/messages", SinkConsumersLive.Show, :messages
+      live "/sinks/:type/:id/messages/:ack_id", SinkConsumersLive.Show, :messages
       live "/sinks/:type/:id/edit", SinkConsumersLive.Show, :edit
 
       live "/functions", TransformsLive.Index, :index
@@ -117,6 +118,8 @@ defmodule SequinWeb.Router do
       live "/change-capture-pipelines/new", WalPipelinesLive.Form, :new
       live "/change-capture-pipelines/:id", WalPipelinesLive.Show, :show
       live "/change-capture-pipelines/:id/edit", WalPipelinesLive.Form, :edit
+
+      live "/cli", CliLive, :index
 
       live "/logout", UserLogoutLive, :index
 

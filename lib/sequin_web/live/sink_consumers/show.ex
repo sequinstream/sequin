@@ -52,6 +52,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   @impl Phoenix.LiveView
   def mount(%{"id" => id} = params, _session, socket) do
     current_account = User.current_account(socket.assigns.current_user)
+    show_ack_id = params["ack_id"]
 
     case load_consumer(id, socket) do
       {:ok, consumer} ->
@@ -69,6 +70,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         socket =
           socket
           |> assign(:consumer, consumer)
+          |> assign(:show_ack_id, show_ack_id)
           |> assign(:last_completed_backfill, last_completed_backfill)
           |> assign(:api_tokens, ApiTokens.list_tokens_for_account(current_account.id))
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
@@ -199,7 +201,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   apiBaseUrl: @api_base_url,
                   apiTokens: encode_api_tokens(@api_tokens),
                   metrics: @metrics,
-                  metrics_loading: @metrics_loading
+                  metrics_loading: @metrics_loading,
+                  showAckId: @show_ack_id
                 }
               }
             />
@@ -957,9 +960,17 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer_messages(
-         %{assigns: %{consumer: consumer, page: page, page_size: page_size, show_acked: show_acked}} = socket
+         %{
+           assigns: %{
+             consumer: consumer,
+             page: page,
+             page_size: page_size,
+             show_acked: show_acked,
+             show_ack_id: show_ack_id
+           }
+         } = socket
        ) do
-    messages = load_consumer_messages(consumer, page_size, page * page_size, show_acked)
+    messages = load_consumer_messages(consumer, page_size, page * page_size, show_acked, show_ack_id)
 
     db_count = Consumers.fast_count_messages_for_consumer(consumer)
 
@@ -976,7 +987,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     |> assign(:total_count, total_count)
   end
 
-  defp load_consumer_messages(consumer, limit, offset, show_acked) do
+  defp load_consumer_messages(consumer, limit, offset, show_acked, show_ack_id) do
     store_messages = load_consumer_messages_from_store(consumer, offset + limit)
 
     redis_messages =
@@ -986,11 +997,28 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         []
       end
 
-    (store_messages ++ redis_messages)
-    |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, :asc)
-    |> Enum.uniq_by(&{&1.commit_lsn, &1.commit_idx})
-    |> Enum.drop(offset)
-    |> Enum.take(limit)
+    show_messages =
+      if show_ack_id do
+        case SlotMessageStore.peek_message(consumer, show_ack_id) do
+          {:ok, message} ->
+            [message]
+
+          {:error, error} ->
+            Logger.error("Failed to load message from store for consumer #{consumer.id}: #{Exception.message(error)}")
+            []
+        end
+      else
+        []
+      end
+
+    messages =
+      (store_messages ++ redis_messages)
+      |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, :asc)
+      |> Enum.uniq_by(&{&1.commit_lsn, &1.commit_idx})
+      |> Enum.drop(offset)
+      |> Enum.take(limit)
+
+    show_messages ++ messages
   end
 
   defp load_consumer_messages_from_store(consumer, limit) do
@@ -1253,6 +1281,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         maybe_augment_alert(check, consumer)
       end)
     end)
+  end
+
+  defp maybe_augment_alert(%{slug: :messages_delivered, status: :error, extra: %{"ack_id" => ack_id}} = check, consumer) do
+    link_id = ~p"/sinks/#{consumer.type}/#{consumer.id}/messages/#{ack_id}"
+
+    Map.merge(check, %{
+      alertTitle: "Error: Message not delivered",
+      alertMessage: """
+      Messages are failing to be delivered to the destination. See the <a href="#{link_id}">message details</a> of one failing message for more information.
+      """,
+      refreshable: false,
+      dismissable: false
+    })
   end
 
   defp maybe_augment_alert(

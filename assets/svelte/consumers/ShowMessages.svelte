@@ -27,6 +27,7 @@
   export let showAcked: boolean = true;
   export let consumer: { type: string };
   export let metrics: { messages_failing_count: number };
+  export let showAckId: string | null;
 
   let page: number = 0;
   let loading = false;
@@ -111,6 +112,14 @@
 
     // Initial calculation
     updatePageSize();
+
+    // If showAckId is provided, find and open the message drawer for that message
+    if (showAckId && messages.length > 0) {
+      const messageToShow = messages.find((msg) => msg.ack_id === showAckId);
+      if (messageToShow) {
+        openDrawer(messageToShow);
+      }
+    }
 
     // Add event listener for window resize
     window.addEventListener("resize", updatePageSize);

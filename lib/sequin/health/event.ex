@@ -94,8 +94,11 @@ defmodule Sequin.Health.Event do
     # How long the event has been in its current status
     field :in_status_since, DateTime.t()
 
-    # Data payload of the event
+    # Data payload of the event, this is included in debounce hash
     field :data, map(), default: %{}
+
+    # Extra data, this is not included in debounce hash
+    field :extra, map(), default: %{}
   end
 
   def valid_status?(status), do: status in @statuses

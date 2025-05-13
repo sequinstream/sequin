@@ -782,7 +782,7 @@ defmodule Sequin.Health do
 
       delivered_event.status == :fail ->
         put_check_timestamps(
-          %{base_check | status: :error, error: delivered_event.error},
+          %{base_check | status: :error, error: delivered_event.error, extra: delivered_event.extra},
           [delivered_event]
         )
 

@@ -415,6 +415,10 @@ defmodule Sequin.Transforms do
 
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: nil}), do: %{}
 
+  defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers})
+       when is_map(encrypted_headers) and map_size(encrypted_headers) == 0,
+       do: %{}
+
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}) do
     "(#{map_size(encrypted_headers)} encrypted header(s)) - sha256sum: #{sha256sum(encrypted_headers)}"
   end
@@ -716,6 +720,9 @@ defmodule Sequin.Transforms do
         "max_retry_count" when is_integer(value) and value >= 0 ->
           {:cont, {:ok, Map.put(acc, :max_retry_count, value)}}
 
+        "max_retry_count" when is_nil(value) ->
+          {:cont, {:ok, acc}}
+
         "max_retry_count" ->
           {:halt, {:error, Error.validation(summary: "max_retry_count must be a non-negative integer")}}
 
@@ -728,6 +735,10 @@ defmodule Sequin.Transforms do
 
         # temporary for backwards compatibility
         "consumer_start" ->
+          {:cont, {:ok, acc}}
+
+        # Ignore until it is properly implemented
+        "active_backfill" ->
           {:cont, {:ok, acc}}
 
         # Ignore internal fields that might be present in the external data

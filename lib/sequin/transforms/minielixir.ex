@@ -245,12 +245,11 @@ defmodule Sequin.Transforms.MiniElixir do
 
     id
     |> try_extract_linenum(stacktrace)
-    |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)
-    |> Enum.join(",")
+    |> Enum.map_join(",", fn {k, v} -> "#{k}: #{v}" end)
     |> case do
-         "" -> msg
-         ds -> "#{msg} (#{ds})"
-       end
+      "" -> msg
+      ds -> "#{msg} (#{ds})"
+    end
   end
 
   defp try_extract_linenum(id, stacktrace) do

@@ -746,9 +746,11 @@ defmodule Sequin.TransformsTest do
       consumer = %SinkConsumer{transform: xf}
       message = ConsumersFactory.consumer_message(message_kind: :event)
 
-      ex = assert_raise Sequin.Error.ServiceError, fn ->
-        Transforms.Message.to_external(consumer, message)
-      end
+      ex =
+        assert_raise Sequin.Error.ServiceError, fn ->
+          Transforms.Message.to_external(consumer, message)
+        end
+
       assert Exception.message(ex) =~ "line: 3"
     end
   end

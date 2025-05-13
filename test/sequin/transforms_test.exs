@@ -727,5 +727,33 @@ defmodule Sequin.TransformsTest do
       result = Transforms.Message.to_external(consumer, message)
       assert 1 == result
     end
+
+    test "error reporting line number" do
+      account = AccountsFactory.insert_account!()
+
+      code =
+        mkfunction("""
+        q = record["nothing"]
+        Map.get(q, "q")
+        """)
+
+      assert {:ok, xf} =
+               Consumers.create_transform(
+                 account.id,
+                 %{name: Factory.unique_word(), transform: %{type: :function, code: code}}
+               )
+
+      consumer = %SinkConsumer{transform: xf}
+      message = ConsumersFactory.consumer_message(message_kind: :event)
+
+      ex =
+        try do
+          _result = Transforms.Message.to_external(consumer, message)
+        rescue
+          ex -> ex
+        end
+
+      dbg(ex)
+    end
   end
 end

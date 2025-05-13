@@ -97,7 +97,14 @@ defmodule Sequin.Transforms.MiniElixir do
   rescue
     error ->
       :telemetry.execute([:minielixir, :compile, :exception], %{id: id})
-      error = Sequin.Error.service(service: "transform", message: Exception.message(error))
+
+      error =
+        Sequin.Error.service(
+          service: "transform",
+          message: Exception.message(error),
+          details: try_extract_linenum(id, __STACKTRACE__)
+        )
+
       Logger.error("[MiniElixir] Transform failed: #{Exception.message(error)}", transform_id: id)
       {:error, error}
   end
@@ -220,5 +227,12 @@ defmodule Sequin.Transforms.MiniElixir do
 
   defp generate_module_name(id) when is_binary(id) do
     <<"UserTransform.", id::binary>>
+  end
+
+  defp try_extract_linenum(id, stacktrace) do
+    with {:ok, mod} <- module_name_from_id(id),
+         [info | _] <- for({^mod, _f, _a, info} <- stacktrace, do: info) do
+      Keyword.delete(info, :file)
+    end
   end
 end

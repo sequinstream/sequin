@@ -186,6 +186,12 @@ defmodule Sequin.Databases.PostgresDatabase do
       |> Enum.to_list()
       |> Keyword.put_new(:connect_timeout, @default_connect_timeout)
       |> Keyword.put(:types, Sequin.Postgres.PostgrexTypes)
+      # Temporary workaround to resolve Postgrex endpoint resolving issues if PGHOST is set to a socket or socket directory
+      # keep this until a new Postgrex version (>0.20.0) is published including this commit
+      # https://github.com/elixir-ecto/postgrex/commit/412b55567b6f0f3feb587e38466fcab047581c0f
+      |> Keyword.put(:socket, nil)
+      |> Keyword.put(:socket_dir, nil)
+      |> Keyword.put(:endpoints, nil)
 
     # TODO: Remove this when we have CA certs for the cloud providers
     # We likely need a bundle that covers many different database providers

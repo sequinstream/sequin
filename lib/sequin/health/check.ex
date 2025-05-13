@@ -18,6 +18,7 @@ defmodule Sequin.Health.Check do
     field :initial_event_at, DateTime.t() | nil
     field :last_healthy_at, DateTime.t() | nil
     field :erroring_since, DateTime.t() | nil
+    field :extra, map(), default: %{}
   end
 
   @spec from_json!(String.t()) :: t()
@@ -49,7 +50,8 @@ defmodule Sequin.Health.Check do
       name: check_name(check),
       status: if(check.status == :waiting, do: :initializing, else: check.status),
       error: if(check.error, do: %{message: Exception.message(check.error), code: error_code, details: error_details}),
-      error_slug: check.error_slug
+      error_slug: check.error_slug,
+      extra: check.extra
     }
   end
 

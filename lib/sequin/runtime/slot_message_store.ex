@@ -35,6 +35,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Error.NotFoundError
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Replication
@@ -324,7 +325,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   @spec peek_messages(SinkConsumer.t(), pos_integer()) ::
           list(ConsumerRecord.t() | ConsumerEvent.t()) | {:error, Exception.t()}
-  def peek_messages(consumer, count) do
+  def peek_messages(consumer, count) when is_integer(count) do
     consumer
     |> partitions()
     |> Enum.reduce_while({:ok, []}, fn partition, {:ok, acc_messages} ->
@@ -345,6 +346,22 @@ defmodule Sequin.Runtime.SlotMessageStore do
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
+  end
+
+  def peek_message(consumer, ack_id) do
+    not_found = {:error, Error.not_found(entity: :message, params: %{ack_id: ack_id})}
+
+    consumer
+    |> partitions()
+    |> Enum.reduce_while(not_found, fn partition, not_found ->
+      case GenServer.call(via_tuple(consumer.id, partition), {:peek_message, ack_id}) do
+        # When we find the message, we halt with the message
+        {:ok, message} -> {:halt, {:ok, message}}
+        # When we don't find the message, we continue to the next partition
+        {:error, %NotFoundError{}} -> {:cont, not_found}
+        error -> {:halt, error}
+      end
+    end)
   end
 
   @doc """
@@ -710,6 +727,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   def handle_call({:peek_messages, count}, _from, state) do
     execute_timed(:peek_messages, fn ->
       {:reply, {:ok, State.peek_messages(state, count)}, state}
+    end)
+  end
+
+  def handle_call({:peek_message, ack_id}, _from, state) do
+    execute_timed(:peek_message, fn ->
+      {:reply, State.peek_message(state, ack_id), state}
     end)
   end
 

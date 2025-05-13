@@ -447,6 +447,13 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     |> Map.values()
   end
 
+  def peek_message(%State{} = state, ack_id) do
+    case Map.get(state.ack_ids_to_cursor_tuples, ack_id) do
+      nil -> {:error, Error.not_found(entity: :message, params: %{ack_id: ack_id})}
+      cursor_tuple -> {:ok, Map.get(state.messages, cursor_tuple)}
+    end
+  end
+
   # This function provides an optimized way to take the first N messages from a map,
   # using ETS ordered set to maintain sort order
   defp sorted_message_stream(%State{} = state) do

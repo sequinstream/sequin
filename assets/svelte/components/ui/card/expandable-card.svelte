@@ -34,7 +34,7 @@
 
   <CardContent>
     <div class="space-y-2">
-      {#if disabled || !expanded}
+      {#if !expanded}
         <slot name="summary" />
       {:else}
         <slot name="content" />

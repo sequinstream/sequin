@@ -17,6 +17,7 @@
   <ButtonPrimitive.Root
     class="flex flex-row items-center justify-between w-full cursor-pointer"
     on:click={handleClick}
+    type="button"
     {builders}
     {disabled}
   >

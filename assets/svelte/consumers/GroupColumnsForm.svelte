@@ -17,7 +17,6 @@
   let defaultGroupColumns = selectedTable?.default_group_columns || [];
   let groupColumnError: string | null = null;
   let useCustomGrouping = false;
-  let isExpanded = false;
 
   $: groupColumnError = errors.sequence_filter?.group_column_attnums?.[0];
   $: defaultGroupColumns = selectedTable?.default_group_columns || [];
@@ -60,7 +59,9 @@
         .join(", ")}`
     : selectedTable?.is_event_table
       ? "Using source_database_id, source_table_oid, and record_pk for grouping, which is the default"
-      : "Using primary keys for grouping, which is the default";
+      : defaultGroupColumns.length === 0
+        ? "No primary keys available. Custom grouping is required."
+        : "Using primary keys for grouping, which is the default";
 </script>
 
 <!-- Edit Mode Card -->
@@ -90,7 +91,10 @@
 
   <!-- Create Mode - No PKs Available -->
 {:else if selectedTable && defaultGroupColumns.length === 0}
-  <ExpandableCard expanded={!isEditMode}>
+  <ExpandableCard
+    expanded={!isEditMode}
+    disabled={defaultGroupColumns.length === 0}
+  >
     <svelte:fragment slot="title">
       <CardTitle>Message grouping</CardTitle>
     </svelte:fragment>
@@ -118,7 +122,7 @@
 
   <!-- Create Mode - Normal -->
 {:else}
-  <ExpandableCard disabled={!selectedTable} expanded={!isEditMode}>
+  <ExpandableCard disabled={!selectedTable}>
     <svelte:fragment slot="title">
       <CardTitle>Message grouping</CardTitle>
     </svelte:fragment>

@@ -735,14 +735,13 @@ defmodule Sequin.YamlLoader do
   #########################
 
   defp upsert_sink_consumers(account_id, %{"sinks" => consumers}, databases, http_endpoints) do
-
-
     Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
       # This is a hack while sequences might be created while we create sinks
       # TODO: Excise this once sequences are removed
       databases = Repo.preload(databases, [:sequences], force: true)
 
       Logger.info("Upserting sink consumer", consumer_id: consumer.id)
+
       case upsert_sink_consumer(account_id, consumer, databases, http_endpoints) do
         {:ok, consumer} -> {:cont, {:ok, [consumer | acc]}}
         {:error, error} -> {:halt, {:error, error}}

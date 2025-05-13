@@ -12,8 +12,6 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { PlusCircle } from "lucide-svelte";
-  import Datetime from "./Datetime.svelte";
-  import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
   import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let isEdit: boolean = false;
@@ -332,29 +330,32 @@
           </div>
 
           <!-- Column 3: Comparand -->
-          <div
-            class="flex flex-col gap-2 {filter.isJsonb
-              ? 'row-start-2 col-start-3'
-              : ''}"
-          >
-            <Label for={`value-${index}`}
-              >Comparison value
-              <!-- Unused help circle, helps align inputs -->
-              <HelpCircle
-                class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help invisible"
+          {#if !["IS NULL", "IS NOT NULL"].includes(filter.operator)}
+            <div
+              class="flex flex-col gap-2 {filter.isJsonb
+                ? 'row-start-2 col-start-3'
+                : ''}"
+            >
+              <Label for={`value-${index}`}
+                >Comparison value
+                <!-- Unused help circle, helps align inputs -->
+                <HelpCircle
+                  class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help invisible"
+                />
+              </Label>
+              <Input
+                id={`value-${index}`}
+                type="text"
+                placeholder="Value"
+                value={filter.value}
+                on:input={(e) =>
+                  updateFilter(index, "value", e.currentTarget.value)}
+                disabled={(!form.postgresDatabaseId && !form.tableOid) ||
+                  isEdit}
+                class="bg-surface-base border-carbon-100"
               />
-            </Label>
-            <Input
-              id={`value-${index}`}
-              type="text"
-              placeholder="Value"
-              value={filter.value}
-              on:input={(e) =>
-                updateFilter(index, "value", e.currentTarget.value)}
-              disabled={(!form.postgresDatabaseId && !form.tableOid) || isEdit}
-              class="bg-surface-base border-carbon-100"
-            />
-          </div>
+            </div>
+          {/if}
 
           <!-- Column 4: Remove button -->
           <button

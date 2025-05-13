@@ -84,6 +84,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:cursor_position, nil)
           |> assign(:cursor_task_ref, nil)
           |> load_consumer_messages()
+          |> load_consumer_message_by_ack_id()
 
         :syn.join(:consumers, {:sink_config_checked, consumer.id}, self())
 
@@ -960,17 +961,24 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer_messages(
-         %{
-           assigns: %{
-             consumer: consumer,
-             page: page,
-             page_size: page_size,
-             show_acked: show_acked,
-             show_ack_id: show_ack_id
-           }
-         } = socket
+         %{assigns: %{consumer: consumer, page: page, page_size: page_size, show_acked: show_acked}} = socket
        ) do
-    messages = load_consumer_messages(consumer, page_size, page * page_size, show_acked, show_ack_id)
+    offset = page * page_size
+    store_messages = load_consumer_messages_from_store(consumer, offset + page_size)
+
+    redis_messages =
+      if show_acked do
+        load_consumer_messages_from_redis(consumer, offset + page_size)
+      else
+        []
+      end
+
+    messages =
+      (store_messages ++ redis_messages)
+      |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, :asc)
+      |> Enum.uniq_by(&{&1.commit_lsn, &1.commit_idx})
+      |> Enum.drop(offset)
+      |> Enum.take(page_size)
 
     db_count = Consumers.fast_count_messages_for_consumer(consumer)
 
@@ -985,40 +993,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     socket
     |> assign(:messages, messages)
     |> assign(:total_count, total_count)
-  end
-
-  defp load_consumer_messages(consumer, limit, offset, show_acked, show_ack_id) do
-    store_messages = load_consumer_messages_from_store(consumer, offset + limit)
-
-    redis_messages =
-      if show_acked do
-        load_consumer_messages_from_redis(consumer, offset + limit)
-      else
-        []
-      end
-
-    show_messages =
-      if show_ack_id do
-        case SlotMessageStore.peek_message(consumer, show_ack_id) do
-          {:ok, message} ->
-            [message]
-
-          {:error, error} ->
-            Logger.error("Failed to load message from store for consumer #{consumer.id}: #{Exception.message(error)}")
-            []
-        end
-      else
-        []
-      end
-
-    messages =
-      (store_messages ++ redis_messages)
-      |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, :asc)
-      |> Enum.uniq_by(&{&1.commit_lsn, &1.commit_idx})
-      |> Enum.drop(offset)
-      |> Enum.take(limit)
-
-    show_messages ++ messages
   end
 
   defp load_consumer_messages_from_store(consumer, limit) do
@@ -1040,6 +1014,23 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       {:error, error} ->
         Logger.error("Failed to load messages from Redis: #{inspect(error)}")
         []
+    end
+  end
+
+  defp load_consumer_message_by_ack_id(%{assigns: %{show_ack_id: nil}} = socket), do: socket
+
+  defp load_consumer_message_by_ack_id(%{assigns: %{consumer: consumer, show_ack_id: show_ack_id}} = socket) do
+    case SlotMessageStore.peek_message(consumer, show_ack_id) do
+      {:ok, message} ->
+        update_in(socket.assigns.messages, fn messages -> [message | messages] end)
+
+      {:error, error} ->
+        Logger.warning("Failed to load message from store for consumer #{consumer.id}: #{Exception.message(error)}")
+
+        put_flash(socket, :toast, %{
+          kind: :error,
+          title: "Message with ID #{show_ack_id} not found. It may have been acknowledged or deleted."
+        })
     end
   end
 

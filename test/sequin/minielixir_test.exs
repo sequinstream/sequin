@@ -2,6 +2,7 @@ defmodule Sequin.MiniElixirTest do
   use ExUnit.Case
 
   alias Sequin.Transforms.MiniElixir.Validator
+  alias Sequin.Transforms.MiniElixir.Validator.PatternChecker
 
   describe "unwrap" do
     test "unwrap extracts the single def or fails" do
@@ -226,12 +227,11 @@ defmodule Sequin.MiniElixirTest do
     test "attempt to use macros" do
       assert {:error, :validator, _} =
                Validator.check(
-                 quote(
-                   do:
-                     defmacro evil() do
-                       quote(do: :erlang.halt())
-                     end
-                 )
+                 quote do
+                   defmacro evil() do
+                     quote(do: :erlang.halt())
+                   end
+                 end
                )
     end
 
@@ -268,46 +268,304 @@ defmodule Sequin.MiniElixirTest do
     test "attempt to use try/rescue for control flow manipulation" do
       assert {:error, :validator, _} =
                Validator.check(
-                 quote(
-                   do:
-                     try do
-                       :erlang.halt()
-                     rescue
-                       _ -> :ok
-                     end
-                 )
+                 quote do
+                   try do
+                     :erlang.halt()
+                   rescue
+                     _ -> :ok
+                   end
+                 end
                )
     end
 
     test "attempt to define inline macro with malicious intent" do
       assert {:error, :validator, _} =
                Validator.check(
-                 quote(
-                   do:
-                     defmodule EvilMacro do
-                       @moduledoc false
-                       defmacro __using__(_) do
-                         quote do
-                           def evil_function do
-                             :erlang.halt()
-                           end
+                 quote do
+                   defmodule EvilMacro do
+                     @moduledoc false
+                     defmacro __using__(_) do
+                       quote do
+                         def evil_function do
+                           :erlang.halt()
                          end
                        end
                      end
-                 )
+                   end
+                 end
                )
     end
 
     test "attempt to define direct inline macro" do
       assert {:error, :validator, _} =
                Validator.check(
-                 quote(
-                   do:
-                     defmacro evil() do
-                       quote(do: :erlang.halt())
-                     end
-                 )
+                 quote do
+                   defmacro evil() do
+                     quote(do: :erlang.halt())
+                   end
+                 end
                )
+    end
+
+    test "Allows kernel functions" do
+      assert :ok = Validator.check(quote do: to_string(1))
+    end
+
+    # Note that you are only allowed to start from an approved root
+    test "Allows dot access" do
+      assert :ok = Validator.check(quote do: metadata.a.b.c.e)
+    end
+
+    # This is fine becasue if you HAD an evil function you can call it with Enum.map
+    test "Allows fun.()" do
+      assert :ok = Validator.check(quote do: fun.())
+    end
+
+    test "Disallows &capture" do
+      assert {:error, :validator, _} =
+               Validator.check(
+                 quote do
+                   evil = &erlang.halt/0
+                   evil.()
+                 end
+               )
+    end
+
+    test "can't assign evil via struct pattern" do
+      assert {:error, :validator, _} =
+               Validator.check(
+                 quote do
+                   z = %{__struct__: :erlang}
+                   %metadata{} = z
+                   metadata.halt()
+                 end
+               )
+    end
+
+    test "Allows kernel guards" do
+      assert :ok =
+               Validator.check(
+                 quote do
+                   case 1 do
+                     x when is_number(x) -> :ok
+                     y when is_binary(y) -> :ok
+                   end
+                 end
+               )
+    end
+
+    test "cannot shadow existing roots" do
+      assert {:error, :validator, "can't assign to argument: metadata"} =
+               Validator.check(
+                 quote do
+                   metadata = 1
+                 end
+               )
+
+      assert {:error, :validator, _} =
+               Validator.check(
+                 quote do
+                   [metadata] = 1
+                 end
+               )
+
+      assert {:error, :validator, _} =
+               Validator.check(
+                 quote do
+                   {1, metadata, 3} = 1
+                 end
+               )
+
+      assert {:error, :validator, _} =
+               Validator.check(
+                 quote do
+                   %{z => metadata} = 1
+                 end
+               )
+    end
+
+    test "can assign to variables" do
+      assert :ok =
+               Validator.check(
+                 quote do
+                   var = 1
+                   %{key: var} = %{key: 3}
+                   [var] = 7
+                   <<1, 2, var::binary-size(8)>> = "lmao"
+                   {1, var, 3} = {1, 2, 3}
+                 end
+               )
+    end
+  end
+
+  defp get_vars(ast) do
+    {:ok, vars} = PatternChecker.extract_bound_vars(ast)
+    Enum.sort(vars)
+  end
+
+  describe "pattern checker" do
+    test "simple variable" do
+      ast = quote do: x
+      assert get_vars(ast) == [:x]
+    end
+
+    test "ignored variable _" do
+      ast = quote do: _
+      assert get_vars(ast) == []
+    end
+
+    test "ignored named variable _foo" do
+      ast = quote do: _foo
+      assert get_vars(ast) == []
+    end
+
+    test "literals do not bind variables" do
+      assert get_vars(quote do: 123) == []
+      assert get_vars(quote do: "hello") == []
+      assert get_vars(quote do: :world) == []
+      assert get_vars(quote do: true) == []
+      assert get_vars(quote do: nil) == []
+      assert get_vars(quote do: [1, 2, 3]) == []
+      assert get_vars(quote do: {1, :a}) == []
+      assert get_vars(quote do: %{a: 1, b: 2}) == []
+      assert get_vars(quote do: <<1, 2>>) == []
+    end
+
+    test "list patterns" do
+      ast = quote do: [a, b]
+      assert get_vars(ast) == [:a, :b]
+
+      ast = quote do: [h | t]
+      assert get_vars(ast) == [:h, :t]
+
+      ast = quote do: [x, _, [y | _z], k]
+      # _z is ignored
+      assert get_vars(ast) == [:k, :x, :y]
+
+      ast = quote do: [1, var, "str"]
+      assert get_vars(ast) == [:var]
+
+      ast = quote do: []
+      assert get_vars(ast) == []
+    end
+
+    test "tuple patterns" do
+      ast = quote do: {a, b}
+      assert get_vars(ast) == [:a, :b]
+
+      ast = quote do: {x, {y, _}, z}
+      assert get_vars(ast) == [:x, :y, :z]
+
+      ast = quote do: {x, q = {y, _}, z}
+      assert get_vars(ast) == [:q, :x, :y, :z]
+
+      ast = quote do: {:ok, val}
+      assert get_vars(ast) == [:val]
+
+      ast = quote do: {}
+      assert get_vars(ast) == []
+    end
+
+    test "map patterns" do
+      ast = quote do: %{"key2" => val2, key1: val1}
+
+      assert get_vars(ast) == [:val1, :val2]
+
+      ast = quote do: %{a: x, b: %{c: y, d: _z}}
+      assert get_vars(ast) == [:x, :y]
+
+      ast = quote do: %{}
+      assert get_vars(ast) == []
+
+      ast = quote do: %{existing_var => new_val}
+      assert get_vars(ast) == [:new_val]
+    end
+
+    test "match operator (:=)" do
+      ast = quote do: a = b
+      assert get_vars(ast) == [:a, :b]
+
+      ast = quote do: x = {y, z}
+      assert get_vars(ast) == [:x, :y, :z]
+
+      ast = quote do: {p, q} = r
+      assert get_vars(ast) == [:p, :q, :r]
+
+      ast = quote do: val = 10
+      assert get_vars(ast) == [:val]
+
+      ast = quote do: first = second = {third, fourth}
+      assert get_vars(ast) == [:first, :fourth, :second, :third]
+    end
+
+    test "binary patterns" do
+      ast = quote do: <<x, y::size(8), z::binary>>
+      assert get_vars(ast) == [:x, :y, :z]
+
+      ast = quote do: <<head::integer, _rest::binary>>
+      assert get_vars(ast) == [:head]
+
+      ast = quote do: <<a, b::little-unsigned-integer-size(var_size)-unit(1)>>
+      # var_size is part of type spec, not bound by this pattern
+      assert get_vars(ast) == [:a, :b]
+
+      ast = quote do: <<>>
+      assert get_vars(ast) == []
+
+      # 0 is literal
+      ast = quote do: <<0, tail::binary>>
+      assert get_vars(ast) == [:tail]
+    end
+
+    test "when clauses (guards)" do
+      ast = quote do: x when is_integer(x) and x > 0
+      assert get_vars(ast) == [:x]
+
+      # suppose c is from an enclosing scope
+      ast = quote do: {a, b} when a > c and map_size(b) == 2
+      assert get_vars(ast) == [:a, :b]
+    end
+
+    test "pin operator (^)" do
+      ast = quote do: ^pinned_var
+      assert get_vars(ast) == []
+
+      ast = quote do: [^a, b, ^c]
+      assert get_vars(ast) == [:b]
+
+      ast = quote do: %{key: ^val, other: new_val}
+      assert get_vars(ast) == [:new_val]
+    end
+
+    test "struct patterns" do
+      ast = quote do: %MyStruct{field1: f1, field2: _f2, field3: f3}
+      assert get_vars(ast) == [:f1, :f3]
+
+      ast = quote do: %s{field1: f1, field2: _f2, field3: f3}
+      assert get_vars(ast) == [:f1, :f3, :s]
+    end
+
+    test "repeated variables (uniq)" do
+      ast = quote do: {x, x, y, [x]}
+      assert get_vars(ast) == [:x, :y]
+    end
+
+    test "deeply nested and mixed patterns" do
+      ast =
+        quote do
+          {status, [%{data: data_val, meta: _} | _rest_list], error_code} =
+            nil
+          when status != :error and data_val > 0
+        end
+
+      assert get_vars(ast) == [:data_val, :error_code, :status]
+
+      complex_pattern =
+        quote do
+          [first_el = {inner_a, _}, %{"payload" => payload_b, :options => [%Opt{opt_val: c} | _opts]}, _ | tail_d]
+        end
+
+      assert get_vars(complex_pattern) == [:c, :first_el, :inner_a, :payload_b, :tail_d]
     end
   end
 end

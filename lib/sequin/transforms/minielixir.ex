@@ -152,10 +152,22 @@ defmodule Sequin.Transforms.MiniElixir do
 
   defp ensure_code_is_loaded(id) do
     unless is_code_loaded(id) do
-      Agent.update(__MODULE__, fn state ->
-        recreate(id)
-        state
+      __MODULE__
+      |> Agent.get_and_update(fn state ->
+        try do
+          recreate(id)
+          {:ok, state}
+        rescue
+          e -> {{:error, e}, state}
+        end
       end)
+      |> case do
+        :ok ->
+          :ok
+
+        {:error, ex} ->
+          raise ex
+      end
     end
 
     module_name_from_id(id)

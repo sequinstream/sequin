@@ -1829,13 +1829,15 @@ defmodule Sequin.PostgresReplicationTest do
           test_pid: self(),
           id: server_id(),
           message_handler_module: SlotMessageHandlerMock,
-          message_handler_ctx: %MessageHandler.Context{
-            consumers: [],
-            wal_pipelines: [],
-            replication_slot_id: id,
-            postgres_database: db,
-            table_reader_mod: TableReaderServer
-          },
+          message_handler_ctx_fn: fn _ ->
+            %MessageHandler.Context{
+              consumers: [],
+              wal_pipelines: [],
+              replication_slot_id: id,
+              postgres_database: db,
+              table_reader_mod: TableReaderServer
+            }
+          end,
           postgres_database: db,
           replication_slot: %PostgresReplicationSlot{id: id}
         ],

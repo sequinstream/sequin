@@ -181,8 +181,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     replication_slot = Keyword.fetch!(opts, :replication_slot)
     test_pid = Keyword.get(opts, :test_pid)
-    message_handler_ctx = Keyword.fetch!(opts, :message_handler_ctx)
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
+    message_handler_ctx_fn = Keyword.fetch!(opts, :message_handler_ctx_fn)
+    message_handler_ctx = message_handler_ctx_fn.(replication_slot)
     max_memory_bytes = Keyword.get_lazy(opts, :max_memory_bytes, &default_max_memory_bytes/0)
     bytes_between_limit_checks = Keyword.get(opts, :bytes_between_limit_checks, div(max_memory_bytes, 100))
 

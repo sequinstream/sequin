@@ -15,18 +15,17 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   @spec store_messages(String.t(), list(ConsumerEvent.t() | ConsumerRecord.t()), non_neg_integer()) ::
           :ok | {:error, Error.t()}
   def store_messages(consumer_id, messages, max_messages \\ @max_messages) do
-    key = "acknowledged_messages:#{consumer_id}"
-    now = :os.system_time(:nanosecond)
-
     # Add messages to the sorted set
     commands =
       messages
       |> Stream.map(&to_acknowledged_message/1)
-      |> Stream.map(&AcknowledgedMessage.encode/1)
-      |> Enum.map(fn message -> ["ZADD", key, now, message] end)
+      |> Enum.flat_map(fn message ->
+        score = message.commit_lsn * 1_000_000_000 + message.commit_idx
+        [score, AcknowledgedMessage.encode(message)]
+      end)
 
     # Trim sorted set to the latest @max_messages
-    commands = commands ++ [["ZREMRANGEBYRANK", key, 0, -(max_messages + 1)]]
+    commands = [["ZADD", key(consumer_id) | commands]] ++ [["ZREMRANGEBYRANK", key(consumer_id), 0, -(max_messages + 1)]]
     query_name = "acknowledged_messages:store_messages"
 
     commands
@@ -43,9 +42,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   @spec fetch_messages(String.t(), non_neg_integer(), non_neg_integer()) ::
           {:ok, list(AcknowledgedMessage.t())} | {:error, Error.t()}
   def fetch_messages(consumer_id, count \\ 100, offset \\ 0) do
-    key = "acknowledged_messages:#{consumer_id}"
-
-    ["ZREVRANGE", key, offset, offset + count - 1]
+    ["ZREVRANGE", key(consumer_id), offset, offset + count - 1]
     |> Redis.command(query_name: "acknowledged_messages:fetch")
     |> case do
       {:ok, messages} -> {:ok, Enum.map(messages, &AcknowledgedMessage.decode/1)}
@@ -58,12 +55,14 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   """
   @spec count_messages(String.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   def count_messages(consumer_id) do
-    key = "acknowledged_messages:#{consumer_id}"
-
-    case Redis.command(["ZCARD", key], query_name: "acknowledged_messages:count") do
+    case Redis.command(["ZCARD", key(consumer_id)], query_name: "acknowledged_messages:count") do
       {:ok, count} -> {:ok, String.to_integer(count)}
       error -> error
     end
+  end
+
+  defp key(consumer_id) do
+    "acknowledged_messages:v0:#{consumer_id}"
   end
 
   def to_acknowledged_message(%ConsumerRecord{} = record) do

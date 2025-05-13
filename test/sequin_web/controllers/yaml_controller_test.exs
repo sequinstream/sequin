@@ -133,11 +133,11 @@ defmodule SequinWeb.YamlControllerTest do
           hostname: localhost
           pool_size: 10
           username: postgres
-          password: '********'
+          password: postgres
           database: sequin_test
-          slot_name: sequin_slot
+          slot_name: "#{replication_slot()}"
           use_local_tunnel: false
-          publication_name: characters_publication
+          publication_name: "#{@publication}"
       http_endpoints:
         - name: test_http_endpoint
           url: http://localhost:4000/something

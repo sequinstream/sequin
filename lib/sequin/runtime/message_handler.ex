@@ -513,12 +513,6 @@ defmodule Sequin.Runtime.MessageHandler do
   defp get_fields(%Message{action: :update} = message), do: message.fields
   defp get_fields(%Message{action: :delete} = message), do: message.old_fields
 
-  # Carve-out for specific customer that needs strict ordering *per table*.
-  # Replace with a grouping function when that feature ships.
-  defp generate_group_id(%SinkConsumer{account_id: "88a83ac5-16bd-4f38-89d2-31375e660f6f"}, %Message{} = message) do
-    to_string(message.table_oid)
-  end
-
   defp generate_group_id(consumer, message) do
     # This should be way more assertive - we should error if we don't find the source table
     # We have a lot of tests that do not line up consumer source_tables with the message table oid

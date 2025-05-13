@@ -740,11 +740,13 @@ defmodule Sequin.YamlLoader do
       # TODO: Excise this once sequences are removed
       databases = Repo.preload(databases, [:sequences], force: true)
 
-      Logger.info("Upserting sink consumer", consumer_id: consumer.id)
-
       case upsert_sink_consumer(account_id, consumer, databases, http_endpoints) do
-        {:ok, consumer} -> {:cont, {:ok, [consumer | acc]}}
-        {:error, error} -> {:halt, {:error, error}}
+        {:ok, consumer} ->
+          Logger.info("Upserted sink consumer", consumer_id: consumer.id)
+          {:cont, {:ok, [consumer | acc]}}
+
+        {:error, error} ->
+          {:halt, {:error, error}}
       end
     end)
   rescue

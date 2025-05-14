@@ -403,7 +403,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       setting_system_max_memory_bytes:
         Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
       partition: partition,
-      flush_interval: Keyword.get(opts, :flush_interval, :timer.minutes(1)),
+      flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(15)),
       message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2)),
       visibility_check_interval: Keyword.get(opts, :visibility_check_interval, :timer.minutes(5)),
       max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2))
@@ -838,7 +838,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   def handle_info(:flush_messages, %State{} = state) do
     Logger.info("[SlotMessageStore] Checking for messages to flush")
 
-    messages = State.messages_to_flush(state)
+    batch_size = flush_batch_size()
+    messages = State.messages_to_flush(state, batch_size)
 
     state =
       if length(messages) > 0 do
@@ -854,6 +855,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
         if state.test_pid do
           send(state.test_pid, {:flush_messages_done, state.consumer_id})
+          send(state.test_pid, {:flush_messages_count, length(messages)})
         end
 
         Logger.info(
@@ -867,7 +869,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
         state
       end
 
-    schedule_flush_check(state.flush_interval)
+    # Flush again immediately we are likely to have more work to do
+    schedule_flush_check(if length(messages) == batch_size, do: 0, else: state.flush_interval)
+
     {:noreply, state}
   end
 
@@ -1020,5 +1024,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
     with :ok <- delete_messages(state, Enum.map(discarded_messages, & &1.ack_id)) do
       AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages)
     end
+  end
+
+  @default_flush_batch_size 2000
+  defp flush_batch_size do
+    conf = Application.get_env(:sequin, :slot_message_store, [])
+    conf[:flush_batch_size] || @default_flush_batch_size
   end
 end

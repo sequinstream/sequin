@@ -1376,6 +1376,9 @@ defmodule Sequin.Consumers do
           []
       end
     end
+  rescue
+    error ->
+      [code: "validation failed: #{Exception.message(error)}"]
   end
 
   def safe_evaluate_code(code) do

@@ -214,7 +214,9 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   defp good({:defmodule, _, _}), do: {:error, :validator, "defining modules is not allowed"}
   defp good({:def, _, _}), do: {:error, :validator, "defining functions is not allowed"}
   defp good({:defp, _, _}), do: {:error, :validator, "defining functions is not allowed"}
-  defp good({:cond, _meta, [[{:do, body}]]}), do: check_body(body)
+  defp good({:cond, _meta, [[{:do, body}]]}) when is_list(body), do: check_body(body)
+  # Empty cond has an empty block not an empty list
+  defp good({:cond, _meta, [[{:do, body}]]}), do: check(body)
 
   defp good({:=, _meta, [l, r]}) do
     with {:ok, bound} = __MODULE__.PatternChecker.extract_bound_vars(l) do

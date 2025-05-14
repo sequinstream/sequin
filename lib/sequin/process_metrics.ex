@@ -131,19 +131,23 @@ defmodule Sequin.ProcessMetrics do
 
       # Add the handle_info callback for process_logging
       def handle_info(:process_logging, state) do
+        handle_process_logging()
+
+        Process.send_after(self(), :process_logging, process_metrics_interval())
+        Sequin.ProcessMetrics.no_reply(state)
+      end
+
+      defp handle_process_logging do
         # Get dynamic tags from process dictionary
         dynamic_tags = Sequin.ProcessMetrics.get_metadata()
         # Merge static and dynamic tags
         tags = Map.merge(process_metrics_tags(), dynamic_tags)
 
         Sequin.ProcessMetrics.handle_process_logging(
-          interval: process_metrics_interval(),
           metric_prefix: process_metrics_metric_prefix(),
           logger_prefix: process_metrics_logger_prefix(),
           tags: tags
         )
-
-        Sequin.ProcessMetrics.no_reply(state)
       end
     end
   end
@@ -277,7 +281,7 @@ defmodule Sequin.ProcessMetrics do
   * `metric_prefix` - The prefix to use for StatsD metrics
   * `tags` - Additional tags to include in StatsD metrics
   """
-  def handle_process_logging(interval: interval, metric_prefix: metric_prefix, logger_prefix: logger_prefix, tags: tags) do
+  def handle_process_logging(metric_prefix: metric_prefix, logger_prefix: logger_prefix, tags: tags) do
     now = System.monotonic_time(:millisecond)
     last_logged_at = Process.get(@metrics_last_logged_at_key)
     interval_ms = if last_logged_at, do: now - last_logged_at
@@ -435,14 +439,7 @@ defmodule Sequin.ProcessMetrics do
     put_metrics(@default_state)
 
     # Schedule next logging and update last logged time
-    schedule_process_logging(interval)
     Process.put(@metrics_last_logged_at_key, now)
-  end
-
-  # Private functions
-
-  defp schedule_process_logging(interval) do
-    Process.send_after(self(), :process_logging, interval)
   end
 end
 

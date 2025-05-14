@@ -3,9 +3,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   Subscribes to the Postgres replication slot, decodes write ahead log binary messages
   and publishes them to a stream.
   """
-
   # See below, where we set restart: :temporary
   use Sequin.Postgres.ReplicationConnection
+
+  use Sequin.ProcessMetrics,
+    metric_prefix: "sequin.slot_processor_server"
+
+  use Sequin.ProcessMetrics.Decorator
 
   import Sequin.Error.Guards, only: [is_error: 1]
 
@@ -23,6 +27,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Postgres
   alias Sequin.Postgres.ReplicationConnection
   alias Sequin.Postgres.ValueCaster
+  alias Sequin.ProcessMetrics
   alias Sequin.Prometheus
   alias Sequin.Replication
   alias Sequin.Repo
@@ -273,7 +278,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     state = schedule_heartbeat(state, 0)
     state = schedule_heartbeat_verification(state)
-    schedule_process_logging(0)
+    Process.send_after(self(), :process_logging, 0)
     schedule_observe_ingestion_latency()
 
     {:ok, %{state | connection_state: :disconnected}}
@@ -392,49 +397,50 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:keep_state, state}
   end
 
+  @decorate track_metrics("handle_data_sequin")
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    execute_timed(:handle_data_sequin, fn ->
-      raw_bytes_received = byte_size(msg)
-      incr_counter(:raw_bytes_received, raw_bytes_received)
-      incr_counter(:raw_bytes_received_since_last_log, raw_bytes_received)
+    raw_bytes_received = byte_size(msg)
+    ProcessMetrics.increment_throughput("raw_bytes_received", raw_bytes_received)
 
-      state = maybe_schedule_flush(state)
-      state = %{state | message_received_since_last_heartbeat: true}
+    state = maybe_schedule_flush(state)
+    state = %{state | message_received_since_last_heartbeat: true}
 
-      state =
-        Map.update!(state, :accumulated_msg_binaries, fn acc ->
-          %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, binaries: [msg | acc.binaries]}
-        end)
+    state =
+      Map.update!(state, :accumulated_msg_binaries, fn acc ->
+        %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, binaries: [msg | acc.binaries]}
+      end)
 
-      # Update bytes processed and check limits
-      with {:ok, state} <- check_limit(state, raw_bytes_received),
-           {:ok, state} <- maybe_flush_messages(state) do
-        {:keep_state, state}
-      else
-        {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
-          Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
-          {:disconnect, :payload_size_limit_exceeded, state}
+    ProcessMetrics.gauge("accumulated_msg_binaries_count", state.accumulated_msg_binaries.count)
+    ProcessMetrics.gauge("accumulated_msg_binaries_bytes", state.accumulated_msg_binaries.bytes)
 
-        {:error, %InvariantError{code: :over_system_memory_limit}} ->
-          Health.put_event(
-            state.replication_slot,
-            %Event{slug: :replication_memory_limit_exceeded, status: :info}
-          )
+    # Update bytes processed and check limits
+    with {:ok, state} <- check_limit(state, raw_bytes_received),
+         {:ok, state} <- maybe_flush_messages(state) do
+      {:keep_state, state}
+    else
+      {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
+        Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
+        {:disconnect, :payload_size_limit_exceeded, state}
 
-          Logger.warning("[SlotProcessorServer] System hit memory limit, shutting down",
-            limit: state.max_memory_bytes,
-            current_memory: state.check_memory_fn.()
-          )
+      {:error, %InvariantError{code: :over_system_memory_limit}} ->
+        Health.put_event(
+          state.replication_slot,
+          %Event{slug: :replication_memory_limit_exceeded, status: :info}
+        )
 
-          {:ok, state} = flush_messages(state)
+        Logger.warning("[SlotProcessorServer] System hit memory limit, shutting down",
+          limit: state.max_memory_bytes,
+          current_memory: state.check_memory_fn.()
+        )
 
-          if state.test_pid do
-            send(state.test_pid, {:stop_replication, state.id})
-          end
+        {:ok, state} = flush_messages(state)
 
-          {:disconnect, :over_system_memory_limit, state}
-      end
-    end)
+        if state.test_pid do
+          send(state.test_pid, {:stop_replication, state.id})
+        end
+
+        {:disconnect, :over_system_memory_limit, state}
+    end
   rescue
     e ->
       Logger.error("Error processing message: #{inspect(e)}")
@@ -457,35 +463,35 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   # The server is not asking for a reply
+  @decorate track_metrics("handle_data_keepalive")
   def handle_data(<<?k, wal_end::64, clock::64, 0>>, %State{} = state) do
     diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
     Logger.info("Received keepalive message for slot", clock: clock, wal_end: wal_end, diff_ms: diff_ms)
 
-    execute_timed(:handle_data_keepalive, fn ->
-      # Because these are <14 Postgres databases, they will not receive heartbeat messages
-      # temporarily mark them as healthy if we receive a keepalive message
-      if state.id in @slots_ids_with_old_postgres do
-        Health.put_event(
-          state.replication_slot,
-          %Health.Event{slug: :replication_heartbeat_received, status: :success}
-        )
-      end
+    # Because these are <14 Postgres databases, they will not receive heartbeat messages
+    # temporarily mark them as healthy if we receive a keepalive message
+    if state.id in @slots_ids_with_old_postgres do
+      Health.put_event(
+        state.replication_slot,
+        %Health.Event{slug: :replication_heartbeat_received, status: :success}
+      )
+    end
 
-      # Check if we should send an ack even though not requested
-      if should_send_ack?(state) do
-        Logger.info("Sending ack")
-        commit_lsn = get_commit_lsn(state, wal_end)
-        reply = ack_message(commit_lsn)
-        state = %{state | last_lsn_acked_at: Sequin.utc_now()}
-        log_keepalive_ack(commit_lsn, clock)
-        {:keep_state_and_ack, reply, state}
-      else
-        {:keep_state, state}
-      end
-    end)
+    # Check if we should send an ack even though not requested
+    if should_send_ack?(state) do
+      Logger.info("Sending ack")
+      commit_lsn = get_commit_lsn(state, wal_end)
+      reply = ack_message(commit_lsn)
+      state = %{state | last_lsn_acked_at: Sequin.utc_now()}
+      log_keepalive_ack(commit_lsn, clock)
+      {:keep_state_and_ack, reply, state}
+    else
+      {:keep_state, state}
+    end
   end
 
   # The server is asking for a reply
+  @decorate track_metrics("handle_data_keepalive")
   def handle_data(<<?k, wal_end::64, clock::64, 1>>, %State{} = state) do
     diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
 
@@ -495,13 +501,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       diff_ms: diff_ms
     )
 
-    execute_timed(:handle_data_keepalive, fn ->
-      commit_lsn = get_commit_lsn(state, wal_end)
-      reply = ack_message(commit_lsn)
-      state = %{state | last_lsn_acked_at: Sequin.utc_now()}
-      log_keepalive_ack(commit_lsn, clock)
-      {:keep_state_and_ack, reply, state}
-    end)
+    commit_lsn = get_commit_lsn(state, wal_end)
+    reply = ack_message(commit_lsn)
+    state = %{state | last_lsn_acked_at: Sequin.utc_now()}
+    log_keepalive_ack(commit_lsn, clock)
+    {:keep_state_and_ack, reply, state}
   end
 
   def handle_data(data, %State{} = state) do
@@ -510,68 +514,64 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   @impl ReplicationConnection
+  @decorate track_metrics("update_message_handler_ctx")
   def handle_call({:update_message_handler_ctx, ctx}, from, %State{} = state) do
-    execute_timed(:update_message_handler_ctx, fn ->
-      :ok = state.message_handler_module.reload_entities(ctx)
-      state = %{state | message_handler_ctx: ctx}
-      # Need to manually send reply
+    :ok = state.message_handler_module.reload_entities(ctx)
+    state = %{state | message_handler_ctx: ctx}
+    # Need to manually send reply
+    GenServer.reply(from, :ok)
+    {:keep_state, state}
+  end
+
+  @impl ReplicationConnection
+  @decorate track_metrics("monitor_message_store")
+  def handle_call({:monitor_message_store, consumer}, from, state) do
+    if Map.has_key?(state.message_store_refs, consumer.id) do
       GenServer.reply(from, :ok)
       {:keep_state, state}
-    end)
+    else
+      # Monitor just the first partition (there's always at least one) and if any crash they will all restart
+      # due to supervisor setting of :one_for_all
+      pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer.id, 0))
+      ref = Process.monitor(pid)
+      :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
+      Logger.info("Monitoring message store for consumer #{consumer.id}")
+      GenServer.reply(from, :ok)
+      {:keep_state, %{state | message_store_refs: Map.put(state.message_store_refs, consumer.id, ref)}}
+    end
   end
 
   @impl ReplicationConnection
-  def handle_call({:monitor_message_store, consumer}, from, state) do
-    execute_timed(:monitor_message_store, fn ->
-      if Map.has_key?(state.message_store_refs, consumer.id) do
+  @decorate track_metrics("demonitor_message_store")
+  def handle_call({:demonitor_message_store, consumer_id}, from, state) do
+    case state.message_store_refs[consumer_id] do
+      nil ->
+        Logger.warning("No monitor found for consumer #{consumer_id}")
         GenServer.reply(from, :ok)
         {:keep_state, state}
-      else
-        # Monitor just the first partition (there's always at least one) and if any crash they will all restart
-        # due to supervisor setting of :one_for_all
-        pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer.id, 0))
-        ref = Process.monitor(pid)
-        :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
-        Logger.info("Monitoring message store for consumer #{consumer.id}")
+
+      ref ->
+        res = Process.demonitor(ref)
+        Logger.info("Demonitored message store for consumer #{consumer_id}: (res=#{inspect(res)})")
         GenServer.reply(from, :ok)
-        {:keep_state, %{state | message_store_refs: Map.put(state.message_store_refs, consumer.id, ref)}}
-      end
-    end)
+        {:keep_state, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
+    end
   end
 
   @impl ReplicationConnection
-  def handle_call({:demonitor_message_store, consumer_id}, from, state) do
-    execute_timed(:demonitor_message_store, fn ->
-      case state.message_store_refs[consumer_id] do
-        nil ->
-          Logger.warning("No monitor found for consumer #{consumer_id}")
-          GenServer.reply(from, :ok)
-          {:keep_state, state}
-
-        ref ->
-          res = Process.demonitor(ref)
-          Logger.info("Demonitored message store for consumer #{consumer_id}: (res=#{inspect(res)})")
-          GenServer.reply(from, :ok)
-          {:keep_state, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
-      end
-    end)
-  end
-
-  @impl ReplicationConnection
+  @decorate track_metrics("flush_messages")
   def handle_info(:flush_messages, %State{} = state) do
-    execute_timed(:handle_info_flush_messages, fn ->
-      case flush_messages(state) do
-        {:ok, state} ->
-          {:keep_state, %{state | flush_timer: nil}}
+    case flush_messages(state) do
+      {:ok, state} ->
+        {:keep_state, %{state | flush_timer: nil}}
 
-        {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
-          Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
-          {:disconnect, :payload_size_limit_exceeded, %{state | flush_timer: nil}}
+      {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
+        Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
+        {:disconnect, :payload_size_limit_exceeded, %{state | flush_timer: nil}}
 
-        {:error, error} ->
-          raise error
-      end
-    end)
+      {:error, error} ->
+        raise error
+    end
   end
 
   @impl ReplicationConnection
@@ -603,72 +603,71 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   @impl ReplicationConnection
+  @decorate track_metrics("emit_heartbeat")
   def handle_info(:emit_heartbeat, %State{id: id} = state) when id in @slots_ids_with_old_postgres do
-    execute_timed(:handle_info_emit_heartbeat, fn ->
-      # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
-      # This heartbeat is not used for health, but rather to advance the slot even if tables are dormant.
-      conn = get_primary_conn(state)
+    # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
+    # This heartbeat is not used for health, but rather to advance the slot even if tables are dormant.
+    conn = get_primary_conn(state)
 
-      # We can schedule right away, as we'll not be receiving a heartbeat message
-      state = schedule_heartbeat(%{state | heartbeat_timer: nil})
+    # We can schedule right away, as we'll not be receiving a heartbeat message
+    state = schedule_heartbeat(%{state | heartbeat_timer: nil})
 
-      q =
-        "insert into sequin_heartbeat(id, updated_at) values (1, now()) on conflict (id) do update set updated_at = now()"
+    q =
+      "insert into sequin_heartbeat(id, updated_at) values (1, now()) on conflict (id) do update set updated_at = now()"
 
-      case Postgres.query(conn, q) do
-        {:ok, _res} ->
-          Logger.info("Emitted legacy heartbeat", emitted_at: Sequin.utc_now())
+    case Postgres.query(conn, q) do
+      {:ok, _res} ->
+        Logger.info("Emitted legacy heartbeat", emitted_at: Sequin.utc_now())
 
-        {:error, error} ->
-          Logger.error("Error emitting legacy heartbeat: #{inspect(error)}")
-      end
+      {:error, error} ->
+        Logger.error("Error emitting legacy heartbeat: #{inspect(error)}")
+    end
 
-      {:keep_state, state}
-    end)
+    {:keep_state, state}
   end
 
+  @decorate track_metrics("emit_heartbeat")
   def handle_info(:emit_heartbeat, %State{} = state) do
-    execute_timed(:emit_heartbeat, fn ->
-      heartbeat_id = UUID.uuid4()
-      emitted_at = Sequin.utc_now()
+    heartbeat_id = UUID.uuid4()
+    emitted_at = Sequin.utc_now()
 
-      payload =
-        Jason.encode!(%{
-          id: heartbeat_id,
-          emitted_at: DateTime.to_iso8601(emitted_at),
-          version: "1.0"
-        })
+    payload =
+      Jason.encode!(%{
+        id: heartbeat_id,
+        emitted_at: DateTime.to_iso8601(emitted_at),
+        version: "1.0"
+      })
 
-      case send_heartbeat(state, payload) do
-        :ok ->
-          Logger.info("Emitted heartbeat", heartbeat_id: heartbeat_id, emitted_at: emitted_at)
+    case send_heartbeat(state, payload) do
+      :ok ->
+        Logger.info("Emitted heartbeat", heartbeat_id: heartbeat_id, emitted_at: emitted_at)
 
-          {:keep_state,
-           %{
-             state
-             | heartbeat_timer: nil,
-               current_heartbeat_id: heartbeat_id,
-               heartbeat_emitted_at: emitted_at,
-               heartbeat_emitted_lsn: state.last_commit_lsn,
-               message_received_since_last_heartbeat: false
-           }}
+        {:keep_state,
+         %{
+           state
+           | heartbeat_timer: nil,
+             current_heartbeat_id: heartbeat_id,
+             heartbeat_emitted_at: emitted_at,
+             heartbeat_emitted_lsn: state.last_commit_lsn,
+             message_received_since_last_heartbeat: false
+         }}
 
-        {:error,
-         %Postgrex.Error{
-           postgres: %{code: :undefined_table, message: "relation \"public.sequin_logical_messages\" does not exist"}
-         }} ->
-          Logger.warning("Heartbeat table does not exist.")
-          {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(30))}
+      {:error,
+       %Postgrex.Error{
+         postgres: %{code: :undefined_table, message: "relation \"public.sequin_logical_messages\" does not exist"}
+       }} ->
+        Logger.warning("Heartbeat table does not exist.")
+        {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(30))}
 
-        {:error, error} ->
-          Logger.error("Error emitting heartbeat: #{inspect(error)}")
-          {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(10))}
-      end
-    end)
+      {:error, error} ->
+        Logger.error("Error emitting heartbeat: #{inspect(error)}")
+        {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(10))}
+    end
   end
 
   @max_time_between_heartbeat_emissions_min 5
   @max_time_between_heartbeat_emit_and_receive_min 10
+  @decorate track_metrics("verify_heartbeat")
   def handle_info(:verify_heartbeat, %State{} = state) do
     next_state = schedule_heartbeat_verification(state)
 
@@ -760,137 +759,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  @impl ReplicationConnection
-  def handle_info(:process_logging, state) do
-    info =
-      Process.info(self(), [
-        # Total memory used by process in bytes
-        :memory,
-        # Number of messages in queue
-        :message_queue_len
-      ])
-
-    last_logged_at = Process.get(:last_logged_at)
-    raw_bytes_received_since_last_log = Process.get(:raw_bytes_received_since_last_log)
-    messages_processed_since_last_log = Process.get(:messages_processed_since_last_log)
-    seconds_diff = if last_logged_at, do: DateTime.diff(Sequin.utc_now(), last_logged_at, :second), else: 0
-
-    ms_since_last_logged_at =
-      if last_logged_at, do: DateTime.diff(Sequin.utc_now(), last_logged_at, :millisecond)
-
-    {messages_per_second, raw_bytes_per_second} =
-      if is_integer(messages_processed_since_last_log) and is_integer(raw_bytes_received_since_last_log) and
-           seconds_diff > 0 do
-        {messages_processed_since_last_log / seconds_diff, raw_bytes_received_since_last_log / seconds_diff}
-      else
-        {0.0, 0.0}
-      end
-
-    Logger.info(
-      "[SlotProcessorServer] #{Float.round(messages_per_second, 1)} messages/s, #{Sequin.String.format_bytes(raw_bytes_per_second)}/s"
-    )
-
-    # Get all timing metrics from process dictionary
-    timing_metrics =
-      Process.get()
-      |> Enum.filter(fn {key, _} ->
-        key |> to_string() |> String.ends_with?("_total_ms")
-      end)
-      |> Keyword.new()
-
-    count_metrics =
-      Process.get()
-      |> Enum.filter(fn {key, _} ->
-        key |> to_string() |> String.ends_with?("_count")
-      end)
-      |> Keyword.new()
-
-    # Log all timing metrics as histograms with operation tag
-    Enum.each(timing_metrics, fn {key, value} ->
-      operation = key |> to_string() |> String.replace("_total_ms", "")
-
-      Sequin.Statsd.histogram("sequin.slot_processor.operation_time_ms", value,
-        tags: %{
-          replication_slot_id: state.replication_slot.id,
-          operation: operation
-        }
-      )
-    end)
-
-    unaccounted_ms =
-      if ms_since_last_logged_at do
-        # Calculate total accounted time
-        slot_processor_metrics =
-          MapSet.new([
-            :handle_data_total_ms,
-            :handle_data_keepalive_total_ms,
-            :update_message_handler_ctx_total_ms,
-            :monitor_message_store_total_ms,
-            :demonitor_message_store_total_ms,
-            :handle_info_emit_heartbeat_total_ms,
-            :emit_heartbeat_total_ms,
-            :flush_messages_total_ms
-          ])
-
-        total_accounted_ms =
-          Enum.reduce(timing_metrics, 0, fn {key, value}, acc ->
-            if MapSet.member?(slot_processor_metrics, key), do: acc + value, else: acc
-          end)
-
-        # Calculate unaccounted time
-        max(0, ms_since_last_logged_at - total_accounted_ms)
-      end
-
-    if unaccounted_ms do
-      # Log unaccounted time with same metric but different operation tag
-      Sequin.Statsd.histogram("sequin.slot_processor.operation_time_ms", unaccounted_ms,
-        tags: %{
-          replication_slot_id: state.replication_slot.id,
-          operation: "unaccounted"
-        }
-      )
-    end
-
-    metadata =
-      [
-        memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
-        message_queue_len: info[:message_queue_len],
-        accumulated_payload_size_bytes: state.accumulated_msg_binaries.bytes,
-        accumulated_message_count: state.accumulated_msg_binaries.count,
-        last_commit_lsn: state.last_commit_lsn,
-        low_watermark_wal_cursor_lsn: state.low_watermark_wal_cursor[:commit_lsn],
-        low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor[:commit_idx],
-        messages_processed: Process.get(:messages_processed, 0),
-        raw_bytes_received: Process.get(:raw_bytes_received, 0),
-        messages_per_second: messages_per_second,
-        raw_bytes_per_second: raw_bytes_per_second
-      ]
-      |> Keyword.merge(timing_metrics)
-      |> Keyword.merge(count_metrics)
-      |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
-
-    Logger.info("[SlotProcessorServer] Process metrics", metadata)
-
-    # Clear timing metrics after logging
-    timing_metrics
-    |> Keyword.keys()
-    |> Enum.each(&clear_counter/1)
-
-    count_metrics
-    |> Keyword.keys()
-    |> Enum.each(&clear_counter/1)
-
-    clear_counter(:messages_processed)
-    clear_counter(:messages_processed_since_last_log)
-    clear_counter(:raw_bytes_received)
-    clear_counter(:raw_bytes_received_since_last_log)
-
-    Process.put(:last_logged_at, Sequin.utc_now())
-    schedule_process_logging()
-
-    {:keep_state, state}
-  end
-
   def handle_info(:observe_ingestion_latency, %State{} = state) do
     # Check if we have an outstanding heartbeat
     if not is_nil(state.current_heartbeat_id) and not is_nil(state.heartbeat_emitted_at) do
@@ -899,6 +767,16 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     schedule_observe_ingestion_latency()
 
+    {:keep_state, state}
+  end
+
+  # Add the handle_info callback for process_logging
+  # We have to vendor this because use ReplicationConnection which does play nicely with the ProcessMetrics module
+  def handle_info(:process_logging, state) do
+    # This is imported by `use Sequin.ProcessMetrics`
+    handle_process_logging()
+
+    Process.send_after(self(), :process_logging, process_metrics_interval())
     {:keep_state, state}
   end
 
@@ -997,10 +875,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp maybe_schedule_flush(%State{flush_timer: ref} = state) when is_reference(ref) do
     state
-  end
-
-  defp schedule_process_logging(interval \\ :timer.seconds(10)) do
-    Process.send_after(self(), :process_logging, interval)
   end
 
   defp schedule_heartbeat(state, interval \\ nil)
@@ -1409,130 +1283,129 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   @spec flush_messages(State.t()) :: {:ok, State.t()} | {:error, Error.t()}
+  @decorate track_metrics("flush_messages")
   defp flush_messages(%State{} = state) do
-    execute_timed(:flush_messages, fn ->
-      if ref = state.flush_timer do
-        Process.cancel_timer(ref)
-      end
+    if ref = state.flush_timer do
+      Process.cancel_timer(ref)
+    end
 
-      state = %{state | flush_timer: nil}
+    state = %{state | flush_timer: nil}
 
-      accumulated_binares = state.accumulated_msg_binaries.binaries
-      schemas = state.schemas
+    accumulated_binares = state.accumulated_msg_binaries.binaries
+    schemas = state.schemas
 
-      # TODO: Move to an after_connect callback after we augment ReplicationConnection
+    # TODO: Move to an after_connect callback after we augment ReplicationConnection
+    Health.put_event(
+      state.replication_slot,
+      %Event{slug: :replication_connected, status: :success}
+    )
+
+    messages =
+      accumulated_binares
+      |> Enum.reverse()
+      |> Enum.with_index()
+      |> Flow.from_enumerable(max_demand: 50, min_demand: 25)
+      |> Flow.map(fn {msg, idx} ->
+        case Decoder.decode_message(msg) do
+          %type{} = msg when type in [Insert, Update, Delete] ->
+            msg = cast_message(msg, schemas)
+            {msg, idx}
+
+          msg ->
+            {msg, idx}
+        end
+      end)
+      # Merge back to single partition - always use 1 stage to ensure ordering
+      |> Flow.partition(stages: 1)
+      # Sort by original index
+      |> Enum.sort_by(&elem(&1, 1))
+      # Extract just the messages
+      |> Enum.map(&elem(&1, 0))
+
+    if Enum.any?(messages, &(not match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, &1))) do
+      # A replication message is *their* message(s), not our message.
       Health.put_event(
         state.replication_slot,
-        %Event{slug: :replication_connected, status: :success}
+        %Event{slug: :replication_message_processed, status: :success}
       )
+    end
 
-      messages =
-        accumulated_binares
-        |> Enum.reverse()
-        |> Enum.with_index()
-        |> Flow.from_enumerable(max_demand: 50, min_demand: 25)
-        |> Flow.map(fn {msg, idx} ->
-          case Decoder.decode_message(msg) do
-            %type{} = msg when type in [Insert, Update, Delete] ->
-              msg = cast_message(msg, schemas)
-              {msg, idx}
-
-            msg ->
-              {msg, idx}
-          end
-        end)
-        # Merge back to single partition - always use 1 stage to ensure ordering
-        |> Flow.partition(stages: 1)
-        # Sort by original index
-        |> Enum.sort_by(&elem(&1, 1))
-        # Extract just the messages
-        |> Enum.map(&elem(&1, 0))
-
-      if Enum.any?(messages, &(not match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, &1))) do
-        # A replication message is *their* message(s), not our message.
-        Health.put_event(
-          state.replication_slot,
-          %Event{slug: :replication_message_processed, status: :success}
-        )
-      end
-
-      {state, messages} =
-        Enum.reduce(messages, {state, []}, fn msg, {state, messages} ->
-          case process_message(state, msg) do
-            {%State{} = state, %Message{} = message} ->
-              if skip_message?(message, state) do
-                {state, messages}
-              else
-                {state, [message | messages]}
-              end
-
-            %State{} = state ->
+    {state, messages} =
+      Enum.reduce(messages, {state, []}, fn msg, {state, messages} ->
+        case process_message(state, msg) do
+          {%State{} = state, %Message{} = message} ->
+            if skip_message?(message, state) do
               {state, messages}
-          end
-        end)
-
-      last_message = List.first(messages)
-      messages = Enum.reverse(messages)
-
-      count = length(messages)
-      incr_counter(:messages_processed, count)
-      incr_counter(:messages_processed_since_last_log, count)
-
-      # Flush accumulated messages
-      # Temp: Do this here, as handle_messages call is going to become async
-      state.message_handler_module.before_handle_messages(state.message_handler_ctx, messages)
-
-      {time_ms, res} =
-        :timer.tc(state.message_handler_module, :handle_messages, [state.message_handler_ctx, messages], :millisecond)
-
-      state.backfill_watermark_messages
-      |> Enum.reverse()
-      |> Enum.each(fn %LogicalMessage{} = msg ->
-        lsn = Postgres.lsn_to_int(msg.lsn)
-        state.message_handler_module.handle_logical_message(state.message_handler_ctx, lsn, msg)
-      end)
-
-      if time_ms > 100 do
-        Logger.warning("[SlotProcessorServer] Flushed messages took longer than 100ms",
-          duration_ms: time_ms,
-          message_count: count
-        )
-      end
-
-      case res do
-        :ok ->
-          Prometheus.increment_messages_ingested(state.replication_slot.id, state.replication_slot.slot_name, count)
-
-          if state.test_pid do
-            state.message_handler_module.flush_messages(state.message_handler_ctx)
-            send(state.test_pid, {__MODULE__, :flush_messages})
-          end
-
-          last_flushed_wal_cursor =
-            if last_message do
-              %Message{commit_lsn: commit_lsn, commit_idx: commit_idx} = last_message
-
-              %{commit_lsn: commit_lsn, commit_idx: commit_idx}
             else
-              state.last_flushed_wal_cursor
+              {state, [message | messages]}
             end
 
-          state = %{
-            state
-            | accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []},
-              last_flushed_wal_cursor: last_flushed_wal_cursor,
-              backfill_watermark_messages: []
-          }
+          %State{} = state ->
+            {state, messages}
+        end
+      end)
 
-          {:ok, state}
+    last_message = List.first(messages)
+    messages = Enum.reverse(messages)
 
-        {:error, %InvariantError{code: :payload_size_limit_exceeded} = error} ->
-          {:error, error}
+    count = length(messages)
+    ProcessMetrics.increment_throughput("messages_processed", count)
 
-        {:error, error} ->
-          raise error
-      end
+    # Flush accumulated messages
+    # Temp: Do this here, as handle_messages call is going to become async
+    state.message_handler_module.before_handle_messages(state.message_handler_ctx, messages)
+
+    {time_ms, res} =
+      :timer.tc(state.message_handler_module, :handle_messages, [state.message_handler_ctx, messages], :millisecond)
+
+    state.backfill_watermark_messages
+    |> Enum.reverse()
+    |> Enum.each(fn %LogicalMessage{} = msg ->
+      lsn = Postgres.lsn_to_int(msg.lsn)
+      state.message_handler_module.handle_logical_message(state.message_handler_ctx, lsn, msg)
     end)
+
+    if time_ms > 100 do
+      Logger.warning("[SlotProcessorServer] Flushed messages took longer than 100ms",
+        duration_ms: time_ms,
+        message_count: count
+      )
+    end
+
+    case res do
+      :ok ->
+        ProcessMetrics.increment_throughput("messages_ingested", count)
+        Prometheus.increment_messages_ingested(state.replication_slot.id, state.replication_slot.slot_name, count)
+
+        if state.test_pid do
+          state.message_handler_module.flush_messages(state.message_handler_ctx)
+          send(state.test_pid, {__MODULE__, :flush_messages})
+        end
+
+        last_flushed_wal_cursor =
+          if last_message do
+            %Message{commit_lsn: commit_lsn, commit_idx: commit_idx} = last_message
+
+            %{commit_lsn: commit_lsn, commit_idx: commit_idx}
+          else
+            state.last_flushed_wal_cursor
+          end
+
+        state = %{
+          state
+          | accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []},
+            last_flushed_wal_cursor: last_flushed_wal_cursor,
+            backfill_watermark_messages: []
+        }
+
+        {:ok, state}
+
+      {:error, %InvariantError{code: :payload_size_limit_exceeded} = error} ->
+        {:error, error}
+
+      {:error, error} ->
+        raise error
+    end
   end
 
   defp default_safe_wal_cursor_fn(%State{last_commit_lsn: nil}),
@@ -1732,22 +1605,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp default_max_memory_bytes do
     Application.get_env(:sequin, :max_memory_bytes)
-  end
-
-  defp incr_counter(name, amount \\ 1) do
-    current = Process.get(name, 0)
-    Process.put(name, current + amount)
-  end
-
-  defp clear_counter(name) do
-    Process.delete(name)
-  end
-
-  defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun, :millisecond)
-    incr_counter(:"#{name}_total_ms", time)
-    incr_counter(:"#{name}_count")
-    result
   end
 
   # Helper function to determine if we should send an ack

@@ -93,5 +93,16 @@ if Mix.env() == :test do
       |> TestEventLogPartitioned.changeset(attrs)
       |> repo.insert!()
     end
+
+    @spec update_test_event_log_partitioned!(map(), [map()], Keyword.t()) :: [map()]
+    def update_test_event_log_partitioned!(%TestEventLogPartitioned{} = event, attrs, opts \\ []) do
+      repo = Keyword.get(opts, :repo, Repo)
+
+      for attr <- attrs do
+        event
+        |> TestEventLogPartitioned.changeset(attr)
+        |> repo.update!()
+      end
+    end
   end
 end

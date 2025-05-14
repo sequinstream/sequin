@@ -806,15 +806,27 @@ defmodule Sequin.Runtime.SlotMessageStore do
       )
     end
 
+    count_metrics =
+      Process.get()
+      |> Enum.filter(fn {key, _} ->
+        key |> to_string() |> String.ends_with?("_count")
+      end)
+      |> Keyword.new()
+
     metadata =
       metadata
       |> Keyword.merge(timing_metrics)
+      |> Keyword.merge(count_metrics)
       |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
 
     Logger.info("[SlotMessageStore] Process metrics", metadata)
 
     # Clear timing metrics after logging
     timing_metrics
+    |> Keyword.keys()
+    |> Enum.each(&clear_counter/1)
+
+    count_metrics
     |> Keyword.keys()
     |> Enum.each(&clear_counter/1)
 
@@ -837,6 +849,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   def handle_info(:flush_messages, %State{} = state) do
     Logger.info("[SlotMessageStore] Checking for messages to flush")
+    start_time = System.monotonic_time(:millisecond)
 
     batch_size = flush_batch_size()
     messages = State.messages_to_flush(state, batch_size)
@@ -858,10 +871,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
           send(state.test_pid, {:flush_messages_count, length(messages)})
         end
 
+        end_time = System.monotonic_time(:millisecond)
+        duration_ms = end_time - start_time
+
         Logger.info(
           "[SlotMessageStore] Flushed #{length(messages)} old messages to allow slot advancement",
           consumer_id: state.consumer_id,
-          partition: state.partition
+          partition: state.partition,
+          duration_ms: duration_ms
         )
 
         state
@@ -954,12 +971,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
   defp upsert_messages(%State{}, []), do: :ok
 
   defp upsert_messages(%State{} = state, messages) do
-    messages
-    # This value is calculated based on the number of parameters in our consumer_events/consumer_records
-    # upserts and the Postgres limit of 65535 parameters per query.
-    |> Enum.chunk_every(2_000)
-    |> Enum.each(fn chunk ->
-      {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, chunk)
+    execute_timed(:upsert_messages, fn ->
+      messages
+      # This value is calculated based on the number of parameters in our consumer_events/consumer_records
+      # upserts and the Postgres limit of 65535 parameters per query.
+      |> Enum.chunk_every(2_000)
+      |> Enum.each(fn chunk ->
+        {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, chunk)
+      end)
     end)
   end
 
@@ -983,7 +1002,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end
   end
 
-  defp incr_counter(name, amount) do
+  defp incr_counter(name, amount \\ 1) do
     current = Process.get(name, 0)
     Process.put(name, current + amount)
   end
@@ -995,6 +1014,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   defp execute_timed(name, fun) do
     {time, result} = :timer.tc(fun, :millisecond)
     incr_counter(:"#{name}_total_ms", time)
+    incr_counter(:"#{name}_count")
     result
   end
 

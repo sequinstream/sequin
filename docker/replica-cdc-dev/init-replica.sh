@@ -26,7 +26,17 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE SUBSCRIPTION sequin_sub
     CONNECTION 'host=postgres-primary port=5432 user=replicator password=replicator_password dbname=postgres'
     PUBLICATION sequin_pub
-    WITH (copy_data = true);
+    WITH (copy_data = true, create_slot = true, enabled = true, connect = true, slot_name = 'sequin_sub', disable_on_error = false);
+EOSQL
+
+# Allow time for the subscription to be established
+sleep 5
+
+# Restart subscription if needed
+psql -v ON_ERROR_STOP=0 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+    -- Restart subscription if not active
+    ALTER SUBSCRIPTION sequin_sub DISABLE;
+    ALTER SUBSCRIPTION sequin_sub ENABLE;
 EOSQL
 
 # Wait for initial data copy to complete

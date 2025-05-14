@@ -433,7 +433,7 @@ defmodule Sequin.Databases do
 
   def test_maybe_replica(%PostgresDatabase{} = db, db_primary) do
     cond do
-      not replica?(db) ->
+      not is_physical_replica?(db) ->
         :ok
 
       is_nil(db_primary) ->
@@ -627,18 +627,16 @@ defmodule Sequin.Databases do
     end
   end
 
-  @spec replica?(%PostgresDatabase{}) :: boolean()
-  def replica?(%PostgresDatabase{} = db) do
+  @spec is_physical_replica?(%PostgresDatabase{}) :: boolean()
+  def is_physical_replica?(%PostgresDatabase{} = db) do
     with_uncached_connection(db, fn conn ->
       query = """
-        SELECT
-          pg_is_in_recovery() AS is_physical_replica,
-          EXISTS (SELECT 1 FROM pg_subscription) AS has_logical_replication
+        SELECT pg_is_in_recovery() AS is_physical_replica
       """
 
       case Postgres.query(conn, query, []) do
-        {:ok, %{rows: [[is_physical, has_logical]]}} ->
-          is_physical or has_logical
+        {:ok, %{rows: [[is_physical]]}} ->
+          is_physical
 
         _ ->
           false

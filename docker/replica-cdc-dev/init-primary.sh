@@ -27,12 +27,17 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     CREATE PUBLICATION sequin_pub FOR TABLE test_table;
     
     -- Drop existing replication slot if it exists
-    SELECT pg_drop_replication_slot('sequin_slot') WHERE EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = 'sequin_slot');
+    SELECT pg_drop_replication_slot(slot_name)
+    FROM pg_replication_slots
+    WHERE slot_name LIKE 'pg_%_sync_%' OR slot_name = 'sequin_slot';
     
-    -- Create replication slot
+    -- Create primary replication slot
     SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
 EOSQL
 
 # Configure pg_hba.conf to allow replication connections
 echo "host replication replicator all md5" >> "$PGDATA/pg_hba.conf"
-echo "host all replicator all md5" >> "$PGDATA/pg_hba.conf" 
+echo "host all replicator all md5" >> "$PGDATA/pg_hba.conf"
+
+# Set synchronous_commit to local to improve performance
+echo "synchronous_commit = local" >> "$PGDATA/postgresql.conf"

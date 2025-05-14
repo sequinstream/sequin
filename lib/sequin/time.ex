@@ -154,4 +154,63 @@ defmodule Sequin.Time do
   defp convert_to_ms(num, "ms"), do: num
   defp convert_to_ms(num, "s"), do: num * 1000
   defp convert_to_ms(num, "m"), do: num * 60 * 1000
+
+  @doc """
+  Calculate the difference in milliseconds between two timestamps.
+
+  ## Parameters
+    - start: The starting timestamp
+    - finish: The ending timestamp (defaults to now)
+
+  ## Examples
+      iex> start = ~N[2023-01-01 00:00:00]
+      iex> finish = ~N[2023-01-01 00:00:01]
+      iex> Sequin.Time.ms_since(start, finish)
+      1000
+  """
+  @spec ms_since(DateTime.t() | NaiveDateTime.t(), DateTime.t() | NaiveDateTime.t() | nil) :: integer()
+  def ms_since(start, finish \\ nil)
+
+  def ms_since(%DateTime{} = start, %DateTime{} = finish) do
+    DateTime.diff(finish, start, :millisecond)
+  end
+
+  def ms_since(%DateTime{} = start, nil) do
+    ms_since(start, DateTime.utc_now())
+  end
+
+  def ms_since(%NaiveDateTime{} = start, %NaiveDateTime{} = finish) do
+    NaiveDateTime.diff(finish, start, :millisecond)
+  end
+
+  def ms_since(%NaiveDateTime{} = start, nil) do
+    ms_since(start, NaiveDateTime.utc_now())
+  end
+
+  @doc """
+  Convert microseconds since 2000-01-01 to milliseconds difference from now.
+
+  This is primarily used for Postgres replication protocol timestamps.
+
+  ## Parameters
+    - microseconds_since_2000: Microseconds since 2000-01-01 00:00:00 UTC
+
+  ## Returns
+    Millisecond difference between the timestamp and now (positive if timestamp is in future)
+  """
+  @spec microseconds_since_2000_to_ms_since_now(integer()) :: integer()
+  def microseconds_since_2000_to_ms_since_now(microseconds_since_2000) do
+    # Define the epoch (2000-01-01 midnight in UTC)
+    {:ok, epoch_2000} = NaiveDateTime.new(2000, 1, 1, 0, 0, 0)
+    epoch_2000_in_microseconds = NaiveDateTime.diff(epoch_2000, ~N[1970-01-01 00:00:00], :microsecond)
+
+    # Convert microseconds since 2000 to microseconds since Unix epoch
+    unix_microseconds = epoch_2000_in_microseconds + microseconds_since_2000
+
+    # Convert to DateTime
+    timestamp = DateTime.from_unix!(unix_microseconds, :microsecond)
+
+    # Calculate difference in milliseconds
+    ms_since(timestamp, DateTime.utc_now())
+  end
 end

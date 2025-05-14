@@ -39,6 +39,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Runtime.PostgresRelationHashCache
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.Time
   alias Sequin.Workers.CreateReplicationSlotWorker
 
   require Logger
@@ -456,7 +457,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   # The server is not asking for a reply
-  def handle_data(<<?k, wal_end::64, _clock::64, 0>>, %State{} = state) do
+  def handle_data(<<?k, wal_end::64, clock::64, 0>>, %State{} = state) do
+    diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
+    Logger.info("Received keepalive message for slot", clock: clock, wal_end: wal_end, diff_ms: diff_ms)
+
     execute_timed(:handle_data_keepalive, fn ->
       # Because these are <14 Postgres databases, they will not receive heartbeat messages
       # temporarily mark them as healthy if we receive a keepalive message
@@ -469,9 +473,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       # Check if we should send an ack even though not requested
       if should_send_ack?(state) do
+        Logger.info("Sending ack")
         commit_lsn = get_commit_lsn(state, wal_end)
         reply = ack_message(commit_lsn)
         state = %{state | last_lsn_acked_at: Sequin.utc_now()}
+        log_keepalive_ack(commit_lsn, clock)
         {:keep_state_and_ack, reply, state}
       else
         {:keep_state, state}
@@ -480,11 +486,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   # The server is asking for a reply
-  def handle_data(<<?k, wal_end::64, _clock::64, 1>>, %State{} = state) do
+  def handle_data(<<?k, wal_end::64, clock::64, 1>>, %State{} = state) do
+    diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
+
+    Logger.info("Received keepalive message for slot (expecting reply)",
+      clock: clock,
+      wal_end: wal_end,
+      diff_ms: diff_ms
+    )
+
     execute_timed(:handle_data_keepalive, fn ->
       commit_lsn = get_commit_lsn(state, wal_end)
       reply = ack_message(commit_lsn)
       state = %{state | last_lsn_acked_at: Sequin.utc_now()}
+      log_keepalive_ack(commit_lsn, clock)
       {:keep_state_and_ack, reply, state}
     end)
   end
@@ -1782,5 +1797,17 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp observe_ingestion_latency(%State{} = state, ts) do
     latency_us = DateTime.diff(Sequin.utc_now(), ts, :microsecond)
     Prometheus.observe_ingestion_latency(state.replication_slot.id, state.replication_slot.slot_name, latency_us)
+  end
+
+  defp log_keepalive_ack(commit_lsn, clock) do
+    diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
+    message = "Responded to keepalive ack in #{diff_ms}ms"
+    tags = [commit_lsn: commit_lsn, diff_ms: diff_ms]
+
+    case diff_ms do
+      diff_ms when diff_ms < 100 -> Logger.info(message, tags)
+      diff_ms when diff_ms < 1000 -> Logger.warning(message, tags)
+      _ -> Logger.error(message, tags)
+    end
   end
 end

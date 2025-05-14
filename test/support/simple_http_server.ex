@@ -8,7 +8,7 @@ defmodule Sequin.TestSupport.SimpleHttpServer do
 
   require Logger
 
-  @port Application.compile_env(:sequin, :webhook_test_port, 8888)
+  @port Application.compile_env(:sequin, :webhook_test_port)
   @listen_options [:binary, packet: :raw, active: false, reuseaddr: true]
   @response """
   HTTP/1.1 204 No Content\r

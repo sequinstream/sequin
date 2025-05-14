@@ -382,7 +382,12 @@ defmodule Sequin.ProcessMetrics do
     # Add unaccounted percentage
     percentages =
       if interval_ms && interval_ms > 0 && unaccounted_ms do
-        Keyword.put(percentages, :unaccounted_percent, Float.round(unaccounted_ms / interval_ms * 100, 2))
+        unaccounted_percent = Float.round(unaccounted_ms / interval_ms * 100, 2)
+        busy_percent = Float.round(100 - unaccounted_percent, 2)
+
+        percentages
+        |> Keyword.put(:unaccounted_percent, unaccounted_percent)
+        |> Keyword.put(:busy_percent, busy_percent)
       else
         percentages
       end
@@ -415,7 +420,16 @@ defmodule Sequin.ProcessMetrics do
         metadata
       end
 
-    Logger.info("#{logger_prefix} Process metrics", metadata)
+    case metadata[:busy_percent] do
+      nil ->
+        Logger.info("#{logger_prefix} Process metrics", metadata)
+
+      busy_percent when busy_percent < 20 ->
+        Logger.info("#{logger_prefix} Process metrics (#{busy_percent}% busy)", metadata)
+
+      busy_percent ->
+        Logger.warning("#{logger_prefix} Process metrics (#{busy_percent}% busy)", metadata)
+    end
 
     # Clear metrics after logging
     put_metrics(@default_state)

@@ -848,15 +848,15 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     test "returns messages in order", %{state: state} do
       state = %{state | message_age_before_flush_ms: 0}
 
-      msgs = [
-        ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0),
-        ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 1),
-        ConsumersFactory.consumer_message(commit_lsn: 2, commit_idx: 3),
-        ConsumersFactory.consumer_message(commit_lsn: 4, commit_idx: 0),
-        ConsumersFactory.consumer_message(commit_lsn: 8, commit_idx: 8),
-        ConsumersFactory.consumer_message(commit_lsn: 9, commit_idx: 0)
-      ]
-      |> Enum.shuffle()
+      msgs =
+        Enum.shuffle([
+          ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0),
+          ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 1),
+          ConsumersFactory.consumer_message(commit_lsn: 2, commit_idx: 3),
+          ConsumersFactory.consumer_message(commit_lsn: 4, commit_idx: 0),
+          ConsumersFactory.consumer_message(commit_lsn: 8, commit_idx: 8),
+          ConsumersFactory.consumer_message(commit_lsn: 9, commit_idx: 0)
+        ])
 
       {:ok, state} = State.put_messages(state, msgs)
       sorted = Enum.sort_by(msgs, fn m -> {m.commit_lsn, m.commit_idx} end)

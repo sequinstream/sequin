@@ -586,21 +586,17 @@ defmodule Sequin.SlotMessageStoreTest do
 
       refute_receive {:flush_messages_done, _}, 100
     end
-
   end
 
   describe "SlotMessageStore flush batching behavior" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1)
 
-      sup = start_supervised!(
-        {SlotMessageStoreSupervisor,
-         consumer: consumer,
-         test_pid: self(),
-         flush_interval: 999999999,
-         message_age_before_flush_ms: 0
-        }
-      )
+      sup =
+        start_supervised!(
+          {SlotMessageStoreSupervisor,
+           consumer: consumer, test_pid: self(), flush_interval: 999_999_999, message_age_before_flush_ms: 0}
+        )
 
       [pid] = for {_name, pid, _, _} <- Supervisor.which_children(sup), do: pid
 
@@ -615,7 +611,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Create a message that will be old enough to flush
       messages =
-        for _ <- 1..3*8 do
+        for _ <- 1..(3 * 8) do
           ConsumersFactory.consumer_message(
             message_kind: consumer.message_kind,
             consumer_id: consumer.id
@@ -627,7 +623,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Initially we have one unpersisted commit tuple
       assert [_] =
-        SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+               SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
 
       send(pid, :flush_messages)
 

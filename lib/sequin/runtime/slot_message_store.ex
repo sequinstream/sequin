@@ -838,7 +838,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   def handle_info(:flush_messages, %State{} = state) do
     Logger.info("[SlotMessageStore] Checking for messages to flush")
 
-    batch_size = flush_batch_bize()
+    batch_size = flush_batch_size()
     messages = State.messages_to_flush(state, batch_size)
 
     state =
@@ -855,6 +855,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
         if state.test_pid do
           send(state.test_pid, {:flush_messages_done, state.consumer_id})
+          send(state.test_pid, {:flush_messages_count, length(messages)})
         end
 
         Logger.info(
@@ -1026,9 +1027,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @default_flush_batch_size 2000
-  defp flush_batch_size() do
-    conf = Application.get_env(:sequin, SlotMessageStore, [])
+  defp flush_batch_size do
+    conf = Application.get_env(:sequin, :slot_message_store, [])
     conf[:flush_batch_size] || @default_flush_batch_size
   end
-
 end

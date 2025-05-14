@@ -507,12 +507,13 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   due to slow group processing or sequin stream syncs.)
   """
   @spec messages_to_flush(State.t(), non_neg_integer()) :: list(message())
-  def messages_to_flush(%State{} = state, limit) do
+  def messages_to_flush(%State{} = state, limit \\ 2000) do
     now = Sequin.utc_now()
     age_threshold = DateTime.add(now, -state.message_age_before_flush_ms, :millisecond)
 
     # Find first N messages that are older than threshold and not persisted
-    sorted_message_stream(state)
+    state
+    |> sorted_message_stream()
     |> Stream.reject(&is_message_persisted?(state, &1))
     |> Stream.filter(&DateTime.before?(&1.ingested_at, age_threshold))
     |> Enum.take(limit)

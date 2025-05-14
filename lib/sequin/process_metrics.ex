@@ -125,7 +125,7 @@ defmodule Sequin.ProcessMetrics do
       end
 
       def handle_info(:start, state) do
-        Process.send_after(self(), :process_logging, process_metrics_interval())
+        Process.send_after(self(), :process_logging, 0)
         Sequin.ProcessMetrics.no_reply(state)
       end
 
@@ -442,16 +442,7 @@ defmodule Sequin.ProcessMetrics do
   # Private functions
 
   defp schedule_process_logging(interval) do
-    # If this is the first time we're scheduling, set the interval to 0
-    # to log immediately after startup
-    actual_interval =
-      if Process.get(@metrics_last_logged_at_key) == nil do
-        0
-      else
-        interval
-      end
-
-    Process.send_after(self(), :process_logging, actual_interval)
+    Process.send_after(self(), :process_logging, interval)
   end
 end
 

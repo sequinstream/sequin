@@ -29,6 +29,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   use GenServer
 
+  use Sequin.ProcessMetrics,
+    metric_prefix: "sequin.slot_message_store"
+
+  use Sequin.ProcessMetrics.Decorator
+
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
@@ -71,7 +76,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   Should raise so SlotProcessorServer cannot continue if this fails.
   """
-
   @spec put_messages(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok | {:error, Error.t()}
   def put_messages(consumer, messages) do
     messages
@@ -348,6 +352,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
+  @decorate track_metrics("peek_message")
   def peek_message(consumer, ack_id) do
     not_found = {:error, Error.not_found(entity: :message, params: %{ack_id: ack_id})}
 
@@ -367,6 +372,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Set the monitor reference for the SlotMessageStore into State
   """
+  @decorate track_metrics("set_monitor_ref")
   @spec set_monitor_ref(SinkConsumer.t(), reference()) :: :ok
   def set_monitor_ref(consumer, ref) do
     consumer
@@ -408,6 +414,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
       visibility_check_interval: Keyword.get(opts, :visibility_check_interval, :timer.minutes(5)),
       max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2))
     }
+
+    Sequin.ProcessMetrics.start()
+    Sequin.ProcessMetrics.metadata(%{consumer_id: consumer_id, partition: partition})
 
     {:ok, state, {:continue, :init}}
   end
@@ -453,7 +462,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
       |> put_max_memory_bytes()
       |> State.put_persisted_messages(persisted_messages)
 
-    schedule_process_logging(0)
+    Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
+
     schedule_max_memory_check()
     schedule_flush_check(state.flush_interval)
     schedule_visibility_check(state.visibility_check_interval)
@@ -461,374 +471,267 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @impl GenServer
+  @decorate track_metrics("put_messages")
   def handle_call({:put_messages, messages}, from, %State{} = state) do
-    execute_timed(:put_messages, fn ->
-      # Validate first
-      case State.validate_put_messages(state, messages) do
-        {:ok, _incoming_payload_size_bytes} ->
-          # Reply early since validation passed. This frees up the SlotProcessorServer to continue
-          # calling other SMSs, accumulating messages, etc.
-          GenServer.reply(from, :ok)
+    # Validate first
+    case State.validate_put_messages(state, messages) do
+      {:ok, _incoming_payload_size_bytes} ->
+        # Reply early since validation passed. This frees up the SlotProcessorServer to continue
+        # calling other SMSs, accumulating messages, etc.
+        GenServer.reply(from, :ok)
 
-          execute_timed(:put_messages_after_reply, fn ->
-            now = Sequin.utc_now()
+        {:noreply, put_messages_after_reply(state, messages)}
 
-            messages =
-              messages
-              |> Stream.reject(&State.message_exists?(state, &1))
-              |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
-              |> Enum.to_list()
+      {:error, error} ->
+        if state.consumer.load_shedding_policy == :discard_on_full do
+          Health.put_event(state.consumer, %Event{slug: :load_shedding_policy_discarded, status: :fail})
 
-            {to_persist, to_put} =
-              if state.consumer.status == :disabled do
-                {messages, []}
-              else
-                Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
-              end
-
-            {:ok, state} = State.put_messages(state, to_put)
-
-            :ok = upsert_messages(state, to_persist)
-            state = State.put_persisted_messages(state, to_persist)
-
-            Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
-            :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
-
-            if state.test_pid do
-              send(state.test_pid, {:put_messages_done, state.consumer.id})
-            end
-
-            {:noreply, state}
-          end)
-
-        {:error, error} ->
-          if state.consumer.load_shedding_policy == :discard_on_full do
-            Health.put_event(state.consumer, %Event{slug: :load_shedding_policy_discarded, status: :fail})
-
-            {:reply, :ok, state}
-          else
-            # Reply with error if validation fails
-            {:reply, {:error, error}, state}
-          end
-      end
-    end)
+          {:reply, :ok, state}
+        else
+          # Reply with error if validation fails
+          {:reply, {:error, error}, state}
+        end
+    end
   end
 
   @impl GenServer
+  @decorate track_metrics("put_table_reader_batch")
   def handle_call({:put_table_reader_batch, messages, batch_id}, _from, %State{} = state) do
-    execute_timed(:put_table_reader_batch, fn ->
-      now = Sequin.utc_now()
+    now = Sequin.utc_now()
 
-      messages = Enum.map(messages, &%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
+    messages = Enum.map(messages, &%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
 
-      {to_persist, to_put} = Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
+    {to_persist, to_put} = Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
 
-      with {:ok, state} <- State.put_table_reader_batch(state, to_put, batch_id),
-           :ok <- upsert_messages(state, to_persist) do
-        state = State.put_persisted_messages(state, to_persist)
-        Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
-        :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
+    with {:ok, state} <- State.put_table_reader_batch(state, to_put, batch_id),
+         :ok <- upsert_messages(state, to_persist) do
+      state = State.put_persisted_messages(state, to_persist)
+      Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
+      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
 
-        {:reply, :ok, state}
-      else
-        error ->
-          {:reply, error, state}
-      end
-    end)
+      Sequin.ProcessMetrics.increment_throughput("table_reader_batch_messages", length(messages))
+      Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
+      {:reply, :ok, state}
+    else
+      error ->
+        {:reply, error, state}
+    end
   end
 
-  @impl GenServer
+  @decorate track_metrics("unpersisted_table_reader_batch_ids")
   def handle_call(:unpersisted_table_reader_batch_ids, _from, %State{} = state) do
     {:reply, {:ok, State.unpersisted_table_reader_batch_ids(state)}, state}
   end
 
+  @decorate track_metrics("produce")
   def handle_call({:produce, count, producer_pid}, from, %State{last_consumer_producer_pid: last_producer_pid} = state)
       when not is_nil(last_producer_pid) and last_producer_pid != producer_pid do
-    execute_timed(:produce, fn ->
-      # Producer has changed, so we need to reset the state
-      {state, _count} = State.nack_produced_messages(state)
-      handle_call({:produce, count, producer_pid}, from, %{state | last_consumer_producer_pid: producer_pid})
-    end)
+    # Producer has changed, so we need to reset the state
+    {state, _count} = State.nack_produced_messages(state)
+    handle_call({:produce, count, producer_pid}, from, %{state | last_consumer_producer_pid: producer_pid})
   end
 
+  @decorate track_metrics("produce")
   def handle_call({:produce, count, producer_pid}, _from, %State{} = state) do
-    execute_timed(:produce, fn ->
-      {time, {messages, state}} = :timer.tc(State, :produce_messages, [state, count], :millisecond)
+    {time, {messages, state}} = :timer.tc(State, :produce_messages, [state, count], :millisecond)
 
-      messages
-      |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
-      |> then(&MessageLedgers.wal_cursors_reached_checkpoint(state.consumer_id, "slot_message_store.produce", &1))
+    messages
+    |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
+    |> then(&MessageLedgers.wal_cursors_reached_checkpoint(state.consumer_id, "slot_message_store.produce", &1))
 
-      if time > @min_log_time_ms do
-        Logger.warning(
-          "[SlotMessageStore] Produce messages took longer than expected",
-          count: length(messages),
-          duration_ms: time,
-          message_count: map_size(state.messages)
-        )
-      end
+    if time > @min_log_time_ms do
+      Logger.warning(
+        "[SlotMessageStore] Produce messages took longer than expected",
+        count: length(messages),
+        duration_ms: time,
+        message_count: map_size(state.messages)
+      )
+    end
 
-      state = %{state | last_consumer_producer_pid: producer_pid}
+    state = %{state | last_consumer_producer_pid: producer_pid}
 
-      if length(messages) > 0 do
-        Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
-        {:reply, {:ok, messages}, state}
-      else
-        :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
-        {:reply, {:ok, []}, state, :hibernate}
-      end
-    end)
+    Sequin.ProcessMetrics.gauge("message_count", map_size(state.messages))
+    Sequin.ProcessMetrics.gauge("produced_message_groups", map_size(state.produced_message_groups))
+
+    if length(messages) > 0 do
+      Sequin.ProcessMetrics.increment_throughput("messages_produced", length(messages))
+      Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
+      {:reply, {:ok, messages}, state}
+    else
+      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
+      {:reply, {:ok, []}, state, :hibernate}
+    end
   end
 
+  @decorate track_metrics("messages_succeeded")
   def handle_call({:messages_succeeded, [], _return_messages?}, _from, state) do
     {:reply, {:ok, 0}, state}
   end
 
+  @decorate track_metrics("messages_succeeded")
   def handle_call({:messages_succeeded, ack_ids, return_messages?}, _from, state) do
     prev_state = state
 
-    execute_timed(:messages_succeeded, fn ->
-      cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
+    cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
 
-      persisted_messages_to_drop =
-        state
-        |> State.peek_messages(cursor_tuples)
-        |> Enum.filter(&State.is_message_persisted?(state, &1))
+    persisted_messages_to_drop =
+      state
+      |> State.peek_messages(cursor_tuples)
+      |> Enum.filter(&State.is_message_persisted?(state, &1))
 
-      {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
+    {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
-      :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
+    :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
-      maybe_finish_table_reader_batch(prev_state, state)
+    maybe_finish_table_reader_batch(prev_state, state)
 
-      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
+    :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
 
-      if return_messages? do
-        {:reply, {:ok, dropped_messages}, state}
-      else
-        # Optionally, avoid returning full messages (more CPU/memory intensive)
-        {:reply, {:ok, length(dropped_messages)}, state}
-      end
-    end)
+    Sequin.ProcessMetrics.increment_throughput("messages_succeeded", length(dropped_messages))
+    Sequin.ProcessMetrics.gauge("message_count", map_size(state.messages))
+
+    if return_messages? do
+      {:reply, {:ok, dropped_messages}, state}
+    else
+      # Optionally, avoid returning full messages (more CPU/memory intensive)
+      {:reply, {:ok, length(dropped_messages)}, state}
+    end
   end
 
+  @decorate track_metrics("messages_already_succeeded")
   def handle_call({:messages_already_succeeded, []}, _from, state) do
     {:reply, {:ok, 0}, state}
   end
 
+  @decorate track_metrics("messages_already_succeeded")
   def handle_call({:messages_already_succeeded, ack_ids}, _from, state) do
     prev_state = state
 
-    execute_timed(:messages_already_succeeded, fn ->
-      cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
+    cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
 
-      persisted_messages_to_drop =
-        state
-        |> State.peek_messages(cursor_tuples)
-        |> Enum.filter(&State.is_message_persisted?(state, &1))
+    persisted_messages_to_drop =
+      state
+      |> State.peek_messages(cursor_tuples)
+      |> Enum.filter(&State.is_message_persisted?(state, &1))
 
-      {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
+    {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
-      count = length(dropped_messages)
+    count = length(dropped_messages)
 
-      :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
+    :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
-      maybe_finish_table_reader_batch(prev_state, state)
+    maybe_finish_table_reader_batch(prev_state, state)
 
-      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
+    :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
 
-      {:reply, {:ok, count}, state}
-    end)
+    Sequin.ProcessMetrics.increment_throughput("messages_already_succeeded", count)
+    Sequin.ProcessMetrics.gauge("message_count", map_size(state.messages))
+
+    {:reply, {:ok, count}, state}
   end
 
+  @decorate track_metrics("messages_failed")
   def handle_call({:messages_failed, message_metadatas}, _from, state) do
     prev_state = state
 
-    execute_timed(:messages_failed, fn ->
-      cursor_tuples = State.ack_ids_to_cursor_tuples(state, Enum.map(message_metadatas, & &1.ack_id))
+    cursor_tuples = State.ack_ids_to_cursor_tuples(state, Enum.map(message_metadatas, & &1.ack_id))
 
-      message_metas_by_ack_id = Map.new(message_metadatas, &{&1.ack_id, &1})
-      {messages, state} = State.pop_messages(state, cursor_tuples)
+    message_metas_by_ack_id = Map.new(message_metadatas, &{&1.ack_id, &1})
+    {messages, state} = State.pop_messages(state, cursor_tuples)
 
-      messages =
-        Enum.map(messages, fn msg ->
-          meta = Map.get(message_metas_by_ack_id, msg.ack_id)
+    messages =
+      Enum.map(messages, fn msg ->
+        meta = Map.get(message_metas_by_ack_id, msg.ack_id)
 
-          %{
-            msg
-            | deliver_count: meta.deliver_count,
-              last_delivered_at: meta.last_delivered_at,
-              not_visible_until: meta.not_visible_until
-          }
-        end)
+        %{
+          msg
+          | deliver_count: meta.deliver_count,
+            last_delivered_at: meta.last_delivered_at,
+            not_visible_until: meta.not_visible_until
+        }
+      end)
 
-      {discarded_messages, messages} =
-        maybe_discard_messages(messages, state.consumer.max_retry_count)
+    {discarded_messages, messages} =
+      maybe_discard_messages(messages, state.consumer.max_retry_count)
 
-      state = State.put_persisted_messages(state, messages)
+    state = State.put_persisted_messages(state, messages)
 
-      with :ok <- handle_discarded_messages(state, discarded_messages),
-           :ok <- upsert_messages(state, messages) do
-        maybe_finish_table_reader_batch(prev_state, state)
-        {:reply, :ok, state}
-      else
-        error ->
-          {:reply, error, state}
-      end
-    end)
+    Sequin.ProcessMetrics.increment_throughput("messages_failed", length(messages))
+    Sequin.ProcessMetrics.increment_throughput("messages_discarded", length(discarded_messages))
+    Sequin.ProcessMetrics.gauge("message_count", map_size(state.messages))
+
+    with :ok <- handle_discarded_messages(state, discarded_messages),
+         :ok <- upsert_messages(state, messages) do
+      maybe_finish_table_reader_batch(prev_state, state)
+      {:reply, :ok, state}
+    else
+      error ->
+        {:reply, error, state}
+    end
   end
 
+  @decorate track_metrics("nack_stale_produced_messages")
   def handle_call(:nack_stale_produced_messages, _from, state) do
-    execute_timed(:nack_stale_produced_messages, fn ->
-      {:reply, :ok, State.nack_stale_produced_messages(state)}
-    end)
+    state = State.nack_stale_produced_messages(state)
+    Sequin.ProcessMetrics.gauge("produced_message_groups", map_size(state.produced_message_groups))
+    {:reply, :ok, state}
   end
 
+  @decorate track_metrics("reset_message_visibilities")
   def handle_call({:reset_message_visibilities, ack_ids}, _from, state) do
-    execute_timed(:reset_message_visibilities, fn ->
-      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
-      {state, reset_messages} = State.reset_message_visibilities(state, ack_ids)
-      {:reply, {:ok, reset_messages}, state}
-    end)
+    :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
+    {state, reset_messages} = State.reset_message_visibilities(state, ack_ids)
+
+    Sequin.ProcessMetrics.increment_throughput("visibility_resets", length(reset_messages))
+
+    {:reply, {:ok, reset_messages}, state}
   end
 
+  @decorate track_metrics("reset_all_message_visibilities")
   def handle_call(:reset_all_message_visibilities, _from, state) do
-    execute_timed(:reset_all_message_visibilities, fn ->
-      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
-      {:reply, :ok, State.reset_all_message_visibilities(state)}
-    end)
+    :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
+    state = State.reset_all_message_visibilities(state)
+    {:reply, :ok, state}
   end
 
+  @decorate track_metrics("min_unpersisted_wal_cursor")
   def handle_call({:min_unpersisted_wal_cursor, monitor_ref}, _from, state) do
-    execute_timed(:min_unpersisted_wal_cursor, fn ->
-      if monitor_ref == state.slot_processor_monitor_ref do
-        {:reply, {:ok, State.min_unpersisted_wal_cursor(state)}, state}
-      else
-        raise "Monitor ref mismatch. Expected #{inspect(state.slot_processor_monitor_ref)} but got #{inspect(monitor_ref)}"
-      end
-    end)
+    if monitor_ref == state.slot_processor_monitor_ref do
+      {:reply, {:ok, State.min_unpersisted_wal_cursor(state)}, state}
+    else
+      raise "Monitor ref mismatch. Expected #{inspect(state.slot_processor_monitor_ref)} but got #{inspect(monitor_ref)}"
+    end
   end
 
+  @decorate track_metrics("count_messages")
   def handle_call(:count_messages, _from, state) do
-    execute_timed(:count_messages, fn ->
-      {:reply, {:ok, map_size(state.messages)}, state}
-    end)
+    count = map_size(state.messages)
+    Sequin.ProcessMetrics.gauge("message_count", count)
+    {:reply, {:ok, count}, state}
   end
 
+  @decorate track_metrics("peek")
   def handle_call(:peek, _from, state) do
-    execute_timed(:peek, fn ->
-      {:reply, {:ok, state}, state}
-    end)
+    {:reply, {:ok, state}, state}
   end
 
+  @decorate track_metrics("peek_messages")
   def handle_call({:peek_messages, count}, _from, state) do
-    execute_timed(:peek_messages, fn ->
-      {:reply, {:ok, State.peek_messages(state, count)}, state}
-    end)
+    {:reply, {:ok, State.peek_messages(state, count)}, state}
   end
 
+  @decorate track_metrics("peek_message")
   def handle_call({:peek_message, ack_id}, _from, state) do
-    execute_timed(:peek_message, fn ->
-      {:reply, State.peek_message(state, ack_id), state}
-    end)
+    {:reply, State.peek_message(state, ack_id), state}
   end
 
+  @decorate track_metrics("set_monitor_ref")
   def handle_call({:set_monitor_ref, ref}, _from, state) do
-    execute_timed(:set_monitor_ref, fn ->
-      {:reply, :ok, %{state | slot_processor_monitor_ref: ref}}
-    end)
+    {:reply, :ok, %{state | slot_processor_monitor_ref: ref}}
   end
 
   def handle_call(:payload_size_bytes, _from, state) do
     {:reply, {:ok, state.payload_size_bytes}, state}
-  end
-
-  @impl GenServer
-  def handle_info(:process_logging, %State{} = state) do
-    now = System.monotonic_time(:millisecond)
-    interval_ms = if state.last_logged_stats_at, do: now - state.last_logged_stats_at
-
-    info =
-      Process.info(self(), [
-        # Total memory used by process in bytes
-        :memory,
-        # Number of messages in queue
-        :message_queue_len
-      ])
-
-    metadata = [
-      memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
-      message_queue_len: info[:message_queue_len],
-      message_count: map_size(state.messages),
-      payload_size_bytes: state.payload_size_bytes,
-      produced_message_groups: map_size(state.produced_message_groups)
-    ]
-
-    # Get all timing metrics from process dictionary
-    timing_metrics =
-      Process.get()
-      |> Enum.filter(fn {key, _} ->
-        key |> to_string() |> String.ends_with?("_total_ms")
-      end)
-      |> Keyword.new()
-
-    # Log all timing metrics as histograms with operation tag
-    Enum.each(timing_metrics, fn {key, value} ->
-      operation = key |> to_string() |> String.replace("_total_ms", "")
-
-      Sequin.Statsd.histogram("sequin.slot_message_store.operation_time_ms", value,
-        tags: %{
-          consumer_id: state.consumer_id,
-          operation: operation
-        }
-      )
-    end)
-
-    unaccounted_ms =
-      if interval_ms do
-        # Calculate total accounted time
-        total_accounted_ms = Enum.reduce(timing_metrics, 0, fn {_key, value}, acc -> acc + value end)
-
-        # Calculate unaccounted time
-        max(0, interval_ms - total_accounted_ms)
-      end
-
-    if unaccounted_ms do
-      # Log unaccounted time with same metric but different operation tag
-      Sequin.Statsd.histogram("sequin.slot_message_store.operation_time_ms", unaccounted_ms,
-        tags: %{
-          consumer_id: state.consumer_id,
-          operation: "unaccounted"
-        }
-      )
-    end
-
-    count_metrics =
-      Process.get()
-      |> Enum.filter(fn {key, _} ->
-        key |> to_string() |> String.ends_with?("_count")
-      end)
-      |> Keyword.new()
-
-    metadata =
-      metadata
-      |> Keyword.merge(timing_metrics)
-      |> Keyword.merge(count_metrics)
-      |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
-
-    Logger.info("[SlotMessageStore] Process metrics", metadata)
-
-    # Clear timing metrics after logging
-    timing_metrics
-    |> Keyword.keys()
-    |> Enum.each(&clear_counter/1)
-
-    count_metrics
-    |> Keyword.keys()
-    |> Enum.each(&clear_counter/1)
-
-    schedule_process_logging()
-    {:noreply, %{state | last_logged_stats_at: now}}
   end
 
   @impl GenServer
@@ -878,6 +781,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
           duration_ms: duration_ms
         )
 
+        Sequin.ProcessMetrics.increment_throughput("messages_flushed", length(messages))
         state
       else
         state
@@ -915,6 +819,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
           partition: state.partition
         )
 
+        Sequin.ProcessMetrics.increment_throughput("visibility_resets", length(messages))
         state
       else
         state
@@ -924,11 +829,38 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {:noreply, state}
   end
 
-  defp schedule_process_logging(interval \\ :timer.seconds(30)) do
-    Process.send_after(self(), :process_logging, interval)
+  @decorate track_metrics("put_messages_after_reply")
+  defp put_messages_after_reply(%State{} = state, messages) do
+    now = Sequin.utc_now()
+
+    messages =
+      messages
+      |> Stream.reject(&State.message_exists?(state, &1))
+      |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
+      |> Enum.to_list()
+
+    {to_persist, to_put} =
+      if state.consumer.status == :disabled do
+        {messages, []}
+      else
+        Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
+      end
+
+    {:ok, state} = State.put_messages(state, to_put)
+
+    :ok = upsert_messages(state, to_persist)
+    state = State.put_persisted_messages(state, to_persist)
+
+    Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
+    :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
+
+    if state.test_pid do
+      send(state.test_pid, {:put_messages_done, state.consumer.id})
+    end
+
+    state
   end
 
-  # Can be very infrequent, as we use :syn to learn about changes to consumer count
   defp schedule_max_memory_check(interval \\ :timer.minutes(5)) do
     Process.send_after(self(), :max_memory_check, interval)
   end
@@ -946,7 +878,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     max_memory_bytes = Consumers.max_memory_bytes_for_consumer(consumer)
 
-    %{state | max_memory_bytes: div(max_memory_bytes, consumer.partition_count)}
+    max_memory_bytes = div(max_memory_bytes, consumer.partition_count)
+    Sequin.ProcessMetrics.gauge("max_memory_bytes", max_memory_bytes)
+    %{state | max_memory_bytes: max_memory_bytes}
   end
 
   defp exit_to_sequin_error({:timeout, {GenServer, :call, [_, _, timeout]}}) do
@@ -965,22 +899,24 @@ defmodule Sequin.Runtime.SlotMessageStore do
     Error.invariant(message: "[SlotMessageStore] exited with #{inspect(e)}")
   end
 
+  @decorate track_metrics("upsert_messages")
   defp upsert_messages(%State{}, []), do: :ok
 
+  @decorate track_metrics("upsert_messages")
   defp upsert_messages(%State{} = state, messages) do
-    execute_timed(:upsert_messages, fn ->
-      messages
-      # This value is calculated based on the number of parameters in our consumer_events/consumer_records
-      # upserts and the Postgres limit of 65535 parameters per query.
-      |> Enum.chunk_every(2_000)
-      |> Enum.each(fn chunk ->
-        {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, chunk)
-      end)
+    messages
+    # This value is calculated based on the number of parameters in our consumer_events/consumer_records
+    # upserts and the Postgres limit of 65535 parameters per query.
+    |> Enum.chunk_every(2_000)
+    |> Enum.each(fn chunk ->
+      {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, chunk)
     end)
   end
 
+  @decorate track_metrics("delete_messages")
   defp delete_messages(%State{}, []), do: :ok
 
+  @decorate track_metrics("delete_messages")
   defp delete_messages(%State{} = state, messages) do
     messages
     |> Enum.chunk_every(10_000)
@@ -997,22 +933,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
         :table_reader_batches_changed
       )
     end
-  end
-
-  defp incr_counter(name, amount \\ 1) do
-    current = Process.get(name, 0)
-    Process.put(name, current + amount)
-  end
-
-  defp clear_counter(name) do
-    Process.delete(name)
-  end
-
-  defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun, :millisecond)
-    incr_counter(:"#{name}_total_ms", time)
-    incr_counter(:"#{name}_count")
-    result
   end
 
   def partitions(%SinkConsumer{partition_count: partition_count}) do

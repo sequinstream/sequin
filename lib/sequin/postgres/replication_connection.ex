@@ -140,6 +140,8 @@ defmodule Sequin.Postgres.ReplicationConnection do
 
   @behaviour :gen_statem
 
+  use Sequin.ProcessMetrics.Decorator
+
   import Bitwise
 
   alias Postgrex.Protocol
@@ -492,19 +494,17 @@ defmodule Sequin.Postgres.ReplicationConnection do
   end
 
   def handle_event(:info, msg, @state, %{protocol: protocol, streaming: streaming} = s) do
-    execute_timed(:handle_data, fn ->
-      case Protocol.handle_copy_recv(msg, streaming, protocol) do
-        {:ok, copies, protocol} ->
-          handle_data(copies, %{s | protocol: protocol})
+    case Protocol.handle_copy_recv(msg, streaming, protocol) do
+      {:ok, copies, protocol} ->
+        handle_data(copies, %{s | protocol: protocol})
 
-        :unknown ->
-          %{state: {mod, mod_state}} = s
-          maybe_handle(mod, :handle_info, [msg, mod_state], s)
+      :unknown ->
+        %{state: {mod, mod_state}} = s
+        maybe_handle(mod, :handle_info, [msg, mod_state], s)
 
-        {error, reason, protocol} ->
-          reconnect_or_stop(error, reason, protocol, s)
-      end
-    end)
+      {error, reason, protocol} ->
+        reconnect_or_stop(error, reason, protocol, s)
+    end
   end
 
   def handle_event({:timeout, :reconnect}, nil, @state, s) do
@@ -626,16 +626,4 @@ defmodule Sequin.Postgres.ReplicationConnection do
 
   defp opts, do: Process.get(__MODULE__)
   defp put_opts(opts), do: Process.put(__MODULE__, opts)
-
-  defp incr_counter(name, amount \\ 1) do
-    current = Process.get(name, 0)
-    Process.put(name, current + amount)
-  end
-
-  defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun, :millisecond)
-    incr_counter(:"#{name}_total_ms", time)
-    incr_counter(:"#{name}_count")
-    result
-  end
 end

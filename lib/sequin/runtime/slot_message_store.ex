@@ -667,11 +667,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
       state = State.put_persisted_messages(state, messages)
 
-      with {newly_blocked_messages, state} <- State.pop_blocked_messages(state),
-           :ok <- handle_discarded_messages(state, discarded_messages),
-           # Now put the blocked messages into persisted_messages
-           state = State.put_persisted_messages(state, newly_blocked_messages),
-           :ok <- upsert_messages(state, messages ++ newly_blocked_messages) do
+      with :ok <- handle_discarded_messages(state, discarded_messages),
+           :ok <- upsert_messages(state, messages) do
         maybe_finish_table_reader_batch(prev_state, state)
         {:reply, :ok, state}
       else

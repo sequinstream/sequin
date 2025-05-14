@@ -868,19 +868,20 @@ defmodule Sequin.PostgresReplicationTest do
       event = TestEventLogFactory.insert_test_event_log_partitioned!(event, repo: UnboxedRepo)
 
       transactions_count = 20
-      queries_count = 10
+      transaction_queries_count = 10
 
       Enum.reduce(1..transactions_count, initial_seq, fn _, seq ->
         {events, seq} =
-          Enum.reduce(1..queries_count, {[], seq}, fn _, {acc, seq} ->
-            {[%{seq: seq + 1} | acc], seq + 1}
+          Enum.reduce(1..transaction_queries_count, {[], seq}, fn _, {acc, seq} ->
+            seq = seq + 1
+            {[%{seq: seq} | acc], seq}
           end)
 
         TestEventLogFactory.update_test_event_log_partitioned!(event, Enum.reverse(events), repo: UnboxedRepo)
         seq
       end)
 
-      assert wait_and_validate_data(inspect(ref), -1, transactions_count * queries_count)
+      assert wait_and_validate_data(inspect(ref), -1, transactions_count * transaction_queries_count)
     end
   end
 

@@ -9,7 +9,6 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.ApiTokens
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.PostgresDatabasePrimary
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Name

@@ -657,7 +657,7 @@
                         >Not visible until:</span
                       >
                       <span class="text-sm text-gray-900">
-                        {selectedMessage.last_delivered_at
+                        {selectedMessage.not_visible_until
                           ? formatDate(selectedMessage.not_visible_until)
                           : "N/A"}
                       </span>

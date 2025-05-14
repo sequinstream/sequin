@@ -196,32 +196,6 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "pop_blocked_messages/2" do
-    test "pops messages that should be moved to persisted_message_groups in persisted_message_groups", %{state: state} do
-      # Add two messages with different group_ids
-      msg1 = ConsumersFactory.consumer_message(group_id: "group1")
-      msg2 = ConsumersFactory.consumer_message(group_id: "group2")
-
-      {:ok, state} = State.put_messages(state, [msg1, msg2])
-
-      # Add a persisted message that shares group_id with msg1
-      persisted_msg = ConsumersFactory.consumer_message(group_id: "group1")
-      state = State.put_persisted_messages(state, [persisted_msg])
-
-      # Call pop_blocked_messages/2
-      {popped_messages, updated_state} = State.pop_blocked_messages(state)
-
-      # Verify we get back only msg1 which shares group_id with the persisted message
-      assert length(popped_messages) == 1
-      [popped_msg] = popped_messages
-      assert_cursor_tuple_matches(msg1, popped_msg)
-      assert popped_msg.group_id == "group1"
-
-      # Verify msg2 is still in state since it wasn't blocked
-      assert_message_in_state(msg2, updated_state)
-    end
-  end
-
   describe "end to end test with put and pop" do
     test "popped messages are removed from state", %{state: state} do
       now = DateTime.utc_now()

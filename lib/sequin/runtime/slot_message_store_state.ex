@@ -207,22 +207,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
      }}
   end
 
-  @spec pop_blocked_messages(State.t()) :: {list(message()), State.t()}
-  def pop_blocked_messages(%State{} = state) do
-    execute_timed(:pop_blocked_messages, fn ->
-      blocked_cursor_tuples =
-        state.messages
-        |> Stream.filter(fn {cursor_tuple, msg} ->
-          is_message_group_persisted?(state, msg.group_id) and
-            not Multiset.value_member?(state.persisted_message_groups, msg.group_id, cursor_tuple)
-        end)
-        |> Stream.map(fn {cursor_tuple, _msg} -> cursor_tuple end)
-        |> Enum.to_list()
-
-      pop_messages(state, blocked_cursor_tuples)
-    end)
-  end
-
   @spec pop_all_messages(State.t()) :: {list(message()), State.t()}
   def pop_all_messages(%State{} = state) do
     pop_messages(state, Map.keys(state.messages))
@@ -538,17 +522,5 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       msg -> not is_nil(msg.last_delivered_at) and DateTime.before?(msg.last_delivered_at, max_time_since_delivered)
     end)
     |> Enum.to_list()
-  end
-
-  defp incr_counter(name, amount \\ 1) do
-    current = Process.get(name, 0)
-    Process.put(name, current + amount)
-  end
-
-  defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun, :millisecond)
-    incr_counter(:"#{name}_total_ms", time)
-    incr_counter(:"#{name}_count")
-    result
   end
 end

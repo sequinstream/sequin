@@ -221,50 +221,6 @@ defmodule Sequin.SlotMessageStoreTest do
       assert Enum.all?(messages, fn msg -> msg.not_visible_until == not_visible_until end)
     end
 
-    test "when a message fails, non-persisted messages of the same group_id are persisted", %{consumer: consumer} do
-      # Create two messages with same group_id
-      group_id = "test-group"
-
-      message1 =
-        ConsumersFactory.consumer_message(
-          group_id: group_id,
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      message2 =
-        ConsumersFactory.consumer_message(
-          group_id: group_id,
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      # Put both messages in store
-      :ok = SlotMessageStore.put_messages(consumer, [message1, message2])
-
-      # Get and fail first message
-      {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
-
-      meta = %{
-        ack_id: delivered.ack_id,
-        deliver_count: 1,
-        group_id: delivered.group_id,
-        last_delivered_at: DateTime.utc_now(),
-        not_visible_until: DateTime.add(DateTime.utc_now(), 60)
-      }
-
-      :ok = SlotMessageStore.messages_failed(consumer, [meta])
-
-      # Verify both messages are now persisted
-      messages = SlotMessageStore.peek_messages(consumer, 2)
-      assert length(messages) == 2
-      assert Enum.all?(messages, &(&1.group_id == group_id))
-
-      persisted_messages = Consumers.list_consumer_messages_for_consumer(consumer)
-      assert length(persisted_messages) == 2
-      assert Enum.all?(persisted_messages, &(&1.group_id == group_id))
-    end
-
     test "if the pid changes between calls of produce_messages, produced_messages are available for deliver", %{
       consumer: consumer
     } do
@@ -389,12 +345,6 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Put second message (nil group_id)
       :ok = SlotMessageStore.put_messages(consumer, [message2])
-
-      # Verify only messages with non-nil group_ids are blocked
-      Enum.each(SlotMessageStore.peek(consumer), fn state ->
-        {blocked_messages, _state} = State.pop_blocked_messages(state)
-        assert length(blocked_messages) == 0
-      end)
     end
 
     test "duplicate messages don't accumulate payload size", %{consumer: consumer} do

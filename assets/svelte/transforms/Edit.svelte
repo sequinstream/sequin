@@ -608,9 +608,9 @@ Please help me create or modify the Elixir function transform to achieve the des
               />
             </SelectContent>
           </Select>
-          {#if showErrors && formErrors.transform?.type}
+          {#if showErrors && formErrors.transform && Array.isArray(formErrors.transform)}
             <p class="text-sm text-red-500 dark:text-red-400">
-              {formErrors.transform.type[0]}
+              {formErrors.transform[0]}
             </p>
           {/if}
 
@@ -640,9 +640,9 @@ Please help me create or modify the Elixir function transform to achieve the des
                 />
               </SelectContent>
             </Select>
-            {#if showErrors && formErrors.transform?.type}
+            {#if showErrors && formErrors.transform?.sink_type}
               <p class="text-sm text-red-500 dark:text-red-400">
-                {formErrors.transform.type[0]}
+                {formErrors.transform.sink_type[0]}
               </p>
             {/if}
           {/if}
@@ -802,17 +802,6 @@ Please help me create or modify the Elixir function transform to achieve the des
         </div>
 
         <div class="flex gap-2 pt-2">
-          {#if form.transform.type === "function"}
-            <CopyToClipboard
-              textFn={handleCopyForChatGPT}
-              buttonText="Copy for ChatGPT"
-              successText="Copied to clipboard"
-              buttonVariant="magic"
-              buttonSize="default"
-              className="w-48"
-            />
-          {/if}
-
           <AlertDialog bind:open={showUpdateDialog}>
             <Button
               type="submit"
@@ -864,6 +853,17 @@ Please help me create or modify the Elixir function transform to achieve the des
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {#if form.transform.type === "function"}
+            <CopyToClipboard
+              textFn={handleCopyForChatGPT}
+              buttonText="Copy for ChatGPT"
+              successText="Copied to clipboard"
+              buttonVariant="magic"
+              buttonSize="default"
+              className="w-48"
+            />
+          {/if}
 
           {#if isEditing}
             <AlertDialog bind:open={showDeleteDialog}>

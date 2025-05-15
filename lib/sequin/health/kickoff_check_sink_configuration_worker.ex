@@ -2,7 +2,7 @@ defmodule Sequin.Health.KickoffCheckSinkConfigurationWorker do
   @moduledoc false
 
   use Oban.Worker,
-    queue: :default,
+    queue: :kickoff,
     max_attempts: 1
 
   alias Sequin.Consumers

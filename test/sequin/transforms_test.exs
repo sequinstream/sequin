@@ -690,7 +690,7 @@ defmodule Sequin.TransformsTest do
 
       assert_enqueued(worker: CLEW, args: %{"event" => "create"})
 
-      Oban.drain_queue(queue: :default)
+      Oban.drain_queue(queue: :lifecycle)
 
       assert {:ok, mod} = MiniElixir.module_name_from_id(xf.id)
       assert Code.loaded?(mod)
@@ -704,7 +704,7 @@ defmodule Sequin.TransformsTest do
 
       assert_enqueued(worker: CLEW, args: %{"event" => "update"})
 
-      Oban.drain_queue(queue: :default)
+      Oban.drain_queue(queue: :lifecycle)
 
       refute md5 == mod.__info__(:md5)
     end

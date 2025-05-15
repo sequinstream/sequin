@@ -4,7 +4,7 @@ defmodule Sequin.Runtime.DatabaseLifecycleEventWorker do
   """
 
   use Oban.Worker,
-    queue: :default,
+    queue: :lifecycle,
     max_attempts: 3
 
   alias Sequin.Databases

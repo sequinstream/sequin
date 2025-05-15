@@ -51,11 +51,15 @@ defmodule Sequin.Runtime.MessageHandler do
 
   def context(%PostgresReplicationSlot{} = pr) do
     pr =
-      Repo.preload(pr, [
-        :wal_pipelines,
-        [postgres_database: :sequences],
-        [not_disabled_sink_consumers: [:sequence, :postgres_database]]
-      ])
+      Repo.preload(
+        pr,
+        [
+          :wal_pipelines,
+          [postgres_database: :sequences],
+          [not_disabled_sink_consumers: [:sequence, :postgres_database]]
+        ],
+        force: true
+      )
 
     %Context{
       consumers: pr.not_disabled_sink_consumers,

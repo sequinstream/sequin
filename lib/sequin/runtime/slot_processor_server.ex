@@ -672,8 +672,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     next_state = schedule_heartbeat_verification(state)
 
     case verify_heartbeat(state) do
-      :ok ->
-        Logger.info("[SlotProcessorServer] Heartbeat verification successful",
+      {:ok, reason} ->
+        Logger.info("[SlotProcessorServer] Heartbeat verification successful: #{reason}",
           heartbeat_id: state.current_heartbeat_id
         )
 
@@ -684,7 +684,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
         {:keep_state, next_state}
 
-      {:error, :no_heartbeat} ->
+      {:error, :no_recent_heartbeat} ->
         Logger.error(
           "[SlotProcessorServer] Heartbeat verification failed (no heartbeat emitted in last #{@max_time_between_heartbeat_emissions_min} min)",
           heartbeat_id: state.current_heartbeat_id
@@ -701,6 +701,23 @@ defmodule Sequin.Runtime.SlotProcessorServer do
                 message:
                   "Replication slot connection is stale - no heartbeat emitted in last #{@max_time_between_heartbeat_emissions_min} min"
               )
+          }
+        )
+
+        {:stop, :heartbeat_verification_failed, next_state}
+
+      {:error, :no_heartbeat} ->
+        Logger.error(
+          "[SlotProcessorServer] Heartbeat verification failed (no heartbeat emitted)",
+          heartbeat_id: state.current_heartbeat_id
+        )
+
+        Health.put_event(
+          state.replication_slot,
+          %Event{
+            slug: :replication_heartbeat_verification,
+            status: :fail,
+            error: Error.service(service: :replication, message: "No heartbeat emitted")
           }
         )
 
@@ -784,18 +801,21 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     cond do
       # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
       state.id in @slots_ids_with_old_postgres ->
-        :ok
+        {:ok, "Old Postgres"}
 
       # No outstanding heartbeat but we have emitted one in the last few minutes
       # This is the most likely clause we hit because we usually receive the heartbeat message
       # pretty quickly after emitting it
       is_nil(state.current_heartbeat_id) and not is_nil(state.heartbeat_emitted_at) and
           Sequin.Time.after_min_ago?(state.heartbeat_emitted_at, @max_time_between_heartbeat_emissions_min) ->
-        :ok
+        {:ok, "Last heartbeat was received"}
 
       # We have no outstanding heartbeat and it has been too long since we emitted one !
       # This is a bug, as we should always either be regularly emitting heartbeats or have one outstanding
-      is_nil(state.current_heartbeat_id) ->
+      is_nil(state.current_heartbeat_id) and not is_nil(state.heartbeat_emitted_at) ->
+        {:error, :no_recent_heartbeat}
+
+      is_nil(state.current_heartbeat_id) and is_nil(state.heartbeat_emitted_at) ->
         {:error, :no_heartbeat}
 
       not is_nil(state.heartbeat_emitted_lsn) and state.last_commit_lsn > state.heartbeat_emitted_lsn ->
@@ -804,7 +824,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       # We have an outstanding heartbeat and we have received a message since it was emitted
       # This occurs when there is significant replication lag
       not is_nil(state.current_heartbeat_id) and state.message_received_since_last_heartbeat ->
-        :ok
+        {:ok, "Outstanding heartbeat but messages received since it was emitted"}
 
       # We have an outstanding heartbeat but it was emitted less than 20s ago (too recent to verify)
       # This should only occur when latency between Sequin and the Postgres is high

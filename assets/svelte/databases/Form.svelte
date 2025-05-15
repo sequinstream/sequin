@@ -185,7 +185,7 @@
     validating = true;
     clearFormStorage();
     pushEvent("form_submitted", { form }, (reply) => {
-      if (reply?.ok !== true) {
+      if (reply?.ok === false) {
         validating = false;
         progress.set(0);
         saveFormToStorage();

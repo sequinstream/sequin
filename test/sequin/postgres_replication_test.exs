@@ -137,6 +137,7 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account_id,
           type: :http_push,
+          legacy_transform: :none,
           sink: %{
             type: :http_push,
             http_endpoint_id: http_endpoint.id,

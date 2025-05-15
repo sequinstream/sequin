@@ -632,7 +632,14 @@ defmodule Sequin.Transforms do
   end
 
   defp parse_headers(headers) when is_binary(headers) do
-    {:error, Error.validation(summary: "Invalid headers configuration. Must be a list of key-value pairs.")}
+    if Regex.match?(~r/\(\d+ encrypted header\(s\)\) - sha256sum: [a-f0-9]+/, headers) do
+      {:error,
+       Error.validation(
+         summary: "Headers appear to be encrypted. Please provide decrypted headers as a list of key-value pairs."
+       )}
+    else
+      {:error, Error.validation(summary: "Invalid headers configuration. Must be a list of key-value pairs.")}
+    end
   end
 
   defp generate_webhook_site_id do

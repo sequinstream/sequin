@@ -183,9 +183,13 @@ defmodule Sequin.Error do
 
     @impl Exception
     def message(%__MODULE__{} = error) do
-      formatted_errors = Enum.map(error.errors, fn {field, errors} -> "- #{field}: #{Enum.join(errors, "; ")}" end)
+      formatted_errors =
+        Enum.map_join(error.errors, "\n", fn {field, errors} -> "- #{field}: #{Enum.join(errors, "; ")}" end)
 
-      Enum.join(List.wrap(error.summary) ++ formatted_errors, "\n")
+      String.trim_trailing("""
+      #{error.summary}
+      #{formatted_errors}
+      """)
     end
 
     def from_json(json), do: JSON.struct(json, __MODULE__)

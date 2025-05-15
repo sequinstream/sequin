@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/a8m/envsubst"
 	"github.com/sequinstream/sequin/cli/context"
@@ -70,6 +71,31 @@ func Interpolate(inputPath, outputPath string) error {
 	return nil
 }
 
+// PrettyPrintServerError formats a server error response
+func PrettyPrintServerError(errorBody string) string {
+	// Try to parse the error as JSON
+	var errorData map[string]interface{}
+	if err := json.Unmarshal([]byte(errorBody), &errorData); err != nil {
+		// If it's not valid JSON, return the original error
+		return errorBody
+	}
+
+	var result strings.Builder
+
+	// Process the summary field if it exists
+	if summary, ok := errorData["summary"].(string); ok {
+		result.WriteString(summary)
+		delete(errorData, "summary")
+	}
+
+	// Process any additional fields
+	for key, value := range errorData {
+		result.WriteString(fmt.Sprintf("\n%s: %v", key, value))
+	}
+
+	return result.String()
+}
+
 func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 	// Read YAML file
 	yamlContent, err := os.ReadFile(yamlPath)
@@ -125,7 +151,8 @@ func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned error: %s", string(body))
+		errorMsg := PrettyPrintServerError(string(body))
+		return nil, fmt.Errorf("server returned error: %s", errorMsg)
 	}
 
 	// Parse response
@@ -193,7 +220,8 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned error: %s", string(body))
+		errorMsg := PrettyPrintServerError(string(body))
+		return nil, fmt.Errorf("server returned error: %s", errorMsg)
 	}
 
 	// Parse response
@@ -236,7 +264,8 @@ func Export(ctx *context.Context, showSensitive bool) (*ExportResponse, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned error: %s", string(body))
+		errorMsg := PrettyPrintServerError(string(body))
+		return nil, fmt.Errorf("server returned error: %s", errorMsg)
 	}
 
 	// Parse response

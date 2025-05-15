@@ -905,7 +905,11 @@ defmodule Sequin.Health do
     upsert_snapshot(entity)
   end
 
-  def on_status_change(entity, _old_status, new_status) do
+  def on_status_change(%struct{} = _entity, _old_status, _new_status) when struct in [SinkConsumer, WalPipeline] do
+    :ok
+  end
+
+  def on_status_change(%PostgresReplicationSlot{} = entity, _old_status, new_status) do
     entity = Repo.preload(entity, [:account])
 
     unless entity.annotations["ignore_health"] || entity.account.annotations["ignore_health"] do

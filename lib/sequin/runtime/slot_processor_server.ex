@@ -639,7 +639,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       })
 
     case send_heartbeat(state, payload) do
-      :ok ->
+      {:ok, lsn} ->
         Logger.info("Emitted heartbeat", heartbeat_id: heartbeat_id, emitted_at: emitted_at)
 
         {:keep_state,
@@ -648,7 +648,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
            | heartbeat_timer: nil,
              current_heartbeat_id: heartbeat_id,
              heartbeat_emitted_at: emitted_at,
-             heartbeat_emitted_lsn: state.last_commit_lsn,
+             heartbeat_emitted_lsn: lsn,
              message_received_since_last_heartbeat: false
          }}
 
@@ -877,13 +877,16 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     if is_integer(pg_major_version) and pg_major_version < 14 do
       case Postgres.upsert_logical_message(conn, state.id, @heartbeat_message_prefix, payload) do
-        :ok -> :ok
+        {:ok, lsn} -> {:ok, lsn}
         {:error, error} -> {:error, error}
       end
     else
       case Postgres.query(conn, "SELECT pg_logical_emit_message(true, '#{@heartbeat_message_prefix}', $1)", [payload]) do
-        {:ok, _res} -> :ok
-        {:error, error} -> {:error, error}
+        {:ok, %Postgrex.Result{rows: [[lsn_int]]}} ->
+          {:ok, lsn_int}
+
+        {:error, error} ->
+          {:error, error}
       end
     end
   end

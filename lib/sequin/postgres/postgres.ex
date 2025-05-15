@@ -1168,16 +1168,18 @@ defmodule Sequin.Postgres do
     end
   end
 
+  @spec upsert_logical_message(db_conn(), slot_id :: String.t(), subject :: String.t(), content :: String.t()) ::
+          {:ok, appx_lsn :: integer()} | {:error, Error.t()}
   def upsert_logical_message(database_or_conn, slot_id, subject, content) do
-    query = """
+    upsert_query = """
     INSERT INTO public.#{@logical_message_table_name} (slot_id, subject, content)
     VALUES ($1, $2, $3)
     ON CONFLICT (slot_id, subject) DO UPDATE SET content = $3, updated_at = NOW()
     """
 
-    case query(database_or_conn, query, [slot_id, subject, content]) do
-      {:ok, _} -> :ok
-      {:error, error} -> {:error, error}
+    with {:ok, _} <- query(database_or_conn, upsert_query, [slot_id, subject, content]),
+         {:ok, %{rows: [[appx_lsn]]}} <- query(database_or_conn, "SELECT pg_current_wal_lsn()") do
+      {:ok, appx_lsn}
     end
   end
 end

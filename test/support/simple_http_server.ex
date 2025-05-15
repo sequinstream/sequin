@@ -8,7 +8,6 @@ defmodule Sequin.TestSupport.SimpleHttpServer do
 
   require Logger
 
-  @port Application.compile_env(:sequin, :webhook_test_port)
   @listen_options [:binary, packet: :raw, active: false, reuseaddr: true]
   @response """
   HTTP/1.1 204 No Content\r
@@ -19,7 +18,8 @@ defmodule Sequin.TestSupport.SimpleHttpServer do
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
 
   def init(opts) do
-    {:ok, listen_socket} = :gen_tcp.listen(opts[:port] || @port, @listen_options)
+    port = opts[:port] || Application.get_env(:sequin, :jepsen_http_port)
+    {:ok, listen_socket} = :gen_tcp.listen(port, @listen_options)
 
     state = %{
       caller: opts.caller,

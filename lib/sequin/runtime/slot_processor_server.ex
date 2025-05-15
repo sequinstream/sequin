@@ -134,7 +134,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :safe_wal_cursor, Replication.wal_cursor()
       field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
       field :last_flushed_wal_cursor, Replication.wal_cursor()
-      field :last_lsn_acked_at, DateTime.t() | nil
       field :update_safe_wal_cursor_timer_ref, nil | reference()
       field :setting_update_safe_wal_cursor_interval, non_neg_integer()
 
@@ -168,6 +167,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :heartbeat_timer, nil | reference()
       field :heartbeat_verification_timer, nil | reference()
       field :message_received_since_last_heartbeat, boolean(), default: false
+
+      # Acks
+      field :last_lsn_acked_at, DateTime.t() | nil
+      field :ack_timer_ref, nil | reference()
+      field :setting_ack_interval, non_neg_integer()
 
       # Reference to primary in case slot lives on replica
       field :primary_database, nil | PostgresDatabase.t()
@@ -220,7 +224,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
       safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
-      setting_update_safe_wal_cursor_interval: Keyword.get(opts, :update_safe_wal_cursor_interval, :timer.seconds(30))
+      setting_update_safe_wal_cursor_interval: Keyword.get(opts, :update_safe_wal_cursor_interval, :timer.seconds(30)),
+      setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10))
     }
 
     ReplicationConnection.start_link(SlotProcessorServer, init, rep_conn_opts)
@@ -282,6 +287,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     state = schedule_heartbeat(state, 0)
     state = schedule_heartbeat_verification(state)
     state = schedule_update_safe_wal_cursor(state)
+    state = schedule_ack(state)
     Process.send_after(self(), :process_logging, 0)
     schedule_observe_ingestion_latency()
 
@@ -498,7 +504,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       safe_wal_cursor = state.safe_wal_cursor
       diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
 
-      Logger.info("Received keepalive message for slot (reply_requested=#{reply_requested})",
+      Logger.info("Received keepalive message for slot (reply_requested=#{reply_requested}) (clock_diff=#{diff_ms}ms)",
         clock: clock,
         wal_end: wal_end,
         diff_ms: diff_ms
@@ -514,7 +520,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       reply = ack_message(safe_wal_cursor.commit_lsn)
       state = %{state | last_lsn_acked_at: Sequin.utc_now()}
-      log_keepalive_ack(safe_wal_cursor.commit_lsn, clock)
       {:keep_state_and_ack, reply, state}
     else
       {:keep_state, state}
@@ -816,6 +821,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:keep_state, state}
   end
 
+  def handle_info(:send_ack, %State{} = state) do
+    Logger.info("[SlotProcessorServer] Sending ack for LSN #{state.safe_wal_cursor.commit_lsn}")
+
+    reply = ack_message(state.safe_wal_cursor.commit_lsn)
+    state = schedule_ack(%{state | ack_timer_ref: nil})
+    {:keep_state_and_ack, reply, state}
+  end
+
   defp update_safe_wal_cursor(%State{} = state) do
     safe_wal_cursor =
       if is_nil(state.last_commit_lsn) do
@@ -954,6 +967,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp schedule_update_safe_wal_cursor(%State{update_safe_wal_cursor_timer_ref: nil} = state) do
     ref = Process.send_after(self(), :update_safe_wal_cursor, state.setting_update_safe_wal_cursor_interval)
     %{state | update_safe_wal_cursor_timer_ref: ref}
+  end
+
+  defp schedule_ack(%State{ack_timer_ref: nil} = state) do
+    ref = Process.send_after(self(), :send_ack, state.setting_ack_interval)
+    %{state | ack_timer_ref: ref}
   end
 
   defp maybe_recreate_slot(%State{connection: connection} = state) do
@@ -1678,17 +1696,5 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp observe_ingestion_latency(%State{} = state, ts) do
     latency_us = DateTime.diff(Sequin.utc_now(), ts, :microsecond)
     Prometheus.observe_ingestion_latency(state.replication_slot.id, state.replication_slot.slot_name, latency_us)
-  end
-
-  defp log_keepalive_ack(commit_lsn, clock) do
-    diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
-    message = "Responded to keepalive ack in #{diff_ms}ms"
-    tags = [commit_lsn: commit_lsn, diff_ms: diff_ms]
-
-    case diff_ms do
-      diff_ms when diff_ms < 100 -> Logger.info(message, tags)
-      diff_ms when diff_ms < 1000 -> Logger.warning(message, tags)
-      _ -> Logger.error(message, tags)
-    end
   end
 end

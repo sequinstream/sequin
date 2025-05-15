@@ -116,7 +116,7 @@ defmodule Sequin.MixProject do
       {:broadway_dashboard, "~> 0.4.0"},
 
       # Background Jobs
-      {:oban, "~> 2.17"},
+      {:oban, "~> 2.19"},
 
       # Metaprogramming and Enhancements
       {:decorator, "~> 1.4"},

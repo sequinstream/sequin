@@ -3,7 +3,11 @@ defmodule Sequin.Health.KickoffCheckSinkConfigurationWorker do
 
   use Oban.Worker,
     queue: :kickoff,
-    max_attempts: 1
+    max_attempts: 1,
+    unique: [
+      period: :infinity,
+      states: ~w(scheduled available)a
+    ]
 
   alias Sequin.Consumers
   alias Sequin.Health.CheckSinkConfigurationWorker

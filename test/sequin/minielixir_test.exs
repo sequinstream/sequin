@@ -396,6 +396,16 @@ defmodule Sequin.MiniElixirTest do
                  end
                )
     end
+
+    test "empty cond expression" do
+      assert :ok =
+               Validator.check(
+                 quote do
+                   cond do
+                   end
+                 end
+               )
+    end
   end
 
   defp get_vars(ast) do

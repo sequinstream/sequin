@@ -167,6 +167,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :heartbeat_verification_timer, nil | reference()
       field :message_received_since_last_heartbeat, boolean(), default: false
 
+      # Low WAL cursor precomputation task
+      field :low_wal_cursor_for_stores,
+            :pending | %{:updated_at => DateTime.t(), :cursor => Replication.wal_cursor() | nil},
+            default: :pending
+
+      field :low_wal_cursor_for_stores_task_interval, non_neg_integer()
+      field :low_wal_cursor_for_stores_task_ref, nil | reference()
+
       # Reference to primary in case slot lives on replica
       field :primary_database, nil | PostgresDatabase.t()
     end
@@ -217,6 +225,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       bytes_between_limit_checks: bytes_between_limit_checks,
       check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
       safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
+      low_wal_cursor_for_stores_task_interval:
+        Keyword.get(opts, :low_wal_cursor_for_stores_task_interval, :timer.seconds(10)),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10))
     }
 
@@ -280,6 +290,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     state = schedule_heartbeat_verification(state)
     Process.send_after(self(), :process_logging, 0)
     schedule_observe_ingestion_latency()
+    state = spawn_low_wal_cursor_for_stores_task(state)
 
     {:ok, %{state | connection_state: :disconnected}}
   end
@@ -795,6 +806,84 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     Process.send_after(self(), :process_logging, process_metrics_interval())
     {:keep_state, state}
+  end
+
+  # Task completed successfully
+  def handle_info({ref, {cursor, started_at, updated_at}}, %State{low_wal_cursor_for_stores_task_ref: ref} = state) do
+    Process.demonitor(ref, [:flush])
+
+    # Start next task based on how much time elapsed since the last one started
+    interval = state.low_wal_cursor_for_stores_task_interval
+    now_ms = System.monotonic_time(:millisecond)
+    elapsed_ms = now_ms - started_at
+    delay_ms = max(interval - elapsed_ms, 0)
+
+    next_state =
+      state
+      |> Map.put(:low_wal_cursor_for_stores, %{cursor: cursor, updated_at: updated_at})
+      |> spawn_low_wal_cursor_for_stores_task(delay_ms)
+
+    {:keep_state, next_state}
+  end
+
+  # Task failed
+  @impl ReplicationConnection
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %State{low_wal_cursor_for_stores_task_ref: ref} = state) do
+    # Log the failure and restart the task
+    Logger.error("[SlotProcessorServer] low_wal_cursor_for_stores task failed", reason: reason)
+
+    # Restart the task immediately
+    next_state = spawn_low_wal_cursor_for_stores_task(state)
+
+    {:keep_state, next_state}
+  end
+
+  # ---------------------
+  # Low WAL cursor task
+  # ---------------------
+
+  defp spawn_low_wal_cursor_for_stores_task(%State{} = state, delay_ms \\ 0) do
+    # Spawn an async task that optionally sleeps before computing the low WAL cursor
+    replication_slot = state.replication_slot
+    message_store_refs = state.message_store_refs
+
+    task =
+      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+        if delay_ms > 0 do
+          Process.sleep(delay_ms)
+        end
+
+        started_at = System.monotonic_time(:millisecond)
+        cursor = compute_low_wal_cursor(replication_slot, message_store_refs)
+
+        {cursor, started_at, Sequin.utc_now()}
+      end)
+
+    %{state | low_wal_cursor_for_stores_task_ref: task.ref}
+  end
+
+  defp compute_low_wal_cursor(replication_slot, message_store_refs) do
+    consumers =
+      Repo.preload(replication_slot, :not_disabled_sink_consumers, force: true).not_disabled_sink_consumers
+
+    message_store_refs
+    |> Enum.flat_map(fn {consumer_id, ref} ->
+      consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
+      SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+    end)
+    |> Enum.filter(& &1)
+    |> case do
+      [] -> nil
+      cursors -> Enum.min_by(cursors, &{&1.commit_lsn, &1.commit_idx})
+    end
+  end
+
+  defp maybe_log_stale_low_wal_cursor(%State{} = state, updated_at) do
+    interval = state.low_wal_cursor_for_stores_task_interval
+
+    if DateTime.diff(Sequin.utc_now(), updated_at, :millisecond) > interval * 2 do
+      Logger.error("[SlotProcessorServer] low_wal_cursor_for_stores is stale", updated_at: updated_at)
+    end
   end
 
   defp verify_heartbeat(%State{} = state) do
@@ -1435,21 +1524,16 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     do: raise("Unsafe to call safe_wal_cursor when last_commit_lsn is nil")
 
   defp default_safe_wal_cursor_fn(%State{} = state) do
-    consumers =
-      Repo.preload(state.replication_slot, :not_disabled_sink_consumers, force: true).not_disabled_sink_consumers
-
     with :ok <- verify_messages_flushed(state),
          :ok <- verify_monitor_refs(state) do
       low_for_message_stores =
-        state.message_store_refs
-        |> Enum.flat_map(fn {consumer_id, ref} ->
-          consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
-          SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
-        end)
-        |> Enum.filter(& &1)
-        |> case do
-          [] -> nil
-          cursors -> Enum.min_by(cursors, &{&1.commit_lsn, &1.commit_idx})
+        case state.low_wal_cursor_for_stores do
+          :pending ->
+            compute_low_wal_cursor(state.replication_slot, state.message_store_refs)
+
+          %{updated_at: updated_at, cursor: cursor} ->
+            maybe_log_stale_low_wal_cursor(state, updated_at)
+            cursor
         end
 
       cond do

@@ -1068,6 +1068,30 @@ defmodule Sequin.Postgres do
     end
   end
 
+  @doc """
+  Gets both restart_lsn and confirmed_flush_lsn for a replication slot.
+  """
+  @spec get_replication_lsns(db_conn(), String.t()) ::
+          {:ok, %{restart_lsn: non_neg_integer(), confirmed_flush_lsn: non_neg_integer()}} | {:error, Error.t()}
+  def get_replication_lsns(conn, slot_name) do
+    query = """
+    SELECT restart_lsn, confirmed_flush_lsn
+    FROM pg_replication_slots
+    WHERE slot_name = $1
+    """
+
+    case query(conn, query, [slot_name]) do
+      {:ok, %{rows: [[restart_lsn, confirmed_flush_lsn]]}} ->
+        {:ok, %{restart_lsn: lsn_to_int(restart_lsn), confirmed_flush_lsn: lsn_to_int(confirmed_flush_lsn)}}
+
+      {:ok, %{rows: []}} ->
+        {:error, Error.not_found(entity: :replication_slot, params: %{name: slot_name})}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
   @logical_message_table_name Constants.logical_messages_table_name()
 
   def logical_messages_table_ddl do

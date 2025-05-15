@@ -32,6 +32,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
          :ok <- check_database(database) do
       check_replication_slot(database)
       measure_replication_lag(database)
+      log_replication_lsns(database)
 
       :syn.publish(:replication, {:postgres_replication_slot_checked, database.id}, :postgres_replication_slot_checked)
 
@@ -160,13 +161,42 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
         )
 
         if lag_bytes > Replication.lag_bytes_alert_threshold(slot) do
-          Logger.warning("Replication lag is #{lag_mb}MB")
+          Logger.warning("Replication lag is #{lag_mb}MB", lag_bytes: lag_bytes)
         else
-          Logger.info("Replication lag is #{lag_mb}MB")
+          Logger.info("Replication lag is #{lag_mb}MB", lag_bytes: lag_bytes)
         end
 
       {:error, error} ->
         Logger.error("Failed to measure replication lag: #{inspect(error)}")
+    end
+  end
+
+  defp log_replication_lsns(%PostgresDatabase{} = db) do
+    %PostgresReplicationSlot{} = slot = db.replication_slot
+
+    case Replication.get_replication_lsns(slot) do
+      {:ok, %{restart_lsn: restart_lsn, confirmed_flush_lsn: confirmed_flush_lsn}}
+      when not is_nil(restart_lsn) and not is_nil(confirmed_flush_lsn) ->
+        # Calculate lag in bytes
+        lag_bytes = confirmed_flush_lsn - restart_lsn
+        pretty_lag = Sequin.String.format_bytes(lag_bytes)
+
+        Logger.info("Replication slot LSNs",
+          slot_name: slot.slot_name,
+          restart_lsn: restart_lsn,
+          confirmed_flush_lsn: confirmed_flush_lsn,
+          lag_bytes: lag_bytes,
+          lag_pretty: pretty_lag
+        )
+
+      {:ok, %{restart_lsn: nil}} ->
+        Logger.warning("Replication slot #{slot.slot_name} has nil restart_lsn")
+
+      {:ok, %{confirmed_flush_lsn: nil}} ->
+        Logger.warning("Replication slot #{slot.slot_name} has nil confirmed_flush_lsn")
+
+      {:error, error} ->
+        Logger.error("Failed to fetch replication LSNs: #{inspect(error)}")
     end
   end
 end

@@ -182,15 +182,15 @@ defmodule Sequin.Replication do
   end
 
   # Replication runtime lifecycle
-  @spec put_low_watermark_wal_cursor!(replication_slot_id :: String.t(), wal_cursor :: wal_cursor()) ::
+  @spec put_restart_wal_cursor!(replication_slot_id :: String.t(), wal_cursor :: wal_cursor()) ::
           Redis.redis_value()
-  def put_low_watermark_wal_cursor!(replication_slot_id, %{commit_lsn: lsn, commit_idx: idx}) do
-    Redis.command!(["SET", low_watermark_wal_cursor_key(replication_slot_id), "#{lsn}:#{idx}"])
+  def put_restart_wal_cursor!(replication_slot_id, %{commit_lsn: lsn, commit_idx: idx}) do
+    Redis.command!(["SET", restart_wal_cursor_key(replication_slot_id), "#{lsn}:#{idx}"])
   end
 
-  @spec low_watermark_wal_cursor(replication_slot_id :: String.t()) :: {:ok, wal_cursor()} | {:error, Error.t()}
-  def low_watermark_wal_cursor(replication_slot_id) do
-    case Redis.command(["GET", low_watermark_wal_cursor_key(replication_slot_id)]) do
+  @spec restart_wal_cursor(replication_slot_id :: String.t()) :: {:ok, wal_cursor()} | {:error, Error.t()}
+  def restart_wal_cursor(replication_slot_id) do
+    case Redis.command(["GET", restart_wal_cursor_key(replication_slot_id)]) do
       {:ok, nil} ->
         {:ok, %{commit_lsn: 0, commit_idx: 0}}
 
@@ -203,7 +203,7 @@ defmodule Sequin.Replication do
     end
   end
 
-  defp low_watermark_wal_cursor_key(replication_slot_id) do
+  defp restart_wal_cursor_key(replication_slot_id) do
     "sequin:replication:last_processed_commit_tuple:#{replication_slot_id}"
   end
 

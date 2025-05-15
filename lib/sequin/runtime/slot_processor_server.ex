@@ -131,7 +131,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :transaction_annotations, nil | String.t()
 
       # Wal cursors
-      field :low_watermark_wal_cursor, Replication.wal_cursor()
+      field :safe_wal_cursor, Replication.wal_cursor()
       field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
       field :last_flushed_wal_cursor, Replication.wal_cursor()
       field :last_lsn_acked_at, DateTime.t() | nil
@@ -296,9 +296,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   def handle_connect(state) do
     Logger.debug("[SlotProcessorServer] Handling connect")
 
-    {:ok, low_watermark_wal_cursor} = Sequin.Replication.low_watermark_wal_cursor(state.id)
+    {:ok, safe_wal_cursor} = Sequin.Replication.restart_wal_cursor(state.id)
 
-    Logger.info("[SlotProcessorServer] Low watermark wal cursor for slot: #{inspect(low_watermark_wal_cursor)}")
+    Logger.info("[SlotProcessorServer] Restart wal cursor for slot: #{inspect(safe_wal_cursor)}")
 
     query =
       case state.postgres_database.pg_major_version do
@@ -331,7 +331,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
        %{
          state
          | connection_state: :streaming,
-           low_watermark_wal_cursor: low_watermark_wal_cursor
+           safe_wal_cursor: safe_wal_cursor
        }}
     end
   end
@@ -936,11 +936,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp skip_message?(%Message{} = msg, %State{} = state) do
-    %{commit_lsn: low_watermark_lsn, commit_idx: low_watermark_idx} = state.low_watermark_wal_cursor
+    %{commit_lsn: safe_wal_cursor_lsn, commit_idx: safe_wal_cursor_idx} = state.safe_wal_cursor
     {message_lsn, message_idx} = {msg.commit_lsn, msg.commit_idx}
 
-    lte_watermark? =
-      message_lsn < low_watermark_lsn or (message_lsn == low_watermark_lsn and message_idx < low_watermark_idx)
+    lte_safe_wal_cursor? =
+      message_lsn < safe_wal_cursor_lsn or
+        (message_lsn == safe_wal_cursor_lsn and message_idx < safe_wal_cursor_idx)
 
     # We'll re-receive already-flushed messages if we reconnect to the replication slot (without killing the GenServer) but haven't advanced the slot's cursor yet
     lte_flushed? =
@@ -951,7 +952,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         false
       end
 
-    lte_watermark? or lte_flushed? or
+    lte_safe_wal_cursor? or lte_flushed? or
       (msg.table_schema in [@config_schema, @stream_schema] and msg.table_schema != "public")
   end
 
@@ -1460,13 +1461,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
         accumulated_messages?(state) ->
           # When there are messages that the SlotProcessorServer has not flushed yet,
-          # we need to fallback on the last low_watermark_wal_cursor (not safe to use
+          # we need to fallback on the last safe_wal_cursor (not safe to use
           # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
-          Logger.info(
-            "[SlotProcessorServer] safe_wal_cursor/1: state.low_watermark_wal_cursor=#{inspect(state.low_watermark_wal_cursor)}"
-          )
+          Logger.info("[SlotProcessorServer] safe_wal_cursor/1: state.safe_wal_cursor=#{inspect(state.safe_wal_cursor)}")
 
-          state.low_watermark_wal_cursor
+          state.safe_wal_cursor
 
         true ->
           # The SlotProcessorServer has processed messages beyond what the message stores have.
@@ -1639,17 +1638,17 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     # If we don't have a last_commit_lsn, we're still processing the first xaction
     # we received on boot. This can happen if we're processing a very large xaction.
     # It is therefore safe to send an ack with the last LSN we processed.
-    {:ok, low_watermark} = Replication.low_watermark_wal_cursor(state.id)
+    {:ok, safe_wal_cursor} = Replication.restart_wal_cursor(state.id)
 
-    if low_watermark.commit_lsn > wal_end do
-      Logger.warning("Server LSN #{wal_end} is behind our LSN #{low_watermark.commit_lsn}")
+    if safe_wal_cursor.commit_lsn > wal_end do
+      Logger.warning("Server LSN #{wal_end} is behind our LSN #{safe_wal_cursor.commit_lsn}")
     end
 
     Logger.info(
-      "Acking LSN #{inspect(low_watermark.commit_lsn)} (last_commit_lsn is nil) (current server LSN: #{wal_end})"
+      "Acking LSN #{inspect(safe_wal_cursor.commit_lsn)} (last_commit_lsn is nil) (current server LSN: #{wal_end})"
     )
 
-    low_watermark.commit_lsn
+    safe_wal_cursor.commit_lsn
   end
 
   defp get_commit_lsn(%State{} = state, wal_end) do
@@ -1658,7 +1657,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     wal_cursor = state.safe_wal_cursor_fn.(state)
     Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
 
-    Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
+    Replication.put_restart_wal_cursor!(state.id, wal_cursor)
 
     if wal_cursor.commit_lsn > wal_end do
       Logger.warning("Server LSN #{wal_end} is behind our LSN #{wal_cursor.commit_lsn}")

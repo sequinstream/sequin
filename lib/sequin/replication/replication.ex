@@ -487,8 +487,20 @@ defmodule Sequin.Replication do
     10 * 1024 * 1024 * 1024
   end
 
+  # 2.5GB
   def lag_bytes_alert_threshold(_slot) do
     2.5 * 1024 * 1024 * 1024
+  end
+
+  @doc """
+  Gets both restart_lsn and confirmed_flush_lsn for a replication slot.
+  Returns the LSNs in their original string format.
+  """
+  @spec get_replication_lsns(PostgresReplicationSlot.t()) ::
+          {:ok, %{restart_lsn: String.t(), confirmed_flush_lsn: String.t()}} | {:error, Error.t()}
+  def get_replication_lsns(%PostgresReplicationSlot{} = slot) do
+    slot = Repo.preload(slot, :postgres_database)
+    Postgres.get_replication_lsns(slot.postgres_database, slot.slot_name)
   end
 
   defp env do

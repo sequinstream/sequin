@@ -9,7 +9,6 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.ApiTokens
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.PostgresDatabasePrimary
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Name
@@ -415,10 +414,14 @@ defmodule SequinWeb.DatabasesLive.Form do
           nil ->
             %{"url" => nil, "ssl" => true}
 
-          _ ->
+          primary ->
             %{
-              "url" => PostgresDatabasePrimary.connection_url(database.primary),
-              "ssl" => database.primary.ssl
+              "hostname" => primary.hostname,
+              "database" => primary.database,
+              "port" => primary.port || 5432,
+              "username" => primary.username || "postgres",
+              "password" => primary.password,
+              "ssl" => primary.ssl
             }
         end
     }

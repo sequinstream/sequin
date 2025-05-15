@@ -316,7 +316,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
   }
 </script>
 
-<FullPageForm title="Connect Database" on:close={handleClose}>
+<FullPageForm title={isEdit ? `Edit database ${form.name}` : "Connect Database"} on:close={handleClose}>
   <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto">
     <Card>
       <CardHeader class="flex flex-row items-center">

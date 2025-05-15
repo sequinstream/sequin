@@ -37,7 +37,8 @@ config :sequin, Oban,
     default: 32,
     lifecycle: 32,
     kickoff: 8,
-    health_checks: 64
+    health_checks: 64,
+    user_submitted: 8
   ],
   repo: Sequin.Repo,
   plugins: [

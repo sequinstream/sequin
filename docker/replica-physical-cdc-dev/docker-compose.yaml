@@ -1,0 +1,61 @@
+services:
+  postgres-primary:
+    image: postgres:17.4
+    container_name: postgres-primary
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "7432:5432"
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+      - ./init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c hot_standby=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: postgres:17.4
+    container_name: postgres-replica
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "7452:5432"
+    volumes:
+      - postgres-replica-data:/var/lib/postgresql/data
+      - ./setup-replica.sh:/setup-replica.sh
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/setup-replica.sh"]
+    command: >
+      postgres
+      -c hot_standby=on
+      -c hot_standby_feedback=on
+      -c archive_mode=on
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c wal_sender_timeout=1000
+      -c recovery_target_timeline='latest'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres && psql -U postgres -d postgres -c 'SELECT pg_is_in_recovery();' | grep 't'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-primary-data:
+  postgres-replica-data:
+

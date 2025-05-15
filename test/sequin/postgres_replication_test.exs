@@ -127,8 +127,8 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.insert_http_endpoint!(
           account_id: account_id,
           scheme: :http,
-          host: "127.0.0.1",
-          port: Application.get_env(:sequin, :webhook_test_port),
+          host: Application.get_env(:sequin, :jepsen_http_host),
+          port: Application.get_env(:sequin, :jepsen_http_port),
           path: "/",
           headers: %{"Content-Type" => "application/json"}
         )
@@ -851,6 +851,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert consumer_event.table_oid == TestEventLogPartitioned.table_oid()
     end
 
+    @tag :jepsen
     test "batch updates are delivered in sequence order via HTTP" do
       {:ok, pid} = SimpleHttpServer.start_link(%{caller: self()})
 
@@ -867,8 +868,8 @@ defmodule Sequin.PostgresReplicationTest do
       event = [seq: initial_seq, source_table_schema: inspect(ref)]
       event = TestEventLogFactory.insert_test_event_log_partitioned!(event, repo: UnboxedRepo)
 
-      transactions_count = 20
-      transaction_queries_count = 10
+      transactions_count = Application.get_env(:sequin, :jepsen_transactions_count)
+      transaction_queries_count = Application.get_env(:sequin, :jepsen_transaction_queries_count)
 
       Enum.reduce(1..transactions_count, initial_seq, fn _, seq ->
         {events, seq} =

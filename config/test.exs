@@ -107,7 +107,10 @@ config :sequin,
   # Arbitrarily high memory limit for testing
   max_memory_bytes: 100 * 1024 * 1024 * 1024,
   slot_message_store: [flush_batch_size: 8],
-  webhook_test_port: 8888
+  jepsen_http_host: System.get_env("JEPSEN_HTTP_HOST", "127.0.0.1"),
+  jepsen_http_port: System.get_env("JEPSEN_HTTP_PORT", "4040") |> String.to_integer(),
+  jepsen_transactions_count: System.get_env("JEPSEN_TRANSACTIONS_COUNT", "20") |> String.to_integer(),
+  jepsen_transaction_queries_count: System.get_env("JEPSEN_TRANSACTION_QUERIES_COUNT", "10") |> String.to_integer()
 
 # In AES.GCM, it is important to specify 12-byte IV length for
 # interoperability with other encryption software. See this GitHub

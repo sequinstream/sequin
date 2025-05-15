@@ -1487,9 +1487,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           # When there are messages that the SlotProcessorServer has not flushed yet,
           # we need to fallback on the last safe_wal_cursor (not safe to use
           # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
-          Logger.info("[SlotProcessorServer] safe_wal_cursor/1: state.safe_wal_cursor=#{inspect(state.safe_wal_cursor)}")
+          Logger.info(
+            "[SlotProcessorServer] no unpersisted messages in stores, using last_flushed_wal_cursor=#{inspect(state.last_flushed_wal_cursor)}"
+          )
 
-          state.safe_wal_cursor
+          state.last_flushed_wal_cursor
 
         true ->
           # The SlotProcessorServer has processed messages beyond what the message stores have.

@@ -464,7 +464,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   # The server is not asking for a reply
   @decorate track_metrics("handle_data_keepalive")
-  def handle_data(<<?k, wal_end::64, clock::64, 0>>, %State{} = state) do
+  def handle_data(<<?k, wal_end::64, clock::64, reply_requested>>, %State{} = state) do
     # Because these are <14 Postgres databases, they will not receive heartbeat messages
     # temporarily mark them as healthy if we receive a keepalive message
     if state.id in @slots_ids_with_old_postgres do
@@ -474,9 +474,31 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       )
     end
 
+    send_ack? =
+      cond do
+        reply_requested == 1 ->
+          true
+
+        is_nil(state.last_lsn_acked_at) ->
+          true
+
+        DateTime.diff(Sequin.utc_now(), state.last_lsn_acked_at, :second) > 60 ->
+          true
+
+        true ->
+          false
+      end
+
     # Check if we should send an ack even though not requested
-    if should_send_ack?(state) do
-      Logger.info("Sending ack")
+    if send_ack? do
+      diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
+
+      Logger.info("Received keepalive message for slot (reply_requested=#{reply_requested})",
+        clock: clock,
+        wal_end: wal_end,
+        diff_ms: diff_ms
+      )
+
       safe_wal_cursor = get_safe_wal_cursor(state, wal_end)
       reply = ack_message(safe_wal_cursor.commit_lsn)
       state = %{state | last_lsn_acked_at: Sequin.utc_now()}
@@ -485,24 +507,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     else
       {:keep_state, state}
     end
-  end
-
-  # The server is asking for a reply
-  @decorate track_metrics("handle_data_keepalive")
-  def handle_data(<<?k, wal_end::64, clock::64, 1>>, %State{} = state) do
-    diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
-
-    Logger.info("Received keepalive message for slot (expecting reply)",
-      clock: clock,
-      wal_end: wal_end,
-      diff_ms: diff_ms
-    )
-
-    safe_wal_cursor = get_safe_wal_cursor(state, wal_end)
-    reply = ack_message(safe_wal_cursor.commit_lsn)
-    state = %{state | last_lsn_acked_at: Sequin.utc_now()}
-    log_keepalive_ack(safe_wal_cursor.commit_lsn, clock)
-    {:keep_state_and_ack, reply, state}
   end
 
   def handle_data(data, %State{} = state) do
@@ -1624,13 +1628,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp default_max_memory_bytes do
     Application.get_env(:sequin, :max_memory_bytes)
-  end
-
-  # Helper function to determine if we should send an ack
-  defp should_send_ack?(%State{last_lsn_acked_at: nil}), do: true
-
-  defp should_send_ack?(%State{last_lsn_acked_at: last_acked_at}) do
-    DateTime.diff(Sequin.utc_now(), last_acked_at, :second) > 60
   end
 
   # Encapsulate commit LSN logic

@@ -82,7 +82,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("refresh_health", _params, socket) do
-    CheckHttpEndpointHealthWorker.enqueue(socket.assigns.http_endpoint.id, unique: false)
+    CheckHttpEndpointHealthWorker.enqueue_for_user(socket.assigns.http_endpoint.id)
     {:noreply, assign_health(socket)}
   end
 

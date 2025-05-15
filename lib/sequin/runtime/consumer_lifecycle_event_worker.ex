@@ -62,7 +62,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
           consumer = Repo.preload(consumer, :postgres_database)
           # Lazy, just do this on every sink create. Eventually, we'll retire Sequence
           Databases.update_sequences_from_db(consumer.postgres_database)
-          CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
+          CheckSinkConfigurationWorker.enqueue(consumer.id)
           RuntimeSupervisor.start_for_sink_consumer(consumer)
           :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
           RuntimeSupervisor.maybe_start_table_reader(consumer)
@@ -72,7 +72,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
       "update" ->
         with {:ok, consumer} <- Consumers.get_consumer(id) do
           consumer = Repo.preload(consumer, :replication_slot)
-          CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
+          CheckSinkConfigurationWorker.enqueue(consumer.id)
 
           # Restart the entire supervision tree for replication, including slot processor, smss, etc.
           # This is safest- later we can be a bit more intelligent about when to restart (ie. when name changes we don't have to restart)

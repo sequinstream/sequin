@@ -4,7 +4,11 @@ defmodule Sequin.Health.CheckHttpEndpointHealthWorker do
   use Oban.Worker,
     queue: :health_checks,
     max_attempts: 1,
-    unique: [states: [:available, :scheduled, :retryable]]
+    unique: [
+      states: ~w(available scheduled retryable)a,
+      period: :infinity,
+      timestamp: :scheduled_at
+    ]
 
   alias Sequin.Consumers
   alias Sequin.Error
@@ -28,15 +32,9 @@ defmodule Sequin.Health.CheckHttpEndpointHealthWorker do
     |> Oban.insert()
   end
 
-  def enqueue(http_endpoint_id, unique: false) do
+  def enqueue_for_user(http_endpoint_id) do
     %{http_endpoint_id: http_endpoint_id}
-    |> new(unique: [states: [:available], period: 1])
-    |> Oban.insert()
-  end
-
-  def enqueue_in(http_endpoint_id, delay_seconds) do
-    %{http_endpoint_id: http_endpoint_id}
-    |> new(schedule_in: delay_seconds)
+    |> new(queue: :user_submitted)
     |> Oban.insert()
   end
 

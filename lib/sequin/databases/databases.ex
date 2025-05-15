@@ -110,7 +110,7 @@ defmodule Sequin.Databases do
 
       case res do
         {:ok, updated_db} ->
-          CheckPostgresReplicationSlotWorker.enqueue(updated_db.id, unique: false)
+          CheckPostgresReplicationSlotWorker.enqueue(updated_db.id)
           DatabaseLifecycleEventWorker.enqueue(:update, :postgres_database, updated_db.id)
           {:ok, updated_db}
 

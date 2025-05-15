@@ -2068,19 +2068,10 @@ defmodule Sequin.PostgresReplicationTest do
 
   defp wait_and_validate_data(ref, prev_seq, expected_count) do
     receive do
-      %{"action" => "update", "record" => %{"source_table_schema" => ^ref}} = data ->
-        if data["record"]["seq"] > prev_seq do
-          wait_and_validate_data(ref, data["record"]["seq"], expected_count - 1)
-        else
-          flunk("Received message with seq #{data["record"]["seq"]} which is less than prev_seq #{prev_seq}")
-        end
-
-      %{"source_table_schema" => ^ref} = data ->
-        if data["seq"] > prev_seq do
-          wait_and_validate_data(ref, data["seq"], expected_count - 1)
-        else
-          flunk("Received message with seq #{data["seq"]} which is less than prev_seq #{prev_seq}")
-        end
+      %{"action" => "update", "record" => %{"source_table_schema" => ^ref, "seq" => current_seq}} ->
+        if current_seq > prev_seq,
+          do: wait_and_validate_data(ref, current_seq, expected_count - 1),
+          else: flunk("Received message with seq #{current_seq} which is less than prev_seq #{prev_seq}")
 
       _ ->
         wait_and_validate_data(ref, prev_seq, expected_count)

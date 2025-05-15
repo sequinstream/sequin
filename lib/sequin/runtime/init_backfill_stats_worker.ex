@@ -3,7 +3,7 @@ defmodule Sequin.Runtime.InitBackfillStatsWorker do
   Worker that calculates and sets the initial row count for a backfill.
   """
   use Oban.Worker,
-    queue: :default,
+    queue: :lifecycle,
     max_attempts: 3,
     unique: [period: 30]
 

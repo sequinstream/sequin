@@ -4,7 +4,7 @@ defmodule Sequin.Health.SnapshotHealthWorker do
   """
 
   use Oban.Worker,
-    queue: :default,
+    queue: :health_checks,
     max_attempts: 1
 
   alias Sequin.Health

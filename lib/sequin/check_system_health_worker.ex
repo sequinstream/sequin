@@ -1,7 +1,7 @@
 defmodule Sequin.CheckSystemHealthWorker do
   @moduledoc false
   use Oban.Worker,
-    queue: :default,
+    queue: :health_checks,
     max_attempts: 1
 
   alias Sequin.CheckSystemHealth

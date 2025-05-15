@@ -1,6 +1,6 @@
 defmodule Sequin.Workers.CreateReplicationSlotWorker do
   @moduledoc false
-  use Oban.Worker, queue: :default, max_attempts: 1
+  use Oban.Worker, queue: :lifecycle, max_attempts: 1
 
   alias Sequin.Databases
   alias Sequin.Postgres

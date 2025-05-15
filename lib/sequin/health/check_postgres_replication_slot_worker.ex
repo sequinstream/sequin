@@ -2,7 +2,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   @moduledoc false
 
   use Oban.Worker,
-    queue: :default,
+    queue: :health_checks,
     max_attempts: 1,
     unique: [period: 10, timestamp: :scheduled_at]
 

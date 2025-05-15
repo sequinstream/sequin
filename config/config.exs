@@ -34,8 +34,10 @@ config :sentry,
 config :sequin, Oban,
   prefix: sequin_config_schema,
   queues: [
-    default: 20,
-    health_checks: 20
+    default: 32,
+    lifecycle: 32,
+    kickoff: 8,
+    health_checks: 64
   ],
   repo: Sequin.Repo,
   plugins: [

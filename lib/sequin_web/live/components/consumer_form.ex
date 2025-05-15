@@ -1287,4 +1287,33 @@ defmodule SequinWeb.Components.ConsumerForm do
     Application.get_env(:sequin, :env) != :prod or
       Application.get_env(:sequin, :self_hosted)
   end
+
+  # Returns a default SinkConsumer struct for a given kind (as string or atom)
+  @spec default_for_kind(String.t() | atom) :: SinkConsumer.t()
+  def default_for_kind(kind) when is_binary(kind), do: default_for_kind(String.to_existing_atom(kind))
+
+  def default_for_kind(kind) do
+    sink_consumer = %SinkConsumer{type: kind}
+
+    {sink, attrs} =
+      case kind do
+        :http_push -> {%HttpPushSink{}, %{}}
+        :sqs -> {%SqsSink{}, %{batch_size: 10}}
+        :sns -> {%SnsSink{}, %{batch_size: 10}}
+        :kafka -> {%KafkaSink{tls: false}, %{batch_size: 10}}
+        :redis_stream -> {%RedisStreamSink{}, %{batch_size: 10}}
+        :sequin_stream -> {%SequinStreamSink{}, %{}}
+        :gcp_pubsub -> {%GcpPubsubSink{}, %{}}
+        :nats -> {%NatsSink{}, %{}}
+        :rabbitmq -> {%RabbitMqSink{virtual_host: "/"}, %{}}
+        :azure_event_hub -> {%AzureEventHubSink{}, %{}}
+        :typesense -> {%TypesenseSink{}, %{}}
+        :elasticsearch -> {%ElasticsearchSink{}, %{}}
+        :redis_string -> {%RedisStringSink{}, %{batch_size: 10}}
+      end
+
+    sink_consumer
+    |> Map.put(:sink, sink)
+    |> Map.merge(Map.take(attrs, [:batch_size]))
+  end
 end

@@ -465,9 +465,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   # The server is not asking for a reply
   @decorate track_metrics("handle_data_keepalive")
   def handle_data(<<?k, wal_end::64, clock::64, 0>>, %State{} = state) do
-    diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
-    Logger.info("Received keepalive message for slot", clock: clock, wal_end: wal_end, diff_ms: diff_ms)
-
     # Because these are <14 Postgres databases, they will not receive heartbeat messages
     # temporarily mark them as healthy if we receive a keepalive message
     if state.id in @slots_ids_with_old_postgres do

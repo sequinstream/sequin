@@ -2,7 +2,11 @@ defmodule Sequin.CheckSystemHealthWorker do
   @moduledoc false
   use Oban.Worker,
     queue: :health_checks,
-    max_attempts: 1
+    max_attempts: 1,
+    unique: [
+      period: :infinity,
+      states: ~w(scheduled available)a
+    ]
 
   alias Sequin.CheckSystemHealth
   alias Sequin.Error.ServiceError

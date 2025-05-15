@@ -80,6 +80,20 @@
 
   let form = { ...database };
 
+  let lastPushedFormJSON = null;
+  let isDirty = false;
+
+  $: {
+    isDirty = JSON.stringify(form) !== JSON.stringify(database);
+
+    // Only push the form if it has changed since the last push
+    // Prevents infinite loop of pushing the same form over and over
+    if (JSON.stringify(form) !== lastPushedFormJSON) {
+      pushEvent("form_updated", { form });
+      lastPushedFormJSON = JSON.stringify(form);
+    }
+  }
+
   const isEdit = !!form.id;
 
   let databaseErrors: any = {};
@@ -318,6 +332,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
 
 <FullPageForm
   title={isEdit ? `Edit database ${form.name}` : "Connect Database"}
+  showConfirmOnExit={isDirty}
   on:close={handleClose}
 >
   <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto">

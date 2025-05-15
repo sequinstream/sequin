@@ -45,7 +45,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :queue_interval, :integer, default: 1000
     field :queue_target, :integer, default: 50
     field :name, :string
-    field :ssl, :boolean, default: false
+    field :ssl, :boolean, default: true
     field :username, :string
     field(:password, Sequin.Encrypted.Binary) :: String.t()
     field :tables_refreshed_at, :utc_datetime

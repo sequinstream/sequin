@@ -499,9 +499,29 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         diff_ms: diff_ms
       )
 
-      safe_wal_cursor = get_safe_wal_cursor(state, wal_end)
+      safe_wal_cursor =
+        if is_nil(state.last_commit_lsn) do
+          # If we don't have a last_commit_lsn, we're still processing the first xaction
+          # we received on boot. This can happen if we're processing a very large xaction.
+          # It is therefore safe to send an ack with the last LSN we processed.
+          {:ok, safe_wal_cursor} = Replication.restart_wal_cursor(state.id)
+          safe_wal_cursor
+        else
+          state.safe_wal_cursor_fn.(state)
+        end
+
+      Replication.put_restart_wal_cursor!(state.id, safe_wal_cursor)
+
+      if safe_wal_cursor.commit_lsn > wal_end do
+        Logger.warning("Server LSN #{wal_end} is behind our LSN #{safe_wal_cursor.commit_lsn}")
+      end
+
+      Logger.info(
+        "Acking LSN #{inspect(safe_wal_cursor.commit_lsn)} (current server LSN: #{wal_end}) (last_commit_lsn: #{state.last_commit_lsn})"
+      )
+
       reply = ack_message(safe_wal_cursor.commit_lsn)
-      state = %{state | last_lsn_acked_at: Sequin.utc_now()}
+      state = %{state | last_lsn_acked_at: Sequin.utc_now(), safe_wal_cursor: safe_wal_cursor}
       log_keepalive_ack(safe_wal_cursor.commit_lsn, clock)
       {:keep_state_and_ack, reply, state}
     else
@@ -1628,39 +1648,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp default_max_memory_bytes do
     Application.get_env(:sequin, :max_memory_bytes)
-  end
-
-  # Encapsulate commit LSN logic
-  defp get_safe_wal_cursor(%State{last_commit_lsn: nil} = state, wal_end) do
-    # If we don't have a last_commit_lsn, we're still processing the first xaction
-    # we received on boot. This can happen if we're processing a very large xaction.
-    # It is therefore safe to send an ack with the last LSN we processed.
-    {:ok, safe_wal_cursor} = Replication.restart_wal_cursor(state.id)
-
-    if safe_wal_cursor.commit_lsn > wal_end do
-      Logger.warning("Server LSN #{wal_end} is behind our LSN #{safe_wal_cursor.commit_lsn}")
-    end
-
-    Logger.info(
-      "Acking LSN #{inspect(safe_wal_cursor.commit_lsn)} (last_commit_lsn is nil) (current server LSN: #{wal_end})"
-    )
-
-    safe_wal_cursor
-  end
-
-  defp get_safe_wal_cursor(%State{} = state, wal_end) do
-    # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
-    # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
-    wal_cursor = state.safe_wal_cursor_fn.(state)
-    Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
-
-    Replication.put_restart_wal_cursor!(state.id, wal_cursor)
-
-    if wal_cursor.commit_lsn > wal_end do
-      Logger.warning("Server LSN #{wal_end} is behind our LSN #{wal_cursor.commit_lsn}")
-    end
-
-    wal_cursor
   end
 
   defp schedule_observe_ingestion_latency do

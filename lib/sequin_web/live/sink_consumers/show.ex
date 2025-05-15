@@ -414,13 +414,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("refresh_health", _params, socket) do
-    CheckSinkConfigurationWorker.enqueue(socket.assigns.consumer.id, unique: false)
+    CheckSinkConfigurationWorker.enqueue_for_user(socket.assigns.consumer.id)
     consumer = put_health(socket.assigns.consumer)
     {:noreply, assign(socket, :consumer, consumer)}
   end
 
   def handle_event("refresh_check", %{"slug" => "sink_configuration"}, socket) do
-    CheckSinkConfigurationWorker.enqueue(socket.assigns.consumer.id, unique: false)
+    CheckSinkConfigurationWorker.enqueue_for_user(socket.assigns.consumer.id)
     {:noreply, socket}
   end
 

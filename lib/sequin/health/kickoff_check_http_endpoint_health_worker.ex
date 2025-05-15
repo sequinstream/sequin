@@ -14,12 +14,8 @@ defmodule Sequin.Health.KickoffCheckHttpEndpointHealthWorker do
 
   @impl Oban.Worker
   def perform(_) do
-    Consumers.list_http_endpoints()
-    |> Enum.with_index()
-    |> Enum.each(fn {endpoint, index} ->
-      # Integer division to get the delay in seconds (10 per second)
-      delay_seconds = div(index, 10)
-      CheckHttpEndpointHealthWorker.enqueue_in(endpoint.id, delay_seconds)
+    Enum.each(Consumers.list_http_endpoints(), fn endpoint ->
+      CheckHttpEndpointHealthWorker.enqueue(endpoint.id)
     end)
 
     :ok

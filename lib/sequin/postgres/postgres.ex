@@ -479,17 +479,13 @@ defmodule Sequin.Postgres do
 
   def check_replication_permissions(conn) do
     query = """
-    select pg_is_in_recovery(),
-           current_setting('max_replication_slots')::int > 0,
+    select current_setting('max_replication_slots')::int > 0,
            current_setting('wal_level') = 'logical'
     """
 
     case query(conn, query) do
-      {:ok, %{rows: [[is_in_recovery, has_replication_slots, has_logical_wal_level]]}} ->
+      {:ok, %{rows: [[has_replication_slots, has_logical_wal_level]]}} ->
         cond do
-          is_in_recovery ->
-            {:error, Error.validation(summary: "Database is in recovery mode and cannot be used for replication")}
-
           not has_replication_slots ->
             {:error, Error.validation(summary: "Database does not have replication slots enabled")}
 
@@ -1056,8 +1052,8 @@ defmodule Sequin.Postgres do
   @spec replication_lag_bytes(db_conn(), String.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   def replication_lag_bytes(conn, slot_name) do
     query = """
-    select pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) as replication_lag_bytes
-    from pg_replication_slots
+    select pg_wal_lsn_diff(current.lsn, confirmed_flush_lsn) as replication_lag_bytes
+    from pg_replication_slots, (select case when pg_is_in_recovery() then pg_last_wal_receive_lsn() else pg_current_wal_lsn() end lsn) current
     where slot_name = $1;
     """
 

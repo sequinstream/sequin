@@ -1015,7 +1015,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert get_field_value(change.fields, "id") == character2.id
 
       # write the low watermark for character2
-      Replication.put_low_watermark_wal_cursor!(server_id(), %{
+      Replication.put_restart_wal_cursor!(server_id(), %{
         commit_lsn: change.commit_lsn,
         commit_idx: change.commit_idx
       })

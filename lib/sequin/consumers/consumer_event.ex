@@ -49,7 +49,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     # the encoded data here.
     field :encoded_data, :string, virtual: true
     field :encoded_data_size_bytes, :integer, virtual: true
-    field :payload_size_bytes, :integer, virtual: true
+    field :payload_size_bytes, :integer
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -69,7 +69,8 @@ defmodule Sequin.Consumers.ConsumerEvent do
       :not_visible_until,
       :deliver_count,
       :last_delivered_at,
-      :replication_message_trace_id
+      :replication_message_trace_id,
+      :payload_size_bytes
     ])
     |> cast_embed(:data, required: true)
     |> validate_required([
@@ -86,7 +87,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
   def update_changeset(consumer_event, attrs) do
     consumer_event
-    |> cast(attrs, [:not_visible_until, :deliver_count, :last_delivered_at, :state])
+    |> cast(attrs, [:not_visible_until, :deliver_count, :last_delivered_at, :state, :payload_size_bytes])
     |> validate_required([:not_visible_until, :deliver_count, :last_delivered_at])
   end
 

@@ -498,7 +498,8 @@ defmodule Sequin.Consumers do
       Repo.insert_all(
         ConsumerEvent,
         events,
-        on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
+        on_conflict:
+          {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until, :payload_size_bytes]},
         conflict_target: [:consumer_id, :ack_id]
       )
 
@@ -622,7 +623,8 @@ defmodule Sequin.Consumers do
       Repo.insert_all(
         ConsumerRecord,
         records,
-        on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
+        on_conflict:
+          {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until, :payload_size_bytes]},
         conflict_target: [:consumer_id, :ack_id]
       )
 
@@ -1332,7 +1334,6 @@ defmodule Sequin.Consumers do
       :table_reader_batch_id,
       :ingested_at,
       :commit_timestamp,
-      :payload_size_bytes,
       :deleted
     ])
   end

@@ -48,7 +48,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     # the encoded data here.
     field :encoded_data, :string, virtual: true
     field :encoded_data_size_bytes, :integer, virtual: true
-    field :payload_size_bytes, :integer, virtual: true
+    field :payload_size_bytes, :integer
     # Used to track if the record has been deleted from MessageHandler -> Store
     field :deleted, :boolean, virtual: true
 
@@ -70,7 +70,8 @@ defmodule Sequin.Consumers.ConsumerRecord do
       :not_visible_until,
       :deliver_count,
       :last_delivered_at,
-      :replication_message_trace_id
+      :replication_message_trace_id,
+      :payload_size_bytes
     ])
     |> validate_required([
       :consumer_id,
@@ -86,7 +87,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
   end
 
   def update_changeset(consumer_record, attrs) do
-    cast(consumer_record, attrs, [:state, :commit_lsn, :last_delivered_at, :not_visible_until, :deliver_count])
+    cast(consumer_record, attrs, [:state, :commit_lsn, :last_delivered_at, :not_visible_until, :deliver_count, :payload_size_bytes])
   end
 
   def stringify_record_pks(attrs) when is_map(attrs) do

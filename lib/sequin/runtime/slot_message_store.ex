@@ -399,7 +399,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     consumer_id = if consumer, do: consumer.id, else: Keyword.fetch!(opts, :consumer_id)
     partition = Keyword.fetch!(opts, :partition)
 
-    Logger.metadata(consumer_id: consumer_id)
+    Logger.metadata(consumer_id: consumer_id, partition: partition)
     Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
 
     state = %State{
@@ -453,8 +453,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
       consumer
       |> Consumers.list_consumer_messages_for_consumer()
       |> Stream.filter(&(message_partition(&1, consumer.partition_count) == state.partition))
-      |> Enum.map(fn msg ->
-        %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
+      # Can remove after payload_size_bytes has been propagated out
+      |> Enum.map(fn
+        %{payload_size_bytes: nil} = msg ->
+          %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
+
+        msg ->
+          msg
       end)
 
     state =

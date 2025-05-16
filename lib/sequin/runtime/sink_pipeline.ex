@@ -284,10 +284,19 @@ defmodule Sequin.Runtime.SinkPipeline do
     # Have to ensure module is loaded to trust function_exported?
     Code.ensure_loaded?(pipeline_mod)
 
-    if function_exported?(pipeline_mod, :batchers_config, 1) do
-      Keyword.merge(default, pipeline_mod.batchers_config(consumer))
+    config =
+      if function_exported?(pipeline_mod, :batchers_config, 1) do
+        Keyword.merge(default, pipeline_mod.batchers_config(consumer))
+      else
+        default
+      end
+
+    default_workers = Application.get_env(:sequin, __MODULE__, [])[:default_workers_per_sink]
+
+    if default_workers do
+      put_in(config, [:default, :concurrency], default_workers)
     else
-      default
+      config
     end
   end
 

@@ -2,6 +2,22 @@ defmodule Sequin.ConfigParser do
   @moduledoc false
   require Logger
 
+  def default_workers_per_sink(env) do
+    case env["DEFAULT_WORKERS_PER_SINK"] do
+      nil ->
+        nil
+
+      workers_str ->
+        case Integer.parse(workers_str) do
+          {workers, ""} when workers >= 1 ->
+            workers
+
+          _ ->
+            raise "DEFAULT_WORKERS_PER_SINK must be an integer >= 1. Got: #{inspect(workers_str)}"
+        end
+    end
+  end
+
   def redis_config(env) do
     [socket_options: [], pool_size: parse_pool_size(env)]
     |> put_redis_url(env)

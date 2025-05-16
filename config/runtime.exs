@@ -277,6 +277,10 @@ if config_env() == :prod and not self_hosted do
     max_memory_bytes: 100 * 1024 * 1024 * 1024
 end
 
+# Set the default workers per sink setting from environment variable if available
+default_workers_per_sink = ConfigParser.default_workers_per_sink(env_vars)
+config :sequin, Sequin.Runtime.SinkPipeline, default_workers_per_sink: default_workers_per_sink
+
 if config_env() == :prod do
   vault_key = System.get_env("VAULT_KEY") || raise("VAULT_KEY is not set")
 

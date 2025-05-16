@@ -55,6 +55,7 @@ The `PG_POOL_SIZE` variable controls the maximum number of concurrent connection
 
 ### Runtime configuration
 
+- `DEFAULT_WORKERS_PER_SINK`: Sets a global default for the number of concurrent workers to assign to each sink. If not set, Sequin will use a default based on the number of CPU cores. You may want to set higher if you have high-latency destinations, like slow webhook endpoints. Must be an integer >= 1.
 - `BACKFILL_MAX_PENDING_MESSAGES`: When backfilling, the maximum number of pending messages to accumulate in the sink's outbox before pausing the backfill. When messages start draining to the sink, the backfill will automatically resume. The default is 1M messages.
 - `MAX_MEMORY_MB`: Maximum memory limit in megabytes
   - If not set, Sequin will use available system memory

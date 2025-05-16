@@ -521,13 +521,13 @@ defmodule Sequin.Runtime.MessageHandler do
     # This should be way more assertive - we should error if we don't find the source table
     # We have a lot of tests that do not line up consumer source_tables with the message table oid
     if consumer.sequence_filter.group_column_attnums do
-      Enum.map_join(consumer.sequence_filter.group_column_attnums, ",", fn attnum ->
+      Enum.map_join(consumer.sequence_filter.group_column_attnums, ":", fn attnum ->
         fields = if message.action == :delete, do: message.old_fields, else: message.fields
         field = Sequin.Enum.find!(fields, &(&1.column_attnum == attnum))
         to_string(field.value)
       end)
     else
-      Enum.map_join(message.ids, ",", &to_string/1)
+      Enum.map_join(message.ids, ":", &to_string/1)
     end
   end
 

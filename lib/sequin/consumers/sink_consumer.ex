@@ -48,6 +48,7 @@ defmodule Sequin.Consumers.SinkConsumer do
              :status,
              :health,
              :max_memory_mb,
+             :max_storage_mb,
              :legacy_transform,
              :timestamp_format,
              :batch_timeout_ms,
@@ -69,6 +70,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :batch_timeout_ms, :integer, default: nil
     field :annotations, :map, default: %{}
     field :max_memory_mb, :integer, default: 128
+    field :max_storage_mb, :integer, default: nil
     field :partition_count, :integer, default: 1
     field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
@@ -138,6 +140,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       :sequence_id,
       :message_kind,
       :max_memory_mb,
+      :max_storage_mb,
       :transform_id,
       :routing_id
     ])
@@ -179,6 +182,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       :status,
       :annotations,
       :max_memory_mb,
+      :max_storage_mb,
       :partition_count,
       :legacy_transform,
       :transform_id,
@@ -196,6 +200,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:batch_size, less_than_or_equal_to: 1_000)
     |> validate_number(:batch_timeout_ms, greater_than: 0)
     |> validate_number(:max_memory_mb, greater_than_or_equal_to: 128)
+    |> validate_number(:max_storage_mb, greater_than_or_equal_to: 256)
     |> validate_number(:partition_count, greater_than_or_equal_to: 1)
     |> validate_number(:max_retry_count, greater_than: 0)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])

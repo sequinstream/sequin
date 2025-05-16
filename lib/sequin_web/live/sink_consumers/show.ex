@@ -1199,22 +1199,31 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp get_message_state(%{type: :sequin_stream}, %AcknowledgedMessage{}), do: "acknowledged"
   defp get_message_state(_consumer, %AcknowledgedMessage{state: "discarded"}), do: "discarded"
   defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "delivered"
-  defp get_message_state(_consumer, %{deliver_count: 0}), do: "not delivered"
 
-  defp get_message_state(consumer, %{not_visible_until: not_visible_until, state: state}) do
+  defp get_message_state(consumer, %{not_visible_until: not_visible_until, last_delivered_at: last_delivered_at}) do
+    now = DateTime.utc_now()
+    ack_deadline = if last_delivered_at, do: DateTime.add(last_delivered_at, consumer.ack_wait_ms, :millisecond)
+
     cond do
-      state == :delivered and consumer.type == :sequin_stream ->
-        "delivered"
-
-      state == :delivered ->
-        "delivering"
-
-      not_visible_until == nil ->
+      is_nil(last_delivered_at) ->
         "available"
 
-      DateTime.after?(not_visible_until, DateTime.utc_now()) ->
+      # Message is being delivered and within ack window
+      (is_nil(not_visible_until) || not DateTime.before?(last_delivered_at, not_visible_until)) &&
+          not DateTime.after?(now, ack_deadline) ->
+        if consumer.type == :sequin_stream do
+          # wording change for sequin stream sink
+          "delivered"
+        else
+          "delivering"
+        end
+
+      # Message is backing off (either explicitly set not_visible_until or past ack window)
+      (not_visible_until && DateTime.before?(now, not_visible_until)) ||
+          DateTime.after?(now, ack_deadline) ->
         "backing off"
 
+      # We're past the not_visible_until time
       true ->
         "pending re-delivery"
     end

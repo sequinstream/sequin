@@ -91,11 +91,14 @@ defmodule Sequin.Transforms do
     end
   end
 
-  def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint, _show_sensitive) do
+  def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint, show_sensitive) do
     %{
       id: http_endpoint.id,
       name: http_endpoint.name,
-      "webhook.site": true
+      "webhook.site": true,
+      headers: format_headers(http_endpoint.headers),
+      encrypted_headers:
+        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
     }
   end
 
@@ -449,12 +452,8 @@ defmodule Sequin.Transforms do
 
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: nil}), do: %{}
 
-  defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers})
-       when is_map(encrypted_headers) and map_size(encrypted_headers) == 0,
-       do: %{}
-
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}) do
-    "(#{map_size(encrypted_headers)} encrypted header(s)) - sha256sum: #{sha256sum(encrypted_headers)}"
+    Map.new(encrypted_headers, fn {key, value} -> {key, maybe_obfuscate(value, false)} end)
   end
 
   defp sha256sum(encrypted_headers) do

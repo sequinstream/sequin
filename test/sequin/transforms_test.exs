@@ -176,7 +176,7 @@ defmodule Sequin.TransformsTest do
                local: true,
                path: "/webhook",
                headers: %{"Content-Type" => "application/json"},
-               encrypted_headers: "(1 encrypted header(s)) - sha256sum: " <> _
+               encrypted_headers: %{"Authorization" => "********"}
              } = json
     end
 
@@ -198,7 +198,7 @@ defmodule Sequin.TransformsTest do
                name: "standard_endpoint",
                url: "https://api.example.com/webhook",
                headers: %{"Content-Type" => "application/json"},
-               encrypted_headers: "(1 encrypted header(s)) - sha256sum: " <> _
+               encrypted_headers: %{"Authorization" => "********"}
              } = json
     end
 

@@ -499,18 +499,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         diff_ms: diff_ms
       )
 
-      safe_wal_cursor =
-        if is_nil(state.last_commit_lsn) do
-          # If we don't have a last_commit_lsn, we're still processing the first xaction
-          # we received on boot. This can happen if we're processing a very large xaction.
-          # It is therefore safe to send an ack with the last LSN we processed.
-          {:ok, safe_wal_cursor} = Replication.restart_wal_cursor(state.id)
-          safe_wal_cursor
-        else
-          state.safe_wal_cursor_fn.(state)
-        end
-
-      Replication.put_restart_wal_cursor!(state.id, safe_wal_cursor)
+      state = update_safe_wal_cursor(state)
+      safe_wal_cursor = state.safe_wal_cursor
 
       if safe_wal_cursor.commit_lsn > wal_end do
         Logger.warning("Server LSN #{wal_end} is behind our LSN #{safe_wal_cursor.commit_lsn}")
@@ -521,7 +511,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       )
 
       reply = ack_message(safe_wal_cursor.commit_lsn)
-      state = %{state | last_lsn_acked_at: Sequin.utc_now(), safe_wal_cursor: safe_wal_cursor}
+      state = %{state | last_lsn_acked_at: Sequin.utc_now()}
       log_keepalive_ack(safe_wal_cursor.commit_lsn, clock)
       {:keep_state_and_ack, reply, state}
     else
@@ -816,6 +806,22 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     Process.send_after(self(), :process_logging, process_metrics_interval())
     {:keep_state, state}
+  end
+
+  defp update_safe_wal_cursor(%State{} = state) do
+    safe_wal_cursor =
+      if is_nil(state.last_commit_lsn) do
+        # If we don't have a last_commit_lsn, we're still processing the first xaction
+        # we received on boot. This can happen if we're processing a very large xaction.
+        # It is therefore safe to send an ack with the last LSN we processed.
+        state.safe_wal_cursor
+      else
+        state.safe_wal_cursor_fn.(state)
+      end
+
+    Replication.put_restart_wal_cursor!(state.id, safe_wal_cursor)
+
+    %{state | safe_wal_cursor: safe_wal_cursor}
   end
 
   defp verify_heartbeat(%State{} = state) do

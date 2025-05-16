@@ -30,6 +30,7 @@ defmodule SequinWeb.TransformEditTest do
     :telemetry.detach(telref)
   end
 
+  @tag :capture_log
   test "Failure telemetry is actually emitted" do
     telref =
       :telemetry_test.attach_event_handlers(self(), [

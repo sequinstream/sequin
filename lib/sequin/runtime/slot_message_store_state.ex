@@ -39,6 +39,8 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :last_logged_stats_at, non_neg_integer() | nil
     field :flush_interval, non_neg_integer()
     field :message_age_before_flush_ms, non_neg_integer()
+    field :storage_available_fn, (State.t(), non_neg_integer() -> boolean())
+    field :all_loaded?, boolean()
 
     # Rescue messages stuck in produced state
     field :visibility_check_interval, non_neg_integer()

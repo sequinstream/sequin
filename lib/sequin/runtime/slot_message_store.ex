@@ -86,6 +86,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       test_pid: Keyword.get(opts, :test_pid),
       setting_system_max_memory_bytes:
         Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
+      max_memory_bytes: Keyword.get(opts, :max_memory_bytes),
       partition: partition,
       flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(15)),
       message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2)),
@@ -127,19 +128,48 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     :ok = State.setup_ets(state)
 
-    persisted_messages =
-      consumer
-      |> Consumers.list_consumer_messages_for_consumer()
-      |> Stream.filter(&(message_partition(&1, consumer.partition_count) == state.partition))
-      |> Enum.map(fn msg ->
-        %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
-      end)
-
+    # First set max_memory_bytes and max_storage_bytes to have the limits available
     state =
       state
       |> put_max_memory_bytes()
       |> put_max_storage_bytes()
-      |> State.put_persisted_messages(persisted_messages)
+
+    # Stream messages and stop when we reach max_memory_bytes
+    {persisted_messages, current_size_bytes, message_count, all_loaded?} =
+      consumer
+      |> Consumers.stream_consumer_messages_for_consumer()
+      |> Stream.filter(&(message_partition(&1, consumer.partition_count) == state.partition))
+      |> Stream.map(fn msg ->
+        %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
+      end)
+      |> Enum.reduce_while({[], 0, 0, true}, fn msg, {messages, current_size, message_count, _all_loaded?} ->
+        new_size = current_size + msg.payload_size_bytes
+        new_message_count = message_count + 1
+
+        if new_size <= state.max_memory_bytes and new_message_count <= state.setting_max_messages do
+          {:cont, {[msg | messages], new_size, new_message_count, true}}
+        else
+          Logger.info("[SlotMessageStore] Reached memory limit, not loading more persisted messages",
+            consumer_id: state.consumer_id,
+            partition: state.partition,
+            max_memory_bytes: state.max_memory_bytes,
+            current_size_bytes: current_size
+          )
+
+          {:halt, {messages, current_size, message_count, false}}
+        end
+      end)
+
+    Logger.info("[SlotMessageStore] Loaded persisted messages",
+      consumer_id: state.consumer_id,
+      partition: state.partition,
+      message_count: message_count,
+      size_bytes: current_size_bytes,
+      all_loaded?: all_loaded?
+    )
+
+    # Now put the messages into state
+    state = State.put_persisted_messages(state, persisted_messages)
 
     Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
 
@@ -874,7 +904,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     Process.send_after(self(), :check_visibility, interval)
   end
 
-  defp put_max_memory_bytes(%State{} = state) do
+  defp put_max_memory_bytes(%State{max_memory_bytes: nil} = state) do
     consumer = state.consumer
 
     max_memory_bytes = Consumers.max_memory_bytes_for_consumer(consumer)
@@ -882,6 +912,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
     max_memory_bytes = div(max_memory_bytes, consumer.partition_count)
     Sequin.ProcessMetrics.gauge("max_memory_bytes", max_memory_bytes)
     %{state | max_memory_bytes: max_memory_bytes}
+  end
+
+  # This clause is when max_memory_bytes is already set in the state
+  # ie. for test
+  defp put_max_memory_bytes(%State{} = state) do
+    state
   end
 
   defp put_max_storage_bytes(%State{} = state) do

@@ -154,9 +154,19 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   def flush_messages(%Context{} = ctx) do
     %{replication_slot_id: slot_id, partition_count: partition_count} = ctx
 
-    Sequin.Enum.reduce_while_ok(0..(partition_count - 1), fn processor_idx ->
-      name = via_tuple(slot_id, processor_idx)
-      GenServer.call(name, :flush)
+    Sequin.TaskSupervisor
+    |> Task.Supervisor.async_stream(
+      0..(partition_count - 1),
+      fn processor_idx ->
+        name = via_tuple(slot_id, processor_idx)
+        GenServer.call(name, :flush)
+      end,
+      max_concurrency: partition_count,
+      timeout: :timer.seconds(10)
+    )
+    |> Sequin.Enum.reduce_while_ok(fn
+      {:ok, _} -> :ok
+      error -> error
     end)
   end
 

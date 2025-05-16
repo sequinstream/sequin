@@ -483,6 +483,55 @@ defmodule Sequin.Consumers do
     |> Enum.map(&ConsumerEvent.deserialize/1)
   end
 
+  @spec stream_consumer_messages_for_consumer(SinkConsumer.t(), Keyword.t()) ::
+          Enumerable.t(ConsumerRecord.t() | ConsumerEvent.t())
+  def stream_consumer_messages_for_consumer(%SinkConsumer{id: consumer_id} = consumer, opts \\ []) do
+    batch_size = Keyword.get(opts, :batch_size, 1000)
+
+    module =
+      case consumer.message_kind do
+        :event -> ConsumerEvent
+        :record -> ConsumerRecord
+      end
+
+    initial_query =
+      module
+      |> where([m], m.consumer_id == ^consumer_id)
+      |> order_by([m], asc: m.commit_lsn, asc: m.commit_idx)
+      |> limit(^batch_size)
+
+    # Query, prev_results, last_cursor
+    # last_cursor is {commit_lsn, commit_idx} of the last record
+    {initial_query, [], nil}
+    |> Stream.unfold(fn
+      # No more results, perform query with the current cursor
+      {query, [], cursor} ->
+        updated_query =
+          if is_nil(cursor) do
+            query
+          else
+            {commit_lsn, commit_idx} = cursor
+            where(query, [m], {m.commit_lsn, m.commit_idx} > {^commit_lsn, ^commit_idx})
+          end
+
+        case Repo.all(updated_query) do
+          # Database has nothing more
+          [] ->
+            nil
+
+          [h | t] = results ->
+            # Get the last record's cursor for next pagination
+            last_record = List.last(results)
+            next_cursor = {last_record.commit_lsn, last_record.commit_idx}
+            {h, {query, t, next_cursor}}
+        end
+
+      {query, [h | t], cursor} ->
+        {h, {query, t, cursor}}
+    end)
+    |> Stream.map(&module.deserialize/1)
+  end
+
   def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
     case consumer.message_kind do
       :event -> upsert_consumer_events(messages)

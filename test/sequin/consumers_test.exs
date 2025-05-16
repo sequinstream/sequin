@@ -2366,4 +2366,92 @@ defmodule Sequin.ConsumersTest do
       assert is_struct(retrieved_record["decimal_field"], Decimal)
     end
   end
+
+  describe "stream_messages/3" do
+    test "streams consummer messages ordered by commit_lsn and commit_idx" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      # Create events with different commit_lsn and commit_idx values
+      # The order here is intentionally mixed up
+      events = [
+        # LSN: 200, IDX: 2
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 200,
+          commit_idx: 2
+        ),
+        # LSN: 100, IDX: 2
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 100,
+          commit_idx: 2
+        ),
+        # LSN: 200, IDX: 1
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 200,
+          commit_idx: 1
+        ),
+        # LSN: 100, IDX: 1
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 100,
+          commit_idx: 1
+        )
+      ]
+
+      # Expected order based on [commit_lsn, commit_idx] asc
+      expected_ordered_ids = [
+        # LSN: 100, IDX: 1
+        Enum.at(events, 3).id,
+        # LSN: 100, IDX: 2
+        Enum.at(events, 1).id,
+        # LSN: 200, IDX: 1
+        Enum.at(events, 2).id,
+        # LSN: 200, IDX: 2
+        Enum.at(events, 0).id
+      ]
+
+      streamed_messages =
+        consumer
+        |> Consumers.stream_consumer_messages_for_consumer()
+        |> Enum.to_list()
+
+      streamed_ids = Enum.map(streamed_messages, & &1.id)
+      assert streamed_ids == expected_ordered_ids
+    end
+
+    test "cursor-based pagination works correctly" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      # Create 10 events with increasing LSNs
+      Enum.map(1..10, fn i ->
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: i * 100,
+          commit_idx: 1
+        )
+      end)
+
+      # Stream with a small batch size to force pagination
+      batch_size = 3
+
+      streamed_messages =
+        consumer
+        |> Consumers.stream_consumer_messages_for_consumer(batch_size: batch_size)
+        |> Enum.to_list()
+
+      # All 10 events should be retrieved in order
+      assert length(streamed_messages) == 10
+
+      # Check if they're in the correct LSN order
+      streamed_lsns = Enum.map(streamed_messages, & &1.commit_lsn)
+      assert streamed_lsns == Enum.map(1..10, fn i -> i * 100 end)
+    end
+  end
 end

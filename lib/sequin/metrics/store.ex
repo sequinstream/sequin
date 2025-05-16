@@ -5,14 +5,14 @@ defmodule Sequin.Metrics.Store do
 
   # Count functions
   def incr_count(key, amount \\ 1) do
-    case Redis.command(["INCRBY", "metrics:count:#{key}", amount]) do
+    case Redis.command(["INCRBY", metrics_count_key(key), amount]) do
       {:ok, _} -> :ok
       {:error, error} -> {:error, error}
     end
   end
 
   def get_count(key) do
-    case Redis.command(["GET", "metrics:count:#{key}"]) do
+    case Redis.command(["GET", metrics_count_key(key)]) do
       {:ok, nil} -> {:ok, 0}
       {:ok, value} -> {:ok, String.to_integer(value)}
       {:error, error} -> {:error, error}
@@ -20,7 +20,7 @@ defmodule Sequin.Metrics.Store do
   end
 
   def reset_count(key) do
-    case Redis.command(["DEL", "metrics:count:#{key}"]) do
+    case Redis.command(["DEL", metrics_count_key(key)]) do
       {:ok, _} -> :ok
       {:error, error} -> {:error, error}
     end
@@ -34,8 +34,8 @@ defmodule Sequin.Metrics.Store do
     now = :os.system_time(:second)
 
     [
-      ["INCRBY", "metrics:throughput:#{key}:#{now}", count],
-      ["EXPIRE", "metrics:throughput:#{key}:#{now}", @timeseries_windows + 1]
+      ["INCRBY", metrics_throughput_key(key, now), count],
+      ["EXPIRE", metrics_throughput_key(key, now), @timeseries_windows + 1]
     ]
     |> Redis.pipeline()
     |> case do
@@ -48,9 +48,9 @@ defmodule Sequin.Metrics.Store do
   def get_throughput(key) do
     now = :os.system_time(:second)
     buckets = Enum.to_list((now - @instant_throughput_window + 1)..now)
-    commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
+    keys = Enum.map(buckets, &metrics_throughput_key(key, &1))
 
-    case Redis.pipeline(commands) do
+    case Redis.command(["MGET" | keys]) do
       {:ok, results} ->
         sum =
           results
@@ -75,9 +75,9 @@ defmodule Sequin.Metrics.Store do
     now = :os.system_time(:second)
     most_recent_full_window = now - 1
     buckets = Enum.to_list((most_recent_full_window - window_count + 1)..most_recent_full_window)
-    commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
+    keys = Enum.map(buckets, &metrics_throughput_key(key, &1))
 
-    case Redis.pipeline(commands) do
+    case Redis.command(["MGET" | keys]) do
       {:ok, results} ->
         {:ok, Enum.map(results, &String.to_integer(&1 || "0"))}
 
@@ -90,8 +90,8 @@ defmodule Sequin.Metrics.Store do
   @latency_windows 5
   def measure_latency(key, value) do
     [
-      ["RPUSH", "metrics:latency:#{key}", value],
-      ["LTRIM", "metrics:latency:#{key}", -@latency_windows, -1]
+      ["RPUSH", metrics_latency_key(key), value],
+      ["LTRIM", metrics_latency_key(key), -@latency_windows, -1]
     ]
     |> Redis.pipeline()
     |> case do
@@ -101,7 +101,7 @@ defmodule Sequin.Metrics.Store do
   end
 
   def get_latency(key) do
-    case Redis.command(["LRANGE", "metrics:latency:#{key}", "0", "-1"]) do
+    case Redis.command(["LRANGE", metrics_latency_key(key), "0", "-1"]) do
       {:ok, values} ->
         values =
           Enum.map(values, fn str ->
@@ -122,17 +122,22 @@ defmodule Sequin.Metrics.Store do
   end
 
   def measure_gauge(key, value) do
-    case Redis.command(["SET", "metrics:gauge:#{key}", value]) do
+    case Redis.command(["SET", metrics_gauge_key(key), value]) do
       {:ok, _} -> :ok
       {:error, error} -> {:error, error}
     end
   end
 
   def get_gauge(key) do
-    case Redis.command(["GET", "metrics:gauge:#{key}"]) do
+    case Redis.command(["GET", metrics_gauge_key(key)]) do
       {:ok, nil} -> {:ok, nil}
       {:ok, value} -> {:ok, String.to_integer(value)}
       {:error, error} -> {:error, error}
     end
   end
+
+  defp metrics_count_key(key), do: "metrics:count:#{key}"
+  defp metrics_gauge_key(key), do: "metrics:gauge:#{key}"
+  defp metrics_latency_key(key), do: "metrics:latency:#{key}"
+  defp metrics_throughput_key(key, bucket), do: "metrics:throughput:{#{key}}:#{bucket}"
 end

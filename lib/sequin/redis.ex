@@ -29,8 +29,21 @@ defmodule Sequin.Redis do
       :eredis_cluster.q(connection, command)
     end
 
+    # Redis cluster only supports pipelines where all keys map to the same node
+    # We can guarantee this throughout the system by using `hash tags`
+    # ie. `my-key:{some-hash-value}`
+    # we have not done this yet! so we hack it here with Enum.map
+    # but: this raise was left as a warning
     def qp(connection, commands) do
-      :eredis_cluster.q(connection, commands)
+      if env() == :prod or length(commands) <= 3 do
+        Enum.map(commands, &q(connection, &1))
+      else
+        raise "Redis pipeline length must be <= 3. Received #{length(commands)} commands"
+      end
+    end
+
+    defp env do
+      Application.get_env(:sequin, :env)
     end
   end
 
@@ -88,13 +101,19 @@ defmodule Sequin.Redis do
           {:ok, result}
 
         {:error, :no_connection} ->
-          {:error, Error.service(service: :redis, code: "no_connection", message: "No connection to Redis")}
+          {:error,
+           Error.service(
+             service: :redis,
+             code: "no_connection",
+             message: "No connection to Redis"
+           )}
 
         {:error, :timeout} ->
           {:error, Error.service(service: :redis, code: :timeout, message: "Timeout connecting to Redis")}
 
         {:error, error} when is_binary(error) or is_atom(error) ->
           Logger.error("Redis command failed: #{error}", error: error)
+
           {:error, Error.service(service: :redis, code: :command_failed, message: to_string(error))}
       end
     end)
@@ -107,13 +126,17 @@ defmodule Sequin.Redis do
       res = connection() |> redis_client().q(command) |> parse_result()
 
       case res do
-        {:ok, result} -> result
-        {:error, error} -> raise Error.service(service: :redis, code: :command_failed, message: error)
+        {:ok, result} ->
+          result
+
+        {:error, error} ->
+          raise Error.service(service: :redis, code: :command_failed, message: error)
       end
     end)
   end
 
-  @spec pipeline([command()], [opt]) :: {:ok, [pipeline_return_value()]} | {:error, ServiceError.t()}
+  @spec pipeline([command()], [opt]) ::
+          {:ok, [pipeline_return_value()]} | {:error, ServiceError.t()}
         when opt: command_opt()
   def pipeline(commands, opts \\ []) do
     maybe_time(commands, opts[:query_name], fn ->
@@ -133,7 +156,12 @@ defmodule Sequin.Redis do
            end)}
 
         {:error, :no_connection} ->
-          {:error, Error.service(service: :redis, code: "no_connection", message: "No connection to Redis")}
+          {:error,
+           Error.service(
+             service: :redis,
+             code: "no_connection",
+             message: "No connection to Redis"
+           )}
       end
     end)
   end
@@ -170,7 +198,9 @@ defmodule Sequin.Redis do
 
   @sample_rate 1
   defp maybe_time([command_kind | _commands], query_name, fun) do
-    command_kind = if is_list(command_kind), do: "pipeline-#{List.first(command_kind)}", else: command_kind
+    command_kind =
+      if is_list(command_kind), do: "pipeline-#{List.first(command_kind)}", else: command_kind
+
     query_name = query_name || "unnamed_query"
     {time_ms, result} = :timer.tc(fun, :millisecond)
 
@@ -214,8 +244,11 @@ defmodule Sequin.Redis do
 
   defp set_redis_client do
     case parse_redis_connection_opts() do
-      %{database: 0} -> Application.put_env(:sequin, RedisClient, ClusterClient)
-      %{database: database} when database > 0 and database < 16 -> Application.put_env(:sequin, RedisClient, Client)
+      %{database: 0} ->
+        Application.put_env(:sequin, RedisClient, ClusterClient)
+
+      %{database: database} when database > 0 and database < 16 ->
+        Application.put_env(:sequin, RedisClient, Client)
     end
 
     :ok

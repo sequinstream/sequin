@@ -38,11 +38,9 @@ defmodule Sequin.Runtime.MessageLedgers do
     if subsample?() do
       ingested_at = Sequin.utc_now()
 
-      commands =
-        Enum.map(wal_cursors, fn wal_cursor ->
+      score_value_pairs =
+        Enum.flat_map(wal_cursors, fn wal_cursor ->
           [
-            "ZADD",
-            undelivered_cursors_key(consumer_id),
             DateTime.to_unix(ingested_at, :second),
             member_from_wal_cursor(wal_cursor)
           ]
@@ -50,7 +48,7 @@ defmodule Sequin.Runtime.MessageLedgers do
 
       query_name = "message_ledgers:wal_cursors_ingested"
 
-      case Redis.pipeline(commands, query_name: query_name) do
+      case Redis.command(["ZADD", undelivered_cursors_key(consumer_id) | score_value_pairs], query_name: query_name) do
         {:ok, _results} -> :ok
         {:error, error} -> {:error, error}
       end
@@ -70,13 +68,13 @@ defmodule Sequin.Runtime.MessageLedgers do
   def wal_cursors_delivered(consumer_id, wal_cursors) do
     query_name = "message_ledgers:wal_cursors_delivered"
 
-    wal_cursors
-    |> Enum.flat_map(fn commit ->
-      [
-        ["ZREM", undelivered_cursors_key(consumer_id), member_from_wal_cursor(commit)],
-        ["ZADD", delivered_cursors_key(consumer_id), score_from_wal_cursor(commit), member_from_wal_cursor(commit)]
-      ]
-    end)
+    members = Enum.map(wal_cursors, &member_from_wal_cursor/1)
+    score_member_pairs = Enum.flat_map(wal_cursors, &[score_from_wal_cursor(&1), member_from_wal_cursor(&1)])
+
+    [
+      ["ZREM", undelivered_cursors_key(consumer_id) | members],
+      ["ZADD", delivered_cursors_key(consumer_id) | score_member_pairs]
+    ]
     |> Redis.pipeline(query_name: query_name)
     |> case do
       {:ok, _} -> :ok
@@ -284,17 +282,15 @@ defmodule Sequin.Runtime.MessageLedgers do
       reached_at = Sequin.utc_now()
       query_name = "message_ledgers:wal_cursors_reached_checkpoint"
 
-      commands =
-        Enum.map(wal_cursors, fn wal_cursor ->
+      score_value_pairs =
+        Enum.flat_map(wal_cursors, fn wal_cursor ->
           [
-            "ZADD",
-            checkpoint_key(consumer_id, checkpoint),
             DateTime.to_unix(reached_at, :second),
             member_from_wal_cursor(wal_cursor)
           ]
         end)
 
-      case Redis.pipeline(commands, query_name: query_name) do
+      case Redis.command(["ZADD", checkpoint_key(consumer_id, checkpoint) | score_value_pairs], query_name: query_name) do
         {:ok, _results} -> :ok
         {:error, error} -> {:error, error}
       end

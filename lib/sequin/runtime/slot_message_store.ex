@@ -138,6 +138,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     state =
       state
       |> put_max_memory_bytes()
+      |> put_max_storage_bytes()
       |> State.put_persisted_messages(persisted_messages)
 
     Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
@@ -881,6 +882,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
     max_memory_bytes = div(max_memory_bytes, consumer.partition_count)
     Sequin.ProcessMetrics.gauge("max_memory_bytes", max_memory_bytes)
     %{state | max_memory_bytes: max_memory_bytes}
+  end
+
+  defp put_max_storage_bytes(%State{} = state) do
+    consumer = state.consumer
+
+    max_storage_bytes = Consumers.max_storage_bytes_for_consumer(consumer)
+
+    %{state | max_storage_bytes: max_storage_bytes}
   end
 
   defp exit_to_sequin_error({:timeout, {GenServer, :call, [_, _, timeout]}}) do

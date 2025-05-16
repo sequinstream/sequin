@@ -74,6 +74,39 @@ defmodule Sequin.SlotMessageStoreTest do
     end
   end
 
+  describe "SlotMessageStore with persisted messages that exceed max_memory_bytes" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1)
+
+      data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
+      data_size_bytes = :erlang.external_size(put_in(data.metadata.consumer, nil))
+
+      for _ <- 1..20 do
+        ConsumersFactory.insert_consumer_message!(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          data: data
+        )
+      end
+
+      max_memory_bytes = data_size_bytes * 10
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor, consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self()}
+      )
+
+      %{consumer: consumer}
+    end
+
+    test ":init loads only the first 10 messages", %{consumer: consumer} do
+      # 20 on disk
+      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 20
+
+      # 10 in memory
+      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
+    end
+  end
+
   describe "SlotMessageStore message handling" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()

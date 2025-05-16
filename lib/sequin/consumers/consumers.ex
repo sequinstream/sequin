@@ -728,6 +728,19 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def consumer_partition_size_bytes(%SinkConsumer{} = consumer) do
+    case Repo.query("SELECT pg_total_relation_size('#{stream_schema()}.#{partition_name(consumer)}')") do
+      {:ok, %Postgrex.Result{rows: [[size]]}} when is_integer(size) ->
+        {:ok, size}
+
+      {:ok, %Postgrex.Result{rows: []}} ->
+        {:error, Error.not_found(entity: :consumer_partition)}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
   # Acking Messages
   @spec ack_messages(consumer(), [String.t()]) :: {:ok, non_neg_integer()}
   def ack_messages(_consumer, []) do

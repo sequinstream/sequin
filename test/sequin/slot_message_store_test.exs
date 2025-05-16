@@ -773,9 +773,14 @@ defmodule Sequin.SlotMessageStoreTest do
     end
   end
 
-  describe "SlotMessageStore load shedding behavior" do
+  describe "SlotMessageStore put_messages that exceed max_memory_bytes" do
     test "returns error when load_shedding_policy=pause_on_full" do
-      consumer = ConsumersFactory.insert_sink_consumer!(load_shedding_policy: :pause_on_full, max_memory_mb: 128)
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          load_shedding_policy: :pause_on_full,
+          max_memory_mb: 128,
+          max_storage_mb: nil
+        )
 
       start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
 
@@ -793,7 +798,11 @@ defmodule Sequin.SlotMessageStoreTest do
     end
 
     test "returns ok when load_shedding_policy=discard_on_full" do
-      consumer = ConsumersFactory.insert_sink_consumer!(load_shedding_policy: :discard_on_full)
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          load_shedding_policy: :discard_on_full,
+          max_storage_mb: nil
+        )
 
       start_supervised!(
         {SlotMessageStoreSupervisor, consumer: consumer, test_pid: self(), setting_system_max_memory_bytes: 1}
@@ -809,6 +818,100 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Put message in store
       assert :ok = SlotMessageStore.put_messages(consumer, [message])
+    end
+
+    test "returns ok when messages are stored on disk" do
+      consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1, max_memory_mb: 128, max_storage_mb: 512)
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor,
+         consumer: consumer, test_pid: self(), max_memory_bytes: 1, storage_available_fn: fn _, _ -> true end}
+      )
+
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      # Put message in store
+      assert :ok = SlotMessageStore.put_messages(consumer, [message])
+
+      assert_receive {:put_messages_to_disk, [^message]}, 1000
+      # Verify message is stored on disk
+      assert [_] = Consumers.list_consumer_messages_for_consumer(consumer)
+
+      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 0
+    end
+
+    test "returns error when messages will not fit on disk" do
+      consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1, max_memory_mb: 128, max_storage_mb: 512)
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor,
+         consumer: consumer, test_pid: self(), max_memory_bytes: 1, storage_available_fn: fn _, _ -> false end}
+      )
+
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      # Put message in store
+      assert {:error, %Error.InvariantError{}} = SlotMessageStore.put_messages(consumer, [message])
+    end
+
+    test "puts to disk if all_loaded? is false, even with room in memory" do
+      consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1, max_memory_mb: 128, max_storage_mb: 1024)
+
+      data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
+      data_size_bytes = :erlang.external_size(put_in(data.metadata.consumer, nil))
+
+      for _ <- 1..20 do
+        ConsumersFactory.insert_consumer_message!(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          data: data
+        )
+      end
+
+      max_memory_bytes = data_size_bytes * 10
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor, consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self()}
+      )
+
+      # 20 on disk
+      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 20
+
+      # 10 in memory
+      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
+
+      acks_ids = Enum.map(SlotMessageStore.peek_messages(consumer, 100), & &1.ack_id)
+      assert {:ok, 10} = SlotMessageStore.messages_succeeded(consumer, acks_ids)
+
+      # 0 in memory
+      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 0
+
+      # 10 on disk
+      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 10
+
+      new_message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      assert :ok = SlotMessageStore.put_messages(consumer, [new_message])
+
+      assert_receive {:put_messages_to_disk, [^new_message]}, 1000
+
+      # 11 on disk
+      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 11
+
+      # 0 in memory
+      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 0
     end
   end
 end

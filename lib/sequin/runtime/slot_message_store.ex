@@ -71,6 +71,83 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {:via, :syn, {:replication, {__MODULE__, {consumer_id, partition}}}}
   end
 
+  @impl GenServer
+  def init(opts) do
+    consumer = opts[:consumer]
+    consumer_id = if consumer, do: consumer.id, else: Keyword.fetch!(opts, :consumer_id)
+    partition = Keyword.fetch!(opts, :partition)
+
+    Logger.metadata(consumer_id: consumer_id)
+    Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
+
+    state = %State{
+      consumer: consumer,
+      consumer_id: consumer_id,
+      test_pid: Keyword.get(opts, :test_pid),
+      setting_system_max_memory_bytes:
+        Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
+      partition: partition,
+      flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(15)),
+      message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2)),
+      visibility_check_interval: Keyword.get(opts, :visibility_check_interval, :timer.minutes(5)),
+      max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2))
+    }
+
+    Sequin.ProcessMetrics.start()
+    Sequin.ProcessMetrics.metadata(%{consumer_id: consumer_id, partition: partition})
+
+    {:ok, state, {:continue, :init}}
+  end
+
+  @impl GenServer
+  def handle_continue(:init, %State{} = state) do
+    # If we're not self-hosted, there will be no system-wide max memory bytes
+    # so we don't need to recalculate max_memory_bytes on consumers changing
+    if state.setting_system_max_memory_bytes do
+      :syn.join(:consumers, :consumers_changed, self())
+    end
+
+    # Allow test process to access the database connection
+    if state.test_pid do
+      Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
+      Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
+      Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
+    end
+
+    consumer =
+      if state.consumer do
+        state.consumer
+      else
+        Consumers.get_sink_consumer!(state.consumer_id)
+      end
+
+    state = %State{state | consumer: consumer}
+
+    Logger.metadata(account_id: consumer.account_id, replication_id: consumer.replication_slot_id)
+
+    :ok = State.setup_ets(state)
+
+    persisted_messages =
+      consumer
+      |> Consumers.list_consumer_messages_for_consumer()
+      |> Stream.filter(&(message_partition(&1, consumer.partition_count) == state.partition))
+      |> Enum.map(fn msg ->
+        %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
+      end)
+
+    state =
+      state
+      |> put_max_memory_bytes()
+      |> State.put_persisted_messages(persisted_messages)
+
+    Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
+
+    schedule_max_memory_check()
+    schedule_flush_check(state.flush_interval)
+    schedule_visibility_check(state.visibility_check_interval)
+    {:noreply, state}
+  end
+
   @doc """
   Stores new messages in the message store.
 
@@ -391,83 +468,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
       id: via_tuple(consumer_id, partition),
       start: {__MODULE__, :start_link, [opts]}
     }
-  end
-
-  @impl GenServer
-  def init(opts) do
-    consumer = opts[:consumer]
-    consumer_id = if consumer, do: consumer.id, else: Keyword.fetch!(opts, :consumer_id)
-    partition = Keyword.fetch!(opts, :partition)
-
-    Logger.metadata(consumer_id: consumer_id)
-    Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
-
-    state = %State{
-      consumer: consumer,
-      consumer_id: consumer_id,
-      test_pid: Keyword.get(opts, :test_pid),
-      setting_system_max_memory_bytes:
-        Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
-      partition: partition,
-      flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(15)),
-      message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2)),
-      visibility_check_interval: Keyword.get(opts, :visibility_check_interval, :timer.minutes(5)),
-      max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2))
-    }
-
-    Sequin.ProcessMetrics.start()
-    Sequin.ProcessMetrics.metadata(%{consumer_id: consumer_id, partition: partition})
-
-    {:ok, state, {:continue, :init}}
-  end
-
-  @impl GenServer
-  def handle_continue(:init, %State{} = state) do
-    # If we're not self-hosted, there will be no system-wide max memory bytes
-    # so we don't need to recalculate max_memory_bytes on consumers changing
-    if state.setting_system_max_memory_bytes do
-      :syn.join(:consumers, :consumers_changed, self())
-    end
-
-    # Allow test process to access the database connection
-    if state.test_pid do
-      Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
-      Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
-      Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
-    end
-
-    consumer =
-      if state.consumer do
-        state.consumer
-      else
-        Consumers.get_sink_consumer!(state.consumer_id)
-      end
-
-    state = %State{state | consumer: consumer}
-
-    Logger.metadata(account_id: consumer.account_id, replication_id: consumer.replication_slot_id)
-
-    :ok = State.setup_ets(state)
-
-    persisted_messages =
-      consumer
-      |> Consumers.list_consumer_messages_for_consumer()
-      |> Stream.filter(&(message_partition(&1, consumer.partition_count) == state.partition))
-      |> Enum.map(fn msg ->
-        %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
-      end)
-
-    state =
-      state
-      |> put_max_memory_bytes()
-      |> State.put_persisted_messages(persisted_messages)
-
-    Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
-
-    schedule_max_memory_check()
-    schedule_flush_check(state.flush_interval)
-    schedule_visibility_check(state.visibility_check_interval)
-    {:noreply, state}
   end
 
   @impl GenServer

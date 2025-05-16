@@ -584,7 +584,11 @@
           transformTypes={["function", "path"]}
           createNewQueryParams="?type=function"
           bind:refreshState={transformRefreshState}
-        />
+        >
+          <svelte:fragment slot="none-option">
+            No transform. Messages will be sent as-is to the sink destination.
+          </svelte:fragment>
+        </FunctionPicker>
       </svelte:fragment>
     </ExpandableCard>
 

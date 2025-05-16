@@ -127,7 +127,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
         Receive messages from your stream again to see the new change. This time, include the `?batch_size=10` parameter to receive multiple messages at once, like so:
 
         ```bash
-        curl -X GET "http://localhost:7376/api/http_pull_consumers/products-stream/receive?batch_size=10" \
+        curl -X GET "http://localhost:7376/api/http_pull_consumers/products_sink/receive?batch_size=10" \
           -H "Authorization: Bearer YOUR_API_TOKEN"
         ```
 
@@ -164,7 +164,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
         You can acknowledge messages to ensure they're not delivered again:
 
         ```bash
-        curl -X POST "https://api.sequinstream.com/api/http_pull_consumers/products-stream/ack" \
+        curl -X POST "http://localhost:7376/api/http_pull_consumers/products_sink/ack" \
           -H "Authorization: Bearer YOUR_API_TOKEN" \
           -H "Content-Type: application/json" \
           -d '{"ack_ids": ["MTYyeJ7abUjl1pO"]}'

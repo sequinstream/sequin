@@ -1517,7 +1517,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           fn {consumer, ref} ->
             SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
           end,
-          max_concurrency: map_size(state.message_store_refs),
+          max_concurrency: max(map_size(state.message_store_refs), 1),
           timeout: :timer.seconds(15)
         )
         |> Enum.flat_map(fn {:ok, cursors} -> cursors end)

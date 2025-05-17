@@ -16,7 +16,7 @@ defmodule Sequin.Health.KickoffCheckHttpEndpointHealthWorker do
   def perform(_) do
     Consumers.list_http_endpoints()
     |> Enum.with_index()
-    |> Enum.map(fn {endpoint, index} ->
+    |> Enum.each(fn {endpoint, index} ->
       # Integer division to get the delay in seconds (10 per second)
       delay_seconds = div(index, 10)
       CheckHttpEndpointHealthWorker.enqueue_in(endpoint.id, delay_seconds)

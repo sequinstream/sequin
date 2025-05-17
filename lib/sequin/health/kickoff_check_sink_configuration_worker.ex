@@ -16,7 +16,7 @@ defmodule Sequin.Health.KickoffCheckSinkConfigurationWorker do
   def perform(_) do
     Consumers.list_active_sink_consumers()
     |> Enum.with_index()
-    |> Enum.map(fn {consumer, index} ->
+    |> Enum.each(fn {consumer, index} ->
       # Integer division to get the delay in seconds (10 per second)
       delay_seconds = div(index, 10)
 

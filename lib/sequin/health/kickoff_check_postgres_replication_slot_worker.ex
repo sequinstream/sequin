@@ -16,7 +16,7 @@ defmodule Sequin.Health.KickoffCheckPostgresReplicationSlotWorker do
   def perform(_) do
     Databases.list_dbs()
     |> Enum.with_index()
-    |> Enum.map(fn {db, index} ->
+    |> Enum.each(fn {db, index} ->
       # Integer division to get the delay in seconds (10 per second)
       delay_seconds = div(index, 10)
       CheckPostgresReplicationSlotWorker.enqueue_in(db.id, delay_seconds)

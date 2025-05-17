@@ -427,6 +427,7 @@ defmodule SequinWeb.PostgresDatabaseControllerTest do
 
       payload = %{
         "url" => url,
+        "ssl" => false,
         "name" => "URLTestDB",
         "replication_slots" => [slot_attrs]
       }

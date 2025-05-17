@@ -404,7 +404,7 @@ defmodule SequinWeb.DatabasesLive.Form do
       "port" => database.port || 5432,
       "username" => database.username || "postgres",
       "password" => database.password,
-      "ssl" => database.ssl,
+      "ssl" => database.ssl || true,
       "publication_name" => database.replication_slot.publication_name || "sequin_pub",
       "slot_name" => database.replication_slot.slot_name || "sequin_slot",
       "useLocalTunnel" => database.use_local_tunnel || false,

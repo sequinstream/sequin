@@ -118,15 +118,27 @@ defmodule Sequin.ConfigParser do
               "[ConfigParser] Failed to get total memory bytes, using very high limit (100GB). (This can happen if Sequin is running on a non-Linux system. See \"Configuration\" reference for more details.)"
             )
 
-            100 * 1024 * 1024 * 1024
+            Sequin.Size.gb(100)
         end
 
       mb_str ->
         # Use explicit limit with buffer
         mb_str
         |> String.to_integer()
-        |> Kernel.*(1024 * 1024)
+        |> Sequin.Size.mb()
         |> apply_buffer(buffer_percent)
+    end
+  end
+
+  def max_storage_bytes(env) do
+    case env["MAX_STORAGE_MB"] do
+      nil ->
+        nil
+
+      mb_str ->
+        mb_str
+        |> String.to_integer()
+        |> Sequin.Size.mb()
     end
   end
 

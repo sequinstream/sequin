@@ -237,6 +237,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> put_change(:max_waiting, get_field(changeset, :max_waiting) || 20)
     |> put_change(:max_ack_pending, get_field(changeset, :max_ack_pending) || 10_000)
     |> put_change(:max_memory_mb, get_field(changeset, :max_memory_mb) || 128)
+    |> put_change(:max_storage_mb, get_field(changeset, :max_storage_mb) || default_max_storage_mb())
     |> put_change(:partition_count, get_field(changeset, :partition_count) || 1)
     |> put_change(:legacy_transform, get_field(changeset, :legacy_transform) || :none)
     |> put_change(:message_kind, get_field(changeset, :message_kind) || :event)
@@ -332,4 +333,11 @@ defmodule Sequin.Consumers.SinkConsumer do
   end
 
   def preload_http_endpoint(consumer), do: consumer
+
+  defp default_max_storage_mb do
+    case Application.get_env(:sequin, :max_storage_bytes) do
+      nil -> nil
+      bytes -> round(bytes / 1024 / 1024)
+    end
+  end
 end

@@ -1111,7 +1111,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       )
 
       PostgresRelationHashCache.update_schema_hash(state.postgres_database.id, id, current_hash)
-      DatabaseUpdateWorker.enqueue(state.postgres_database.id, unique_period: 0)
+      unique_period = if env() == :test, do: 0, else: 5
+      DatabaseUpdateWorker.enqueue(state.postgres_database.id, unique_period: unique_period)
     end
 
     # Store using the actual relation_id but with parent table info
@@ -1712,5 +1713,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp observe_ingestion_latency(%State{} = state, ts) do
     latency_us = DateTime.diff(Sequin.utc_now(), ts, :microsecond)
     Prometheus.observe_ingestion_latency(state.replication_slot.id, state.replication_slot.slot_name, latency_us)
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

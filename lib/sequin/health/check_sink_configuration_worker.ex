@@ -4,7 +4,11 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
   use Oban.Worker,
     queue: :health_checks,
     max_attempts: 1,
-    unique: [period: 30, timestamp: :scheduled_at]
+    unique: [
+      period: :infinity,
+      states: ~w(available scheduled retryable)a,
+      timestamp: :scheduled_at
+    ]
 
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
@@ -62,16 +66,9 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     |> Oban.insert()
   end
 
-  def enqueue(sink_consumer_id, unique: false) do
+  def enqueue_for_user(sink_consumer_id) do
     %{sink_consumer_id: sink_consumer_id}
-    # Effectively disable unique constraint for this job
-    |> new(unique: [states: [:available], period: 1])
-    |> Oban.insert()
-  end
-
-  def enqueue_in(sink_consumer_id, delay_seconds) do
-    %{sink_consumer_id: sink_consumer_id}
-    |> new(schedule_in: delay_seconds)
+    |> new(queue: :user_submitted)
     |> Oban.insert()
   end
 

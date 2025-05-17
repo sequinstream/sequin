@@ -11,7 +11,7 @@
   } from "$lib/components/ui/dialog";
   import { Label } from "$lib/components/ui/label";
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
-  import { ChevronRight } from "lucide-svelte";
+  import { ChevronRight, ChevronLeft } from "lucide-svelte";
   import { Database, Plug, Webhook, Pause, StopCircle } from "lucide-svelte";
   import { ArrowDownSquare } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
@@ -65,10 +65,17 @@
   export let live: any;
   export let hasDatabases: boolean;
   export let selfHosted: boolean;
+  export let page: number;
+  export let pageSize: number;
+  export let totalCount: number;
   let selectedDestination: string;
   let dialogOpen = false;
 
-  const hasConsumers = consumers.length > 0;
+  let pageLoading = false;
+  $: hasConsumers = totalCount > 0;
+  $: pageCount = Math.ceil(totalCount / pageSize);
+  $: startIndex = page * pageSize + 1;
+  $: endIndex = Math.min((page + 1) * pageSize, totalCount);
 
   const sinks = [
     {
@@ -255,6 +262,16 @@
       }
     });
   }
+
+  function changePage(newPage: number) {
+    if (newPage >= 0 && newPage < pageCount) {
+      page = newPage;
+      pageLoading = true;
+      live.pushEvent("change_page", { page }, () => {
+        pageLoading = false;
+      });
+    }
+  }
 </script>
 
 <div class="container mx-auto py-10">
@@ -358,6 +375,31 @@
         {/each}
       </Table.Body>
     </Table.Root>
+    {#if totalCount > pageSize}
+      <div class="flex justify-between items-center mt-4">
+        <div>
+          Showing {startIndex} to {endIndex} of {totalCount} sinks
+        </div>
+        <div class="flex gap-2">
+          <Button
+            variant="outline"
+            on:click={() => changePage(page - 1)}
+            disabled={page === 0 || pageLoading}
+          >
+            <ChevronLeft class="h-4 w-4 mr-1" />
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            on:click={() => changePage(page + 1)}
+            disabled={page >= pageCount - 1 || pageLoading}
+          >
+            Next
+            <ChevronRight class="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      </div>
+    {/if}
   {/if}
 </div>
 

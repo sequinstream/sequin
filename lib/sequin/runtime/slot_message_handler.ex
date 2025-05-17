@@ -165,7 +165,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       timeout: :timer.seconds(10)
     )
     |> Sequin.Enum.reduce_while_ok(fn
-      {:ok, _} -> :ok
+      {:ok, :ok} -> :ok
       error -> error
     end)
   end

@@ -1504,12 +1504,23 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     with :ok <- verify_messages_flushed(state),
          :ok <- verify_monitor_refs(state) do
-      low_for_message_stores =
-        state.message_store_refs
-        |> Enum.flat_map(fn {consumer_id, ref} ->
+      consumers_with_refs =
+        Enum.map(state.message_store_refs, fn {consumer_id, ref} ->
           consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
-          SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+          {consumer, ref}
         end)
+
+      low_for_message_stores =
+        Sequin.TaskSupervisor
+        |> Task.Supervisor.async_stream(
+          consumers_with_refs,
+          fn {consumer, ref} ->
+            SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+          end,
+          max_concurrency: map_size(state.message_store_refs),
+          timeout: :timer.seconds(15)
+        )
+        |> Enum.flat_map(fn {:ok, cursors} -> cursors end)
         |> Enum.filter(& &1)
         |> case do
           [] -> nil

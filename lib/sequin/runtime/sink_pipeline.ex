@@ -378,7 +378,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       |> Stream.map(&Consumers.advance_delivery_state_for_failure/1)
       |> Enum.map(&%{&1 | data: nil})
 
-    Enum.map(failed, fn %Message{} = message ->
+    Enum.each(failed, fn %Message{} = message ->
       error =
         case message.status do
           {:failed, error} when is_exception(error) ->

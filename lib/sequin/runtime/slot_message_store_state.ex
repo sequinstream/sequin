@@ -215,18 +215,18 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     pop_messages(state, Map.keys(state.messages))
   end
 
-  @spec is_message_group_persisted?(State.t(), String.t()) :: boolean()
+  @spec message_group_persisted?(State.t(), String.t()) :: boolean()
   # Messages without group_ids do not belong to any group
-  def is_message_group_persisted?(%State{}, nil) do
+  def message_group_persisted?(%State{}, nil) do
     false
   end
 
-  def is_message_group_persisted?(%State{} = state, group_id) do
+  def message_group_persisted?(%State{} = state, group_id) do
     Multiset.member?(state.persisted_message_groups, group_id)
   end
 
-  @spec is_message_persisted?(State.t(), message()) :: boolean()
-  def is_message_persisted?(%State{} = state, msg) do
+  @spec message_persisted?(State.t(), message()) :: boolean()
+  def message_persisted?(%State{} = state, msg) do
     Multiset.value_member?(state.persisted_message_groups, msg.group_id, {msg.commit_lsn, msg.commit_idx})
   end
 
@@ -503,7 +503,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     # Find first N messages that are older than threshold and not persisted
     state
     |> sorted_message_stream()
-    |> Stream.reject(&is_message_persisted?(state, &1))
+    |> Stream.reject(&message_persisted?(state, &1))
     |> Stream.filter(&DateTime.before?(&1.ingested_at, age_threshold))
     |> Enum.take(limit)
   end

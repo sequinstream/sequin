@@ -948,7 +948,7 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: SlotMessageHandlerMock)
       assert_receive {:change, [change]}, :timer.seconds(5)
 
-      assert is_action(change, :insert), "Expected change to be an insert, got: #{inspect(change)}"
+      assert action?(change, :insert), "Expected change to be an insert, got: #{inspect(change)}"
 
       assert fields_equal?(change.fields, record)
 
@@ -985,13 +985,13 @@ defmodule Sequin.PostgresReplicationTest do
       assert insert2.commit_idx == 1
       assert insert3.commit_idx == 2
 
-      assert is_action(insert1, :insert)
+      assert action?(insert1, :insert)
       assert get_field_value(insert1.fields, "name") == "Paul Atreides"
 
-      assert is_action(insert2, :insert)
+      assert action?(insert2, :insert)
       assert get_field_value(insert2.fields, "name") == "Leto Atreides"
 
-      assert is_action(insert3, :insert)
+      assert action?(insert3, :insert)
       assert get_field_value(insert3.fields, "name") == "Chani"
 
       # Insert another character
@@ -1037,7 +1037,7 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: SlotMessageHandlerMock)
 
       assert_receive {:change, [change]}, :timer.seconds(1)
-      assert is_action(change, :insert)
+      assert action?(change, :insert)
 
       # Should have received the record (it was re-delivered)
       assert fields_equal?(change.fields, record)
@@ -1060,7 +1060,7 @@ defmodule Sequin.PostgresReplicationTest do
       record = character |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
       assert_receive {:change, [create_change]}, :timer.seconds(1)
-      assert is_action(create_change, :insert)
+      assert action?(create_change, :insert)
       assert is_integer(create_change.commit_lsn)
       assert create_change.commit_idx == 0
 
@@ -1072,7 +1072,7 @@ defmodule Sequin.PostgresReplicationTest do
       record = Map.put(record, "planet", "Arrakis")
 
       assert_receive {:change, [update_change]}, :timer.seconds(1)
-      assert is_action(update_change, :update)
+      assert action?(update_change, :update)
       assert update_change.commit_lsn > create_change.commit_lsn
       assert update_change.commit_idx == 0
 
@@ -1085,7 +1085,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.delete!(character)
 
       assert_receive {:change, [delete_change]}, :timer.seconds(1)
-      assert is_action(delete_change, :delete)
+      assert action?(delete_change, :delete)
       assert delete_change.commit_lsn > update_change.commit_lsn
       assert delete_change.commit_idx == 0
 
@@ -1111,7 +1111,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Wait for the message to be handled
       assert_receive {:changes, [change]}, :timer.seconds(1)
-      assert is_action(change, :insert)
+      assert action?(change, :insert)
       assert get_field_value(change.fields, "id") == character1.id
 
       # Insert another record
@@ -1119,7 +1119,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Wait for the message to be handled
       assert_receive {:changes, [change]}, :timer.seconds(1)
-      assert is_action(change, :insert)
+      assert action?(change, :insert)
       assert get_field_value(change.fields, "id") == character2.id
 
       # write the low watermark for character2
@@ -1141,10 +1141,10 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {:changes, [change2, change3]}, :timer.seconds(1)
 
       # Verify we only get the records >= low watermark
-      assert is_action(change2, :insert)
+      assert action?(change2, :insert)
       assert get_field_value(change2.fields, "id") == character2.id
 
-      assert is_action(change3, :insert)
+      assert action?(change3, :insert)
       assert get_field_value(change3.fields, "id") == character3.id
     end
 
@@ -1955,7 +1955,7 @@ defmodule Sequin.PostgresReplicationTest do
     start_supervised!(SlotProcessorServer.child_spec(opts))
   end
 
-  defp is_action(change, action) do
+  defp action?(change, action) do
     is_struct(change, Message) and change.action == action
   end
 

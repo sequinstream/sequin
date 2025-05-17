@@ -284,7 +284,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "is_message_group_persisted?/2" do
+  describe "message_group_persisted?/2" do
     test "returns true if the message group is persisted", %{state: state} do
       # Add a persisted message to establish a blocked group
       persisted_msg = ConsumersFactory.consumer_message(group_id: "group1")
@@ -292,8 +292,8 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       state = State.put_persisted_messages(state, [persisted_msg])
       {:ok, state} = State.put_messages(state, [other_msg])
 
-      assert State.is_message_group_persisted?(state, "group1")
-      refute State.is_message_group_persisted?(state, "group2")
+      assert State.message_group_persisted?(state, "group1")
+      refute State.message_group_persisted?(state, "group2")
     end
   end
 

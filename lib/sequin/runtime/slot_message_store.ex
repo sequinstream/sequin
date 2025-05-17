@@ -549,7 +549,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   def handle_call({:put_messages, messages}, from, %State{all_loaded?: false} = state) do
     estimated_size = Enum.sum_by(messages, & &1.payload_size_bytes)
 
-    if state.storage_available_fn.(state, estimated_size) do
+    if storage_enabled?(state) and state.storage_available_fn.(state, estimated_size) do
       # Reply early since this frees up the SlotProcessorServer to continue
       # calling other SMSs, accumulating messages, etc.
       GenServer.reply(from, :ok)
@@ -1108,7 +1108,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   defp storage_enabled?(%State{max_storage_bytes: nil}), do: false
   defp storage_enabled?(%State{max_storage_bytes: _}), do: true
 
-  defp storage_available?(%State{max_storage_bytes: nil}, _buffer_bytes), do: raise("max_storage_bytes is nil")
+  defp storage_available?(%State{max_storage_bytes: nil}, _buffer_bytes), do: false
 
   defp storage_available?(%State{consumer: consumer, max_storage_bytes: max_storage_bytes}, buffer_bytes)
        when is_integer(max_storage_bytes) do

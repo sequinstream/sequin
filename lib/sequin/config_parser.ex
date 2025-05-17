@@ -130,6 +130,18 @@ defmodule Sequin.ConfigParser do
     end
   end
 
+  def max_storage_bytes(env) do
+    case env["MAX_STORAGE_MB"] do
+      nil ->
+        nil
+
+      mb_str ->
+        mb_str
+        |> String.to_integer()
+        |> Kernel.*(1024 * 1024)
+    end
+  end
+
   defp parse_buffer_percent(env) do
     env
     |> Map.get("MEMORY_BUFFER_PERCENT", "20")

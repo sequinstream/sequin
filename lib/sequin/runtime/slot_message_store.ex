@@ -136,44 +136,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       |> put_max_memory_bytes()
       |> put_max_storage_bytes()
 
-    # Stream messages and stop when we reach max_memory_bytes
-    {persisted_messages, current_size_bytes, message_count, all_loaded?} =
-      consumer
-      |> Consumers.stream_consumer_messages_for_consumer()
-      |> Stream.filter(&(message_partition(&1, consumer.partition_count) == state.partition))
-      |> Stream.map(fn msg ->
-        %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
-      end)
-      |> Enum.reduce_while({[], 0, 0, true}, fn msg, {messages, current_size, message_count, _all_loaded?} ->
-        new_size = current_size + msg.payload_size_bytes
-        new_message_count = message_count + 1
-
-        if new_size <= state.max_memory_bytes and new_message_count <= state.setting_max_messages do
-          {:cont, {[msg | messages], new_size, new_message_count, true}}
-        else
-          Logger.info("[SlotMessageStore] Reached memory limit, not loading more persisted messages",
-            consumer_id: state.consumer_id,
-            partition: state.partition,
-            max_memory_bytes: state.max_memory_bytes,
-            current_size_bytes: current_size
-          )
-
-          {:halt, {messages, current_size, message_count, false}}
-        end
-      end)
-
-    state = %State{state | all_loaded?: all_loaded?}
-
-    Logger.info("[SlotMessageStore] Loaded persisted messages",
-      consumer_id: state.consumer_id,
-      partition: state.partition,
-      message_count: message_count,
-      size_bytes: current_size_bytes,
-      all_loaded?: all_loaded?
-    )
-
-    # Now put the messages into state
-    state = State.put_persisted_messages(state, persisted_messages)
+    state = stream_messages_into_state(state)
 
     Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
 
@@ -1012,41 +975,50 @@ defmodule Sequin.Runtime.SlotMessageStore do
         map_size(state.messages) < div(state.setting_max_messages, 2)
 
     if should_pull_more_messages? do
-      # Stream messages and stop when we reach max_memory_bytes
-      {persisted_messages, _current_size_bytes, _message_count, all_loaded?} =
-        state.consumer
-        |> Consumers.stream_consumer_messages_for_consumer()
-        |> Stream.filter(&(message_partition(&1, state.consumer.partition_count) == state.partition))
-        |> Enum.reduce_while({[], 0, 0, true}, fn msg, {messages, current_size, message_count, _all_loaded?} ->
-          if State.message_exists?(state, msg) do
-            {:cont, {messages, current_size, message_count, true}}
-          else
-            msg = %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
-            new_size = current_size + msg.payload_size_bytes
-            new_message_count = message_count + 1
-
-            if new_size <= state.max_memory_bytes and new_message_count <= state.setting_max_messages do
-              {:cont, {[msg | messages], new_size, new_message_count, true}}
-            else
-              Logger.info("[SlotMessageStore] Reached memory limit, not loading more persisted messages",
-                consumer_id: state.consumer_id,
-                partition: state.partition,
-                max_memory_bytes: state.max_memory_bytes,
-                current_size_bytes: current_size
-              )
-
-              {:halt, {messages, current_size, message_count, false}}
-            end
-          end
-        end)
-
-      # Now put the messages into state
-      state = State.put_persisted_messages(state, persisted_messages)
-
-      %State{state | all_loaded?: all_loaded?}
+      stream_messages_into_state(state)
     else
       state
     end
+  end
+
+  defp stream_messages_into_state(%State{} = state) do
+    # Stream messages and stop when we reach max_memory_bytes
+    {persisted_messages, current_size_bytes, message_count, all_loaded?} =
+      state.consumer
+      |> Consumers.stream_consumer_messages_for_consumer()
+      |> Stream.filter(&(message_partition(&1, state.consumer.partition_count) == state.partition))
+      |> Stream.reject(&State.message_exists?(state, &1))
+      |> Enum.reduce_while({[], 0, 0, true}, fn msg, {messages, current_size, message_count, _all_loaded?} ->
+        msg = %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
+        new_size = current_size + msg.payload_size_bytes
+        new_message_count = message_count + 1
+
+        if new_size <= state.max_memory_bytes and new_message_count <= state.setting_max_messages do
+          {:cont, {[msg | messages], new_size, new_message_count, true}}
+        else
+          Logger.warning("[SlotMessageStore] Reached memory limit, not loading more persisted messages",
+            consumer_id: state.consumer_id,
+            partition: state.partition,
+            max_memory_bytes: state.max_memory_bytes,
+            current_size_bytes: current_size
+          )
+
+          {:halt, {messages, current_size, message_count, false}}
+        end
+      end)
+
+    Logger.info("[SlotMessageStore] Loaded messages from disk",
+      consumer_id: state.consumer_id,
+      partition: state.partition,
+      message_count: message_count,
+      size_bytes: current_size_bytes,
+      all_loaded?: all_loaded?
+    )
+
+    # Now put the messages into state
+    state = State.put_persisted_messages(state, persisted_messages)
+
+    %State{state | all_loaded?: all_loaded?}
   end
 
   @decorate track_metrics("delete_messages")

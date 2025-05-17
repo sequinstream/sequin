@@ -100,10 +100,17 @@ defmodule Sequin.SlotMessageStoreTest do
 
     test ":init loads only the first 10 messages", %{consumer: consumer} do
       # 20 on disk
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 20
+      disk_messages = Consumers.list_consumer_messages_for_consumer(consumer)
+      assert length(disk_messages) == 20
 
       # 10 in memory
-      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
+      memory_messages = SlotMessageStore.peek_messages(consumer, 100)
+      assert length(memory_messages) == 10
+      # Verify we loaded the messages with lowest LSNs
+      disk_lsns = Enum.map(disk_messages, & &1.commit_lsn)
+      memory_lsns = Enum.map(memory_messages, & &1.commit_lsn)
+
+      assert memory_lsns == Enum.take(Enum.sort(disk_lsns), 10)
     end
   end
 

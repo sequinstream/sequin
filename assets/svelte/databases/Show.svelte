@@ -54,6 +54,8 @@
     updated_at: string;
     consumers: Consumer[];
     health: Health;
+    publication_name: string;
+    slot_name: string;
   }
 
   export let database: PostgresDatabase;
@@ -191,6 +193,14 @@
           <div>
             <p class="text-sm text-gray-500">Pool Size</p>
             <p class="font-medium">{database.pool_size}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-500">Publication Name</p>
+            <p class="font-medium">{database.publication_name}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-500">Slot Name</p>
+            <p class="font-medium">{database.slot_name}</p>
           </div>
           <!-- <div>
               <p class="text-sm text-gray-500">Queue Interval</p>

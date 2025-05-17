@@ -322,7 +322,9 @@ defmodule SequinWeb.DatabasesLive.Show do
       inserted_at: database.inserted_at,
       updated_at: database.updated_at,
       consumers: encode_consumers(database.replication_slot.sink_consumers, database),
-      health: encode_health(database)
+      health: encode_health(database),
+      publication_name: database.replication_slot.publication_name,
+      slot_name: database.replication_slot.slot_name
     }
   end
 

@@ -157,7 +157,7 @@ defmodule Sequin.Transforms.MiniElixir do
   end
 
   defp ensure_code_is_loaded(id) do
-    unless is_code_loaded(id) do
+    unless code_loaded?(id) do
       __MODULE__
       |> Agent.get_and_update(fn state ->
         try do
@@ -179,7 +179,7 @@ defmodule Sequin.Transforms.MiniElixir do
     module_name_from_id(id)
   end
 
-  defp is_code_loaded(id) do
+  defp code_loaded?(id) do
     with {:ok, mod} <- module_name_from_id(id),
          {:file, _} <- :code.is_loaded(mod) do
       true
@@ -189,7 +189,7 @@ defmodule Sequin.Transforms.MiniElixir do
   end
 
   defp recreate(id) do
-    with false <- is_code_loaded(id),
+    with false <- code_loaded?(id),
          {:ok, %Transform{} = transform} <- Consumers.get_transform(id) do
       create(transform.id, transform.transform.code)
     end

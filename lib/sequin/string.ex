@@ -38,7 +38,7 @@ defmodule Sequin.String do
     end
   end
 
-  def is_uuid?(str) when is_binary(str) do
+  def uuid?(str) when is_binary(str) do
     str
     |> UUID.info()
     |> case do
@@ -78,7 +78,7 @@ defmodule Sequin.String do
 
   """
   def all_uuids?(list) when is_list(list) do
-    Enum.all?(list, &is_uuid?/1)
+    Enum.all?(list, &uuid?/1)
   end
 
   @doc """

@@ -296,7 +296,7 @@ defmodule Sequin.YamlLoaderTest do
       assert endpoint.scheme == :https
       assert endpoint.host == "webhook.site"
       assert "/" <> uuid = endpoint.path
-      assert Sequin.String.is_uuid?(uuid)
+      assert Sequin.String.uuid?(uuid)
     end
 
     test "creates local endpoint" do

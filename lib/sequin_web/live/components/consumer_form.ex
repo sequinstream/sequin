@@ -161,7 +161,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> maybe_put_replication_slot_id(socket)
 
     res =
-      if is_edit?(socket) do
+      if edit?(socket) do
         update_consumer(socket, params)
       else
         create_consumer(socket, params)
@@ -181,7 +181,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     consumer = socket.assigns.consumer
 
     socket =
-      if is_edit?(socket) do
+      if edit?(socket) do
         push_navigate(socket, to: RouteHelpers.consumer_path(consumer))
       else
         push_navigate(socket, to: ~p"/sinks")
@@ -1013,7 +1013,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "schema" => table.schema,
       "name" => table.name,
       "default_group_columns" => default_group_columns,
-      "is_event_table" => Postgres.is_event_table?(table),
+      "is_event_table" => Postgres.event_table?(table),
       "columns" => Enum.map(table.columns, &encode_column/1)
     }
   end
@@ -1252,7 +1252,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp is_edit?(socket) do
+  defp edit?(socket) do
     not is_nil(socket.assigns.consumer) and not is_nil(socket.assigns.consumer.id)
   end
 

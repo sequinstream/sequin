@@ -36,7 +36,7 @@ defmodule Sequin.Databases.PostgresDatabaseTable do
   end
 
   def default_group_column_attnums(%__MODULE__{} = table) do
-    if Postgres.is_event_table?(table) do
+    if Postgres.event_table?(table) do
       Enum.map(["source_database_id", "source_table_oid", "record_pk"], fn col_name ->
         column = Sequin.Enum.find!(table.columns, &(&1.name == col_name))
         column.attnum

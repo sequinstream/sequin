@@ -821,6 +821,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:keep_state, state}
   end
 
+  def handle_info(:send_ack, %State{connection_state: :disconnected} = state) do
+    state = schedule_ack(%{state | ack_timer_ref: nil})
+    {:keep_state, state}
+  end
+
   def handle_info(:send_ack, %State{} = state) do
     Logger.info("[SlotProcessorServer] Sending ack for LSN #{state.safe_wal_cursor.commit_lsn}")
 

@@ -19,6 +19,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.Transform
+  alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
@@ -311,12 +312,20 @@ defmodule Sequin.Consumers do
         |> Repo.insert()
 
       with {:ok, consumer} <- res,
-           consumer = Repo.reload!(consumer),
+           consumer = reload_sink_consumer_with_preloads(consumer),
            :ok <- create_consumer_partition(consumer),
+           Databases.update_sequences_from_db(consumer.postgres_database),
            {:ok, _} <- ConsumerLifecycleEventWorker.enqueue(:create, :sink_consumer, consumer.id) do
         {:ok, consumer}
       end
     end)
+  end
+
+  defp reload_sink_consumer_with_preloads(%SinkConsumer{id: id}) do
+    SinkConsumer
+    |> where(id: ^id)
+    |> preload([:postgres_database])
+    |> Repo.one!()
   end
 
   def update_sink_consumer(%SinkConsumer{} = consumer, attrs, opts \\ []) do

@@ -28,6 +28,7 @@
     AlertDialogTitle,
   } from "$lib/components/ui/alert-dialog";
   import CopyToClipboard from "$lib/components/ui/CopyToClipboard.svelte";
+  import DeleteFunctionDialog from "$lib/components/DeleteFunctionDialog.svelte";
 
   // CodeMirror imports
   import { EditorView, basicSetup } from "codemirror";
@@ -866,36 +867,18 @@ Please help me create or modify the Elixir function transform to achieve the des
           {/if}
 
           {#if isEditing}
-            <AlertDialog bind:open={showDeleteDialog}>
-              <Button
-                type="button"
-                variant="destructive"
-                on:click={handleDelete}
-              >
-                Delete Function
-              </Button>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Cannot Delete Function</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This function cannot be deleted because it is currently
-                    being used by the following consumers:
-                    <ul class="list-disc pl-4 mt-2 space-y-1">
-                      {#each usedByConsumers as consumer}
-                        <li class="font-mono">{consumer.name}</li>
-                      {/each}
-                    </ul>
-                    <p class="mt-2">
-                      Please remove this function from all consumers before
-                      deleting it.
-                    </p>
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogAction>OK</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button
+              type="button"
+              variant="destructive"
+              on:click={() => (showDeleteDialog = true)}
+            >
+              Delete Function
+            </Button>
+            <DeleteFunctionDialog
+              bind:open={showDeleteDialog}
+              consumers={usedByConsumers}
+              onDelete={() => pushEvent("delete")}
+            />
           {/if}
         </div>
       </form>

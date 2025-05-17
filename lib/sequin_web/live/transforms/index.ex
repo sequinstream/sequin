@@ -3,6 +3,7 @@ defmodule SequinWeb.TransformsLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
+  alias Sequin.Logger
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -22,7 +23,8 @@ defmodule SequinWeb.TransformsLive.Index do
         name="transforms/Index"
         props={
           %{
-            transforms: @encoded_transforms
+            transforms: @encoded_transforms,
+            parent: "transforms-index"
           }
         }
         socket={@socket}
@@ -32,18 +34,19 @@ defmodule SequinWeb.TransformsLive.Index do
   end
 
   defp encode_transform(transform) do
+    account_id = transform.account_id
+    consumers = Consumers.list_consumers_for_transform(account_id, transform.id)
+    consumer_count = length(consumers)
+    consumer_names = Enum.map(consumers, &%{name: &1.name})
+
     %{
       id: transform.id,
       name: transform.name,
       type: transform.type,
-      snippet:
-        case transform.type do
-          "path" -> truncate(transform.transform.path)
-          "function" -> truncate(transform.transform.code)
-          "routing" -> truncate(transform.transform.code)
-        end,
       insertedAt: transform.inserted_at,
-      updatedAt: transform.updated_at
+      updatedAt: transform.updated_at,
+      consumerCount: consumer_count,
+      consumers: consumer_names
     }
   end
 
@@ -52,6 +55,20 @@ defmodule SequinWeb.TransformsLive.Index do
       String.slice(string, 0, length) <> "..."
     else
       string
+    end
+  end
+
+  def handle_event("delete", %{"id" => id}, socket) do
+    case Consumers.delete_transform(current_account_id(socket), id) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:toast, %{kind: :info, title: "Transform deleted successfully"})
+         |> assign(:transforms, Consumers.list_transforms_for_account(current_account_id(socket)))}
+
+      {:error, error} ->
+        Logger.error("[Transform.Index] Failed to delete transform", error: error)
+        {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Failed to delete transform"})}
     end
   end
 end

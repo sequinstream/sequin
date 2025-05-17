@@ -2454,4 +2454,27 @@ defmodule Sequin.ConsumersTest do
       assert streamed_lsns == Enum.map(1..10, fn i -> i * 100 end)
     end
   end
+
+  describe "consumer_partition_size_bytes/1" do
+    test "returns the size of the consumer partition" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      # Insert some messages to ensure the table exists and has data
+      for _ <- 1..5 do
+        ConsumersFactory.insert_consumer_message!(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+      end
+
+      # Check the size is positive
+      {:ok, size} = Consumers.consumer_partition_size_bytes(consumer)
+      assert is_integer(size)
+      assert size > 0
+
+      # Check that a non-existent consumer ID returns an error
+      nonexistent_consumer = %{consumer | seq: Factory.unique_integer()}
+      assert {:error, %Postgrex.Error{}} = Consumers.consumer_partition_size_bytes(nonexistent_consumer)
+    end
+  end
 end

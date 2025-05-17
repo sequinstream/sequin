@@ -134,6 +134,18 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
+  def list_sink_consumers_for_account_paginated(account_id, page, page_size, preload \\ []) do
+    offset = page * page_size
+
+    account_id
+    |> SinkConsumer.where_account_id()
+    |> order_by([sc], desc: sc.updated_at)
+    |> preload(^preload)
+    |> limit(^page_size)
+    |> offset(^offset)
+    |> Repo.all()
+  end
+
   def count_sink_consumers_for_account(account_id) do
     account_id
     |> SinkConsumer.where_account_id()

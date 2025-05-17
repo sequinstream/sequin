@@ -11,13 +11,24 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
   @smoothing_window 5
   @timeseries_window_count 60
+  @page_size 50
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     user = current_user(socket)
     account = current_account(socket)
 
-    consumers = load_consumers(socket)
+    page = 0
+    page_size = @page_size
+    total_count = Consumers.count_sink_consumers_for_account(account.id)
+
+    socket =
+      socket
+      |> assign(:page, page)
+      |> assign(:page_size, page_size)
+      |> assign(:total_count, total_count)
+      |> assign(:consumers, load_consumers(socket, page, page_size))
+
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
 
     socket =
@@ -40,7 +51,6 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
     socket =
       socket
-      |> assign(:consumers, consumers)
       |> assign(:has_databases?, has_databases?)
       |> assign(:self_hosted, Application.get_env(:sequin, :self_hosted))
 
@@ -67,7 +77,10 @@ defmodule SequinWeb.SinkConsumersLive.Index do
           %{
             consumers: @encoded_consumers,
             hasDatabases: @has_databases?,
-            selfHosted: @self_hosted
+            selfHosted: @self_hosted,
+            page: @page,
+            pageSize: @page_size,
+            totalCount: @total_count
           }
         }
         socket={@socket}
@@ -81,6 +94,25 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     {:noreply, push_navigate(socket, to: ~p"/sinks/#{type}/#{id}")}
   end
 
+  @impl Phoenix.LiveView
+  def handle_event("change_page", %{"page" => page}, socket) do
+    page = String.to_integer(page)
+    total_count =
+      socket
+      |> current_account_id()
+      |> Consumers.count_sink_consumers_for_account()
+
+    socket =
+      socket
+      |> assign(:page, page)
+      |> assign(:total_count, total_count)
+      |> assign_async(:consumers, fn ->
+        {:ok, %{consumers: load_consumers(socket, page, socket.assigns.page_size)}}
+      end)
+
+    {:noreply, socket}
+  end
+
   defp apply_action(socket, :index, _params) do
     socket
     |> assign(:page_title, "Sinks")
@@ -90,13 +122,18 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   @impl Phoenix.LiveView
   def handle_info(:update_consumers, socket) do
     Process.send_after(self(), :update_consumers, 1000)
-    {:noreply, assign(socket, :consumers, load_consumers(socket))}
+    page = socket.assigns.page
+    page_size = socket.assigns.page_size
+    {:noreply,
+     assign_async(socket, :consumers, fn ->
+       {:ok, %{consumers: load_consumers(socket, page, page_size)}}
+     end)}
   end
 
-  defp load_consumers(socket) do
+  defp load_consumers(socket, page, page_size) do
     socket
     |> current_account_id()
-    |> Consumers.list_consumers_for_account([:postgres_database, :replication_slot, :active_backfill])
+    |> Consumers.list_sink_consumers_for_account_paginated(page, page_size, [:postgres_database, :replication_slot, :active_backfill])
     |> load_consumer_health()
     |> load_consumer_metrics()
   end

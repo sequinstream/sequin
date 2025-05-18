@@ -2,18 +2,12 @@
   import * as Table from "$lib/components/ui/table";
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
-  import {
-    ExternalLink,
-    Code,
-    FilePlus,
-    FolderOpen,
-    Pencil,
-    Trash2,
-  } from "lucide-svelte";
+  import { ExternalLink, Code, FilePlus, Pencil, Trash2 } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
   import Beta from "$lib/components/Beta.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import DeleteFunctionDialog from "$lib/components/DeleteFunctionDialog.svelte";
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
 
   export let transforms: Array<{
     id: string;
@@ -50,29 +44,29 @@
 
 <div class="container mx-auto py-8">
   <div class="flex justify-between items-center mb-4">
-    <div class="flex items-center space-x-2">
-      <Code class="h-5 w-5 text-muted" />
-      <h1 class="text-xl font-semibold">Functions</h1>
-      <Beta size="sm" variant="subtle" />
+    <div class="flex items-center">
+      <Code class="h-6 w-6 mr-2" />
+      <h1 class="text-2xl font-bold">Functions</h1>
+      <div class="ml-2">
+        <Beta size="lg" variant="subtle" />
+      </div>
     </div>
-    <a
-      href="/functions/new"
-      data-phx-link="redirect"
-      data-phx-link-state="push"
-    >
-      <Button size="sm" class="gap-2">
-        <FilePlus class="h-4 w-4" />
-        Create Function
-      </Button>
-    </a>
+    {#if transforms.length > 0}
+      <a
+        href="/functions/new"
+        data-phx-link="redirect"
+        data-phx-link-state="push"
+      >
+        <Button>Create Function</Button>
+      </a>
+    {/if}
   </div>
 
   {#if transforms.length === 0}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
-      <div class="text-center py-12 w-1/2 mx-auto">
-        <FolderOpen class="h-10 w-10 mx-auto text-gray-400 mb-4" />
-        <h2 class="text-lg font-semibold mb-2">No transforms found</h2>
-        <p class="text-gray-600 mb-6 text-sm">
+      <div class="text-center py-12 w-1/2 mx-auto my-auto">
+        <h2 class="text-xl font-semibold mb-4">No functions</h2>
+        <p class="text-gray-600 mb-6">
           Functions allow you to modify and restructure your data as it flows
           through your pipelines.
         </p>
@@ -81,10 +75,7 @@
           data-phx-link="redirect"
           data-phx-link-state="push"
         >
-          <Button size="sm">
-            <FilePlus class="h-4 w-4 mr-2" />
-            Create your first function
-          </Button>
+          <Button>Create your first function</Button>
         </a>
       </div>
     </div>
@@ -97,8 +88,8 @@
           <Table.Head>Consumers</Table.Head>
           <Table.Head>Created</Table.Head>
           <Table.Head>Updated</Table.Head>
-          <Table.Head>Edit</Table.Head>
-          <Table.Head>Delete</Table.Head>
+          <Table.Head></Table.Head>
+          <Table.Head></Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -141,7 +132,7 @@
                     </div>
                   {:else}
                     <p class="text-sm text-gray-600">
-                      Not used by any consumer
+                      Not used by any consumers
                     </p>
                   {/if}
                 </Tooltip.Content>
@@ -157,35 +148,28 @@
             </Table.Cell>
 
             <Table.Cell class="py-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-8 w-8 p-0"
-                on:click={() => {
-                  const url = `/functions/${transform.id}`;
-                  window.history.pushState({}, "", url);
-                  dispatchEvent(new PopStateEvent("popstate"));
-                }}
-              >
-                <Pencil class="h-4 w-4" />
-              </Button>
+              <LinkPushNavigate href={`/functions/${transform.id}`}>
+                <Button
+                  variant="link"
+                  size="sm"
+                  class="text-blue-600 hover:underline p-0 h-auto"
+                >
+                  Edit
+                </Button>
+              </LinkPushNavigate>
             </Table.Cell>
 
             <Table.Cell class="py-4">
               <Button
-                variant="ghost"
+                variant="link"
                 size="sm"
-                class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                class="text-red-600 hover:underline p-0 h-auto"
                 on:click={() => {
-                  if (transform.consumers.length > 0) {
-                    selectedTransform = transform;
-                    deleteDialogOpen = true;
-                  } else {
-                    pushEvent("delete", { id: transform.id });
-                  }
+                  selectedTransform = transform;
+                  deleteDialogOpen = true;
                 }}
               >
-                <Trash2 class="h-4 w-4" />
+                Delete
               </Button>
             </Table.Cell>
           </Table.Row>

@@ -3,7 +3,7 @@ defmodule SequinWeb.TransformsLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
-  alias Sequin.Logger
+  require Logger
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -58,17 +58,18 @@ defmodule SequinWeb.TransformsLive.Index do
     end
   end
 
+  @impl Phoenix.LiveView
   def handle_event("delete", %{"id" => id}, socket) do
     case Consumers.delete_transform(current_account_id(socket), id) do
       {:ok, _} ->
         {:noreply,
          socket
-         |> put_flash(:toast, %{kind: :info, title: "Transform deleted successfully"})
+         |> put_flash(:toast, %{kind: :info, title: "Function deleted"})
          |> assign(:transforms, Consumers.list_transforms_for_account(current_account_id(socket)))}
 
       {:error, error} ->
         Logger.error("[Transform.Index] Failed to delete transform", error: error)
-        {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Failed to delete transform"})}
+        {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Failed to delete function"})}
     end
   end
 end

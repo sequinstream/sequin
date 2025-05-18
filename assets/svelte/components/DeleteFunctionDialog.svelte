@@ -19,9 +19,9 @@
     <AlertDialogHeader>
       <AlertDialogTitle>
         {#if consumers.length > 0}
-          Cannot Delete Function
+          Cannot delete function
         {:else}
-          Confirm Delete
+          Confirm delete
         {/if}
       </AlertDialogTitle>
 
@@ -44,9 +44,18 @@
     </AlertDialogHeader>
 
     <AlertDialogFooter>
-      <AlertDialogAction on:click={() => consumers.length === 0 && onDelete()}>
-        {consumers.length > 0 ? "OK" : "Delete"}
+      <AlertDialogAction class="bg-gray-800 text-white hover:bg-gray-700">
+        {consumers.length > 0 ? "OK" : "Cancel"}
       </AlertDialogAction>
+
+      {#if consumers.length === 0}
+        <AlertDialogAction
+          class="bg-red-600 text-white hover:bg-red-700"
+          on:click={onDelete}
+        >
+          Delete
+        </AlertDialogAction>
+      {/if}
     </AlertDialogFooter>
   </AlertDialogContent>
 </AlertDialog>

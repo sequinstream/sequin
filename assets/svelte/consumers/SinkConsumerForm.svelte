@@ -386,7 +386,9 @@
 </script>
 
 <FullPageForm
-  title={isEditMode ? `Edit ${consumerTitle}` : `Create ${consumerTitle}`}
+  title={isEditMode
+    ? `Edit ${consumerTitle} ${form.name}`
+    : `Create ${consumerTitle}`}
   showConfirmOnExit={isDirty}
   on:close={handleClose}
 >

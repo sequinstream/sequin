@@ -1,13 +1,13 @@
 <script lang="ts">
   import {
     AlertDialog,
-    AlertDialogAction,
     AlertDialogContent,
     AlertDialogDescription,
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
   } from "$lib/components/ui/alert-dialog";
+  import { Button } from "$lib/components/ui/button";
 
   export let open: boolean;
   export let consumers: Array<{ name: string }>;
@@ -44,17 +44,21 @@
     </AlertDialogHeader>
 
     <AlertDialogFooter>
-      <AlertDialogAction class="bg-gray-800 text-white hover:bg-gray-700">
+      <Button type="button" variant="default" on:click={() => (open = false)}>
         {consumers.length > 0 ? "OK" : "Cancel"}
-      </AlertDialogAction>
+      </Button>
 
       {#if consumers.length === 0}
-        <AlertDialogAction
-          class="bg-red-600 text-white hover:bg-red-700"
-          on:click={onDelete}
+        <Button
+          type="button"
+          variant="destructive"
+          on:click={() => {
+            onDelete();
+            open = false;
+          }}
         >
           Delete
-        </AlertDialogAction>
+        </Button>
       {/if}
     </AlertDialogFooter>
   </AlertDialogContent>

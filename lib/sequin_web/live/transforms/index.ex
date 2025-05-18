@@ -50,13 +50,13 @@ defmodule SequinWeb.TransformsLive.Index do
     }
   end
 
-  defp truncate(string, length \\ 512) do
-    if String.length(string) > length do
-      String.slice(string, 0, length) <> "..."
-    else
-      string
-    end
-  end
+  # defp truncate(string, length \\ 512) do
+  #   if String.length(string) > length do
+  #     String.slice(string, 0, length) <> "..."
+  #   else
+  #     string
+  #   end
+  # end
 
   @impl Phoenix.LiveView
   def handle_event("delete", %{"id" => id}, socket) do

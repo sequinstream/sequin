@@ -3,6 +3,7 @@ defmodule SequinWeb.TransformsLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
+
   require Logger
 
   @impl Phoenix.LiveView

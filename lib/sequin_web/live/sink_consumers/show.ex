@@ -41,7 +41,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Transforms.Message
-  alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
 
   require Logger
@@ -122,19 +121,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       end
 
     socket = assign(socket, :show_acked, show_acked)
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
-  end
-
-  defp apply_action(socket, :show, _params) do
-    assign(socket, :page_title, "Show Consumer")
-  end
-
-  defp apply_action(socket, :edit, _params) do
-    assign(socket, :page_title, "Edit Consumer")
-  end
-
-  defp apply_action(socket, :messages, _params) do
-    assign(socket, :page_title, "Messages")
+    {:noreply, socket}
   end
 
   @impl Phoenix.LiveView
@@ -160,16 +147,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       <!-- Main content area that fills the remaining space -->
       <div class="flex-1 overflow-auto">
         <%= case {@live_action, @consumer} do %>
-          <% {:edit, _consumer} -> %>
-            <!-- Edit component -->
-            <.live_component
-              module={ConsumerForm}
-              id="edit-consumer"
-              consumer={@consumer}
-              on_finish={&handle_edit_finish/1}
-              current_user={@current_user}
-              transforms={Enum.map(@transforms, &encode_transform/1)}
-            />
           <% {:show, %SinkConsumer{}} -> %>
             <!-- ShowHttpPush component -->
             <.svelte
@@ -213,10 +190,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     """
   end
 
-  @impl Phoenix.LiveView
   def handle_event("edit", _params, socket) do
     type = Consumers.kind(socket.assigns.consumer)
-    {:noreply, push_patch(socket, to: ~p"/sinks/#{type}/#{socket.assigns.consumer.id}/edit")}
+    {:noreply, push_navigate(socket, to: ~p"/sinks/#{type}/#{socket.assigns.consumer.id}/edit")}
   end
 
   @impl Phoenix.LiveView
@@ -480,10 +456,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:reply, %{ok: false},
          put_flash(socket, :toast, %{kind: :error, title: "Failed to reset message visibility: #{inspect(reason)}"})}
     end
-  end
-
-  defp handle_edit_finish(updated_consumer) do
-    send(self(), {:updated_consumer, updated_consumer})
   end
 
   @impl Phoenix.LiveView

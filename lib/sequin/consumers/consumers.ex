@@ -1423,7 +1423,8 @@ defmodule Sequin.Consumers do
           consumer: %Metadata.Sink{
             id: Sequin.uuid4(),
             name: "my-consumer"
-          }
+          },
+          idempotency_key: "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz"
         }
       }
     }

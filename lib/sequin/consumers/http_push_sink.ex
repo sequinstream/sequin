@@ -35,7 +35,7 @@ defmodule Sequin.Consumers.HttpPushSink do
         validate_format(
           changeset,
           :http_endpoint_path,
-          ~r/^(\/[a-zA-Z0-9\-._~!$&'()*+,;=:@%\/]*)?$/,
+          ~r/^(\/[a-zA-Z0-9\-._~!$&'()*+,;=:@%?\/]*)?$/,
           message: "must be a valid URL path or empty"
         )
       else

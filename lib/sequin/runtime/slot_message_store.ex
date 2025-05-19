@@ -485,10 +485,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
         cond do
           storage_enabled?(state) and state.storage_available_fn.(state, estimated_size) ->
+            Logger.warning("[SlotMessageStore] Storage available, upserting messages")
+
             # Reply early since this frees up the SlotProcessorServer to continue
             # calling other SMSs, accumulating messages, etc.
             GenServer.reply(from, :ok)
-
             :ok = upsert_messages(state, messages)
 
             if state.test_pid do
@@ -525,6 +526,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
       {:noreply, state}
     else
+      Logger.warning("[SlotMessageStore] Storage not available, rejecting messages")
+
       # Use a different error code to differentiate from the payload size limit exceeded error
       # We actually want this one to cause the SPS to explode 💥
       {:reply, {:error, Error.invariant(message: "Storage not available", code: :storage_not_available)}, state}

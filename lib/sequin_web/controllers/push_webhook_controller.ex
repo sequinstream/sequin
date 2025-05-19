@@ -5,9 +5,11 @@ defmodule SequinWeb.PushWebhookController do
 
   action_fallback ApiFallbackPlug
 
-  def ack(conn, _params) do
-    delay = :rand.uniform(500) + 1000
-    Process.sleep(delay)
+  def ack(conn, params) do
+    if wait_ms = params["wait_ms"] do
+      wait_ms = String.to_integer(wait_ms)
+      Process.sleep(wait_ms)
+    end
 
     send_resp(conn, 200, "ACK")
   end

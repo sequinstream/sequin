@@ -21,6 +21,7 @@
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
   import SnsIcon from "../sinks/sns/SnsIcon.svelte";
+  import KinesisIcon from "../sinks/kinesis/KinesisIcon.svelte";
   import RedisIcon from "../sinks/redis_shared/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
@@ -43,6 +44,7 @@
       | "http_push"
       | "sqs"
       | "sns"
+      | "kinesis"
       | "redis_stream"
       | "kafka"
       | "gcp_pubsub"
@@ -85,6 +87,11 @@
       id: "sns",
       name: "Amazon SNS",
       icon: SnsIcon,
+    },
+    {
+      id: "kinesis",
+      name: "Amazon Kinesis",
+      icon: KinesisIcon,
     },
     {
       id: "redis_stream",

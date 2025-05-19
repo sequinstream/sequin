@@ -917,6 +917,38 @@ defmodule Sequin.YamlLoaderTest do
                topic_arn: "arn:aws:sns:us-west-2:123456789012:MyTopic",
                region: "us-west-2",
                access_key_id: "AKIAXXXXXXXXXXXXXXXX",
+              secret_access_key: "secret123"
+            } = consumer.sink
+    end
+
+    test "creates kinesis sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "kinesis-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "kinesis"
+                     stream_name: "my-stream"
+                     region: "us-east-1"
+                     access_key_id: "AKIAXXXXXXXXXXXXXXXX"
+                     secret_access_key: "secret123"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "kinesis-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      assert %KinesisSink{
+               type: :kinesis,
+               stream_name: "my-stream",
+               region: "us-east-1",
+               access_key_id: "AKIAXXXXXXXXXXXXXXXX",
                secret_access_key: "secret123"
              } = consumer.sink
     end

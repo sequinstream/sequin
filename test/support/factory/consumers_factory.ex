@@ -123,7 +123,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         status: :active,
         sequence_id: sequence_id,
         sequence_filter: sequence_filter,
-        legacy_transform: Enum.random([:none, :record_only]),
+        legacy_transform: :none,
         timestamp_format: :iso8601
       },
       attrs

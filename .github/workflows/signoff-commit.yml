@@ -104,6 +104,32 @@ jobs:
       - name: Compile with warnings as errors
         run: MIX_ENV=prod mix compile --warnings-as-errors
 
+      - name: Run Credo checks
+        run: mix credo --strict --all --mute-exit-status --format=sarif > results.sarif
+
+      - name: Upload Credo SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: credo
+
+      - name: Retrieve PLT Cache
+        uses: actions/cache@v4
+        id: plt-cache
+        with:
+          path: _build/prod/*.plt
+          key: ${{ runner.os }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-plts-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.beam.outputs.otp-version }}-${{ steps.beam.outputs.elixir-version }}-plts-
+
+      - name: Create PLTs
+        if: steps.plt-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p priv/plts
+          mix dialyzer.build
+      - name: Run dialyzer
+        run: mix dialyzer             
+
       - name: Run Elixir tests
         run: mix test --max-cases 8
 

@@ -131,7 +131,9 @@ defmodule Sequin.MixProject do
       {:rexbug, "~> 1.0"},
       {:floki, ">= 0.30.0", only: :test},
       {:uuid, "~> 1.1"},
-      {:tidewave, "~> 0.1", only: :dev}
+      {:tidewave, "~> 0.1", only: :dev},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 

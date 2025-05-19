@@ -27,7 +27,7 @@ defmodule SequinWeb.YamlController do
     })
 
     case YamlLoader.apply_from_yml(account_id, yaml) do
-      {:ok, {:ok, resources}} ->
+      {:ok, resources} ->
         Posthog.capture("YAML Applied", %{
           distinct_id: "00000000-0000-0000-0000-000000000000",
           properties: %{
@@ -38,9 +38,6 @@ defmodule SequinWeb.YamlController do
         })
 
         json(conn, %{resources: resources})
-
-      {:ok, {:error, error}} ->
-        {:error, error}
 
       {:error, error} ->
         {:error, error}

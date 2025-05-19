@@ -1707,7 +1707,7 @@ defmodule Sequin.YamlLoaderTest do
           test_connect_fun: test_connect_fun
         )
 
-      assert {:ok, {:ok, _resources}} = result
+      assert {:ok, _resources} = result
 
       # Should have attempted exactly twice
       assert :atomics.get(counter, 1) == 2

@@ -55,15 +55,12 @@ defmodule Sequin.YamlLoader do
 
   def apply_from_yml!(yml) do
     case apply_from_yml(yml) do
-      {:ok, {:ok, _resources}} ->
+      {:ok, _resources} ->
         :ok
 
       # Hack to give a better error message when table is missing
-      {:ok, {:error, %NotFoundError{entity: :sequence} = error}} ->
+      {:error, %NotFoundError{entity: :sequence} = error} ->
         error = %{error | entity: :postgres_table}
-        raise "Failed to apply config: #{inspect(error)}"
-
-      {:ok, {:error, error}} ->
         raise "Failed to apply config: #{inspect(error)}"
 
       {:error, error} ->
@@ -74,15 +71,36 @@ defmodule Sequin.YamlLoader do
   def apply_from_yml(account_id \\ nil, yml, opts \\ []) do
     case YamlElixir.read_from_string(yml, merge_anchors: true) do
       {:ok, config} ->
-        Repo.transaction(
-          fn ->
-            case apply_config(account_id, config, opts) do
-              {:ok, resources} -> {:ok, resources}
-              {:error, error} -> Repo.rollback(error)
+        case Repo.transaction(
+               fn ->
+                 case apply_config(account_id, config, opts) do
+                   {:ok, resources, actions} ->
+                     {:ok, {resources, actions}}
+
+                   {:error, error} ->
+                     Repo.rollback(error)
+                 end
+               end,
+               timeout: :timer.seconds(90)
+             ) do
+          {:ok, {:ok, {resources, actions}}} ->
+            case perform_actions(actions) do
+              :ok ->
+                {:ok, resources}
+
+              {:error, errors} ->
+                msg = """
+                Successfully applied config, but failed to apply actions:
+
+                #{Enum.map_join(errors, "\n", &Exception.message/1)}
+                """
+
+                {:error, Error.invariant(message: msg)}
             end
-          end,
-          timeout: :timer.seconds(90)
-        )
+
+          {:error, error} ->
+            {:error, error}
+        end
 
       {:error, %YamlElixir.ParsingError{} = error} ->
         {:error, Error.bad_request(message: "Invalid YAML: #{Exception.message(error)}")}
@@ -108,7 +126,7 @@ defmodule Sequin.YamlLoader do
           )
 
         case result do
-          {:error, {:ok, planned_resources}} ->
+          {:error, {:ok, planned_resources, _actions}} ->
             # Get the account id from the planned resources if it exists
             # account_id is nil if the account is not found, ie. it's a new account
             account_id =
@@ -144,14 +162,14 @@ defmodule Sequin.YamlLoader do
     with {:ok, account} <- find_or_create_account(account_id, config),
          {:ok, _users} <- find_or_create_users(account, config),
          {:ok, _tokens} <- find_or_create_tokens(account, config),
-         {:ok, _databases} <- upsert_databases(account.id, config, opts),
+         {:ok, _databases, actions} <- upsert_databases(account.id, config, opts),
          databases = Databases.list_dbs_for_account(account.id, [:sequences, :replication_slot]),
          {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
          http_endpoints = Consumers.list_http_endpoints_for_account(account.id),
          {:ok, _transforms} <- upsert_transforms(account.id, config),
          {:ok, _sink_consumers} <- upsert_sink_consumers(account.id, config, databases, http_endpoints) do
-      {:ok, all_resources(account.id)}
+      {:ok, all_resources(account.id), actions}
     end
   end
 
@@ -320,11 +338,12 @@ defmodule Sequin.YamlLoader do
   defp upsert_databases(account_id, %{"databases" => databases}, opts) do
     Logger.info("Upserting databases: #{inspect(databases, pretty: true)}")
 
-    Enum.reduce_while(databases, {:ok, []}, fn database_attrs, {:ok, acc} ->
+    Enum.reduce_while(databases, {:ok, [], []}, fn database_attrs, {:ok, acc_databases, acc_actions} ->
       database_attrs = Map.delete(database_attrs, "tables")
 
       case upsert_database(account_id, database_attrs, opts) do
-        {:ok, database} -> {:cont, {:ok, [database | acc]}}
+        {:ok, database} -> {:cont, {:ok, [database | acc_databases], acc_actions}}
+        {:ok, database, actions} -> {:cont, {:ok, [database | acc_databases], actions ++ acc_actions}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
@@ -332,7 +351,7 @@ defmodule Sequin.YamlLoader do
 
   defp upsert_databases(_account_id, %{}, _opts) do
     Logger.info("No databases found in config")
-    {:ok, []}
+    {:ok, [], []}
   end
 
   defp upsert_database(_account_id, %{"name" => nil} = _database_attrs, _opts) do
@@ -432,15 +451,21 @@ defmodule Sequin.YamlLoader do
 
   defp create_database_with_replication(account_id, database_attrs) do
     with {:ok, database_attrs, replication_attrs, slot_attrs, pub_attrs} <- parse_database_attrs(database_attrs),
-         {:ok, db} <- Databases.create_db(account_id, database_attrs),
-         :ok <- maybe_create_replication_slot(db, slot_attrs),
-         :ok <- maybe_create_publication(db, pub_attrs) do
+         {:ok, db} <- Databases.create_db(account_id, database_attrs) do
+      create_pub_action = maybe_create_publication_action(db, pub_attrs)
+      create_slot_action = maybe_create_slot_action(db, slot_attrs)
       replication_attrs = Map.put(replication_attrs, "postgres_database_id", db.id)
 
-      case Replication.create_pg_replication(account_id, replication_attrs) do
+      validate_slot? = database_attrs["slot"]["create_if_missing"] != true
+      validate_pub? = database_attrs["publication"]["create_if_missing"] != true
+
+      case Replication.create_pg_replication(account_id, replication_attrs,
+             validate_slot?: validate_slot?,
+             validate_pub?: validate_pub?
+           ) do
         {:ok, replication} ->
           Logger.info("Created database: #{inspect(db, pretty: true)}")
-          {:ok, %PostgresDatabase{db | replication_slot: replication}}
+          {:ok, %PostgresDatabase{db | replication_slot: replication}, [create_pub_action, create_slot_action]}
 
         {:error, error} when is_exception(error) ->
           {:error,
@@ -552,6 +577,14 @@ defmodule Sequin.YamlLoader do
 
         {:ok, database_attrs, replication_attrs, slot_attrs, pub_attrs}
     end
+  end
+
+  defp maybe_create_slot_action(db, slot_attrs) do
+    fn -> maybe_create_replication_slot(db, slot_attrs) end
+  end
+
+  defp maybe_create_publication_action(db, pub_attrs) do
+    fn -> maybe_create_publication(db, pub_attrs) end
   end
 
   defp maybe_create_replication_slot(_db, nil), do: :ok
@@ -1070,4 +1103,17 @@ defmodule Sequin.YamlLoader do
   end
 
   defp coerce_transform_inner(attrs), do: attrs
+
+  defp perform_actions(actions) do
+    Enum.reduce(actions, :ok, fn action, status_tuple ->
+      case {action.(), status_tuple} do
+        {:ok, :ok} -> :ok
+        {{:ok, _}, :ok} -> :ok
+        {{:ok, {:error, errors}}, :ok} -> {:error, errors}
+        {{:ok, _}, {:error, errors}} -> {:error, errors}
+        {{:error, error}, :ok} -> {:error, [error]}
+        {{:error, error}, {:error, errors}} -> {:error, [error | errors]}
+      end
+    end)
+  end
 end

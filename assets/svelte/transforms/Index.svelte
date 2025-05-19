@@ -1,10 +1,13 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table";
+  import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
-  import { ExternalLink } from "lucide-svelte";
+  import { ExternalLink, Code, FilePlus, Pencil, Trash2 } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
-  import { Code } from "lucide-svelte";
   import Beta from "$lib/components/Beta.svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
+  import DeleteFunctionDialog from "$lib/components/DeleteFunctionDialog.svelte";
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
 
   export let transforms: Array<{
     id: string;
@@ -13,10 +16,13 @@
     snippet: string;
     insertedAt: string;
     updatedAt: string;
+    consumerCount: number;
+    consumers: Array<{ name: string }>;
   }>;
+  export let live;
+  export let parent: string;
 
   let docBase = "https://sequinstream.com/docs";
-
   let typeToDocPath = {
     function: "/reference/transforms",
     path: "/reference/transforms",
@@ -24,9 +30,19 @@
   };
 
   let getHref = (transform) => docBase + typeToDocPath[transform.type];
+  let deleteDialogOpen = false;
+  let selectedTransform: (typeof transforms)[0] | null = null;
+
+  function pushEvent(
+    event: string,
+    payload = {},
+    callback = (event: any) => {},
+  ) {
+    live.pushEventTo(`#${parent}`, event, payload, callback);
+  }
 </script>
 
-<div class="container mx-auto py-10">
+<div class="container mx-auto py-8">
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <Code class="h-6 w-6 mr-2" />
@@ -49,7 +65,7 @@
   {#if transforms.length === 0}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
-        <h2 class="text-xl font-semibold mb-4">No transforms found</h2>
+        <h2 class="text-xl font-semibold mb-4">No functions</h2>
         <p class="text-gray-600 mb-6">
           Functions allow you to modify and restructure your data as it flows
           through your pipelines.
@@ -64,55 +80,112 @@
       </div>
     </div>
   {:else}
-    <Table.Root>
+    <Table.Root class="text-sm">
       <Table.Header>
-        <Table.Row>
+        <Table.Row class="text-xs text-gray-500 uppercase tracking-wide">
           <Table.Head>Name</Table.Head>
           <Table.Head>Type</Table.Head>
-          <Table.Head>Function</Table.Head>
+          <Table.Head>Consumers</Table.Head>
           <Table.Head>Created</Table.Head>
-          <Table.Head>Last updated</Table.Head>
+          <Table.Head>Updated</Table.Head>
+          <Table.Head></Table.Head>
+          <Table.Head></Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
         {#each transforms as transform}
-          <Table.Row
-            class="cursor-pointer"
-            on:click={() => {
-              const url = `/functions/${transform.id}`;
-              window.history.pushState({}, "", url);
-              dispatchEvent(new PopStateEvent("popstate"));
-            }}
-          >
-            <Table.Cell>{transform.name}</Table.Cell>
-            <Table.Cell>
+          <Table.Row class="hover:bg-gray-50 transition">
+            <Table.Cell class="py-4 font-medium">{transform.name}</Table.Cell>
+
+            <Table.Cell class="py-4">
               <a
                 href={getHref(transform)}
-                target="_blank"
                 on:click|stopPropagation
+                target="_blank"
               >
-                <Button variant="outline" size="sm">
-                  <ExternalLink class="h-4 w-4 mr-2" />
+                <Badge
+                  variant="secondary"
+                  class="text-xs capitalize inline-flex items-center gap-1"
+                >
                   {transform.type}
-                </Button>
+                  <ExternalLink class="h-3 w-3" />
+                </Badge>
               </a>
             </Table.Cell>
-            <Table.Cell>
-              <div
-                class="text-gray-600 bg-gray-50 p-2 rounded-md max-w-lg overflow-x-auto"
-              >
-                <pre><code>{transform.snippet}</code></pre>
-              </div>
+
+            <Table.Cell class="py-4">
+              <Tooltip.Root>
+                <Tooltip.Trigger>
+                  <div class="flex gap-2">
+                    <span>{transform.consumerCount}</span>
+                  </div>
+                </Tooltip.Trigger>
+                <Tooltip.Content>
+                  {#if transform.consumers && transform.consumers.length > 0}
+                    <div class="max-w-xs">
+                      <p class="font-medium mb-1">Used by:</p>
+                      <ul class="text-sm space-y-1">
+                        {#each transform.consumers as consumer}
+                          <li class="text-gray-600">{consumer.name}</li>
+                        {/each}
+                      </ul>
+                    </div>
+                  {:else}
+                    <p class="text-sm text-gray-600">
+                      Not used by any consumers
+                    </p>
+                  {/if}
+                </Tooltip.Content>
+              </Tooltip.Root>
             </Table.Cell>
-            <Table.Cell>
+
+            <Table.Cell class="py-4" title={transform.insertedAt}>
               {formatRelativeTimestamp(transform.insertedAt)}
             </Table.Cell>
-            <Table.Cell>
+
+            <Table.Cell class="py-4" title={transform.updatedAt}>
               {formatRelativeTimestamp(transform.updatedAt)}
+            </Table.Cell>
+
+            <Table.Cell class="py-4">
+              <LinkPushNavigate href={`/functions/${transform.id}`}>
+                <Button
+                  variant="link"
+                  size="sm"
+                  class="text-blue-600 hover:underline p-0 h-auto"
+                >
+                  Edit
+                </Button>
+              </LinkPushNavigate>
+            </Table.Cell>
+
+            <Table.Cell class="py-4">
+              <Button
+                variant="link"
+                size="sm"
+                class="text-red-600 hover:underline p-0 h-auto"
+                on:click={() => {
+                  selectedTransform = transform;
+                  deleteDialogOpen = true;
+                }}
+              >
+                Delete
+              </Button>
             </Table.Cell>
           </Table.Row>
         {/each}
       </Table.Body>
     </Table.Root>
   {/if}
+
+  <DeleteFunctionDialog
+    bind:open={deleteDialogOpen}
+    consumers={selectedTransform?.consumers || []}
+    onDelete={() => {
+      if (selectedTransform) {
+        pushEvent("delete", { id: selectedTransform.id });
+        selectedTransform = null;
+      }
+    }}
+  />
 </div>

@@ -56,7 +56,7 @@
   {:else}
     <Table.Root>
       <Table.Header>
-        <Table.Row>
+        <Table.Row class="text-xs text-gray-500 uppercase tracking-wide">
           <Table.Head>Name</Table.Head>
           <Table.Head>Status</Table.Head>
           <Table.Head>Hostname</Table.Head>

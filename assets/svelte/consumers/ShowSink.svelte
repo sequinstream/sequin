@@ -27,6 +27,7 @@
     TypesenseConsumer,
     ElasticsearchConsumer,
     RedisStringConsumer,
+    KinesisConsumer,
   } from "./types";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
@@ -40,6 +41,7 @@
   import TypesenseSinkCard from "../sinks/typesense/TypesenseSinkCard.svelte";
   import ElasticsearchSinkCard from "../sinks/elasticsearch/ElasticsearchSinkCard.svelte";
   import RedisStringSinkCard from "../sinks/redis-string/RedisStringSinkCard.svelte";
+  import KinesisSinkCard from "../sinks/kinesis/KinesisSinkCard.svelte";
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
@@ -133,6 +135,12 @@
     consumer: Consumer,
   ): consumer is RedisStringConsumer {
     return consumer.sink.type === "redis_string";
+  }
+
+  function isKinesisConsumer(
+    consumer: Consumer,
+  ): consumer is KinesisConsumer {
+    return consumer.sink.type === "kinesis";
   }
 
   function isNatsConsumer(consumer: Consumer): consumer is NatsConsumer {
@@ -1179,6 +1187,8 @@
         <ElasticsearchSinkCard {consumer} />
       {:else if isRedisStringConsumer(consumer)}
         <RedisStringSinkCard {consumer} />
+      {:else if isKinesisConsumer(consumer)}
+        <KinesisSinkCard {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

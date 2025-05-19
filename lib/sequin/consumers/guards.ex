@@ -7,6 +7,7 @@ defmodule Sequin.Consumers.Guards do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
+  alias Sequin.Consumers.KinesisSink
 
   @doc """
   Guard that checks if the given term is either a ConsumerEvent or a ConsumerRecord.
@@ -16,4 +17,7 @@ defmodule Sequin.Consumers.Guards do
 
   defguard is_redis_sink(sink)
            when is_struct(sink, RedisStreamSink) or is_struct(sink, RedisStringSink)
+
+  defguard is_kinesis_sink(sink)
+           when is_struct(sink, KinesisSink)
 end

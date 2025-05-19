@@ -16,7 +16,8 @@ export type BaseConsumer = {
     | "rabbitmq"
     | "typesense"
     | "elasticsearch"
-    | "redis_string";
+    | "redis_string"
+    | "kinesis";
   name: string;
   annotations: Record<string, boolean>;
   status: "active" | "paused" | "disabled";
@@ -210,6 +211,18 @@ export type ElasticsearchConsumer = BaseConsumer & {
   };
 };
 
+// Kinesis specific sink
+export type KinesisConsumer = BaseConsumer & {
+  sink: {
+    type: "kinesis";
+    stream_name: string;
+    region: string;
+    access_key_id: string;
+    secret_access_key: string;
+    partition_key_field: string;
+  };
+};
+
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer
@@ -224,4 +237,5 @@ export type Consumer =
   | TypesenseConsumer
   | SnsConsumer
   | ElasticsearchConsumer
-  | RedisStringConsumer;
+  | RedisStringConsumer
+  | KinesisConsumer;

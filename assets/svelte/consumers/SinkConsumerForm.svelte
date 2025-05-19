@@ -35,6 +35,7 @@
   import { CircleAlert, Info, Plus } from "lucide-svelte";
   import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
   import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
+  import KinesisSinkForm from "$lib/sinks/kinesis/KinesisSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import TableSelector from "../components/TableSelector.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -702,6 +703,8 @@
       <TypesenseSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "elasticsearch"}
       <ElasticsearchSinkForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "kinesis"}
+      <KinesisSinkForm errors={errors.consumer} bind:form />
     {/if}
 
     <Card>

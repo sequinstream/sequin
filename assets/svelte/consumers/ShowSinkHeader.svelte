@@ -27,6 +27,7 @@
   import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
   import ElasticsearchIcon from "../sinks/elasticsearch/ElasticsearchIcon.svelte";
+  import KinesisIcon from "../sinks/kinesis/KinesisIcon.svelte";
   import StopSinkModal from "./StopSinkModal.svelte";
 
   export let consumer;
@@ -156,6 +157,8 @@
             <ElasticsearchIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "sns"}
             <SnsIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "kinesis"}
+            <KinesisIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumer.name}

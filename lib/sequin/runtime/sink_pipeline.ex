@@ -319,6 +319,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       :gcp_pubsub -> Sequin.Runtime.GcpPubsubPipeline
       :http_push -> Sequin.Runtime.HttpPushPipeline
       :kafka -> Sequin.Runtime.KafkaPipeline
+      :kinesis -> Sequin.Runtime.KinesisPipeline
       :nats -> Sequin.Runtime.NatsPipeline
       :rabbitmq -> Sequin.Runtime.RabbitMqPipeline
       :redis_stream -> Sequin.Runtime.RedisStreamPipeline

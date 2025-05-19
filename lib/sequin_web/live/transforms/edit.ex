@@ -117,7 +117,7 @@ defmodule SequinWeb.TransformsLive.Edit do
       )
       |> assign_databases()
 
-    {:ok, socket}
+    {:ok, socket, layout: {SequinWeb.Layouts, :app_no_sidenav}}
   end
 
   def render(assigns) do
@@ -254,6 +254,10 @@ defmodule SequinWeb.TransformsLive.Edit do
       messages ->
         {:noreply, assign(socket, test_messages: messages)}
     end
+  end
+
+  def handle_event("form_closed", _params, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/functions")}
   end
 
   defp upsert_transform(%{assigns: %{id: nil}} = socket, params) do

@@ -17,6 +17,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -55,6 +56,7 @@ defmodule Sequin.Factory.ConsumersFactory do
           :redis_stream,
           :redis_string,
           :sqs,
+          :kinesis,
           :sns,
           :kafka,
           :sequin_stream,
@@ -202,6 +204,19 @@ defmodule Sequin.Factory.ConsumersFactory do
         access_key_id: Factory.word(),
         secret_access_key: Factory.word(),
         is_fifo: Enum.random([true, false])
+      },
+      attrs
+    )
+  end
+
+  defp sink(:kinesis, _account_id, attrs) do
+    merge_attributes(
+      %KinesisSink{
+        type: :kinesis,
+        stream_name: Factory.word(),
+        region: Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
+        access_key_id: Factory.word(),
+        secret_access_key: Factory.word()
       },
       attrs
     )

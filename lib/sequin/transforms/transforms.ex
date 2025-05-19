@@ -16,6 +16,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -239,6 +240,16 @@ defmodule Sequin.Transforms do
       access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
       secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
       is_fifo: sink.is_fifo
+    })
+  end
+
+  def to_external(%KinesisSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "kinesis",
+      stream_name: sink.stream_name,
+      region: sink.region,
+      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
+      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive)
     })
   end
 
@@ -810,6 +821,17 @@ defmodule Sequin.Transforms do
      %{
        type: :sns,
        topic_arn: attrs["topic_arn"],
+       region: attrs["region"],
+       access_key_id: attrs["access_key_id"],
+       secret_access_key: attrs["secret_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "kinesis"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :kinesis,
+       stream_name: attrs["stream_name"],
        region: attrs["region"],
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"]

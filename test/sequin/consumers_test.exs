@@ -2174,6 +2174,70 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
+  describe "list_sink_consumers_for_account_paginated/3" do
+    import Sequin.Test.Assertions, only: [assert_lists_equal: 2]
+
+    test "paginates sink consumers for an account with custom ordering" do
+      # Create an account
+      account = AccountsFactory.insert_account!()
+
+      # Create 10 sink consumers with different names in reverse order
+      # This will help prove the ordering is working correctly
+      for i <- 10..1//-1 do
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          name: "consumer-#{String.pad_leading(Integer.to_string(i), 2, "0")}"
+        )
+      end
+
+      # First page (0-based index) with 3 items per page, ordered by name asc
+      page_0 = Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 3, order_by: [asc: :name])
+      assert length(page_0) == 3
+      assert_lists_equal(Enum.map(page_0, & &1.name), ["consumer-01", "consumer-02", "consumer-03"])
+
+      # Second page with 3 items
+      page_1 = Consumers.list_sink_consumers_for_account_paginated(account.id, 1, 3, order_by: [asc: :name])
+      assert length(page_1) == 3
+      assert_lists_equal(Enum.map(page_1, & &1.name), ["consumer-04", "consumer-05", "consumer-06"])
+
+      # Third page with 3 items
+      page_2 = Consumers.list_sink_consumers_for_account_paginated(account.id, 2, 3, order_by: [asc: :name])
+      assert length(page_2) == 3
+      assert_lists_equal(Enum.map(page_2, & &1.name), ["consumer-07", "consumer-08", "consumer-09"])
+
+      # Fourth page with remaining items
+      page_3 = Consumers.list_sink_consumers_for_account_paginated(account.id, 3, 3, order_by: [asc: :name])
+      assert length(page_3) == 1
+      assert_lists_equal(Enum.map(page_3, & &1.name), ["consumer-10"])
+
+      # Empty page beyond available data
+      page_4 = Consumers.list_sink_consumers_for_account_paginated(account.id, 4, 3, order_by: [asc: :name])
+      assert Enum.empty?(page_4)
+
+      # Test with different page size
+      page_large = Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 5, order_by: [asc: :name])
+      assert length(page_large) == 5
+
+      assert_lists_equal(
+        Enum.map(page_large, & &1.name),
+        ["consumer-01", "consumer-02", "consumer-03", "consumer-04", "consumer-05"]
+      )
+
+      # Test with name descending order
+      page_desc = Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 3, order_by: [desc: :name])
+      assert length(page_desc) == 3
+      assert_lists_equal(Enum.map(page_desc, & &1.name), ["consumer-10", "consumer-09", "consumer-08"])
+
+      # Test with preloads
+      page_with_preloads = Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 3, preload: [:postgres_database], order_by: [asc: :name])
+      assert length(page_with_preloads) == 3
+      # Verify preloads worked - would raise error if not preloaded
+      for consumer <- page_with_preloads do
+        assert %Ecto.Association.NotLoaded{} != consumer.postgres_database
+      end
+    end
+  end
+
   describe "consumer_features/1" do
     test "returns legacy_event_transform feature when conditions are met" do
       account = AccountsFactory.account(features: ["legacy_event_transform"])

@@ -134,12 +134,15 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
-  def list_sink_consumers_for_account_paginated(account_id, page, page_size, preload \\ []) do
+  def list_sink_consumers_for_account_paginated(account_id, page, page_size, opts \\ []) do
+    preload = Keyword.get(opts, :preload, [])
+    order_by = Keyword.get(opts, :order_by, [desc: :updated_at])
+
     offset = page * page_size
 
     account_id
     |> SinkConsumer.where_account_id()
-    |> order_by([sc], desc: sc.updated_at)
+    |> order_by([sc], ^order_by)
     |> preload(^preload)
     |> limit(^page_size)
     |> offset(^offset)

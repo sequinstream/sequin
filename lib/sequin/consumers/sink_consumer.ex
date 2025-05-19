@@ -335,7 +335,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   def preload_http_endpoint(consumer), do: consumer
 
   defp default_max_storage_mb do
-    case Application.get_env(:sequin, :max_storage_bytes) do
+    case Application.get_env(:sequin, :default_max_storage_bytes) do
       nil -> nil
       bytes -> round(bytes / 1024 / 1024)
     end

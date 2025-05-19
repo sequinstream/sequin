@@ -215,7 +215,7 @@ if config_env() == :prod and self_hosted do
     release_version: System.get_env("RELEASE_VERSION"),
     backfill_max_pending_messages: backfill_max_pending_messages,
     max_memory_bytes: ConfigParser.max_memory_bytes(env_vars),
-    max_storage_bytes: ConfigParser.max_storage_bytes(env_vars)
+    default_max_storage_bytes: ConfigParser.default_max_storage_bytes(env_vars)
 end
 
 if config_env() == :prod and not self_hosted do

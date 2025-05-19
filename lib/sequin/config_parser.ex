@@ -130,8 +130,8 @@ defmodule Sequin.ConfigParser do
     end
   end
 
-  def max_storage_bytes(env) do
-    case env["MAX_STORAGE_MB"] do
+  def default_max_storage_bytes(env) do
+    case env["DEFAULT_MAX_STORAGE_MB"] do
       nil ->
         nil
 

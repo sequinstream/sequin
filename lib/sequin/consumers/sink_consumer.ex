@@ -12,6 +12,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
@@ -24,7 +25,6 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.Transform
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
@@ -106,8 +106,8 @@ defmodule Sequin.Consumers.SinkConsumer do
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
-    belongs_to :transform, Transform
-    belongs_to :routing, Transform
+    belongs_to :transform, Function
+    belongs_to :routing, Function
 
     polymorphic_embeds_one(:sink,
       types: [
@@ -261,7 +261,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: c.transform_id == ^transform_id)
   end
 
-  def where_transform_or_function_id(query \\ base_query(), transform_id) do
+  def where_transform_or_routing_id(query \\ base_query(), transform_id) do
     from([consumer: c] in query, where: c.transform_id == ^transform_id or c.routing_id == ^transform_id)
   end
 

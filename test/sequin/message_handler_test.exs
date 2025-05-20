@@ -8,6 +8,7 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Functions.TestMessages
   alias Sequin.Health
   alias Sequin.Replication
   alias Sequin.Runtime.MessageHandler
@@ -16,7 +17,6 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.Runtime.TableReaderServerMock
   alias Sequin.TestSupport
-  alias Sequin.Transforms.TestMessages
 
   setup do
     TestSupport.stub_random(fn _ -> 1 end)

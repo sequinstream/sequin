@@ -6,6 +6,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.ApiTokens
   alias Sequin.Consumers
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.KafkaSink
@@ -19,7 +20,6 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.Transform
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabasePrimary
@@ -500,54 +500,54 @@ defmodule Sequin.YamlLoaderTest do
     end
   end
 
-  describe "transforms" do
-    test "creates a transform" do
+  describe "functions" do
+    test "creates a function" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
-               transforms:
+               functions:
                  - name: "my-record-only"
-                   transform:
+                   function:
                       type: "path"
                       path: "record"
                """)
 
-      assert [transform] = Repo.all(Transform)
-      assert transform.name == "my-record-only"
-      assert transform.type == "path"
-      assert transform.transform.path == "record"
+      assert [function] = Repo.all(Function)
+      assert function.name == "my-record-only"
+      assert function.type == "path"
+      assert function.function.path == "record"
     end
 
-    test "creates a transform flat format" do
+    test "creates a function flat format" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
-               transforms:
+               functions:
                  - name: "my-record-only"
                    type: "path"
                    path: "record"
                """)
 
-      assert [transform] = Repo.all(Transform)
-      assert transform.name == "my-record-only"
-      assert transform.type == "path"
-      assert transform.transform.path == "record"
+      assert [function] = Repo.all(Function)
+      assert function.name == "my-record-only"
+      assert function.type == "path"
+      assert function.function.path == "record"
     end
 
-    test "updates an existing transform" do
-      # First create the transform
+    test "updates an existing function" do
+      # First create the function
       assert :ok =
                YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
-               transforms:
-                 - name: "my-transform"
-                   transform:
+               functions:
+                 - name: "my-function"
+                   function:
                     type: "path"
                     path: "record"
                """)
@@ -558,73 +558,73 @@ defmodule Sequin.YamlLoaderTest do
                account:
                  name: "Configured by Sequin"
 
-               transforms:
-                 - name: "my-transform"
-                   transform:
+               functions:
+                 - name: "my-function"
+                   function:
                      type: "path"
                      path: "record.id"
                """)
 
-      assert [transform] = Repo.all(Transform)
-      assert transform.name == "my-transform"
-      assert transform.type == "path"
-      assert transform.transform.path == "record.id"
+      assert [function] = Repo.all(Function)
+      assert function.name == "my-function"
+      assert function.type == "path"
+      assert function.function.path == "record.id"
     end
 
-    test "creates multiple transforms" do
+    test "creates multiple functions" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
-               transforms:
-                 - name: "transform-1"
-                   transform:
+               functions:
+                 - name: "function-1"
+                   function:
                      type: "path"
                      path: "record"
-                 - name: "transform-2"
-                   transform:
+                 - name: "function-2"
+                   function:
                      type: "path"
                      path: "record.status"
                """)
 
-      assert transforms = Repo.all(Transform)
-      assert length(transforms) == 2
+      assert functions = Repo.all(Function)
+      assert length(functions) == 2
 
-      transform1 = Enum.find(transforms, &(&1.name == "transform-1"))
-      assert transform1.type == "path"
-      assert transform1.transform.path == "record"
+      function1 = Enum.find(functions, &(&1.name == "function-1"))
+      assert function1.type == "path"
+      assert function1.function.path == "record"
 
-      transform2 = Enum.find(transforms, &(&1.name == "transform-2"))
-      assert transform2.type == "path"
-      assert transform2.transform.path == "record.status"
+      function2 = Enum.find(functions, &(&1.name == "function-2"))
+      assert function2.type == "path"
+      assert function2.function.path == "record.status"
     end
 
-    test "handles invalid transform type" do
-      assert_raise RuntimeError, ~r/Error creating transform/, fn ->
+    test "handles invalid function type" do
+      assert_raise RuntimeError, ~r/Error creating function/, fn ->
         YamlLoader.apply_from_yml!("""
         account:
           name: "Configured by Sequin"
 
-        transforms:
-          - name: "invalid-transform"
-            transform:
+        functions:
+          - name: "invalid-function"
+            function:
               type: "invalid_type"
         """)
       end
     end
 
-    test "creates a function transform" do
+    test "creates a function function" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
-               transforms:
-                 - name: "id-action-functional"
+               functions:
+                 - name: "id-action-transform"
                    description: "Record ID and action"
-                   transform:
-                     type: "function"
+                   function:
+                     type: "transform"
                      code: |-
                         def transform(action, record, changes, metadata) do
                           %{
@@ -634,12 +634,12 @@ defmodule Sequin.YamlLoaderTest do
                         end
                """)
 
-      assert [transform] = Repo.all(Transform)
-      assert transform.name == "id-action-functional"
-      assert transform.type == "function"
-      assert transform.description == "Record ID and action"
+      assert [function] = Repo.all(Function)
+      assert function.name == "id-action-transform"
+      assert function.type == "transform"
+      assert function.description == "Record ID and action"
 
-      assert transform.transform.code ==
+      assert function.function.code ==
                String.trim("""
                def transform(action, record, changes, metadata) do
                  %{
@@ -671,9 +671,9 @@ defmodule Sequin.YamlLoaderTest do
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               transforms:
+               functions:
                  - name: "record_only"
-                   transform:
+                   function:
                      type: "path"
                      path: "record"
 
@@ -1365,9 +1365,9 @@ defmodule Sequin.YamlLoaderTest do
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               transforms:
+               functions:
                  - name: "my-transform"
-                   transform:
+                   function:
                     type: "path"
                     path: "record"
 
@@ -1385,29 +1385,29 @@ defmodule Sequin.YamlLoaderTest do
                    transform: "my-transform"
                """)
 
-      assert [transform] = Repo.all(Transform)
-      assert transform.name == "my-transform"
-      assert transform.type == "path"
-      assert transform.transform.path == "record"
+      assert [function] = Repo.all(Function)
+      assert function.name == "my-transform"
+      assert function.type == "path"
+      assert function.function.path == "record"
 
       assert [consumer] = Repo.all(SinkConsumer)
       consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "test-db.public.Characters"
-      assert consumer.transform_id == transform.id
+      assert consumer.transform_id == function.id
     end
 
-    test "creates webhook subscription with function transform" do
+    test "creates webhook subscription with transform function" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               transforms:
+               functions:
                  - name: "id-action-transform"
                    description: "Extract ID and action"
-                   transform:
-                     type: "function"
+                   function:
+                     type: "transform"
                      code: |-
                        def transform(action, record, changes, metadata) do
                          %{
@@ -1430,12 +1430,12 @@ defmodule Sequin.YamlLoaderTest do
                    transform: "id-action-transform"
                """)
 
-      assert [transform] = Repo.all(Transform)
-      assert transform.name == "id-action-transform"
-      assert transform.type == "function"
-      assert transform.description == "Extract ID and action"
+      assert [function] = Repo.all(Function)
+      assert function.name == "id-action-transform"
+      assert function.type == "transform"
+      assert function.description == "Extract ID and action"
 
-      assert transform.transform.code ==
+      assert function.function.code ==
                String.trim("""
                def transform(action, record, changes, metadata) do
                  %{
@@ -1450,7 +1450,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "test-db.public.Characters"
-      assert consumer.transform_id == transform.id
+      assert consumer.transform_id == function.id
     end
 
     test "creates sink with no transform" do
@@ -1481,7 +1481,7 @@ defmodule Sequin.YamlLoaderTest do
     end
 
     test "raises error when referenced transform not found" do
-      assert_raise RuntimeError, ~r/Transform 'missing-transform' not found/, fn ->
+      assert_raise RuntimeError, ~r/Function 'missing-function' not found/, fn ->
         YamlLoader.apply_from_yml!("""
         #{account_db_and_sequence_yml()}
 
@@ -1496,7 +1496,7 @@ defmodule Sequin.YamlLoaderTest do
             destination:
               type: "webhook"
               http_endpoint: "sequin-playground-http"
-            transform: "missing-transform"
+            transform: "missing-function"
         """)
       end
     end
@@ -1506,9 +1506,9 @@ defmodule Sequin.YamlLoaderTest do
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               transforms:
+               functions:
                  - name: "my-routing"
-                   transform:
+                   function:
                      type: "routing"
                      sink_type: "http_push"
                      code: |-
@@ -1542,10 +1542,10 @@ defmodule Sequin.YamlLoaderTest do
       # Check routing function reference was used
       assert consumer.routing
       assert consumer.routing.name == "my-routing"
-      assert consumer.routing.transform.type == :routing
-      assert consumer.routing.transform.sink_type == :http_push
-      assert consumer.routing.transform.code =~ "def route(action, record, changes, metadata)"
-      assert consumer.routing.transform.code =~ "/custom/"
+      assert consumer.routing.function.type == :routing
+      assert consumer.routing.function.sink_type == :http_push
+      assert consumer.routing.function.code =~ "def route(action, record, changes, metadata)"
+      assert consumer.routing.function.code =~ "/custom/"
     end
 
     test "creates webhook subscription with new yaml names" do
@@ -1623,8 +1623,8 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.routing.name == "my-routing"
     end
 
-    test "errors when routing transform doesn't exist" do
-      assert_raise RuntimeError, ~r/[Tt]ransform 'non-existent-routing' not found/, fn ->
+    test "errors when routing function doesn't exist" do
+      assert_raise RuntimeError, ~r/[Ff]unction 'non-existent-routing' not found/, fn ->
         YamlLoader.apply_from_yml!("""
         #{account_db_and_sequence_yml()}
 
@@ -1644,14 +1644,14 @@ defmodule Sequin.YamlLoaderTest do
       end
     end
 
-    test "errors when transform referenced for routing is not a routing transform" do
-      assert_raise RuntimeError, "`routing` must reference a transform with type `routing`", fn ->
+    test "errors when function referenced for routing is not a routing function" do
+      assert_raise RuntimeError, "`routing` must reference a function with type `routing`", fn ->
         YamlLoader.apply_from_yml!("""
         #{account_db_and_sequence_yml()}
 
-        transforms:
+        functions:
           - name: "regular-transform"
-            transform:
+            function:
               type: "path"
               path: "record"
 

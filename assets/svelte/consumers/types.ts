@@ -1,5 +1,5 @@
 import type { Table } from "../databases/types";
-import type { Transform } from "../transforms/types";
+import type { Transform } from "../functions/types";
 
 // Base consumer type with shared properties
 export type BaseConsumer = {

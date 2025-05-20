@@ -1,4 +1,4 @@
-defmodule Sequin.Transforms.TestMessagesTest do
+defmodule Sequin.Functions.TestMessagesTest do
   use Sequin.Case, async: true
 
   alias Sequin.Consumers.ConsumerEvent
@@ -7,7 +7,7 @@ defmodule Sequin.Transforms.TestMessagesTest do
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.ConsumerRecordData.Metadata
   alias Sequin.Factory
-  alias Sequin.Transforms.TestMessages
+  alias Sequin.Functions.TestMessages
 
   setup do
     TestMessages.create_ets_table()

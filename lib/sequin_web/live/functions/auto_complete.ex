@@ -1,4 +1,4 @@
-defmodule SequinWeb.TransformLive.AutoComplete do
+defmodule SequinWeb.FunctionLive.AutoComplete do
   @moduledoc false
   @function_completion_modules [
     Date,

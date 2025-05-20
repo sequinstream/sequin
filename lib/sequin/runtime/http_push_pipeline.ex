@@ -6,10 +6,10 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Metrics
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Transforms
-  alias Sequin.Transforms.MiniElixir
 
   require Logger
 

@@ -3,11 +3,11 @@ defmodule SequinWeb.TransformEditTest do
 
   import Phoenix.LiveViewTest
 
-  alias Sequin.Consumers.FunctionTransform
-  alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.Function
+  alias Sequin.Consumers.TransformFunction
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Transforms.MiniElixir
+  alias Sequin.Functions.MiniElixir
 
   test "Do not try to run obviously-invalid function transforms", %{conn: conn} do
     telref =
@@ -19,9 +19,9 @@ defmodule SequinWeb.TransformEditTest do
     conn = log_in_user(conn, AccountsFactory.insert_user!())
     {:ok, lv, _} = live(conn, ~p"/functions/new")
 
-    p1 = %{"description" => nil, "id" => nil, "name" => nil, "transform" => %{"type" => "function"}}
+    p1 = %{"description" => nil, "id" => nil, "name" => nil, "function" => %{"type" => "transform"}}
 
-    render_hook(lv, "validate", %{"transform" => p1})
+    render_hook(lv, "validate", %{"function" => p1})
 
     # assigns = :sys.get_state(lv.pid).socket.assigns
 
@@ -39,7 +39,7 @@ defmodule SequinWeb.TransformEditTest do
       ])
 
     MiniElixir.run_interpreted_inner(
-      %Transform{id: "fake", transform: %FunctionTransform{code: "{"}},
+      %Function{id: "fake", function: %TransformFunction{code: "{"}},
       ConsumersFactory.consumer_event_data(
         action: :insert,
         record: %{"id" => "xyz"}

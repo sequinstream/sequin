@@ -493,7 +493,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 >
   <form on:submit={handleSubmit} class="space-y-4">
     <div
-      class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 max-w-3xl mx-auto"
+      class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 max-w-7xl mx-auto"
     >
       <div class="p-4 border-b border-slate-200 dark:border-slate-800">
         <div class="flex justify-between items-center">
@@ -895,7 +895,7 @@ Please help me create or modify the Elixir function transform to achieve the des
     </div>
 
     <div
-      class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 mt-6 max-w-6xl mx-auto px-4 sm:px-6"
+      class="w-full border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 mt-6 max-w-7xl mx-auto px-4 sm:px-6"
     >
       <div class="p-4 border-b border-slate-200 dark:border-slate-800">
         <h2 class="text-lg font-semibold tracking-tight">Test Messages</h2>

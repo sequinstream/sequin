@@ -1,4 +1,4 @@
-defmodule Sequin.Transforms.MiniElixir.Validator do
+defmodule Sequin.Functions.MiniElixir.Validator do
   @moduledoc false
   @allowed_funname [:transform, :route]
   @args [:action, :record, :changes, :metadata]

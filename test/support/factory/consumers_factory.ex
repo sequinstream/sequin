@@ -9,6 +9,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -23,7 +24,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.Transform
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -894,30 +894,30 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> insert_backfill!()
   end
 
-  # Transform
+  # Function
   def transform(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {transform_type, attrs} = Map.pop_lazy(attrs, :transform_type, fn -> :path end)
+    {function_type, attrs} = Map.pop_lazy(attrs, :function_type, fn -> :path end)
 
-    transform_attrs =
-      case transform_type do
+    function_attrs =
+      case function_type do
         :path -> path_transform()
       end
 
     merge_attributes(
-      %Transform{
+      %Function{
         id: Factory.uuid(),
         account_id: Factory.uuid(),
         name: Factory.unique_word(),
-        type: to_string(transform_type),
-        transform: transform_attrs
+        type: to_string(function_type),
+        function: function_attrs
       },
       attrs
     )
   end
 
-  # PathTransform
+  # PathFunction
   def path_transform(attrs \\ []) do
     valid_paths = [
       "record",
@@ -938,7 +938,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     ]
 
     merge_attributes(
-      %Sequin.Consumers.PathTransform{
+      %Sequin.Consumers.PathFunction{
         type: :path,
         path: Enum.random(valid_paths)
       },

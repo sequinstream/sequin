@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.Transform do
+defmodule Sequin.Consumers.Function do
   @moduledoc false
   use Sequin.ConfigSchema
 
@@ -7,24 +7,24 @@ defmodule Sequin.Consumers.Transform do
   import PolymorphicEmbed
 
   alias Sequin.Accounts.Account
-  alias Sequin.Consumers.FunctionTransform
-  alias Sequin.Consumers.PathTransform
-  alias Sequin.Consumers.RoutingTransform
-  alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.Function
+  alias Sequin.Consumers.PathFunction
+  alias Sequin.Consumers.RoutingFunction
+  alias Sequin.Consumers.TransformFunction
 
-  @derive {Jason.Encoder, only: [:name, :type, :description, :transform]}
-  typed_schema "transforms" do
+  @derive {Jason.Encoder, only: [:name, :type, :description, :function]}
+  typed_schema "functions" do
     field :name, :string
     field :type, :string, read_after_writes: true
     field :description, :string
 
     belongs_to :account, Account
 
-    polymorphic_embeds_one(:transform,
+    polymorphic_embeds_one(:function,
       types: [
-        path: PathTransform,
-        function: FunctionTransform,
-        routing: RoutingTransform
+        path: PathFunction,
+        transform: TransformFunction,
+        routing: RoutingFunction
       ],
       on_replace: :update,
       type_field_name: :type
@@ -33,28 +33,28 @@ defmodule Sequin.Consumers.Transform do
     timestamps()
   end
 
-  def create_changeset(transform, attrs) do
-    transform
+  def create_changeset(function, attrs) do
+    function
     |> cast(attrs, [:name, :description])
     |> changeset(attrs)
     |> unique_constraint([:account_id, :name], error_key: :name)
   end
 
-  def update_changeset(transform, attrs) do
-    changeset(transform, attrs)
+  def update_changeset(function, attrs) do
+    changeset(function, attrs)
   end
 
-  def changeset(transform, attrs) do
-    account_id = if is_struct(transform, Transform), do: transform.account_id, else: transform.data.account_id
+  def changeset(function, attrs) do
+    account_id = if is_struct(function, Function), do: function.account_id, else: function.data.account_id
 
-    transform
+    function
     |> cast(attrs, [:name, :description])
-    |> cast_polymorphic_embed(:transform,
+    |> cast_polymorphic_embed(:function,
       required: true,
       with: [
-        function: &FunctionTransform.changeset(&1, &2, account_id),
-        routing: &RoutingTransform.changeset(&1, &2, account_id),
-        path: &PathTransform.changeset(&1, &2, account_id)
+        transform: &TransformFunction.changeset(&1, &2, account_id),
+        routing: &RoutingFunction.changeset(&1, &2, account_id),
+        path: &PathFunction.changeset(&1, &2, account_id)
       ]
     )
     |> validate_required([:name])
@@ -63,19 +63,19 @@ defmodule Sequin.Consumers.Transform do
   end
 
   def where_account_id(query \\ base_query(), account_id) do
-    from([transform: t] in query, where: t.account_id == ^account_id)
+    from([function: t] in query, where: t.account_id == ^account_id)
   end
 
   def where_sequence_id(query \\ base_query(), sequence_id) do
-    from([transform: t] in query, where: t.sequence_id == ^sequence_id)
+    from([function: t] in query, where: t.sequence_id == ^sequence_id)
   end
 
   def where_id(query \\ base_query(), id) do
-    from([transform: t] in query, where: t.id == ^id)
+    from([function: t] in query, where: t.id == ^id)
   end
 
   def where_name(query \\ base_query(), name) do
-    from([transform: t] in query, where: t.name == ^name)
+    from([function: t] in query, where: t.name == ^name)
   end
 
   def where_id_or_name(query \\ base_query(), id_or_name) do
@@ -87,6 +87,6 @@ defmodule Sequin.Consumers.Transform do
   end
 
   defp base_query(query \\ __MODULE__) do
-    from(t in query, as: :transform)
+    from(t in query, as: :function)
   end
 end

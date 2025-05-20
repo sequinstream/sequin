@@ -173,7 +173,7 @@ defmodule Sequin.YamlLoader do
          {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
          http_endpoints = Consumers.list_http_endpoints_for_account(account.id),
-         {:ok, _transforms} <- upsert_transforms(account.id, config),
+         {:ok, _functions} <- upsert_functions(account.id, config),
          {:ok, _sink_consumers} <- upsert_sink_consumers(account.id, config, databases, http_endpoints) do
       {:ok, all_resources(account.id), actions}
     end
@@ -187,14 +187,14 @@ defmodule Sequin.YamlLoader do
     databases = Databases.list_dbs_for_account(account_id, [:sequences, :replication_slot])
     wal_pipelines = Replication.list_wal_pipelines_for_account(account_id, [:source_database, :destination_database])
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
-    transforms = Consumers.list_transforms_for_account(account_id)
+    functions = Consumers.list_functions_for_account(account_id)
 
     sink_consumers =
       account_id
       |> Consumers.list_sink_consumers_for_account(sequence: [:postgres_database])
       |> Enum.map(&SinkConsumer.preload_http_endpoint/1)
 
-    [account | users] ++ databases ++ wal_pipelines ++ http_endpoints ++ transforms ++ sink_consumers
+    [account | users] ++ databases ++ wal_pipelines ++ http_endpoints ++ functions ++ sink_consumers
   end
 
   #############
@@ -937,8 +937,8 @@ defmodule Sequin.YamlLoader do
   rescue
     e in Postgrex.Error ->
       case e do
-        %_{postgres: %{message: "routing_id must reference a transform with type 'routing'"}} ->
-          raise "`routing` must reference a transform with type `routing`"
+        %_{postgres: %{message: "routing_id must reference a function with type 'routing'"}} ->
+          raise "`routing` must reference a function with type `routing`"
 
         _ ->
           reraise e, __STACKTRACE__
@@ -1011,107 +1011,107 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  defp upsert_transforms(_, %{"transforms" => _, "functions" => _}) do
+  defp upsert_functions(_, %{"transforms" => _, "functions" => _}) do
     {:error, "Cannot specify both `functions` and `transforms`"}
   end
 
-  defp upsert_transforms(account_id, %{"transforms" => transforms}) do
-    upsert_transforms(account_id, %{"functions" => transforms})
+  defp upsert_functions(account_id, %{"transforms" => functions}) do
+    upsert_functions(account_id, %{"functions" => functions})
   end
 
-  defp upsert_transforms(account_id, %{"functions" => transforms}) do
-    Logger.info("Upserting transforms: #{inspect(transforms, pretty: true)}")
+  defp upsert_functions(account_id, %{"functions" => functions}) do
+    Logger.info("Upserting functions: #{inspect(functions, pretty: true)}")
 
-    Enum.reduce_while(transforms, {:ok, []}, fn transform_attrs, {:ok, acc} ->
-      case upsert_transform(account_id, transform_attrs) do
-        {:ok, transform} -> {:cont, {:ok, [transform | acc]}}
+    Enum.reduce_while(functions, {:ok, []}, fn function_attrs, {:ok, acc} ->
+      case upsert_function(account_id, function_attrs) do
+        {:ok, function} -> {:cont, {:ok, [function | acc]}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
   end
 
-  defp upsert_transforms(_account_id, %{}), do: {:ok, []}
+  defp upsert_functions(_account_id, %{}), do: {:ok, []}
 
-  defp upsert_transform(_account_id, %{"name" => nil} = _transform_attrs) do
-    {:error, Error.validation(summary: "`name` is required on transforms.")}
+  defp upsert_function(_account_id, %{"name" => nil} = _function_attrs) do
+    {:error, Error.validation(summary: "`name` is required on functions.")}
   end
 
-  defp upsert_transform(account_id, %{"name" => name} = raw_attrs) do
-    with {:ok, transform_attrs} <- coerce_transform_attrs(raw_attrs) do
-      case Consumers.find_transform(account_id, name: name) do
-        {:ok, transform} ->
-          update_transform(account_id, transform.id, transform_attrs)
+  defp upsert_function(account_id, %{"name" => name} = raw_attrs) do
+    with {:ok, function_attrs} <- coerce_function_attrs(raw_attrs) do
+      case Consumers.find_function(account_id, name: name) do
+        {:ok, function} ->
+          update_function(account_id, function.id, function_attrs)
 
         {:error, %NotFoundError{}} ->
-          create_transform(account_id, transform_attrs)
+          create_function(account_id, function_attrs)
       end
     end
   end
 
-  defp upsert_transform(_account_id, %{}) do
-    {:error, Error.validation(summary: "`name` is required on transforms.")}
+  defp upsert_function(_account_id, %{}) do
+    {:error, Error.validation(summary: "`name` is required on functions.")}
   end
 
-  defp create_transform(account_id, attrs) do
-    case Consumers.create_transform(account_id, attrs) do
-      {:ok, transform} ->
-        Logger.info("Created transform: #{inspect(transform, pretty: true)}")
-        {:ok, transform}
+  defp create_function(account_id, attrs) do
+    case Consumers.create_function(account_id, attrs) do
+      {:ok, function} ->
+        Logger.info("Created function: #{inspect(function, pretty: true)}")
+        {:ok, function}
 
       {:error, changeset} ->
         error = Sequin.Error.errors_on(changeset)
 
         {:error,
-         Error.bad_request(message: "Error creating transform '#{attrs["name"]}': #{inspect(error, pretty: true)}")}
+         Error.bad_request(message: "Error creating function '#{attrs["name"]}': #{inspect(error, pretty: true)}")}
     end
   end
 
-  defp update_transform(account_id, id, attrs) do
-    case Consumers.update_transform(account_id, id, attrs) do
-      {:ok, transform} ->
-        Logger.info("Updated transform: #{inspect(transform, pretty: true)}")
-        {:ok, transform}
+  defp update_function(account_id, id, attrs) do
+    case Consumers.update_function(account_id, id, attrs) do
+      {:ok, function} ->
+        Logger.info("Updated function: #{inspect(function, pretty: true)}")
+        {:ok, function}
 
       {:error, changeset} ->
         error = Sequin.Error.errors_on(changeset)
 
         {:error,
-         Error.bad_request(message: "Error updating transform '#{attrs["name"]}': #{inspect(error, pretty: true)}")}
+         Error.bad_request(message: "Error updating function '#{attrs["name"]}': #{inspect(error, pretty: true)}")}
     end
   end
 
-  defp coerce_transform_attrs(%{"function" => _, "transform" => _}) do
+  defp coerce_function_attrs(%{"function" => _, "transform" => _}) do
     {:error, "Cannot specify both `function` and `transform`"}
   end
 
-  defp coerce_transform_attrs(%{"function" => transform} = raw_attrs) do
+  defp coerce_function_attrs(%{"transform" => function} = raw_attrs) do
     attrs =
       raw_attrs
-      |> Map.delete("function")
-      |> Map.put("transform", coerce_transform_inner(transform))
+      |> Map.delete("transform")
+      |> Map.put("function", coerce_function_inner(function))
 
     {:ok, attrs}
   end
 
-  defp coerce_transform_attrs(%{"transform" => _} = attrs) do
-    {:ok, Map.update!(attrs, "transform", &coerce_transform_inner/1)}
+  defp coerce_function_attrs(%{"function" => _} = attrs) do
+    {:ok, Map.update!(attrs, "function", &coerce_function_inner/1)}
   end
 
-  # Assume that if you don't have "function" or "transform" that you used flat structure
-  defp coerce_transform_attrs(flat) do
+  # Assume that if you don't have "function" or "function" that you used flat structure
+  defp coerce_function_attrs(flat) do
     nested_attrs =
       flat
       |> Map.take(["id", "name"])
-      |> Map.put("transform", Map.take(flat, ["type", "sink_type", "code", "description", "path"]))
+      |> Map.put("function", Map.take(flat, ["type", "sink_type", "code", "description", "path"]))
 
     {:ok, nested_attrs}
   end
 
-  defp coerce_transform_inner(%{"sink_type" => "webhook"} = attrs) do
+  defp coerce_function_inner(%{"sink_type" => "webhook"} = attrs) do
     Map.put(attrs, "sink_type", "http_push")
   end
 
-  defp coerce_transform_inner(attrs), do: attrs
+  defp coerce_function_inner(attrs), do: attrs
 
   defp perform_actions(actions) do
     Enum.reduce(actions, :ok, fn %__MODULE__.Action{} = action, status_tuple ->

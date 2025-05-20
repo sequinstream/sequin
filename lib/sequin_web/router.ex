@@ -99,9 +99,9 @@ defmodule SequinWeb.Router do
       live "/sinks/:type/:id/messages/:ack_id", SinkConsumersLive.Show, :messages
       live "/sinks/:type/:id/edit", SinkConsumersLive.Form, :edit
 
-      live "/functions", TransformsLive.Index, :index
-      live "/functions/new", TransformsLive.Edit, :new
-      live "/functions/:id", TransformsLive.Edit, :edit
+      live "/functions", FunctionsLive.Index, :index
+      live "/functions/new", FunctionsLive.Edit, :new
+      live "/functions/:id", FunctionsLive.Edit, :edit
 
       live "/databases", DatabasesLive.Index, :index
       live "/databases/new", DatabasesLive.Form, :new

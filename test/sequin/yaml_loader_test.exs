@@ -69,7 +69,7 @@ defmodule Sequin.YamlLoaderTest do
 
   describe "plan_from_yml" do
     test "returns lists of planned and current resources" do
-      assert {:ok, planned_resources, [] = _current_resources} =
+      assert {:ok, planned_resources, [] = _current_resources, [] = _actions} =
                YamlLoader.plan_from_yml("""
                 account:
                   name: "Playground"

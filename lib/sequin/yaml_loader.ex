@@ -19,6 +19,12 @@ defmodule Sequin.YamlLoader do
 
   @app :sequin
 
+  defmodule Action do
+    @moduledoc false
+    @derive {Jason.Encoder, only: [:description]}
+    defstruct [:description, :action]
+  end
+
   def config_file_path do
     Application.get_env(@app, :config_file_path)
   end
@@ -126,7 +132,7 @@ defmodule Sequin.YamlLoader do
           )
 
         case result do
-          {:error, {:ok, planned_resources, _actions}} ->
+          {:error, {:ok, planned_resources, actions}} ->
             # Get the account id from the planned resources if it exists
             # account_id is nil if the account is not found, ie. it's a new account
             account_id =
@@ -140,7 +146,7 @@ defmodule Sequin.YamlLoader do
               end
 
             current_resources = all_resources(account_id)
-            {:ok, planned_resources, current_resources}
+            {:ok, planned_resources, current_resources, actions}
 
           {:error, {:error, error}} ->
             {:error, error}
@@ -452,8 +458,9 @@ defmodule Sequin.YamlLoader do
   defp create_database_with_replication(account_id, database_attrs) do
     with {:ok, database_attrs, replication_attrs, slot_attrs, pub_attrs} <- parse_database_attrs(database_attrs),
          {:ok, db} <- Databases.create_db(account_id, database_attrs) do
-      create_pub_action = maybe_create_publication_action(db, pub_attrs)
-      create_slot_action = maybe_create_slot_action(db, slot_attrs)
+      create_pub_actions = maybe_create_publication_action(db, pub_attrs)
+      create_slot_actions = maybe_create_slot_action(db, slot_attrs)
+
       replication_attrs = Map.put(replication_attrs, "postgres_database_id", db.id)
 
       validate_slot? = database_attrs["slot"]["create_if_missing"] != true
@@ -465,7 +472,7 @@ defmodule Sequin.YamlLoader do
            ) do
         {:ok, replication} ->
           Logger.info("Created database: #{inspect(db, pretty: true)}")
-          {:ok, %PostgresDatabase{db | replication_slot: replication}, [create_pub_action, create_slot_action]}
+          {:ok, %PostgresDatabase{db | replication_slot: replication}, create_pub_actions ++ create_slot_actions}
 
         {:error, error} when is_exception(error) ->
           {:error,
@@ -579,15 +586,19 @@ defmodule Sequin.YamlLoader do
     end
   end
 
+  defp maybe_create_slot_action(_, nil), do: []
+
   defp maybe_create_slot_action(db, slot_attrs) do
-    fn -> maybe_create_replication_slot(db, slot_attrs) end
+    go = fn -> maybe_create_replication_slot(db, slot_attrs) end
+    [%__MODULE__.Action{action: go, description: "Ensure replication slot `#{slot_attrs["name"]}` exists"}]
   end
+
+  defp maybe_create_publication_action(_, nil), do: []
 
   defp maybe_create_publication_action(db, pub_attrs) do
-    fn -> maybe_create_publication(db, pub_attrs) end
+    go = fn -> maybe_create_publication(db, pub_attrs) end
+    [%__MODULE__.Action{action: go, description: "Ensure publication `#{pub_attrs["name"]}` exists"}]
   end
-
-  defp maybe_create_replication_slot(_db, nil), do: :ok
 
   defp maybe_create_replication_slot(db, slot_params) do
     case Postgres.create_replication_slot(db, slot_params["name"]) do
@@ -601,8 +612,6 @@ defmodule Sequin.YamlLoader do
          )}
     end
   end
-
-  defp maybe_create_publication(_db, nil), do: :ok
 
   defp maybe_create_publication(db, pub_params) do
     case Postgres.create_publication(db, pub_params["name"], pub_params["init_sql"]) do
@@ -1105,8 +1114,8 @@ defmodule Sequin.YamlLoader do
   defp coerce_transform_inner(attrs), do: attrs
 
   defp perform_actions(actions) do
-    Enum.reduce(actions, :ok, fn action, status_tuple ->
-      case {action.(), status_tuple} do
+    Enum.reduce(actions, :ok, fn %__MODULE__.Action{} = action, status_tuple ->
+      case {action.action.(), status_tuple} do
         {:ok, :ok} -> :ok
         {{:ok, _}, :ok} -> :ok
         {{:ok, {:error, errors}}, :ok} -> {:error, errors}

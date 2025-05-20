@@ -172,6 +172,15 @@ func (c *ConfigCommands) planAction(_ *fisk.ParseContext) error {
 		}
 	}
 
+	// Print actions
+	if len(planResp.Actions) > 0 {
+		fmt.Printf("\nAdditional actions:\n\n")
+		for _, action := range planResp.Actions {
+			fmt.Printf("* %s\n", action.Description)
+		}
+		fmt.Println()
+	}
+
 	// Print summary
 	fmt.Printf("\nPlan: %d to add, %d to change, %d to destroy.\n",
 		creates, updates, deletes)

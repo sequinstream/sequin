@@ -169,9 +169,6 @@ defmodule SequinWeb.TransformsLive.Edit do
     if database_id && table_oid do
       test_messages = TestMessages.get_test_messages(database_id, table_oid)
 
-      # TODO Transform test_messages with the editions made in the code editor
-      # OR prepend with the custom edited message
-
       if length(test_messages) >= @max_test_messages do
         TestMessages.unregister_needs_messages(database_id)
       end
@@ -204,6 +201,7 @@ defmodule SequinWeb.TransformsLive.Edit do
                    {record, _} <- Code.eval_quoted(record_ast) do
                 {:ok, %{record: record}}
               else
+                {:error, error_type, error} -> %{error: MiniElixir.encode_error(error_type, error)}
                 {:error, error} -> %{error: MiniElixir.encode_error(error)}
               end
 
@@ -211,35 +209,38 @@ defmodule SequinWeb.TransformsLive.Edit do
           end)
       end
 
-    dbg(modified_test_messages)
-    dbg(socket.assigns.synthetic_test_message)
-
     synthetic_test_message = socket.assigns.synthetic_test_message
 
     new_synthetic_test_message =
       case modified_test_messages[synthetic_test_message.id] do
-        nil ->
-          synthetic_test_message
-
-        {:ok, modified} ->
-          %{synthetic_test_message | data: Map.put(synthetic_test_message.data, :record, modified.record)}
-
-        # TODO Propagate error to frontend
-        %{error: error} ->
-          synthetic_test_message
+        {:ok, %{record: record}} -> %{synthetic_test_message | data: %{synthetic_test_message.data | record: record}}
+        _ -> synthetic_test_message
       end
 
     dbg(socket.assigns.test_messages)
     dbg(socket.assigns.synthetic_test_message)
 
+    modified_form_errors =
+      Map.put(
+        form_errors,
+        :modified_test_messages,
+        Enum.reduce(modified_test_messages, %{}, fn {id, result}, acc ->
+          case result do
+            {:ok, _} -> acc
+            # TODO propagate errors for other fields
+            %{error: error} -> Map.put(acc, id, %{record: error})
+          end
+        end)
+      )
+
+    dbg(modified_form_errors)
+
     socket =
       socket
       |> assign(:changeset, changeset)
       |> assign(:form_data, form_data)
-      |> assign(:form_errors, form_errors)
+      |> assign(:form_errors, modified_form_errors)
       |> assign(:synthetic_test_message, new_synthetic_test_message)
-
-    #  |> assign(:synthetic_test_message, updated_synthetic_message)}
 
     {:noreply, socket}
   end

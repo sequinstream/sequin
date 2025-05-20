@@ -61,6 +61,7 @@
       code?: string[];
       sink_type?: string[];
     };
+    modified_test_messages?: Record<string, TestMessageError>;
   }
 
   interface TestMessage {
@@ -74,15 +75,17 @@
     error: {
       type: string;
       info: any;
-      // Errors regarding edition of these fields
-      record: string;
-      changes: string;
-      metadata: string;
     };
   }
 
   interface Consumer {
     name: string;
+  }
+
+  interface TestMessageError {
+    record: string;
+    changes: string;
+    metadata: string;
   }
 
   export let formData: FormData;
@@ -321,7 +324,7 @@
 
   let messagesToShow: TestMessage[] = [];
   let showSyntheticMessages = false;
-  let selectedMessageIndex = 0;
+  let selectedMessageIndex: number = 0;
   let selectedMessage: TestMessage | null;
   let isEditingRecord: boolean = false;
 
@@ -334,12 +337,27 @@
       showSyntheticMessages = true;
     }
 
-    selectMessage(0);
+    selectMessage(selectedMessageIndex);
   }
 
   function selectMessage(index: number) {
     selectedMessageIndex = index;
+
+    const oldSelectedMessage = selectedMessage;
     selectedMessage = messagesToShow[selectedMessageIndex];
+
+    // If there is an error for the given selectedMessage editable maps, keep the edited ones instead of relying on the ones returned from the server
+    if (
+      oldSelectedMessage &&
+      formErrors.modified_test_messages &&
+      oldSelectedMessage.id === selectedMessage.id &&
+      formErrors.modified_test_messages[selectedMessage.id]
+    ) {
+      if (formErrors.modified_test_messages[selectedMessage.id].record) {
+        selectedMessage.record = oldSelectedMessage.record;
+      }
+      // TODO add other 2 fields
+    }
 
     // Update editor when selected message changes
     updateMessageEditor(selectedMessage);
@@ -353,29 +371,20 @@
       messageRecordEditorView = null;
     }
 
-    // Only create new editor if we have both a message and an element
-    if (message && messageRecordEditorElement) {
-      const messageRecordEditorState = EditorState.create({
-        doc: message.record,
-        extensions: [
-          basicSetup,
-          elixir(),
-          autocompletion({ override: [] }),
-          keymap.of([indentWithTab]),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
-              console.log("new message");
-              console.log(update.state.doc.toString());
-            }
-          }),
-        ],
-      });
+    const messageRecordEditorState = EditorState.create({
+      doc: message.record,
+      extensions: [
+        basicSetup,
+        elixir(),
+        autocompletion({ override: [] }),
+        keymap.of([indentWithTab]),
+      ],
+    });
 
-      messageRecordEditorView = new EditorView({
-        state: messageRecordEditorState,
-        parent: messageRecordEditorElement,
-      });
-    }
+    messageRecordEditorView = new EditorView({
+      state: messageRecordEditorState,
+      parent: messageRecordEditorElement,
+    });
   }
 
   // let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
@@ -496,12 +505,7 @@
     };
   });
 
-  $: {
-    let payload = { transform: { ...form } };
-    console.log("PAYLOAD");
-    console.dir(payload);
-    pushEvent("validate", payload);
-  }
+  $: pushEvent("validate", { transform: { ...form } });
 
   function handleCopyForChatGPT() {
     const codeErrors = formErrors.transform?.code || [];
@@ -1140,76 +1144,90 @@ Please help me create or modify the Elixir function transform to achieve the des
                       Function transform arguments
                     </h3>
                     <div
-                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4"
+                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
                     >
-                      <div>
-                        <div
-                          class="font-semibold mb-1 flex w-full justify-between items-center"
-                        >
-                          <span>record</span>
-                          {#if !isEditingRecord}
-                            <div>
-                              <button
-                                type="button"
-                                on:click={() => {
-                                  isEditingRecord = true;
-                                }}
-                              >
-                                <Pencil
-                                  class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
-                                />
-                              </button>
-                            </div>
-                          {:else}
-                            <div>
-                              <button
-                                type="button"
-                                on:click={() => {
-                                  selectedMessage.record =
-                                    messageRecordEditorView.state.doc.toString();
-                                  form.modified_test_messages[
-                                    selectedMessage.id
-                                  ] = selectedMessage;
-                                  isEditingRecord = false;
-                                }}
-                              >
-                                <Save
-                                  class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
-                                />
-                              </button>
+                      <div
+                        class="font-semibold mb-1 flex w-full justify-between items-center"
+                      >
+                        <span>record</span>
+                        {#if !isEditingRecord}
+                          <div>
+                            <button
+                              type="button"
+                              on:click={() => {
+                                isEditingRecord = true;
+                              }}
+                            >
+                              <Pencil
+                                class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
+                              />
+                            </button>
+                          </div>
+                        {:else}
+                          <div>
+                            <button
+                              type="button"
+                              on:click={() => {
+                                selectedMessage.record =
+                                  messageRecordEditorView.state.doc.toString();
 
-                              <button
-                                type="button"
-                                on:click={() => {
-                                  isEditingRecord = false;
-                                }}
-                              >
-                                <Ban
-                                  class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
-                                />
-                              </button>
-                            </div>
-                          {/if}
-                        </div>
-                        <div
-                          hidden={!isEditingRecord}
-                          bind:this={messageRecordEditorElement}
-                        />
-                        <pre
-                          hidden={isEditingRecord}>{selectedMessage.record}</pre>
+                                form.modified_test_messages[
+                                  selectedMessage.id
+                                ] = selectedMessage;
+
+                                isEditingRecord = false;
+                              }}
+                            >
+                              <Save
+                                class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
+                              />
+                            </button>
+
+                            <button
+                              type="button"
+                              on:click={() => {
+                                isEditingRecord = false;
+                              }}
+                            >
+                              <Ban
+                                class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
+                              />
+                            </button>
+                          </div>
+                        {/if}
                       </div>
-                      <div>
-                        <div class="font-semibold mb-1">changes</div>
-                        <pre>{message.changes}</pre>
-                      </div>
-                      <div>
-                        <div class="font-semibold mb-1">action</div>
-                        <pre>{message.action}</pre>
-                      </div>
-                      <div>
-                        <div class="font-semibold mb-1">metadata</div>
-                        <pre>{message.metadata}</pre>
-                      </div>
+                      <div
+                        hidden={!isEditingRecord}
+                        bind:this={messageRecordEditorElement}
+                      />
+                      <pre
+                        hidden={isEditingRecord}>{selectedMessage.record}</pre>
+                      {#if formErrors.modified_test_messages && formErrors.modified_test_messages[selectedMessage.id]}
+                        <p class="text-sm text-red-500 dark:text-red-400">
+                          {formErrors.modified_test_messages[selectedMessage.id]
+                            .record.type}: {formErrors.modified_test_messages[
+                            selectedMessage.id
+                          ].record.info.description}
+                        </p>
+                      {/if}
+                    </div>
+                    <div
+                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
+                    >
+                      <div class="font-semibold mb-1">changes</div>
+                      <pre>{message.changes}</pre>
+                    </div>
+                    <div
+                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
+                    >
+                      <div class="font-semibold mb-1">action</div>
+                      <pre>{message.action}</pre>
+                    </div>
+                    <div
+                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
+                    >
+                      <div class="font-semibold mb-1">metadata</div>
+                      <pre>{message.metadata}</pre>
                     </div>
                   </div>
                 {/if}

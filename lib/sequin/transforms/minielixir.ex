@@ -240,6 +240,10 @@ defmodule Sequin.Transforms.MiniElixir do
     %{type: "Syntax error", info: %{description: message}}
   end
 
+  def encode_error(:validator, error) do
+    %{type: "Validation error", info: %{description: error}}
+  end
+
   defp generate_module_name(id) when is_binary(id) do
     <<"UserTransform.", id::binary>>
   end

@@ -200,7 +200,9 @@ defmodule SequinWeb.DatabasesLive.Show do
   end
 
   def handle_info(:postgres_replication_slot_checked, socket) do
-    {:noreply, assign_health(socket)}
+    socket = socket |> assign_health() |> assign_metrics()
+
+    {:noreply, socket}
   end
 
   @impl Phoenix.LiveView

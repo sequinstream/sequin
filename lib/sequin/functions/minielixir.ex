@@ -1,13 +1,13 @@
-defmodule Sequin.Transforms.MiniElixir do
+defmodule Sequin.Functions.MiniElixir do
   @moduledoc false
   use Agent
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.Function
   alias Sequin.Error
-  alias Sequin.Transforms.MiniElixir.Validator
+  alias Sequin.Functions.MiniElixir.Validator
 
   require Logger
 
@@ -17,10 +17,10 @@ defmodule Sequin.Transforms.MiniElixir do
     Agent.start_link(fn -> :no_state end, name: __MODULE__)
   end
 
-  def run_compiled(%Transform{account_id: account_id} = transform, data) do
+  def run_compiled(%Function{account_id: account_id} = function, data) do
     if Sequin.feature_enabled?(account_id, :function_transforms) do
       __MODULE__
-      |> Task.async(:run_compiled_inner, [transform, data])
+      |> Task.async(:run_compiled_inner, [function, data])
       |> Task.await(@timeout)
       |> case do
         {:ok, answer} -> answer
@@ -28,14 +28,14 @@ defmodule Sequin.Transforms.MiniElixir do
         {:error, :validator, error} -> raise error
       end
     else
-      raise Error.invariant(message: "Function transforms are not enabled. Talk to the Sequin team to enable them.")
+      raise Error.invariant(message: "Transform functions are not enabled. Talk to the Sequin team to enable them.")
     end
   end
 
-  def run_interpreted(%Transform{account_id: account_id} = transform, data) do
+  def run_interpreted(%Function{account_id: account_id} = function, data) do
     if Sequin.feature_enabled?(account_id, :function_transforms) do
       __MODULE__
-      |> Task.async(:run_interpreted_inner, [transform, data])
+      |> Task.async(:run_interpreted_inner, [function, data])
       |> Task.await(@timeout)
       |> case do
         {:ok, answer} ->
@@ -48,11 +48,11 @@ defmodule Sequin.Transforms.MiniElixir do
           raise error
       end
     else
-      raise Error.invariant(message: "Function transforms are not enabled. Talk to the Sequin team to enable them.")
+      raise Error.invariant(message: "Transform functions are not enabled. Talk to the Sequin team to enable them.")
     end
   end
 
-  def run_interpreted_inner(%Transform{id: id, transform: %_s{code: code}}, data) do
+  def run_interpreted_inner(%Function{id: id, function: %_s{code: code}}, data) do
     changes =
       case data do
         %ConsumerRecordData{} -> %{}
@@ -81,11 +81,11 @@ defmodule Sequin.Transforms.MiniElixir do
   rescue
     error ->
       :telemetry.execute([:minielixir, :interpret, :exception], %{id: id})
-      Logger.error("[MiniElixir] run_interpreted error raised: #{Exception.message(error)}", transform_id: id)
+      Logger.error("[MiniElixir] run_interpreted error raised: #{Exception.message(error)}", function_id: id)
       {:error, error}
   end
 
-  def run_compiled_inner(%Transform{id: id}, data) do
+  def run_compiled_inner(%Function{id: id}, data) do
     changes =
       case data do
         %ConsumerRecordData{} -> %{}
@@ -104,7 +104,7 @@ defmodule Sequin.Transforms.MiniElixir do
           message: format_error(id, error, __STACKTRACE__)
         )
 
-      Logger.error("[MiniElixir] Transform failed: #{Exception.message(error)}", transform_id: id)
+      Logger.error("[MiniElixir] Function failed: #{Exception.message(error)}", function_id: id)
       {:error, error}
   end
 
@@ -126,7 +126,7 @@ defmodule Sequin.Transforms.MiniElixir do
       |> Code.quoted_to_algebra()
       |> Inspect.Algebra.format(:infinity)
 
-    Logger.info(["[MiniElixir] Create transform module:\n", alg])
+    Logger.info(["[MiniElixir] Create function module:\n", alg])
   end
 
   def compile_and_load!(ast) do
@@ -190,8 +190,8 @@ defmodule Sequin.Transforms.MiniElixir do
 
   defp recreate(id) do
     with false <- is_code_loaded(id),
-         {:ok, %Transform{} = transform} <- Consumers.get_transform(id) do
-      create(transform.id, transform.transform.code)
+         {:ok, %Function{} = function} <- Consumers.get_function(id) do
+      create(function.id, function.function.code)
     end
   end
 
@@ -237,7 +237,7 @@ defmodule Sequin.Transforms.MiniElixir do
   end
 
   defp generate_module_name(id) when is_binary(id) do
-    <<"UserTransform.", id::binary>>
+    <<"UserFunction.", id::binary>>
   end
 
   defp format_error(id, error, stacktrace) do

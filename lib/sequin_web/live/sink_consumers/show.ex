@@ -12,24 +12,24 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ElasticsearchSink
-  alias Sequin.Consumers.FunctionTransform
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
-  alias Sequin.Consumers.PathTransform
+  alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
-  alias Sequin.Consumers.RoutingTransform
+  alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -73,7 +73,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:last_completed_backfill, last_completed_backfill)
           |> assign(:api_tokens, ApiTokens.list_tokens_for_account(current_account.id))
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
-          |> assign(:transforms, Consumers.list_transforms_for_account(current_account.id))
+          |> assign(:functions, Consumers.list_functions_for_account(current_account.id))
           |> assign_metrics()
           |> assign(:paused, false)
           |> assign(:show_acked, params["showAcked"] == "true")
@@ -160,7 +160,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   cursor_position: encode_backfill(@consumer, @last_completed_backfill),
                   apiBaseUrl: @api_base_url,
                   apiTokens: encode_api_tokens(@api_tokens),
-                  transform: encode_transform(@consumer.transform)
+                  transform: encode_function(@consumer.transform)
                 }
               }
             />
@@ -620,7 +620,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       table: encode_table(table),
       transform_id: consumer.transform_id,
       routing_id: consumer.routing_id,
-      routing: encode_transform(consumer.routing)
+      routing: encode_function(consumer.routing)
     }
   end
 
@@ -829,21 +829,21 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_transform(nil), do: nil
+  defp encode_function(nil), do: nil
 
-  defp encode_transform(%Transform{type: type, transform: inner_transform} = transform) do
+  defp encode_function(%Function{type: type, function: inner_function} = function) do
     %{
-      id: transform.id,
-      name: transform.name,
-      description: transform.description,
-      transform: Map.merge(%{type: type}, encode_transform_inner(inner_transform))
+      id: function.id,
+      name: function.name,
+      description: function.description,
+      function: Map.merge(%{type: type}, encode_function_inner(inner_function))
     }
   end
 
-  defp encode_transform_inner(%PathTransform{path: path}), do: %{path: path}
-  defp encode_transform_inner(%FunctionTransform{code: code}), do: %{code: code}
+  defp encode_function_inner(%PathFunction{path: path}), do: %{path: path}
+  defp encode_function_inner(%TransformFunction{code: code}), do: %{code: code}
 
-  defp encode_transform_inner(%RoutingTransform{sink_type: sink_type, code: code}) do
+  defp encode_function_inner(%RoutingFunction{sink_type: sink_type, code: code}) do
     %{sink_type: sink_type, code: code}
   end
 
@@ -1056,7 +1056,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           state_color: get_message_state_color(consumer, state),
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
-          transformed_message: maybe_transform_message(consumer, message)
+          functioned_message: maybe_function_message(consumer, message)
         }
 
       %ConsumerEvent{} = message ->
@@ -1078,7 +1078,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           state_color: get_message_state_color(consumer, state),
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
-          transformed_message: maybe_transform_message(consumer, message)
+          functioned_message: maybe_function_message(consumer, message)
         }
 
       %AcknowledgedMessage{} = message ->
@@ -1105,14 +1105,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  defp maybe_transform_message(consumer, message) do
-    case consumer.transform do
+  defp maybe_function_message(consumer, message) do
+    case consumer.function do
       nil -> nil
       _ -> Message.to_external(consumer, message)
     end
   rescue
     error ->
-      "Error transforming message: #{Exception.message(error)}"
+      "Error functioning message: #{Exception.message(error)}"
   end
 
   defp encode_backfill(consumer, last_completed_backfill) do

@@ -55,7 +55,7 @@
     id: string;
     name: string;
     description: string;
-    transform: {
+    function: {
       type: string;
       path: string;
       code: string;
@@ -1124,23 +1124,23 @@
                 </div>
               {/if}
 
-              {#if transform.transform.type === "path"}
+              {#if transform.function.type === "path"}
                 <div>
                   <span class="text-sm text-gray-500">Path</span>
                   <div class="mt-2">
                     <span
                       class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-                      >{transform.transform.path}</span
+                      >{transform.function.path}</span
                     >
                   </div>
                 </div>
-              {:else if transform.transform.type === "function"}
+              {:else if transform.function.type === "transform"}
                 <div>
                   <span class="text-sm text-gray-500">Code</span>
                   <div class="mt-2">
                     <pre
                       class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
-                        >{transform.transform.code}</code
+                        >{transform.function.code}</code
                       ></pre>
                   </div>
                 </div>

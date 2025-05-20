@@ -8,8 +8,9 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
     max_attempts: 3
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.Function
   alias Sequin.Databases
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Health
   alias Sequin.Health.CheckHttpEndpointHealthWorker
   alias Sequin.Health.CheckSinkConfigurationWorker
@@ -18,12 +19,11 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
-  alias Sequin.Transforms.MiniElixir
 
   require Logger
 
   @events ~w(create update delete)a
-  @entities ~w(sink_consumer http_endpoint backfill transform)a
+  @entities ~w(sink_consumer http_endpoint backfill function)a
 
   @spec enqueue(event :: atom(), entity_type :: atom(), entity_id :: String.t(), data :: map() | nil) ::
           {:ok, Oban.Job.t()} | {:error, Oban.Job.changeset() | term()}
@@ -45,8 +45,8 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
       "backfill" ->
         handle_backfill_event(event, entity_id)
 
-      "transform" ->
-        handle_transform_event(event, entity_id)
+      "function" ->
+        handle_function_event(event, entity_id)
     end
   end
 
@@ -146,41 +146,41 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
     end
   end
 
-  defp handle_transform_event(event, id) when is_binary(id) do
-    Logger.metadata(transform_id: id)
-    Logger.info("[LifecycleEventWorker] Handling event `#{event}` for transform")
+  defp handle_function_event(event, id) when is_binary(id) do
+    Logger.metadata(function_id: id)
+    Logger.info("[LifecycleEventWorker] Handling event `#{event}` for function")
 
-    case Consumers.get_transform(id) do
-      {:ok, %Transform{type: "path"}} -> :ok
-      {:ok, transform} -> handle_transform_event(event, transform)
+    case Consumers.get_function(id) do
+      {:ok, %Function{type: "path"}} -> :ok
+      {:ok, function} -> handle_function_event(event, function)
       {:error, error} -> {:error, error}
     end
   end
 
-  defp handle_transform_event(event, %Transform{} = transform) do
+  defp handle_function_event(event, %Function{} = function) do
     case event do
       "create" ->
-        case MiniElixir.create(transform.id, transform.transform.code) do
+        case MiniElixir.create(function.id, function.function.code) do
           {:ok, _} ->
             :ok
 
           {:error, error} ->
-            Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
+            Logger.error("[LifecycleEventWorker] Failed to create function", error: error)
             {:error, error}
         end
 
       "update" ->
-        consumers = Consumers.list_consumers_for_transform(transform.account_id, transform.id, [:replication_slot])
+        consumers = Consumers.list_consumers_for_function(function.account_id, function.id, [:replication_slot])
         replication_slots = consumers |> Enum.map(& &1.replication_slot) |> Enum.uniq_by(& &1.id)
         Enum.each(replication_slots, &RuntimeSupervisor.stop_replication/1)
 
-        case MiniElixir.create(transform.id, transform.transform.code) do
+        case MiniElixir.create(function.id, function.function.code) do
           {:ok, _} ->
             Enum.each(replication_slots, &RuntimeSupervisor.restart_replication/1)
             :ok
 
           {:error, error} ->
-            Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
+            Logger.error("[LifecycleEventWorker] Failed to create function", error: error)
             {:error, error}
         end
     end

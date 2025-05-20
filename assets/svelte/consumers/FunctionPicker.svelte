@@ -8,7 +8,7 @@
     TableRow,
   } from "$lib/components/ui/table";
 
-  export let transforms: Array<{
+  export let functions: Array<{
     id: string;
     name: string;
     type: string;
@@ -17,25 +17,25 @@
   }>;
   export let selectedFunctionId: string = "none";
   export let title: string = "Function";
-  export let onFunctionChange: (transformId: string) => void;
+  export let onFunctionChange: (functionId: string) => void;
   export let refreshFunctions: () => void;
-  export let transformTypes: string[] = ["function", "path"];
+  export let functionTypes: string[] = ["function", "path"];
   export let showTypeLabel: boolean = true;
   export let typeLabelKey: string = "type";
   export let refreshState: "idle" | "refreshing" | "done" = "idle";
   export let createNewQueryParams: string = "";
 
   $: createNewLink = `/functions/new${createNewQueryParams}`;
-  $: filteredFunctions = transforms.filter((t) =>
-    transformTypes.includes(t.type),
+  $: filteredFunctions = functions.filter((t) =>
+    functionTypes.includes(t.type),
   );
   $: hasNoneOption = $$slots["none-option"] !== undefined;
   $: hasValidOptions = filteredFunctions.length > 0 || hasNoneOption;
 
-  function handleFunctionClick(transformId: string) {
+  function handleFunctionClick(functionId: string) {
     // Only allow selection of "none" if the none-option slot exists
-    if (transformId === "none" && !hasNoneOption) return;
-    onFunctionChange(transformId);
+    if (functionId === "none" && !hasNoneOption) return;
+    onFunctionChange(functionId);
   }
 </script>
 
@@ -99,25 +99,25 @@
                 </TableRow>
               {/if}
 
-              {#each filteredFunctions as transform}
+              {#each filteredFunctions as func}
                 <TableRow
-                  on:click={() => handleFunctionClick(transform.id)}
-                  class="cursor-pointer {transform.id === selectedFunctionId
+                  on:click={() => handleFunctionClick(func.id)}
+                  class="cursor-pointer {func.id === selectedFunctionId
                     ? 'bg-blue-50 hover:bg-blue-100'
                     : 'hover:bg-gray-100'}"
                 >
                   <TableCell>
                     <div class="flex items-center gap-2">
-                      <span class="font-medium">{transform.name}</span>
+                      <span class="font-medium">{func.name}</span>
                       {#if showTypeLabel}
                         <span
                           class="text-xs bg-gray-200 px-2 py-0.5 rounded-full"
-                          >{transform[typeLabelKey]}</span
+                          >{func[typeLabelKey]}</span
                         >
                       {/if}
                     </div>
                     <div class="text-sm text-muted-foreground">
-                      {transform.description || "No description provided."}
+                      {func.description || "No description provided."}
                     </div>
                   </TableCell>
                 </TableRow>

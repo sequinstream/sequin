@@ -11,7 +11,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { onMount, onDestroy } from "svelte";
-  import { Info, BookText } from "lucide-svelte";
+  import { Info, BookText, Pencil, Save, Ban } from "lucide-svelte";
   import FunctionTransformSnippet from "$lib/mdx/function-transform-snippet.mdx";
   import {
     Popover,
@@ -49,6 +49,7 @@
       code?: string;
       sink_type?: string;
     };
+    modified_test_messages?: Record<string, TestMessage>;
   }
 
   interface FormErrors {
@@ -63,6 +64,7 @@
   }
 
   interface TestMessage {
+    id: string;
     record: string;
     changes: string;
     action: string;
@@ -72,6 +74,10 @@
     error: {
       type: string;
       info: any;
+      // Errors regarding edition of these fields
+      record: string;
+      changes: string;
+      metadata: string;
     };
   }
 
@@ -113,8 +119,8 @@
   let form = {
     ...formData,
     transform: { ...formData.transform },
+    modified_test_messages: {},
   };
-  let selectedMessageIndex = 0;
 
   let isEditing = form.id !== null;
   let initialFormState = JSON.stringify(form);
@@ -125,6 +131,8 @@
   }
   let functionEditorElement: HTMLElement;
   let functionEditorView: EditorView;
+  let messageRecordEditorElement: HTMLElement;
+  let messageRecordEditorView: EditorView | null = null;
 
   let copyTimeout: ReturnType<typeof setTimeout>;
 
@@ -217,7 +225,7 @@
       showUpdateDialog = true;
     } else {
       saving = true;
-      pushEvent("save", { transform: form }, () => {
+      pushEvent("save", { transform: { ...form } }, () => {
         saving = false;
       });
     }
@@ -313,6 +321,9 @@
 
   let messagesToShow: TestMessage[] = [];
   let showSyntheticMessages = false;
+  let selectedMessageIndex = 0;
+  let selectedMessage: TestMessage | null;
+  let isEditingRecord: boolean = false;
 
   $: {
     if (testMessages.length > 0) {
@@ -321,6 +332,49 @@
     } else {
       messagesToShow = syntheticTestMessages;
       showSyntheticMessages = true;
+    }
+
+    selectMessage(0);
+  }
+
+  function selectMessage(index: number) {
+    selectedMessageIndex = index;
+    selectedMessage = messagesToShow[selectedMessageIndex];
+
+    // Update editor when selected message changes
+    updateMessageEditor(selectedMessage);
+  }
+
+  // Add a function to create/update the editor view
+  function updateMessageEditor(message: TestMessage) {
+    // Destroy existing editor if it exists
+    if (messageRecordEditorView) {
+      messageRecordEditorView.destroy();
+      messageRecordEditorView = null;
+    }
+
+    // Only create new editor if we have both a message and an element
+    if (message && messageRecordEditorElement) {
+      const messageRecordEditorState = EditorState.create({
+        doc: message.record,
+        extensions: [
+          basicSetup,
+          elixir(),
+          autocompletion({ override: [] }),
+          keymap.of([indentWithTab]),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              console.log("new message");
+              console.log(update.state.doc.toString());
+            }
+          }),
+        ],
+      });
+
+      messageRecordEditorView = new EditorView({
+        state: messageRecordEditorState,
+        parent: messageRecordEditorElement,
+      });
     }
   }
 
@@ -429,15 +483,27 @@
       parent: functionEditorElement,
     });
 
+    // Initialize message record editor if we have a selected message
+    if (selectedMessage) {
+      updateMessageEditor(selectedMessage);
+    }
+
     return () => {
       functionEditorView.destroy();
+      if (messageRecordEditorView) {
+        messageRecordEditorView.destroy();
+      }
     };
   });
 
-  $: pushEvent("validate", { transform: form });
+  $: {
+    let payload = { transform: { ...form } };
+    console.log("PAYLOAD");
+    console.dir(payload);
+    pushEvent("validate", payload);
+  }
 
   function handleCopyForChatGPT() {
-    const currentMessage = messagesToShow[selectedMessageIndex];
     const codeErrors = formErrors.transform?.code || [];
 
     const prompt = `I need help creating or modifying an Elixir function transform for Sequin. Here are the details:
@@ -461,10 +527,10 @@ ${codeErrors.map((error) => `- ${error}`).join("\n")}
 Test Message:
 \`\`\`json
 {
-  "record": ${currentMessage.record},
-  "changes": ${currentMessage.changes},
-  "action": "${currentMessage.action}",
-  "metadata": ${currentMessage.metadata}
+  "record": ${selectedMessage.record},
+  "changes": ${selectedMessage.changes},
+  "action": "${selectedMessage.action}",
+  "metadata": ${selectedMessage.metadata}
 }
 \`\`\`
 
@@ -1045,23 +1111,28 @@ Please help me create or modify the Elixir function transform to achieve the des
           </div>
           <div class="p-4 space-y-2">
             {#each messagesToShow as message, i}
-              <button
-                class="w-full text-left p-3 rounded-lg border border-slate-200 dark:border-slate-800 transition-all duration-200 {selectedMessageIndex ===
+              <div
+                class="w-full text-left rounded-lg border border-slate-200 dark:border-slate-800 transition-all duration-200 {selectedMessageIndex ===
                 i
                   ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800 shadow-sm'
                   : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}"
-                on:click={() => (selectedMessageIndex = i)}
               >
-                <div class="flex justify-between items-center">
-                  <span class="font-medium"
-                    >{showSyntheticMessages
-                      ? "Example"
-                      : `Message ${i + 1}`}</span
-                  >
-                </div>
+                <button
+                  class="w-full p-3"
+                  on:click={() => selectMessage(i)}
+                  type="button"
+                >
+                  <div class="flex justify-between items-center">
+                    <span class="font-medium"
+                      >{showSyntheticMessages
+                        ? "Example"
+                        : `Message ${i + 1}`}</span
+                    >
+                  </div>
+                </button>
                 {#if selectedMessageIndex === i}
                   <div
-                    class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800"
+                    class="p-3 border-t border-slate-200 dark:border-slate-800"
                   >
                     <h3
                       class="text-sm font-medium mb-2 text-slate-500 dark:text-slate-400"
@@ -1072,8 +1143,60 @@ Please help me create or modify the Elixir function transform to achieve the des
                       class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4"
                     >
                       <div>
-                        <div class="font-semibold mb-1">record</div>
-                        <pre>{message.record}</pre>
+                        <div
+                          class="font-semibold mb-1 flex w-full justify-between items-center"
+                        >
+                          <span>record</span>
+                          {#if !isEditingRecord}
+                            <div>
+                              <button
+                                type="button"
+                                on:click={() => {
+                                  isEditingRecord = true;
+                                }}
+                              >
+                                <Pencil
+                                  class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
+                                />
+                              </button>
+                            </div>
+                          {:else}
+                            <div>
+                              <button
+                                type="button"
+                                on:click={() => {
+                                  selectedMessage.record =
+                                    messageRecordEditorView.state.doc.toString();
+                                  form.modified_test_messages[
+                                    selectedMessage.id
+                                  ] = selectedMessage;
+                                  isEditingRecord = false;
+                                }}
+                              >
+                                <Save
+                                  class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
+                                />
+                              </button>
+
+                              <button
+                                type="button"
+                                on:click={() => {
+                                  isEditingRecord = false;
+                                }}
+                              >
+                                <Ban
+                                  class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
+                                />
+                              </button>
+                            </div>
+                          {/if}
+                        </div>
+                        <div
+                          hidden={!isEditingRecord}
+                          bind:this={messageRecordEditorElement}
+                        />
+                        <pre
+                          hidden={isEditingRecord}>{selectedMessage.record}</pre>
                       </div>
                       <div>
                         <div class="font-semibold mb-1">changes</div>
@@ -1090,7 +1213,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                     </div>
                   </div>
                 {/if}
-              </button>
+              </div>
             {/each}
           </div>
         </div>
@@ -1101,15 +1224,15 @@ Please help me create or modify the Elixir function transform to achieve the des
         >
           <div class="p-4 flex items-center justify-between">
             <h3 class="text-lg font-semibold tracking-tight">Output</h3>
-            {#if messagesToShow[selectedMessageIndex].time}
+            {#if selectedMessage.time}
               <div class="flex items-center gap-1">
                 <span
                   class="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium cursor-help"
                 >
                   Executed in
-                  {messagesToShow[selectedMessageIndex].time >= 1000
-                    ? `${(messagesToShow[selectedMessageIndex].time / 1000).toFixed(2)}ms`
-                    : `${messagesToShow[selectedMessageIndex].time}μs`}
+                  {selectedMessage.time >= 1000
+                    ? `${(selectedMessage.time / 1000).toFixed(2)}ms`
+                    : `${selectedMessage.time}μs`}
                 </span>
                 <Popover>
                   <PopoverTrigger>
@@ -1132,16 +1255,16 @@ Please help me create or modify the Elixir function transform to achieve the des
           </div>
 
           <div class="p-4">
-            {#if !messagesToShow[selectedMessageIndex].error}
+            {#if !selectedMessage.error}
               <div
                 class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300"
               >
                 <div class="flex justify-center items-center p-4">
-                  {#if messagesToShow[selectedMessageIndex].transformed !== undefined}
+                  {#if selectedMessage.transformed !== undefined}
                     <div class="w-full overflow-auto">
                       <pre
                         class="text-slate-600 dark:text-slate-400">{JSON.stringify(
-                          messagesToShow[selectedMessageIndex].transformed,
+                          selectedMessage.transformed,
                           null,
                           2,
                         )}
@@ -1160,7 +1283,7 @@ Please help me create or modify the Elixir function transform to achieve the des
               </div>
             {:else}
               <div class="text-red-600 font-bold text-lg">
-                {messagesToShow[selectedMessageIndex].error.type}
+                {selectedMessage.error.type}
               </div>
 
               <div
@@ -1171,16 +1294,16 @@ Please help me create or modify the Elixir function transform to achieve the des
                   style="grid-template-columns: minmax(8em, min-content) 1fr;"
                 >
                   {#each errorKeyOrder as key}
-                    {#if messagesToShow[selectedMessageIndex].error.info && messagesToShow[selectedMessageIndex].error.info[key]}
+                    {#if selectedMessage.error.info && selectedMessage.error.info[key]}
                       <div class="font-semibold">{key}</div>
                       <div>
-                        {messagesToShow[selectedMessageIndex].error.info[key]}
+                        {selectedMessage.error.info[key]}
                       </div>
                     {/if}
                   {/each}
                   <!-- Extra keys -->
-                  {#if messagesToShow[selectedMessageIndex].error.info}
-                    {#each Object.entries(messagesToShow[selectedMessageIndex].error.info) as [key, value]}
+                  {#if selectedMessage.error.info}
+                    {#each Object.entries(selectedMessage.error.info) as [key, value]}
                       {#if !errorKeyOrder.includes(key)}
                         <div class="font-semibold">{key}</div>
                         <pre>{typeof value === "object"

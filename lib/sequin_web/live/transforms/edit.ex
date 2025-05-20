@@ -169,6 +169,9 @@ defmodule SequinWeb.TransformsLive.Edit do
     if database_id && table_oid do
       test_messages = TestMessages.get_test_messages(database_id, table_oid)
 
+      # TODO Transform test_messages with the editions made in the code editor
+      # OR prepend with the custom edited message
+
       if length(test_messages) >= @max_test_messages do
         TestMessages.unregister_needs_messages(database_id)
       end
@@ -180,6 +183,8 @@ defmodule SequinWeb.TransformsLive.Edit do
   end
 
   def handle_event("validate", %{"transform" => params}, socket) do
+    dbg(params)
+
     changeset =
       %Transform{account_id: current_account_id(socket)}
       |> Transform.changeset(params)
@@ -188,11 +193,55 @@ defmodule SequinWeb.TransformsLive.Edit do
     form_data = changeset_to_form_data(changeset)
     form_errors = Sequin.Error.errors_on(changeset)
 
-    {:noreply,
-     socket
-     |> assign(:changeset, changeset)
-     |> assign(:form_data, form_data)
-     |> assign(:form_errors, form_errors)}
+    # Validate and transform the serialized maps using MiniElixir
+    modified_test_messages =
+      case params["modified_test_messages"] do
+        messages when is_map(messages) ->
+          Map.new(messages, fn {id, message} ->
+            result =
+              with {:ok, record_ast} <- Code.string_to_quoted(message["record"]),
+                   :ok <- MiniElixir.Validator.check(record_ast),
+                   {record, _} <- Code.eval_quoted(record_ast) do
+                {:ok, %{record: record}}
+              else
+                {:error, error} -> %{error: MiniElixir.encode_error(error)}
+              end
+
+            {id, result}
+          end)
+      end
+
+    dbg(modified_test_messages)
+    dbg(socket.assigns.synthetic_test_message)
+
+    synthetic_test_message = socket.assigns.synthetic_test_message
+
+    new_synthetic_test_message =
+      case modified_test_messages[synthetic_test_message.id] do
+        nil ->
+          synthetic_test_message
+
+        {:ok, modified} ->
+          %{synthetic_test_message | data: Map.put(synthetic_test_message.data, :record, modified.record)}
+
+        # TODO Propagate error to frontend
+        %{error: error} ->
+          synthetic_test_message
+      end
+
+    dbg(socket.assigns.test_messages)
+    dbg(socket.assigns.synthetic_test_message)
+
+    socket =
+      socket
+      |> assign(:changeset, changeset)
+      |> assign(:form_data, form_data)
+      |> assign(:form_errors, form_errors)
+      |> assign(:synthetic_test_message, new_synthetic_test_message)
+
+    #  |> assign(:synthetic_test_message, updated_synthetic_message)}
+
+    {:noreply, socket}
   end
 
   def handle_event("save", %{"transform" => params}, socket) do
@@ -347,6 +396,7 @@ defmodule SequinWeb.TransformsLive.Edit do
 
   defp prepare_test_message(m) do
     %{
+      id: m.id,
       record: inspect(m.data.record, pretty: true),
       changes: inspect(m.data.changes, pretty: true),
       action: inspect(to_string(m.data.action), pretty: true),

@@ -236,6 +236,10 @@ defmodule Sequin.Transforms.MiniElixir do
     %{type: "Unknown error", info: %{description: Exception.message(error)}}
   end
 
+  def encode_error({error_info, message, _rest}) when is_list(error_info) do
+    %{type: "Syntax error", info: %{description: message}}
+  end
+
   defp generate_module_name(id) when is_binary(id) do
     <<"UserTransform.", id::binary>>
   end

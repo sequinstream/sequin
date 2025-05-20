@@ -1118,7 +1118,6 @@ defmodule Sequin.YamlLoader do
       case {action.action.(), status_tuple} do
         {:ok, :ok} -> :ok
         {{:ok, _}, :ok} -> :ok
-        {{:ok, {:error, errors}}, :ok} -> {:error, errors}
         {{:ok, _}, {:error, errors}} -> {:error, errors}
         {{:error, error}, :ok} -> {:error, [error]}
         {{:error, error}, {:error, errors}} -> {:error, [error | errors]}

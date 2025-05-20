@@ -59,7 +59,7 @@ defmodule Sequin.Replication do
     end
   end
 
-  def create_pg_replication(account_id, attrs) do
+  def create_pg_replication(account_id, attrs, opts \\ []) do
     attrs = Sequin.Map.atomize_keys(attrs)
     attrs = Map.put(attrs, :status, :active)
 
@@ -68,7 +68,7 @@ defmodule Sequin.Replication do
     Repo.transact(fn ->
       with %{valid?: true} = changeset <- changeset,
            {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
-           :ok <- validate_replication_config(postgres_database, attrs),
+           :ok <- validate_replication_config(postgres_database, attrs, opts),
            {:ok, pg_replication} <- Repo.insert(changeset) do
         DatabaseLifecycleEventWorker.enqueue(:create, :postgres_replication_slot, pg_replication.id)
         {:ok, pg_replication}
@@ -141,10 +141,13 @@ defmodule Sequin.Replication do
     end
   end
 
-  def validate_replication_config(%PostgresDatabase{} = db, attrs) do
+  def validate_replication_config(%PostgresDatabase{} = db, attrs, opts \\ []) do
+    validate_slot? = Keyword.get(opts, :validate_slot?, true)
+    validate_pub? = Keyword.get(opts, :validate_pub?, true)
+
     Databases.with_connection(db, fn conn ->
-      with :ok <- validate_slot(conn, attrs.slot_name) do
-        validate_publication(conn, attrs.publication_name)
+      with :ok <- if(validate_slot?, do: validate_slot(conn, attrs.slot_name), else: :ok) do
+        if validate_pub?, do: validate_publication(conn, attrs.publication_name), else: :ok
       end
     end)
   end

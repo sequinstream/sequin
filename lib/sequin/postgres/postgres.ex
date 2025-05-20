@@ -839,7 +839,9 @@ defmodule Sequin.Postgres do
   end
 
   defp verify_publication_init_sql(pub_name, init_sql) do
-    if Regex.match?(~r/^\s*create\s+publication\s+\"?#{pub_name}\"?/, String.downcase(init_sql)) do
+    regex = ~r/^\s*create\s+publication\s+"?#{Regex.escape(pub_name)}"?\s/
+
+    if Regex.match?(regex, String.downcase(init_sql)) do
       :ok
     else
       {:error,

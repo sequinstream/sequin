@@ -27,7 +27,7 @@ defmodule SequinWeb.YamlController do
     })
 
     case YamlLoader.apply_from_yml(account_id, yaml) do
-      {:ok, {:ok, resources}} ->
+      {:ok, resources} ->
         Posthog.capture("YAML Applied", %{
           distinct_id: "00000000-0000-0000-0000-000000000000",
           properties: %{
@@ -38,9 +38,6 @@ defmodule SequinWeb.YamlController do
         })
 
         json(conn, %{resources: resources})
-
-      {:ok, {:error, error}} ->
-        {:error, error}
 
       {:error, error} ->
         {:error, error}
@@ -58,7 +55,7 @@ defmodule SequinWeb.YamlController do
     })
 
     case YamlLoader.plan_from_yml(account_id, yaml) do
-      {:ok, planned_resources, current_resources} ->
+      {:ok, planned_resources, current_resources, actions} ->
         envelopes = diff_resources(planned_resources, current_resources)
 
         Posthog.capture("YAML Planned", %{
@@ -72,7 +69,7 @@ defmodule SequinWeb.YamlController do
           }
         })
 
-        json(conn, %{changes: envelopes})
+        json(conn, %{changes: envelopes, actions: actions})
 
       {:error, error} ->
         {:error, error}

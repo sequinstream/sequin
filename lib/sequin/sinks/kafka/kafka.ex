@@ -1,6 +1,5 @@
 defmodule Sequin.Sinks.Kafka do
   @moduledoc false
-  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.KafkaSink
@@ -43,16 +42,12 @@ defmodule Sequin.Sinks.Kafka do
   end
 
   @spec message_key(SinkConsumer.t(), ConsumerRecord.t() | ConsumerEvent.t()) :: String.t()
-  def message_key(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerRecord{} = record) do
-    consumer
-    |> Consumers.group_column_values(record.data)
-    |> Enum.join(":")
+  def message_key(%SinkConsumer{sink: %KafkaSink{}}, %ConsumerRecord{} = record) do
+    record.group_id
   end
 
-  def message_key(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerEvent{} = event) do
-    consumer
-    |> Consumers.group_column_values(event.data)
-    |> Enum.join(":")
+  def message_key(%SinkConsumer{sink: %KafkaSink{}}, %ConsumerEvent{} = event) do
+    event.group_id
   end
 
   defp impl do

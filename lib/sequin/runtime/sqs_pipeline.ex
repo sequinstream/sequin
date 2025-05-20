@@ -61,12 +61,7 @@ defmodule Sequin.Runtime.SqsPipeline do
     }
 
     if consumer.sink.is_fifo do
-      group_id =
-        consumer
-        |> Sequin.Consumers.group_column_values(record_or_event.data)
-        |> Enum.join(",")
-
-      Map.put(message, :message_group_id, group_id)
+      Map.put(message, :message_group_id, record_or_event.group_id)
     else
       message
     end

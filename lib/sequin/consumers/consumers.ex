@@ -21,7 +21,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.Transform
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Health
@@ -1307,16 +1306,6 @@ defmodule Sequin.Consumers do
   """
   def any_unmigrated_consumers? do
     Enum.any?(all_consumers(), fn consumer -> is_nil(consumer.sequence_id) end)
-  end
-
-  def group_column_values(%SinkConsumer{} = consumer, record_data) do
-    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-    group_column_attnums = consumer.sequence_filter.group_column_attnums
-    group_column_names = PostgresDatabaseTable.column_attnums_to_names(table, group_column_attnums)
-
-    Enum.map(group_column_names, fn group_column_name ->
-      Map.get(record_data.record, group_column_name)
-    end)
   end
 
   def get_backfill(id) do

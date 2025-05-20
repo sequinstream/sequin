@@ -1,5 +1,6 @@
 <script lang="ts">
   import FullPageForm from "../components/FullPageForm.svelte";
+  import EditableArgument from "./EditableArgument.svelte";
   import {
     Select,
     SelectContent,
@@ -322,71 +323,6 @@
     }
   }
 
-  let messagesToShow: TestMessage[] = [];
-  let showSyntheticMessages = false;
-  let selectedMessageIndex: number = 0;
-  let selectedMessage: TestMessage | null;
-  let isEditingRecord: boolean = false;
-
-  $: {
-    if (testMessages.length > 0) {
-      messagesToShow = testMessages;
-      showSyntheticMessages = false;
-    } else {
-      messagesToShow = syntheticTestMessages;
-      showSyntheticMessages = true;
-    }
-
-    selectMessage(selectedMessageIndex);
-  }
-
-  function selectMessage(index: number) {
-    selectedMessageIndex = index;
-
-    const oldSelectedMessage = selectedMessage;
-    selectedMessage = messagesToShow[selectedMessageIndex];
-
-    // If there is an error for the given selectedMessage editable maps, keep the edited ones instead of relying on the ones returned from the server
-    if (
-      oldSelectedMessage &&
-      formErrors.modified_test_messages &&
-      oldSelectedMessage.id === selectedMessage.id &&
-      formErrors.modified_test_messages[selectedMessage.id]
-    ) {
-      if (formErrors.modified_test_messages[selectedMessage.id].record) {
-        selectedMessage.record = oldSelectedMessage.record;
-      }
-      // TODO add other 2 fields
-    }
-
-    // Update editor when selected message changes
-    updateMessageEditor(selectedMessage);
-  }
-
-  // Add a function to create/update the editor view
-  function updateMessageEditor(message: TestMessage) {
-    // Destroy existing editor if it exists
-    if (messageRecordEditorView) {
-      messageRecordEditorView.destroy();
-      messageRecordEditorView = null;
-    }
-
-    const messageRecordEditorState = EditorState.create({
-      doc: message.record,
-      extensions: [
-        basicSetup,
-        elixir(),
-        autocompletion({ override: [] }),
-        keymap.of([indentWithTab]),
-      ],
-    });
-
-    messageRecordEditorView = new EditorView({
-      state: messageRecordEditorState,
-      parent: messageRecordEditorElement,
-    });
-  }
-
   // let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
   // let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
 
@@ -440,6 +376,71 @@
   //     });
   //   }
   // }
+
+  let messagesToShow: TestMessage[] = [];
+  let showSyntheticMessages = false;
+  let selectedMessageIndex: number = 0;
+  let selectedMessage: TestMessage | undefined;
+  let isEditingRecord: boolean = false;
+
+  $: {
+    if (testMessages.length > 0) {
+      messagesToShow = testMessages;
+      showSyntheticMessages = false;
+    } else {
+      messagesToShow = syntheticTestMessages;
+      showSyntheticMessages = true;
+    }
+
+    selectMessage(selectedMessageIndex);
+  }
+
+  function selectMessage(index: number) {
+    selectedMessageIndex = index;
+
+    const oldSelectedMessage = selectedMessage;
+    selectedMessage = messagesToShow[selectedMessageIndex];
+
+    // If there is an error for the submitted selectedMessage editable fields, keep the previous edited ones instead of relying on the ones returned from the server
+    if (
+      oldSelectedMessage &&
+      formErrors.modified_test_messages &&
+      oldSelectedMessage.id === selectedMessage.id &&
+      formErrors.modified_test_messages[selectedMessage.id]
+    ) {
+      if (formErrors.modified_test_messages[selectedMessage.id].record) {
+        selectedMessage.record = oldSelectedMessage.record;
+      }
+      // TODO add other 2 fields
+    }
+
+    // Update editor when selected message changes
+    updateMessageEditor(selectedMessage);
+  }
+
+  // Add a function to create/update the editor view
+  function updateMessageEditor(message: TestMessage) {
+    // Destroy existing editor if it exists
+    if (messageRecordEditorView) {
+      messageRecordEditorView.destroy();
+      messageRecordEditorView = null;
+    }
+
+    const messageRecordEditorState = EditorState.create({
+      doc: message.record,
+      extensions: [
+        basicSetup,
+        elixir(),
+        autocompletion({ override: [] }),
+        keymap.of([indentWithTab]),
+      ],
+    });
+
+    messageRecordEditorView = new EditorView({
+      state: messageRecordEditorState,
+      parent: messageRecordEditorElement,
+    });
+  }
 
   onMount(() => {
     // Handle URL parameters for new transforms
@@ -1143,92 +1144,31 @@ Please help me create or modify the Elixir function transform to achieve the des
                     >
                       Function transform arguments
                     </h3>
-                    <div
-                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
-                    >
-                      <div
-                        class="font-semibold mb-1 flex w-full justify-between items-center"
-                      >
-                        <span>record</span>
-                        {#if !isEditingRecord}
-                          <div>
-                            <button
-                              type="button"
-                              on:click={() => {
-                                isEditingRecord = true;
-                              }}
-                            >
-                              <Pencil
-                                class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
-                              />
-                            </button>
-                          </div>
-                        {:else}
-                          <div>
-                            <button
-                              type="button"
-                              on:click={() => {
-                                selectedMessage.record =
-                                  messageRecordEditorView.state.doc.toString();
+                    <EditableArgument
+                      field="record"
+                      bind:selectedMessage
+                      bind:form
+                      bind:formErrors
+                    />
 
-                                form.modified_test_messages[
-                                  selectedMessage.id
-                                ] = selectedMessage;
-
-                                isEditingRecord = false;
-                              }}
-                            >
-                              <Save
-                                class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
-                              />
-                            </button>
-
-                            <button
-                              type="button"
-                              on:click={() => {
-                                isEditingRecord = false;
-                              }}
-                            >
-                              <Ban
-                                class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
-                              />
-                            </button>
-                          </div>
-                        {/if}
-                      </div>
-                      <div
-                        hidden={!isEditingRecord}
-                        bind:this={messageRecordEditorElement}
-                      />
-                      <pre
-                        hidden={isEditingRecord}>{selectedMessage.record}</pre>
-                      {#if formErrors.modified_test_messages && formErrors.modified_test_messages[selectedMessage.id]}
-                        <p class="text-sm text-red-500 dark:text-red-400">
-                          {formErrors.modified_test_messages[selectedMessage.id]
-                            .record.type}: {formErrors.modified_test_messages[
-                            selectedMessage.id
-                          ].record.info.description}
-                        </p>
-                      {/if}
-                    </div>
-                    <div
-                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
-                    >
-                      <div class="font-semibold mb-1">changes</div>
-                      <pre>{message.changes}</pre>
-                    </div>
+                    <EditableArgument
+                      field="changes"
+                      bind:selectedMessage
+                      bind:form
+                      bind:formErrors
+                    />
                     <div
                       class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
                     >
                       <div class="font-semibold mb-1">action</div>
                       <pre>{message.action}</pre>
                     </div>
-                    <div
-                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
-                    >
-                      <div class="font-semibold mb-1">metadata</div>
-                      <pre>{message.metadata}</pre>
-                    </div>
+                    <EditableArgument
+                      field="metadata"
+                      bind:selectedMessage
+                      bind:form
+                      bind:formErrors
+                    />
                   </div>
                 {/if}
               </div>

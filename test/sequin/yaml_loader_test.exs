@@ -69,7 +69,7 @@ defmodule Sequin.YamlLoaderTest do
 
   describe "plan_from_yml" do
     test "returns lists of planned and current resources" do
-      assert {:ok, planned_resources, [] = _current_resources} =
+      assert {:ok, planned_resources, [] = _current_resources, [] = _actions} =
                YamlLoader.plan_from_yml("""
                 account:
                   name: "Playground"
@@ -276,6 +276,103 @@ defmodule Sequin.YamlLoaderTest do
       assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
       assert db.name == "test-db"
       assert db.pool_size == 5
+    end
+
+    test "creates database with block format publication (create_if_not_exists=false)" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "test-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot:
+                     name: "#{replication_slot()}"
+                     create_if_not_exists: false
+                   publication:
+                     name: "#{@publication}"
+                     create_if_not_exists: false
+               """)
+
+      assert [account] = Repo.all(Account)
+      assert account.name == "Configured by Sequin"
+
+      assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
+      assert db.account_id == account.id
+      assert db.name == "test-db"
+
+      assert [%PostgresReplicationSlot{} = replication] = Repo.all(PostgresReplicationSlot)
+      assert replication.postgres_database_id == db.id
+      assert replication.slot_name == replication_slot()
+      assert replication.publication_name == @publication
+    end
+
+    test "creates database with block format publication (create_if_not_exists=true)" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "test-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot:
+                     name: "#{replication_slot()}"
+                     create_if_not_exists: false
+                   publication:
+                     name: "#{@publication}"
+                     create_if_not_exists: true
+                     init_sql: |-
+                       create publication #{@publication} for tables in schema public with (publish_via_partition_root = true)
+               """)
+
+      assert [account] = Repo.all(Account)
+      assert account.name == "Configured by Sequin"
+
+      assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
+      assert db.account_id == account.id
+      assert db.name == "test-db"
+
+      assert [%PostgresReplicationSlot{} = replication] = Repo.all(PostgresReplicationSlot)
+      assert replication.postgres_database_id == db.id
+      assert replication.slot_name == replication_slot()
+      assert replication.publication_name == @publication
+
+      # Verify that the publication was actually created
+      # This assumes there's a way to check for the publication's existence in your test environment
+      {:ok, conn} = Sequin.Databases.ConnectionCache.connection(db)
+      {:ok, pub_info} = Sequin.Postgres.get_publication(conn, @publication)
+      assert pub_info["pubname"] == @publication
+    end
+
+    test "fails with error when both block and flat publication formats are used" do
+      assert {:error, error} =
+               YamlLoader.apply_from_yml("""
+               account:
+                 name: "Configured by Sequin"
+
+               databases:
+                 - name: "test-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
+                   publication:
+                     name: "#{@publication}"
+                     create_if_not_exists: true
+               """)
+
+      assert error.summary =~
+               "Invalid database configuration: `publication` and `publication_name` are both specified. Only `publication` should be used."
     end
   end
 
@@ -1610,7 +1707,7 @@ defmodule Sequin.YamlLoaderTest do
           test_connect_fun: test_connect_fun
         )
 
-      assert {:ok, {:ok, _resources}} = result
+      assert {:ok, _resources} = result
 
       # Should have attempted exactly twice
       assert :atomics.get(counter, 1) == 2

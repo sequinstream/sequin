@@ -15,6 +15,7 @@ import (
 
 type PlanResponse struct {
 	Changes []Change `json:"changes"`
+	Actions []Action `json:"actions"`
 }
 
 type Change struct {
@@ -22,6 +23,10 @@ type Change struct {
 	Action       string      `json:"action"`
 	Old          interface{} `json:"old,omitempty"`
 	New          interface{} `json:"new,omitempty"`
+}
+
+type Action struct {
+	Description string `json:"description"`
 }
 
 type ApplyResponse struct {

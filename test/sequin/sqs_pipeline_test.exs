@@ -2,7 +2,6 @@ defmodule Sequin.Runtime.SqsPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Aws.HttpClient
-  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
@@ -136,31 +135,33 @@ defmodule Sequin.Runtime.SqsPipelineTest do
     setup do
       account = AccountsFactory.insert_account!()
 
-      database = DatabasesFactory.configured_postgres_database(account_id: account.id)
+      database =
+        DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: :character_tables)
+
       ConnectionCache.cache_connection(database, Sequin.Repo)
 
       sequence =
-        DatabasesFactory.sequence(
+        DatabasesFactory.insert_sequence!(
           postgres_database_id: database.id,
           postgres_database: database,
-          table_oid: CharacterDetailed.table_oid()
+          table_oid: CharacterDetailed.table_oid(),
+          account_id: account.id
         )
 
-      replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
+      replication =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
 
       consumer =
-        ConsumersFactory.sink_consumer(
-          id: UUID.uuid4(),
+        ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :sqs,
           replication_slot_id: replication.id,
           sequence_id: sequence.id,
-          sequence: sequence,
-          message_kind: :record,
-          postgres_database: database
+          message_kind: :record
         )
-
-      :ok = Consumers.create_consumer_partition(consumer)
 
       {:ok, %{consumer: consumer}}
     end
@@ -178,22 +179,29 @@ defmodule Sequin.Runtime.SqsPipelineTest do
       start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
-      start_supervised!({SinkPipeline, [consumer: consumer, test_pid: test_pid]})
+      start_pipeline!(consumer, dummy_producer: false)
 
       assert_receive {:sqs_request, _conn}, 1_000
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
     end
   end
 
-  defp start_pipeline!(consumer) do
-    start_supervised!(
-      {SinkPipeline,
-       [
-         consumer: consumer,
-         producer: Broadway.DummyProducer,
-         test_pid: self()
-       ]}
-    )
+  defp start_pipeline!(consumer, opts \\ []) do
+    {dummy_producer, _opts} = Keyword.pop(opts, :dummy_producer, true)
+
+    opts = [
+      consumer: consumer,
+      test_pid: self()
+    ]
+
+    opts =
+      if dummy_producer do
+        Keyword.put(opts, :producer, Broadway.DummyProducer)
+      else
+        opts
+      end
+
+    start_supervised!({SinkPipeline, opts})
   end
 
   defp send_test_event(consumer, event \\ nil) do

@@ -10,6 +10,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   use Broadway
 
   alias Broadway.Message
+  alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
@@ -103,7 +104,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       consumer =
       opts
       |> Keyword.fetch!(:consumer)
-      |> Repo.lazy_preload([:sequence, :transform, :routing])
+      |> preload_consumer()
       # Ensure db is not on there
       |> Ecto.reset_fields([:postgres_database])
 
@@ -115,11 +116,19 @@ defmodule Sequin.Runtime.SinkPipeline do
     context = %{
       pipeline_mod: pipeline_mod,
       consumer: consumer,
+      consumer_id: consumer.id,
+      account_id: consumer.account_id,
       slot_message_store_mod: slot_message_store_mod,
       test_pid: test_pid
     }
 
-    context = pipeline_mod.init(context, opts)
+    context =
+      context
+      |> pipeline_mod.init(opts)
+      # In production environments, we do not want to load the consumer here,
+      # as it means child specs have the consumer struct on them. This is
+      # not ideal for memory consumption.
+      |> Map.delete(:consumer)
 
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
@@ -150,9 +159,11 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   @impl Broadway
   def handle_message(_, message, %{pipeline_mod: pipeline_mod} = context) do
+    setup_allowances(context[:test_pid])
+
     Logger.metadata(
-      account_id: context.consumer.account_id,
-      consumer_id: context.consumer.id
+      account_id: context.account_id,
+      consumer_id: context.consumer_id
     )
 
     context = context(context)
@@ -180,8 +191,8 @@ defmodule Sequin.Runtime.SinkPipeline do
     setup_allowances(context[:test_pid])
 
     Logger.metadata(
-      account_id: context.consumer.account_id,
-      consumer_id: context.consumer.id
+      account_id: context.account_id,
+      consumer_id: context.consumer_id
     )
 
     context = context(context)
@@ -236,8 +247,29 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   # Give processes a way to modify their context, which allows them to use it as a k/v store
   defp context(context) do
-    ctx = Process.get(:runtime_context, %{})
-    Map.merge(context, ctx)
+    runtime_ctx = Process.get(:runtime_context, %{})
+    context = Map.merge(context, runtime_ctx)
+
+    case Map.get(context, :consumer) do
+      nil ->
+        init_runtime_context(context)
+
+      _ ->
+        context
+    end
+  end
+
+  defp init_runtime_context(context) do
+    consumer =
+      context
+      |> Map.fetch!(:consumer_id)
+      |> Consumers.get_sink_consumer!()
+      |> preload_consumer()
+
+    context = Map.put(context, :consumer, consumer)
+
+    Process.put(:runtime_context, context)
+    context
   end
 
   defp update_context(context, next_context) when context == next_context, do: :ok
@@ -473,6 +505,11 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Sandbox.allow(Sequin.Repo, test_pid, self())
+  end
+
+  defp preload_consumer(consumer) do
+    Repo.lazy_preload(consumer, [:sequence, :transform, :routing])
   end
 
   # Formats timestamps according to the consumer's timestamp_format setting

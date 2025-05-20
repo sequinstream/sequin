@@ -110,11 +110,13 @@ defmodule Sequin.Sinks.Nats.Client do
     end
   end
 
-  defp get_headers(%ConsumerEvent{} = message) do
-    [{"Nats-Msg-Id", to_string(message.id)}]
+  defp get_headers(%ConsumerEvent{data: %{metadata: %{idempotency_key: idempotency_key}}} = _message)
+       when not is_nil(idempotency_key) do
+    [{"Nats-Msg-Id", idempotency_key}]
   end
 
-  defp get_headers(%ConsumerRecord{} = message) do
-    [{"Nats-Msg-Id", to_string(message.id)}]
+  defp get_headers(%ConsumerRecord{data: %{metadata: %{idempotency_key: idempotency_key}}} = _message)
+       when not is_nil(idempotency_key) do
+    [{"Nats-Msg-Id", idempotency_key}]
   end
 end

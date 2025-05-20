@@ -62,10 +62,10 @@ databases:
     pool_size: 10               # Default: 3
     slot:
       name: "sequin_slot"        # Required
-      create_if_missing: false   # Optional, default: false
+      create_if_not_exists: false   # Optional, default: false
     publication:
       name: "sequin_pub"         # Required
-      create_if_missing: false   # Optional, default: false
+      create_if_not_exists: false   # Optional, default: false
       init_sql: |-               # Optional, SQL to run to create the publication. Defaults to create a publication for schema "public"
         create publication sequin_pub for tables in schema public with (publish_via_partition_root = true)
     await_database:             # Optional, configuration for database connection retry behavior
@@ -108,12 +108,12 @@ Sequin uses PostgreSQL's logical replication to capture changes from your databa
 
 ##### Replication slot
 
-After following the instructions in the Sequin console to create a replication slot, you can indicate the name of the slot in the `slot` block. Alternatively, you can choose to have Sequin create the slot for you by setting `create_if_missing` to `true`:
+After following the instructions in the Sequin console to create a replication slot, you can indicate the name of the slot in the `slot` block. Alternatively, you can choose to have Sequin create the slot for you by setting `create_if_not_exists` to `true`:
 
 ```yaml
 slot:
   name: "sequin_slot"         # Required
-  create_if_missing: true     # Optional, default: false
+  create_if_not_exists: true     # Optional, default: false
 ```
 
 <Warning>
@@ -122,17 +122,17 @@ slot:
 
 ##### Publication
 
-After following the instructions in the Sequin console to create a publication, you can indicate the name of the publication in the `publication` block. Alternatively, you can choose to have Sequin create the publication for you by setting `create_if_missing` to `true`:
+After following the instructions in the Sequin console to create a publication, you can indicate the name of the publication in the `publication` block. Alternatively, you can choose to have Sequin create the publication for you by setting `create_if_not_exists` to `true`:
 
 ```yaml
 publication:
   name: "sequin_pub"          # Required
-  create_if_missing: true     # Optional, default: false
+  create_if_not_exists: true     # Optional, default: false
   init_sql: |-               # Optional, SQL to run to create the publication. Defaults to create a publication for schema "public"
     create publication sequin_pub for tables in schema public with (publish_via_partition_root = true)
 ```
 
-When `create_if_missing` is `true`, Sequin will attempt to create the publication if it doesn't exist. If you specify `init_sql`, Sequin will run that SQL to create the publication. Otherwise, Sequin will create a publication for the schema "public".
+When `create_if_not_exists` is `true`, Sequin will attempt to create the publication if it doesn't exist. If you specify `init_sql`, Sequin will run that SQL to create the publication. Otherwise, Sequin will create a publication for the schema "public".
 
 #### Database connection retry
 
@@ -529,10 +529,10 @@ databases:
     database: "app_production"
     slot:
       name: "sequin_slot"
-      create_if_missing: true
+      create_if_not_exists: true
     publication:
       name: "sequin_pub"
-      create_if_missing: true
+      create_if_not_exists: true
       schemas: ["public"]
 
 http_endpoints:

@@ -278,7 +278,7 @@ defmodule Sequin.YamlLoaderTest do
       assert db.pool_size == 5
     end
 
-    test "creates database with block format publication (create_if_missing=false)" do
+    test "creates database with block format publication (create_if_not_exists=false)" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                account:
@@ -292,10 +292,10 @@ defmodule Sequin.YamlLoaderTest do
                    database: "sequin_test"
                    slot:
                      name: "#{replication_slot()}"
-                     create_if_missing: false
+                     create_if_not_exists: false
                    publication:
                      name: "#{@publication}"
-                     create_if_missing: false
+                     create_if_not_exists: false
                """)
 
       assert [account] = Repo.all(Account)
@@ -311,7 +311,7 @@ defmodule Sequin.YamlLoaderTest do
       assert replication.publication_name == @publication
     end
 
-    test "creates database with block format publication (create_if_missing=true)" do
+    test "creates database with block format publication (create_if_not_exists=true)" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                account:
@@ -325,10 +325,10 @@ defmodule Sequin.YamlLoaderTest do
                    database: "sequin_test"
                    slot:
                      name: "#{replication_slot()}"
-                     create_if_missing: false
+                     create_if_not_exists: false
                    publication:
                      name: "#{@publication}"
-                     create_if_missing: true
+                     create_if_not_exists: true
                      init_sql: |-
                        create publication #{@publication} for tables in schema public with (publish_via_partition_root = true)
                """)
@@ -368,7 +368,7 @@ defmodule Sequin.YamlLoaderTest do
                    publication_name: "#{@publication}"
                    publication:
                      name: "#{@publication}"
-                     create_if_missing: true
+                     create_if_not_exists: true
                """)
 
       assert error.summary =~

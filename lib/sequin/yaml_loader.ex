@@ -463,8 +463,8 @@ defmodule Sequin.YamlLoader do
 
       replication_attrs = Map.put(replication_attrs, "postgres_database_id", db.id)
 
-      validate_slot? = database_attrs["slot"]["create_if_missing"] != true
-      validate_pub? = database_attrs["publication"]["create_if_missing"] != true
+      validate_slot? = database_attrs["slot"]["create_if_not_exists"] != true
+      validate_pub? = database_attrs["publication"]["create_if_not_exists"] != true
 
       case Replication.create_pg_replication(account_id, replication_attrs,
              validate_slot?: validate_slot?,
@@ -564,13 +564,13 @@ defmodule Sequin.YamlLoader do
 
         slot_attrs =
           case Map.fetch(database_attrs, "slot") do
-            {:ok, %{"create_if_missing" => true}} -> %{"name" => slot_name}
+            {:ok, %{"create_if_not_exists" => true}} -> %{"name" => slot_name}
             _ -> nil
           end
 
         pub_attrs =
           case Map.fetch(database_attrs, "publication") do
-            {:ok, %{"create_if_missing" => true}} ->
+            {:ok, %{"create_if_not_exists" => true}} ->
               %{
                 "name" => pub_name,
                 "init_sql" => database_attrs["publication"]["init_sql"]

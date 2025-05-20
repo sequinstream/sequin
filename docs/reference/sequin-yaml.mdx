@@ -6,13 +6,40 @@ description: "Reference for Sequin's YAML configuration for infrastructure-as-co
 
 ## Overview
 
-Configure Sequin resources like databases, sinks, and HTTP endpoints using YAML.
+Configure Sequin resources like databases, sinks, and transforms using YAML.
 
-You can provide YAML configuration to Sequin in three ways:
+You can provide YAML configuration to Sequin in two ways:
 
-1. Via a configuration file using the `CONFIG_FILE_PATH` environment variable
-2. Directly as base64-encoded YAML using the `CONFIG_FILE_YAML` environment variable
-3. Via the Sequin CLI using the `sequin config export|plan|apply` command group
+1. At runtime using [Sequin CLI](/reference/cli/overview) using the `sequin config export|plan|apply` command group
+1. At start up using `CONFIG_FILE_PATH` or `CONFIG_FILE_YAML` [environment variables](/reference/configuration#configuration-file)
+
+### Names
+
+In general, resources in Sequin are uniquely identified both by `id` and by `name`. For `sequin.yaml`, the `name` is used to reference resources in the YAML file.
+
+
+For instance, when you create a `transform`, you specify a `name` that must be unique across all transforms in your Sequin account. Then, when you create a `sink`, you can reference the `transform` by `name`.
+
+```yaml
+transforms:
+  - name: "my-transform"
+    ...
+
+sinks:
+  - name: "my-sink"
+    transform: "my-transform"
+```
+
+When you apply a `sequin.yaml` file, Sequin performs upserts for each resource in the file. The `name` is used to match resources in the file to resources in the database. So:
+
+* If you change the `name` of a resource in the Sequin console, you must also update the `name` in the `sequin.yaml` file to match.
+* If you change the `name` of a resource in the `sequin.yaml` file, `sequin config apply` will create a new resource with the new name.
+
+### Deletes
+
+Currently, `sequin.yaml` does not support deleting resources. If you remove a resource from the `sequin.yaml` file, Sequin will not delete the resource from the database.
+
+Both the Sequin console and the [management API](/reference/management-api) support deletes.
 
 ## Schema
 
@@ -26,6 +53,8 @@ account:
 <Note>
   Creating accounts is only supported on self-hosted Sequin.
 </Note>
+
+Creating accounts via YAML is only supported on self-hosted Sequin. The feature is intended for use in development or CI/CD workflows, where you may need to create accounts in a non-interactive way.
 
 ### User configuration
 
@@ -49,22 +78,24 @@ api_tokens:
   Creating API tokens is only supported on self-hosted Sequin.
 </Note>
 
+Creating API tokens via YAML is only supported on self-hosted Sequin. The feature is intended for use in development or CI/CD workflows, where you may need to create API tokens in a non-interactive way.
+
 ### Database configuration
 
 ```yaml
 databases:
-  - name: "my-database"          # Required, unique identifier
-    username: "postgres"         # Default: postgres
-    password: "postgres"         # Default: postgres
-    hostname: "localhost"        # Required
-    port: 5432                  # Default: 5432
-    database: "my_database"     # Required
-    pool_size: 10               # Default: 3
-    slot_name: "sequin_slot"    # Required
-    publication_name: "sequin_pub" # Required
-    await_database:             # Optional, configuration for database connection retry behavior
-      timeout_ms: 30000         # Default: 30000 (30 seconds)
-      interval_ms: 3000         # Default: 3000 (3 seconds)
+  - name: "my-database"             # Required, unique identifier
+    username: "postgres"            # Default: postgres
+    password: "postgres"            # Default: postgres
+    hostname: "localhost"           # Required
+    port: 5432                      # Default: 5432
+    database: "my_database"         # Required
+    pool_size: 10                   # Default: 3
+    slot_name: "sequin_slot"        # Required
+    publication_name: "sequin_pub"  # Required
+    await_database:                 # Optional, see "database connection retry" below
+      timeout_ms: 30000             # Default: 30000 (30 seconds)
+      interval_ms: 3000             # Default: 3000 (3 seconds)
 ```
 
 #### Replica database configuration
@@ -108,12 +139,12 @@ You can configure HTTP endpoints in three ways:
 #### 1. External URL
 ```yaml
 http_endpoints:
-  - name: "external-endpoint"         # Required
+  - name: "external-endpoint"               # Required
     url: "https://api.example.com/webhook"  # Required
-    headers:                          # Optional
+    headers:                                # Optional
       - key: "Content-Type"
         value: "application/json"
-    encrypted_headers:                # Optional, for sensitive headers
+    encrypted_headers:                      # Optional, for sensitive headers
       - key: "Authorization" 
         value: "Bearer token123"
 ```
@@ -124,7 +155,7 @@ Sequin Cloud offers tunneling to your local machine for development. Learn more 
 
 ```yaml
 http_endpoints:
-  - name: "local-endpoint"     # Required
+  - name: "local-endpoint"    # Required
     local: "true"             # Required
     path: "/webhook"          # Optional
     headers:                  # Optional
@@ -154,7 +185,7 @@ sinks:
     batch_size: 1                  # Optional, messages per batch, default: 1
     status: "active"               # Optional: active or disabled, default: active
     group_column_names: ["id"]     # Optional, columns to group messages by
-    transform: "my-transform"       # Optional, reference to a transform name or "none"
+    transform: "my-transform"      # Optional, reference to a transform name or "none"
     actions:                       # Optional, defaults to all
       - insert
       - update
@@ -172,6 +203,11 @@ sinks:
       type: "..."                  # Required, sink type
       ...                          # Additional sink-specific options
 ```
+
+* The `database` field references a [database] by name. See [databases](#database-configuration) for more information.
+* The `table` field references a table in the database by `[schema.]table`. `schema` is optional and defaults to `public`.
+* The `transform` field references a [transform] by name. See [sink transforms](#sink-transforms) below for more information.
+* Filters are optional. See [sink filters](#sink-filters) below for more information.
 
 The `destination` configuration varies by sink type. Below are the configurations for each sink type:
 
@@ -208,6 +244,12 @@ destination:
   batch_size: 100                  # Optional, messages per batch, default: 100, max: 10000
 ```
 
+Auth type and auth value jointly determine the authentication method used to connect to the Elasticsearch cluster.
+
+* `api_key`: Use an API key with the `auth_value` as the key.
+* `basic`: Use basic authentication with the `auth_value` as `username:password`.
+* `bearer`: Use a Bearer token with the `auth_value` as the token. Do **not** include the `Bearer ` prefix in the `auth_value`.
+
 #### Sequin Stream sink
 [Sequin Stream](/reference/sinks/sequin-stream) is a durable, scalable, and fault-tolerant message stream that you can use with Sequin in place of additional infrastructure like Kafka or SQS.
 
@@ -222,8 +264,8 @@ destination:
 For publishing changes to Kafka topics:
 ```yaml
 destination:
-  type: "kafka"                  # Required
-  hosts: "localhost:9092"        # Required, comma-separated list of brokers
+  type: "kafka"                 # Required
+  hosts: "localhost:9092"       # Required, comma-separated list of brokers
   topic: "my-topic"             # Required
   tls: false                    # Optional, enable TLS, default: false
   username: "kafka-user"        # Optional, for SASL authentication
@@ -237,7 +279,7 @@ For sending changes to Amazon SQS queues:
 destination:
   type: "sqs"                   # Required
   queue_url: "https://sqs.us-west-2.amazonaws.com/123/MyQueue.fifo" # Required
-  access_key_id: "AKIAXXXX"    # Required
+  access_key_id: "AKIAXXXX"     # Required
   secret_access_key: "secret"   # Required
 ```
 
@@ -247,8 +289,8 @@ For publishing changes to AWS SNS topics:
 destination:
   type: "sns"                   # Required
   topic_arn: "arn:aws:sns:us-west-2:123456789012:my-topic" # Required, full SNS Topic ARN
-  region: "us-west-2"          # Optional, inferred from topic_arn if omitted
-  access_key_id: "AKIAXXXX"    # Required
+  region: "us-west-2"           # Optional, inferred from topic_arn if omitted
+  access_key_id: "AKIAXXXX"     # Required
   secret_access_key: "secret"   # Required
 ```
 
@@ -272,14 +314,14 @@ destination:
 For publishing changes to RabbitMQ exchanges:
 ```yaml
 destination:
-  type: "rabbitmq"              # Required
-  host: "localhost"              # Required
-  port: 5672                    # Required
-  exchange: "my-exchange"        # Required
-  username: "guest"              # Optional, default: guest
-  password: "guest"              # Optional, default: guest
-  virtual_host: "/"              # Optional, default: /
-  tls: false                    # Optional, enable TLS, default: false
+  type: "rabbitmq"          # Required
+  host: "localhost"         # Required
+  port: 5672                # Required
+  exchange: "my-exchange"   # Required
+  username: "guest"         # Optional, default: guest
+  password: "guest"         # Optional, default: guest
+  virtual_host: "/"         # Optional, default: /
+  tls: false                # Optional, enable TLS, default: false
 ```
 
 #### GCP PubSub sink
@@ -333,7 +375,7 @@ filters:
     field_path: "preferences.theme" # Dot notation for nested fields
     operator: "="                   # =, !=, >, >=, <, <=
     comparison_value: "dark"
-    field_type: "string"           # string, number, boolean, null, list
+    field_type: "string"            # string, number, boolean, null, list
 ```
 
 Additioanlly, you can specify actions to consume. By default, all actions are consumed.
@@ -388,15 +430,15 @@ change_retentions:
     destination_database: "dest-db"       # Required
     destination_table_schema: "public"    # Required  
     destination_table_name: "user_events" # Required
-    actions:                             # Optional, defaults to all
+    actions:                              # Optional, defaults to all
       - insert
       - update 
       - delete
-    filters:                             # Optional
+    filters:                              # Optional
       - column_name: "status"           
         operator: "="
         comparison_value: "active"
-      - column_name: "metadata"          # JSONB column example
+      - column_name: "metadata"           # JSONB column example
         field_path: "type.name"
         operator: "="
         comparison_value: "premium"

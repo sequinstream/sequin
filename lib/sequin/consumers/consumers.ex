@@ -133,6 +133,21 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
+  def list_sink_consumers_for_account_paginated(account_id, page, page_size, opts \\ []) do
+    preload = Keyword.get(opts, :preload, [])
+    order_by = Keyword.get(opts, :order_by, desc: :updated_at, desc: :name)
+
+    offset = page * page_size
+
+    account_id
+    |> SinkConsumer.where_account_id()
+    |> order_by([sc], ^order_by)
+    |> preload(^preload)
+    |> limit(^page_size)
+    |> offset(^offset)
+    |> Repo.all()
+  end
+
   def count_sink_consumers_for_account(account_id) do
     account_id
     |> SinkConsumer.where_account_id()

@@ -2229,7 +2229,12 @@ defmodule Sequin.ConsumersTest do
       assert_lists_equal(Enum.map(page_desc, & &1.name), ["consumer-10", "consumer-09", "consumer-08"])
 
       # Test with preloads
-      page_with_preloads = Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 3, preload: [:postgres_database], order_by: [asc: :name])
+      page_with_preloads =
+        Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 3,
+          preload: [:postgres_database],
+          order_by: [asc: :name]
+        )
+
       assert length(page_with_preloads) == 3
       # Verify preloads worked - would raise error if not preloaded
       for consumer <- page_with_preloads do

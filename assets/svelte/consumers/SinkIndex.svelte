@@ -34,6 +34,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import * as d3 from "d3";
   import { onMount } from "svelte";
+  import { Skeleton } from "$lib/components/ui/skeleton";
 
   export let consumers: Array<{
     id: string;
@@ -61,7 +62,7 @@
     metrics: {
       messages_processed_throughput_timeseries: number[];
     };
-  }>;
+  }> | null;
   export let live: any;
   export let hasDatabases: boolean;
   export let selfHosted: boolean;
@@ -71,7 +72,7 @@
   let selectedDestination: string;
   let dialogOpen = false;
 
-  let pageLoading = false;
+  $: pageLoading = consumers === null;
   $: hasConsumers = totalCount > 0;
   $: pageCount = Math.ceil(totalCount / pageSize);
   $: startIndex = page * pageSize + 1;
@@ -233,43 +234,45 @@
 
   onMount(() => {
     // Create charts for each consumer
-    consumers.forEach((consumer) => {
-      const element = chartElements[consumer.id];
-      if (
-        element &&
-        consumer.metrics.messages_processed_throughput_timeseries.length > 0
-      ) {
-        createMiniChart(
-          element,
-          consumer.metrics.messages_processed_throughput_timeseries,
-        );
-      }
-    });
+    if (consumers !== null) {
+      consumers.forEach((consumer) => {
+        const element = chartElements[consumer.id];
+        if (
+          element &&
+          consumer.metrics.messages_processed_throughput_timeseries.length > 0
+        ) {
+          createMiniChart(
+            element,
+            consumer.metrics.messages_processed_throughput_timeseries,
+          );
+        }
+      });
+    }
   });
 
-  $: if (consumers) {
-    // Update charts when consumers data changes
-    consumers.forEach((consumer) => {
-      const element = chartElements[consumer.id];
-      if (
-        element &&
-        consumer.metrics.messages_processed_throughput_timeseries.length > 0
-      ) {
-        createMiniChart(
-          element,
-          consumer.metrics.messages_processed_throughput_timeseries,
-        );
-      }
-    });
+  $: {
+    if (consumers !== null) {
+      // Update charts when consumers data changes
+      consumers.forEach((consumer) => {
+        const element = chartElements[consumer.id];
+        if (
+          element &&
+          consumer.metrics.messages_processed_throughput_timeseries.length > 0
+        ) {
+          createMiniChart(
+            element,
+            consumer.metrics.messages_processed_throughput_timeseries,
+          );
+        }
+      });
+    }
   }
 
   function changePage(newPage: number) {
     if (newPage >= 0 && newPage < pageCount) {
       page = newPage;
       pageLoading = true;
-      live.pushEvent("change_page", { page }, () => {
-        pageLoading = false;
-      });
+      live.pushEvent("change_page", { page });
     }
   }
 </script>
@@ -330,49 +333,74 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each consumers as consumer}
-          <Table.Row
-            on:click={() => handleConsumerClick(consumer.id, consumer.type)}
-            class="cursor-pointer"
-          >
-            <Table.Cell>
-              {#each sinks.filter((d) => d.id === consumer.type) as dest}
-                <svelte:component this={dest.icon} class="h-6 w-6" />
-              {/each}
-            </Table.Cell>
-            <Table.Cell>{consumer.name}</Table.Cell>
-            <Table.Cell>
-              <div class="flex items-center gap-2">
-                {#if consumer.status === "paused"}
-                  <Badge variant="warning">
-                    <Pause class="h-4 w-4 mr-1" />
-                    <span>Paused</span>
-                  </Badge>
-                {:else if consumer.status === "disabled"}
-                  <Badge variant="secondary">
-                    <StopCircle class="h-4 w-4 mr-1" />
-                    <span>Disabled</span>
-                  </Badge>
-                {:else}
-                  <HealthPill status={consumer.health.status} />
-                {/if}
-                {#if consumer.active_backfill}
-                  <Badge variant="secondary">
-                    <ArrowDownSquare class="h-4 w-4 mr-1" />
-                    <span>Backfilling</span>
-                  </Badge>
-                {/if}
-              </div>
-            </Table.Cell>
-            <Table.Cell>{consumer.database_name}</Table.Cell>
-            <Table.Cell>
-              <div use:bindChartElement={consumer.id} class="w-48 h-8" />
-            </Table.Cell>
-            <Table.Cell
-              >{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
+        {#if pageLoading}
+          {#each Array(pageSize) as _, i}
+            <Table.Row>
+              <Table.Cell class="w-8">
+                <Skeleton class="h-6 w-6 rounded" />
+              </Table.Cell>
+              <Table.Cell class="w-32">
+                <Skeleton class="h-4 w-24" />
+              </Table.Cell>
+              <Table.Cell class="w-24">
+                <Skeleton class="h-6 w-24" />
+              </Table.Cell>
+              <Table.Cell class="w-40">
+                <Skeleton class="h-4 w-40" />
+              </Table.Cell>
+              <Table.Cell class="w-48">
+                <Skeleton class="h-8 w-48" />
+              </Table.Cell>
+              <Table.Cell class="w-24">
+                <Skeleton class="h-4 w-24" />
+              </Table.Cell>
+            </Table.Row>
+          {/each}
+        {:else}
+          {#each consumers as consumer}
+            <Table.Row
+              on:click={() => handleConsumerClick(consumer.id, consumer.type)}
+              class="cursor-pointer"
             >
-          </Table.Row>
-        {/each}
+              <Table.Cell class="w-8">
+                {#each sinks.filter((d) => d.id === consumer.type) as dest}
+                  <svelte:component this={dest.icon} class="h-6 w-6" />
+                {/each}
+              </Table.Cell>
+              <Table.Cell class="w-32">{consumer.name}</Table.Cell>
+              <Table.Cell class="w-24">
+                <div class="flex items-center gap-2">
+                  {#if consumer.status === "paused"}
+                    <Badge variant="warning">
+                      <Pause class="h-4 w-4 mr-1" />
+                      <span>Paused</span>
+                    </Badge>
+                  {:else if consumer.status === "disabled"}
+                    <Badge variant="secondary">
+                      <StopCircle class="h-4 w-4 mr-1" />
+                      <span>Disabled</span>
+                    </Badge>
+                  {:else}
+                    <HealthPill status={consumer.health.status} />
+                  {/if}
+                  {#if consumer.active_backfill}
+                    <Badge variant="secondary">
+                      <ArrowDownSquare class="h-4 w-4 mr-1" />
+                      <span>Backfilling</span>
+                    </Badge>
+                  {/if}
+                </div>
+              </Table.Cell>
+              <Table.Cell class="w-40">{consumer.database_name}</Table.Cell>
+              <Table.Cell class="w-48">
+                <div use:bindChartElement={consumer.id} class="w-48 h-8" />
+              </Table.Cell>
+              <Table.Cell class="w-24"
+                >{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
+              >
+            </Table.Row>
+          {/each}
+        {/if}
       </Table.Body>
     </Table.Root>
     {#if totalCount > pageSize}

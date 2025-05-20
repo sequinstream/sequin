@@ -31,6 +31,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Error.ValidationError
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
 
@@ -560,8 +561,17 @@ defmodule Sequin.Transforms do
 
         "encrypted_headers" ->
           case parse_headers(value) do
-            {:ok, headers} -> {:cont, {:ok, Map.put(acc, :encrypted_headers, headers)}}
-            {:error, error} -> {:halt, {:error, error}}
+            {:ok, headers} ->
+              {:cont, {:ok, Map.put(acc, :encrypted_headers, headers)}}
+
+            {:error,
+             %ValidationError{
+               summary: "Headers appear to be encrypted. Please provide decrypted headers as a list of key-value pairs."
+             }} ->
+              {:cont, {:ok, acc}}
+
+            {:error, error} ->
+              {:halt, {:error, error}}
           end
 
         "webhook.site" ->

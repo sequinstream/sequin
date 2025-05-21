@@ -101,6 +101,7 @@
     path: "Path transform",
     transform: "Transform function",
     routing: "Routing function",
+    filter: "Filter function",
   };
 
   let sinkTypeInternalToExternal = {
@@ -598,8 +599,8 @@ Please help me create or modify the Elixir function transform to achieve the des
               </SelectTrigger>
               <SelectContent>
                 <SelectItem
-                  value="path"
-                  label={functionInternalToExternal.path}
+                  value="filter"
+                  label={functionInternalToExternal.filter}
                 />
                 <SelectItem
                   value="transform"
@@ -608,6 +609,10 @@ Please help me create or modify the Elixir function transform to achieve the des
                 <SelectItem
                   value="routing"
                   label={functionInternalToExternal.routing}
+                />
+                <SelectItem
+                  value="path"
+                  label={functionInternalToExternal.path}
                 />
               </SelectContent>
             </Select>
@@ -734,8 +739,11 @@ Please help me create or modify the Elixir function transform to achieve the des
           {/if}
 
           <div
-            hidden={form.function.type !== "transform" &&
-              form.function.type !== "routing"}
+            hidden={!(
+              form.function.type !== "transform" ||
+              form.function.type !== "routing" ||
+              form.function.type !== "filter"
+            )}
           >
             <div class="space-y-2">
               {#if !functionTransformsEnabled}

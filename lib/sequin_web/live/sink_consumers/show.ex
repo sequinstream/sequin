@@ -12,6 +12,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
@@ -101,7 +102,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
-        |> Repo.preload([:postgres_database, :sequence, :active_backfill, :replication_slot, :transform, :routing],
+        |> Repo.preload(
+          [:postgres_database, :sequence, :active_backfill, :replication_slot, :transform, :routing, :filter],
           force: true
         )
         |> SinkConsumer.preload_http_endpoint()
@@ -620,7 +622,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       table: encode_table(table),
       transform_id: consumer.transform_id,
       routing_id: consumer.routing_id,
-      routing: encode_function(consumer.routing)
+      routing: encode_function(consumer.routing),
+      filter_id: consumer.filter_id,
+      filter: encode_function(consumer.filter)
     }
   end
 
@@ -842,6 +846,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_function_inner(%PathFunction{path: path}), do: %{path: path}
   defp encode_function_inner(%TransformFunction{code: code}), do: %{code: code}
+  defp encode_function_inner(%FilterFunction{code: code}), do: %{code: code}
 
   defp encode_function_inner(%RoutingFunction{sink_type: sink_type, code: code}) do
     %{sink_type: sink_type, code: code}

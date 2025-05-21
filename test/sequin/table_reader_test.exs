@@ -82,7 +82,7 @@ defmodule Sequin.TableReaderTest do
           account_id: db.account_id,
           postgres_database_id: db.id
         ),
-        [:sequence, :postgres_database]
+        [:sequence, :postgres_database, :filter]
       )
 
     ConsumersFactory.insert_active_backfill!(
@@ -102,7 +102,7 @@ defmodule Sequin.TableReaderTest do
           account_id: db.account_id,
           postgres_database_id: db.id
         ),
-        [:sequence, :postgres_database]
+        [:sequence, :postgres_database, :filter]
       )
 
     character_detailed_consumer =
@@ -113,7 +113,7 @@ defmodule Sequin.TableReaderTest do
           account_id: db.account_id,
           postgres_database_id: db.id
         ),
-        [:sequence, :postgres_database]
+        [:sequence, :postgres_database, :filter]
       )
 
     ConsumersFactory.insert_active_backfill!(

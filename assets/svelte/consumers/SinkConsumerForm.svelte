@@ -101,9 +101,10 @@
     groupColumnAttnums: number[];
     batchSize: number;
     transform: string;
-    timestampFormat: string;
+    filterId: string;
     routingId: string;
     routingMode: string;
+    timestampFormat: string;
   }
 
   let initialForm: FormState = {
@@ -132,6 +133,7 @@
     timestampFormat: consumer.timestamp_format || "iso8601",
     routingId: consumer.routing_id || "none",
     routingMode: consumer.routing_mode,
+    filterId: consumer.filter_id || "none",
   };
 
   let form: FormState = { ...initialForm };
@@ -507,11 +509,14 @@
       </CardHeader>
       <CardContent>
         <FilterForm
+          {functions}
           messageKind={form.messageKind}
           {selectedTable}
           bind:form
           {errors}
           onFilterChange={handleFilterChange}
+          {refreshFunctions}
+          {functionRefreshState}
           showTitle={false}
           isEdit={isEditMode}
         />

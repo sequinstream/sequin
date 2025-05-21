@@ -11,6 +11,7 @@ defmodule Sequin.Consumers.Function do
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.TransformFunction
+  alias Sequin.Consumers.FilterFunction
 
   @derive {Jason.Encoder, only: [:name, :type, :description, :function]}
   typed_schema "functions" do
@@ -24,7 +25,8 @@ defmodule Sequin.Consumers.Function do
       types: [
         path: PathFunction,
         transform: TransformFunction,
-        routing: RoutingFunction
+        routing: RoutingFunction,
+        filter: FilterFunction
       ],
       on_replace: :update,
       type_field_name: :type
@@ -54,6 +56,7 @@ defmodule Sequin.Consumers.Function do
       with: [
         transform: &TransformFunction.changeset(&1, &2, account_id),
         routing: &RoutingFunction.changeset(&1, &2, account_id),
+        filter: &FilterFunction.changeset(&1, &2, account_id),
         path: &PathFunction.changeset(&1, &2, account_id)
       ]
     )

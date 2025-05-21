@@ -33,6 +33,7 @@
   let editorView: EditorView | undefined;
 
   let isEditingField: boolean = false;
+  let actionToSet: string;
 
   export let field: FieldType;
 
@@ -40,7 +41,7 @@
 
   function handleActionSelect(value: string) {
     if (field === "action" && actionOptions.includes(value as ActionType)) {
-      selectedMessage[field] = `"${value}"` as ActionType;
+      actionToSet = `"${value}"` as ActionType;
     }
   }
 
@@ -98,7 +99,7 @@
           type="button"
           on:click={() => {
             if (field === "action") {
-              // The value is already updated through onSelectedChange
+              selectedMessage["action"] = actionToSet;
             } else {
               selectedMessage[field] = editorView.state.doc.toString();
             }
@@ -114,6 +115,16 @@
         <button
           type="button"
           on:click={() => {
+            if (field !== "action" && editorView) {
+              // Reset the editor content to the original value
+              editorView.dispatch({
+                changes: {
+                  from: 0,
+                  to: editorView.state.doc.length,
+                  insert: selectedMessage[field],
+                },
+              });
+            }
             isEditingField = false;
           }}
         >

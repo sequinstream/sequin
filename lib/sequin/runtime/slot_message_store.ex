@@ -1011,7 +1011,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
           new_message_count = message_count + 1
 
           if new_size <= state.max_memory_bytes and new_message_count <= state.setting_max_messages and
-               new_message_count < 10_000 do
+               new_message_count < 100 do
             {:cont, {[msg | messages], new_size, new_message_count, true}}
           else
             Logger.info(

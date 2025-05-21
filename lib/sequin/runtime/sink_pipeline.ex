@@ -151,52 +151,70 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   @impl Broadway
   def handle_message(_, message, %{pipeline_mod: pipeline_mod} = context) do
-    setup_allowances(context[:test_pid])
+    :telemetry.span(
+      [:sequin, :sink_pipeline, :handle_message],
+      %{consumer_id: context.consumer_id, account_id: context.account_id},
+      fn ->
+        setup_allowances(context[:test_pid])
 
-    Logger.metadata(
-      account_id: context.account_id,
-      consumer_id: context.consumer_id
-    )
+        Logger.metadata(
+          account_id: context.account_id,
+          consumer_id: context.consumer_id
+        )
 
-    context = context(context)
-    message = format_timestamps(message, context.consumer)
+        context = context(context)
+        message = format_timestamps(message, context.consumer)
 
-    # Have to ensure module is loaded to trust function_exported?
-    Code.ensure_loaded?(pipeline_mod)
+        # Have to ensure module is loaded to trust function_exported?
+        Code.ensure_loaded?(pipeline_mod)
 
-    if function_exported?(pipeline_mod, :handle_message, 2) do
-      case pipeline_mod.handle_message(message, context) do
-        {:ok, message, next_context} ->
-          update_context(context, next_context)
-          message
+        result =
+          if function_exported?(pipeline_mod, :handle_message, 2) do
+            case pipeline_mod.handle_message(message, context) do
+              {:ok, message, next_context} ->
+                update_context(context, next_context)
+                message
 
-        {:error, error} ->
-          Message.failed(message, error)
+              {:error, error} ->
+                Message.failed(message, error)
+            end
+          else
+            message
+          end
+
+        {result, %{}}
       end
-    else
-      message
-    end
+    )
   end
 
   @impl Broadway
   def handle_batch(batch_name, messages, batch_info, %{pipeline_mod: pipeline_mod} = context) do
-    setup_allowances(context[:test_pid])
+    :telemetry.span(
+      [:sequin, :sink_pipeline, :handle_batch],
+      %{consumer_id: context.consumer_id, account_id: context.account_id, batch_size: length(messages)},
+      fn ->
+        setup_allowances(context[:test_pid])
 
-    Logger.metadata(
-      account_id: context.account_id,
-      consumer_id: context.consumer_id
+        Logger.metadata(
+          account_id: context.account_id,
+          consumer_id: context.consumer_id
+        )
+
+        context = context(context)
+
+        result =
+          case reject_delivered_messages(context, messages) do
+            {[], already_delivered} ->
+              already_delivered
+
+            {to_deliver, already_delivered} ->
+              Prometheus.increment_message_deliver_attempt(context.consumer.id, context.consumer.name, length(to_deliver))
+              deliver_messages(pipeline_mod, batch_name, to_deliver, already_delivered, batch_info, context)
+          end
+
+        {result, %{}}
+      end
     )
-
-    context = context(context)
-
-    case reject_delivered_messages(context, messages) do
-      {[], already_delivered} ->
-        already_delivered
-
-      {to_deliver, already_delivered} ->
-        Prometheus.increment_message_deliver_attempt(context.consumer.id, context.consumer.name, length(to_deliver))
-        deliver_messages(pipeline_mod, batch_name, to_deliver, already_delivered, batch_info, context)
-    end
   end
 
   defp deliver_messages(pipeline_mod, batch_name, to_deliver, already_delivered, batch_info, context) do
@@ -363,8 +381,19 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   @spec ack({SinkConsumer.t(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) :: :ok
   def ack({%SinkConsumer{} = consumer, test_pid, slot_message_store_mod}, successful, failed) do
-    ack_successful(consumer, slot_message_store_mod, successful)
-    ack_failed(consumer, slot_message_store_mod, failed)
+    :telemetry.span(
+      [:sequin, :sink_pipeline, :ack_successful],
+      %{consumer_id: consumer.id, count: length(successful)},
+      fn ->
+        result = ack_successful(consumer, slot_message_store_mod, successful)
+        {result, %{}}
+      end
+    )
+
+    :telemetry.span([:sequin, :sink_pipeline, :ack_failed], %{consumer_id: consumer.id, count: length(failed)}, fn ->
+      result = ack_failed(consumer, slot_message_store_mod, failed)
+      {result, %{}}
+    end)
 
     if test_pid do
       successful_ack_ids = Enum.map(successful, & &1.data.ack_id)
@@ -388,10 +417,19 @@ defmodule Sequin.Runtime.SinkPipeline do
     :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
     :ok = MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "consumer_producer.ack", wal_cursors)
 
-    case slot_message_store_mod.messages_succeeded(consumer, successful_ack_ids) do
-      {:ok, _count} -> :ok
-      {:error, error} -> raise error
-    end
+    :telemetry.span(
+      [:sequin, :sink_pipeline, :sms_messages_succeeded],
+      %{count: length(successful_ack_ids), consumer_id: consumer.id},
+      fn ->
+        result =
+          case slot_message_store_mod.messages_succeeded(consumer, successful_ack_ids) do
+            {:ok, _count} -> :ok
+            {:error, error} -> raise error
+          end
+
+        {result, %{}}
+      end
+    )
 
     # Update consumer stats + create ack messages
     {:ok, _count} = Consumers.after_messages_acked(consumer, successful_messages)
@@ -449,7 +487,10 @@ defmodule Sequin.Runtime.SinkPipeline do
       )
     end)
 
-    :ok = slot_message_store_mod.messages_failed(consumer, failed_message_metadatas)
+    :telemetry.span([:sequin, :sink_pipeline, :sms_messages_failed], %{count: length(failed_message_metadatas)}, fn ->
+      :ok = slot_message_store_mod.messages_failed(consumer, failed_message_metadatas)
+      {:ok, %{consumer_id: consumer.id}}
+    end)
   end
 
   defp reject_delivered_messages(context, messages) do

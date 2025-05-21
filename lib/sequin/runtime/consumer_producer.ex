@@ -181,19 +181,28 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   @decorate track_metrics("produce_messages")
   defp produce_messages(state, count) do
-    consumer = state.consumer
+    :telemetry.span(
+      [:sequin, :consumer_producer, :produce],
+      %{batch_size: count, consumer_id: state.consumer.id, account_id: state.consumer.account_id},
+      fn ->
+        consumer = state.consumer
 
-    case state.slot_message_store_mod.produce(consumer, count, self()) do
-      {:ok, messages} ->
-        unless messages == [] do
-          Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
-        end
+        result =
+          case state.slot_message_store_mod.produce(consumer, count, self()) do
+            {:ok, messages} ->
+              unless messages == [] do
+                Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
+              end
 
-        messages
+              messages
 
-      {:error, _error} ->
-        []
-    end
+            {:error, _error} ->
+              []
+          end
+
+        {result, %{produced_count: length(result), consumer: consumer}}
+      end
+    )
   end
 
   defp schedule_receive_messages(state) do

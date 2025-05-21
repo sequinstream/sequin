@@ -32,7 +32,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Time
   alias Sequin.Tracer.Server, as: TracerServer
-  alias Sequin.Transforms.Message
 
   require Logger
 
@@ -1493,11 +1492,7 @@ defmodule Sequin.Consumers do
   end
 
   def safe_evaluate_code(code) do
-    Message.to_external(
-      %SinkConsumer{id: nil, transform: %Function{function: %TransformFunction{code: code}}},
-      synthetic_message()
-    )
-
+    MiniElixir.run_interpreted(%Function{function: %TransformFunction{code: code}}, synthetic_message().data)
     :ok
   rescue
     error ->

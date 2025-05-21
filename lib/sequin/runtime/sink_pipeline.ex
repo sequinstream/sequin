@@ -115,20 +115,12 @@ defmodule Sequin.Runtime.SinkPipeline do
 
     context = %{
       pipeline_mod: pipeline_mod,
-      consumer: consumer,
+      pipeline_mod_opts: Keyword.take(opts, [:req_opts, :features]),
       consumer_id: consumer.id,
       account_id: consumer.account_id,
       slot_message_store_mod: slot_message_store_mod,
       test_pid: test_pid
     }
-
-    context =
-      context
-      |> pipeline_mod.init(opts)
-      # In production environments, we do not want to load the consumer here,
-      # as it means child specs have the consumer struct on them. This is
-      # not ideal for memory consumption.
-      |> Map.delete(:consumer)
 
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
@@ -247,26 +239,31 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   # Give processes a way to modify their context, which allows them to use it as a k/v store
   defp context(context) do
-    runtime_ctx = Process.get(:runtime_context, %{})
-    context = Map.merge(context, runtime_ctx)
-
-    case Map.get(context, :consumer) do
+    case Process.get(:runtime_context) do
       nil ->
         init_runtime_context(context)
 
-      _ ->
-        context
+      runtime_ctx ->
+        Map.merge(context, runtime_ctx)
     end
   end
 
   defp init_runtime_context(context) do
+    # Add jitter for thundering herd
+    unless Application.get_env(:sequin, :env) == :test do
+      :timer.sleep(:rand.uniform(50))
+    end
+
     consumer =
       context
       |> Map.fetch!(:consumer_id)
       |> Consumers.get_sink_consumer!()
       |> preload_consumer()
 
-    context = Map.put(context, :consumer, consumer)
+    context =
+      context
+      |> Map.put(:consumer, consumer)
+      |> context.pipeline_mod.init(context.pipeline_mod_opts)
 
     Process.put(:runtime_context, context)
     context

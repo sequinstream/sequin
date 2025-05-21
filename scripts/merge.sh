@@ -62,8 +62,8 @@ elif [ "${PR_COUNT}" -eq 1 ]; then
             echo -e "${GREEN}Pull request #${PR_NUMBER} merged successfully with rebase.${RESET}"
 
             # Prompt to delete local branch and pull changes
-            read -p "$(echo -e "${BLUE}Delete local branch '${LOCAL_BRANCH_NAME}' and pull latest changes? [Y/n] ${RESET}")" RESPONSE
-            RESPONSE=${RESPONSE:-Y}  # Default to Y if empty
+            read -p "$(echo -e "${BLUE}Delete local branch '${LOCAL_BRANCH_NAME}' and pull latest changes? [y/N] ${RESET}")" RESPONSE
+            RESPONSE=${RESPONSE:-N}  # Default to Y if empty
 
             if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
                 echo -e "${BLUE}Checking out main branch...${RESET}"

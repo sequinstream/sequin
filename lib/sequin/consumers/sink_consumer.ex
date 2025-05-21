@@ -106,8 +106,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
+
     belongs_to :transform, Function
     belongs_to :routing, Function
+    belongs_to :filter, Function
 
     polymorphic_embeds_one(:sink,
       types: [
@@ -142,13 +144,15 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_memory_mb,
       :max_storage_mb,
       :transform_id,
-      :routing_id
+      :routing_id,
+      :filter_id
     ])
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
     |> foreign_key_constraint(:sequence_id)
     |> foreign_key_constraint(:transform_id)
     |> foreign_key_constraint(:routing_id)
+    |> foreign_key_constraint(:filter_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:sequence_filter, name: "sequence_filter_check")
     |> check_constraint(:batch_size,
@@ -187,6 +191,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       :legacy_transform,
       :transform_id,
       :routing_id,
+      :filter_id,
       :timestamp_format,
       :batch_timeout_ms,
       :load_shedding_policy
@@ -261,8 +266,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: c.transform_id == ^transform_id)
   end
 
-  def where_transform_or_routing_id(query \\ base_query(), transform_id) do
-    from([consumer: c] in query, where: c.transform_id == ^transform_id or c.routing_id == ^transform_id)
+  def where_any_function_id(query \\ base_query(), function_id) do
+    from([consumer: c] in query,
+      where: c.transform_id == ^function_id or c.routing_id == ^function_id or c.filter_id == ^function_id
+    )
   end
 
   def where_type(query \\ base_query(), type) do

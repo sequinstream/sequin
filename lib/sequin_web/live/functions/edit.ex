@@ -5,9 +5,11 @@ defmodule SequinWeb.FunctionsLive.Edit do
   import LiveSvelte
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.TransformFunction
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Functions.MiniElixir
@@ -54,9 +56,17 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_filter """
+  def filter(action, record, changes, metadata) do
+    # Must return true or false!
+    true # Keep everything by default
+  end
+  """
+
   @initial_code_map %{
     "path" => "",
     "transform" => @initial_transform,
+    "filter" => @initial_filter,
     "routing_undefined" => @initial_route_no_sink_type,
     "routing_http_push" => @initial_route_http,
     "routing_redis_string" => @initial_route_redis_string
@@ -311,16 +321,20 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   defp do_encode_test_messages(test_messages, form_data, account_id) do
     function = form_data[:function]
+    function = %Function{account_id: account_id, type: function.type, function: function}
 
-    consumer = %SinkConsumer{
-      transform: %Function{account_id: account_id, function: function},
-      legacy_transform: :none
-    }
+    consumer = %SinkConsumer{account_id: account_id, legacy_transform: :none}
 
     consumer =
-      case function do
-        %RoutingFunction{} -> %{consumer | type: function.sink_type}
-        _ -> consumer
+      case function.function do
+        %RoutingFunction{} ->
+          %SinkConsumer{consumer | type: function.function.sink_type, routing: function}
+
+        %TransformFunction{} ->
+          %SinkConsumer{consumer | transform: function}
+
+        %FilterFunction{} ->
+          %SinkConsumer{consumer | filter: function}
       end
 
     base_messages = Enum.map(test_messages, &prepare_test_message/1)
@@ -419,6 +433,10 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   defp decode_function(%{"type" => "routing"} = function) do
     %{"type" => "routing", "code" => function["code"], "sink_type" => function["sink_type"]}
+  end
+
+  defp decode_function(%{"type" => "filter"} = function) do
+    %{"type" => "filter", "code" => function["code"]}
   end
 
   defp decode_function(%{}), do: nil

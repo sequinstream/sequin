@@ -150,18 +150,16 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
     Logger.metadata(function_id: id)
     Logger.info("[LifecycleEventWorker] Handling event `#{event}` for function")
 
-    case Consumers.get_function(id) do
-      {:ok, %Function{type: "path"}} -> :ok
-      {:ok, function} -> handle_function_event(event, function)
-      {:error, error} -> {:error, error}
+    with {:ok, function} <- Consumers.get_function(id) do
+      handle_function_event(event, function)
     end
   end
 
   defp handle_function_event(event, %Function{} = function) do
     case event do
       "create" ->
-        case MiniElixir.create(function.id, function.function.code) do
-          {:ok, _} ->
+        case maybe_recompile_function(function) do
+          :ok ->
             :ok
 
           {:error, error} ->
@@ -174,8 +172,8 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
         replication_slots = consumers |> Enum.map(& &1.replication_slot) |> Enum.uniq_by(& &1.id)
         Enum.each(replication_slots, &RuntimeSupervisor.stop_replication/1)
 
-        case MiniElixir.create(function.id, function.function.code) do
-          {:ok, _} ->
+        case maybe_recompile_function(function) do
+          :ok ->
             Enum.each(replication_slots, &RuntimeSupervisor.restart_replication/1)
             :ok
 
@@ -183,6 +181,16 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
             Logger.error("[LifecycleEventWorker] Failed to create function", error: error)
             {:error, error}
         end
+    end
+  end
+
+  # Path functions don't require compilation
+  defp maybe_recompile_function(%Function{type: "path"}), do: :ok
+
+  defp maybe_recompile_function(%Function{} = function) do
+    case MiniElixir.create(function.id, function.function.code) do
+      {:ok, _} -> :ok
+      {:error, error} -> {:error, error}
     end
   end
 end

@@ -15,6 +15,3 @@ databases:
     port: 5432
     slot_name: "sequin_slot"
     publication_name: "sequin_pub"
-    tables:
-      - table_name: "products"
-        sort_column_name: "updated_at"

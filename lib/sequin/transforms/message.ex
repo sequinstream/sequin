@@ -4,14 +4,11 @@ defmodule Sequin.Transforms.Message do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.PathFunction
-  alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Functions.MiniElixir
-  alias Sequin.Runtime.SinkPipeline
 
   def to_external(%SinkConsumer{transform: nil, legacy_transform: :none}, %ConsumerEvent{} = event) do
     %{
@@ -37,27 +34,11 @@ defmodule Sequin.Transforms.Message do
     record.data.record
   end
 
-  # TODO: move this / refactor functions elsewhere
-  def to_external(%SinkConsumer{transform: %Function{id: id, function: %TransformFunction{}} = function}, %c{data: data})
-      when c in [ConsumerEvent, ConsumerRecord] do
-    # Presence or abscence of ID is intended to indicate whether we are evaluating for test messages
-    if id do
-      MiniElixir.run_compiled(function, data)
-    else
-      MiniElixir.run_interpreted(function, data)
-    end
-  end
+  def to_external(%SinkConsumer{transform: %Function{id: nil}}, _), do: raise("Transform function lacks id")
 
-  # This is only called by edit function page
-  def to_external(%SinkConsumer{routing: %Function{function: %RoutingFunction{}} = function} = sc, %c{data: data})
+  def to_external(%SinkConsumer{transform: %Function{function: %TransformFunction{}} = function}, %c{data: data})
       when c in [ConsumerEvent, ConsumerRecord] do
-    res = MiniElixir.run_interpreted(function, data)
-    SinkPipeline.apply_routing(sc, res)
-  end
-
-  def to_external(%SinkConsumer{filter: %Function{function: %FilterFunction{}} = function}, %c{data: data})
-      when c in [ConsumerEvent, ConsumerRecord] do
-    MiniElixir.run_interpreted(function, data)
+    MiniElixir.run_compiled(function, data)
   end
 
   def to_external(%SinkConsumer{transform: %Function{function: %PathFunction{path: path}}}, %ConsumerEvent{} = event) do

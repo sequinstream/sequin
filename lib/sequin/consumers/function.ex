@@ -7,11 +7,11 @@ defmodule Sequin.Consumers.Function do
   import PolymorphicEmbed
 
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.TransformFunction
-  alias Sequin.Consumers.FilterFunction
 
   @derive {Jason.Encoder, only: [:name, :type, :description, :function]}
   typed_schema "functions" do

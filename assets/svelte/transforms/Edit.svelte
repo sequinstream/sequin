@@ -411,7 +411,12 @@
       if (formErrors.modified_test_messages[selectedMessage.id].record) {
         selectedMessage.record = oldSelectedMessage.record;
       }
-      // TODO add other 2 fields
+      if (formErrors.modified_test_messages[selectedMessage.id].metadata) {
+        selectedMessage.metadata = oldSelectedMessage.metadata;
+      }
+      if (formErrors.modified_test_messages[selectedMessage.id].changes) {
+        selectedMessage.changes = oldSelectedMessage.changes;
+      }
     }
 
     // Update editor when selected message changes

@@ -1458,8 +1458,8 @@ defmodule Sequin.Consumers do
         # We ignore other runtime errors because the synthetic message
         # might cause ie. bad arithmetic errors whereas the users' real
         # data might be ok.
-        {:error, :evaluation_error, _} ->
-          []
+        {:error, :evaluation_error, error} ->
+          [code: "code failed with unknown error to evaluate: #{Exception.message(error)}"]
       end
     end
   rescue

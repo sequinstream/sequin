@@ -180,8 +180,6 @@ defmodule SequinWeb.TransformsLive.Edit do
   end
 
   def handle_event("validate", %{"transform" => params}, socket) do
-    dbg(params)
-
     changeset =
       %Transform{account_id: current_account_id(socket)}
       |> Transform.changeset(params)
@@ -195,17 +193,60 @@ defmodule SequinWeb.TransformsLive.Edit do
       case params["modified_test_messages"] do
         messages when is_map(messages) ->
           Map.new(messages, fn {id, message} ->
-            result =
+            record_result =
               with {:ok, record_ast} <- Code.string_to_quoted(message["record"]),
-                   :ok <- MiniElixir.Validator.check(record_ast),
-                   {record, _} <- Code.eval_quoted(record_ast) do
-                {:ok, %{record: record}}
+                   :ok <- MiniElixir.Validator.check(record_ast) do
+                try do
+                  {record, e} = Code.eval_quoted(record_ast)
+                  {:ok, record}
+                rescue
+                  e ->
+                    {:error, MiniElixir.encode_error(e)}
+                end
               else
-                {:error, error_type, error} -> %{error: MiniElixir.encode_error(error_type, error)}
-                {:error, error} -> %{error: MiniElixir.encode_error(error)}
+                {:error, error_type, error} -> {:error, MiniElixir.encode_error(error_type, error)}
+                {:error, error} -> {:error, MiniElixir.encode_error(error)}
               end
 
-            {id, result}
+            metadata_result =
+              with {:ok, metadata_ast} <- Code.string_to_quoted(message["metadata"]),
+                   :ok <- MiniElixir.Validator.check(metadata_ast) do
+                try do
+                  {metadata, _} = Code.eval_quoted(metadata_ast)
+                  {:ok, metadata}
+                rescue
+                  e -> {:error, MiniElixir.encode_error(e)}
+                end
+              else
+                {:error, error_type, error} -> {:error, MiniElixir.encode_error(error_type, error)}
+                {:error, error} -> {:error, MiniElixir.encode_error(error)}
+              end
+
+            changes_result =
+              with {:ok, changes_ast} <- Code.string_to_quoted(message["changes"]),
+                   :ok <- MiniElixir.Validator.check(changes_ast) do
+                try do
+                  {changes, _} = Code.eval_quoted(changes_ast)
+                  {:ok, changes}
+                rescue
+                  e -> {:error, MiniElixir.encode_error(e)}
+                end
+              else
+                {:error, error_type, error} -> {:error, MiniElixir.encode_error(error_type, error)}
+                {:error, error} -> {:error, MiniElixir.encode_error(error)}
+              end
+
+            result = %{}
+            result = if match?({:ok, _}, record_result), do: Map.put(result, :record, elem(record_result, 1)), else: result
+            result = if match?({:ok, _}, metadata_result), do: Map.put(result, :metadata, elem(metadata_result, 1)), else: result
+            result = if match?({:ok, _}, changes_result), do: Map.put(result, :changes, elem(changes_result, 1)), else: result
+
+            errors = %{}
+            errors = if match?({:error, _}, record_result), do: Map.put(errors, :record, elem(record_result, 1)), else: errors
+            errors = if match?({:error, _}, metadata_result), do: Map.put(errors, :metadata, elem(metadata_result, 1)), else: errors
+            errors = if match?({:error, _}, changes_result), do: Map.put(errors, :changes, elem(changes_result, 1)), else: errors
+
+            {id, if(map_size(errors) > 0, do: %{error: errors}, else: {:ok, result})}
           end)
       end
 
@@ -213,7 +254,12 @@ defmodule SequinWeb.TransformsLive.Edit do
 
     new_synthetic_test_message =
       case modified_test_messages[synthetic_test_message.id] do
-        {:ok, %{record: record}} -> %{synthetic_test_message | data: %{synthetic_test_message.data | record: record}}
+        {:ok, result} ->
+          data = synthetic_test_message.data
+          data = if Map.has_key?(result, :record), do: Map.put(data, :record, result.record), else: data
+          data = if Map.has_key?(result, :metadata), do: Map.put(data, :metadata, result.metadata), else: data
+          data = if Map.has_key?(result, :changes), do: Map.put(data, :changes, result.changes), else: data
+          %{synthetic_test_message | data: data}
         _ -> synthetic_test_message
       end
 
@@ -227,8 +273,7 @@ defmodule SequinWeb.TransformsLive.Edit do
         Enum.reduce(modified_test_messages, %{}, fn {id, result}, acc ->
           case result do
             {:ok, _} -> acc
-            # TODO propagate errors for other fields
-            %{error: error} -> Map.put(acc, id, %{record: error})
+            %{error: errors} -> Map.put(acc, id, errors)
           end
         end)
       )

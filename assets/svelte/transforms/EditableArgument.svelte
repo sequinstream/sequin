@@ -98,7 +98,7 @@
   </div>
   <div hidden={!isEditingField} bind:this={editorElement} />
   <pre hidden={isEditingField}>{selectedMessage[field]}</pre>
-  {#if formErrors.modified_test_messages && formErrors.modified_test_messages[selectedMessage.id]}
+  {#if formErrors?.modified_test_messages?.[selectedMessage.id]?.[field]}
     <p class="text-sm text-red-500 dark:text-red-400">
       {formErrors.modified_test_messages[selectedMessage.id][field].type}: {formErrors
         .modified_test_messages[selectedMessage.id][field].info.description}

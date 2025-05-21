@@ -11,7 +11,6 @@ defmodule SequinWeb.TransformsLive.Edit do
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Repo
-  alias Sequin.Runtime
   alias Sequin.Transforms.Message
   alias Sequin.Transforms.MiniElixir
   alias Sequin.Transforms.TestMessages
@@ -206,11 +205,6 @@ defmodule SequinWeb.TransformsLive.Edit do
          |> push_navigate(to: ~p"/functions")}
 
       {:ok, :updated} ->
-        socket.assigns.used_by_consumers
-        |> Enum.map(& &1.replication_slot)
-        |> Enum.uniq_by(& &1.id)
-        |> Enum.each(&Runtime.Supervisor.restart_replication/1)
-
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :info, title: "Transform updated successfully"})

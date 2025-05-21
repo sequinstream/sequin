@@ -12,7 +12,7 @@ defmodule Sequin.Runtime.NatsPipelineTest do
   describe "message handling" do
     setup do
       consumer =
-        ConsumersFactory.sink_consumer(
+        ConsumersFactory.insert_sink_consumer!(
           type: :nats,
           sink: %{
             type: :nats,

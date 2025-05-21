@@ -51,6 +51,10 @@ api_tokens:
 
 ### Database configuration
 
+<Note>
+  These database entries tell Sequin which Postgres instances to capture changes from. They are separate from the Postgres database that Sequin itself uses, which is configured via the `PG_*` environment variables.
+</Note>
+
 ```yaml
 databases:
   - name: "my-database"          # Required, unique identifier

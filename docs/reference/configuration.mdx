@@ -49,6 +49,10 @@ You can provide a YAML configuration file to Sequin. This configuration file wil
 - `PG_SSL`: Enable SSL for Postgres connection (default: false)
 - `PG_POOL_SIZE`: Database connection pool size (default: 10)
 
+<Note>
+  These variables configure the Postgres database that Sequin itself uses to store state. They are not for the databases you stream from—those are defined in [`sequin.yaml`](/reference/sequin-yaml#database-configuration).
+</Note>
+
 #### `PG_POOL_SIZE`
 
 The `PG_POOL_SIZE` variable controls the maximum number of concurrent connections that Sequin will maintain to Postgres. For higher throughput on larger Postgres instances, you should increase this value.

@@ -135,6 +135,10 @@ The easiest way to get started with Sequin is with our [Docker Compose file](htt
 
 Sequin uses a Postgres database for configuration and to assist with its change data capture process.
 
+<Note>
+  These `PG_*` variables configure Sequin's internal Postgres database. The Postgres databases you want to stream from are configured separately in [`sequin.yaml`](/reference/sequin-yaml#database-configuration).
+</Note>
+
 We recommend creating a new logical database for Sequin in your existing Postgres instance:
 
 ```sql

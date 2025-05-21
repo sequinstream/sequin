@@ -167,13 +167,26 @@ defmodule SequinWeb.TransformsLive.Edit do
     schedule_poll_test_messages()
 
     if database_id && table_oid do
-      test_messages = TestMessages.get_test_messages(database_id, table_oid)
+      new_test_messages = TestMessages.get_test_messages(database_id, table_oid)
+      existing_test_messages = socket.assigns.test_messages
 
-      if length(test_messages) >= @max_test_messages do
+      # Merge new messages with existing modifications
+      merged_messages =
+        new_test_messages
+        |> Enum.map(fn new_msg ->
+          case Enum.find(existing_test_messages, &(&1.id == new_msg.id)) do
+            nil -> new_msg
+            existing_msg ->
+              # Preserve any user modifications from the existing message
+              %{new_msg | data: Map.merge(new_msg.data, existing_msg.data)}
+          end
+        end)
+
+      if length(merged_messages) >= @max_test_messages do
         TestMessages.unregister_needs_messages(database_id)
       end
 
-      {:noreply, assign(socket, test_messages: test_messages)}
+      {:noreply, assign(socket, test_messages: merged_messages)}
     else
       {:noreply, assign(socket, test_messages: [])}
     end
@@ -263,8 +276,20 @@ defmodule SequinWeb.TransformsLive.Edit do
         _ -> synthetic_test_message
       end
 
-    dbg(socket.assigns.test_messages)
-    dbg(socket.assigns.synthetic_test_message)
+    # Update regular test messages
+    new_test_messages =
+      socket.assigns.test_messages
+      |> Enum.map(fn message ->
+        case modified_test_messages[message.id] do
+          {:ok, result} ->
+            data = message.data
+            data = if Map.has_key?(result, :record), do: Map.put(data, :record, result.record), else: data
+            data = if Map.has_key?(result, :metadata), do: Map.put(data, :metadata, result.metadata), else: data
+            data = if Map.has_key?(result, :changes), do: Map.put(data, :changes, result.changes), else: data
+            %{message | data: data}
+          _ -> message
+        end
+      end)
 
     modified_form_errors =
       Map.put(
@@ -278,14 +303,13 @@ defmodule SequinWeb.TransformsLive.Edit do
         end)
       )
 
-    dbg(modified_form_errors)
-
     socket =
       socket
       |> assign(:changeset, changeset)
       |> assign(:form_data, form_data)
       |> assign(:form_errors, modified_form_errors)
       |> assign(:synthetic_test_message, new_synthetic_test_message)
+      |> assign(:test_messages, new_test_messages)
 
     {:noreply, socket}
   end

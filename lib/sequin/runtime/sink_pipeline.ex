@@ -133,7 +133,7 @@ defmodule Sequin.Runtime.SinkPipeline do
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
       producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid]}
+        module: {producer, [consumer_id: consumer.id, test_pid: test_pid]}
       ],
       processors: processors_config(pipeline_mod, consumer),
       batchers: batchers_config(pipeline_mod, consumer),

@@ -12,6 +12,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
+  alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -28,9 +29,9 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   @impl GenStage
   def init(opts) do
-    consumer = Keyword.fetch!(opts, :consumer)
+    consumer_id = Keyword.fetch!(opts, :consumer_id)
     slot_message_store_mod = Keyword.get(opts, :slot_message_store_mod, SlotMessageStore)
-    Logger.metadata(consumer_id: consumer.id)
+    Logger.metadata(consumer_id: consumer_id)
     Logger.info("Initializing consumer producer")
 
     if test_pid = Keyword.get(opts, :test_pid) do
@@ -39,11 +40,12 @@ defmodule Sequin.Runtime.ConsumerProducer do
       Mox.allow(Sequin.Runtime.SlotMessageStoreMock, test_pid, self())
     end
 
-    :syn.join(:consumers, {:messages_maybe_available, consumer.id}, self())
+    :syn.join(:consumers, {:messages_maybe_available, consumer_id}, self())
 
     state = %{
       demand: 0,
-      consumer: consumer,
+      consumer_id: consumer_id,
+      consumer: nil,
       receive_timer: nil,
       trim_timer: nil,
       batch_timeout: Keyword.get(opts, :batch_timeout, :timer.minutes(1)),
@@ -54,7 +56,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
     # Add dynamic tags for metrics
     ProcessMetrics.metadata(%{
-      consumer_id: consumer.id
+      consumer_id: consumer_id
     })
 
     ProcessMetrics.start()
@@ -74,7 +76,10 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   @impl GenStage
   def handle_info(:init, state) do
-    consumer = Repo.lazy_preload(state.consumer, postgres_database: [:replication_slot])
+    consumer =
+      state.consumer_id
+      |> Consumers.get_consumer!()
+      |> Repo.preload(postgres_database: [:replication_slot])
 
     state =
       state

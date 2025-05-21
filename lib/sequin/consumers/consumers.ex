@@ -23,6 +23,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Error
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.MiniElixir.Validator
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -287,7 +288,7 @@ defmodule Sequin.Consumers do
   def list_consumers_for_function(account_id, function_id, preload \\ []) do
     account_id
     |> SinkConsumer.where_account_id()
-    |> SinkConsumer.where_transform_or_routing_id(function_id)
+    |> SinkConsumer.where_any_function_id(function_id)
     |> preload(^preload)
     |> Repo.all()
   end
@@ -1188,6 +1189,30 @@ defmodule Sequin.Consumers do
     Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
     matches?
+  end
+
+  def matches_filter?(%SinkConsumer{filter: nil}, _), do: true
+
+  def matches_filter?(%SinkConsumer{filter: filter} = consumer, %ConsumerEvent{data: data}) do
+    filter
+    |> MiniElixir.run_compiled(data)
+    |> check_filter_return(consumer)
+  end
+
+  def matches_filter?(%SinkConsumer{filter: filter} = consumer, %ConsumerRecord{data: data}) do
+    filter
+    |> MiniElixir.run_compiled(data)
+    |> check_filter_return(consumer)
+  end
+
+  defp check_filter_return(true, _), do: true
+  defp check_filter_return(false, _), do: false
+
+  defp check_filter_return(e, consumer) do
+    val = e |> inspect() |> String.slice(0, 128)
+    msg = "Filter functions must return true or false, got: #{val}"
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :fail, error: Error.invariant(message: msg)})
+    raise "filter function failed to return boolean"
   end
 
   defp action_matches?(source_table_actions, message_action) do

@@ -435,6 +435,7 @@ defmodule Sequin.Runtime.MessageHandler do
         consumer_messages
         |> Stream.reject(&is_nil/1)
         |> Stream.reject(&violates_payload_size?(ctx.replication_slot_id, &1))
+        |> Stream.filter(&Consumers.matches_filter?(consumer, &1))
         |> Enum.to_list()
 
       {consumer, messages}

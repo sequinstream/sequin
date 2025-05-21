@@ -27,6 +27,7 @@
     transform: "/reference/transforms",
     path: "/reference/transforms",
     routing: "/reference/routing",
+    filter: "/reference/filters#filter-functions",
   };
 
   let getHref = (transform) => docBase + typeToDocPath[transform.type];

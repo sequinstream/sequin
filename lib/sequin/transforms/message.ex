@@ -4,6 +4,7 @@ defmodule Sequin.Transforms.Message do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RoutingFunction
@@ -47,10 +48,16 @@ defmodule Sequin.Transforms.Message do
     end
   end
 
+  # This is only called by edit function page
   def to_external(%SinkConsumer{routing: %Function{function: %RoutingFunction{}} = function} = sc, %c{data: data})
       when c in [ConsumerEvent, ConsumerRecord] do
     res = MiniElixir.run_interpreted(function, data)
     SinkPipeline.apply_routing(sc, res)
+  end
+
+  def to_external(%SinkConsumer{filter: %Function{function: %FilterFunction{}} = function}, %c{data: data})
+      when c in [ConsumerEvent, ConsumerRecord] do
+    MiniElixir.run_interpreted(function, data)
   end
 
   def to_external(%SinkConsumer{transform: %Function{function: %PathFunction{path: path}}}, %ConsumerEvent{} = event) do

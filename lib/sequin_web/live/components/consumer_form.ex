@@ -575,6 +575,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "initial_backfill" => decode_initial_backfill(form),
         "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
         "routing_id" => if(form["routingId"] === "none", do: nil, else: form["routingId"]),
+        "filter_id" => if(form["filterId"] === "none", do: nil, else: form["filterId"]),
         "routing_mode" => form["routingMode"],
         "timestamp_format" => form["timestampFormat"]
       }
@@ -810,7 +811,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "table_oid" => source_table && source_table.oid,
       "type" => consumer.type,
       "transform_id" => consumer.transform_id,
-      "timestamp_format" => consumer.timestamp_format
+      "timestamp_format" => consumer.timestamp_format,
+      "filter_id" => consumer.filter_id
     }
   end
 

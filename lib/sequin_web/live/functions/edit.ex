@@ -16,7 +16,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   alias Sequin.Functions.TestMessages
   alias Sequin.Repo
   alias Sequin.Runtime
-  alias Sequin.Transforms.Message
+  alias Sequin.Runtime.SinkPipeline
   alias SequinWeb.FunctionLive.AutoComplete
 
   require Logger
@@ -125,6 +125,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
         function_completions: @function_completions,
         function_transforms_enabled: Sequin.feature_enabled?(current_account_id(socket), :function_transforms)
       )
+      |> assign_encoded_messages()
       |> assign_databases()
 
     {:ok, socket, layout: {SequinWeb.Layouts, :app_no_sidenav}}
@@ -140,20 +141,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
             formData: @form_data,
             showErrors: @show_errors?,
             formErrors: @form_errors,
-            testMessages:
-              encode_test_messages(
-                @test_messages,
-                @form_data,
-                @form_errors,
-                @account_id
-              ),
-            syntheticTestMessages:
-              encode_synthetic_test_message(
-                @synthetic_test_message,
-                @form_data,
-                @form_errors,
-                @account_id
-              ),
+            testMessages: @encoded_test_messages,
+            syntheticTestMessages: @encoded_synthetic_test_message,
             usedByConsumers: Enum.map(@used_by_consumers, &encode_consumer/1),
             databases: Enum.map(@databases, &encode_database/1),
             validating: @validating,
@@ -183,9 +172,9 @@ defmodule SequinWeb.FunctionsLive.Edit do
         TestMessages.unregister_needs_messages(database_id)
       end
 
-      {:noreply, assign(socket, test_messages: test_messages)}
+      {:noreply, socket |> assign(test_messages: test_messages) |> assign_encoded_messages()}
     else
-      {:noreply, assign(socket, test_messages: [])}
+      {:noreply, socket |> assign(test_messages: []) |> assign_encoded_messages()}
     end
   end
 
@@ -202,7 +191,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
      socket
      |> assign(:changeset, changeset)
      |> assign(:form_data, form_data)
-     |> assign(:form_errors, form_errors)}
+     |> assign(:form_errors, form_errors)
+     |> assign_encoded_messages()}
   end
 
   def handle_event("save", %{"function" => params}, socket) do
@@ -305,6 +295,28 @@ defmodule SequinWeb.FunctionsLive.Edit do
     }
   end
 
+  defp assign_encoded_messages(socket) do
+    socket
+    |> assign(
+      :encoded_test_messages,
+      encode_test_messages(
+        socket.assigns.test_messages,
+        socket.assigns.form_data,
+        socket.assigns.form_errors,
+        current_account_id(socket)
+      )
+    )
+    |> assign(
+      :encoded_synthetic_test_message,
+      encode_synthetic_test_message(
+        socket.assigns.synthetic_test_message,
+        socket.assigns.form_data,
+        socket.assigns.form_errors,
+        current_account_id(socket)
+      )
+    )
+  end
+
   defp encode_synthetic_test_message(synthetic_message, form_data, form_errors, account_id) do
     [synthetic_message]
     |> encode_test_messages(form_data, form_errors, account_id)
@@ -312,18 +324,19 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp encode_test_messages(test_messages, form_data, form_errors, account_id) do
-    if is_nil(get_in(form_errors, [:function, :code])) do
-      do_encode_test_messages(test_messages, form_data, account_id)
+    function = form_data[:function]
+    function_errors = form_errors[:function]
+
+    if is_struct(function) and function_errors == nil do
+      do_encode_test_messages(test_messages, function, account_id)
     else
-      Enum.map(test_messages, &prepare_test_message/1)
+      Enum.map(test_messages, &format_test_message/1)
     end
   end
 
-  defp do_encode_test_messages(test_messages, form_data, account_id) do
-    function = form_data[:function]
+  defp do_encode_test_messages(test_messages, function, account_id) do
     function = %Function{account_id: account_id, type: function.type, function: function}
-
-    consumer = %SinkConsumer{account_id: account_id, legacy_transform: :none}
+    consumer = %SinkConsumer{account_id: account_id}
 
     consumer =
       case function.function do
@@ -337,18 +350,15 @@ defmodule SequinWeb.FunctionsLive.Edit do
           %SinkConsumer{consumer | filter: function}
       end
 
-    base_messages = Enum.map(test_messages, &prepare_test_message/1)
-
-    if is_struct(function) do
-      results = Enum.map(test_messages, &encode_one(&1, consumer))
-      Enum.zip_with(base_messages, results, &Map.merge/2)
-    else
-      base_messages
-    end
+    Enum.map(test_messages, fn test_message ->
+      encoded = encode_one(consumer, test_message)
+      formatted = format_test_message(test_message)
+      Map.merge(formatted, encoded)
+    end)
   end
 
-  defp encode_one(message, consumer) do
-    {time, value} = :timer.tc(Message, :to_external, [consumer, message], :microsecond)
+  defp encode_one(consumer, message) do
+    {time, value} = :timer.tc(fn -> run_function(consumer, message) end)
 
     case Jason.encode(value) do
       {:ok, _} -> %{transformed: value, time: time}
@@ -359,13 +369,30 @@ defmodule SequinWeb.FunctionsLive.Edit do
       %{error: MiniElixir.encode_error(ex), time: nil}
   end
 
-  defp prepare_test_message(m) do
+  defp format_test_message(m) do
     %{
       record: inspect(m.data.record, pretty: true),
       changes: inspect(m.data.changes, pretty: true),
       action: inspect(to_string(m.data.action), pretty: true),
       metadata: inspect(Sequin.Map.from_struct_deep(m.data.metadata), pretty: true)
     }
+  end
+
+  defp run_function(%SinkConsumer{transform: %Function{} = function}, message) do
+    MiniElixir.run_interpreted(function, message.data)
+  end
+
+  defp run_function(%SinkConsumer{routing: %Function{} = function} = sink_consumer, message) do
+    result = MiniElixir.run_interpreted(function, message.data)
+    SinkPipeline.apply_routing(sink_consumer, result)
+  end
+
+  defp run_function(%SinkConsumer{filter: %Function{} = function}, message) do
+    case MiniElixir.run_interpreted(function, message.data) do
+      true -> true
+      false -> false
+      other -> raise Sequin.Error.invariant(message: "Filter function must return true or false, got: #{inspect(other)}")
+    end
   end
 
   defp assign_databases(socket) do

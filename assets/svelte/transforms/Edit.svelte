@@ -414,6 +414,9 @@
       if (formErrors.modified_test_messages[selectedMessage.id].metadata) {
         selectedMessage.metadata = oldSelectedMessage.metadata;
       }
+      if (formErrors.modified_test_messages[selectedMessage.id].action) {
+        selectedMessage.action = oldSelectedMessage.action;
+      }
       if (formErrors.modified_test_messages[selectedMessage.id].changes) {
         selectedMessage.changes = oldSelectedMessage.changes;
       }
@@ -1155,19 +1158,18 @@ Please help me create or modify the Elixir function transform to achieve the des
                       bind:form
                       bind:formErrors
                     />
-
                     <EditableArgument
                       field="changes"
                       bind:selectedMessage
                       bind:form
                       bind:formErrors
                     />
-                    <div
-                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
-                    >
-                      <div class="font-semibold mb-1">action</div>
-                      <pre>{message.action}</pre>
-                    </div>
+                    <EditableArgument
+                      field="action"
+                      bind:selectedMessage
+                      bind:form
+                      bind:formErrors
+                    />
                     <EditableArgument
                       field="metadata"
                       bind:selectedMessage

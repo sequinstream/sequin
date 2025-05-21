@@ -172,16 +172,18 @@ defmodule SequinWeb.TransformsLive.Edit do
 
       # Merge new messages with existing modifications
       merged_messages =
-        new_test_messages
-        |> Enum.map(fn new_msg ->
+        Enum.map(new_test_messages, fn new_msg ->
           case Enum.find(existing_test_messages, &(&1.id == new_msg.id)) do
-            nil -> new_msg
+            nil ->
+              new_msg
+
             existing_msg ->
-              # Preserve any user modifications from the existing message
+              # Preserve user modifications
               %{new_msg | data: Map.merge(new_msg.data, existing_msg.data)}
           end
         end)
 
+      # Preserve any user modifications from the existing message
       if length(merged_messages) >= @max_test_messages do
         TestMessages.unregister_needs_messages(database_id)
       end
@@ -221,6 +223,26 @@ defmodule SequinWeb.TransformsLive.Edit do
                 {:error, error} -> {:error, MiniElixir.encode_error(error)}
               end
 
+            # Action is a simple string, no need for complex parsing
+            action_result =
+              case message["action"] do
+                "\"" <> rest ->
+                  # Handle double-quoted strings by removing the quotes
+                  case String.trim_trailing(rest, "\"") do
+                    action ->
+                      case String.downcase(action) do
+                        "insert" -> {:ok, "insert"}
+                        "update" -> {:ok, "update"}
+                        "delete" -> {:ok, "delete"}
+                        "read" -> {:ok, "read"}
+                        _ -> {:error, "Action must be one of: insert, update, delete, read"}
+                      end
+                  end
+
+                _ ->
+                  {:error, "Action must be a string"}
+              end
+
             metadata_result =
               with {:ok, metadata_ast} <- Code.string_to_quoted(message["metadata"]),
                    :ok <- MiniElixir.Validator.check(metadata_ast) do
@@ -250,14 +272,34 @@ defmodule SequinWeb.TransformsLive.Edit do
               end
 
             result = %{}
-            result = if match?({:ok, _}, record_result), do: Map.put(result, :record, elem(record_result, 1)), else: result
-            result = if match?({:ok, _}, metadata_result), do: Map.put(result, :metadata, elem(metadata_result, 1)), else: result
-            result = if match?({:ok, _}, changes_result), do: Map.put(result, :changes, elem(changes_result, 1)), else: result
+
+            result =
+              if match?({:ok, _}, record_result), do: Map.put(result, :record, elem(record_result, 1)), else: result
+
+            result =
+              if match?({:ok, _}, action_result), do: Map.put(result, :action, elem(action_result, 1)), else: result
+
+            result =
+              if match?({:ok, _}, metadata_result), do: Map.put(result, :metadata, elem(metadata_result, 1)), else: result
+
+            result =
+              if match?({:ok, _}, changes_result), do: Map.put(result, :changes, elem(changes_result, 1)), else: result
 
             errors = %{}
-            errors = if match?({:error, _}, record_result), do: Map.put(errors, :record, elem(record_result, 1)), else: errors
-            errors = if match?({:error, _}, metadata_result), do: Map.put(errors, :metadata, elem(metadata_result, 1)), else: errors
-            errors = if match?({:error, _}, changes_result), do: Map.put(errors, :changes, elem(changes_result, 1)), else: errors
+
+            errors =
+              if match?({:error, _}, record_result), do: Map.put(errors, :record, elem(record_result, 1)), else: errors
+
+            errors =
+              if match?({:error, _}, action_result), do: Map.put(errors, :action, elem(action_result, 1)), else: errors
+
+            errors =
+              if match?({:error, _}, metadata_result),
+                do: Map.put(errors, :metadata, elem(metadata_result, 1)),
+                else: errors
+
+            errors =
+              if match?({:error, _}, changes_result), do: Map.put(errors, :changes, elem(changes_result, 1)), else: errors
 
             {id, if(map_size(errors) > 0, do: %{error: errors}, else: {:ok, result})}
           end)
@@ -272,22 +314,28 @@ defmodule SequinWeb.TransformsLive.Edit do
           data = if Map.has_key?(result, :record), do: Map.put(data, :record, result.record), else: data
           data = if Map.has_key?(result, :metadata), do: Map.put(data, :metadata, result.metadata), else: data
           data = if Map.has_key?(result, :changes), do: Map.put(data, :changes, result.changes), else: data
+          data = if Map.has_key?(result, :action), do: Map.put(data, :action, result.action), else: data
           %{synthetic_test_message | data: data}
-        _ -> synthetic_test_message
+
+        _ ->
+          synthetic_test_message
       end
 
     # Update regular test messages
     new_test_messages =
-      socket.assigns.test_messages
-      |> Enum.map(fn message ->
+      Enum.map(socket.assigns.test_messages, fn message ->
         case modified_test_messages[message.id] do
           {:ok, result} ->
             data = message.data
             data = if Map.has_key?(result, :record), do: Map.put(data, :record, result.record), else: data
             data = if Map.has_key?(result, :metadata), do: Map.put(data, :metadata, result.metadata), else: data
             data = if Map.has_key?(result, :changes), do: Map.put(data, :changes, result.changes), else: data
-            %{message | data: data}
-          _ -> message
+            data = if Map.has_key?(result, :action), do: Map.put(data, :action, result.action), else: data
+            message = %{message | data: data}
+            message
+
+          _ ->
+            message
         end
       end)
 

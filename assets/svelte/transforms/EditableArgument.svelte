@@ -6,23 +6,49 @@
   import { indentWithTab } from "@codemirror/commands";
   import { autocompletion } from "@codemirror/autocomplete";
   import { Pencil, Save, Ban } from "lucide-svelte";
+  import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  } from "$lib/components/ui/select";
+
+  type ActionType = "insert" | "update" | "delete" | "read";
+  type FieldType = "record" | "metadata" | "changes" | "action";
+
+  interface TestMessage {
+    id: string;
+    record: string;
+    changes: string;
+    action: ActionType;
+    metadata: string;
+  }
 
   export let form;
   export let formErrors;
-  export let selectedMessage;
+  export let selectedMessage: TestMessage;
 
   let editorElement: HTMLElement;
   let editorView: EditorView | undefined;
 
   let isEditingField: boolean = false;
 
-  export let field: "record" | "metadata" | "changes" | "action";
-  // $: {
-  //     let kind = if(field === "action") "dropdown" else "editor";
-  // }
+  export let field: FieldType;
+
+  const actionOptions: ActionType[] = ["insert", "update", "delete", "read"];
+
+  function handleActionSelect(value: string) {
+    if (field === "action" && actionOptions.includes(value as ActionType)) {
+      selectedMessage[field] = `"${value}"` as ActionType;
+    }
+  }
 
   // Add a function to create/update the editor view
   function updateMessageEditor(message: TestMessage) {
+    // Only create editor for non-action fields
+    if (field === "action") return;
+
     // Destroy existing editor if it exists
     if (editorView) {
       editorView.destroy();
@@ -71,10 +97,12 @@
         <button
           type="button"
           on:click={() => {
-            selectedMessage[field] = editorView.state.doc.toString();
-
+            if (field === "action") {
+              // The value is already updated through onSelectedChange
+            } else {
+              selectedMessage[field] = editorView.state.doc.toString();
+            }
             form.modified_test_messages[selectedMessage.id] = selectedMessage;
-
             isEditingField = false;
           }}
         >
@@ -96,8 +124,31 @@
       </div>
     {/if}
   </div>
-  <div hidden={!isEditingField} bind:this={editorElement} />
-  <pre hidden={isEditingField}>{selectedMessage[field]}</pre>
+  {#if field === "action"}
+    {#if isEditingField}
+      <Select
+        selected={{
+          value: selectedMessage[field],
+          label: selectedMessage[field],
+        }}
+        onSelectedChange={(event) => handleActionSelect(event.value)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Select an action" />
+        </SelectTrigger>
+        <SelectContent>
+          {#each actionOptions as option}
+            <SelectItem value={option}>{option}</SelectItem>
+          {/each}
+        </SelectContent>
+      </Select>
+    {:else}
+      <pre>{selectedMessage[field]}</pre>
+    {/if}
+  {:else}
+    <div hidden={!isEditingField} bind:this={editorElement} />
+    <pre hidden={isEditingField}>{selectedMessage[field]}</pre>
+  {/if}
   {#if formErrors?.modified_test_messages?.[selectedMessage.id]?.[field]}
     <p class="text-sm text-red-500 dark:text-red-400">
       {formErrors.modified_test_messages[selectedMessage.id][field].type}: {formErrors

@@ -68,7 +68,7 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
         {:ok, 2}
       end)
 
-      start_broadway(consumer: consumer, batch_size: 2)
+      start_broadway(consumer_id: consumer.id, batch_size: 2)
 
       assert_receive {:messages_succeeded, messages}, 2_000
       message_data = Enum.map(messages, & &1.data)
@@ -90,7 +90,7 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
         :ok
       end)
 
-      start_broadway(consumer: consumer, context: %{fail?: true})
+      start_broadway(consumer_id: consumer.id, context: %{fail?: true})
 
       # No message received since it failed
       assert_receive {:messages_failed, _messages}, 1_000

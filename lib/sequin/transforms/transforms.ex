@@ -23,6 +23,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
+  alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases
@@ -328,6 +329,15 @@ defmodule Sequin.Transforms do
       description: function.description,
       type: function.type,
       sink_type: function.function.sink_type,
+      code: function.function.code
+    }
+  end
+
+  def to_external(%Function{function: %FilterFunction{}} = function, _show_sensitive) do
+    %{
+      name: function.name,
+      description: function.description,
+      type: function.type,
       code: function.function.code
     }
   end

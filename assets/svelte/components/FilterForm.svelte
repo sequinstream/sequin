@@ -440,9 +440,7 @@
         <span class="text-base font-medium">Filter functions</span>
       </svelte:fragment>
 
-      <svelte:fragment slot="none-option">
-        No function filter. Only the column filters below will be applied.
-      </svelte:fragment>
+      <svelte:fragment slot="none-option">No function filter.</svelte:fragment>
     </FunctionPicker>
   </div>
 </div>

@@ -38,36 +38,41 @@ defmodule Sequin.ConfigParser do
 
   def secret_key_base(env) do
     secret = Map.get(env, "SECRET_KEY_BASE")
-    validate_secret!(secret, "SECRET_KEY_BASE", 64)
+    validate_required(secret, "SECRET_KEY_BASE")
+    validate_length_gte(secret, "SECRET_KEY_BASE", 64)
     secret
   end
 
   def vault_key(env) do
     secret = Map.get(env, "VAULT_KEY")
-    validate_secret!(secret, "VAULT_KEY", 32)
+    validate_required(secret, "VAULT_KEY")
+    validate_length_gte(secret, "VAULT_KEY", 32)
+    validate_base64(secret, "VAULT_KEY")
     secret
   end
 
-  defp validate_secret!(nil, secret_name, _expected_length) do
-    raise ArgumentError, """
-    Environment variable #{secret_name} is not set.
-
-    See: #{@secret_generation_docs_link}
-    """
+  defp validate_required(env_var, env_name) do
+    if is_nil(env_var) do
+      raise ArgumentError, """
+      Environment variable #{env_name} is not set.
+      """
+    end
   end
 
-  defp validate_secret!(secret, secret_name, expected_length) do
+  defp validate_length_gte(env_var, env_name, expected_length) when is_binary(env_var) do
+    if byte_size(env_var) < expected_length do
+      raise ArgumentError, """
+      Environment variable #{env_name} is too short.
+
+      Expected at least #{expected_length} bytes. Got #{byte_size(env_var)} bytes.
+      """
+    end
+  end
+
+  defp validate_base64(secret, secret_name) do
     case Base.decode64(secret) do
-      {:ok, decoded} ->
-        unless byte_size(decoded) == expected_length do
-          raise ArgumentError, """
-          Secret #{secret_name} is of the wrong length.
-
-          Expected a #{expected_length} byte string that is then base64 encoded. Got #{byte_size(decoded)} bytes after decoding.
-
-          See: #{@secret_generation_docs_link}
-          """
-        end
+      {:ok, _} ->
+        :ok
 
       :error ->
         raise ArgumentError, """

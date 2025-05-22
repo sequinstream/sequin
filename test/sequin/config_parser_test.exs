@@ -13,7 +13,7 @@ defmodule Sequin.ConfigParserTest do
     end
 
     test "raises error when REDIS_URL is not set" do
-      assert_raise RuntimeError, ~r/REDIS_URL is not set/, fn ->
+      assert_raise ArgumentError, ~r/REDIS_URL is not set/, fn ->
         ConfigParser.redis_config(%{})
       end
     end
@@ -41,7 +41,7 @@ defmodule Sequin.ConfigParserTest do
     test "raises error for invalid REDIS_SSL value" do
       env = valid_redis_config(%{"REDIS_SSL" => "invalid"})
 
-      assert_raise RuntimeError, ~r/REDIS_SSL must be true, 1, verify-none, false, or 0/, fn ->
+      assert_raise ArgumentError, ~r/REDIS_SSL must be true, 1, verify-none, false, or 0/, fn ->
         ConfigParser.redis_config(env)
       end
     end
@@ -84,6 +84,82 @@ defmodule Sequin.ConfigParserTest do
       assert ConfigParser.log_level(env, :info) == :info
       assert ConfigParser.log_level(env, :debug) == :debug
       assert ConfigParser.log_level(env, :warning) == :warning
+    end
+  end
+
+  describe "secret_key_base/1" do
+    test "returns the value when valid SECRET_KEY_BASE is set" do
+      # Generate a valid base64 encoded 64-byte string
+      valid_secret = 64 |> :crypto.strong_rand_bytes() |> Base.encode64()
+      env = %{"SECRET_KEY_BASE" => valid_secret}
+
+      assert ConfigParser.secret_key_base(env) == valid_secret
+    end
+
+    test "raises error when SECRET_KEY_BASE is not set" do
+      assert_raise ArgumentError, ~r/SECRET_KEY_BASE is not set/, fn ->
+        ConfigParser.secret_key_base(%{})
+      end
+    end
+
+    test "raises error when SECRET_KEY_BASE is not valid base64" do
+      env = %{"SECRET_KEY_BASE" => "not_valid_base64!@#"}
+
+      assert_raise ArgumentError, ~r/SECRET_KEY_BASE is not valid base64/, fn ->
+        ConfigParser.secret_key_base(env)
+      end
+    end
+
+    test "raises error when SECRET_KEY_BASE has incorrect length" do
+      # Generate a base64 encoded string that's not 64 bytes when decoded
+      too_short = 32 |> :crypto.strong_rand_bytes() |> Base.encode64()
+      too_long = 80 |> :crypto.strong_rand_bytes() |> Base.encode64()
+
+      for invalid_secret <- [too_short, too_long] do
+        env = %{"SECRET_KEY_BASE" => invalid_secret}
+
+        assert_raise ArgumentError, ~r/Secret SECRET_KEY_BASE is of the wrong length/, fn ->
+          ConfigParser.secret_key_base(env)
+        end
+      end
+    end
+  end
+
+  describe "vault_key/1" do
+    test "returns the value when valid VAULT_KEY is set" do
+      # Generate a valid base64 encoded 32-byte string
+      valid_key = 32 |> :crypto.strong_rand_bytes() |> Base.encode64()
+      env = %{"VAULT_KEY" => valid_key}
+
+      assert ConfigParser.vault_key(env) == valid_key
+    end
+
+    test "raises error when VAULT_KEY is not set" do
+      assert_raise ArgumentError, ~r/VAULT_KEY is not set/, fn ->
+        ConfigParser.vault_key(%{})
+      end
+    end
+
+    test "raises error when VAULT_KEY is not valid base64" do
+      env = %{"VAULT_KEY" => "not_valid_base64!@#"}
+
+      assert_raise ArgumentError, ~r/VAULT_KEY is not valid base64/, fn ->
+        ConfigParser.vault_key(env)
+      end
+    end
+
+    test "raises error when VAULT_KEY has incorrect length" do
+      # Generate a base64 encoded string that's not 32 bytes when decoded
+      too_short = 16 |> :crypto.strong_rand_bytes() |> Base.encode64()
+      too_long = 48 |> :crypto.strong_rand_bytes() |> Base.encode64()
+
+      for invalid_key <- [too_short, too_long] do
+        env = %{"VAULT_KEY" => invalid_key}
+
+        assert_raise ArgumentError, ~r/Secret VAULT_KEY is of the wrong length/, fn ->
+          ConfigParser.vault_key(env)
+        end
+      end
     end
   end
 

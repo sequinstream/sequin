@@ -127,12 +127,7 @@ if config_env() == :prod and self_hosted do
         url
     end
 
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+  secret_key_base = ConfigParser.secret_key_base(env_vars)
 
   repo_ssl =
     case System.get_env("PG_SSL") do
@@ -221,12 +216,7 @@ end
 if config_env() == :prod and not self_hosted do
   database_url = System.fetch_env!("PG_URL")
 
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+  secret_key_base = ConfigParser.secret_key_base(env_vars)
 
   function_transforms =
     if System.get_env("FEATURE_FUNCTION_TRANSFORMS", "disabled") in enabled_feature_values, do: :enabled, else: :disabled
@@ -283,7 +273,7 @@ default_workers_per_sink = ConfigParser.default_workers_per_sink(env_vars)
 config :sequin, Sequin.Runtime.SinkPipeline, default_workers_per_sink: default_workers_per_sink
 
 if config_env() == :prod do
-  vault_key = System.get_env("VAULT_KEY") || raise("VAULT_KEY is not set")
+  vault_key = ConfigParser.vault_key(env_vars)
 
   datadog_api_key = get_env.("DATADOG_API_KEY")
   datadog_app_key = get_env.("DATADOG_APP_KEY")

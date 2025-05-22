@@ -2,6 +2,8 @@ defmodule Sequin.ConfigParser do
   @moduledoc false
   require Logger
 
+  @secret_generation_docs_link "https://sequinstream.com/docs/reference/configuration#secret-generation"
+
   def default_workers_per_sink(env) do
     case env["DEFAULT_WORKERS_PER_SINK"] do
       nil ->
@@ -13,7 +15,7 @@ defmodule Sequin.ConfigParser do
             workers
 
           _ ->
-            raise "DEFAULT_WORKERS_PER_SINK must be an integer >= 1. Got: #{inspect(workers_str)}"
+            raise ArgumentError, "DEFAULT_WORKERS_PER_SINK must be an integer >= 1. Got: #{inspect(workers_str)}"
         end
     end
   end
@@ -34,6 +36,50 @@ defmodule Sequin.ConfigParser do
     |> validate_log_level(default_level)
   end
 
+  def secret_key_base(env) do
+    secret = Map.get(env, "SECRET_KEY_BASE")
+    validate_secret!(secret, "SECRET_KEY_BASE", 64)
+    secret
+  end
+
+  def vault_key(env) do
+    secret = Map.get(env, "VAULT_KEY")
+    validate_secret!(secret, "VAULT_KEY", 32)
+    secret
+  end
+
+  defp validate_secret!(nil, secret_name, _expected_length) do
+    raise ArgumentError, """
+    Environment variable #{secret_name} is not set.
+
+    See: #{@secret_generation_docs_link}
+    """
+  end
+
+  defp validate_secret!(secret, secret_name, expected_length) do
+    case Base.decode64(secret) do
+      {:ok, decoded} ->
+        unless byte_size(decoded) == expected_length do
+          raise ArgumentError, """
+          Secret #{secret_name} is of the wrong length.
+
+          Expected a #{expected_length} byte string that is then base64 encoded. Got #{byte_size(decoded)} bytes after decoding.
+
+          See: #{@secret_generation_docs_link}
+          """
+        end
+
+      :error ->
+        raise ArgumentError, """
+        Secret #{secret_name} is not valid base64.
+
+        Got: #{inspect(secret)}
+
+        See: #{@secret_generation_docs_link}
+        """
+    end
+  end
+
   defp validate_log_level(level, _default_level) when level in @valid_log_levels, do: level
 
   defp validate_log_level(level, default_level) do
@@ -47,7 +93,7 @@ defmodule Sequin.ConfigParser do
   end
 
   defp put_redis_url(_opts, _env) do
-    raise "REDIS_URL is not set. Please set the REDIS_URL env variable. Docs: #{doc_link(:redis)}"
+    raise ArgumentError, "REDIS_URL is not set. Please set the REDIS_URL env variable. Docs: #{doc_link(:redis)}"
   end
 
   defp ensure_redis_port(url) do
@@ -71,7 +117,7 @@ defmodule Sequin.ConfigParser do
         Keyword.put(opts, :tls, nil)
 
       true ->
-        raise "REDIS_SSL must be true, 1, verify-none, false, or 0. Docs: #{doc_link(:redis)}"
+        raise ArgumentError, "REDIS_SSL must be true, 1, verify-none, false, or 0. Docs: #{doc_link(:redis)}"
     end
   end
 
@@ -161,7 +207,7 @@ defmodule Sequin.ConfigParser do
         size
 
       _ ->
-        raise "REDIS_POOL_SIZE must be a positive integer. Got: #{inspect(pool_size)}."
+        raise ArgumentError, "REDIS_POOL_SIZE must be a positive integer. Got: #{inspect(pool_size)}."
     end
   end
 end

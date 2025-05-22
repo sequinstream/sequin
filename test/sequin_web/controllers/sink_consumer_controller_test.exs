@@ -49,7 +49,10 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       actions: ["insert", "update", "delete"],
       group_column_names: [column.name],
       max_retry_count: 5,
-      load_shedding_policy: "pause_on_full"
+      load_shedding_policy: "pause_on_full",
+      annotations: %{
+        user_name: "Thingy"
+      }
     }
 
     %{
@@ -139,6 +142,7 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       assert sink_consumer.sequence_filter.group_column_attnums == [column.attnum]
       assert sink_consumer.max_retry_count == valid_attrs.max_retry_count
       assert sink_consumer.load_shedding_policy == String.to_atom(valid_attrs.load_shedding_policy)
+      assert %{"user_name" => "Thingy"} = sink_consumer.annotations
     end
 
     test "creates a webhook sink consumer defaulting batch to true", %{

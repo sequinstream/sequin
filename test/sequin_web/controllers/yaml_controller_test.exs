@@ -269,6 +269,43 @@ defmodule SequinWeb.YamlControllerTest do
       assert Sequin.String.is_uuid?(wal_pipeline_id)
     end
 
+    test "returns nice error when table doesnt exist", %{conn: conn} do
+      yaml = """
+      users:
+        - email: "admin@sequinstream.com"
+          password: "sequinpassword!"
+
+      databases:
+        - name: "test-db"
+          username: "postgres"
+          password: "postgres"
+          hostname: "localhost"
+          port: 5432
+          database: "sequin_test"
+          slot_name: "#{replication_slot()}"
+          publication_name: "#{@publication}"
+          pool_size: 10
+
+      http_endpoints:
+        - name: "sequin-playground-webhook"
+          url: "https://example.com/webhook"
+
+      sinks:
+        - name: "sequin-playground-webhook"
+          database: "test-db"
+          table: "DOES NOT EXIST LMAO"
+          destination:
+            type: "webhook"
+            http_endpoint: "sequin-playground-webhook"
+      """
+
+      conn = post(conn, ~p"/api/config/apply", %{yaml: yaml})
+
+      %{"summary" => summary} = json_response(conn, 404)
+      assert summary =~ "table"
+      refute summary =~ "sequence"
+    end
+
     test "returns error for invalid yaml", %{conn: conn} do
       yaml = """
       databases:

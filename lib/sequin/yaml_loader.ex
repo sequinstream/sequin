@@ -64,11 +64,6 @@ defmodule Sequin.YamlLoader do
       {:ok, _resources} ->
         :ok
 
-      # Hack to give a better error message when table is missing
-      {:error, %NotFoundError{entity: :sequence} = error} ->
-        error = %{error | entity: :postgres_table}
-        raise "Failed to apply config: #{inspect(error)}"
-
       {:error, error} ->
         raise "Failed to apply config: #{inspect(error)}"
     end
@@ -105,7 +100,7 @@ defmodule Sequin.YamlLoader do
             end
 
           {:error, error} ->
-            {:error, error}
+            {:error, map_error(error)}
         end
 
       {:error, %YamlElixir.ParsingError{} = error} ->
@@ -149,7 +144,7 @@ defmodule Sequin.YamlLoader do
             {:ok, planned_resources, current_resources, actions}
 
           {:error, {:error, error}} ->
-            {:error, error}
+            {:error, map_error(error)}
         end
 
       {:error, %YamlElixir.ParsingError{} = error} ->
@@ -163,6 +158,10 @@ defmodule Sequin.YamlLoader do
         {:error, Error.bad_request(message: "Error reading config file: #{inspect(error, pretty: true)}")}
     end
   end
+
+  # Hack to give a better error message when table is missing
+  defp map_error(error = %NotFoundError{entity: :sequence}), do: %{error | entity: :postgres_table} |> dbg()
+  defp map_error(error), do: error |> dbg()
 
   defp apply_config(account_id, config, opts) do
     with {:ok, account} <- find_or_create_account(account_id, config),

@@ -679,6 +679,9 @@ defmodule Sequin.Transforms do
         "status" ->
           {:cont, {:ok, Map.put(acc, :status, parse_status(value))}}
 
+        "annotations" ->
+          {:cont, {:ok, Map.put(acc, :annotations, value)}}
+
         "batch_size" ->
           case value do
             size when is_integer(size) and size > 0 and size <= 1_000 ->

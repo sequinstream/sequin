@@ -41,4 +41,19 @@ defmodule Sequin.Factory.SinkFactory do
       attrs
     )
   end
+
+  def kinesis_record(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %{
+        data: %{
+          "event" => Factory.word(),
+          "payload" => %{Factory.word() => Factory.word()}
+        },
+        partition_key: Factory.unique_word()
+      },
+      attrs
+    )
+  end
 end

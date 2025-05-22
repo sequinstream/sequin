@@ -24,6 +24,7 @@
   import SinkHttpPushForm from "$lib/consumers/SinkHttpPushForm.svelte";
   import SqsSinkForm from "$lib/sinks/sqs/SqsSinkForm.svelte";
   import SnsSinkForm from "$lib/sinks/sns/SnsSinkForm.svelte";
+  import KinesisSinkForm from "$lib/sinks/kinesis/KinesisSinkForm.svelte";
   import RedisStreamSinkForm from "$lib/sinks/redis-stream/RedisStreamSinkForm.svelte";
   import RedisStringSinkForm from "$lib/sinks/redis-string/RedisStringSinkForm.svelte";
   import KafkaSinkForm from "$lib/sinks/kafka/KafkaSinkForm.svelte";
@@ -676,6 +677,8 @@
       <SqsSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "sns"}
       <SnsSinkForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "kinesis"}
+      <KinesisSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "redis_stream"}
       <RedisStreamSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "redis_string"}

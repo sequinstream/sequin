@@ -79,7 +79,7 @@ defmodule Sequin.SlotMessageStoreTest do
       consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1)
 
       data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
-      data_size_bytes = :erlang.external_size(put_in(data.metadata.consumer, nil))
+      data_size_bytes = :erlang.external_size(data)
 
       for _ <- 1..20 do
         ConsumersFactory.insert_consumer_message!(
@@ -119,7 +119,7 @@ defmodule Sequin.SlotMessageStoreTest do
       consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 3)
 
       data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
-      data_size_bytes = :erlang.external_size(put_in(data.metadata.consumer, nil))
+      data_size_bytes = :erlang.external_size(data)
 
       for _ <- 1..20 do
         ConsumersFactory.insert_consumer_message!(
@@ -906,7 +906,7 @@ defmodule Sequin.SlotMessageStoreTest do
       consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1, max_memory_mb: 128, max_storage_mb: 1024)
 
       data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
-      data_size_bytes = :erlang.external_size(put_in(data.metadata.consumer, nil))
+      data_size_bytes = :erlang.external_size(data)
 
       for _ <- 1..20 do
         ConsumersFactory.insert_consumer_message!(
@@ -960,7 +960,7 @@ defmodule Sequin.SlotMessageStoreTest do
       consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1, max_memory_mb: 128, max_storage_mb: 1024)
 
       data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
-      data_size_bytes = :erlang.external_size(put_in(data.metadata.consumer, nil))
+      data_size_bytes = :erlang.external_size(data)
 
       for _ <- 1..30 do
         ConsumersFactory.insert_consumer_message!(
@@ -1008,7 +1008,7 @@ defmodule Sequin.SlotMessageStoreTest do
     consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 2, max_memory_mb: 128, max_storage_mb: 1024)
 
     data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
-    data_size_bytes = :erlang.external_size(put_in(data.metadata.consumer, nil))
+    data_size_bytes = :erlang.external_size(data)
 
     for _ <- 1..30 do
       ConsumersFactory.insert_consumer_message!(

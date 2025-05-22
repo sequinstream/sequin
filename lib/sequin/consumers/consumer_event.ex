@@ -40,7 +40,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     field :not_visible_until, :utc_datetime_usec
     field :replication_message_trace_id, Ecto.UUID
 
-    embeds_one :data, ConsumerEventData
+    embeds_one :data, ConsumerEventData, on_replace: :update
 
     # For SlotMessageStore
     field :ingested_at, :utc_datetime_usec, virtual: true
@@ -105,6 +105,14 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
   def stringify_record_pks(pks) when is_list(pks) do
     Enum.map(pks, &to_string/1)
+  end
+
+  def map_from_struct(%ConsumerEvent{} = consumer_event) do
+    consumer_event
+    |> Sequin.Map.from_ecto()
+    |> update_in([:data], &Sequin.Map.from_ecto/1)
+    |> update_in([:data, :metadata], &Sequin.Map.from_ecto/1)
+    |> update_in([:data, :metadata, :consumer], &Sequin.Map.from_ecto/1)
   end
 
   def where_consumer_id(query \\ base_query(), consumer_id) do

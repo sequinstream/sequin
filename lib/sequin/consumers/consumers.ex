@@ -2,6 +2,7 @@ defmodule Sequin.Consumers do
   @moduledoc false
   import Ecto.Query
 
+  alias Ecto.Changeset
   alias Sequin.Accounts
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.Backfill
@@ -571,7 +572,11 @@ defmodule Sequin.Consumers do
 
     events =
       Enum.map(consumer_events, fn %ConsumerEvent{} = event ->
+        attrs = ConsumerEvent.map_from_struct(event)
+
         %ConsumerEvent{event | updated_at: now, inserted_at: now}
+        |> ConsumerEvent.create_changeset(attrs)
+        |> Changeset.apply_changes()
         |> Sequin.Map.from_ecto()
         |> drop_virtual_fields()
       end)
@@ -693,13 +698,15 @@ defmodule Sequin.Consumers do
     now = DateTime.utc_now()
 
     records =
-      consumer_records
-      |> Stream.map(fn %ConsumerRecord{} = record ->
+      Enum.map(consumer_records, fn %ConsumerRecord{} = record ->
+        attrs = ConsumerRecord.map_from_struct(record)
+
         %ConsumerRecord{record | updated_at: now, inserted_at: now}
+        |> ConsumerRecord.create_changeset(attrs)
+        |> Changeset.apply_changes()
+        |> Sequin.Map.from_ecto()
+        |> drop_virtual_fields()
       end)
-      # insert_all expects a plain outer-map, but struct embeds
-      |> Stream.map(&Sequin.Map.from_ecto/1)
-      |> Enum.map(&drop_virtual_fields/1)
 
     {count, _records} =
       Repo.insert_all(

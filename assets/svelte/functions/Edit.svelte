@@ -1051,6 +1051,7 @@ Please help me create or modify the Elixir function transform to achieve the des
           <div class="p-4 space-y-2">
             {#each messagesToShow as message, i}
               <button
+                type="button"
                 class="w-full text-left p-3 rounded-lg border border-slate-200 dark:border-slate-800 transition-all duration-200 {selectedMessageIndex ===
                 i
                   ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800 shadow-sm'

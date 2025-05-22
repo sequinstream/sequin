@@ -102,25 +102,13 @@ defmodule Sequin.ConfigParserTest do
       end
     end
 
-    test "raises error when SECRET_KEY_BASE is not valid base64" do
-      env = %{"SECRET_KEY_BASE" => "not_valid_base64!@#"}
-
-      assert_raise ArgumentError, ~r/SECRET_KEY_BASE is not valid base64/, fn ->
-        ConfigParser.secret_key_base(env)
-      end
-    end
-
     test "raises error when SECRET_KEY_BASE has incorrect length" do
-      # Generate a base64 encoded string that's not 64 bytes when decoded
       too_short = 32 |> :crypto.strong_rand_bytes() |> Base.encode64()
-      too_long = 80 |> :crypto.strong_rand_bytes() |> Base.encode64()
 
-      for invalid_secret <- [too_short, too_long] do
-        env = %{"SECRET_KEY_BASE" => invalid_secret}
+      env = %{"SECRET_KEY_BASE" => too_short}
 
-        assert_raise ArgumentError, ~r/Secret SECRET_KEY_BASE is of the wrong length/, fn ->
-          ConfigParser.secret_key_base(env)
-        end
+      assert_raise ArgumentError, ~r/Environment variable SECRET_KEY_BASE is too short/, fn ->
+        ConfigParser.secret_key_base(env)
       end
     end
   end
@@ -141,7 +129,7 @@ defmodule Sequin.ConfigParserTest do
     end
 
     test "raises error when VAULT_KEY is not valid base64" do
-      env = %{"VAULT_KEY" => "not_valid_base64!@#"}
+      env = %{"VAULT_KEY" => "not_valid_base64!@# some padding for length"}
 
       assert_raise ArgumentError, ~r/VAULT_KEY is not valid base64/, fn ->
         ConfigParser.vault_key(env)
@@ -151,14 +139,11 @@ defmodule Sequin.ConfigParserTest do
     test "raises error when VAULT_KEY has incorrect length" do
       # Generate a base64 encoded string that's not 32 bytes when decoded
       too_short = 16 |> :crypto.strong_rand_bytes() |> Base.encode64()
-      too_long = 48 |> :crypto.strong_rand_bytes() |> Base.encode64()
 
-      for invalid_key <- [too_short, too_long] do
-        env = %{"VAULT_KEY" => invalid_key}
+      env = %{"VAULT_KEY" => too_short}
 
-        assert_raise ArgumentError, ~r/Secret VAULT_KEY is of the wrong length/, fn ->
-          ConfigParser.vault_key(env)
-        end
+      assert_raise ArgumentError, ~r/Environment variable VAULT_KEY is too short/, fn ->
+        ConfigParser.vault_key(env)
       end
     end
   end

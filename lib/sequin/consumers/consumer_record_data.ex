@@ -33,6 +33,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
 
         field :id, :string
         field :name, :string
+        field :annotations, :map
       end
     end
   end

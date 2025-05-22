@@ -290,7 +290,18 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp assign_encoded_messages(socket) do
+    cache_key = {socket.assigns.form_data[:function], socket.assigns.test_messages}
+
+    if socket.assigns[:cache_key] == cache_key do
+      socket
+    else
+      do_assign_encoded_messages(socket, cache_key)
+    end
+  end
+
+  defp do_assign_encoded_messages(socket, cache_key) do
     socket
+    |> assign(:cache_key, cache_key)
     |> assign(
       :encoded_test_messages,
       encode_test_messages(

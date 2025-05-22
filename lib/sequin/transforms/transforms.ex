@@ -287,7 +287,6 @@ defmodule Sequin.Transforms do
       endpoint_url: sink.endpoint_url,
       collection_name: sink.collection_name,
       api_key: maybe_obfuscate(sink.api_key, show_sensitive),
-      import_action: sink.import_action,
       batch_size: sink.batch_size,
       timeout_seconds: sink.timeout_seconds
     })
@@ -922,7 +921,6 @@ defmodule Sequin.Transforms do
        endpoint_url: attrs["endpoint_url"],
        collection_name: attrs["collection_name"],
        api_key: attrs["api_key"],
-       import_action: attrs["import_action"],
        batch_size: attrs["batch_size"],
        timeout_seconds: attrs["timeout_seconds"]
      }}

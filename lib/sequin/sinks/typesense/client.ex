@@ -20,13 +20,12 @@ defmodule Sequin.Sinks.Typesense.Client do
   @doc """
   Index a single document in a collection.
   """
-  def index_document(%__MODULE__{} = client, collection_name, document, opts \\ []) do
-    action = Keyword.get(opts, :action, "emplace")
+  def index_document(%__MODULE__{} = client, collection_name, document) do
     req = base_request(client)
 
     url = "/collections/#{collection_name}/documents"
 
-    case Req.post(req, url: url, json: document, params: %{action: action}) do
+    case Req.post(req, url: url, json: document, params: %{action: "emplace"}) do
       {:ok, %{status: st, body: body}} when st in 200..299 ->
         {:ok, body}
 
@@ -52,12 +51,11 @@ defmodule Sequin.Sinks.Typesense.Client do
   @doc """
   Import multiple documents in JSONL format.
   """
-  def import_documents(%__MODULE__{} = client, collection_name, jsonl, opts \\ []) do
-    action = Keyword.get(opts, :action, "emplace")
+  def import_documents(%__MODULE__{} = client, collection_name, jsonl) do
     req = base_request(client)
 
     query_params = %{
-      "action" => action
+      "action" => "emplace"
     }
 
     case Req.post(req,

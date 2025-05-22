@@ -1,22 +1,20 @@
-defmodule SequinWeb.FunctionsLive.Edit do
+defmodule SequinWeb.TransformsLive.Edit do
   @moduledoc false
   use SequinWeb, :live_view
 
   import LiveSvelte
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.FilterFunction
-  alias Sequin.Consumers.Function
-  alias Sequin.Consumers.RoutingFunction
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Consumers.TransformFunction
+  alias Sequin.Consumers.Transform
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabaseTable
-  alias Sequin.Functions.MiniElixir
-  alias Sequin.Functions.TestMessages
   alias Sequin.Repo
-  alias Sequin.Runtime.SinkPipeline
-  alias SequinWeb.FunctionLive.AutoComplete
+  alias Sequin.Transforms.Message
+  alias Sequin.Transforms.MiniElixir
+  alias Sequin.Transforms.TestMessages
+  alias SequinWeb.TransformLive.AutoComplete
 
   require Logger
 
@@ -55,17 +53,9 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
-  @initial_filter """
-  def filter(action, record, changes, metadata) do
-    # Must return true or false!
-    true # Keep everything by default
-  end
-  """
-
   @initial_code_map %{
     "path" => "",
-    "transform" => @initial_transform,
-    "filter" => @initial_filter,
+    "function" => @initial_transform,
     "routing_undefined" => @initial_route_no_sink_type,
     "routing_http_push" => @initial_route_http,
     "routing_redis_string" => @initial_route_redis_string
@@ -85,22 +75,22 @@ defmodule SequinWeb.FunctionsLive.Edit do
     changeset =
       case id do
         nil ->
-          function =
+          transform =
             Sequin.Map.reject_nil_values(%{
               type: params["type"],
               sink_type: params["sink_type"]
             })
 
-          Function.changeset(%Function{account_id: current_account_id(socket)}, %{"function" => function})
+          Transform.changeset(%Transform{account_id: current_account_id(socket)}, %{"transform" => transform})
 
         id ->
-          function = Consumers.get_function_for_account!(current_account_id(socket), id)
-          Function.changeset(function, %{})
+          transform = Consumers.get_transform_for_account!(current_account_id(socket), id)
+          Transform.changeset(transform, %{})
       end
 
     used_by_consumers =
       if id do
-        Consumers.list_consumers_for_function(current_account_id(socket), id, [:replication_slot])
+        Consumers.list_consumers_for_transform(current_account_id(socket), id, [:replication_slot])
       else
         []
       end
@@ -124,7 +114,6 @@ defmodule SequinWeb.FunctionsLive.Edit do
         function_completions: @function_completions,
         function_transforms_enabled: Sequin.feature_enabled?(current_account_id(socket), :function_transforms)
       )
-      |> assign_encoded_messages()
       |> assign_databases()
 
     {:ok, socket, layout: {SequinWeb.Layouts, :app_no_sidenav}}
@@ -132,20 +121,32 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   def render(assigns) do
     ~H"""
-    <div id="function_new">
+    <div id="transform_new">
       <.svelte
-        name="functions/Edit"
+        name="transforms/Edit"
         props={
           %{
             formData: @form_data,
             showErrors: @show_errors?,
             formErrors: @form_errors,
-            testMessages: @encoded_test_messages,
-            syntheticTestMessages: @encoded_synthetic_test_message,
+            testMessages:
+              encode_test_messages(
+                @test_messages,
+                @form_data,
+                @form_errors,
+                @account_id
+              ),
+            syntheticTestMessages:
+              encode_synthetic_test_message(
+                @synthetic_test_message,
+                @form_data,
+                @form_errors,
+                @account_id
+              ),
             usedByConsumers: Enum.map(@used_by_consumers, &encode_consumer/1),
             databases: Enum.map(@databases, &encode_database/1),
             validating: @validating,
-            parent: "function_new",
+            parent: "transform_new",
             initialCodeMap: @initial_code,
             initialCode: "glugma",
             functionTransformsEnabled: @function_transforms_enabled,
@@ -171,16 +172,16 @@ defmodule SequinWeb.FunctionsLive.Edit do
         TestMessages.unregister_needs_messages(database_id)
       end
 
-      {:noreply, socket |> assign(test_messages: test_messages) |> assign_encoded_messages()}
+      {:noreply, assign(socket, test_messages: test_messages)}
     else
-      {:noreply, socket |> assign(test_messages: []) |> assign_encoded_messages()}
+      {:noreply, assign(socket, test_messages: [])}
     end
   end
 
-  def handle_event("validate", %{"function" => params}, socket) do
+  def handle_event("validate", %{"transform" => params}, socket) do
     changeset =
-      %Function{account_id: current_account_id(socket)}
-      |> Function.changeset(params)
+      %Transform{account_id: current_account_id(socket)}
+      |> Transform.changeset(params)
       |> Map.put(:action, :validate)
 
     form_data = changeset_to_form_data(changeset)
@@ -190,24 +191,23 @@ defmodule SequinWeb.FunctionsLive.Edit do
      socket
      |> assign(:changeset, changeset)
      |> assign(:form_data, form_data)
-     |> assign(:form_errors, form_errors)
-     |> assign_encoded_messages()}
+     |> assign(:form_errors, form_errors)}
   end
 
-  def handle_event("save", %{"function" => params}, socket) do
+  def handle_event("save", %{"transform" => params}, socket) do
     params = decode_params(params)
 
-    case upsert_function(socket, params) do
+    case upsert_transform(socket, params) do
       {:ok, :created} ->
         {:noreply,
          socket
-         |> put_flash(:toast, %{kind: :info, title: "Function created successfully"})
+         |> put_flash(:toast, %{kind: :info, title: "Transform created successfully"})
          |> push_navigate(to: ~p"/functions")}
 
       {:ok, :updated} ->
         {:noreply,
          socket
-         |> put_flash(:toast, %{kind: :info, title: "Function updated successfully"})
+         |> put_flash(:toast, %{kind: :info, title: "Transform updated successfully"})
          |> push_navigate(to: ~p"/functions")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -224,16 +224,16 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   def handle_event("delete", _params, socket) do
-    case Consumers.delete_function(current_account_id(socket), socket.assigns.id) do
+    case Consumers.delete_transform(current_account_id(socket), socket.assigns.id) do
       {:ok, _} ->
         {:noreply,
          socket
-         |> put_flash(:toast, %{kind: :info, title: "Function deleted successfully"})
+         |> put_flash(:toast, %{kind: :info, title: "Transform deleted successfully"})
          |> push_navigate(to: ~p"/functions")}
 
       {:error, error} ->
-        Logger.error("[Function.Edit] Failed to delete function", error: error)
-        {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Failed to delete function"})}
+        Logger.error("[Transform.Edit] Failed to delete transform", error: error)
+        {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Failed to delete transform"})}
     end
   end
 
@@ -254,28 +254,28 @@ defmodule SequinWeb.FunctionsLive.Edit do
     {:noreply, push_navigate(socket, to: ~p"/functions")}
   end
 
-  defp upsert_function(%{assigns: %{id: nil}} = socket, params) do
-    with {:ok, _function} <- Consumers.create_function(current_account_id(socket), params) do
+  defp upsert_transform(%{assigns: %{id: nil}} = socket, params) do
+    with {:ok, _transform} <- Consumers.create_transform(current_account_id(socket), params) do
       {:ok, :created}
     end
   end
 
-  defp upsert_function(%{assigns: %{id: id}} = socket, params) do
-    with {:ok, _} <- Consumers.update_function(current_account_id(socket), id, params) do
+  defp upsert_transform(%{assigns: %{id: id}} = socket, params) do
+    with {:ok, _} <- Consumers.update_transform(current_account_id(socket), id, params) do
       {:ok, :updated}
     end
   end
 
   defp changeset_to_form_data(changeset) do
-    function = Ecto.Changeset.get_field(changeset, :function)
+    transform = Ecto.Changeset.get_field(changeset, :transform)
 
-    function_data =
-      case function do
+    transform_data =
+      case transform do
         nil ->
           %{}
 
         %Ecto.Changeset{} ->
-          Ecto.Changeset.apply_changes(function)
+          Ecto.Changeset.apply_changes(transform)
 
         %_{} = struct ->
           struct
@@ -285,30 +285,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
       id: Ecto.Changeset.get_field(changeset, :id),
       name: Ecto.Changeset.get_field(changeset, :name),
       description: Ecto.Changeset.get_field(changeset, :description),
-      function: function_data
+      transform: transform_data
     }
-  end
-
-  defp assign_encoded_messages(socket) do
-    socket
-    |> assign(
-      :encoded_test_messages,
-      encode_test_messages(
-        socket.assigns.test_messages,
-        socket.assigns.form_data,
-        socket.assigns.form_errors,
-        current_account_id(socket)
-      )
-    )
-    |> assign(
-      :encoded_synthetic_test_message,
-      encode_synthetic_test_message(
-        socket.assigns.synthetic_test_message,
-        socket.assigns.form_data,
-        socket.assigns.form_errors,
-        current_account_id(socket)
-      )
-    )
   end
 
   defp encode_synthetic_test_message(synthetic_message, form_data, form_errors, account_id) do
@@ -318,41 +296,39 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp encode_test_messages(test_messages, form_data, form_errors, account_id) do
-    function = form_data[:function]
-    function_errors = form_errors[:function]
-
-    if is_struct(function) and function_errors == nil do
-      do_encode_test_messages(test_messages, function, account_id)
+    if is_nil(get_in(form_errors, [:transform, :code])) do
+      do_encode_test_messages(test_messages, form_data, account_id)
     else
-      Enum.map(test_messages, &format_test_message/1)
+      Enum.map(test_messages, &prepare_test_message/1)
     end
   end
 
-  defp do_encode_test_messages(test_messages, function, account_id) do
-    function = %Function{account_id: account_id, type: function.type, function: function}
-    consumer = %SinkConsumer{account_id: account_id}
+  defp do_encode_test_messages(test_messages, form_data, account_id) do
+    transform = form_data[:transform]
+
+    consumer = %SinkConsumer{
+      transform: %Transform{account_id: account_id, transform: transform},
+      legacy_transform: :none
+    }
 
     consumer =
-      case function.function do
-        %RoutingFunction{} ->
-          %SinkConsumer{consumer | type: function.function.sink_type, routing: function}
-
-        %TransformFunction{} ->
-          %SinkConsumer{consumer | transform: function}
-
-        %FilterFunction{} ->
-          %SinkConsumer{consumer | filter: function}
+      case transform do
+        %RoutingTransform{} -> %{consumer | type: transform.sink_type}
+        _ -> consumer
       end
 
-    Enum.map(test_messages, fn test_message ->
-      encoded = encode_one(consumer, test_message)
-      formatted = format_test_message(test_message)
-      Map.merge(formatted, encoded)
-    end)
+    base_messages = Enum.map(test_messages, &prepare_test_message/1)
+
+    if is_struct(transform) do
+      results = Enum.map(test_messages, &encode_one(&1, consumer))
+      Enum.zip_with(base_messages, results, &Map.merge/2)
+    else
+      base_messages
+    end
   end
 
-  defp encode_one(consumer, message) do
-    {time, value} = :timer.tc(fn -> run_function(consumer, message) end)
+  defp encode_one(message, consumer) do
+    {time, value} = :timer.tc(Message, :to_external, [consumer, message], :microsecond)
 
     case Jason.encode(value) do
       {:ok, _} -> %{transformed: value, time: time}
@@ -363,30 +339,13 @@ defmodule SequinWeb.FunctionsLive.Edit do
       %{error: MiniElixir.encode_error(ex), time: nil}
   end
 
-  defp format_test_message(m) do
+  defp prepare_test_message(m) do
     %{
       record: inspect(m.data.record, pretty: true),
       changes: inspect(m.data.changes, pretty: true),
       action: inspect(to_string(m.data.action), pretty: true),
       metadata: inspect(Sequin.Map.from_struct_deep(m.data.metadata), pretty: true)
     }
-  end
-
-  defp run_function(%SinkConsumer{transform: %Function{} = function}, message) do
-    MiniElixir.run_interpreted(function, message.data)
-  end
-
-  defp run_function(%SinkConsumer{routing: %Function{} = function} = sink_consumer, message) do
-    result = MiniElixir.run_interpreted(function, message.data)
-    SinkPipeline.apply_routing(sink_consumer, result)
-  end
-
-  defp run_function(%SinkConsumer{filter: %Function{} = function}, message) do
-    case MiniElixir.run_interpreted(function, message.data) do
-      true -> true
-      false -> false
-      other -> raise Sequin.Error.invariant(message: "Filter function must return true or false, got: #{inspect(other)}")
-    end
   end
 
   defp assign_databases(socket) do
@@ -440,27 +399,23 @@ defmodule SequinWeb.FunctionsLive.Edit do
     Sequin.Map.reject_nil_values(%{
       "name" => params["name"],
       "description" => params["description"],
-      "function" => decode_function(params["function"])
+      "transform" => decode_transform(params["transform"])
     })
   end
 
-  defp decode_function(%{"type" => "path"} = function) do
-    %{"type" => "path", "path" => function["path"]}
+  defp decode_transform(%{"type" => "path"} = transform) do
+    %{"type" => "path", "path" => transform["path"]}
   end
 
-  defp decode_function(%{"type" => "transform"} = function) do
-    %{"type" => "transform", "code" => function["code"]}
+  defp decode_transform(%{"type" => "function"} = transform) do
+    %{"type" => "function", "code" => transform["code"]}
   end
 
-  defp decode_function(%{"type" => "routing"} = function) do
-    %{"type" => "routing", "code" => function["code"], "sink_type" => function["sink_type"]}
+  defp decode_transform(%{"type" => "routing"} = transform) do
+    %{"type" => "routing", "code" => transform["code"], "sink_type" => transform["sink_type"]}
   end
 
-  defp decode_function(%{"type" => "filter"} = function) do
-    %{"type" => "filter", "code" => function["code"]}
-  end
-
-  defp decode_function(%{}), do: nil
+  defp decode_transform(%{}), do: nil
 
   defp schedule_poll_test_messages do
     Process.send_after(self(), :poll_test_messages, 1000)

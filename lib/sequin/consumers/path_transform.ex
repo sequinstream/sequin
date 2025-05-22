@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.PathFunction do
+defmodule Sequin.Consumers.PathTransform do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema

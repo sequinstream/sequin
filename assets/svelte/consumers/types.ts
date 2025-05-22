@@ -1,5 +1,5 @@
 import type { Table } from "../databases/types";
-import type { Function } from "../functions/types";
+import type { Transform } from "../transforms/types";
 
 // Base consumer type with shared properties
 export type BaseConsumer = {
@@ -39,9 +39,7 @@ export type BaseConsumer = {
     }>;
   };
   routing_id: string | null;
-  routing: Function | null;
-  filter_id: string | null;
-  filter: Function | null;
+  routing: Transform | null;
   table: Table;
   postgres_database: {
     id: string;

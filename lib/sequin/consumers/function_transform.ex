@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.FilterFunction do
+defmodule Sequin.Consumers.FunctionTransform do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema
@@ -11,7 +11,7 @@ defmodule Sequin.Consumers.FilterFunction do
 
   @primary_key false
   typed_embedded_schema do
-    field :type, Ecto.Enum, values: [:filter], default: :filter
+    field :type, Ecto.Enum, values: [:function], default: :function
     field :code, :string
   end
 
@@ -25,7 +25,7 @@ defmodule Sequin.Consumers.FilterFunction do
         Consumers.validate_code(code)
       end)
     else
-      add_error(changeset, :type, "Filter functions are not enabled. Talk to the Sequin team to enable them.")
+      add_error(changeset, :type, "Function transforms are not enabled. Talk to the Sequin team to enable them.")
     end
   end
 end

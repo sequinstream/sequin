@@ -1036,7 +1036,7 @@ defmodule Sequin.Runtime.TableReaderServer do
   end
 
   defp preload_consumer(consumer) do
-    Repo.preload(consumer, [:sequence, :active_backfill, :filter, replication_slot: :postgres_database], force: true)
+    Repo.preload(consumer, [:sequence, :active_backfill, replication_slot: :postgres_database], force: true)
   end
 
   defp fetch_slot_lsn(%State{} = state) do

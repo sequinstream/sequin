@@ -43,7 +43,7 @@
     id: string;
     name: string;
     description: string;
-    function: {
+    transform: {
       type: string;
       path?: string;
       code?: string;
@@ -54,7 +54,7 @@
   interface FormErrors {
     name?: string[];
     description?: string[];
-    function?: {
+    transform?: {
       type?: string[];
       path?: string[];
       code?: string[];
@@ -97,11 +97,10 @@
     info: string;
   }>;
 
-  let functionInternalToExternal = {
+  let transformInternalToExternal = {
     path: "Path transform",
-    transform: "Transform function",
+    function: "Function transform",
     routing: "Routing function",
-    filter: "Filter function",
   };
 
   let sinkTypeInternalToExternal = {
@@ -113,7 +112,7 @@
 
   let form = {
     ...formData,
-    function: { ...formData.function },
+    transform: { ...formData.transform },
   };
   let selectedMessageIndex = 0;
 
@@ -218,18 +217,21 @@
       showUpdateDialog = true;
     } else {
       saving = true;
-      pushEvent("save", { function: form }, () => {
+      pushEvent("save", { transform: form }, () => {
         saving = false;
       });
     }
   }
 
   function handleTypeSelect(event: any, oldType: string) {
-    const oldInitialCode = initialCodeFor(oldType, form.function.sink_type);
-    const newInitialCode = initialCodeFor(event.value, form.function.sink_type);
+    const oldInitialCode = initialCodeFor(oldType, form.transform.sink_type);
+    const newInitialCode = initialCodeFor(
+      event.value,
+      form.transform.sink_type,
+    );
 
-    if (form.function.code === oldInitialCode || !form.function.code) {
-      form.function.code = newInitialCode;
+    if (form.transform.code === oldInitialCode || !form.transform.code) {
+      form.transform.code = newInitialCode;
       functionEditorView.dispatch({
         changes: {
           from: 0,
@@ -242,15 +244,15 @@
       console.log("Did not replace initial code");
     }
 
-    form.function.type = event.value;
+    form.transform.type = event.value;
   }
 
   function handleRoutingSinkTypeSelect(event: any, oldSinkType: string) {
-    const oldInitialCode = initialCodeFor(form.function.type, oldSinkType);
-    const newInitialCode = initialCodeFor(form.function.type, event.value);
+    const oldInitialCode = initialCodeFor(form.transform.type, oldSinkType);
+    const newInitialCode = initialCodeFor(form.transform.type, event.value);
 
-    if (form.function.code === oldInitialCode || !form.function.code) {
-      form.function.code = newInitialCode;
+    if (form.transform.code === oldInitialCode || !form.transform.code) {
+      form.transform.code = newInitialCode;
       functionEditorView.dispatch({
         changes: {
           from: 0,
@@ -259,7 +261,7 @@
         },
       });
     }
-    form.function.sink_type = event.value;
+    form.transform.sink_type = event.value;
   }
 
   function handleDelete() {
@@ -326,10 +328,10 @@
   // let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   function maybeSetInitialCode() {
-    if (form.id == null && form.function.type) {
-      form.function.code = initialCodeFor(
-        form.function.type,
-        form.function.sink_type,
+    if (form.id == null && form.transform.type) {
+      form.transform.code = initialCodeFor(
+        form.transform.type,
+        form.transform.sink_type,
       );
     }
   }
@@ -377,22 +379,22 @@
   // }
 
   onMount(() => {
-    // Handle URL parameters for new functions
+    // Handle URL parameters for new transforms
     if (!isEditing) {
       const urlParams = new URLSearchParams(window.location.search);
 
       const typeParam = urlParams.get("type");
-      if (typeParam && functionInternalToExternal[typeParam]) {
-        form.function.type = typeParam;
+      if (typeParam && transformInternalToExternal[typeParam]) {
+        form.transform.type = typeParam;
       }
 
       const sinkTypeParam = urlParams.get("sink_type");
       if (
         sinkTypeParam &&
-        form.function.type === "routing" &&
+        form.transform.type === "routing" &&
         sinkTypeInternalToExternal[sinkTypeParam]
       ) {
-        form.function.sink_type = sinkTypeParam;
+        form.transform.sink_type = sinkTypeParam;
       }
     }
 
@@ -406,9 +408,9 @@
 
     maybeSetInitialCode();
 
-    // Initialize CodeMirror for function function if it exists
+    // Initialize CodeMirror for function transform if it exists
     const startState = EditorState.create({
-      doc: form.function.code || "",
+      doc: form.transform.code || "",
       extensions: [
         basicSetup,
         elixir(),
@@ -416,7 +418,7 @@
         keymap.of([indentWithTab]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            form.function.code = update.state.doc.toString();
+            form.transform.code = update.state.doc.toString();
           }
         }),
       ],
@@ -432,11 +434,11 @@
     };
   });
 
-  $: pushEvent("validate", { function: form });
+  $: pushEvent("validate", { transform: form });
 
   function handleCopyForChatGPT() {
     const currentMessage = messagesToShow[selectedMessageIndex];
-    const codeErrors = formErrors.function?.code || [];
+    const codeErrors = formErrors.transform?.code || [];
 
     const prompt = `I need help creating or modifying an Elixir function transform for Sequin. Here are the details:
 
@@ -445,7 +447,7 @@ Function Details:
 - Description: ${form.description}
 - Current Function Code:
 \`\`\`elixir
-${form.function.code}
+${form.transform.code}
 \`\`\`
 ${
   codeErrors.length > 0
@@ -466,7 +468,7 @@ Test Message:
 }
 \`\`\`
 
-${showSyntheticMessages ? "Warning ⚠️: This is a synthetic test message. The actual data in your database may differ. If the specific data in the test message is important for the behavior of the function, please capture test messages from your database." : ""}
+${showSyntheticMessages ? "Warning ⚠️: This is a synthetic test message. The actual data in your database may differ. If the specific data in the test message is important for the behavior of the transform, please capture test messages from your database." : ""}
 
 Documentation:
 ${FunctionTransformSnippet}
@@ -523,8 +525,8 @@ Please help me create or modify the Elixir function transform to achieve the des
                 >
                   <div class="text-sm space-y-2">
                     <p class="text-slate-500 dark:text-slate-400">
-                      Give your function a descriptive name to help identify its
-                      purpose.
+                      Give your transform a descriptive name to help identify
+                      its purpose.
                     </p>
                   </div>
                 </PopoverContent>
@@ -555,7 +557,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                 >
                   <div class="text-sm space-y-2">
                     <p class="text-slate-500 dark:text-slate-400">
-                      Select the type of function you want to create.
+                      Select the type of transform you want to create.
                     </p>
 
                     <ul
@@ -585,52 +587,48 @@ Please help me create or modify the Elixir function transform to achieve the des
 
             <Select
               onSelectedChange={(event) => {
-                const old = form.function.type;
+                const old = form.transform.type;
                 handleTypeSelect(event, old);
               }}
               selected={{
-                value: form.function.type,
-                label: functionInternalToExternal[form.function.type],
+                value: form.transform.type,
+                label: transformInternalToExternal[form.transform.type],
               }}
               disabled={isEditing}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select a function type" />
+                <SelectValue placeholder="Select a transform type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem
-                  value="filter"
-                  label={functionInternalToExternal.filter}
+                  value="path"
+                  label={transformInternalToExternal.path}
                 />
                 <SelectItem
-                  value="transform"
-                  label={functionInternalToExternal.transform}
+                  value="function"
+                  label={transformInternalToExternal.function}
                 />
                 <SelectItem
                   value="routing"
-                  label={functionInternalToExternal.routing}
-                />
-                <SelectItem
-                  value="path"
-                  label={functionInternalToExternal.path}
+                  label={transformInternalToExternal.routing}
                 />
               </SelectContent>
             </Select>
-            {#if showErrors && formErrors.function && Array.isArray(formErrors.function)}
+            {#if showErrors && formErrors.transform && Array.isArray(formErrors.transform)}
               <p class="text-sm text-red-500 dark:text-red-400">
-                {formErrors.function[0]}
+                {formErrors.transform[0]}
               </p>
             {/if}
 
-            {#if form.function.type === "routing"}
+            {#if form.transform.type === "routing"}
               <Select
                 onSelectedChange={(event) => {
-                  const oldSinkType = form.function.sink_type;
+                  const oldSinkType = form.transform.sink_type;
                   handleRoutingSinkTypeSelect(event, oldSinkType);
                 }}
                 selected={{
-                  value: form.function.sink_type,
-                  label: sinkTypeInternalToExternal[form.function.sink_type],
+                  value: form.transform.sink_type,
+                  label: sinkTypeInternalToExternal[form.transform.sink_type],
                 }}
                 disabled={isEditing}
               >
@@ -650,9 +648,9 @@ Please help me create or modify the Elixir function transform to achieve the des
                   />
                 </SelectContent>
               </Select>
-              {#if showErrors && formErrors.function?.sink_type}
+              {#if showErrors && formErrors.transform?.sink_type}
                 <p class="text-sm text-red-500 dark:text-red-400">
-                  {formErrors.function.sink_type[0]}
+                  {formErrors.transform.sink_type[0]}
                 </p>
               {/if}
             {/if}
@@ -690,7 +688,7 @@ Please help me create or modify the Elixir function transform to achieve the des
             {/if}
           </div>
 
-          {#if form.function.type === "path"}
+          {#if form.transform.type === "path"}
             <div class="space-y-2">
               <div class="flex items-center gap-2">
                 <Label for="path">Transform Path</Label>
@@ -726,24 +724,21 @@ Please help me create or modify the Elixir function transform to achieve the des
               </div>
               <Input
                 id="path"
-                bind:value={form.function.path}
+                bind:value={form.transform.path}
                 placeholder="e.g. record.id or changes.name"
                 class="font-mono max-w-xl bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800"
               />
-              {#if showErrors && formErrors.function?.path}
+              {#if showErrors && formErrors.transform?.path}
                 <p class="text-sm text-red-500 dark:text-red-400">
-                  {formErrors.function.path[0]}
+                  {formErrors.transform.path[0]}
                 </p>
               {/if}
             </div>
           {/if}
 
           <div
-            hidden={!(
-              form.function.type !== "transform" ||
-              form.function.type !== "routing" ||
-              form.function.type !== "filter"
-            )}
+            hidden={form.transform.type !== "function" &&
+              form.transform.type !== "routing"}
           >
             <div class="space-y-2">
               {#if !functionTransformsEnabled}
@@ -755,7 +750,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                   />
                   <div class="flex flex-col gap-1">
                     <p class="text-sm text-blue-700 dark:text-blue-300">
-                      Transform functions are not enabled in Cloud.
+                      Function transforms are not enabled in Cloud.
                     </p>
                     <p class="text-sm text-blue-700 dark:text-blue-300">
                       Talk to the Sequin team if you are interested in trying
@@ -766,7 +761,7 @@ Please help me create or modify the Elixir function transform to achieve the des
               {:else}
                 <div class="max-w-3xl">
                   <div class="flex items-center gap-2">
-                    <Label for="function">Transform function</Label>
+                    <Label for="function">Function transform</Label>
                     <Popover>
                       <PopoverTrigger>
                         <Info
@@ -807,8 +802,8 @@ Please help me create or modify the Elixir function transform to achieve the des
                   <p
                     class="-mb-2 min-h-10 text-sm text-red-500 dark:text-red-400"
                   >
-                    {#if formErrors.function?.code}
-                      {formErrors.function.code[0]}
+                    {#if formErrors.transform?.code}
+                      {formErrors.transform.code[0]}
                     {/if}
                   </p>
                 </div>
@@ -858,7 +853,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                   <AlertDialogAction
                     on:click={() => {
                       saving = true;
-                      pushEvent("save", { function: form }, () => {
+                      pushEvent("save", { transform: form }, () => {
                         saving = false;
                       });
                     }}
@@ -869,7 +864,7 @@ Please help me create or modify the Elixir function transform to achieve the des
               </AlertDialogContent>
             </AlertDialog>
 
-            {#if form.function.type === "function"}
+            {#if form.transform.type === "function"}
               <CopyToClipboard
                 textFn={handleCopyForChatGPT}
                 buttonText="Copy for ChatGPT"
@@ -1071,7 +1066,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                     <h3
                       class="text-sm font-medium mb-2 text-slate-500 dark:text-slate-400"
                     >
-                      Transform function arguments
+                      Function transform arguments
                     </h3>
                     <div
                       class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4"

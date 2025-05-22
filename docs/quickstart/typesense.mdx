@@ -101,9 +101,9 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
     <Step title="Setup a transform">
       In the [Transform](/reference/transforms) card, click the toggle to view existing transforms. None exist, so click "+ Create new transform" which will open a window for creating a new transform.
 
-      For "Transform name", put `products-typesense`. For "Transform type", select "Transform function".
+      For "Transform name", put `products-typesense`. For "Transform type", select "Function transform".
 
-      In the "Transform function" field, input the following code:
+      In the "Function transform" field, input the following code:
 
       ```elixir
       def transform(action, record, changes, metadata) do

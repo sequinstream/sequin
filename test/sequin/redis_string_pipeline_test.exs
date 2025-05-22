@@ -4,9 +4,9 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
   alias Sequin.Consumers
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.RedisMock
+  alias Sequin.Transforms.MiniElixir
 
   describe "redis string pipeline" do
     setup do
@@ -74,15 +74,15 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
       """
 
       assert {:ok, transform} =
-               Consumers.create_function(consumer.account_id, %{
+               Consumers.create_transform(consumer.account_id, %{
                  name: "test",
-                 function: %{
-                   type: "transform",
+                 transform: %{
+                   type: "function",
                    code: transform_code
                  }
                })
 
-      assert MiniElixir.create(transform.id, transform.function.code)
+      assert MiniElixir.create(transform.id, transform.transform.code)
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{transform_id: transform.id})
 
       message =
@@ -108,16 +108,16 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
       """
 
       assert {:ok, routing} =
-               Consumers.create_function(consumer.account_id, %{
+               Consumers.create_transform(consumer.account_id, %{
                  name: "routing_test",
-                 function: %{
+                 transform: %{
                    type: "routing",
                    sink_type: :redis_string,
                    code: routing_code
                  }
                })
 
-      assert MiniElixir.create(routing.id, routing.function.code)
+      assert MiniElixir.create(routing.id, routing.transform.code)
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{routing_id: routing.id, routing_mode: "dynamic"})
 
       message =

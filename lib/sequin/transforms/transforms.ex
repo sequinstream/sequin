@@ -6,23 +6,23 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
-  alias Sequin.Consumers.Function
+  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
-  alias Sequin.Consumers.PathFunction
+  alias Sequin.Consumers.PathTransform
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
-  alias Sequin.Consumers.RoutingFunction
+  alias Sequin.Consumers.RoutingTransform
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.TransformFunction
+  alias Sequin.Consumers.Transform
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases
@@ -304,31 +304,31 @@ defmodule Sequin.Transforms do
     })
   end
 
-  def to_external(%Function{function: %PathFunction{}} = function, _show_sensitive) do
+  def to_external(%Transform{transform: %PathTransform{}} = transform, _show_sensitive) do
     %{
-      name: function.name,
-      description: function.description,
-      type: function.type,
-      path: function.function.path
+      name: transform.name,
+      description: transform.description,
+      type: transform.type,
+      path: transform.transform.path
     }
   end
 
-  def to_external(%Function{function: %TransformFunction{}} = function, _show_sensitive) do
+  def to_external(%Transform{transform: %FunctionTransform{}} = transform, _show_sensitive) do
     %{
-      name: function.name,
-      description: function.description,
-      type: function.type,
-      code: function.function.code
+      name: transform.name,
+      description: transform.description,
+      type: transform.type,
+      code: transform.transform.code
     }
   end
 
-  def to_external(%Function{function: %RoutingFunction{}} = function, _show_sensitive) do
+  def to_external(%Transform{transform: %RoutingTransform{}} = transform, _show_sensitive) do
     %{
-      name: function.name,
-      description: function.description,
-      type: function.type,
-      sink_type: function.function.sink_type,
-      code: function.function.code
+      name: transform.name,
+      description: transform.description,
+      type: transform.type,
+      sink_type: transform.transform.sink_type,
+      code: transform.transform.code
     }
   end
 
@@ -972,10 +972,10 @@ defmodule Sequin.Transforms do
   defp parse_transform_id(_account_id, nil), do: {:ok, nil}
   defp parse_transform_id(_account_id, "none"), do: {:ok, nil}
 
-  defp parse_transform_id(account_id, function_name) do
-    case Consumers.find_function(account_id, name: function_name) do
-      {:ok, function} -> {:ok, function.id}
-      {:error, %NotFoundError{}} -> {:error, Error.validation(summary: "Function '#{function_name}' not found.")}
+  defp parse_transform_id(account_id, transform_name) do
+    case Consumers.find_transform(account_id, name: transform_name) do
+      {:ok, transform} -> {:ok, transform.id}
+      {:error, %NotFoundError{}} -> {:error, Error.validation(summary: "Transform '#{transform_name}' not found.")}
     end
   end
 
@@ -1052,7 +1052,7 @@ defmodule Sequin.Transforms do
   end
 
   # This is a hack while sequences are required
-  # Functions should not perform any database operations
+  # Transforms should not perform any database operations
   # TODO: Excise this once sequences are removed
   defp find_or_create_sequence(%PostgresDatabase{} = database, %PostgresDatabaseTable{} = table) do
     case Enum.find(database.sequences, &(&1.table_oid == table.oid)) do

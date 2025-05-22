@@ -62,7 +62,7 @@
         <div class="mt-2">
           <pre
             class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
-              >{consumer.routing.function.code}</code
+              >{consumer.routing.transform.code}</code
             ></pre>
         </div>
       </div>

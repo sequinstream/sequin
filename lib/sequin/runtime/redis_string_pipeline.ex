@@ -2,13 +2,13 @@ defmodule Sequin.Runtime.RedisStringPipeline do
   @moduledoc false
   @behaviour Sequin.Runtime.SinkPipeline
 
-  alias Sequin.Consumers.Function
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.Transform
   alias Sequin.Error
-  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Redis
+  alias Sequin.Transforms.MiniElixir
 
   require Logger
 
@@ -74,7 +74,7 @@ defmodule Sequin.Runtime.RedisStringPipeline do
     end
   end
 
-  defp maybe_apply_routing(%SinkConsumer{routing: %Function{} = routing} = consumer, message) do
+  defp maybe_apply_routing(%SinkConsumer{routing: %Transform{} = routing} = consumer, message) do
     res = MiniElixir.run_compiled(routing, message.data)
     apply_routing(consumer, res)
   end

@@ -3,80 +3,11 @@ defmodule SequinWeb.TransformEditTest do
 
   import Phoenix.LiveViewTest
 
-  alias Sequin.Consumers.Function
-  alias Sequin.Consumers.TransformFunction
+  alias Sequin.Consumers.FunctionTransform
+  alias Sequin.Consumers.Transform
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Functions.MiniElixir
-
-  describe "runs functions" do
-    setup %{conn: conn} do
-      conn = log_in_user(conn, AccountsFactory.insert_user!())
-      {:ok, conn: conn}
-    end
-
-    test "of type transform", %{conn: conn} do
-      {:ok, lv, _} = live(conn, ~p"/functions/new")
-
-      p1 = %{
-        "description" => nil,
-        "id" => nil,
-        "name" => "test",
-        "function" => %{
-          "type" => "transform",
-          "code" => "def transform(action, record, changes, metadata) do\n  record\nend\n"
-        }
-      }
-
-      render_hook(lv, "validate", %{"function" => p1})
-
-      assert [test_message] = assigns(lv).encoded_synthetic_test_message
-      assert is_map(test_message.transformed)
-      refute test_message[:error]
-    end
-
-    test "of type filter", %{conn: conn} do
-      {:ok, lv, _} = live(conn, ~p"/functions/new")
-
-      p1 = %{
-        "description" => nil,
-        "id" => nil,
-        "name" => "test",
-        "function" => %{
-          "type" => "filter",
-          "code" => "def filter(action, record, changes, metadata) do\n  true\nend\n"
-        }
-      }
-
-      render_hook(lv, "validate", %{"function" => p1})
-
-      assert [test_message] = assigns(lv).encoded_synthetic_test_message
-      assert test_message.transformed == true
-      refute test_message[:error]
-    end
-
-    test "of type routing", %{conn: conn} do
-      {:ok, lv, _} = live(conn, ~p"/functions/new")
-
-      p1 = %{
-        "description" => nil,
-        "id" => nil,
-        "name" => "test",
-        "function" => %{
-          "type" => "routing",
-          "sink_type" => "redis_string",
-          "code" => "def route(action, record, changes, metadata) do\n  %{key: record[\"id\"]}\nend\n"
-        }
-      }
-
-      render_hook(lv, "validate", %{"function" => p1})
-
-      assert [test_message] = assigns(lv).encoded_synthetic_test_message
-      assert %Sequin.Runtime.RedisStringPipeline.RoutingInfo{key: key} = test_message.transformed
-      assert key
-      refute test_message[:error]
-    end
-  end
+  alias Sequin.Transforms.MiniElixir
 
   test "Do not try to run obviously-invalid function transforms", %{conn: conn} do
     telref =
@@ -88,9 +19,11 @@ defmodule SequinWeb.TransformEditTest do
     conn = log_in_user(conn, AccountsFactory.insert_user!())
     {:ok, lv, _} = live(conn, ~p"/functions/new")
 
-    p1 = %{"description" => nil, "id" => nil, "name" => nil, "function" => %{"type" => "transform"}}
+    p1 = %{"description" => nil, "id" => nil, "name" => nil, "transform" => %{"type" => "function"}}
 
-    render_hook(lv, "validate", %{"function" => p1})
+    render_hook(lv, "validate", %{"transform" => p1})
+
+    # assigns = :sys.get_state(lv.pid).socket.assigns
 
     refute_receive {[:minielixir, _, :exception], ^telref, _, _}, 10
 
@@ -106,7 +39,7 @@ defmodule SequinWeb.TransformEditTest do
       ])
 
     MiniElixir.run_interpreted_inner(
-      %Function{id: "fake", function: %TransformFunction{code: "{"}},
+      %Transform{id: "fake", transform: %FunctionTransform{code: "{"}},
       ConsumersFactory.consumer_event_data(
         action: :insert,
         record: %{"id" => "xyz"}
@@ -117,7 +50,5 @@ defmodule SequinWeb.TransformEditTest do
     :telemetry.detach(telref)
   end
 
-  defp assigns(lv) do
-    :sys.get_state(lv.pid).socket.assigns
-  end
+  # TEST `end` to prvide proper validation error for ecto
 end

@@ -9,7 +9,7 @@
   import DeleteFunctionDialog from "$lib/components/DeleteFunctionDialog.svelte";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
 
-  export let functions: Array<{
+  export let transforms: Array<{
     id: string;
     name: string;
     type: string;
@@ -24,15 +24,14 @@
 
   let docBase = "https://sequinstream.com/docs";
   let typeToDocPath = {
-    transform: "/reference/transforms",
+    function: "/reference/transforms",
     path: "/reference/transforms",
     routing: "/reference/routing",
-    filter: "/reference/filters#filter-functions",
   };
 
   let getHref = (transform) => docBase + typeToDocPath[transform.type];
   let deleteDialogOpen = false;
-  let selectedTransform: (typeof functions)[0] | null = null;
+  let selectedTransform: (typeof transforms)[0] | null = null;
 
   function pushEvent(
     event: string,
@@ -52,7 +51,7 @@
         <Beta size="lg" variant="subtle" />
       </div>
     </div>
-    {#if functions.length > 0}
+    {#if transforms.length > 0}
       <a
         href="/functions/new"
         data-phx-link="redirect"
@@ -63,7 +62,7 @@
     {/if}
   </div>
 
-  {#if functions.length === 0}
+  {#if transforms.length === 0}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
         <h2 class="text-xl font-semibold mb-4">No functions</h2>
@@ -94,17 +93,21 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each functions as func}
+        {#each transforms as transform}
           <Table.Row class="hover:bg-gray-50 transition">
-            <Table.Cell class="py-4 font-medium">{func.name}</Table.Cell>
+            <Table.Cell class="py-4 font-medium">{transform.name}</Table.Cell>
 
             <Table.Cell class="py-4">
-              <a href={getHref(func)} on:click|stopPropagation target="_blank">
+              <a
+                href={getHref(transform)}
+                on:click|stopPropagation
+                target="_blank"
+              >
                 <Badge
                   variant="secondary"
                   class="text-xs capitalize inline-flex items-center gap-1"
                 >
-                  {func.type}
+                  {transform.type}
                   <ExternalLink class="h-3 w-3" />
                 </Badge>
               </a>
@@ -114,15 +117,15 @@
               <Tooltip.Root>
                 <Tooltip.Trigger>
                   <div class="flex gap-2">
-                    <span>{func.consumerCount}</span>
+                    <span>{transform.consumerCount}</span>
                   </div>
                 </Tooltip.Trigger>
                 <Tooltip.Content>
-                  {#if func.consumers && func.consumers.length > 0}
+                  {#if transform.consumers && transform.consumers.length > 0}
                     <div class="max-w-xs">
                       <p class="font-medium mb-1">Used by:</p>
                       <ul class="text-sm space-y-1">
-                        {#each func.consumers as consumer}
+                        {#each transform.consumers as consumer}
                           <li class="text-gray-600">{consumer.name}</li>
                         {/each}
                       </ul>
@@ -136,16 +139,16 @@
               </Tooltip.Root>
             </Table.Cell>
 
-            <Table.Cell class="py-4" title={func.insertedAt}>
-              {formatRelativeTimestamp(func.insertedAt)}
+            <Table.Cell class="py-4" title={transform.insertedAt}>
+              {formatRelativeTimestamp(transform.insertedAt)}
             </Table.Cell>
 
-            <Table.Cell class="py-4" title={func.updatedAt}>
-              {formatRelativeTimestamp(func.updatedAt)}
+            <Table.Cell class="py-4" title={transform.updatedAt}>
+              {formatRelativeTimestamp(transform.updatedAt)}
             </Table.Cell>
 
             <Table.Cell class="py-4">
-              <LinkPushNavigate href={`/functions/${func.id}`}>
+              <LinkPushNavigate href={`/functions/${transform.id}`}>
                 <Button
                   variant="link"
                   size="sm"
@@ -162,7 +165,7 @@
                 size="sm"
                 class="text-red-600 hover:underline p-0 h-auto"
                 on:click={() => {
-                  selectedTransform = func;
+                  selectedTransform = transform;
                   deleteDialogOpen = true;
                 }}
               >

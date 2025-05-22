@@ -9,7 +9,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.Function
+  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
@@ -18,13 +18,11 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
-  alias Sequin.Consumers.TransformFunction
+  alias Sequin.Consumers.Transform
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Error
-  alias Sequin.Functions.MiniElixir
-  alias Sequin.Functions.MiniElixir.Validator
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
@@ -32,6 +30,8 @@ defmodule Sequin.Consumers do
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Time
   alias Sequin.Tracer.Server, as: TracerServer
+  alias Sequin.Transforms.Message
+  alias Sequin.Transforms.MiniElixir.Validator
 
   require Logger
 
@@ -160,59 +160,59 @@ defmodule Sequin.Consumers do
     |> Repo.aggregate(:count, :id)
   end
 
-  def list_functions_for_account(account_id) do
+  def list_transforms_for_account(account_id) do
     account_id
-    |> Function.where_account_id()
+    |> Transform.where_account_id()
     |> Repo.all()
   end
 
-  def get_function(id) do
-    case Repo.get(Function, id) do
-      nil -> {:error, Error.not_found(entity: :function, params: %{id: id})}
-      function -> {:ok, function}
+  def get_transform(id) do
+    case Repo.get(Transform, id) do
+      nil -> {:error, Error.not_found(entity: :transform, params: %{id: id})}
+      transform -> {:ok, transform}
     end
   end
 
-  def get_function_for_account(account_id, id) do
+  def get_transform_for_account(account_id, id) do
     account_id
-    |> Function.where_account_id()
-    |> Function.where_id(id)
+    |> Transform.where_account_id()
+    |> Transform.where_id(id)
     |> Repo.one()
     |> case do
-      nil -> {:error, Error.not_found(entity: :function, params: %{id: id, account_id: account_id})}
-      function -> {:ok, function}
+      nil -> {:error, Error.not_found(entity: :transform, params: %{id: id, account_id: account_id})}
+      transform -> {:ok, transform}
     end
   end
 
-  def get_function_for_account!(account_id, id) do
-    case get_function_for_account(account_id, id) do
-      {:ok, function} -> function
+  def get_transform_for_account!(account_id, id) do
+    case get_transform_for_account(account_id, id) do
+      {:ok, transform} -> transform
       {:error, error} -> raise error
     end
   end
 
-  def find_function(account_id, params) do
+  def find_transform(account_id, params) do
     params
-    |> Enum.reduce(Function.where_account_id(account_id), fn
-      {:name, name}, query -> Function.where_name(query, name)
-      {:id, id}, query -> Function.where_id(query, id)
+    |> Enum.reduce(Transform.where_account_id(account_id), fn
+      {:name, name}, query -> Transform.where_name(query, name)
+      {:id, id}, query -> Transform.where_id(query, id)
     end)
     |> Repo.one()
     |> case do
-      nil -> {:error, Error.not_found(entity: :function, params: params)}
-      function -> {:ok, function}
+      nil -> {:error, Error.not_found(entity: :transform, params: params)}
+      transform -> {:ok, transform}
     end
   end
 
-  def create_function(account_id, params) do
+  def create_transform(account_id, params) do
     Repo.transact(fn ->
-      %Function{account_id: account_id}
-      |> Function.create_changeset(params)
+      %Transform{account_id: account_id}
+      |> Transform.create_changeset(params)
       |> Repo.insert()
       |> case do
-        {:ok, function} ->
-          ConsumerLifecycleEventWorker.enqueue(:create, :function, function.id)
-          {:ok, function}
+        {:ok, transform} ->
+          ConsumerLifecycleEventWorker.enqueue(:create, :transform, transform.id)
+          {:ok, transform}
 
         {:error, error} ->
           {:error, error}
@@ -220,15 +220,15 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  def update_function(account_id, id, params) do
+  def update_transform(account_id, id, params) do
     Repo.transact(fn ->
-      %Function{id: id, account_id: account_id}
-      |> Function.update_changeset(params)
+      %Transform{id: id, account_id: account_id}
+      |> Transform.update_changeset(params)
       |> Repo.update()
       |> case do
-        {:ok, function} ->
-          ConsumerLifecycleEventWorker.enqueue(:update, :function, function.id)
-          {:ok, function}
+        {:ok, transform} ->
+          ConsumerLifecycleEventWorker.enqueue(:update, :transform, transform.id)
+          {:ok, transform}
 
         {:error, error} ->
           {:error, error}
@@ -236,11 +236,11 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  def delete_function(account_id, id) do
-    with {:ok, function} <- get_function_for_account(account_id, id) do
-      function
-      |> Function.changeset(%{})
-      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_function_id_fkey")
+  def delete_transform(account_id, id) do
+    with {:ok, transform} <- get_transform_for_account(account_id, id) do
+      transform
+      |> Transform.changeset(%{})
+      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_transform_id_fkey")
       |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_routing_id_fkey")
       |> Repo.delete()
     end
@@ -284,10 +284,10 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
-  def list_consumers_for_function(account_id, function_id, preload \\ []) do
+  def list_consumers_for_transform(account_id, transform_id, preload \\ []) do
     account_id
     |> SinkConsumer.where_account_id()
-    |> SinkConsumer.where_any_function_id(function_id)
+    |> SinkConsumer.where_transform_or_function_id(transform_id)
     |> preload(^preload)
     |> Repo.all()
   end
@@ -1190,30 +1190,6 @@ defmodule Sequin.Consumers do
     matches?
   end
 
-  def matches_filter?(%SinkConsumer{filter: nil}, _), do: true
-
-  def matches_filter?(%SinkConsumer{filter: filter} = consumer, %ConsumerEvent{data: data}) do
-    filter
-    |> MiniElixir.run_compiled(data)
-    |> check_filter_return(consumer)
-  end
-
-  def matches_filter?(%SinkConsumer{filter: filter} = consumer, %ConsumerRecord{data: data}) do
-    filter
-    |> MiniElixir.run_compiled(data)
-    |> check_filter_return(consumer)
-  end
-
-  defp check_filter_return(true, _), do: true
-  defp check_filter_return(false, _), do: false
-
-  defp check_filter_return(e, consumer) do
-    val = e |> inspect() |> String.slice(0, 128)
-    msg = "Filter functions must return true or false, got: #{val}"
-    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :fail, error: Error.invariant(message: msg)})
-    raise "filter function failed to return boolean"
-  end
-
   defp action_matches?(source_table_actions, message_action) do
     message_action in source_table_actions
   end
@@ -1492,7 +1468,11 @@ defmodule Sequin.Consumers do
   end
 
   def safe_evaluate_code(code) do
-    MiniElixir.run_interpreted(%Function{function: %TransformFunction{code: code}}, synthetic_message().data)
+    Message.to_external(
+      %SinkConsumer{id: nil, transform: %Transform{transform: %FunctionTransform{code: code}}},
+      synthetic_message()
+    )
+
     :ok
   rescue
     error ->

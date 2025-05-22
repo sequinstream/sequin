@@ -2,22 +2,22 @@ defmodule Sequin.RoutingTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.RoutingFunction
+  alias Sequin.Consumers.RoutingTransform
+  alias Sequin.Consumers.Transform
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Transforms.MiniElixir
 
-  describe "routing function creation and validation" do
+  describe "routing transform creation and validation" do
     setup do
       account = AccountsFactory.insert_account!()
       {:ok, %{account: account}}
     end
 
-    test "creating a routing function with valid code", %{account: account} do
+    test "creating a routing transform with valid code", %{account: account} do
       routing_code = """
       def route(action, record, changes, metadata) do
         %{
@@ -27,12 +27,12 @@ defmodule Sequin.RoutingTest do
       end
       """
 
-      assert {:ok, function} =
-               Consumers.create_function(
+      assert {:ok, transform} =
+               Consumers.create_transform(
                  account.id,
                  %{
                    name: Factory.unique_word(),
-                   function: %{
+                   transform: %{
                      type: :routing,
                      sink_type: :http_push,
                      code: routing_code
@@ -40,13 +40,13 @@ defmodule Sequin.RoutingTest do
                  }
                )
 
-      assert %Function{function: %RoutingFunction{}} = function
-      assert function.function.sink_type == :http_push
-      assert function.function.code == routing_code
+      assert %Transform{transform: %RoutingTransform{}} = transform
+      assert transform.transform.sink_type == :http_push
+      assert transform.transform.code == routing_code
     end
   end
 
-  describe "using routing functions in HTTP push pipeline" do
+  describe "using routing transforms in HTTP push pipeline" do
     setup do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
@@ -60,12 +60,12 @@ defmodule Sequin.RoutingTest do
       end
       """
 
-      {:ok, function} =
-        Consumers.create_function(
+      {:ok, transform} =
+        Consumers.create_transform(
           account.id,
           %{
             name: Factory.unique_word(),
-            function: %{
+            transform: %{
               type: :routing,
               sink_type: :http_push,
               code: routing_code
@@ -73,7 +73,7 @@ defmodule Sequin.RoutingTest do
           }
         )
 
-      {:ok, _} = MiniElixir.create(function.id, function.function.code)
+      {:ok, _} = MiniElixir.create(transform.id, transform.transform.code)
 
       consumer =
         ConsumersFactory.insert_sink_consumer!(
@@ -81,18 +81,18 @@ defmodule Sequin.RoutingTest do
           type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           message_kind: :event,
-          routing_id: function.id,
+          routing_id: transform.id,
           routing_mode: :dynamic
         )
 
       %{
         consumer: consumer,
-        function: function,
+        transform: transform,
         http_endpoint: http_endpoint
       }
     end
 
-    test "HTTP request uses routing function to determine method and path", %{
+    test "HTTP request uses routing transform to determine method and path", %{
       consumer: consumer,
       http_endpoint: http_endpoint
     } do

@@ -13,9 +13,9 @@
 
   export let form;
   export let errors: any = {};
-  export let functions: Array<any> = [];
+  export let transforms: Array<any> = [];
   export let refreshFunctions: () => void;
-  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
+  export let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   let showPassword = false;
 
@@ -73,16 +73,16 @@
       {#if selectedDynamic}
         <div class="p-4 bg-muted/50 rounded-md">
           <FunctionPicker
-            {functions}
+            {transforms}
             selectedFunctionId={form.routingId || "none"}
             title="Redis Key Router"
-            onFunctionChange={(functionId) =>
-              (form.routingId = functionId === "none" ? null : functionId)}
+            onFunctionChange={(transformId) =>
+              (form.routingId = transformId === "none" ? null : transformId)}
             {refreshFunctions}
-            functionTypes={["routing"]}
+            transformTypes={["routing"]}
             typeLabelKey="sink_type"
             createNewQueryParams="?type=routing&sink_type=redis_string"
-            bind:refreshState={functionRefreshState}
+            bind:refreshState={transformRefreshState}
           >
             <p class="text-sm text-muted-foreground">
               Select a routing transform to dynamically set Redis keys:

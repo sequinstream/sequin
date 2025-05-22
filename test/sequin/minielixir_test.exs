@@ -1,8 +1,8 @@
 defmodule Sequin.MiniElixirTest do
   use ExUnit.Case
 
-  alias Sequin.Functions.MiniElixir.Validator
-  alias Sequin.Functions.MiniElixir.Validator.PatternChecker
+  alias Sequin.Transforms.MiniElixir.Validator
+  alias Sequin.Transforms.MiniElixir.Validator.PatternChecker
 
   describe "unwrap" do
     test "unwrap extracts the single def or fails" do

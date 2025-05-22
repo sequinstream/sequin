@@ -49,16 +49,7 @@
   } from "$lib/components/ui/accordion";
   import type { Table as DatabaseTable } from "$lib/databases/types";
   import BackfillForm from "$lib/components/BackfillForm.svelte";
-  import { RotateCwIcon, CheckIcon } from "lucide-svelte";
   import Beta from "../components/Beta.svelte";
-  import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-  } from "$lib/components/ui/table";
 
   type Database = {
     id: string;
@@ -72,7 +63,7 @@
   export let consumerTitle;
   export let httpEndpoints;
   export let databases: Database[];
-  export let transforms: Array<{
+  export let functions: Array<{
     id: string;
     name: string;
     type: string;
@@ -110,9 +101,10 @@
     groupColumnAttnums: number[];
     batchSize: number;
     transform: string;
-    timestampFormat: string;
+    filterId: string;
     routingId: string;
     routingMode: string;
+    timestampFormat: string;
   }
 
   let initialForm: FormState = {
@@ -141,6 +133,7 @@
     timestampFormat: consumer.timestamp_format || "iso8601",
     routingId: consumer.routing_id || "none",
     routingMode: consumer.routing_mode,
+    filterId: consumer.filter_id || "none",
   };
 
   let form: FormState = { ...initialForm };
@@ -369,14 +362,14 @@
     backfillSectionExpanded = backfillSectionEnabled && !isEditMode;
   }
 
-  let transformRefreshState: "idle" | "refreshing" | "done" = "idle";
+  let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   function refreshFunctions() {
-    transformRefreshState = "refreshing";
-    pushEvent("refresh_transforms", {}, () => {
-      transformRefreshState = "done";
+    functionRefreshState = "refreshing";
+    pushEvent("refresh_functions", {}, () => {
+      functionRefreshState = "done";
       setTimeout(() => {
-        transformRefreshState = "idle";
+        functionRefreshState = "idle";
       }, 2000);
     });
   }
@@ -516,11 +509,14 @@
       </CardHeader>
       <CardContent>
         <FilterForm
+          {functions}
           messageKind={form.messageKind}
           {selectedTable}
           bind:form
           {errors}
           onFilterChange={handleFilterChange}
+          {refreshFunctions}
+          {functionRefreshState}
           showTitle={false}
           isEdit={isEditMode}
         />
@@ -567,25 +563,25 @@
           </p>
         {:else}
           <p class="font-medium">
-            {transforms.find((t) => t.id === form.transform)?.name ||
+            {functions.find((f) => f.id === form.transform)?.name ||
               form.transform}
           </p>
           <p class="text-sm text-muted-foreground">
-            {transforms.find((t) => t.id === form.transform)?.description || ""}
+            {functions.find((f) => f.id === form.transform)?.description || ""}
           </p>
         {/if}
       </svelte:fragment>
 
       <svelte:fragment slot="content">
         <FunctionPicker
-          {transforms}
+          {functions}
           selectedFunctionId={form.transform}
           title="Transform"
-          onFunctionChange={(transformId) => (form.transform = transformId)}
+          onFunctionChange={(functionId) => (form.transform = functionId)}
           {refreshFunctions}
-          transformTypes={["function", "path"]}
-          createNewQueryParams="?type=function"
-          bind:refreshState={transformRefreshState}
+          functionTypes={["transform", "path"]}
+          createNewQueryParams="?type=transform"
+          bind:refreshState={functionRefreshState}
         >
           <svelte:fragment slot="none-option">
             No transform. Messages will be sent as-is to the sink destination.
@@ -668,9 +664,9 @@
         bind:form
         {live}
         {parent}
-        {transforms}
+        {functions}
         {refreshFunctions}
-        bind:transformRefreshState
+        bind:functionRefreshState
       />
     {:else if consumer.type === "sqs"}
       <SqsSinkForm errors={errors.consumer} bind:form />
@@ -683,8 +679,8 @@
         errors={errors.consumer}
         bind:form
         {refreshFunctions}
-        {transforms}
-        {transformRefreshState}
+        {functions}
+        {functionRefreshState}
       />
     {:else if consumer.type === "kafka"}
       <KafkaSinkForm errors={errors.consumer} bind:form />

@@ -235,8 +235,9 @@ defmodule Sequin.Runtime.TableReader do
         messages =
           table
           |> records_by_column_attnum(rows)
-          |> Enum.filter(&Consumers.matches_record?(consumer, table.oid, &1))
-          |> Enum.map(&message_from_row(consumer, table, &1))
+          |> Stream.filter(&Consumers.matches_record?(consumer, table.oid, &1))
+          |> Stream.map(&message_from_row(consumer, table, &1))
+          |> Enum.filter(&Consumers.matches_filter?(consumer, &1))
 
         {:ok, %{messages: messages, next_cursor: next_cursor}}
 

@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.RoutingTransform do
+defmodule Sequin.Consumers.RoutingFunction do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema

@@ -13,6 +13,7 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.InvariantError
+  alias Sequin.Functions.TestMessages
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Replication
@@ -25,7 +26,6 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.TableReaderServer
-  alias Sequin.Transforms.TestMessages
 
   require Logger
 
@@ -435,6 +435,7 @@ defmodule Sequin.Runtime.MessageHandler do
         consumer_messages
         |> Stream.reject(&is_nil/1)
         |> Stream.reject(&violates_payload_size?(ctx.replication_slot_id, &1))
+        |> Stream.filter(&Consumers.matches_filter?(consumer, &1))
         |> Enum.to_list()
 
       {consumer, messages}

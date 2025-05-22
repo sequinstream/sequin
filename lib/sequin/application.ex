@@ -6,10 +6,10 @@ defmodule Sequin.Application do
 
   alias Sequin.Accounts
   alias Sequin.CheckSystemHealthWorker
+  alias Sequin.Functions.TestMessages
   alias Sequin.Health.KickoffCheckPostgresReplicationSlotWorker
   alias Sequin.Health.KickoffCheckSinkConfigurationWorker
   alias Sequin.MutexedSupervisor
-  alias Sequin.Transforms.TestMessages
 
   require Logger
 
@@ -73,7 +73,7 @@ defmodule Sequin.Application do
       Sequin.Cache.child_spec(),
       {Oban, Application.fetch_env!(:sequin, Oban)},
       {Registry, keys: :duplicate, name: TestMessages.registry()},
-      Sequin.Transforms.MiniElixir,
+      Sequin.Functions.MiniElixir,
       Sequin.Databases.ConnectionCache,
       Sequin.Sinks.Redis.ConnectionCache,
       Sequin.Sinks.Kafka.ConnectionCache,

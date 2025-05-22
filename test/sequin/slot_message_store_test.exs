@@ -142,6 +142,10 @@ defmodule Sequin.SlotMessageStoreTest do
       # 20 on disk
       assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 20
 
+      for _ <- 1..consumer.partition_count do
+        assert_receive :init_complete
+      end
+
       # 10 in memory
       assert length(SlotMessageStore.peek_messages(consumer, 100)) == 9
     end

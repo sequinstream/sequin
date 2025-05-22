@@ -2300,8 +2300,19 @@ defmodule Sequin.ConsumersTest do
       assert inserted_msg.ack_id == msg.ack_id
     end
 
-    test "updates existing message" do
+    test "inserts a new message with record_serializers" do
       consumer = ConsumersFactory.insert_sink_consumer!()
+      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+      msg = put_in(msg.data.record["date_field"], Date.utc_today())
+
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
+
+      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
+      assert %Date{} = inserted_msg.data.record["date_field"]
+    end
+
+    test "updates existing message" do
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
 
       existing_msg =
         ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)

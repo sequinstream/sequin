@@ -18,7 +18,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
     field :record_deserializers, :map
     field :action, Ecto.Enum, values: [:insert, :update, :delete, :read]
 
-    embeds_one :metadata, Metadata, primary_key: false do
+    embeds_one :metadata, Metadata, primary_key: false, on_replace: :update do
       @derive Jason.Encoder
 
       field :table_schema, :string
@@ -28,7 +28,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
       field :database_name, :string
       field :idempotency_key, :string
 
-      embeds_one :consumer, Sink, primary_key: false do
+      embeds_one :consumer, Sink, primary_key: false, on_replace: :update do
         @derive Jason.Encoder
 
         field :id, :string
@@ -50,6 +50,13 @@ defmodule Sequin.Consumers.ConsumerRecordData do
     metadata
     |> cast(attrs, [:table_schema, :table_name, :commit_timestamp, :commit_lsn, :database_name])
     |> validate_required([:table_schema, :table_name, :commit_timestamp, :commit_lsn])
+    |> cast_embed(:consumer, required: true, with: &consumer_changeset/2)
+  end
+
+  def consumer_changeset(consumer, attrs) do
+    consumer
+    |> cast(attrs, [:id, :name])
+    |> validate_required([:id, :name])
   end
 
   def deserialize(%ConsumerRecordData{} = data) do

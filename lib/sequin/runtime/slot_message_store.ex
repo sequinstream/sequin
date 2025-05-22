@@ -143,6 +143,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
     schedule_max_memory_check()
     schedule_flush_check(state.flush_interval)
     schedule_visibility_check(state.visibility_check_interval)
+
+    if test_pid = state.test_pid do
+      send(test_pid, :init_complete)
+    end
+
     {:noreply, state}
   end
 

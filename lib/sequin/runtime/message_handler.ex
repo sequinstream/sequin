@@ -599,9 +599,7 @@ defmodule Sequin.Runtime.MessageHandler do
           name: "test-consumer",
           postgres_database: ctx.postgres_database,
           sequence_filter: %SequenceFilter{},
-          annotations: %{"test_message" => true,
-                         "info" => "Test messages are not associated with any sink"
-          }
+          annotations: %{"test_message" => true, "info" => "Test messages are not associated with any sink"}
         }
 
         message = consumer_event(test_consumer, message)

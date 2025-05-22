@@ -35,7 +35,7 @@ defmodule Sequin.Aws.SNS do
 
   def publish_messages(%Client{} = client, topic_arn, messages) do
     entries =
-      if is_fifo?(topic_arn) do
+      if fifo?(topic_arn) do
         Enum.map(messages, fn msg ->
           %{
             "Id" => Map.fetch!(msg, :message_id),
@@ -117,7 +117,7 @@ defmodule Sequin.Aws.SNS do
      Error.service(service: :aws_sns, message: "Error from AWS: #{message} (status=#{status_code})", details: message)}
   end
 
-  defp is_fifo?(topic_arn) do
+  defp fifo?(topic_arn) do
     String.ends_with?(topic_arn, ".fifo")
   end
 end

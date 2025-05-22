@@ -6,6 +6,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
@@ -23,7 +24,6 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
-  alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases

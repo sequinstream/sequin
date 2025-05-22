@@ -581,7 +581,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   @impl ReplicationConnection
-  @decorate track_metrics("flush_messages")
   def handle_info(:flush_messages, %State{} = state) do
     case flush_messages(state) do
       {:ok, state} ->

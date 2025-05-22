@@ -211,6 +211,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   Returns `{:ok, messages}` where messages is a list of deliverable messages.
   """
   @impl SlotMessageStoreBehaviour
+  # def produce(%SinkConsumer{id: "467fb18c-1202-4727-8283-19da9a43f0ad"}, _count, _producer_pid), do: {:ok, []}
+
   def produce(consumer, count, producer_pid) do
     consumer
     |> partitions()
@@ -998,6 +1000,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   defp stream_messages_into_state(%State{} = state) do
+    Logger.info("[SlotMessageStore] Streaming messages into state")
+
     # Stream messages and stop when we reach max_memory_bytes
     {time, {persisted_messages, current_size_bytes, message_count, all_loaded?}} =
       :timer.tc(fn ->
@@ -1010,8 +1014,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
           new_size = current_size + msg.payload_size_bytes
           new_message_count = message_count + 1
 
-          if new_size <= state.max_memory_bytes and new_message_count <= state.setting_max_messages and
-               new_message_count < 100 do
+          if new_size <= state.max_memory_bytes and new_message_count <= state.setting_max_messages do
             {:cont, {[msg | messages], new_size, new_message_count, true}}
           else
             Logger.info(

@@ -515,6 +515,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end
   end
 
+  @decorate track_metrics("put_messages")
   def handle_call({:put_messages, messages}, from, %State{all_loaded?: false} = state) do
     estimated_size = Enum.sum_by(messages, & &1.payload_size_bytes)
 
@@ -796,49 +797,51 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   def handle_info(:flush_messages, %State{} = state) do
-    Logger.info("[SlotMessageStore] Checking for messages to flush")
-    start_time = System.monotonic_time(:millisecond)
+    with_metrics("flush_messages", fn ->
+      Logger.info("[SlotMessageStore] Checking for messages to flush")
+      start_time = System.monotonic_time(:millisecond)
 
-    batch_size = flush_batch_size()
-    messages = State.messages_to_flush(state, batch_size)
+      batch_size = flush_batch_size()
+      messages = State.messages_to_flush(state, batch_size)
 
-    state =
-      if length(messages) > 0 do
-        Logger.warning(
-          "[SlotMessageStore] Flushing #{length(messages)} old messages to allow slot advancement",
-          consumer_id: state.consumer_id,
-          partition: state.partition
-        )
+      state =
+        if length(messages) > 0 do
+          Logger.warning(
+            "[SlotMessageStore] Flushing #{length(messages)} old messages to allow slot advancement",
+            consumer_id: state.consumer_id,
+            partition: state.partition
+          )
 
-        upsert_messages(state, messages)
+          upsert_messages(state, messages)
 
-        state = State.put_persisted_messages(state, messages)
+          state = State.put_persisted_messages(state, messages)
 
-        if state.test_pid do
-          send(state.test_pid, {:flush_messages_done, state.consumer_id})
-          send(state.test_pid, {:flush_messages_count, length(messages)})
+          if state.test_pid do
+            send(state.test_pid, {:flush_messages_done, state.consumer_id})
+            send(state.test_pid, {:flush_messages_count, length(messages)})
+          end
+
+          end_time = System.monotonic_time(:millisecond)
+          duration_ms = end_time - start_time
+
+          Logger.info(
+            "[SlotMessageStore] Flushed #{length(messages)} old messages to allow slot advancement",
+            consumer_id: state.consumer_id,
+            partition: state.partition,
+            duration_ms: duration_ms
+          )
+
+          Sequin.ProcessMetrics.increment_throughput("messages_flushed", length(messages))
+          state
+        else
+          state
         end
 
-        end_time = System.monotonic_time(:millisecond)
-        duration_ms = end_time - start_time
+      # Flush again immediately we are likely to have more work to do
+      schedule_flush_check(if length(messages) == batch_size, do: 0, else: state.flush_interval)
 
-        Logger.info(
-          "[SlotMessageStore] Flushed #{length(messages)} old messages to allow slot advancement",
-          consumer_id: state.consumer_id,
-          partition: state.partition,
-          duration_ms: duration_ms
-        )
-
-        Sequin.ProcessMetrics.increment_throughput("messages_flushed", length(messages))
-        state
-      else
-        state
-      end
-
-    # Flush again immediately we are likely to have more work to do
-    schedule_flush_check(if length(messages) == batch_size, do: 0, else: state.flush_interval)
-
-    {:noreply, state}
+      {:noreply, state}
+    end)
   end
 
   def handle_info(:check_visibility, %State{} = state) do
@@ -919,6 +922,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   defp schedule_visibility_check(interval) do
     Process.send_after(self(), :check_visibility, interval)
+  end
+
+  # Helper function for manually instrumenting functions that can't use decorators
+  defp with_metrics(name, fun) when is_binary(name) and is_function(fun, 0) do
+    {time, result} = :timer.tc(fun)
+    time_ms = div(time, 1000)
+    Sequin.ProcessMetrics.update_timing(name, time_ms)
+    result
   end
 
   defp put_max_memory_bytes(%State{max_memory_bytes: nil} = state) do

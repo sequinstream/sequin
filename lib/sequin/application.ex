@@ -31,6 +31,7 @@ defmodule Sequin.Application do
 
     TestMessages.create_ets_table()
     Accounts.initialize_account_features_cache()
+    Req.default_options(finch: Sequin.Finch)
 
     Sequin.Sentry.init()
 

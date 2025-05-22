@@ -165,7 +165,8 @@ defmodule Sequin.Runtime.HttpPushPipeline do
         url: consumer.sink.http_endpoint_path || "",
         headers: headers,
         json: message_data,
-        receive_timeout: consumer.ack_wait_ms
+        receive_timeout: consumer.ack_wait_ms,
+        finch: Sequin.Finch
       ]
       |> Keyword.merge(req_opts)
       |> Req.new()

@@ -743,7 +743,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       "endpoint_url" => sink["endpoint_url"],
       "collection_name" => sink["collection_name"],
       "api_key" => sink["api_key"],
-      "import_action" => sink["import_action"],
       "batch_size" => sink["batch_size"],
       "timeout_seconds" => sink["timeout_seconds"]
     }
@@ -972,7 +971,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       "endpoint_url" => sink.endpoint_url,
       "collection_name" => sink.collection_name,
       "api_key" => sink.api_key,
-      "import_action" => sink.import_action,
       "batch_size" => sink.batch_size,
       "timeout_seconds" => sink.timeout_seconds
     }

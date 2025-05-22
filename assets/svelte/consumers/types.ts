@@ -183,7 +183,6 @@ export type TypesenseConsumer = BaseConsumer & {
     type: "typesense";
     endpoint_url: string;
     collection_name: string;
-    import_action: "create" | "upsert" | "update" | "emplace";
     batch_size: number;
     timeout_seconds: number;
   };

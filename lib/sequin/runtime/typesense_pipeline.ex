@@ -70,7 +70,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
         {:ok, messages, context}
 
       [message] ->
-        case Client.index_document(client, sink.collection_name, message, action: sink.import_action) do
+        case Client.index_document(client, sink.collection_name, message) do
           {:ok, _response} ->
             {:ok, messages, context}
 
@@ -81,7 +81,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
       _ ->
         jsonl = encode_as_jsonl(external_messages)
 
-        case Client.import_documents(client, sink.collection_name, jsonl, action: sink.import_action) do
+        case Client.import_documents(client, sink.collection_name, jsonl) do
           {:error, error} ->
             {:error, error}
 

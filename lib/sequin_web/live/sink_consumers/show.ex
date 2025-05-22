@@ -759,7 +759,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       type: :typesense,
       endpoint_url: sink.endpoint_url,
       collection_name: sink.collection_name,
-      import_action: sink.import_action,
       batch_size: sink.batch_size,
       timeout_seconds: sink.timeout_seconds
     }

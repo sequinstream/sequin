@@ -246,7 +246,8 @@
       }
     }
 
-    isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
+    isCreateConsumerDisabled =
+      !form.postgresDatabaseId || (!form.tableOid && !form.schema);
   }
 
   const isEditMode = !!consumer.id;
@@ -443,6 +444,7 @@
               {pushEvent}
               selectedDatabaseId={form.postgresDatabaseId}
               selectedTableOid={form.tableOid}
+              selectedSchema={form.schema}
             />
 
             {#if errors.consumer.postgres_database_id}

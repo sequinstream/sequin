@@ -1087,23 +1087,28 @@ defmodule Sequin.YamlLoader do
     attrs =
       raw_attrs
       |> Map.delete("transform")
-      |> Map.put("function", coerce_function_inner(function))
+      |> Map.put("function", coerce_sink_type(function))
       |> update_in(["function", "type"], &coerce_type_to_transform/1)
 
     {:ok, attrs}
   end
 
   defp coerce_function_attrs(%{"function" => _} = attrs) do
-    {:ok, Map.update!(attrs, "function", &coerce_function_inner/1)}
+    {:ok, Map.update!(attrs, "function", &coerce_sink_type/1)}
   end
 
   # Assume that if you don't have "function" or "function" that you used flat structure
   defp coerce_function_attrs(flat) do
+    inner =
+      flat
+      |> Map.take(["type", "sink_type", "code", "description", "path"])
+      |> coerce_sink_type()
+      |> Map.update("type", nil, &coerce_type_to_transform/1)
+
     nested_attrs =
       flat
       |> Map.take(["id", "name"])
-      |> Map.put("function", Map.take(flat, ["type", "sink_type", "code", "description", "path"]))
-      |> update_in(["function", "type"], &coerce_type_to_transform/1)
+      |> Map.put("function", inner)
 
     {:ok, nested_attrs}
   end
@@ -1112,11 +1117,11 @@ defmodule Sequin.YamlLoader do
   defp coerce_type_to_transform("function"), do: "transform"
   defp coerce_type_to_transform(type), do: type
 
-  defp coerce_function_inner(%{"sink_type" => "webhook"} = attrs) do
+  defp coerce_sink_type(%{"sink_type" => "webhook"} = attrs) do
     Map.put(attrs, "sink_type", "http_push")
   end
 
-  defp coerce_function_inner(attrs), do: attrs
+  defp coerce_sink_type(attrs), do: attrs
 
   defp perform_actions(actions) do
     Enum.reduce(actions, :ok, fn %__MODULE__.Action{} = action, status_tuple ->

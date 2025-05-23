@@ -72,6 +72,11 @@ end
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
+config :sequin, Sequin.Runtime.SlotProcessorServer,
+  max_accumulated_bytes: ConfigParser.replication_flush_max_accumulated_bytes(env_vars),
+  max_accumulated_messages: ConfigParser.replication_flush_max_accumulated_messages(env_vars),
+  max_accumulated_messages_time_ms: ConfigParser.replication_flush_max_accumulated_time_ms(env_vars)
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server

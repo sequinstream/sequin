@@ -316,7 +316,8 @@ defmodule Sequin.Runtime.MessageHandler do
       commit_lsn: message.commit_lsn,
       consumer: %{
         id: consumer.id,
-        name: consumer.name
+        name: consumer.name,
+        annotations: consumer.annotations
       },
       transaction_annotations: nil,
       idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}")
@@ -597,7 +598,8 @@ defmodule Sequin.Runtime.MessageHandler do
           message_kind: :event,
           name: "test-consumer",
           postgres_database: ctx.postgres_database,
-          sequence_filter: %SequenceFilter{}
+          sequence_filter: %SequenceFilter{},
+          annotations: %{"test_message" => true, "info" => "Test messages are not associated with any sink"}
         }
 
         message = consumer_event(test_consumer, message)

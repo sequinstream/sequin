@@ -494,7 +494,10 @@ defmodule Sequin.Factory.ConsumersFactory do
           commit_lsn: Factory.unique_integer(),
           consumer: %ConsumerEventData.Metadata.Sink{
             id: Factory.uuid(),
-            name: Factory.word()
+            name: Factory.word(),
+            annotations: %{
+              "test" => true
+            }
           }
         }
       },

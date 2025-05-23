@@ -33,6 +33,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
 
         field :id, :string
         field :name, :string
+        field :annotations, :map
       end
     end
   end
@@ -54,7 +55,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
 
   def consumer_changeset(consumer, attrs) do
     consumer
-    |> cast(attrs, [:id, :name])
+    |> cast(attrs, [:id, :name, :annotations])
     |> validate_required([:id, :name])
   end
 

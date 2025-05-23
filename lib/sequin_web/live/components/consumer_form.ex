@@ -1086,8 +1086,7 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     result =
       Repo.transact(fn ->
-        with {:ok, sequence} <- find_or_create_sequence(account_id, params),
-             params = Map.put(params, "sequence_id", sequence.id),
+        with {:ok, params} <- maybe_put_sequence_id(account_id, params),
              {:ok, consumer} <- Consumers.create_sink_consumer(account_id, params) do
           case maybe_create_backfill(socket, consumer, params, initial_backfill) do
             :ok -> {:ok, Repo.preload(consumer, :active_backfill)}
@@ -1171,10 +1170,17 @@ defmodule SequinWeb.Components.ConsumerForm do
     Consumers.create_backfill(backfill_attrs)
   end
 
-  defp find_or_create_sequence(account_id, %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id}) do
+  defp maybe_put_sequence_id(_account_id, %{"table_oid" => nil} = params) do
+    {:ok, params}
+  end
+
+  defp maybe_put_sequence_id(
+         account_id,
+         %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id} = params
+       ) do
     case Databases.find_sequence_for_account(account_id, postgres_database_id: postgres_database_id, table_oid: table_oid) do
       {:ok, sequence} ->
-        {:ok, sequence}
+        {:ok, Map.put(params, "sequence_id", sequence.id)}
 
       {:error, %NotFoundError{}} ->
         Logger.info("Creating sequence for table #{table_oid}")
@@ -1184,7 +1190,7 @@ defmodule SequinWeb.Components.ConsumerForm do
                table_oid: table_oid,
                postgres_database_id: postgres_database_id
              }) do
-          {:ok, sequence} -> {:ok, sequence}
+          {:ok, sequence} -> {:ok, Map.put(params, "sequence_id", sequence.id)}
           {:error, changeset} -> {:error, changeset}
         end
     end

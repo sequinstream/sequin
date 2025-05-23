@@ -59,15 +59,20 @@
   ) => void;
   export let selectedDatabaseId: string | undefined;
   export let selectedTableOid: number | null;
+  export let selectedSchema: string | null;
   export let onlyEventTables: boolean = false;
   export let excludeEventTables: boolean = false;
 
   let selectedDatabase;
   let autoRefreshedDatabaseTables = [];
-  let selectionMode: "table" | "schema" = "table";
+  let selectionMode: "table" | "schema" = "schema";
 
   let filteredTables: Array<Table> = [];
+  let filteredSchemas: Array<string> = [];
   let searchQuery = "";
+
+  let lastSelectedTableOid: number | null = null;
+  let lastSelectedSchema: string | null = null;
 
   $: {
     if (selectedDatabaseId) {
@@ -85,6 +90,11 @@
     } else if (excludeEventTables) {
       filteredTables = filteredTables.filter((table) => !table.isEventTable);
     }
+
+    filteredSchemas =
+      selectedDatabase?.schemas.filter((schema) =>
+        schema.toLowerCase().includes((searchQuery || "").toLowerCase()),
+      ) || [];
   }
 
   $: {
@@ -95,6 +105,22 @@
     ) {
       autoRefreshedDatabaseTables.push(selectedDatabaseId);
       refreshTables();
+    }
+  }
+
+  $: {
+    if (selectionMode === "schema") {
+      onSelect({
+        databaseId: selectedDatabaseId,
+        tableOid: null,
+        schema: lastSelectedSchema,
+      });
+    } else if (selectionMode === "table") {
+      onSelect({
+        databaseId: selectedDatabaseId,
+        tableOid: lastSelectedTableOid,
+        schema: null,
+      });
     }
   }
 
@@ -126,26 +152,6 @@
         }, 2000);
       });
     }
-  }
-
-  function handleTableSelect(table: {
-    oid: number;
-    schema: string;
-    name: string;
-  }) {
-    onSelect({
-      databaseId: selectedDatabaseId,
-      tableOid: table.oid,
-      schema: null,
-    });
-  }
-
-  function handleSchemaSelect(schema: string) {
-    onSelect({
-      databaseId: selectedDatabaseId,
-      tableOid: null,
-      schema: schema,
-    });
   }
 
   onMount(() => {
@@ -306,6 +312,13 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
   </div>
 
   {#if selectedDatabaseId}
+    <div class="flex flex-col space-y-2 text-sm text-gray-600">
+      <p>
+        Select either a <b>schema</b> to receive messages from <i>all tables</i>
+        in that schema, <i>or</i> a <b>table</b> to receive messages from
+        <i>only that table</i>.
+      </p>
+    </div>
     <div class="border rounded-lg p-4 space-y-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-2">
@@ -315,32 +328,39 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
           </h2>
         </div>
         <div class="flex items-center space-x-2">
-          <RadioGroup.Root
-            bind:value={selectionMode}
-            class="flex items-center space-x-4"
-          >
-            <div class="flex items-center space-x-2">
-              <RadioGroup.Item value="table" id="table" />
-              <Label for="table">Tables</Label>
-            </div>
-            <div class="flex items-center space-x-2">
-              <RadioGroup.Item value="schema" id="schema" />
-              <Label for="schema">Schemas</Label>
-            </div>
-          </RadioGroup.Root>
-          {#if selectionMode === "table"}
-            <div class="relative">
-              <SearchIcon
-                class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4"
-              />
-              <Input
-                type="search"
-                placeholder="Search tables..."
-                class="pl-8"
-                bind:value={searchQuery}
-              />
-            </div>
-          {/if}
+          <div class="inline-flex rounded-md shadow-sm" role="group">
+            <Button
+              variant={selectionMode === "schema" ? "default" : "outline"}
+              class="rounded-r-none border-r-0"
+              on:click={() => {
+                selectionMode = "schema";
+              }}
+            >
+              Schemas
+            </Button>
+            <Button
+              variant={selectionMode === "table" ? "default" : "outline"}
+              class="rounded-l-none"
+              on:click={() => {
+                selectionMode = "table";
+              }}
+            >
+              Tables
+            </Button>
+          </div>
+          <div class="relative">
+            <SearchIcon
+              class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4"
+            />
+            <Input
+              type="search"
+              placeholder="Search {selectionMode === 'table'
+                ? 'tables'
+                : 'schemas'}..."
+              class="pl-8"
+              bind:value={searchQuery}
+            />
+          </div>
           <Tooltip.Root>
             <Tooltip.Trigger>
               <Button
@@ -419,13 +439,22 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
             </TableHeader>
             <TableBody>
               {#if selectionMode === "schema"}
-                {#each selectedDatabase.schemas as schema}
+                {#each filteredSchemas as schema}
                   <TableRow
-                    on:click={() => handleSchemaSelect(schema)}
-                    class="cursor-pointer hover:bg-gray-100"
+                    on:click={() => {
+                      lastSelectedSchema = schema;
+                    }}
+                    class="cursor-pointer hover:bg-gray-100 {selectedSchema ===
+                    schema
+                      ? 'bg-blue-50 hover:bg-blue-100'
+                      : ''}"
                   >
                     <TableCell class="flex items-center space-x-2">
-                      <DatabaseIcon class="h-4 w-4 text-gray-400" />
+                      {#if selectedSchema === schema}
+                        <CheckIcon class="h-4 w-4 text-green-500" />
+                      {:else}
+                        <DatabaseIcon class="h-4 w-4 text-gray-400" />
+                      {/if}
                       <span>{schema}</span>
                     </TableCell>
                   </TableRow>
@@ -444,7 +473,9 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
               {:else}
                 {#each filteredTables as table}
                   <TableRow
-                    on:click={() => handleTableSelect(table)}
+                    on:click={() => {
+                      lastSelectedTableOid = table.oid;
+                    }}
                     class="cursor-pointer {table.oid === selectedTableOid
                       ? 'bg-blue-50 hover:bg-blue-100'
                       : 'hover:bg-gray-100'}"

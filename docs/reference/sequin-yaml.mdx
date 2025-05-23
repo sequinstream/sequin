@@ -158,6 +158,8 @@ sinks:
     transform: "my-transform"       # Optional, reference to a transform function name or "none"
     filter: "my-filter"            # Optional, reference to a filter function name or "none"
     routing: "my-routing"          # Optional, reference to a routing function name or "none"
+    annotations:                   # Optional, JSON object containing additional metadata
+      my_data: "value"
     actions:                       # Optional, defaults to all
       - insert
       - update

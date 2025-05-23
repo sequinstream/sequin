@@ -534,9 +534,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     else
       Logger.warning("[SlotMessageStore] Storage not available, rejecting messages")
 
-      # Use a different error code to differentiate from the payload size limit exceeded error
-      # We actually want this one to cause the SPS to explode 💥
-      {:reply, {:error, Error.invariant(message: "Storage not available", code: :storage_not_available)}, state}
+      {:noreply, state}
     end
   end
 
@@ -609,7 +607,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end
   end
 
-  @decorate track_metrics("messages_succeeded")
+  @decorate track_metrics("messages_succeeded_noop")
   def handle_call({:messages_succeeded, [], _return_messages?}, _from, state) do
     {:reply, {:ok, 0}, state}
   end
@@ -627,7 +625,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
-    :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
+    if persisted_messages_to_drop == [] do
+      :ok
+    else
+      :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
+    end
+
     state = maybe_pull_messages_from_disk(state)
 
     maybe_finish_table_reader_batch(prev_state, state)
@@ -645,7 +648,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end
   end
 
-  @decorate track_metrics("messages_already_succeeded")
+  @decorate track_metrics("messages_already_succeeded_noop")
   def handle_call({:messages_already_succeeded, []}, _from, state) do
     {:reply, {:ok, 0}, state}
   end
@@ -990,8 +993,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   defp maybe_pull_messages_from_disk(%State{all_loaded?: false} = state) do
     should_pull_more_messages? =
-      state.payload_size_bytes < div(state.max_memory_bytes, 2) and
-        map_size(state.messages) < div(state.setting_max_messages, 2)
+      state.payload_size_bytes < div(state.max_memory_bytes, 2) and map_size(state.messages) < 100
 
     if should_pull_more_messages? do
       stream_messages_into_state(state)
@@ -1014,7 +1016,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
           new_message_count = message_count + 1
 
           if new_size <= state.max_memory_bytes and new_message_count <= state.setting_max_messages and
-               new_message_count < 10_000 do
+               new_message_count < 1_000 do
             {:cont, {[msg | messages], new_size, new_message_count, true}}
           else
             Logger.info(
@@ -1058,7 +1060,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     %State{state | all_loaded?: all_loaded?}
   end
 
-  @decorate track_metrics("delete_messages")
+  @decorate track_metrics("delete_messages_noop")
   defp delete_messages(%State{}, []), do: :ok
 
   @decorate track_metrics("delete_messages")

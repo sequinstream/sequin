@@ -1089,6 +1089,7 @@ defmodule Sequin.YamlLoader do
       raw_attrs
       |> Map.delete("transform")
       |> Map.put("function", coerce_function_inner(function))
+      |> update_in(["function", "type"], &coerce_type_to_transform/1)
 
     {:ok, attrs}
   end
@@ -1103,9 +1104,14 @@ defmodule Sequin.YamlLoader do
       flat
       |> Map.take(["id", "name"])
       |> Map.put("function", Map.take(flat, ["type", "sink_type", "code", "description", "path"]))
+      |> update_in(["function", "type"], &coerce_type_to_transform/1)
 
     {:ok, nested_attrs}
   end
+
+  # Helper function to coerce "function" type to "transform" for backwards compatibility
+  defp coerce_type_to_transform("function"), do: "transform"
+  defp coerce_type_to_transform(type), do: type
 
   defp coerce_function_inner(%{"sink_type" => "webhook"} = attrs) do
     Map.put(attrs, "sink_type", "http_push")

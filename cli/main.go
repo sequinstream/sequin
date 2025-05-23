@@ -50,35 +50,3 @@ func getVersion() string {
 
 	return nfo.Main.Version
 }
-
-func trimLogFile(file *os.File, maxLines int) error {
-	// Read all lines
-	scanner := bufio.NewScanner(file)
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-
-	// Keep only the last maxLines
-	if len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
-	}
-
-	// Truncate the file
-	if err := file.Truncate(0); err != nil {
-		return err
-	}
-	if _, err := file.Seek(0, 0); err != nil {
-		return err
-	}
-
-	// Write the trimmed lines back to the file
-	writer := bufio.NewWriter(file)
-	for _, line := range lines {
-		fmt.Fprintln(writer, line)
-	}
-	return writer.Flush()
-}

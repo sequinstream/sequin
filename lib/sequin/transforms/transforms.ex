@@ -153,7 +153,8 @@ defmodule Sequin.Transforms do
       timestamp_format: consumer.timestamp_format,
       active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
       max_retry_count: consumer.max_retry_count,
-      load_shedding_policy: consumer.load_shedding_policy
+      load_shedding_policy: consumer.load_shedding_policy,
+      annotations: consumer.annotations
     }
   end
 

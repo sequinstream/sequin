@@ -24,6 +24,7 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.TableReaderServer
 
@@ -104,6 +105,7 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
+  @spec handle_messages(Context.t(), [Message.t()]) :: {:ok, non_neg_integer()} | {:error, Sequin.Error.t()}
   def handle_messages(%Context{}, []) do
     {:ok, 0}
   end
@@ -412,12 +414,15 @@ defmodule Sequin.Runtime.MessageHandler do
     Map.new(ctx.consumers, fn consumer ->
       matching_messages =
         execute_timed(:filter_matching_messages, fn ->
-          Enum.filter(messages, &Consumers.matches_message?(consumer, &1))
+          # We do some filtering here on the
+          Enum.filter(messages, fn %SlotProcessor.Message{} = message ->
+            Consumers.matches_message?(consumer, message)
+          end)
         end)
 
       consumer_messages =
         execute_timed(:map_to_consumer_messages, fn ->
-          Enum.map(matching_messages, fn message ->
+          Enum.map(matching_messages, fn %SlotProcessor.Message{} = message ->
             cond do
               consumer.message_kind == :event ->
                 consumer_event(consumer, message)

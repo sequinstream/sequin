@@ -165,14 +165,22 @@ defmodule Sequin.MessageHandlerTest do
              }
     end
 
-    @tag skip: "FIXME: This test is broken while we work on table fan-in"
     test "fans out messages correctly for mixed message_kind consumers and wal_pipelines" do
       account = AccountsFactory.insert_account!()
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
 
       field = ReplicationFactory.field()
-      message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field])
-      message2 = ReplicationFactory.postgres_message(table_oid: 456, action: :update, fields: [field])
+      table_schema1 = Factory.postgres_object()
+      table_schema2 = Factory.postgres_object()
+
+      message1 =
+        ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field], table_schema: table_schema1)
+
+      message2 =
+        ReplicationFactory.postgres_message(table_oid: 456, action: :update, fields: [field], table_schema: table_schema2)
+
+      message3 =
+        ReplicationFactory.postgres_message(table_oid: 789, action: :insert, fields: [field], table_schema: table_schema1)
 
       sequence1 =
         DatabasesFactory.insert_sequence!(
@@ -218,11 +226,24 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
+      schema_filter = ConsumersFactory.schema_filter_attrs(schema: table_schema1)
+
+      consumer3 =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: nil,
+          sequence_filter: nil,
+          source_tables: [],
+          schema_filter: schema_filter
+        )
+
       start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer1, test_pid: self(), persisted_mode?: false]})
       start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer2, test_pid: self(), persisted_mode?: false]})
+      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer3, test_pid: self(), persisted_mode?: false]})
 
       consumer1 = Repo.preload(consumer1, [:postgres_database, :sequence, :filter])
       consumer2 = Repo.preload(consumer2, [:postgres_database, :sequence, :filter])
+      consumer3 = Repo.preload(consumer3, [:postgres_database, :sequence, :filter])
 
       database = Repo.preload(database, :sequences)
 
@@ -236,16 +257,17 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       context = %MessageHandler.Context{
-        consumers: [consumer1, consumer2],
+        consumers: [consumer1, consumer2, consumer3],
         wal_pipelines: [wal_pipeline],
         replication_slot_id: UUID.uuid4(),
         postgres_database: database
       }
 
-      {:ok, 4} = MessageHandler.handle_messages(context, [message1, message2])
+      {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2, message3])
 
       consumer1_messages = list_messages(consumer1)
       consumer2_messages = list_messages(consumer2)
+      consumer3_messages = list_messages(consumer3)
       wal_events = Replication.list_wal_events(wal_pipeline.id)
 
       assert length(consumer1_messages) == 1
@@ -253,6 +275,9 @@ defmodule Sequin.MessageHandlerTest do
 
       assert length(consumer2_messages) == 1
       assert hd(consumer2_messages).table_oid == 456
+
+      assert length(consumer3_messages) == 2
+      assert Enum.all?(consumer3_messages, &(&1.data.metadata.table_schema == table_schema1))
 
       assert length(wal_events) == 2
     end

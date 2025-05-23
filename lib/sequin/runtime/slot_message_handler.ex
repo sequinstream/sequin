@@ -331,12 +331,12 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   end
 
   defp context(%State{} = state) do
-    %MessageHandler.Context{
+    MessageHandler.Context.set_indices(%MessageHandler.Context{
       consumers: state.consumers,
       wal_pipelines: state.wal_pipelines,
       postgres_database: state.postgres_database,
       replication_slot_id: state.id,
       table_reader_mod: state.table_reader
-    }
+    })
   end
 end

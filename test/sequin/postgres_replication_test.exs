@@ -15,6 +15,7 @@ defmodule Sequin.PostgresReplicationTest do
   import ExUnit.CaptureLog
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
@@ -1671,6 +1672,18 @@ defmodule Sequin.PostgresReplicationTest do
     } do
       # Randomly select a consumer
       consumer = Enum.random([event_consumer, record_consumer])
+
+      # Attach a schema filter to the consumer
+      consumer
+      |> Ecto.Changeset.cast(%{schema_filter: ConsumersFactory.schema_filter_attrs(schema: "public")}, [])
+      |> Ecto.Changeset.cast_embed(:schema_filter, with: &SchemaFilter.create_changeset/2)
+      |> Ecto.Changeset.put_change(:sequence_id, nil)
+      |> Ecto.Changeset.put_change(:sequence_filter, nil)
+      |> Repo.update!()
+
+      # Restart the consumer to apply the changes
+      Consumers.update_sink_consumer(consumer, %{})
+      Runtime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
 
       # Verify no consumer messages yet
       assert list_messages(consumer) == []

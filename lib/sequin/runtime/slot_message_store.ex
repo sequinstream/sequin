@@ -1006,10 +1006,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
     # Stream messages and stop when we reach max_memory_bytes
     {time, {persisted_messages, current_size_bytes, message_count, all_loaded?}} =
       :timer.tc(fn ->
+        current_cursor = State.max_wal_cursor(state)
+
         state.consumer
-        |> Consumers.stream_consumer_messages_for_consumer()
+        |> Consumers.stream_consumer_messages_for_consumer(cursor: current_cursor)
         |> Stream.filter(&(message_partition(&1, state.consumer.partition_count) == state.partition))
-        |> Stream.reject(&State.message_exists?(state, &1))
         |> Enum.reduce_while({[], 0, 0, true}, fn msg, {messages, current_size, message_count, _all_loaded?} ->
           msg = %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
           new_size = current_size + msg.payload_size_bytes

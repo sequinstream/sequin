@@ -509,6 +509,24 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   end
 
   @doc """
+  Returns the maximum WAL cursor present in the state, or nil if there are no messages.
+  The cursor is returned as a tuple of {commit_lsn, commit_idx}.
+  """
+  @spec max_wal_cursor(State.t()) :: cursor_tuple() | nil
+  def max_wal_cursor(%State{} = state) do
+    if map_size(state.messages) == 0 do
+      nil
+    else
+      table = ordered_cursors_table(state)
+      # Get the last key from the ordered ETS table, which will be the max cursor
+      case :ets.last(table) do
+        :"$end_of_table" -> nil
+        max_cursor -> max_cursor
+      end
+    end
+  end
+
+  @doc """
   Returns messages that are stuck in a delivering state - they are in produced_message_groups
   but were delivered over 1 minute ago. This helps recover messages that may have been
   stuck due to crashes or other issues.

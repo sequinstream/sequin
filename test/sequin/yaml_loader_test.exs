@@ -538,6 +538,55 @@ defmodule Sequin.YamlLoaderTest do
       assert function.function.path == "record"
     end
 
+    test "docs test" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               functions:
+                 # Path function example
+                 - name: "my-path-function"
+                   description: "Extract record"       # Optional
+                   type: "path"
+                   path: "record"                     # Required for path functions
+
+                 # Transform function example
+                 - name: "my-transform-function"
+                   description: "Extract ID and action"
+                   type: "transform"
+                   code: |-                          # Required for transform functions
+                     def transform(action, record, changes, metadata) do
+                       %{
+                         id: record["id"],
+                         action: action
+                       }
+                     end
+
+                 # Filter function example
+                 - name: "my-filter-function"
+                   description: "Filter VIP customers"
+                   type: "filter"
+                   code: |-                          # Required for filter functions
+                     def filter(action, record, changes, metadata) do
+                       record["customer_type"] == "VIP"
+                     end
+
+                 # Routing function example
+                 - name: "my-routing-function"
+                   description: "Route to REST API"
+                   type: "routing"
+                   sink_type: "webhook"              # Required, sink type to route to
+                   code: |-                          # Required for routing functions
+                     def route(action, record, changes, metadata) do
+                       %{
+                         method: "POST",
+                         endpoint_path: "/api/users/\#{record["id"]}"
+                       }
+                     end
+               """)
+    end
+
     test "creates a function backwards compatible with transforms" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
@@ -1534,7 +1583,7 @@ defmodule Sequin.YamlLoaderTest do
       end
     end
 
-    test "creates webhook subscription with routing function reference" do
+    test "creates webhook subscription with routing and filter functions" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
@@ -1551,6 +1600,13 @@ defmodule Sequin.YamlLoaderTest do
                            endpoint_path: "/custom/\#{record["id"]}"
                          }
                        end
+                 - name: "my-filter"
+                   function:
+                     type: "filter"
+                     code: |-
+                       def filter(action, record, changes, metadata) do
+                         true
+                       end
 
                http_endpoints:
                  - name: "sequin-playground-http"
@@ -1564,10 +1620,11 @@ defmodule Sequin.YamlLoaderTest do
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
                    routing: "my-routing"
+                   filter: "my-filter"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, [:sequence, :routing])
+      consumer = Repo.preload(consumer, [:sequence, :routing, :filter])
 
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "test-db.public.Characters"
@@ -1579,6 +1636,13 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.routing.function.sink_type == :http_push
       assert consumer.routing.function.code =~ "def route(action, record, changes, metadata)"
       assert consumer.routing.function.code =~ "/custom/"
+
+      # Check filter function reference was used
+      assert consumer.filter
+      assert consumer.filter.name == "my-filter"
+      assert consumer.filter.function.type == :filter
+      assert consumer.filter.function.code =~ "def filter(action, record, changes, metadata)"
+      assert consumer.filter.function.code =~ "true"
     end
 
     test "creates webhook subscription with new yaml names" do

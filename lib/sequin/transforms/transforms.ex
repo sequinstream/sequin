@@ -744,6 +744,12 @@ defmodule Sequin.Transforms do
               {:halt, {:error, error}}
           end
 
+        "filter" ->
+          case parse_transform_id(account_id, value) do
+            {:ok, transform_id} -> {:cont, {:ok, Map.put(acc, :filter_id, transform_id)}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+
         "timestamp_format" ->
           {:cont, {:ok, Map.put(acc, :timestamp_format, value)}}
 

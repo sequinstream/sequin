@@ -581,6 +581,22 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp decode_params(form, socket) do
     sink = decode_sink(socket.assigns.consumer.type, form["sink"])
 
+    schema_filter =
+      if form["schema"] do
+        %{
+          "schema" => form["schema"]
+        }
+      end
+
+    sequence_filter =
+      if form["tableOid"] do
+        %{
+          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
+          "actions" => form["sourceTableActions"],
+          "group_column_attnums" => form["groupColumnAttnums"]
+        }
+      end
+
     params =
       %{
         "consumer_kind" => form["consumerKind"],
@@ -594,11 +610,8 @@ defmodule SequinWeb.Components.ConsumerForm do
         "name" => form["name"],
         "postgres_database_id" => form["postgresDatabaseId"],
         "table_oid" => form["tableOid"],
-        "sequence_filter" => %{
-          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
-          "actions" => form["sourceTableActions"],
-          "group_column_attnums" => form["groupColumnAttnums"]
-        },
+        "schema_filter" => schema_filter,
+        "sequence_filter" => sequence_filter,
         "batch_size" => form["batchSize"],
         "batch_timeout_ms" => form["batchTimeoutMs"],
         "initial_backfill" => decode_initial_backfill(form),
@@ -846,6 +859,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
       "status" => consumer.status,
       "table_oid" => source_table && source_table.oid,
+      "schema" => consumer.schema_filter && consumer.schema_filter.schema,
       "type" => consumer.type,
       "transform_id" => consumer.transform_id,
       "timestamp_format" => consumer.timestamp_format,
@@ -1041,14 +1055,16 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp encode_database(database) do
+    eligible_tables = Databases.reject_sequin_internal_tables(database.tables)
+
+    encoded_tables = eligible_tables |> Enum.map(&encode_table/1) |> Enum.sort_by(&{&1["schema"], &1["name"]}, :asc)
+    schemas = eligible_tables |> Enum.map(& &1.schema) |> Enum.uniq()
+
     %{
       "id" => database.id,
       "name" => database.name,
-      "tables" =>
-        database.tables
-        |> Databases.reject_sequin_internal_tables()
-        |> Enum.map(&encode_table/1)
-        |> Enum.sort_by(&{&1["schema"], &1["name"]}, :asc)
+      "tables" => encoded_tables,
+      "schemas" => schemas
     }
   end
 

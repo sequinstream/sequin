@@ -538,6 +538,39 @@ defmodule Sequin.YamlLoaderTest do
       assert function.function.path == "record"
     end
 
+    test "creates a function backwards compatible with transforms" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Configured by Sequin"
+
+               transforms:
+                 - name: "my-path-transform"           # Required, unique name for this transform
+                   description: "Extract record"       # Optional, description of the transform
+                   transform:                          # Required, transform configuration
+                     type: "path"                      # Required, "path" or "function"
+                     path: "record"                    # Optional, path to extract from the message (Required if type is "path")
+                 - name: "my-function-transform"
+                   transform:
+                     type: "function"
+                     code: |-                          # Optional, Elixir code to transform the message (Required if type is "function")
+                       def transform(action, record, changes, metadata) do
+                         %{id: record["id"], action: action}
+                       end
+               """)
+
+      assert [function1, function2] = Repo.all(Function)
+      assert function1.name == "my-path-transform"
+      assert function1.type == "path"
+      assert function1.function.path == "record"
+
+      assert function2.name == "my-function-transform"
+      assert function2.type == "transform"
+
+      assert function2.function.code ==
+               "def transform(action, record, changes, metadata) do\n  %{id: record[\"id\"], action: action}\nend"
+    end
+
     test "updates an existing function" do
       # First create the function
       assert :ok =

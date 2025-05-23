@@ -842,11 +842,15 @@ Please help me create or modify the Elixir function transform to achieve the des
                   <AlertDialogDescription>
                     This function is currently being used by the following
                     consumers:
-                    <ul class="list-disc pl-4 mt-2 space-y-1">
-                      {#each usedByConsumers as consumer}
-                        <li class="font-mono">{consumer.name}</li>
-                      {/each}
-                    </ul>
+                    <div
+                      class="max-h-[40vh] overflow-y-auto mt-2 border border-slate-200 dark:border-slate-700 rounded-md p-2"
+                    >
+                      <ul class="list-disc pl-4 space-y-1">
+                        {#each usedByConsumers as consumer}
+                          <li class="font-mono">{consumer.name}</li>
+                        {/each}
+                      </ul>
+                    </div>
                     <p class="mt-2">
                       Are you sure you want to update this function? This may
                       affect the behavior of these consumers.
@@ -1020,7 +1024,7 @@ Please help me create or modify the Elixir function transform to achieve the des
               <SelectTrigger>
                 <SelectValue placeholder="Select a table" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent class="max-h-[80vh] overflow-y-auto">
                 {#each selectedDatabase.tables as table}
                   <SelectItem value={table.oid}
                     >{table.schema}.{table.name}</SelectItem

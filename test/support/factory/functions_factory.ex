@@ -156,7 +156,7 @@ defmodule Sequin.Factory.FunctionsFactory do
           :redis_string ->
             """
             %{
-              key: record.id || 'default',
+              key: record["id"] || "default",
               value: record
             }
             """

@@ -25,6 +25,10 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Databases.PostgresDatabasePrimary
   alias Sequin.Databases.Sequence
   alias Sequin.Error.BadRequestError
+  alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.FunctionsFactory
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalPipeline
   alias Sequin.Test.UnboxedRepo
@@ -696,7 +700,7 @@ defmodule Sequin.YamlLoaderTest do
       end
     end
 
-    test "creates a function function" do
+    test "creates a transform function" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                account:
@@ -730,6 +734,64 @@ defmodule Sequin.YamlLoaderTest do
                  }
                end
                """)
+    end
+
+    test "removing transform/filter/routing keys will remove attached functions from a sink" do
+      account = AccountsFactory.insert_account!()
+      table_attrs = DatabasesFactory.table_attrs()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id, tables: [table_attrs])
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          account_id: account.id,
+          postgres_database_id: database.id,
+          table_oid: table_attrs.oid,
+          table_name: table_attrs.name,
+          table_schema: table_attrs.schema
+        )
+
+      transform = FunctionsFactory.insert_transform_function!(account_id: account.id)
+      filter = FunctionsFactory.insert_filter_function!(account_id: account.id)
+      routing = FunctionsFactory.insert_routing_function!(account_id: account.id)
+
+      sink =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          type: :redis_string,
+          sequence_id: sequence.id,
+          postgres_database_id: database.id,
+          transform_id: transform.id,
+          filter_id: filter.id,
+          routing_mode: :dynamic,
+          routing_id: routing.id
+        )
+
+      sink = Repo.preload(sink, [:transform, :filter, :routing, :postgres_database, :sequence])
+
+      assert %Function{} = sink.transform
+      assert %Function{} = sink.filter
+      assert %Function{} = sink.routing
+
+      database_name = sink.postgres_database.name
+      table_name = "#{sink.sequence.table_schema}.#{sink.sequence.table_name}"
+
+      assert :ok =
+               YamlLoader.apply_from_yml!(account.id, """
+               sinks:
+                 - name: #{sink.name}
+                   database: #{database_name}
+                   table: #{table_name}
+                   destination:
+                     type: "redis_string"
+                     host: #{sink.sink.host}
+                     port: #{sink.sink.port}
+               """)
+
+      sink = sink |> Repo.reload() |> Repo.preload([:transform, :filter, :routing])
+
+      assert is_nil(sink.transform)
+      assert is_nil(sink.filter)
+      assert is_nil(sink.routing)
     end
   end
 

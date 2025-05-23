@@ -31,6 +31,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Metrics
   alias Sequin.Repo
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
+  alias Sequin.Runtime.SlotProcessor
   alias Sequin.Time
   alias Sequin.Tracer.Server, as: TracerServer
 
@@ -1100,7 +1101,7 @@ defmodule Sequin.Consumers do
   # Source Table Matching
   def matches_message?(
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
-        message
+        %SlotProcessor.Message{} = message
       ) do
     matches? = matches_message?(sequence, sequence_filter, message)
 
@@ -1122,7 +1123,7 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
-  def matches_message?(consumer_or_wal_pipeline, message) do
+  def matches_message?(consumer_or_wal_pipeline, %SlotProcessor.Message{} = message) do
     matches? =
       Enum.any?(consumer_or_wal_pipeline.source_tables, fn %SourceTable{} = source_table ->
         table_matches = source_table.oid == message.table_oid
@@ -1167,7 +1168,7 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
-  def matches_message?(%Sequence{} = sequence, %SequenceFilter{} = sequence_filter, message) do
+  def matches_message?(%Sequence{} = sequence, %SequenceFilter{} = sequence_filter, %SlotProcessor.Message{} = message) do
     table_matches? = sequence.table_oid == message.table_oid
     actions_match? = action_matches?(sequence_filter.actions, message.action)
     column_filters_match? = column_filters_match_message?(sequence_filter.column_filters, message)
@@ -1178,10 +1179,10 @@ defmodule Sequin.Consumers do
   def matches_record?(
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         table_oid,
-        record
+        record_attnums_to_values
       ) do
     table_matches? = sequence.table_oid == table_oid
-    column_filters_match? = column_filters_match_record?(sequence_filter.column_filters, record)
+    column_filters_match? = column_filters_match_record?(sequence_filter.column_filters, record_attnums_to_values)
 
     Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
@@ -1199,13 +1200,8 @@ defmodule Sequin.Consumers do
 
   def matches_filter?(%SinkConsumer{filter: nil}, _), do: true
 
-  def matches_filter?(%SinkConsumer{filter: filter} = consumer, %ConsumerEvent{data: data}) do
-    filter
-    |> MiniElixir.run_compiled(data)
-    |> check_filter_return(consumer)
-  end
-
-  def matches_filter?(%SinkConsumer{filter: filter} = consumer, %ConsumerRecord{data: data}) do
+  def matches_filter?(%SinkConsumer{filter: filter} = consumer, %cm{data: data})
+      when cm in [ConsumerRecord, ConsumerEvent] do
     filter
     |> MiniElixir.run_compiled(data)
     |> check_filter_return(consumer)
@@ -1235,7 +1231,7 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  defp column_filters_match_record?([], _message), do: true
+  defp column_filters_match_record?([], _record_attnums_to_values), do: true
 
   defp column_filters_match_record?(column_filters, record_attnums_to_values) do
     Enum.all?(column_filters, fn %ColumnFilter{} = filter ->

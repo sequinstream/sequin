@@ -215,4 +215,54 @@ defmodule Sequin.ConfigParser do
         raise ArgumentError, "REDIS_POOL_SIZE must be a positive integer. Got: #{inspect(pool_size)}."
     end
   end
+
+  @doc """
+  Returns the value of REPLICATION_FLUSH_MAX_ACCUMULATED_BYTES as a positive integer, or nil if not set/invalid.
+  """
+  def replication_flush_max_accumulated_bytes(env) do
+    parse_positive_int(env["REPLICATION_FLUSH_MAX_ACCUMULATED_BYTES"], "REPLICATION_FLUSH_MAX_ACCUMULATED_BYTES")
+  end
+
+  @doc """
+  Returns the value of REPLICATION_FLUSH_MAX_ACCUMULATED_MESSAGES as a positive integer, or nil if not set/invalid.
+  """
+  def replication_flush_max_accumulated_messages(env) do
+    parse_positive_int(env["REPLICATION_FLUSH_MAX_ACCUMULATED_MESSAGES"], "REPLICATION_FLUSH_MAX_ACCUMULATED_MESSAGES")
+  end
+
+  @doc """
+  Returns the value of REPLICATION_FLUSH_MAX_ACCUMULATED_TIME_MS as a positive integer, or nil if not set/invalid.
+  """
+  def replication_flush_max_accumulated_time_ms(env) do
+    parse_positive_int(env["REPLICATION_FLUSH_MAX_ACCUMULATED_TIME_MS"], "REPLICATION_FLUSH_MAX_ACCUMULATED_TIME_MS")
+  end
+
+  # Parse a positive integer from an environment variable.
+  # Returns the integer if valid, or nil if the value is invalid or not positive (and raise: false).
+  #
+  # ## Options
+  # * `:raise` - If true, raises an ArgumentError when the value is invalid. Defaults to false.
+  #
+  defp parse_positive_int(env_value, env_name, opts \\ []) do
+    raise_error = Keyword.get(opts, :raise, false)
+
+    case env_value do
+      nil ->
+        nil
+
+      value ->
+        case Integer.parse(value) do
+          {int, ""} when int > 0 ->
+            int
+
+          _ ->
+            if raise_error do
+              raise ArgumentError, "#{env_name} must be a positive integer. Got: #{inspect(value)}."
+            else
+              Logger.warning("#{env_name} must be a positive integer. Got: #{inspect(value)}. Ignoring.")
+              nil
+            end
+        end
+    end
+  end
 end

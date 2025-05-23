@@ -153,7 +153,8 @@ defmodule Sequin.Transforms do
       timestamp_format: consumer.timestamp_format,
       active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
       max_retry_count: consumer.max_retry_count,
-      load_shedding_policy: consumer.load_shedding_policy
+      load_shedding_policy: consumer.load_shedding_policy,
+      annotations: consumer.annotations
     }
   end
 
@@ -680,7 +681,8 @@ defmodule Sequin.Transforms do
   end
 
   def from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints) do
-    Enum.reduce_while(consumer_attrs, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+    consumer_attrs
+    |> Enum.reduce_while({:ok, %{}}, fn {key, value}, {:ok, acc} ->
       case key do
         "name" ->
           {:cont, {:ok, Map.put(acc, :name, value)}}
@@ -705,7 +707,7 @@ defmodule Sequin.Transforms do
           databases = Repo.preload(databases, [:sequences, :replication_slot])
 
           with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
-               {:ok, sequence} <- find_sequence_by_name(databases, consumer_attrs["database"], value) do
+               {:ok, sequence} <- find_sequence_by_name(database, value) do
             table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
 
             {:cont,
@@ -789,6 +791,20 @@ defmodule Sequin.Transforms do
           {:halt, {:error, Error.validation(summary: "Unknown field: #{key}")}}
       end
     end)
+    |> case do
+      {:ok, acc} ->
+        {:ok,
+         acc
+         # These put_news will remove the transform, filter, and routing keys from the sink
+         # if the keys are not present in the consumer_attrs
+         |> Map.put_new(:transform_id, nil)
+         |> Map.put_new(:filter_id, nil)
+         |> Map.put_new(:routing_id, nil)
+         |> Map.put_new(:routing_mode, "static")}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   defp parse_sink(nil, _resources), do: {:error, Error.validation(summary: "`sink` is required on sink consumers.")}
@@ -1055,16 +1071,15 @@ defmodule Sequin.Transforms do
     end
   end
 
-  defp find_sequence_by_name(databases, database_name, table_name) do
+  defp find_sequence_by_name(%PostgresDatabase{} = database, table_name) do
     {schema, table_name} = parse_table_reference(table_name)
 
-    with %PostgresDatabase{tables: tables} = database <- Enum.find(databases, &(&1.name == database_name)),
-         %PostgresDatabaseTable{} = table <- Enum.find(tables, &(&1.schema == schema and &1.name == table_name)),
+    with %PostgresDatabaseTable{} = table <- Enum.find(database.tables, &(&1.schema == schema and &1.name == table_name)),
          {:ok, %Sequence{} = sequence} <- find_or_create_sequence(database, table) do
       {:ok, sequence}
     else
       {:error, error} -> {:error, error}
-      _ -> {:error, Error.not_found(entity: :sequence, params: %{database: database_name, table: table_name})}
+      _ -> {:error, Error.not_found(entity: :sequence, params: %{database: database.name, table: table_name})}
     end
   end
 

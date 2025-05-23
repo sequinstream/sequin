@@ -37,7 +37,7 @@
   import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
   import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
-  import TableSelector from "../components/TableSelector.svelte";
+  import TableOrSchemaSelector from "../components/TableOrSchemaSelector.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -56,6 +56,7 @@
     id: string;
     name: string;
     tables: DatabaseTable[];
+    schemas: string[];
   };
 
   export let live;
@@ -84,6 +85,7 @@
     messageKind: MessageKind;
     maxMemoryMb: number;
     postgresDatabaseId: string | null;
+    schema: string | null;
     tableOid: number | null;
     sourceTableFilters: any[];
     sourceTableActions: string[];
@@ -113,6 +115,7 @@
     messageKind: (consumer.message_kind || "event") as MessageKind,
     maxMemoryMb: Number(consumer.max_memory_mb),
     postgresDatabaseId: consumer.postgres_database_id,
+    schema: consumer.schema,
     tableOid: consumer.table_oid,
     sourceTableFilters: consumer.source_table_filters || [],
     sourceTableActions: consumer.source_table_actions || [],
@@ -258,7 +261,11 @@
     });
   }
 
-  function handleTableSelect(event: { databaseId: string; tableOid: number }) {
+  function handleTableSelect(event: {
+    databaseId: string;
+    tableOid: number;
+    schema: string;
+  }) {
     if (form.tableOid !== event.tableOid) {
       form.groupColumnAttnums = [];
       form.messageKind = "event";
@@ -266,6 +273,7 @@
 
     form.postgresDatabaseId = event.databaseId;
     form.tableOid = event.tableOid;
+    form.schema = event.schema;
 
     // Set the form name based on the selected table
     if (form.tableOid) {
@@ -430,7 +438,7 @@
               </SelectTrigger>
             </Select>
           {:else}
-            <TableSelector
+            <TableOrSchemaSelector
               {databases}
               onSelect={handleTableSelect}
               {pushEvent}

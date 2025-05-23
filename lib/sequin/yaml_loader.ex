@@ -160,8 +160,8 @@ defmodule Sequin.YamlLoader do
   end
 
   # Hack to give a better error message when table is missing
-  defp map_error(%NotFoundError{entity: :sequence} = error), do: dbg(%{error | entity: :postgres_table})
-  defp map_error(error), do: dbg(error)
+  defp map_error(%NotFoundError{entity: :sequence} = error), do: %{error | entity: :postgres_table}
+  defp map_error(error), do: error
 
   defp apply_config(account_id, config, opts) do
     with {:ok, account} <- find_or_create_account(account_id, config),

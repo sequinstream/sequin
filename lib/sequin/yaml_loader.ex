@@ -59,8 +59,8 @@ defmodule Sequin.YamlLoader do
     :ok
   end
 
-  def apply_from_yml!(yml) do
-    case apply_from_yml(yml) do
+  def apply_from_yml!(account_id \\ nil, yml) do
+    case apply_from_yml(account_id, yml) do
       {:ok, _resources} ->
         :ok
 

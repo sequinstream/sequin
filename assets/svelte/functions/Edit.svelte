@@ -1020,7 +1020,7 @@ Please help me create or modify the Elixir function transform to achieve the des
               <SelectTrigger>
                 <SelectValue placeholder="Select a table" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent class="max-h-[80vh] overflow-y-auto">
                 {#each selectedDatabase.tables as table}
                   <SelectItem value={table.oid}
                     >{table.schema}.{table.name}</SelectItem

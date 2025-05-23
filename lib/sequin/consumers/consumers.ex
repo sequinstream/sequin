@@ -1234,12 +1234,13 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
-  def matches_message?(%Sequence{} = sequence, %SequenceFilter{} = sequence_filter, %SlotProcessor.Message{} = message) do
-    table_matches? = sequence.table_oid == message.table_oid
+  def matches_message?(%Sequence{} = _sequence, %SequenceFilter{} = sequence_filter, %SlotProcessor.Message{} = message) do
+    # table_matches? = sequence.table_oid == message.table_oid
     actions_match? = action_matches?(sequence_filter.actions, message.action)
     column_filters_match? = column_filters_match_message?(sequence_filter.column_filters, message)
 
-    table_matches? and actions_match? and column_filters_match?
+    # table_matches? and actions_match? and column_filters_match?
+    actions_match? and column_filters_match?
   end
 
   def matches_record?(

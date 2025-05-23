@@ -737,5 +737,23 @@ defmodule Sequin.TransformsTest do
 
       assert Exception.message(ex) =~ "line: 3"
     end
+
+    test "access sink annotations" do
+      account = AccountsFactory.insert_account!()
+
+      assert {:ok, xf} =
+               Consumers.create_function(
+                 account.id,
+                 FunctionsFactory.function_attrs(
+                   function_type: :transform,
+                   function_attrs: [body: "metadata.consumer.annotations"]
+                 )
+               )
+
+      consumer = %SinkConsumer{transform: xf}
+      message = ConsumersFactory.consumer_message(message_kind: :event)
+      result = Transforms.Message.to_external(consumer, message)
+      assert %{"test" => true} == result
+    end
   end
 end

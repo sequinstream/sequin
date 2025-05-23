@@ -234,7 +234,7 @@
       );
     }
 
-    if (form.tableOid && selectedDatabase) {
+    if (selectedDatabase) {
       selectedTable = selectedDatabase.tables.find(
         (table) => table.oid === form.tableOid,
       );
@@ -247,7 +247,8 @@
       }
     }
 
-    isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
+    isCreateConsumerDisabled =
+      !form.postgresDatabaseId || (!form.tableOid && !form.schema);
   }
 
   const isEditMode = !!consumer.id;
@@ -276,19 +277,17 @@
     form.schema = event.schema;
 
     // Set the form name based on the selected table
-    if (form.tableOid) {
-      const selectedDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId,
+    const selectedDatabase = databases.find(
+      (db) => db.id === form.postgresDatabaseId,
+    );
+    if (selectedDatabase) {
+      const selectedTable = selectedDatabase.tables.find(
+        (table) => table.oid === form.tableOid,
       );
-      if (selectedDatabase) {
-        const selectedTable = selectedDatabase.tables.find(
-          (table) => table.oid === form.tableOid,
-        );
-        if (selectedTable) {
-          const tableName = selectedTable.name;
-          const newName = `${tableName}_sink`;
-          form.name = newName;
-        }
+      if (selectedTable) {
+        const tableName = selectedTable.name;
+        const newName = `${tableName}_sink`;
+        form.name = newName;
       }
     }
   }
@@ -444,6 +443,7 @@
               {pushEvent}
               selectedDatabaseId={form.postgresDatabaseId}
               selectedTableOid={form.tableOid}
+              selectedSchema={form.schema}
             />
 
             {#if errors.consumer.postgres_database_id}

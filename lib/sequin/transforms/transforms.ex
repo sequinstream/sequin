@@ -6,6 +6,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
@@ -327,6 +328,15 @@ defmodule Sequin.Transforms do
       description: function.description,
       type: function.type,
       sink_type: function.function.sink_type,
+      code: function.function.code
+    }
+  end
+
+  def to_external(%Function{function: %FilterFunction{}} = function, _show_sensitive) do
+    %{
+      name: function.name,
+      description: function.description,
+      type: function.type,
       code: function.function.code
     }
   end

@@ -65,15 +65,15 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   ]
 
   def max_accumulated_bytes do
-    Application.get_env(:sequin, :slot_processor_max_accumulated_bytes) || @max_accumulated_bytes
+    get_config(:max_accumulated_bytes) || @max_accumulated_bytes
   end
 
   def max_accumulated_messages do
-    Application.get_env(:sequin, :slot_processor_max_accumulated_messages) || @max_accumulated_messages
+    get_config(:max_accumulated_messages) || @max_accumulated_messages
   end
 
   def max_accumulated_messages_time_ms do
-    case Application.get_env(:sequin, :slot_processor_max_accumulated_messages_time_ms) do
+    case get_config(:max_accumulated_messages_time_ms) do
       nil ->
         if Application.get_env(:sequin, :env) == :test do
           # We can lower this even more when we handle heartbeat messages sync
@@ -81,7 +81,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           # regular messages get a chance to come through and be part of the batch.
           30
         else
-          10
+          50
         end
 
       value ->
@@ -90,15 +90,26 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   def set_max_accumulated_messages(value) do
-    Application.put_env(:sequin, :slot_processor_max_accumulated_messages, value)
+    put_config(:max_accumulated_messages, value)
   end
 
   def set_max_accumulated_bytes(value) do
-    Application.put_env(:sequin, :slot_processor_max_accumulated_bytes, value)
+    put_config(:max_accumulated_bytes, value)
   end
 
   def set_max_accumulated_messages_time_ms(value) do
-    Application.put_env(:sequin, :slot_processor_max_accumulated_messages_time_ms, value)
+    put_config(:max_accumulated_messages_time_ms, value)
+  end
+
+  defp get_config(key) do
+    config = Application.get_env(:sequin, __MODULE__, [])
+    Keyword.get(config, key)
+  end
+
+  defp put_config(key, value) do
+    current_config = Application.get_env(:sequin, __MODULE__, [])
+    updated_config = Keyword.put(current_config, key, value)
+    Application.put_env(:sequin, __MODULE__, updated_config)
   end
 
   def ets_table, do: __MODULE__

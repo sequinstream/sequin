@@ -48,10 +48,22 @@ func processEnvVars(yamlContent []byte) ([]byte, error) {
 
 // Interpolate reads a YAML file, processes environment variables, and outputs the result
 func Interpolate(inputPath, outputPath string) error {
-	// Read YAML file
-	yamlContent, err := os.ReadFile(inputPath)
-	if err != nil {
-		return fmt.Errorf("failed to read YAML file: %w", err)
+	var yamlContent []byte
+	var err error
+
+	// Read YAML content from stdin or file
+	if inputPath == "-" {
+		// Read from stdin
+		yamlContent, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+	} else {
+		// Read from file
+		yamlContent, err = os.ReadFile(inputPath)
+		if err != nil {
+			return fmt.Errorf("failed to read YAML file: %w", err)
+		}
 	}
 
 	// Process environment variables

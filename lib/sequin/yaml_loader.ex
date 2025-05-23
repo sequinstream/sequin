@@ -112,6 +112,27 @@ defmodule Sequin.YamlLoader do
     end
   end
 
+  def apply_from_stdin! do
+    load_app()
+    ensure_repo_started!()
+
+    Logger.info("Reading config from stdin")
+
+    case IO.read(:stdio, :eof) do
+      :eof ->
+        Logger.info("No config data received from stdin")
+
+      {:error, reason} ->
+        raise "Failed to read config from stdin: #{inspect(reason)}"
+
+      yml when is_binary(yml) ->
+        Logger.info("Received config data, applying...")
+        apply_from_yml!(yml)
+    end
+
+    :ok
+  end
+
   def plan_from_yml(account_id \\ nil, yml, opts \\ []) do
     ## return a list of changesets
     case YamlElixir.read_from_string(yml, merge_anchors: true) do

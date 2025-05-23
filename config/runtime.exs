@@ -170,8 +170,7 @@ if config_env() == :prod and self_hosted do
   config :sequin, SequinWeb.Endpoint,
     # `url` is used for configuring links in the console. So it corresponds to the *external*
     # host and port of the application
-    # TODO: Default to 443
-    url: [host: server_host, port: server_port, scheme: "https"],
+    url: [host: server_host, port: 443, scheme: "https"],
     check_origin: check_origin,
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},

@@ -68,6 +68,11 @@ The request body can include any of the following fields:
   Possible values include `iso8601` and `unix_microsecond`.
 </ParamField>
 
+<ParamField body="annotations" type="object">
+  Additional metadata you can attach to this sink consumer. Annotations can be any JSON object (not a list or a scalar).
+  You can use annotations in your [transform](/reference/transforms), to attach additional information about the sink to each message.
+</ParamField>
+
 <ParamField body="destination" type="object">
   The destination configuration for the sink consumer. The shape varies by destination type.
   <Expandable title="Kafka">

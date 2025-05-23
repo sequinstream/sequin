@@ -19,6 +19,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
+  alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -134,7 +135,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   def sink_consumer_attrs(attrs \\ []) do
     attrs
     |> sink_consumer()
-    |> Sequin.Map.from_ecto()
     |> Map.update!(:sink, &Sequin.Map.from_ecto/1)
     |> Map.update!(:source_tables, fn source_tables ->
       Enum.map(source_tables, fn source_table ->
@@ -154,6 +154,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         end)
       end
     end)
+    |> Sequin.Map.from_ecto()
   end
 
   def insert_sink_consumer!(attrs \\ []) do
@@ -836,6 +837,23 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> sequence_filter_column_filter()
     |> Sequin.Map.from_ecto()
+  end
+
+  def schema_filter(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %SchemaFilter{
+        schema: Factory.postgres_object()
+      },
+      attrs
+    )
+  end
+
+  def schema_filter_attrs(attrs \\ []) do
+    attrs
+    |> schema_filter()
+    |> Sequin.Map.from_ecto(keep_nils: true)
   end
 
   def backfill(attrs \\ []) do

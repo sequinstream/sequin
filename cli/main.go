@@ -3,14 +3,12 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"runtime/debug"
 
 	"github.com/choria-io/fisk"
 
 	"github.com/sequinstream/sequin/cli/cli"
-	"github.com/sequinstream/sequin/cli/constants"
 )
 
 var (
@@ -19,23 +17,6 @@ var (
 )
 
 func main() {
-	// Set up logging
-	logFile, err := os.OpenFile(constants.LogFilePath, os.O_RDWR|os.O_CREATE, 0644)
-	if err != nil {
-		log.Fatal("Failed to open log file:", err)
-	}
-	defer logFile.Close()
-
-	// Trim log file to latest 1000 lines
-	if err := trimLogFile(logFile, 1000); err != nil {
-		log.Println("Failed to trim log file:", err)
-	}
-
-	log.SetOutput(logFile)
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-
-	log.Println("Starting Sequin CLI version:", getVersion())
-
 	help := `Sequin CLI
 
 See 'sequin cheat' for a quick cheatsheet of commands`

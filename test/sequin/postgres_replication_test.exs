@@ -1485,6 +1485,39 @@ defmodule Sequin.PostgresReplicationTest do
       assert length(list_messages(consumer)) == 1
     end
 
+    test "consumer fans in events/records from multiple tables", %{
+      event_consumer: event_consumer,
+      record_consumer: record_consumer
+    } do
+      # Randomly select a consumer
+      consumer = Enum.random([event_consumer, record_consumer])
+
+      # Verify no consumer messages yet
+      assert list_messages(consumer) == []
+
+      # Insert characters in two different tables and wait for each to be flushed
+      matching_character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+      assert_receive {SlotProcessorServer, :flush_messages}, 500
+
+      matching_character_detailed = CharacterFactory.insert_character_detailed!([], repo: UnboxedRepo)
+      assert_receive {SlotProcessorServer, :flush_messages}, 100
+
+      # Fetch consumer messages
+      messages = list_messages(consumer)
+      assert length(messages) == 2
+      [consumer_message1, consumer_message2] = messages
+
+      # Assert the consumer message details
+      assert consumer_message1.consumer_id == consumer.id
+      assert consumer_message2.consumer_id == consumer.id
+
+      assert consumer_message1.table_oid == Character.table_oid()
+      assert consumer_message2.table_oid == CharacterDetailed.table_oid()
+
+      assert consumer_message1.record_pks == [to_string(matching_character.id)]
+      assert consumer_message2.record_pks == [to_string(matching_character_detailed.id)]
+    end
+
     test "inserts are fanned out to both events and records", %{
       event_consumer: event_consumer,
       record_consumer: record_consumer

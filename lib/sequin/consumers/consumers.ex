@@ -514,6 +514,7 @@ defmodule Sequin.Consumers do
           Enumerable.t(ConsumerRecord.t() | ConsumerEvent.t())
   def stream_consumer_messages_for_consumer(%SinkConsumer{id: consumer_id} = consumer, opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 1000)
+    initial_cursor = Keyword.get(opts, :cursor)
 
     module =
       case consumer.message_kind do
@@ -526,6 +527,14 @@ defmodule Sequin.Consumers do
       |> where([m], m.consumer_id == ^consumer_id)
       |> order_by([m], asc: m.commit_lsn, asc: m.commit_idx)
       |> limit(^batch_size)
+
+    initial_query =
+      if is_nil(initial_cursor) do
+        initial_query
+      else
+        {commit_lsn, commit_idx} = initial_cursor
+        where(initial_query, [m], {m.commit_lsn, m.commit_idx} > {^commit_lsn, ^commit_idx})
+      end
 
     # Query, prev_results, last_cursor
     # last_cursor is {commit_lsn, commit_idx} of the last record

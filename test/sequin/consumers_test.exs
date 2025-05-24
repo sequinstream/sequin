@@ -2533,6 +2533,63 @@ defmodule Sequin.ConsumersTest do
       streamed_lsns = Enum.map(streamed_messages, & &1.commit_lsn)
       assert streamed_lsns == Enum.map(1..10, fn i -> i * 100 end)
     end
+
+    test "initial cursor filters out messages before the cursor" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      # Create messages with different commit LSNs and indexes
+      messages = [
+        # LSN: 100, IDX: 1
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 100,
+          commit_idx: 1
+        ),
+        # LSN: 100, IDX: 2
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 100,
+          commit_idx: 2
+        ),
+        # LSN: 200, IDX: 1
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 200,
+          commit_idx: 1
+        ),
+        # LSN: 300, IDX: 1
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 300,
+          commit_idx: 1
+        )
+      ]
+
+      # Set cursor to (100, 2) - should only return messages with cursor > (100, 2)
+      initial_cursor = {100, 2}
+
+      streamed_messages =
+        consumer
+        |> Consumers.stream_consumer_messages_for_consumer(cursor: initial_cursor)
+        |> Enum.to_list()
+
+      # Should only return the last two messages (200,1) and (300,1)
+      assert length(streamed_messages) == 2
+
+      # Check that we only got messages with cursors > (100, 2)
+      streamed_cursors = Enum.map(streamed_messages, &{&1.commit_lsn, &1.commit_idx})
+      assert Enum.all?(streamed_cursors, fn cursor -> cursor > initial_cursor end)
+
+      # Make sure the specific expected messages are returned
+      expected_messages = [Enum.at(messages, 2), Enum.at(messages, 3)]
+      expected_ids = expected_messages |> Enum.map(& &1.id) |> Enum.sort()
+      actual_ids = streamed_messages |> Enum.map(& &1.id) |> Enum.sort()
+      assert actual_ids == expected_ids
+    end
   end
 
   describe "consumer_partition_size_bytes/1" do

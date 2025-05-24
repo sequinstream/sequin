@@ -14,6 +14,7 @@ defmodule Sequin.Consumers.HttpPushSink do
     use Ecto.Schema
     use TypedEctoSchema
 
+    alias Sequin.Aws.HttpClient
     alias Sequin.Encrypted
 
     typed_embedded_schema do
@@ -50,6 +51,25 @@ defmodule Sequin.Consumers.HttpPushSink do
 
     def sqs_url_regex do
       ~r/^https:\/\/sqs\.(?<region>[a-z0-9-]+)\.amazonaws\.com\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/
+    end
+
+    @doc """
+    Creates an AWS client for the SQS service using the credentials from the Via struct.
+    """
+    def aws_client(%__MODULE__{} = via) do
+      via.access_key_id
+      |> AWS.Client.create(via.secret_access_key, via.region)
+      |> HttpClient.put_client()
+    end
+
+    @doc """
+    Extracts the AWS region from the given SQS queue URL.
+    """
+    def region_from_url(queue_url) do
+      case Regex.named_captures(sqs_url_regex(), queue_url) do
+        %{"region" => region} -> region
+        _ -> {:error, Sequin.Error.validation(summary: "Invalid SQS queue URL format")}
+      end
     end
   end
 

@@ -2,8 +2,10 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   @moduledoc false
   @behaviour Sequin.Runtime.SinkPipeline
 
+  alias Sequin.Aws.SQS
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Functions.MiniElixir
@@ -26,11 +28,20 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     req_opts = Keyword.get(opts, :req_opts, [])
     features = Keyword.get(opts, :features, [])
 
-    context
-    |> Map.put(:consumer, consumer)
-    |> Map.put(:http_endpoint, consumer.sink.http_endpoint)
-    |> Map.put(:req_opts, req_opts)
-    |> Map.put(:features, features)
+    context =
+      context
+      |> Map.put(:consumer, consumer)
+      |> Map.put(:http_endpoint, consumer.sink.http_endpoint)
+      |> Map.put(:req_opts, req_opts)
+      |> Map.put(:features, features)
+
+    # Set up SQS client if the sink has a via configuration
+    if Map.get(consumer.sink, :via) do
+      sqs_client = HttpPushSink.Via.aws_client(consumer.sink.via)
+      Map.put(context, :sqs_client, sqs_client)
+    else
+      context
+    end
   end
 
   @impl SinkPipeline
@@ -92,13 +103,24 @@ defmodule Sequin.Runtime.HttpPushPipeline do
           |> Keyword.put(:method, m.method)
       end
 
-    case push_message(http_endpoint, consumer, message_data, req_opts) do
-      :ok ->
-        Metrics.incr_http_endpoint_throughput(http_endpoint)
-        {:ok, messages, context}
+    # If sink has via configuration, route to SQS instead of HTTP endpoint
+    if Map.get(consumer.sink, :via) do
+      case push_to_sqs(http_endpoint, consumer, message_data, req_opts, context) do
+        :ok ->
+          {:ok, messages, context}
 
-      {:error, error} when is_exception(error) ->
-        {:error, error}
+        {:error, error} when is_exception(error) ->
+          {:error, error}
+      end
+    else
+      case push_message(http_endpoint, consumer, message_data, req_opts) do
+        :ok ->
+          Metrics.incr_http_endpoint_throughput(http_endpoint)
+          {:ok, messages, context}
+
+        {:error, error} when is_exception(error) ->
+          {:error, error}
+      end
     end
   end
 
@@ -209,6 +231,74 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     end
   end
 
+  # Handle pushing message to SQS when via configuration is present
+  # batch_size=1 to start, we can increase later
+  defp push_to_sqs(
+         %HttpEndpoint{} = http_endpoint,
+         %SinkConsumer{batch_size: 1} = consumer,
+         message_data,
+         req_opts,
+         context
+       ) do
+    %{sqs_client: sqs_client} = context
+
+    headers = http_endpoint.headers
+    encrypted_headers = http_endpoint.encrypted_headers || %{}
+    headers = Map.merge(headers, encrypted_headers)
+
+    # Create an envelope with request details and metadata
+    envelope = %{
+      request: %{
+        method: Keyword.get(req_opts, :method, "POST"),
+        base_url: HttpEndpoint.url(http_endpoint),
+        url: Keyword.get(req_opts, :url, consumer.sink.http_endpoint_path || ""),
+        headers: headers,
+        json: message_data
+      },
+      metadata: %{
+        consumer_id: consumer.id,
+        max_retry_count: consumer.max_retry_count,
+        request_timeout: 30_000
+      }
+    }
+
+    # Build SQS message
+    sqs_message = %{
+      message_body: envelope,
+      id: UUID.uuid4()
+    }
+
+    # Add deduplication ID if the queue is FIFO
+    # sqs_message =
+    #   if consumer.sink.via.is_fifo do
+    #     # TODO
+    #     # Use random UUID for deduplication unless we have a better ID
+    #     deduplication_id = UUID.uuid4()
+
+    #     # Set message group ID for FIFO queues
+    #     Map.merge(sqs_message, %{
+    #       message_deduplication_id: deduplication_id,
+    #       message_group_id: consumer.id
+    #     })
+    #   else
+    #     sqs_message
+    #   end
+
+    # Send to SQS
+    case SQS.send_messages(sqs_client, consumer.sink.via.queue_url, [sqs_message]) do
+      :ok ->
+        Logger.debug(
+          "[HttpPushPipeline] Successfully routed HTTP request to SQS via configuration for consumer #{consumer.id}"
+        )
+
+        :ok
+
+      {:error, error} ->
+        Logger.error("[HttpPushPipeline] Failed to send message to SQS: #{inspect(error)}")
+        {:error, Error.service(service: :sqs, message: "Failed to send to SQS", details: error)}
+    end
+  end
+
   # TODO: Temp fix for flaky sink consumer
   defp ensure_status(%Req.Response{} = response, %SinkConsumer{id: "52f95f90-4e22-4b44-96d6-438d9b29661d"}) do
     if response.status in 200..299 or response.status == 413 do
@@ -242,5 +332,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Req.Test.allow(Sequin.Aws.HttpClient, test_pid, self())
   end
 end

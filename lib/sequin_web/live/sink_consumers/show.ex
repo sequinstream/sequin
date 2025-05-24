@@ -293,7 +293,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         socket
       ) do
     consumer = socket.assigns.consumer
-    table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
+    table = find_table_for_sequence(consumer.sequence, consumer.postgres_database.tables)
     table = %PostgresDatabaseTable{table | sort_column_attnum: sort_column_attnum}
 
     initial_min_cursor =
@@ -709,7 +709,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp encode_consumer(%SinkConsumer{type: _} = consumer) do
-    table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
+    table = find_table_for_sequence(consumer.sequence, consumer.postgres_database.tables)
 
     %{
       id: consumer.id,
@@ -916,12 +916,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sequence(nil, nil, %PostgresDatabase{}) do
+    %{
+      table_name: nil,
+      table_schema: nil,
+      column_filters: []
+    }
+  end
+
   defp encode_sequence(
          %Sequence{} = sequence,
          %SequenceFilter{} = sequence_filter,
          %PostgresDatabase{} = postgres_database
        ) do
-    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+    case find_table_for_sequence(sequence, postgres_database.tables) do
       nil ->
         %{
           table_name: nil,
@@ -938,8 +946,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  defp find_table_by_oid(oid, tables) do
-    Enum.find(tables, &(&1.oid == oid))
+  defp find_table_for_sequence(nil, _tables), do: nil
+
+  defp find_table_for_sequence(%Sequence{table_oid: table_oid}, tables) do
+    Enum.find(tables, &(&1.oid == table_oid))
   end
 
   defp encode_column_filter(column_filter, table) do
@@ -1019,12 +1029,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end)
   end
 
+  defp encode_group_column_names(%{sequence: nil, sequence_filter: nil, postgres_database: %PostgresDatabase{}}) do
+    []
+  end
+
   defp encode_group_column_names(%{
          sequence: %Sequence{} = sequence,
          sequence_filter: %SequenceFilter{group_column_attnums: nil},
          postgres_database: %PostgresDatabase{} = postgres_database
        }) do
-    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+    case find_table_for_sequence(sequence, postgres_database.tables) do
       %PostgresDatabaseTable{} = table ->
         table.columns
         |> Enum.filter(& &1.is_pk?)
@@ -1041,7 +1055,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
          sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums},
          postgres_database: %PostgresDatabase{} = postgres_database
        }) do
-    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+    case find_table_for_sequence(sequence, postgres_database.tables) do
       %PostgresDatabaseTable{} = table ->
         table.columns
         |> Enum.filter(&(&1.attnum in group_column_attnums))
@@ -1239,6 +1253,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   rescue
     error ->
       "Error functioning message: #{Exception.message(error)}"
+  end
+
+  defp encode_backfill(%SinkConsumer{sequence: nil}, _) do
+    %{
+      is_backfilling: false,
+      cursor_type: nil,
+      last_completed_backfill: nil
+    }
   end
 
   defp encode_backfill(consumer, last_completed_backfill) do

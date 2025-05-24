@@ -50,7 +50,6 @@
   } from "$lib/components/ui/accordion";
   import type { Table as DatabaseTable } from "$lib/databases/types";
   import BackfillForm from "$lib/components/BackfillForm.svelte";
-  import Beta from "../components/Beta.svelte";
 
   type Database = {
     id: string;
@@ -167,8 +166,9 @@
     }
   }
 
-  let selectedDatabase: any;
-  let selectedTable: any;
+  let selectedDatabase: Database | null = null;
+  let selectedSchema: string | null = form.schema;
+  let selectedTable: DatabaseTable | null = null;
   let isCreateConsumerDisabled: boolean = true;
 
   const pushEvent = (event, payload = {}, cb = (reply: any) => {}) => {
@@ -235,6 +235,7 @@
     }
 
     if (selectedDatabase) {
+      selectedSchema = form.schema;
       selectedTable = selectedDatabase.tables.find(
         (table) => table.oid === form.tableOid,
       );
@@ -242,7 +243,7 @@
 
     if (selectedTable) {
       // Force message kind to "record" for event tables
-      if (selectedTable.is_event_table) {
+      if (selectedTable.isEventTable) {
         form.messageKind = "record";
       }
     }
@@ -281,12 +282,14 @@
       (db) => db.id === form.postgresDatabaseId,
     );
     if (selectedDatabase) {
+      const selectedSchema = event.schema;
       const selectedTable = selectedDatabase.tables.find(
         (table) => table.oid === form.tableOid,
       );
-      if (selectedTable) {
-        const tableName = selectedTable.name;
-        const newName = `${tableName}_sink`;
+      const prefix = selectedSchema ? selectedSchema : selectedTable?.name;
+      console.log("prefix", prefix);
+      if (prefix) {
+        const newName = `${prefix}-sink`;
         form.name = newName;
       }
     }
@@ -404,39 +407,37 @@
       <CardContent class="space-y-4">
         <div class="space-y-2">
           {#if isEditMode}
-            <Select
-              disabled
-              selected={{
-                value: form.postgresDatabaseId,
-                label: selectedDatabase?.name || "Selected database",
-              }}
-            >
-              <SelectTrigger
-                class={cn(
-                  "w-full",
-                  "bg-muted text-muted-foreground opacity-100",
-                )}
-              >
-                <SelectValue placeholder="Selected database" />
-              </SelectTrigger>
-            </Select>
-            <Select
-              disabled
-              selected={{
-                value: form.tableOid,
-                label: selectedTable?.name || "Selected table",
-              }}
-            >
-              <SelectTrigger
-                class={cn(
-                  "w-full",
-                  "bg-muted text-muted-foreground opacity-100",
-                )}
-              >
-                <SelectValue placeholder="Selected table" />
-              </SelectTrigger>
-            </Select>
+            <!-- Edit consumer -->
+            <div class="flex flex-col gap-4">
+              <div>
+                <Label>Database</Label>
+                <p class="text-sm text-muted-foreground mt-1">
+                  {selectedDatabase?.name || "Selected database"}
+                </p>
+              </div>
+
+              <div>
+                <Label>Source</Label>
+                {#if selectedSchema}
+                  <p class="text-sm text-muted-foreground mt-1">
+                    All tables in the <b>{selectedSchema}</b> schema.
+                  </p>
+                {:else if selectedTable}
+                  <p class="text-sm text-muted-foreground mt-1">
+                    The <b>{selectedTable.name}</b> table.
+                  </p>
+                {/if}
+              </div>
+
+              <div>
+                <Label>Message type</Label>
+                <p class="text-sm text-muted-foreground mt-1">
+                  {form.messageKind === "record" ? "Records" : "Changes"}
+                </p>
+              </div>
+            </div>
           {:else}
+            <!-- New consumer -->
             <TableOrSchemaSelector
               {databases}
               onSelect={handleTableSelect}
@@ -457,50 +458,51 @@
                 {errors.consumer.table_oid}
               </p>
             {/if}
-          {/if}
-          {#if selectedTable}
-            <div class="space-y-2">
-              <Label for="message_kind">Message type</Label>
-              <p class="text-sm text-muted-foreground mt-1 mb-2">
-                Select the kind of messages you want to process.
-                <button
-                  type="button"
-                  class="text-muted-foreground underline decoration-dotted"
-                  on:click={() => (showMessageTypeExampleModal = true)}
+            {#if selectedTable || selectedSchema}
+              <div class="space-y-2">
+                <Label for="message_kind">Message type</Label>
+                <p class="text-sm text-muted-foreground mt-1 mb-2">
+                  Select the kind of messages you want to process.
+                  <button
+                    type="button"
+                    class="text-muted-foreground underline decoration-dotted"
+                    on:click={() => (showMessageTypeExampleModal = true)}
+                  >
+                    See examples
+                  </button>
+                </p>
+                <Select
+                  selected={{
+                    value: form.messageKind,
+                    label:
+                      form.messageKind === "record" ? "Records" : "Changes",
+                  }}
+                  onSelectedChange={(event) => {
+                    form.messageKind = event.value;
+                  }}
+                  disabled={selectedTable?.isEventTable || isEditMode}
                 >
-                  See examples
-                </button>
-              </p>
-              <Select
-                selected={{
-                  value: form.messageKind,
-                  label: form.messageKind === "record" ? "Records" : "Changes",
-                }}
-                onSelectedChange={(event) => {
-                  form.messageKind = event.value;
-                }}
-                disabled={selectedTable.is_event_table || isEditMode}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a message type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="event">Changes</SelectItem>
-                  <SelectItem value="record">Records</SelectItem>
-                </SelectContent>
-              </Select>
-              {#if selectedTable.is_event_table}
-                <p class="text-muted-foreground text-xs">
-                  Sequin automatically sets the message type to "Records" for
-                  event tables.
-                </p>
-              {/if}
-              {#if errors.consumer.message_kind}
-                <p class="text-destructive text-sm">
-                  {errors.consumer.message_kind}
-                </p>
-              {/if}
-            </div>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a message type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="event">Changes</SelectItem>
+                    <SelectItem value="record">Records</SelectItem>
+                  </SelectContent>
+                </Select>
+                {#if selectedTable?.isEventTable}
+                  <p class="text-muted-foreground text-xs">
+                    Sequin automatically sets the message type to "Records" for
+                    event tables.
+                  </p>
+                {/if}
+                {#if errors.consumer.message_kind}
+                  <p class="text-destructive text-sm">
+                    {errors.consumer.message_kind}
+                  </p>
+                {/if}
+              </div>
+            {/if}
           {/if}
           {#if errors.consumer.postgres_database_id || errors.consumer.table_oid}
             <p class="text-destructive text-sm">

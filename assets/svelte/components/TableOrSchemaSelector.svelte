@@ -315,7 +315,7 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
     <div class="flex flex-col space-y-2 text-sm text-gray-600">
       <p>
         Select either a <b>schema</b> to receive messages from <i>all tables</i>
-        in that schema, <i>or</i> a <b>table</b> to receive messages from
+        in that schema, or a <b>table</b> to receive messages from
         <i>only that table</i>.
       </p>
     </div>

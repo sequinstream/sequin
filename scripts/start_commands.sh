@@ -55,7 +55,6 @@ apply_config() {
         | sequin-cli config interpolate - \
         | ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
     echo "Config applied from environment variable"
-
     unset CONFIG_FILE_YAML
   else
     if [ -n "${CONFIG_FILE_PATH}" ] && [ -f "${CONFIG_FILE_PATH}" ]; then
@@ -63,7 +62,6 @@ apply_config() {
       sequin-cli config interpolate "${CONFIG_FILE_PATH}" \
           | ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
       echo "Config applied from file"
-
     else
       echo "No config file found or path is empty, skipping config loading"
     fi

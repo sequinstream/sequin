@@ -663,6 +663,9 @@ defmodule Sequin.Health do
           config_checked_event
         ])
 
+      config_checked_event.data["using_schema_filter"] == true ->
+        put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
+
       config_checked_event.data["replica_identity"] == "full" ->
         put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
 

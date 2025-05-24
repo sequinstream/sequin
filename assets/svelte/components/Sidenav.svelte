@@ -81,7 +81,7 @@
           path: "/functions",
           text: "Functions",
           icon: Code,
-          beta: true,
+          beta: false,
         } as NavItem,
         {
           path: "/http-endpoints",

@@ -1083,7 +1083,6 @@
             <div class="flex justify-between items-center mb-4">
               <h2 class="text-lg font-semibold flex items-center gap-2">
                 Filter
-                <Beta size="sm" variant="subtle" />
               </h2>
               <a
                 href="/functions/{consumer.filter.id}"
@@ -1132,7 +1131,6 @@
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold flex items-center gap-2">
               Transform
-              <Beta size="sm" variant="subtle" />
             </h2>
             {#if transform && !isRedisStreamConsumer(consumer)}
               <a

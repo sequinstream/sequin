@@ -45,3 +45,7 @@ Mox.defmock(Sequin.Runtime.PageSizeOptimizerMock,
 Mox.defmock(Sequin.Runtime.TableReaderMock,
   for: Sequin.Runtime.TableReader
 )
+
+Mox.defmock(Sequin.ApplicationMock,
+  for: Sequin.ApplicationBehaviour
+)

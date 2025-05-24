@@ -75,7 +75,7 @@
     </svelte:fragment>
 
     <svelte:fragment slot="summary">
-      {#if !useCustomGrouping && !selectedTable.is_event_table}
+      {#if !useCustomGrouping && !selectedTable?.is_event_table}
         <p class="text-sm text-muted-foreground">
           Using primary keys for grouping.
         </p>

@@ -108,10 +108,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
         [message] = messages
         legacy_event_transform_message(consumer, message.data)
 
-      features[:legacy_event_singleton_transform] && length(messages) == 1 ->
-        [message] = messages
-        message.data
-
       consumer.sink.batch == false ->
         [message] = messages
         Transforms.Message.to_external(consumer, message)

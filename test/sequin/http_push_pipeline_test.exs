@@ -139,33 +139,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive :sent, 1_000
     end
 
-    test "legacy_event_singleton_transform sends unwrapped single messages", %{
-      consumer: consumer,
-      http_endpoint: http_endpoint
-    } do
-      test_pid = self()
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
-
-      adapter = fn %Req.Request{} = req ->
-        assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
-        json = Jason.decode!(req.body)
-
-        # Should NOT be wrapped in a list
-        refute is_list(json)
-        assert json["action"] == "insert"
-
-        send(test_pid, :sent)
-        {req, Req.Response.new(status: 200)}
-      end
-
-      # Start pipeline with legacy_event_singleton_transform enabled
-      start_pipeline!(consumer, adapter, features: [legacy_event_singleton_transform: true])
-
-      ref = send_test_event(consumer, event)
-      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
-      assert_receive :sent, 1_000
-    end
-
     test "when all messages are rejected due to idempotency, the pipeline does not invoke the adapter", %{
       consumer: consumer
     } do

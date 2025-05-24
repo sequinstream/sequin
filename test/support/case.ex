@@ -42,6 +42,7 @@ defmodule Sequin.Case do
     Sequin.TestSupport.stub_uuid4(fn -> UUID.uuid4() end)
     Sequin.TestSupport.stub_random(fn n -> Enum.random(n) end)
     Sequin.TestSupport.stub_process_alive?(fn pid -> Process.alive?(pid) end)
+    Sequin.TestSupport.stub_application_get_env(fn atom, mod -> Application.get_env(atom, mod) end)
 
     :ok
   end

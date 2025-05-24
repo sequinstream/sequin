@@ -36,7 +36,7 @@
   import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
   import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
-  import TableSelector from "../components/TableSelector.svelte";
+  import TableOrSchemaSelector from "../components/TableOrSchemaSelector.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -55,6 +55,7 @@
     id: string;
     name: string;
     tables: DatabaseTable[];
+    schemas: string[];
   };
 
   export let live;
@@ -83,6 +84,7 @@
     messageKind: MessageKind;
     maxMemoryMb: number;
     postgresDatabaseId: string | null;
+    schema: string | null;
     tableOid: number | null;
     sourceTableFilters: any[];
     sourceTableActions: string[];
@@ -112,6 +114,7 @@
     messageKind: (consumer.message_kind || "event") as MessageKind,
     maxMemoryMb: Number(consumer.max_memory_mb),
     postgresDatabaseId: consumer.postgres_database_id,
+    schema: consumer.schema,
     tableOid: consumer.table_oid,
     sourceTableFilters: consumer.source_table_filters || [],
     sourceTableActions: consumer.source_table_actions || [],
@@ -230,7 +233,7 @@
       );
     }
 
-    if (form.tableOid && selectedDatabase) {
+    if (selectedDatabase) {
       selectedTable = selectedDatabase.tables.find(
         (table) => table.oid === form.tableOid,
       );
@@ -243,7 +246,8 @@
       }
     }
 
-    isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
+    isCreateConsumerDisabled =
+      !form.postgresDatabaseId || (!form.tableOid && !form.schema);
   }
 
   const isEditMode = !!consumer.id;
@@ -257,7 +261,11 @@
     });
   }
 
-  function handleTableSelect(event: { databaseId: string; tableOid: number }) {
+  function handleTableSelect(event: {
+    databaseId: string;
+    tableOid: number;
+    schema: string;
+  }) {
     if (form.tableOid !== event.tableOid) {
       form.groupColumnAttnums = [];
       form.messageKind = "event";
@@ -265,21 +273,20 @@
 
     form.postgresDatabaseId = event.databaseId;
     form.tableOid = event.tableOid;
+    form.schema = event.schema;
 
     // Set the form name based on the selected table
-    if (form.tableOid) {
-      const selectedDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId,
+    const selectedDatabase = databases.find(
+      (db) => db.id === form.postgresDatabaseId,
+    );
+    if (selectedDatabase) {
+      const selectedTable = selectedDatabase.tables.find(
+        (table) => table.oid === form.tableOid,
       );
-      if (selectedDatabase) {
-        const selectedTable = selectedDatabase.tables.find(
-          (table) => table.oid === form.tableOid,
-        );
-        if (selectedTable) {
-          const tableName = selectedTable.name;
-          const newName = `${tableName}_sink`;
-          form.name = newName;
-        }
+      if (selectedTable) {
+        const tableName = selectedTable.name;
+        const newName = `${tableName}_sink`;
+        form.name = newName;
       }
     }
   }
@@ -429,12 +436,13 @@
               </SelectTrigger>
             </Select>
           {:else}
-            <TableSelector
+            <TableOrSchemaSelector
               {databases}
               onSelect={handleTableSelect}
               {pushEvent}
               selectedDatabaseId={form.postgresDatabaseId}
               selectedTableOid={form.tableOid}
+              selectedSchema={form.schema}
             />
 
             {#if errors.consumer.postgres_database_id}

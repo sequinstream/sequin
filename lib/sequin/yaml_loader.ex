@@ -25,35 +25,22 @@ defmodule Sequin.YamlLoader do
     defstruct [:description, :action]
   end
 
-  def config_file_path do
-    Application.get_env(@app, :config_file_path)
-  end
-
-  def apply! do
-    Logger.info("Applying config")
+  def apply_from_stdin! do
     load_app()
     ensure_repo_started!()
 
-    cond do
-      not self_hosted?() ->
-        Logger.info("Not self-hosted, skipping config loading")
+    Logger.info("Reading config from stdin")
 
-      not is_nil(config_file_yaml()) ->
-        Logger.info("Loading from config file YAML")
+    case IO.read(:stdio, :eof) do
+      :eof ->
+        Logger.info("No config data received from stdin")
 
-        config_file_yaml()
-        |> Base.decode64!()
-        |> apply_from_yml!()
+      {:error, reason} ->
+        raise "Failed to read config from stdin: #{inspect(reason)}"
 
-      not is_nil(config_file_path()) ->
-        Logger.info("Loading from config file path")
-
-        config_file_path()
-        |> File.read!()
-        |> apply_from_yml!()
-
-      true ->
-        Logger.info("No config file YAML or path, skipping config loading")
+      yml when is_binary(yml) ->
+        Logger.info("Received config data, applying...")
+        apply_from_yml!(yml)
     end
 
     :ok
@@ -110,27 +97,6 @@ defmodule Sequin.YamlLoader do
         Logger.error("Error reading config file: #{inspect(error)}")
         {:error, error}
     end
-  end
-
-  def apply_from_stdin! do
-    load_app()
-    ensure_repo_started!()
-
-    Logger.info("Reading config from stdin")
-
-    case IO.read(:stdio, :eof) do
-      :eof ->
-        Logger.info("No config data received from stdin")
-
-      {:error, reason} ->
-        raise "Failed to read config from stdin: #{inspect(reason)}"
-
-      yml when is_binary(yml) ->
-        Logger.info("Received config data, applying...")
-        apply_from_yml!(yml)
-    end
-
-    :ok
   end
 
   def plan_from_yml(account_id \\ nil, yml, opts \\ []) do
@@ -996,10 +962,6 @@ defmodule Sequin.YamlLoader do
   ###############
   ## Utilities ##
   ###############
-
-  defp config_file_yaml do
-    Application.get_env(@app, :config_file_yaml)
-  end
 
   defp load_app do
     Application.load(@app)

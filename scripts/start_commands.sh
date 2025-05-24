@@ -50,28 +50,22 @@ apply_config() {
   # Check if CONFIG_FILE_YAML is provided (base64 encoded YAML)
   if [ -n "${CONFIG_FILE_YAML:-}" ]; then
     echo "CONFIG_FILE_YAML environment variable found, decoding and piping to application"
-    echo "${CONFIG_FILE_YAML}" | base64 -d | \
-      sequin-cli config interpolate - | \
-      ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
+    echo "${CONFIG_FILE_YAML}" \
+        | base64 -d \
+        | sequin-cli config interpolate - \
+        | ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
     echo "Config applied from environment variable"
 
-    # Unset CONFIG_FILE_YAML to prevent the app from attempting to use it directly
     unset CONFIG_FILE_YAML
-    echo "Unset CONFIG_FILE_YAML after processing"
-
   else
-    # Get the config file path from the application
-    CONFIG_FILE_PATH=$(./prod/rel/sequin/bin/sequin eval "IO.puts Sequin.YamlLoader.config_file_path()")
-
     if [ -n "${CONFIG_FILE_PATH}" ] && [ -f "${CONFIG_FILE_PATH}" ]; then
       echo "Interpolating and applying config from ${CONFIG_FILE_PATH}"
-      sequin-cli config interpolate "${CONFIG_FILE_PATH}" | \
-        ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
+      sequin-cli config interpolate "${CONFIG_FILE_PATH}" \
+          | ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
       echo "Config applied from file"
 
     else
       echo "No config file found or path is empty, skipping config loading"
-      ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply!"
     fi
   fi
 }

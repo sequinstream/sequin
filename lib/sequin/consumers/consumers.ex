@@ -12,6 +12,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -1098,12 +1099,24 @@ defmodule Sequin.Consumers do
     end
   end
 
-  # Source Table Matching
+  # Schema Matching
+  def matches_message?(
+        %SinkConsumer{schema_filter: %SchemaFilter{} = schema_filter} = consumer,
+        %SlotProcessor.Message{} = message
+      ) do
+    matches? = message_matches_schema?(schema_filter, message)
+
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+
+    matches?
+  end
+
+  # Sequence Matching
   def matches_message?(
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         %SlotProcessor.Message{} = message
       ) do
-    matches? = matches_message?(sequence, sequence_filter, message)
+    matches? = message_matches_sequence?(sequence, sequence_filter, message)
 
     Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
@@ -1123,26 +1136,13 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
+  # Source Table Matching
   def matches_message?(consumer_or_wal_pipeline, %SlotProcessor.Message{} = message) do
     matches? =
       Enum.any?(consumer_or_wal_pipeline.source_tables, fn %SourceTable{} = source_table ->
         table_matches = source_table.oid == message.table_oid
         action_matches = action_matches?(source_table.actions, message.action)
         column_filters_match = column_filters_match_message?(source_table.column_filters, message)
-
-        # Logger.debug("""
-        # [Consumers]
-        #   matches?: #{table_matches && action_matches && column_filters_match}
-        #     table_matches: #{table_matches}
-        #     action_matches: #{action_matches}
-        #     column_filters_match: #{column_filters_match}
-
-        #   consumer_or_wal_pipeline:
-        #     #{inspect(consumer_or_wal_pipeline, pretty: true)}
-
-        #   message:
-        #     #{inspect(message, pretty: true)}
-        # """)
 
         table_matches && action_matches && column_filters_match
       end)
@@ -1168,13 +1168,20 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
-  def matches_message?(%Sequence{} = _sequence, %SequenceFilter{} = sequence_filter, %SlotProcessor.Message{} = message) do
-    # table_matches? = sequence.table_oid == message.table_oid
+  defp message_matches_schema?(%SchemaFilter{} = schema_filter, %SlotProcessor.Message{} = message) do
+    message.table_schema == schema_filter.schema
+  end
+
+  defp message_matches_sequence?(
+         %Sequence{} = sequence,
+         %SequenceFilter{} = sequence_filter,
+         %SlotProcessor.Message{} = message
+       ) do
+    table_matches? = sequence.table_oid == message.table_oid
     actions_match? = action_matches?(sequence_filter.actions, message.action)
     column_filters_match? = column_filters_match_message?(sequence_filter.column_filters, message)
 
-    # table_matches? and actions_match? and column_filters_match?
-    actions_match? and column_filters_match?
+    table_matches? and actions_match? and column_filters_match?
   end
 
   def matches_record?(

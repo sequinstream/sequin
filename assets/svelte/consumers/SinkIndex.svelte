@@ -30,6 +30,7 @@
 
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
   import ElasticsearchIcon from "../sinks/elasticsearch/ElasticsearchIcon.svelte";
+  import KinesisIcon from "../sinks/kinesis/KinesisIcon.svelte";
 
   import { Badge } from "$lib/components/ui/badge";
   import * as d3 from "d3";
@@ -51,7 +52,8 @@
       | "nats"
       | "rabbitmq"
       | "typesense"
-      | "elasticsearch";
+      | "elasticsearch"
+      | "kinesis";
 
     status: "active" | "disabled" | "paused";
     database_name: string;
@@ -143,6 +145,11 @@
       id: "elasticsearch",
       name: "Elasticsearch",
       icon: ElasticsearchIcon,
+    },
+    {
+      id: "kinesis",
+      name: "Amazon Kinesis",
+      icon: KinesisIcon,
     },
   ];
 

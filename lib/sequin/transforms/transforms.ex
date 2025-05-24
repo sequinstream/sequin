@@ -12,6 +12,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
@@ -246,6 +247,17 @@ defmodule Sequin.Transforms do
       access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
       secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
       is_fifo: sink.is_fifo
+    })
+  end
+
+  def to_external(%KinesisSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "kinesis",
+      stream_name: sink.stream_name,
+      region: sink.region,
+      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
+      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
+      partition_key_field: sink.partition_key_field
     })
   end
 

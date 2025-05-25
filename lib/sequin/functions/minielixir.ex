@@ -236,6 +236,14 @@ defmodule Sequin.Functions.MiniElixir do
     %{type: "Unknown error", info: %{description: Exception.message(error)}}
   end
 
+  def encode_error({error_info, message, rest}) when is_list(error_info) do
+    %{type: "Syntax error", info: %{description: "#{message} #{rest}"}}
+  end
+
+  def encode_error(:validator, error) do
+    %{type: "Validation error", info: %{description: error}}
+  end
+
   defp generate_module_name(id) when is_binary(id) do
     <<"UserFunction.", id::binary>>
   end
@@ -249,6 +257,21 @@ defmodule Sequin.Functions.MiniElixir do
       "#{msg} (line: #{line})"
     else
       _ -> msg
+    end
+  end
+
+  def eval_raw_string(code, field) do
+    with {:ok, ast} <- Code.string_to_quoted(code),
+         :ok <- Validator.check(ast) do
+      try do
+        {result, _} = Code.eval_quoted(ast)
+        {:ok, result}
+      rescue
+        e -> {:error, field, encode_error(e)}
+      end
+    else
+      {:error, error_type, error} -> {:error, field, encode_error(error_type, error)}
+      {:error, error} -> {:error, field, encode_error(error)}
     end
   end
 end

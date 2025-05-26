@@ -13,11 +13,11 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   @page_size 50
 
   @impl Phoenix.LiveView
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     user = current_user(socket)
     account = current_account(socket)
 
-    page = 0
+    page = (params["page"] && String.to_integer(params["page"])) || 0
     page_size = @page_size
     total_count = Consumers.count_sink_consumers_for_account(account.id)
 
@@ -59,7 +59,8 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
   @impl Phoenix.LiveView
   def handle_params(params, _url, socket) do
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+    page = (params["page"] && String.to_integer(params["page"])) || 0
+    {:noreply, socket |> apply_action(socket.assigns.live_action, params) |> assign(:page, page)}
   end
 
   @impl Phoenix.LiveView
@@ -100,6 +101,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       |> assign(:total_count, total_count)
       |> assign(:encoded_consumers, nil)
       |> async_assign_consumers()
+      |> push_patch(to: ~p"/sinks?page=#{page}")
 
     {:noreply, socket}
   end

@@ -31,6 +31,12 @@ defmodule SequinWeb.Router do
     plug :admin_basic_auth
   end
 
+  # if the user is not authenticated, we redirect them to the register page
+  # Currently it's only used for the accept-invite flow
+  pipeline :redirect_to_register_if_unauthenticated do
+    plug :require_authenticated_user, unauthenticated_redirect: :register
+  end
+
   scope "/", SequinWeb do
     pipe_through [:browser]
 
@@ -76,6 +82,15 @@ defmodule SequinWeb.Router do
     end
 
     post "/login", UserSessionController, :create
+  end
+
+  scope "/", SequinWeb do
+    pipe_through [:browser, :redirect_to_register_if_unauthenticated]
+
+    live_session :accept_invite, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
+      live "/accept-invite/:token", AcceptInviteLive, :accept_invite
+      live "/accept-team-invite/:token", AcceptInviteLive, :accept_team_invite
+    end
   end
 
   scope "/", SequinWeb do
@@ -126,9 +141,6 @@ defmodule SequinWeb.Router do
       get "/easter-egg", EasterEggController, :home
 
       live "/settings/accounts", Settings.AccountSettingsLive, :index
-
-      live "/accept-invite/:token", AcceptInviteLive, :accept_invite
-      live "/accept-team-invite/:token", AcceptInviteLive, :accept_team_invite
     end
 
     get "/admin/impersonate/:secret", UserSessionController, :impersonate

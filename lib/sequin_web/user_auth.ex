@@ -268,15 +268,30 @@ defmodule SequinWeb.UserAuth do
 
   If you want to enforce the user email is confirmed before
   they use the application at all, here would be a good place.
+
+  ## Options
+
+    * `:unauthenticated_redirect` - Specifies where to redirect unauthenticated users.
+      * `:login` - Redirects to the login page (default)
+      * `:register` - Redirects to the registration page
   """
-  def require_authenticated_user(conn, _opts) do
+  def require_authenticated_user(conn, opts) do
     if conn.assigns[:current_user] do
       conn
     else
+      {title, redirect_to} =
+        case Keyword.get(opts, :unauthenticated_redirect, :login) do
+          :login ->
+            {"Please log in to continue.", ~p"/login"}
+
+          :register ->
+            {"Please register to continue.", ~p"/register"}
+        end
+
       conn
-      |> put_flash(:toast, %{kind: :error, title: "Please log in to continue."})
+      |> put_flash(:toast, %{kind: :error, title: title})
       |> maybe_store_return_to()
-      |> redirect(to: ~p"/login")
+      |> redirect(to: redirect_to)
       |> halt()
     end
   end

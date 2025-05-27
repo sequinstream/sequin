@@ -23,7 +23,6 @@
 import "phoenix_html";
 // Establish Phoenix Socket and LiveView configuration.
 import * as KoalaSDK from "@getkoala/browser";
-import Intercom from "@intercom/messenger-js-sdk";
 import { getHooks } from "live_svelte";
 import { Socket } from "phoenix";
 import { LiveSocket } from "phoenix_live_view";
@@ -40,11 +39,6 @@ posthog.init(document.querySelector("body").getAttribute("data-ph-token"), {
   session_recording: {
     maskAllInputs: false,
   },
-});
-
-Intercom({
-  app_id: "btt358pc",
-  custom_launcher_selector: "#launch-intercom",
 });
 
 KoalaSDK.load({

@@ -93,10 +93,11 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
             secret_access_key: secret_access_key,
             region: region
           ],
+          attribute_names: [:sent_timestamp, :approximate_receive_count, :approximate_first_receive_timestamp],
           receive_interval: 1_000,
           max_number_of_messages: 10,
           wait_time_seconds: 1,
-          visibility_timeout: 30
+          visibility_timeout: 60
         },
         concurrency: setting_producer_concurrency()
       ],
@@ -131,6 +132,10 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
         Prometheus.increment_http_via_sqs_message_deliver_attempt_count(consumer_id, consumer.name)
         {latency_us, result} = :timer.tc(&deliver_to_http_endpoint/2, [consumer, consumer_event])
 
+        # Is `1` on first delivery
+        %{metadata: %{attributes: %{"approximate_receive_count" => receive_count}}} = message
+        final_delivery? = receive_count - 1 >= consumer.max_retry_count
+
         case result do
           {:ok, _response} ->
             # Track success metrics
@@ -145,18 +150,23 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
             message
 
           {:error, error} ->
-            # Track failure metrics
-            Prometheus.increment_http_via_sqs_message_failure_count(consumer_id, consumer.name)
-            Logger.error("Failed to deliver message to HTTP endpoint: #{inspect(error)}")
-            Message.failed(message, "Failed to deliver message: #{inspect(error)}")
+            Logger.error("[HttpPushSqsPipeline] Failed to deliver message to HTTP endpoint: #{inspect(error)}")
+
+            if final_delivery? do
+              Logger.error("[HttpPushSqsPipeline] Discarding message after #{consumer.max_retry_count} retries")
+              Prometheus.increment_http_via_sqs_message_discard_count(consumer_id, consumer.name)
+              message
+            else
+              Message.failed(message, "Failed to deliver message: #{inspect(error)}")
+            end
         end
 
       {:error, %NotFoundError{}} ->
-        Logger.info("Consumer not found, skipping")
+        Logger.info("[HttpPushSqsPipeline] Consumer not found, skipping")
         message
 
       {:error, :disabled} ->
-        Logger.info("Consumer is disabled, skipping")
+        Logger.info("[HttpPushSqsPipeline] Consumer is disabled, skipping")
         message
     end
   end
@@ -208,6 +218,8 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
         ensure_status(response, consumer)
 
       {:error, %Mint.TransportError{reason: reason} = error} ->
+        Prometheus.increment_http_via_sqs_message_deliver_failure_count(consumer.id, consumer.name, reason)
+
         Logger.error(
           "[HttpPushSqsPipeline] #{req.method} to webhook endpoint failed with Mint.TransportError: #{Exception.message(error)}",
           error: error
@@ -222,6 +234,8 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
          )}
 
       {:error, %Req.TransportError{reason: reason} = error} ->
+        Prometheus.increment_http_via_sqs_message_deliver_failure_count(consumer.id, consumer.name, reason)
+
         Logger.error(
           "[HttpPushSqsPipeline] #{req.method} to webhook endpoint failed with Req.TransportError: #{Exception.message(error)}",
           error: error
@@ -247,6 +261,8 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
       Metrics.incr_http_endpoint_throughput(consumer.sink.http_endpoint)
       {:ok, response}
     else
+      Prometheus.increment_http_via_sqs_message_deliver_failure_count(consumer.id, consumer.name, response.status)
+
       {:error,
        Error.service(
          service: :http_endpoint,

@@ -30,7 +30,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipelineTest do
             via_sqs: true
           },
           message_kind: :event,
-          max_retry_count: 3
+          max_retry_count: Enum.random(5..10)
         )
 
       # Configure the pipeline for testing
@@ -122,6 +122,43 @@ defmodule Sequin.Runtime.HttpPushSqsPipelineTest do
       # Verify the message was failed
       assert_receive {:ack, ^ref, [], [_failed]}, 1000
     end
+
+    @tag capture_log: true
+    test "discards message if max retry count is exceeded", %{consumer: consumer} do
+      test_pid = self()
+
+      # Create a test event
+      event =
+        [consumer_id: consumer.id, action: :insert]
+        |> ConsumersFactory.insert_consumer_event!()
+        |> ConsumerEvent.map_from_struct()
+
+      binary_data = :erlang.term_to_binary(event)
+      message_body = Jason.encode!(%{data: Base.encode64(binary_data)})
+
+      # Stub the HTTP request to return a failure
+      Req.Test.stub(HttpPushSqsPipeline, fn conn ->
+        send(test_pid, {:req, conn})
+
+        conn
+        |> Plug.Conn.put_status(500)
+        |> Req.Test.json(%{})
+      end)
+
+      # Start the pipeline and process the message
+      start_sqs_pipeline()
+
+      ref =
+        send_test_sqs_event(message_body,
+          metadata: %{attributes: %{"approximate_receive_count" => consumer.max_retry_count + 2}}
+        )
+
+      # Verify the HTTP request was made
+      assert_receive {:req, _conn}, 1000
+
+      # Verify the message was acked
+      assert_receive {:ack, ^ref, [_successful], []}, 1000
+    end
   end
 
   @sqs_pipeline_name Module.concat(__MODULE__, TestPipeline)
@@ -138,7 +175,8 @@ defmodule Sequin.Runtime.HttpPushSqsPipelineTest do
     :ok
   end
 
-  defp send_test_sqs_event(event) do
-    Broadway.test_message(@sqs_pipeline_name, event)
+  defp send_test_sqs_event(event, opts \\ []) do
+    metadata = Keyword.get(opts, :metadata, %{attributes: %{"approximate_receive_count" => 1}})
+    Broadway.test_message(@sqs_pipeline_name, event, metadata: metadata)
   end
 end

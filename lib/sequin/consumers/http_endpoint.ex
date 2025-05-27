@@ -8,6 +8,8 @@ defmodule Sequin.Consumers.HttpEndpoint do
   alias Ecto.Changeset
   alias Sequin.Consumers
 
+  @type id :: String.t()
+
   @derive {Jason.Encoder,
            only: [
              :id,

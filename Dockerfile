@@ -103,12 +103,12 @@ FROM ${RUNNER_IMAGE} AS app
 # Install additional packages
 # Do this before setting RELEASE_VERSION which changes on every build
 RUN apt-get update -y && \
-    apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates curl ssh jq telnet netcat htop \
+    apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates curl ssh jq telnet netcat htop vim \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # Copy the Sequin CLI from the cli-builder stage
-COPY --from=cli-builder /sequin-cli /usr/local/bin/sequin-cli
-RUN chmod +x /usr/local/bin/sequin-cli
+COPY --from=cli-builder /sequin-cli /usr/local/bin/sequin
+RUN chmod +x /usr/local/bin/sequin
 
 # Pass the SELF_HOSTED arg again in this stage
 ARG SELF_HOSTED
@@ -132,7 +132,7 @@ WORKDIR /home/app
 COPY --from=builder --chown=app /app/_build .
 
 COPY .iex.exs .
-RUN ln -s /home/app/prod/rel/sequin/bin/sequin /usr/local/bin/sequin
+RUN ln -s /home/app/prod/rel/sequin/bin/sequin /usr/local/bin/sequin-server
 COPY scripts/start_commands.sh /scripts/start_commands.sh
 RUN chmod +x /scripts/start_commands.sh
 

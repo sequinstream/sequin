@@ -1203,6 +1203,22 @@
         </CardContent>
       </Card>
 
+      {#if 0 < Object.keys(consumer.annotations).length}
+        <Card>
+          <CardContent class="p-6">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
+              Annotations
+            </h2>
+            <pre
+              class="mt-2 font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto">{JSON.stringify(
+                consumer.annotations,
+                null,
+                2,
+              )}</pre>
+          </CardContent>
+        </Card>
+      {/if}
+
       {#if isHttpPushConsumer(consumer)}
         <SinkCardHttpPush {consumer} />
       {:else if isSqsConsumer(consumer)}

@@ -398,6 +398,16 @@ defmodule Sequin.Consumers do
     end)
   end
 
+  def set_http_push_to_via_sqs(%SinkConsumer{} = consumer) do
+    sink = Map.from_struct(consumer.sink)
+    update_sink_consumer(consumer, %{sink: Map.put(sink, :via_sqs, true)})
+  end
+
+  def set_http_push_to_not_via_sqs(%SinkConsumer{} = consumer) do
+    sink = Map.from_struct(consumer.sink)
+    update_sink_consumer(consumer, %{sink: Map.put(sink, :via_sqs, false)})
+  end
+
   def delete_sink_consumer(consumer) do
     Repo.transact(fn ->
       with {:ok, _} <- Repo.delete(consumer),

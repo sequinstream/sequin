@@ -368,7 +368,7 @@ defmodule Sequin.Databases do
   end
 
   def with_uncached_connection(%PostgresDatabase{} = db, fun) do
-    with {:ok, conn} <- start_link(db) do
+    with {:ok, conn} <- start_link(db, %{pool_size: 1}) do
       try do
         fun.(conn)
       after

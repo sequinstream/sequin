@@ -213,4 +213,31 @@ defmodule Sequin.Time do
     # Calculate difference in milliseconds
     ms_since(timestamp, DateTime.utc_now())
   end
+
+  @doc """
+  Adds random jitter to a time value.
+
+  ## Parameters
+    - value: The base time value in milliseconds
+    - factor: The jitter factor (default: 0.15, meaning ±15%)
+
+  ## Examples
+      iex> Sequin.Time.with_jitter(1000)
+      # Returns a value between 850 and 1150
+
+      iex> Sequin.Time.with_jitter(1000, 0.5)
+      # Returns a value between 500 and 1500
+  """
+  @spec with_jitter(non_neg_integer(), float()) :: non_neg_integer()
+  def with_jitter(value, factor \\ 0.15) when is_integer(value) and value >= 0 and is_float(factor) and factor >= 0 do
+    # Calculate the jitter range (factor * 2 gives the full range)
+    jitter_range = value * factor * 2
+
+    # Generate a random value within the jitter range
+    random_jitter = :rand.uniform() * jitter_range
+
+    # Apply the jitter by adding the random value and subtracting half the range
+    # This gives a value between (value - value*factor) and (value + value*factor)
+    trunc(value + random_jitter - jitter_range / 2)
+  end
 end

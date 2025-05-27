@@ -10,6 +10,7 @@ defmodule Sequin.Application do
   alias Sequin.Health.KickoffCheckPostgresReplicationSlotWorker
   alias Sequin.Health.KickoffCheckSinkConfigurationWorker
   alias Sequin.MutexedSupervisor
+  alias Sequin.Runtime.HttpPushSqsPipeline
 
   require Logger
 
@@ -46,18 +47,25 @@ defmodule Sequin.Application do
   end
 
   defp children(_) do
-    base_children() ++
-      [
-        SequinWeb.Telemetry,
-        MutexedSupervisor.child_spec(
-          Sequin.Runtime.MutexedSupervisor,
-          [
-            Sequin.Runtime.Supervisor
-          ]
-        ),
-        # Sequin.Tracer.Starter,
-        Sequin.Telemetry.PosthogReporter
-      ]
+    children =
+      base_children() ++
+        [
+          SequinWeb.Telemetry,
+          MutexedSupervisor.child_spec(
+            Sequin.Runtime.MutexedSupervisor,
+            [
+              Sequin.Runtime.Supervisor
+            ]
+          ),
+          # Sequin.Tracer.Starter,
+          Sequin.Telemetry.PosthogReporter
+        ]
+
+    if HttpPushSqsPipeline.enabled?() do
+      children ++ [HttpPushSqsPipeline.child_spec()]
+    else
+      children
+    end
   end
 
   defp base_children do

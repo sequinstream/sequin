@@ -67,6 +67,12 @@ defmodule Sequin.Prometheus do
       labels: [:consumer_id, :consumer_name, :status_code]
     )
 
+    Counter.declare(
+      name: :sequin_http_via_sqs_message_discard_count,
+      help: "Total number of discarded HTTP via SQS messages.",
+      labels: [:consumer_id, :consumer_name]
+    )
+
     Histogram.new(
       name: :sequin_http_via_sqs_message_deliver_latency_us,
       labels: [:consumer_id, :consumer_name],
@@ -343,14 +349,28 @@ defmodule Sequin.Prometheus do
     Counter.inc([name: :sequin_http_via_sqs_message_success_count, labels: [consumer_id, consumer_name]], count)
   end
 
-  @spec increment_http_via_sqs_message_failure_count(
+  @spec increment_http_via_sqs_message_deliver_failure_count(
+          consumer_id :: String.t(),
+          consumer_name :: String.t(),
+          status_code :: number() | String.t(),
+          count :: number()
+        ) ::
+          :ok
+  def increment_http_via_sqs_message_deliver_failure_count(consumer_id, consumer_name, status_code, count \\ 1) do
+    Counter.inc(
+      [name: :sequin_http_via_sqs_message_deliver_failure_count, labels: [consumer_id, consumer_name, status_code]],
+      count
+    )
+  end
+
+  @spec increment_http_via_sqs_message_discard_count(
           consumer_id :: String.t(),
           consumer_name :: String.t(),
           count :: number()
         ) ::
           :ok
-  def increment_http_via_sqs_message_failure_count(consumer_id, consumer_name, count \\ 1) do
-    Counter.inc([name: :sequin_http_via_sqs_message_failure_count, labels: [consumer_id, consumer_name]], count)
+  def increment_http_via_sqs_message_discard_count(consumer_id, consumer_name, count \\ 1) do
+    Counter.inc([name: :sequin_http_via_sqs_message_discard_count, labels: [consumer_id, consumer_name]], count)
   end
 
   @spec observe_http_via_sqs_message_deliver_latency_us(

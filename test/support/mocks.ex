@@ -46,6 +46,6 @@ Mox.defmock(Sequin.Runtime.TableReaderMock,
   for: Sequin.Runtime.TableReader
 )
 
-Mox.defmock(Sequin.ApplicationMock,
+Mox.defmock(Sequin.TestSupport.ApplicationMock,
   for: Sequin.ApplicationBehaviour
 )

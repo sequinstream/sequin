@@ -73,4 +73,26 @@ defmodule Sequin.Consumers.ConsumerEventData do
         changes: Sequin.Changeset.deserialize(data.changes, data.changes_deserializers)
     }
   end
+
+  def map_from_struct(%ConsumerEventData{} = data) do
+    data
+    |> Sequin.Map.from_ecto()
+    |> update_in([:metadata], &Sequin.Map.from_ecto/1)
+    |> update_in([:metadata, :consumer], &Sequin.Map.from_ecto/1)
+  end
+
+  def struct_from_map(map) do
+    map = Sequin.Map.atomize_keys(map)
+
+    ConsumerEventData
+    |> struct!(map)
+    |> update_in([Access.key(:metadata)], fn metadata ->
+      map = Sequin.Map.atomize_keys(metadata)
+      struct!(ConsumerEventData.Metadata, map)
+    end)
+    |> update_in([Access.key(:metadata), Access.key(:consumer)], fn consumer ->
+      map = Sequin.Map.atomize_keys(consumer)
+      struct!(ConsumerEventData.Metadata.Sink, map)
+    end)
+  end
 end

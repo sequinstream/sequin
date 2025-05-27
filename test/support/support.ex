@@ -1,5 +1,6 @@
 defmodule Sequin.TestSupport do
   @moduledoc false
+  alias Sequin.TestSupport.ApplicationMock
   alias Sequin.TestSupport.DateTimeMock
   alias Sequin.TestSupport.EnumMock
   alias Sequin.TestSupport.ProcessMock
@@ -32,7 +33,7 @@ defmodule Sequin.TestSupport do
 
   @spec stub_application_get_env(function()) :: Mox.t()
   def stub_application_get_env(fun) do
-    Mox.stub(Sequin.ApplicationMock, :get_env, fun)
+    Mox.stub(ApplicationMock, :get_env, fun)
   end
 
   @spec expect_random(non_neg_integer(), function()) :: Mox.t()
@@ -52,6 +53,6 @@ defmodule Sequin.TestSupport do
 
   @spec expect_application_get_env(non_neg_integer(), function()) :: Mox.t()
   def expect_application_get_env(n \\ 1, fun) do
-    Mox.expect(Sequin.ApplicationMock, :get_env, n, fun)
+    Mox.expect(ApplicationMock, :get_env, n, fun)
   end
 end

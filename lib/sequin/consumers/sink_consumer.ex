@@ -341,6 +341,17 @@ defmodule Sequin.Consumers.SinkConsumer do
 
   def preload_http_endpoint(consumer), do: consumer
 
+  def preload_cached_http_endpoint(%HttpPushSink{http_endpoint: nil} = sink) do
+    http_endpoint = Consumers.get_cached_http_endpoint!(sink.http_endpoint_id)
+    %{sink | http_endpoint: http_endpoint}
+  end
+
+  def preload_cached_http_endpoint(%SinkConsumer{sink: %HttpPushSink{http_endpoint: nil}} = consumer) do
+    %{consumer | sink: preload_cached_http_endpoint(consumer.sink)}
+  end
+
+  def preload_cached_http_endpoint(consumer), do: consumer
+
   defp default_max_storage_mb do
     case Application.get_env(:sequin, :default_max_storage_bytes) do
       nil -> nil

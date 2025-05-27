@@ -121,7 +121,7 @@ defmodule Sequin.SlotMessageStoreTest do
       data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
       data_size_bytes = :erlang.external_size(data)
 
-      for _ <- 1..20 do
+      for _ <- 1..100 do
         ConsumersFactory.insert_consumer_message!(
           message_kind: consumer.message_kind,
           consumer_id: consumer.id,
@@ -139,8 +139,8 @@ defmodule Sequin.SlotMessageStoreTest do
     end
 
     test ":init loads only the first  messages", %{consumer: consumer} do
-      # 20 on disk
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 20
+      # 100 on disk
+      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 100
 
       for _ <- 1..consumer.partition_count do
         assert_receive :init_complete

@@ -2,10 +2,11 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   @moduledoc false
   @behaviour Sequin.Runtime.SinkPipeline
 
+  alias Sequin.Aws.HttpClient
   alias Sequin.Aws.SQS
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Functions.MiniElixir
@@ -35,13 +36,35 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       |> Map.put(:req_opts, req_opts)
       |> Map.put(:features, features)
 
-    # Set up SQS client if the sink has a via configuration
-    if Map.get(consumer.sink, :via) do
-      sqs_client = HttpPushSink.Via.aws_client(consumer.sink.via)
-      Map.put(context, :sqs_client, sqs_client)
+    # Set up SQS client if the sink has via_sqs enabled
+    if consumer.sink.via_sqs do
+      # Get SQS configuration directly
+      case Sequin.Runtime.HttpPushSqsPipeline.fetch_sqs_config() do
+        {:ok, sqs_config} ->
+          # Create SQS client with the configuration
+          sqs_client = create_aws_client(sqs_config)
+          # Store the config in context for SQS operations
+          context
+          |> Map.put(:sqs_config, sqs_config)
+          |> Map.put(:sqs_client, sqs_client)
+
+        _ ->
+          # If no SQS config available, continue without SQS
+          Logger.warning("SQS configuration not found despite via_sqs being enabled")
+          context
+      end
     else
       context
     end
+  end
+
+  # Helper function to create AWS SQS client
+  defp create_aws_client(config) do
+    %{access_key_id: access_key_id, secret_access_key: secret_access_key, region: region} = config
+
+    access_key_id
+    |> AWS.Client.create(secret_access_key, region)
+    |> HttpClient.put_client()
   end
 
   @impl SinkPipeline
@@ -75,7 +98,28 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     end
   end
 
+  defguardp uses_via_sqs?(context) when context.consumer.sink.via_sqs == true
+
   @impl SinkPipeline
+  def handle_batch(:default, messages, _batch_info, context) when uses_via_sqs?(context) do
+    %{
+      consumer: consumer,
+      http_endpoint: http_endpoint,
+      req_opts: req_opts,
+      test_pid: test_pid
+    } = context
+
+    setup_allowances(test_pid)
+
+    case push_to_sqs(http_endpoint, consumer, messages, req_opts, context) do
+      :ok ->
+        {:ok, messages, context}
+
+      {:error, error} when is_exception(error) ->
+        {:error, error}
+    end
+  end
+
   def handle_batch(:default, messages, batch_info, context) do
     %{
       consumer: consumer,
@@ -103,24 +147,13 @@ defmodule Sequin.Runtime.HttpPushPipeline do
           |> Keyword.put(:method, m.method)
       end
 
-    # If sink has via configuration, route to SQS instead of HTTP endpoint
-    if Map.get(consumer.sink, :via) do
-      case push_to_sqs(http_endpoint, consumer, message_data, req_opts, context) do
-        :ok ->
-          {:ok, messages, context}
+    case push_message(http_endpoint, consumer, message_data, req_opts) do
+      :ok ->
+        Metrics.incr_http_endpoint_throughput(http_endpoint)
+        {:ok, messages, context}
 
-        {:error, error} when is_exception(error) ->
-          {:error, error}
-      end
-    else
-      case push_message(http_endpoint, consumer, message_data, req_opts) do
-        :ok ->
-          Metrics.incr_http_endpoint_throughput(http_endpoint)
-          {:ok, messages, context}
-
-        {:error, error} when is_exception(error) ->
-          {:error, error}
-      end
+      {:error, error} when is_exception(error) ->
+        {:error, error}
     end
   end
 
@@ -231,61 +264,49 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     end
   end
 
-  # Handle pushing message to SQS when via configuration is present
-  # batch_size=1 to start, we can increase later
-  defp push_to_sqs(
-         %HttpEndpoint{} = http_endpoint,
-         %SinkConsumer{batch_size: 1} = consumer,
-         message_data,
-         req_opts,
-         context
-       ) do
+  # Handle pushing messages to SQS when via configuration is present
+  defp push_to_sqs(%HttpEndpoint{} = _http_endpoint, %SinkConsumer{} = consumer, messages, _req_opts, context) do
+    Logger.debug("[HttpPushPipeline] Pushing #{length(messages)} messages to SQS for consumer #{consumer.id}")
+
     %{sqs_client: sqs_client} = context
 
-    headers = http_endpoint.headers
-    encrypted_headers = http_endpoint.encrypted_headers || %{}
-    headers = Map.merge(headers, encrypted_headers)
+    # Extract the raw ConsumerEvent data from each Broadway.Message
+    # and convert to binary using erlang.term_to_binary
+    sqs_messages =
+      Enum.map(messages, fn %Broadway.Message{} = message ->
+        # Extract the ConsumerEvent from the Broadway.Message
+        %ConsumerEvent{} = consumer_event = message.data
 
-    # Create an envelope with request details and metadata
-    envelope = %{
-      request: %{
-        method: Keyword.get(req_opts, :method, "POST"),
-        base_url: HttpEndpoint.url(http_endpoint),
-        url: Keyword.get(req_opts, :url, consumer.sink.http_endpoint_path || ""),
-        headers: headers,
-        json: message_data
-      },
-      metadata: %{
-        consumer_id: consumer.id,
-        max_retry_count: consumer.max_retry_count,
-        request_timeout: 30_000
-      }
-    }
+        # Convert to binary
+        binary_data = consumer_event |> ConsumerEvent.map_from_struct() |> :erlang.term_to_binary() |> Base.encode64()
 
-    # Build SQS message
-    sqs_message = %{
-      message_body: envelope,
-      id: UUID.uuid4()
-    }
+        # Build SQS message with binary data as the message body
+        %{
+          message_body: %{data: binary_data},
+          id: UUID.uuid4()
+        }
+      end)
 
     # Add deduplication ID if the queue is FIFO
-    # sqs_message =
-    #   if consumer.sink.via.is_fifo do
-    #     # TODO
-    #     # Use random UUID for deduplication unless we have a better ID
-    #     deduplication_id = UUID.uuid4()
-
-    #     # Set message group ID for FIFO queues
-    #     Map.merge(sqs_message, %{
-    #       message_deduplication_id: deduplication_id,
-    #       message_group_id: consumer.id
-    #     })
+    # This would need to be applied to each message in the batch
+    # queue_is_fifo = consumer.sink.via && String.ends_with?(consumer.sink.via.queue_url, ".fifo")
+    # sqs_messages =
+    #   if queue_is_fifo do
+    #     Enum.map(sqs_messages, fn sqs_message ->
+    #       deduplication_id = UUID.uuid4()
+    #       Map.merge(sqs_message, %{
+    #         message_deduplication_id: deduplication_id,
+    #         message_group_id: consumer.id
+    #       })
+    #     end)
     #   else
-    #     sqs_message
+    #     sqs_messages
     #   end
 
-    # Send to SQS
-    case SQS.send_messages(sqs_client, consumer.sink.via.queue_url, [sqs_message]) do
+    # Send to SQS - now sending multiple messages in a batch
+    %{sqs_config: sqs_config} = context
+
+    case SQS.send_messages(sqs_client, sqs_config.queue_url, sqs_messages) do
       :ok ->
         Logger.debug(
           "[HttpPushPipeline] Successfully routed HTTP request to SQS via configuration for consumer #{consumer.id}"
@@ -332,6 +353,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
-    Req.Test.allow(Sequin.Aws.HttpClient, test_pid, self())
+    Req.Test.allow(HttpClient, test_pid, self())
   end
 end

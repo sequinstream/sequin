@@ -4,6 +4,7 @@ defmodule Sequin.Consumers do
 
   alias Ecto.Changeset
   alias Sequin.Accounts
+  alias Sequin.Cache
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
@@ -92,6 +93,31 @@ defmodule Sequin.Consumers do
       {:ok, consumer} -> consumer
       {:error, _} -> raise Error.not_found(entity: :consumer)
     end
+  end
+
+  @spec get_cached_consumer(consumer_id :: SinkConsumer.id()) ::
+          {:ok, consumer :: SinkConsumer.t()} | {:error, Error.t()}
+  def get_cached_consumer(consumer_id) do
+    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+
+    Cache.get_or_store(
+      consumer_id,
+      fn ->
+        case get_consumer(consumer_id) do
+          {:ok, consumer} ->
+            consumer = Repo.preload(consumer, [:transform, :routing])
+            {:ok, consumer}
+
+          {:error, _} = error ->
+            error
+        end
+      end,
+      ttl
+    )
+  end
+
+  def invalidate_cached_consumer(consumer_id) do
+    Cache.delete(consumer_id)
   end
 
   def get_consumer_for_account(account_id, consumer_id) do
@@ -972,6 +998,37 @@ defmodule Sequin.Consumers do
     HttpEndpoint
     |> preload(^preload)
     |> Repo.all()
+  end
+
+  @spec get_cached_http_endpoint(endpoint_id :: HttpEndpoint.id()) ::
+          {:ok, endpoint :: HttpEndpoint.t()} | {:error, Error.t()}
+  def get_cached_http_endpoint(endpoint_id) do
+    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+
+    Cache.get_or_store(
+      {:http_endpoint, endpoint_id},
+      fn ->
+        case get_http_endpoint(endpoint_id) do
+          {:ok, endpoint} ->
+            {:ok, endpoint}
+
+          {:error, _} = error ->
+            error
+        end
+      end,
+      ttl
+    )
+  end
+
+  def get_cached_http_endpoint!(endpoint_id) do
+    case get_cached_http_endpoint(endpoint_id) do
+      {:ok, endpoint} -> endpoint
+      {:error, _} -> raise Error.not_found(entity: :http_endpoint)
+    end
+  end
+
+  def invalidate_cached_http_endpoint(endpoint_id) do
+    Cache.delete({:http_endpoint, endpoint_id})
   end
 
   def list_http_endpoints_for_account(account_id, preload \\ []) do

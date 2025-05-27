@@ -110,9 +110,15 @@ defmodule Sequin.Consumers.ConsumerEvent do
   def map_from_struct(%ConsumerEvent{} = consumer_event) do
     consumer_event
     |> Sequin.Map.from_ecto()
-    |> update_in([:data], &Sequin.Map.from_ecto/1)
-    |> update_in([:data, :metadata], &Sequin.Map.from_ecto/1)
-    |> update_in([:data, :metadata, :consumer], &Sequin.Map.from_ecto/1)
+    |> Map.update!(:data, &ConsumerEventData.map_from_struct/1)
+  end
+
+  def struct_from_map(map) do
+    map = Sequin.Map.atomize_keys(map)
+
+    ConsumerEvent
+    |> struct!(map)
+    |> Map.update!(:data, &ConsumerEventData.struct_from_map/1)
   end
 
   def where_consumer_id(query \\ base_query(), consumer_id) do

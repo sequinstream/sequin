@@ -1,147 +1,144 @@
 defmodule Sequin.Runtime.HttpPushSqsPipelineTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.Aws.HttpClient
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Runtime.SinkPipeline
-  alias Sequin.Transforms
+  alias Sequin.Runtime.HttpPushSqsPipeline
 
-  @via_config %{
+  @sqs_config %{
     queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
     region: "us-east-1",
     access_key_id: "test-access-key",
     secret_access_key: "test-secret-key"
   }
 
-  setup do
-    account = Factory.AccountsFactory.insert_account!()
-    http_endpoint = Factory.ConsumersFactory.insert_http_endpoint!(account_id: account.id)
+  describe "HttpPushSqsPipeline" do
+    setup do
+      account = Factory.AccountsFactory.insert_account!()
+      http_endpoint = Factory.ConsumersFactory.insert_http_endpoint!(account_id: account.id)
 
-    stub_application_get_env(fn
-      :sequin, Sequin.Consumers.HttpPushSink -> [via: @via_config]
-      app, key -> Application.get_env(app, key)
-    end)
-
-    consumer =
-      Factory.ConsumersFactory.insert_sink_consumer!(
-        account_id: account.id,
-        type: :http_push,
-        sink: %{
+      consumer =
+        Factory.ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
           type: :http_push,
-          http_endpoint_id: http_endpoint.id,
-          batch: false
-        },
-        message_kind: :event
-      )
+          sink: %{
+            type: :http_push,
+            http_endpoint_id: http_endpoint.id,
+            batch: false,
+            via_sqs: true
+          },
+          message_kind: :event,
+          max_retry_count: 3
+        )
 
-    consumer = Repo.preload(consumer, [:sequence, :transform, :routing])
-
-    # Mock AWS config if necessary using Application.put_env, e.g., for credentials
-    # For now, we rely on Req.Test.stub for SQS interaction.
-
-    {:ok, %{consumer: consumer, http_endpoint: http_endpoint, account: account}}
-  end
-
-  describe "HttpPushSink with :via SQS routing" do
-    test "sends message to SQS with correct payload and does not call HTTP endpoint directly",
-         %{consumer: consumer, http_endpoint: http_endpoint} do
-      test_pid = self()
-
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
-
-      Req.Test.stub(HttpClient, fn %Plug.Conn{} = conn ->
-        send(test_pid, {:req, conn})
-
-        # Mock successful SQS response
-        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "test-msg-id"}], "Failed" => []})
+      # Configure the pipeline for testing
+      expect_application_get_env(3, fn
+        :sequin, HttpPushSqsPipeline -> [sqs: @sqs_config]
       end)
 
-      # Send a test event into the pipeline
-      start_pipeline!(consumer)
-      ref = send_test_event(consumer, event)
+      {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
+    end
 
-      # Assert SQS request was made
-      assert_receive {:req, %Plug.Conn{} = conn}, 1_000
+    test "processes SQS message and makes HTTP request", %{
+      http_endpoint: http_endpoint,
+      consumer: consumer
+    } do
+      test_pid = self()
 
-      #  # Assertions for the SQS request
-      # 1. Correct SQS service endpoint URL (host and scheme)
-      assert @via_config.queue_url =~ conn.host
+      # Create a test event
+      event =
+        [consumer_id: consumer.id, action: :insert]
+        |> ConsumersFactory.insert_consumer_event!()
+        |> ConsumerEvent.map_from_struct()
 
-      #   # 2. Correct HTTP method (POST for SQS)
+      # Create a message that looks like what would come from SQS
+      binary_data = :erlang.term_to_binary(event)
+      message_body = Jason.encode!(%{data: Base.encode64(binary_data)})
+
+      # Stub the HTTP request that the pipeline will make
+      Req.Test.stub(HttpPushSqsPipeline, fn conn ->
+        send(test_pid, {:req, conn})
+
+        # Return a success response
+        Req.Test.json(conn, %{})
+      end)
+
+      # Start the pipeline and process the message
+      start_sqs_pipeline()
+      ref = send_test_sqs_event(message_body)
+
+      assert_receive {:req, conn}, 1_000
+
+      # Verify request details
       assert conn.method == "POST"
 
-      assert {_, content_type} = List.keyfind(conn.req_headers, "content-type", 0)
-      assert content_type == "application/x-amz-json-1.0"
+      # Construct the URL from conn parts
+      conn_url = "#{conn.scheme}://#{conn.host}#{conn.request_path}"
+      assert conn_url == HttpEndpoint.url(http_endpoint)
 
-      decoded_body = conn |> Plug.Conn.read_body() |> elem(1) |> Jason.decode!()
+      # Extract and verify the body
+      {:ok, body, _} = Plug.Conn.read_body(conn)
+      body_json = Jason.decode!(body)
 
-      assert %{
-               "Entries" => [
-                 %{
-                   "Id" => _id,
-                   "MessageAttributes" => %{},
-                   "MessageBody" => envelope_json
-                 }
-               ]
-             } = decoded_body
+      # Verify it's the transformed data
+      assert body_json["action"] == "insert"
+      assert body_json["record"] == event.data.record
 
-      envelope = Jason.decode!(envelope_json)
+      # Verify the message was acked
+      assert_receive {:ack, ^ref, [_successful], []}, 1000
+    end
 
-      assert envelope["request"]["method"] == "POST"
-      assert envelope["request"]["base_url"] == HttpEndpoint.url(http_endpoint)
-      assert envelope["request"]["url"] == (consumer.sink.http_endpoint_path || "")
-      # Ensure headers from http_endpoint are present
-      expected_headers = Map.merge(http_endpoint.headers || %{}, http_endpoint.encrypted_headers || %{})
-      assert envelope["request"]["headers"] == expected_headers
+    @tag capture_log: true
+    test "handles HTTP request failures", %{consumer: consumer} do
+      test_pid = self()
 
-      # Envelope.metadata part
-      assert envelope["metadata"]["consumer_id"] == consumer.id
-      assert envelope["metadata"]["max_retry_count"] == consumer.max_retry_count
-      assert envelope["metadata"]["request_timeout"] == 30_000
+      # Create a test event
+      event =
+        [consumer_id: consumer.id, action: :insert]
+        |> ConsumersFactory.insert_consumer_event!()
+        |> ConsumerEvent.map_from_struct()
 
-      original_payload_in_sqs_message = envelope["request"]["json"]
+      binary_data = :erlang.term_to_binary(event)
+      message_body = Jason.encode!(%{data: Base.encode64(binary_data)})
 
-      expected_transformed_payload =
-        consumer
-        |> Transforms.Message.to_external(event)
-        |> Sequin.Map.stringify_keys()
+      # Stub the HTTP request to return a failure
+      Req.Test.stub(HttpPushSqsPipeline, fn conn ->
+        send(test_pid, {:req, conn})
 
-      expected_transformed_metadata = Sequin.Map.stringify_keys(expected_transformed_payload["metadata"])
+        conn
+        |> Plug.Conn.put_status(500)
+        |> Req.Test.json(%{})
+      end)
 
-      assert_maps_equal(original_payload_in_sqs_message, expected_transformed_payload, ["action", "changes", "record"])
+      # Start the pipeline and process the message
+      start_sqs_pipeline()
+      ref = send_test_sqs_event(message_body)
 
-      assert_maps_equal(original_payload_in_sqs_message["metadata"], expected_transformed_metadata, [
-        "commit_lsn",
-        "table_schema",
-        "table_name"
-      ])
+      # Verify the HTTP request was made
+      assert_receive {:req, _conn}, 1000
 
-      # Assert ack for the message (indicating successful handoff to SQS)
-      assert_receive {:ack, ^ref, [_acked_message], []}, 1_000
+      # Verify the message was failed
+      assert_receive {:ack, ^ref, [], [_failed]}, 1000
     end
   end
 
-  defp start_pipeline!(consumer, opts \\ []) do
-    opts =
-      Keyword.merge(
-        [
-          consumer: consumer,
-          test_pid: self(),
-          producer: Broadway.DummyProducer
-        ],
-        opts
-      )
+  @sqs_pipeline_name Module.concat(__MODULE__, TestPipeline)
+  defp start_sqs_pipeline do
+    # Configure the Broadway pipeline with a DummyProducer
+    pipeline_config = [
+      name: @sqs_pipeline_name,
+      producer_mod: Broadway.DummyProducer,
+      test_pid: self()
+    ]
 
-    start_supervised!({SinkPipeline, opts})
+    # Start the pipeline and process the message
+    start_supervised!({HttpPushSqsPipeline, pipeline_config})
+    :ok
   end
 
-  defp send_test_event(consumer, event) do
-    Broadway.test_message(broadway(consumer), event, metadata: %{})
-  end
-
-  defp broadway(consumer) do
-    SinkPipeline.via_tuple(consumer.id)
+  defp send_test_sqs_event(event) do
+    Broadway.test_message(@sqs_pipeline_name, event)
   end
 end

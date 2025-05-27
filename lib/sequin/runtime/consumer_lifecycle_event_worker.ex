@@ -92,6 +92,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   defp handle_http_endpoint_event(event, id) do
     Logger.metadata(http_endpoint_id: id)
     Logger.info("[LifecycleEventWorker] Handling event `#{event}` for http_endpoint")
+    Consumers.invalidate_cached_http_endpoint(id)
 
     case event do
       "create" ->

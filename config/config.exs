@@ -12,7 +12,9 @@ sequin_stream_schema = "sequin_streams"
 
 config :esbuild, :version, "0.17.11"
 
-# Configures Elixir's Logger
+# Used by broadway_sqs
+config :ex_aws, http_client: ExAws.Request.Req
+
 config :logger, :console,
   format: {Sequin.ConsoleLogger, :format},
   metadata: :all

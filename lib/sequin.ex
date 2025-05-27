@@ -12,10 +12,12 @@ defmodule Sequin do
   @uuid_mod Application.compile_env(:sequin, [Sequin, :uuid_mod], UUID)
   @enum_mod Application.compile_env(:sequin, [Sequin, :enum_mod], Enum)
   @process_mod Application.compile_env(:sequin, [Sequin, :process_mod], Process)
+  @application_mod Application.compile_env(:sequin, [Sequin, :application_mod], Application)
 
   defdelegate utc_now, to: @datetime_mod
   defdelegate uuid4, to: @uuid_mod
   defdelegate random(enum), to: @enum_mod
+  defdelegate get_env(app, key), to: @application_mod
 
   def process_alive?(pid) do
     @process_mod.alive?(pid)

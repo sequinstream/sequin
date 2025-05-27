@@ -315,6 +315,13 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: c.status != ^status)
   end
 
+  def join_postgres_database(query \\ base_query()) do
+    from([consumer: c] in query,
+      join: postgres_database in assoc(c, :postgres_database),
+      as: :database
+    )
+  end
+
   defp base_query(query \\ __MODULE__) do
     from(c in query, as: :consumer)
   end

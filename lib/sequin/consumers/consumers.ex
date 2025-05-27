@@ -30,6 +30,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Runtime.SlotProcessor
@@ -464,6 +465,9 @@ defmodule Sequin.Consumers do
   def list_active_sink_consumers(preloads \\ []) do
     :active
     |> SinkConsumer.where_status()
+    |> SinkConsumer.join_postgres_database()
+    |> PostgresDatabase.join_replication_slot()
+    |> PostgresReplicationSlot.where_status(:active)
     |> preload(^preloads)
     |> Repo.all()
   end

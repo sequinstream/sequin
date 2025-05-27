@@ -2174,6 +2174,71 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
+  describe "list_active_sink_consumers" do
+    test "returns active sink consumers with active replication slot" do
+      account = AccountsFactory.insert_account!()
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          status: :active,
+          postgres_database_id: db.id
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          postgres_database_id: db.id,
+          replication_slot_id: slot.id
+        )
+
+      assert Consumers.list_active_sink_consumers() == [consumer]
+    end
+
+    test "does not return disabled sink with active replication slot" do
+      account = AccountsFactory.insert_account!()
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          status: :active,
+          postgres_database_id: db.id
+        )
+
+      ConsumersFactory.insert_sink_consumer!(
+        account_id: account.id,
+        postgres_database_id: db.id,
+        replication_slot_id: slot.id,
+        status: :disabled
+      )
+
+      assert Consumers.list_active_sink_consumers() == []
+    end
+
+    test "does not return sink consumers with disabled replication slot" do
+      account = AccountsFactory.insert_account!()
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          status: :disabled,
+          postgres_database_id: db.id
+        )
+
+      ConsumersFactory.insert_sink_consumer!(
+        account_id: account.id,
+        postgres_database_id: db.id,
+        replication_slot_id: slot.id,
+        status: :active
+      )
+
+      assert Consumers.list_active_sink_consumers() == []
+    end
+  end
+
   describe "list_sink_consumers_for_account_paginated/3" do
     import Sequin.Test.Assertions, only: [assert_lists_equal: 2]
 

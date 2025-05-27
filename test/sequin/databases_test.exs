@@ -13,6 +13,48 @@ defmodule Sequin.DatabasesTest do
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.TestSupport.Models.Character
 
+  describe "list_dbs" do
+    test "returns empty list if no databases exist" do
+      assert Databases.list_dbs() == []
+    end
+
+    test "returns all databases" do
+      DatabasesFactory.insert_postgres_database!()
+      assert length(Databases.list_dbs()) == 1
+    end
+  end
+
+  describe "list_active_dbs" do
+    test "returns empty list if no databases exist" do
+      assert Databases.list_active_dbs() == []
+    end
+
+    test "returns all databases with active replication slots" do
+      account = AccountsFactory.insert_account!()
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          status: :active,
+          postgres_database_id: db.id
+        )
+
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      _disabled_slot =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          status: :disabled,
+          postgres_database_id: db.id
+        )
+
+      assert [db] = Databases.list_active_dbs()
+      db = Repo.preload(db, :replication_slot)
+      assert db.replication_slot.id == slot.id
+    end
+  end
+
   describe "tables/1" do
     test "returns tables for a database with existing tables" do
       db = insert_valid_postgres_database(tables: [DatabasesFactory.table()])

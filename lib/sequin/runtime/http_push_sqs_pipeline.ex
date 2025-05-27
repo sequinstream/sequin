@@ -22,6 +22,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Metrics
+  alias Sequin.Prometheus
   alias Sequin.Transforms
 
   require Logger
@@ -127,11 +128,25 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
     # Fetch the consumer and preload the HTTP endpoint
     case fetch_consumer(consumer_id) do
       {:ok, consumer} ->
-        case deliver_to_http_endpoint(consumer, consumer_event) do
+        Prometheus.increment_http_via_sqs_message_deliver_attempt_count(consumer_id, consumer.name)
+        {latency_us, result} = :timer.tc(&deliver_to_http_endpoint/2, [consumer, consumer_event])
+
+        case result do
           {:ok, _response} ->
+            # Track success metrics
+            Prometheus.increment_http_via_sqs_message_success_count(consumer_id, consumer.name)
+            Prometheus.observe_http_via_sqs_message_deliver_latency_us(consumer_id, consumer.name, latency_us)
+
+            if ingested_at = consumer_event.ingested_at do
+              total_latency = DateTime.diff(DateTime.utc_now(), ingested_at, :microsecond)
+              Prometheus.observe_http_via_sqs_message_total_latency_us(consumer_id, consumer.name, total_latency)
+            end
+
             message
 
           {:error, error} ->
+            # Track failure metrics
+            Prometheus.increment_http_via_sqs_message_failure_count(consumer_id, consumer.name)
             Logger.error("Failed to deliver message to HTTP endpoint: #{inspect(error)}")
             Message.failed(message, "Failed to deliver message: #{inspect(error)}")
         end

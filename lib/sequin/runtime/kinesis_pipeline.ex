@@ -34,18 +34,9 @@ defmodule Sequin.Runtime.KinesisPipeline do
 
     records =
       Enum.map(messages, fn %{data: data} ->
-        partition_key =
-          consumer
-          |> Sequin.Consumers.group_column_values(data)
-          |> Enum.join(",")
-          |> case do
-            "" -> UUID.uuid4()
-            key -> key
-          end
-
         %{
-          "Data" => Jason.encode!(Sequin.Transforms.Message.to_external(consumer, data)),
-          "PartitionKey" => partition_key
+          "Data" => Base.encode64(Jason.encode!(Sequin.Transforms.Message.to_external(consumer, data))),
+          "PartitionKey" => data.group_id
         }
       end)
 

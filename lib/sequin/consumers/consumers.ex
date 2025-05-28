@@ -4,6 +4,7 @@ defmodule Sequin.Consumers do
 
   alias Ecto.Changeset
   alias Sequin.Accounts
+  alias Sequin.Cache
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
@@ -29,6 +30,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Runtime.SlotProcessor
@@ -92,6 +94,31 @@ defmodule Sequin.Consumers do
       {:ok, consumer} -> consumer
       {:error, _} -> raise Error.not_found(entity: :consumer)
     end
+  end
+
+  @spec get_cached_consumer(consumer_id :: SinkConsumer.id()) ::
+          {:ok, consumer :: SinkConsumer.t()} | {:error, Error.t()}
+  def get_cached_consumer(consumer_id) do
+    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+
+    Cache.get_or_store(
+      consumer_id,
+      fn ->
+        case get_consumer(consumer_id) do
+          {:ok, consumer} ->
+            consumer = Repo.preload(consumer, [:transform, :routing])
+            {:ok, consumer}
+
+          {:error, _} = error ->
+            error
+        end
+      end,
+      ttl
+    )
+  end
+
+  def invalidate_cached_consumer(consumer_id) do
+    Cache.delete(consumer_id)
   end
 
   def get_consumer_for_account(account_id, consumer_id) do
@@ -372,6 +399,16 @@ defmodule Sequin.Consumers do
     end)
   end
 
+  def set_http_push_to_via_sqs(%SinkConsumer{} = consumer) do
+    sink = Map.from_struct(consumer.sink)
+    update_sink_consumer(consumer, %{sink: Map.put(sink, :via_sqs, true)})
+  end
+
+  def set_http_push_to_not_via_sqs(%SinkConsumer{} = consumer) do
+    sink = Map.from_struct(consumer.sink)
+    update_sink_consumer(consumer, %{sink: Map.put(sink, :via_sqs, false)})
+  end
+
   def delete_sink_consumer(consumer) do
     Repo.transact(fn ->
       with {:ok, _} <- Repo.delete(consumer),
@@ -438,6 +475,9 @@ defmodule Sequin.Consumers do
   def list_active_sink_consumers(preloads \\ []) do
     :active
     |> SinkConsumer.where_status()
+    |> SinkConsumer.join_postgres_database()
+    |> PostgresDatabase.join_replication_slot()
+    |> PostgresReplicationSlot.where_status(:active)
     |> preload(^preloads)
     |> Repo.all()
   end
@@ -972,6 +1012,37 @@ defmodule Sequin.Consumers do
     HttpEndpoint
     |> preload(^preload)
     |> Repo.all()
+  end
+
+  @spec get_cached_http_endpoint(endpoint_id :: HttpEndpoint.id()) ::
+          {:ok, endpoint :: HttpEndpoint.t()} | {:error, Error.t()}
+  def get_cached_http_endpoint(endpoint_id) do
+    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+
+    Cache.get_or_store(
+      {:http_endpoint, endpoint_id},
+      fn ->
+        case get_http_endpoint(endpoint_id) do
+          {:ok, endpoint} ->
+            {:ok, endpoint}
+
+          {:error, _} = error ->
+            error
+        end
+      end,
+      ttl
+    )
+  end
+
+  def get_cached_http_endpoint!(endpoint_id) do
+    case get_cached_http_endpoint(endpoint_id) do
+      {:ok, endpoint} -> endpoint
+      {:error, _} -> raise Error.not_found(entity: :http_endpoint)
+    end
+  end
+
+  def invalidate_cached_http_endpoint(endpoint_id) do
+    Cache.delete({:http_endpoint, endpoint_id})
   end
 
   def list_http_endpoints_for_account(account_id, preload \\ []) do

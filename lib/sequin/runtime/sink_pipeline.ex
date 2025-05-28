@@ -502,6 +502,7 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Mox.allow(Sequin.TestSupport.ApplicationMock, test_pid, self())
     Sandbox.allow(Sequin.Repo, test_pid, self())
   end
 

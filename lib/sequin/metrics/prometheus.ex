@@ -48,6 +48,47 @@ defmodule Sequin.Prometheus do
       labels: [:replication_slot_id, :slot_name]
     )
 
+    # SQS Pipeline metrics
+    Counter.declare(
+      name: :sequin_http_via_sqs_message_deliver_attempt_count,
+      help: "Total number of HTTP via SQS message delivery attempts.",
+      labels: [:consumer_id, :consumer_name]
+    )
+
+    Counter.declare(
+      name: :sequin_http_via_sqs_message_success_count,
+      help: "Total number of successful HTTP via SQS message deliveries.",
+      labels: [:consumer_id, :consumer_name]
+    )
+
+    Counter.declare(
+      name: :sequin_http_via_sqs_message_deliver_failure_count,
+      help: "Total number of failed HTTP via SQS message deliveries.",
+      labels: [:consumer_id, :consumer_name, :status_code]
+    )
+
+    Counter.declare(
+      name: :sequin_http_via_sqs_message_discard_count,
+      help: "Total number of discarded HTTP via SQS messages.",
+      labels: [:consumer_id, :consumer_name]
+    )
+
+    Histogram.new(
+      name: :sequin_http_via_sqs_message_deliver_latency_us,
+      labels: [:consumer_id, :consumer_name],
+      buckets: [10, 100, 1000, 10_000, 50_000, 100_000, 500_000, 1_000_000, 5_000_000, 10_000_000, 50_000_000],
+      duration_unit: false,
+      help: "The HTTP via SQS message delivery latency in microseconds."
+    )
+
+    Histogram.new(
+      name: :sequin_http_via_sqs_message_total_latency_us,
+      labels: [:consumer_id, :consumer_name],
+      buckets: [10, 100, 1000, 10_000, 50_000, 100_000, 500_000, 1_000_000, 5_000_000, 10_000_000, 50_000_000],
+      duration_unit: false,
+      help: "The HTTP via SQS message total latency in microseconds."
+    )
+
     Counter.declare(
       name: :sequin_message_deliver_attempt_count,
       help: "Total number of messages attempted for delivery.",
@@ -287,6 +328,73 @@ defmodule Sequin.Prometheus do
   @spec set_messages_buffered(consumer_id :: String.t(), consumer_name :: String.t(), count :: number()) :: :ok
   def set_messages_buffered(consumer_id, consumer_name, count) do
     Gauge.set([name: :sequin_messages_buffered, labels: [consumer_id, consumer_name]], count)
+  end
+
+  @spec increment_http_via_sqs_message_deliver_attempt_count(
+          consumer_id :: String.t(),
+          consumer_name :: String.t(),
+          count :: number()
+        ) :: :ok
+  def increment_http_via_sqs_message_deliver_attempt_count(consumer_id, consumer_name, count \\ 1) do
+    Counter.inc([name: :sequin_http_via_sqs_message_deliver_attempt_count, labels: [consumer_id, consumer_name]], count)
+  end
+
+  @spec increment_http_via_sqs_message_success_count(
+          consumer_id :: String.t(),
+          consumer_name :: String.t(),
+          count :: number()
+        ) ::
+          :ok
+  def increment_http_via_sqs_message_success_count(consumer_id, consumer_name, count \\ 1) do
+    Counter.inc([name: :sequin_http_via_sqs_message_success_count, labels: [consumer_id, consumer_name]], count)
+  end
+
+  @spec increment_http_via_sqs_message_deliver_failure_count(
+          consumer_id :: String.t(),
+          consumer_name :: String.t(),
+          status_code :: number() | String.t(),
+          count :: number()
+        ) ::
+          :ok
+  def increment_http_via_sqs_message_deliver_failure_count(consumer_id, consumer_name, status_code, count \\ 1) do
+    Counter.inc(
+      [name: :sequin_http_via_sqs_message_deliver_failure_count, labels: [consumer_id, consumer_name, status_code]],
+      count
+    )
+  end
+
+  @spec increment_http_via_sqs_message_discard_count(
+          consumer_id :: String.t(),
+          consumer_name :: String.t(),
+          count :: number()
+        ) ::
+          :ok
+  def increment_http_via_sqs_message_discard_count(consumer_id, consumer_name, count \\ 1) do
+    Counter.inc([name: :sequin_http_via_sqs_message_discard_count, labels: [consumer_id, consumer_name]], count)
+  end
+
+  @spec observe_http_via_sqs_message_deliver_latency_us(
+          consumer_id :: String.t(),
+          consumer_name :: String.t(),
+          latency_us :: number()
+        ) :: :ok
+  def observe_http_via_sqs_message_deliver_latency_us(consumer_id, consumer_name, latency_us) do
+    Histogram.observe(
+      [name: :sequin_http_via_sqs_message_deliver_latency_us, labels: [consumer_id, consumer_name]],
+      latency_us
+    )
+  end
+
+  @spec observe_http_via_sqs_message_total_latency_us(
+          consumer_id :: String.t(),
+          consumer_name :: String.t(),
+          latency_us :: number()
+        ) :: :ok
+  def observe_http_via_sqs_message_total_latency_us(consumer_id, consumer_name, latency_us) do
+    Histogram.observe(
+      [name: :sequin_http_via_sqs_message_total_latency_us, labels: [consumer_id, consumer_name]],
+      latency_us
+    )
   end
 
   @spec increment_bytes_ingested(consumer_id :: String.t(), consumer_name :: String.t(), bytes :: number()) :: :ok

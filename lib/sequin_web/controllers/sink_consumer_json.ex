@@ -3,7 +3,18 @@ defmodule SequinWeb.SinkConsumerJSON do
   Renders a list of sink consumers.
   """
   def index(%{sink_consumers: sink_consumers}) do
-    %{data: for(sink_consumer <- sink_consumers, do: Sequin.Transforms.to_external(sink_consumer))}
+    consumers =
+      sink_consumers
+      |> Enum.map(fn sink_consumer ->
+        try do
+          Sequin.Transforms.to_external(sink_consumer)
+        rescue
+          _ -> nil
+        end
+      end)
+      |> Enum.filter(& &1)
+
+    %{data: consumers}
   end
 
   @doc """

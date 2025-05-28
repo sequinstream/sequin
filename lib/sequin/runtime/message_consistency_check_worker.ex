@@ -6,7 +6,6 @@ defmodule Sequin.Runtime.MessageConsistencyCheckWorker do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Replication
   alias Sequin.Runtime.MessageLedgers
 
   require Logger
@@ -15,12 +14,7 @@ defmodule Sequin.Runtime.MessageConsistencyCheckWorker do
   def perform(_job) do
     Logger.info("[MessageConsistencyCheckWorker] Starting consistency check")
 
-    active_replications = Replication.all_active_pg_replications()
-    active_replication_ids = Enum.map(active_replications, & &1.id)
-
-    Consumers.list_active_sink_consumers()
-    |> Stream.filter(&(&1.replication_slot_id in active_replication_ids))
-    |> Enum.each(fn %SinkConsumer{id: consumer_id} ->
+    Enum.each(Consumers.list_active_sink_consumers(), fn %SinkConsumer{id: consumer_id} ->
       two_minutes_ago = DateTime.add(DateTime.utc_now(), -2 * 60, :second)
       audit_and_trim_undelivered_cursors(consumer_id, two_minutes_ago)
     end)

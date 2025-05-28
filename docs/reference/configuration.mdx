@@ -38,6 +38,8 @@ You can provide a YAML configuration file to Sequin. This configuration file wil
 
 ### Postgres configuration
 
+Sequin uses a Postgres database to store state, such as your database connections and sinks. This database is separate from the Postgres databases you stream from (and can configure in [`sequin.yaml`](/reference/sequin-yaml#database-configuration)). It is recommended to give Sequin its own logical database, though it may reside on the same physical Postgres database as your source databases.
+
 - `PG_URL`: Complete Postgres connection URL (alternative to individual PG_* variables below)
   - (e.g. `postgres://sequin:password@localhost:5432/sequin`)
 - `PG_PORT`: Postgres port number (default: 5432)

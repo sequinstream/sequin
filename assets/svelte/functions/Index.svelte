@@ -48,9 +48,6 @@
     <div class="flex items-center">
       <Code class="h-6 w-6 mr-2" />
       <h1 class="text-2xl font-bold">Functions</h1>
-      <div class="ml-2">
-        <Beta size="lg" variant="subtle" />
-      </div>
     </div>
     {#if functions.length > 0}
       <a

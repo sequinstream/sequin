@@ -73,6 +73,10 @@ databases:
       interval_ms: 3000         # Default: 3000 (3 seconds)
 ```
 
+<Note>
+  These database entries tell Sequin which Postgres instances to capture changes from. They are separate from the Postgres database that Sequin itself uses, which is configured via the `PG_*` [environment variables](/reference/configuration#postgres-configuration).
+</Note>
+
 #### Replica database configuration
 
 When [connecting a replica to Sequin](/reference/databases#using-sequin-with-a-replica), Sequin also needs to connect to the primary database.

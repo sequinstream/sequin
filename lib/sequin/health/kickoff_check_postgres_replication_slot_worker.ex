@@ -14,7 +14,7 @@ defmodule Sequin.Health.KickoffCheckPostgresReplicationSlotWorker do
 
   @impl Oban.Worker
   def perform(_) do
-    Enum.each(Databases.list_dbs(), fn db ->
+    Enum.each(Databases.list_active_dbs(), fn db ->
       CheckPostgresReplicationSlotWorker.enqueue(db.id)
     end)
 

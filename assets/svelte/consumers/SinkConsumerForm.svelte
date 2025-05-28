@@ -540,7 +540,6 @@
             </p>
           </Tooltip.Content>
         </Tooltip.Root>
-        <Beta size="sm" variant="subtle" />
       </svelte:fragment>
 
       <svelte:fragment slot="summary">

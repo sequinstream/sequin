@@ -152,6 +152,10 @@ defmodule Sequin.Databases.PostgresDatabase do
     from([database: pd] in query, where: pd.name == ^name)
   end
 
+  def join_replication_slot(query \\ base_query()) do
+    from([database: pd] in query, join: replication_slot in assoc(pd, :replication_slot), as: :postgres_replication)
+  end
+
   defp base_query(query \\ PostgresDatabase) do
     from(pd in query, as: :database)
   end

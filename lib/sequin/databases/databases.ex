@@ -30,6 +30,12 @@ defmodule Sequin.Databases do
     Repo.all(PostgresDatabase)
   end
 
+  def list_active_dbs do
+    PostgresDatabase.join_replication_slot()
+    |> PostgresReplicationSlot.where_status(:active)
+    |> Repo.all()
+  end
+
   def list_dbs_for_account(account_id, preload \\ []) do
     account_id
     |> PostgresDatabase.where_account()
@@ -362,7 +368,7 @@ defmodule Sequin.Databases do
   end
 
   def with_uncached_connection(%PostgresDatabase{} = db, fun) do
-    with {:ok, conn} <- start_link(db) do
+    with {:ok, conn} <- start_link(db, %{pool_size: 1}) do
       try do
         fun.(conn)
       after

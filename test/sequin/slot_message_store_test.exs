@@ -121,7 +121,7 @@ defmodule Sequin.SlotMessageStoreTest do
       data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
       data_size_bytes = :erlang.external_size(data)
 
-      for _ <- 1..20 do
+      for _ <- 1..100 do
         ConsumersFactory.insert_consumer_message!(
           message_kind: consumer.message_kind,
           consumer_id: consumer.id,
@@ -139,8 +139,8 @@ defmodule Sequin.SlotMessageStoreTest do
     end
 
     test ":init loads only the first  messages", %{consumer: consumer} do
-      # 20 on disk
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 20
+      # 100 on disk
+      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 100
 
       for _ <- 1..consumer.partition_count do
         assert_receive :init_complete
@@ -1014,7 +1014,7 @@ defmodule Sequin.SlotMessageStoreTest do
     data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
     data_size_bytes = :erlang.external_size(data)
 
-    for _ <- 1..30 do
+    for _ <- 1..100 do
       ConsumersFactory.insert_consumer_message!(
         message_kind: consumer.message_kind,
         consumer_id: consumer.id,
@@ -1028,7 +1028,7 @@ defmodule Sequin.SlotMessageStoreTest do
       {SlotMessageStoreSupervisor, consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self()}
     )
 
-    assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 30
+    assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 100
 
     assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
 
@@ -1037,7 +1037,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
     assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
 
-    assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 20
+    assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 90
 
     new_message =
       ConsumersFactory.consumer_message(
@@ -1049,7 +1049,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
     assert_receive {:put_messages_to_disk, [^new_message]}, 1000
 
-    assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 21
+    assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 91
 
     assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
   end

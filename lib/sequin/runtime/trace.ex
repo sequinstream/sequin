@@ -3,22 +3,87 @@ defmodule Sequin.Runtime.Trace do
   Provides tracing functionality for consumer events through Phoenix PubSub.
   """
 
+  import Sequin.Error.Guards, only: [is_error: 1]
+
   require Logger
+
+  @type content :: map() | {Req.Request.t(), Req.Response.t()} | {Req.Request.t(), any()}
 
   defmodule Event do
     @moduledoc """
     Represents a trace event with a message, content, and timestamp.
     """
-    @type status :: :info | :error | :warning
+    use TypedStruct
 
-    @type t :: %__MODULE__{
-            status: status(),
-            message: String.t(),
-            content: map(),
-            published_at: DateTime.t()
-          }
+    alias Sequin.Error
 
-    defstruct [:status, :message, :content, :published_at]
+    typedstruct do
+      field :status, :info | :error | :warning
+      field :message, String.t()
+      field :req_request, Req.Request.t() | nil
+      field :req_response, Req.Response.t() | nil
+      field :error, Error.t() | nil
+      field :extra, map()
+      field :published_at, DateTime.t()
+    end
+
+    def to_external(%__MODULE__{} = event) do
+      %{
+        status: event.status,
+        message: event.message,
+        req_request: format_external(event.req_request),
+        req_response: format_external(event.req_response),
+        error: format_external(event.error),
+        extra: Map.new(event.extra, fn {k, v} -> {k, format_external(v)} end)
+      }
+    end
+
+    defp format_external(nil), do: nil
+    defp format_external(binary) when is_binary(binary), do: to_string(binary)
+
+    defp format_external(%Req.Request{} = req) do
+      %{
+        method: req.method,
+        url: format_external(req.url),
+        headers: req.headers,
+        body: format_external(req.body)
+      }
+    end
+
+    defp format_external(%Req.Response{} = resp) do
+      %{
+        status: resp.status,
+        headers: resp.headers,
+        body: format_external(resp.body)
+      }
+    end
+
+    defp format_external(%URI{} = uri), do: URI.to_string(uri)
+
+    defp format_external(error) when is_exception(error) do
+      Exception.message(error)
+    end
+
+    defp format_external(tuple) when is_tuple(tuple) do
+      tuple
+      |> Tuple.to_list()
+      |> Enum.map(&format_external/1)
+    end
+
+    defp format_external(map) when is_map(map) do
+      Map.new(map, fn {k, v} -> {k, format_external(v)} end)
+    end
+
+    defp format_external(unknown) do
+      case Jason.encode(unknown) do
+        {:ok, _} ->
+          unknown
+
+        :error ->
+          Logger.warning("Failed to encode unknown value for format_external: #{inspect(unknown)}")
+          inspect(unknown)
+      end
+    end
   end
 
   @topic_prefix "sequin:trace:"
@@ -44,39 +109,30 @@ defmodule Sequin.Runtime.Trace do
   @doc """
   Publishes an info trace event for a specific consumer.
   """
-  @spec info(String.t(), String.t(), map()) :: :ok | {:error, term()}
-  def info(consumer_id, message, content) do
-    publish(consumer_id, :info, message, content)
+  @spec info(String.t(), Event.t()) :: :ok | {:error, term()}
+  def info(consumer_id, event) do
+    publish(consumer_id, %Event{event | status: :info})
   end
 
   @doc """
   Publishes a warning trace event for a specific consumer.
   """
-  @spec warning(String.t(), String.t(), map()) :: :ok | {:error, term()}
-  def warning(consumer_id, message, content) do
-    publish(consumer_id, :warning, message, content)
+  @spec warning(String.t(), Event.t()) :: :ok | {:error, term()}
+  def warning(consumer_id, event) do
+    publish(consumer_id, %Event{event | status: :warning})
   end
 
   @doc """
   Publishes an error trace event for a specific consumer.
   """
-  @spec error(String.t(), String.t(), map()) :: :ok | {:error, term()}
-  def error(consumer_id, message, content) do
-    publish(consumer_id, :error, message, content)
+  @spec error(String.t(), Event.t()) :: :ok | {:error, term()}
+  def error(consumer_id, event) do
+    publish(consumer_id, %Event{event | status: :error})
   end
 
-  @spec publish(String.t(), Event.status(), String.t(), map()) :: :ok | {:error, term()}
-  defp publish(consumer_id, status, message, content)
-       when is_binary(consumer_id) and is_binary(message) and is_map(content) do
-    event = %Event{
-      status: status,
-      message: message,
-      content: content,
-      published_at: DateTime.utc_now()
-    }
-
-    topic = topic(consumer_id)
-    Phoenix.PubSub.broadcast(Sequin.PubSub, topic, {:trace_event, event})
+  @spec publish(String.t(), Event.t()) :: :ok | {:error, term()}
+  defp publish(consumer_id, event) when is_binary(consumer_id) do
+    Phoenix.PubSub.broadcast(Sequin.PubSub, topic(consumer_id), {:trace_event, event})
   end
 
   @doc """

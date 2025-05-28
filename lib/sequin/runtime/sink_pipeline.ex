@@ -217,11 +217,6 @@ defmodule Sequin.Runtime.SinkPipeline do
         Prometheus.increment_message_deliver_success(context.consumer.id, context.consumer.name, length(delivered))
         Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :ok, t)
 
-        Trace.info(context.consumer.id, "Messages delivered to sink", %{
-          delivered_count: length(delivered),
-          delivered: Enum.map(delivered, & &1.data)
-        })
-
         update_context(context, next_context)
         delivered ++ already_delivered
 

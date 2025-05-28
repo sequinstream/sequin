@@ -82,7 +82,7 @@
   });
 </script>
 
-<div class="flex flex-col flex-1">
+<div class="flex flex-col flex-1 max-w-8xl">
   <!-- Content container with overflow handling -->
   <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
     <!-- Header Div -->

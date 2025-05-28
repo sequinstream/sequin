@@ -203,7 +203,6 @@ defmodule Sequin.Runtime.MessageHandler do
     payload_size = :erlang.external_size(data)
 
     %ConsumerEvent{
-      id: Ecto.UUID.generate(),
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,

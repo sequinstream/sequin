@@ -59,7 +59,7 @@ apply_config() {
   else
     if [ -n "${CONFIG_FILE_PATH}" ] && [ -f "${CONFIG_FILE_PATH}" ]; then
       echo "Interpolating and applying config from ${CONFIG_FILE_PATH}"
-      sequin-cli config interpolate "${CONFIG_FILE_PATH}" \
+      sequin config interpolate "${CONFIG_FILE_PATH}" \
           | ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
       echo "Config applied from file"
     else

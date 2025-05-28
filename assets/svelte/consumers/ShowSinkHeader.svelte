@@ -104,8 +104,19 @@
     ? `${consumer.href}/messages?showAcked=false`
     : `${consumer.href}/messages`;
 
+  $: traceUrl = `${consumer.href}/trace`;
+
   onMount(() => {
-    activeTab = live_action === "messages" ? "messages" : "overview";
+    switch (live_action) {
+      case "messages":
+        activeTab = "messages";
+        break;
+      case "trace":
+        activeTab = "trace";
+        break;
+      default:
+        activeTab = "overview";
+    }
   });
 
   let sinkDocsSlug: string;
@@ -261,6 +272,18 @@
         {#if messages_failing}
           <AlertCircle class="h-4 w-4 text-red-600 ml-1" />
         {/if}
+      </a>
+      <a
+        href={traceUrl}
+        class={`py-2 px-4 flex items-center font-medium border-b-2 ${
+          activeTab === "trace"
+            ? "text-black border-black"
+            : "text-gray-500 hover:text-gray-700 border-transparent"
+        }`}
+        data-phx-link="redirect"
+        data-phx-link-state="push"
+      >
+        Trace
       </a>
     </div>
   </div>

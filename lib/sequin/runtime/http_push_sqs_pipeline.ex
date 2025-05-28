@@ -23,6 +23,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   alias Sequin.Error.NotFoundError
   alias Sequin.Metrics
   alias Sequin.Prometheus
+  alias Sequin.Runtime.Trace
   alias Sequin.Transforms
 
   require Logger
@@ -137,7 +138,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
         final_delivery? = receive_count - 1 >= consumer.max_retry_count
 
         case result do
-          {:ok, _response} ->
+          {:ok, %Req.Response{} = response} ->
             # Track success metrics
             Prometheus.increment_http_via_sqs_message_success_count(consumer_id, consumer.name)
             Prometheus.observe_http_via_sqs_message_deliver_latency_us(consumer_id, consumer.name, latency_us)
@@ -147,10 +148,18 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
               Prometheus.observe_http_via_sqs_message_total_latency_us(consumer_id, consumer.name, total_latency)
             end
 
+            Trace.info(consumer_id, "Message delivered to HTTP endpoint", %{
+              response: Map.from_struct(response)
+            })
+
             message
 
           {:error, error} ->
             Logger.error("[HttpPushSqsPipeline] Failed to deliver message to HTTP endpoint: #{inspect(error)}")
+
+            Trace.error(consumer_id, "Failed to deliver message to HTTP endpoint", %{
+              error: Exception.message(error)
+            })
 
             if final_delivery? do
               Logger.error("[HttpPushSqsPipeline] Discarding message after #{consumer.max_retry_count} retries")
@@ -214,7 +223,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
 
     # Make the HTTP request
     case Req.request(req) do
-      {:ok, response} ->
+      {:ok, %Req.Response{} = response} ->
         ensure_status(response, consumer)
 
       {:error, %Mint.TransportError{reason: reason} = error} ->

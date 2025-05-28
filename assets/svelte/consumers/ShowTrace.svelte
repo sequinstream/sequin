@@ -1,12 +1,10 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import { Switch } from "$lib/components/ui/switch";
   import { Play, Pause, Loader2 } from "lucide-svelte";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
 
   // Props
-  export let consumer: { type: string };
   export let trace: {
     events: any[];
     total_count: number;
@@ -17,6 +15,9 @@
     paused: boolean;
     show_acked: boolean;
   };
+
+  export let live;
+  export let parent;
 
   let page = trace.page;
   let loading = trace.loading;
@@ -29,18 +30,17 @@
     if (newPage >= 0 && newPage < trace.page_count) {
       page = newPage;
       loading = true;
-      // TODO: Implement page change event
+      live.pushEventTo(`#${parent}`, "trace_change_page", { page: newPage });
     }
   }
 
   function togglePause() {
     paused = !paused;
-    // TODO: Implement pause/resume event
-  }
-
-  function toggleShowAcked() {
-    showAcked = !showAcked;
-    // TODO: Implement show acked toggle event
+    if (paused) {
+      live.pushEventTo(`#${parent}`, "trace_pause_updates");
+    } else {
+      live.pushEventTo(`#${parent}`, "trace_resume_updates");
+    }
   }
 
   function openDrawer(event) {
@@ -76,6 +76,14 @@
       return `${date.toLocaleDateString()} at ${timeString}`;
     }
   }
+
+  function formatContent(content: any): string {
+    try {
+      return JSON.stringify(content, null, 2);
+    } catch (e) {
+      return String(content);
+    }
+  }
 </script>
 
 <TableWithDrawer
@@ -92,39 +100,25 @@
 >
   <svelte:fragment slot="titleActions">
     <Button
-      variant="outline"
-      size="sm"
-      class="flex items-center space-x-2"
-      on:click={toggleShowAcked}
-    >
-      <Switch checked={showAcked} />
-      <span>Show Acked</span>
-    </Button>
-
-    <Button
       variant={paused ? "default" : "outline"}
       size="sm"
       on:click={togglePause}
     >
       {#if paused}
-        <Play class="h-4 w-4 mr-1" /> Resume Updates
+        <Play class="h-4 w-4 mr-1" /> Start Trace
       {:else}
-        <Pause class="h-4 w-4 mr-1" /> Pause Updates
+        <Pause class="h-4 w-4 mr-1" /> Stop Trace
       {/if}
     </Button>
   </svelte:fragment>
 
   <svelte:fragment slot="emptyState">
-    {#if showAcked}
-      Trace events will appear here when they are pending, delivered, or
-      acknowledged.
-    {:else}
-      You have no pending trace events. Try toggling "Show Acked" to see
-      acknowledged events.
-    {/if}
+    No trace events yet. Hit "Start trace" then wait for messages to flow
+    through this sink.
   </svelte:fragment>
 
   <svelte:fragment slot="header">
+    <th class="px-2 py-1"></th>
     <th
       class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
     >
@@ -133,17 +127,12 @@
     <th
       class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
     >
-      Type
-    </th>
-    <th
-      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
-    >
-      Status
-    </th>
-    <th
-      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
-    >
       Message
+    </th>
+    <th
+      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
+    >
+      Content
     </th>
   </svelte:fragment>
 
@@ -155,21 +144,25 @@
   </svelte:fragment>
 
   <svelte:fragment slot="row" let:item>
-    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+    <td class="px-2 w-4">
+      {#if item.status === "info"}
+        <div class="px-[2px] py-[10px] bg-blue-500 text-xs rounded-sm"></div>
+      {:else if item.status === "error"}
+        <div class="px-[2px] py-[10px] bg-red-500 text-xs rounded-sm"></div>
+      {:else if item.status === "warning"}
+        <div class="px-[2px] py-[10px] bg-orange-500 text-xs rounded-sm"></div>
+      {/if}
+    </td>
+    <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs text-gray-500">
       {formatDate(item.timestamp)}
     </td>
-    <td class="px-2 py-1 whitespace-nowrap text-2xs">
-      {item.type}
-    </td>
-    <td class="px-2 py-1 whitespace-nowrap text-2xs">
-      <span
-        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-800"
-      >
-        {item.status}
-      </span>
-    </td>
-    <td class="px-2 py-1 whitespace-nowrap text-2xs">
+    <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs">
       {item.message}
+    </td>
+    <td
+      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500"
+    >
+      {formatContent(item.content)}
     </td>
   </svelte:fragment>
 
@@ -200,7 +193,16 @@
           </div>
         </div>
 
-        <!-- Additional event data can be added here -->
+        <!-- Content -->
+        {#if selectedEvent.content}
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h3 class="text-sm font-medium text-gray-500 mb-2">Content:</h3>
+            <pre
+              class="text-sm text-gray-900 whitespace-pre-wrap overflow-x-auto">{formatContent(
+                selectedEvent.content,
+              )}</pre>
+          </div>
+        {/if}
       </div>
     {/if}
   </svelte:fragment>

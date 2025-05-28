@@ -754,21 +754,17 @@ defmodule Sequin.Health do
   defp check(:messages_delivered, %SinkConsumer{}, events) do
     base_check = %Check{slug: :messages_delivered, status: :waiting}
     delivered_event = find_event(events, :messages_delivered)
-    load_shedding_policy_discarded_event = find_event(events, :load_shedding_policy_discarded)
-    show_load_shedding_policy_error =
-      load_shedding_policy_discarded_event
-      && is_nil(find_newer_event(events, load_shedding_policy_discarded_event, :load_shedding_policy_discarded_dismissed)
 
-    sqs_delivery_failed_event = find_event(events, :sqs_delivery_failed)
-    show_sqs_delivery_failed_error =
-      sqs_delivery_failed_event
-      && is_nil(find_newer_event(events, sqs_delivery_failed_event, :sqs_delivery_failed_dismissed)
+    load_shedding_policy_discarded_event =
+      dismissable_event(events, :load_shedding_policy_discarded, :load_shedding_policy_discarded_dismissed)
+
+    sqs_delivery_failed_event = dismissable_event(events, :sqs_delivery_failed, :sqs_delivery_failed_dismissed)
 
     cond do
       is_nil(delivered_event) ->
         base_check
 
-      show_load_shedding_policy_error ->
+      load_shedding_policy_discarded_event ->
         put_check_timestamps(
           %{
             base_check
@@ -778,7 +774,7 @@ defmodule Sequin.Health do
           [load_shedding_policy_discarded_event]
         )
 
-      show_sqs_delivery_failed_error ->
+      sqs_delivery_failed_event ->
         put_check_timestamps(
           %{
             base_check
@@ -787,13 +783,13 @@ defmodule Sequin.Health do
           },
           [sqs_delivery_failed_event]
         )
-        
+
       delivered_event.status == :fail ->
         put_check_timestamps(
           %{base_check | status: :error, error: delivered_event.error, extra: delivered_event.extra},
           [delivered_event]
         )
-        
+
       true ->
         status = if delivered_event.status == :success, do: :healthy, else: :warning
         put_check_timestamps(%{base_check | status: status}, [delivered_event])
@@ -827,6 +823,16 @@ defmodule Sequin.Health do
 
       true ->
         base_check
+    end
+  end
+
+  defp dismissable_event(events, t_main, t_dismissal) do
+    main = find_event(events, t_main)
+
+    cond do
+      is_nil(main) -> nil
+      find_newer_event(events, main, t_dismissal) -> nil
+      true -> main
     end
   end
 

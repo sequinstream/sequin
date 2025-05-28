@@ -3,8 +3,6 @@ defmodule Sequin.Runtime.Trace do
   Provides tracing functionality for consumer events through Phoenix PubSub.
   """
 
-  import Sequin.Error.Guards, only: [is_error: 1]
-
   require Logger
 
   @type content :: map() | {Req.Request.t(), Req.Response.t()} | {Req.Request.t(), any()}
@@ -23,7 +21,7 @@ defmodule Sequin.Runtime.Trace do
       field :req_request, Req.Request.t() | nil
       field :req_response, Req.Response.t() | nil
       field :error, Error.t() | nil
-      field :extra, map()
+      field :extra, map(), default: %{}
       field :published_at, DateTime.t()
     end
 
@@ -34,7 +32,8 @@ defmodule Sequin.Runtime.Trace do
         req_request: format_external(event.req_request),
         req_response: format_external(event.req_response),
         error: format_external(event.error),
-        extra: Map.new(event.extra, fn {k, v} -> {k, format_external(v)} end)
+        extra: Map.new(event.extra, fn {k, v} -> {k, format_external(v)} end),
+        published_at: event.published_at
       }
     end
 
@@ -46,7 +45,7 @@ defmodule Sequin.Runtime.Trace do
         method: req.method,
         url: format_external(req.url),
         headers: req.headers,
-        body: format_external(req.body)
+        body: format_external(req.body) || format_external(req.options.json)
       }
     end
 
@@ -70,7 +69,11 @@ defmodule Sequin.Runtime.Trace do
       |> Enum.map(&format_external/1)
     end
 
-    defp format_external(map) when is_map(map) do
+    defp format_external(%Decimal{} = decimal) do
+      Decimal.to_string(decimal)
+    end
+
+    defp format_external(map) when is_map(map) and not is_struct(map) do
       Map.new(map, fn {k, v} -> {k, format_external(v)} end)
     end
 
@@ -79,8 +82,8 @@ defmodule Sequin.Runtime.Trace do
         {:ok, _} ->
           unknown
 
-        :error ->
-          Logger.warning("Failed to encode unknown value for format_external: #{inspect(unknown)}")
+        {:error, error} ->
+          Logger.warning("Failed to encode unknown value for format_external: #{inspect(unknown)}", error: error)
           inspect(unknown)
       end
     end
@@ -132,7 +135,11 @@ defmodule Sequin.Runtime.Trace do
 
   @spec publish(String.t(), Event.t()) :: :ok | {:error, term()}
   defp publish(consumer_id, event) when is_binary(consumer_id) do
-    Phoenix.PubSub.broadcast(Sequin.PubSub, topic(consumer_id), {:trace_event, event})
+    Phoenix.PubSub.broadcast(
+      Sequin.PubSub,
+      topic(consumer_id),
+      {:trace_event, %Event{event | published_at: DateTime.utc_now()}}
+    )
   end
 
   @doc """

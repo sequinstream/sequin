@@ -48,8 +48,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   require Logger
 
   # For message management
-  @page_size 25
+  @messages_page_size 25
   @trace_page_size 25
+  @trace_event_limit 25
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id} = params, _session, socket) do
@@ -81,7 +82,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:paused, false)
           |> assign(:show_acked, params["showAcked"] == "true")
           |> assign(:page, 0)
-          |> assign(:page_size, @page_size)
+          |> assign(:page_size, @messages_page_size)
           |> assign(:total_count, 0)
           |> assign(:cursor_position, nil)
           |> assign(:cursor_task_ref, nil)
@@ -210,22 +211,12 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   # FIXME: TEMP
   defp encode_trace(trace) do
     %{
-      events: Enum.map(trace.events, &encode_trace_event/1),
+      events: Enum.map(trace.events, &Trace.Event.to_external/1),
       total_count: trace.total_count,
       page_size: trace.page_size,
       page: trace.page,
       page_count: ceil(trace.total_count / trace.page_size),
       paused: trace.paused
-    }
-  end
-
-  defp encode_trace_event(%Trace.Event{} = event) do
-    %{
-      message: event.message,
-      content: event.content,
-      timestamp: event.published_at,
-      type: "trace",
-      status: event.status
     }
   end
 
@@ -599,15 +590,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     if socket.assigns.live_action == :trace and not paused? and not over_limit? do
       trace = socket.assigns.trace
-      event = coerce_trace_event_content(event)
       events = [event | trace.events]
       total_count = length(events)
+      to_pause? = total_count >= trace.event_limit
 
-      if total_count >= trace.event_limit do
+      if to_pause? do
         Trace.unsubscribe(socket.assigns.consumer.id)
       end
 
-      {:noreply, assign(socket, trace: %{trace | events: events, total_count: total_count})}
+      {:noreply, assign(socket, trace: %{trace | events: events, total_count: total_count, paused: to_pause?})}
     else
       {:noreply, socket}
     end
@@ -620,23 +611,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       page_size: @trace_page_size,
       page: 0,
       page_count: 0,
-      event_limit: 100,
+      event_limit: @trace_event_limit,
       paused: true
     }
-  end
-
-  defp coerce_trace_event_content(%Trace.Event{} = event) do
-    content =
-      case Jason.encode(event.content) do
-        {:ok, _content} ->
-          event.content
-
-        {:error, _} ->
-          Logger.warning("Failed to encode trace event content", event: event)
-          inspect(event.content)
-      end
-
-    %Trace.Event{event | content: content}
   end
 
   @smoothing_window 5

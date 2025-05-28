@@ -227,8 +227,6 @@ if config_env() == :prod and self_hosted do
 
   config :sequin,
     api_base_url: "http://#{server_host}:#{server_port}",
-    config_file_path: System.get_env("CONFIG_FILE_PATH"),
-    config_file_yaml: System.get_env("CONFIG_FILE_YAML"),
     release_version: System.get_env("RELEASE_VERSION"),
     backfill_max_pending_messages: backfill_max_pending_messages,
     max_memory_bytes: ConfigParser.max_memory_bytes(env_vars),

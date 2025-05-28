@@ -881,7 +881,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         state.safe_wal_cursor_fn.(state)
       end
 
-    Replication.put_restart_wal_cursor!(state.id, safe_wal_cursor)
+    if is_nil(safe_wal_cursor) do
+      Logger.info("[SlotProcessorServer] safe_wal_cursor=nil, skipping put_restart_wal_cursor!")
+    else
+      Replication.put_restart_wal_cursor!(state.id, safe_wal_cursor)
+    end
 
     %{state | safe_wal_cursor: safe_wal_cursor}
   end
@@ -1584,7 +1588,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             "[SlotProcessorServer] no unpersisted messages in stores, using last_flushed_wal_cursor=#{inspect(state.last_flushed_wal_cursor)}"
           )
 
-          state.last_flushed_wal_cursor
+          # We want to update to the last flushed wal cursor which is furthest ahead
+          # But this can be nil if no messages have been flushed yet, ie. on a dormant slot
+          state.last_flushed_wal_cursor || state.safe_wal_cursor
 
         true ->
           # The SlotProcessorServer has processed messages beyond what the message stores have.

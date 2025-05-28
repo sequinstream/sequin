@@ -171,7 +171,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
       # Merge new messages with existing modifications
       merged_messages =
         Enum.map(test_messages, fn msg ->
-          case Enum.find(existing_test_messages, &(&1.id == msg.id)) do
+          case Enum.find(existing_test_messages, &(&1.replication_message_trace_id == msg.replication_message_trace_id)) do
             nil ->
               msg
 

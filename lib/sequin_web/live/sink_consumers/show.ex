@@ -41,6 +41,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Repo
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.Trace
   alias Sequin.Transforms.Message
   alias SequinWeb.RouteHelpers
 
@@ -48,6 +49,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   # For message management
   @page_size 25
+  @trace_page_size 25
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id} = params, _session, socket) do
@@ -83,6 +85,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:total_count, 0)
           |> assign(:cursor_position, nil)
           |> assign(:cursor_task_ref, nil)
+          |> assign(:trace, initial_trace())
           |> load_consumer_messages()
           |> load_consumer_message_by_ack_id()
 
@@ -193,7 +196,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
               props={
                 %{
                   consumer: encode_consumer(@consumer),
-                  trace: encode_trace(@consumer, nil)
+                  trace: encode_trace(@trace),
+                  parent: "consumer-show"
                 }
               }
             />
@@ -204,16 +208,24 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   # FIXME: TEMP
-  defp encode_trace(consumer, trace) do
+  defp encode_trace(trace) do
     %{
-      events: [],
-      total_count: 0,
-      page_size: 50,
-      page: 0,
-      page_count: 0,
-      loading: false,
-      paused: false,
-      show_acked: false
+      events: Enum.map(trace.events, &encode_trace_event/1),
+      total_count: trace.total_count,
+      page_size: trace.page_size,
+      page: trace.page,
+      page_count: ceil(trace.total_count / trace.page_size),
+      paused: trace.paused
+    }
+  end
+
+  defp encode_trace_event(%Trace.Event{} = event) do
+    %{
+      message: event.message,
+      content: event.content,
+      timestamp: event.published_at,
+      type: "trace",
+      status: event.status
     }
   end
 
@@ -485,6 +497,28 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
+  def handle_event("trace_pause_updates", _params, socket) do
+    Trace.unsubscribe(socket.assigns.consumer.id)
+    {:noreply, update(socket, :trace, fn trace -> %{trace | paused: true} end)}
+  end
+
+  def handle_event("trace_resume_updates", _params, socket) do
+    Trace.subscribe(socket.assigns.consumer.id)
+    {:noreply, update(socket, :trace, fn trace -> %{trace | paused: false} end)}
+  end
+
+  def handle_event("trace_toggle_show_acked", %{"show_acked" => show_acked}, socket) do
+    {:noreply,
+     socket
+     |> assign(:trace_show_acked, show_acked)
+     |> assign(:trace_page, 0)
+     |> push_patch(to: RouteHelpers.consumer_path(socket.assigns.consumer, "/trace?showAcked=#{show_acked}"))}
+  end
+
+  def handle_event("trace_change_page", %{"page" => page}, socket) do
+    {:noreply, assign(socket, trace_page: page)}
+  end
+
   @impl Phoenix.LiveView
   def handle_info({:updated_consumer, updated_consumer}, socket) do
     {:noreply,
@@ -554,6 +588,31 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def handle_info(:sink_config_checked, socket) do
     consumer = put_health(socket.assigns.consumer)
     {:noreply, assign(socket, :consumer, consumer)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:trace_event, event}, socket) do
+    if socket.assigns.live_action == :trace and not socket.assigns.trace.paused do
+      trace = socket.assigns.trace
+      trace_events = Enum.take([event | trace.events], trace.event_limit)
+      trace = %{trace | events: trace_events, total_count: length(trace_events)}
+
+      {:noreply, assign(socket, trace: trace)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  defp initial_trace do
+    %{
+      events: [],
+      total_count: 0,
+      page_size: @trace_page_size,
+      page: 0,
+      page_count: 0,
+      event_limit: 100,
+      paused: true
+    }
   end
 
   @smoothing_window 5

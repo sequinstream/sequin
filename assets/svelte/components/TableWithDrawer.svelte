@@ -111,29 +111,31 @@
         </h2>
       </div>
     {:else}
-      <table class="w-full bg-white border border-gray-300">
-        <thead>
-          <tr class="bg-gray-100">
-            <slot name="header" />
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-200">
-          <tr
-            class="sample-row"
-            style="visibility: hidden; position: absolute;"
-          >
-            <slot name="sampleRow" />
-          </tr>
-          {#each items as item}
-            <tr
-              class="relative hover:bg-gray-50 cursor-pointer"
-              on:click={() => onRowClick(item)}
-            >
-              <slot name="row" {item} />
+      <div class="w-full overflow-hidden">
+        <table class="w-full bg-white border border-gray-300">
+          <thead>
+            <tr class="bg-gray-100">
+              <slot name="header" />
             </tr>
-          {/each}
-        </tbody>
-      </table>
+          </thead>
+          <tbody class="divide-y divide-gray-200">
+            <tr
+              class="sample-row"
+              style="visibility: hidden; position: absolute;"
+            >
+              <slot name="sampleRow" />
+            </tr>
+            {#each items as item}
+              <tr
+                class="relative hover:bg-gray-50 cursor-pointer"
+                on:click={() => onRowClick(item)}
+              >
+                <slot name="row" {item} />
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
 
       <!-- Pagination Div -->
       <div class="flex items-center justify-between mt-4 messages-footer">

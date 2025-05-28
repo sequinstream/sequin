@@ -1,5 +1,6 @@
 <script lang="ts">
   import FullPageForm from "../components/FullPageForm.svelte";
+  import EditableArgument from "./EditableArgument.svelte";
   import {
     Select,
     SelectContent,
@@ -38,46 +39,7 @@
   import { keymap } from "@codemirror/view";
   import { indentWithTab } from "@codemirror/commands";
   import { autocompletion } from "@codemirror/autocomplete";
-
-  interface FormData {
-    id: string;
-    name: string;
-    description: string;
-    function: {
-      type: string;
-      path?: string;
-      code?: string;
-      sink_type?: string;
-    };
-  }
-
-  interface FormErrors {
-    name?: string[];
-    description?: string[];
-    function?: {
-      type?: string[];
-      path?: string[];
-      code?: string[];
-      sink_type?: string[];
-    };
-  }
-
-  interface TestMessage {
-    record: string;
-    changes: string;
-    action: string;
-    metadata: string;
-    transformed: string;
-    time: number;
-    error: {
-      type: string;
-      info: any;
-    };
-  }
-
-  interface Consumer {
-    name: string;
-  }
+  import type { FormData, FormErrors, TestMessage, Consumer } from "./types";
 
   export let formData: FormData;
   export let formErrors: FormErrors = {};
@@ -111,11 +73,11 @@
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];
 
-  let form = {
+  let form: FormData = {
     ...formData,
     function: { ...formData.function },
+    modified_test_messages: { ...formData.modified_test_messages },
   };
-  let selectedMessageIndex = 0;
 
   let isEditing = form.id !== null;
   let initialFormState = JSON.stringify(form);
@@ -309,19 +271,6 @@
     }
   }
 
-  let messagesToShow: TestMessage[] = [];
-  let showSyntheticMessages = false;
-
-  $: {
-    if (testMessages.length > 0) {
-      messagesToShow = testMessages;
-      showSyntheticMessages = false;
-    } else {
-      messagesToShow = syntheticTestMessages;
-      showSyntheticMessages = true;
-    }
-  }
-
   // let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
   // let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
 
@@ -375,6 +324,51 @@
   //     });
   //   }
   // }
+
+  let messagesToShow: TestMessage[] = [];
+  let showSyntheticMessages = false;
+  let selectedMessageIndex: number = 0;
+  let selectedMessage: TestMessage | undefined;
+
+  $: {
+    if (testMessages.length > 0) {
+      messagesToShow = testMessages;
+      showSyntheticMessages = false;
+    } else {
+      messagesToShow = syntheticTestMessages;
+      showSyntheticMessages = true;
+    }
+
+    selectMessage(selectedMessageIndex);
+  }
+
+  function selectMessage(index: number) {
+    selectedMessageIndex = index;
+
+    const oldSelectedMessage = selectedMessage;
+    selectedMessage = messagesToShow[selectedMessageIndex];
+
+    // If there is an error for the submitted selectedMessage editable fields, keep the previous edited ones instead of relying on the ones returned from the server
+    if (
+      oldSelectedMessage &&
+      formErrors.modified_test_messages &&
+      oldSelectedMessage.id === selectedMessage.id &&
+      formErrors.modified_test_messages[selectedMessage.id]
+    ) {
+      if (formErrors.modified_test_messages[selectedMessage.id].record) {
+        selectedMessage.record = oldSelectedMessage.record;
+      }
+      if (formErrors.modified_test_messages[selectedMessage.id].metadata) {
+        selectedMessage.metadata = oldSelectedMessage.metadata;
+      }
+      if (formErrors.modified_test_messages[selectedMessage.id].action) {
+        selectedMessage.action = oldSelectedMessage.action;
+      }
+      if (formErrors.modified_test_messages[selectedMessage.id].changes) {
+        selectedMessage.changes = oldSelectedMessage.changes;
+      }
+    }
+  }
 
   onMount(() => {
     // Handle URL parameters for new functions
@@ -435,7 +429,6 @@
   $: pushEvent("validate", { function: form });
 
   function handleCopyForChatGPT() {
-    const currentMessage = messagesToShow[selectedMessageIndex];
     const codeErrors = formErrors.function?.code || [];
 
     const prompt = `I need help creating or modifying an Elixir function transform for Sequin. Here are the details:
@@ -459,10 +452,10 @@ ${codeErrors.map((error) => `- ${error}`).join("\n")}
 Test Message:
 \`\`\`json
 {
-  "record": ${currentMessage.record},
-  "changes": ${currentMessage.changes},
-  "action": "${currentMessage.action}",
-  "metadata": ${currentMessage.metadata}
+  "record": ${selectedMessage.record},
+  "changes": ${selectedMessage.changes},
+  "action": "${selectedMessage.action}",
+  "metadata": ${selectedMessage.metadata}
 }
 \`\`\`
 
@@ -764,7 +757,11 @@ Please help me create or modify the Elixir function transform to achieve the des
                   </div>
                 </div>
               {:else}
-                <div class="max-w-3xl">
+                <div
+                  class="max-w-3xl"
+                  hidden={form.function.type === "path" ||
+                    form.function.type === undefined}
+                >
                   <div class="flex items-center gap-2">
                     <Label for="function">Transform function</Label>
                     <Popover>
@@ -1054,53 +1051,61 @@ Please help me create or modify the Elixir function transform to achieve the des
           </div>
           <div class="p-4 space-y-2">
             {#each messagesToShow as message, i}
-              <button
-                type="button"
-                class="w-full text-left p-3 rounded-lg border border-slate-200 dark:border-slate-800 transition-all duration-200 {selectedMessageIndex ===
+              <div
+                class="w-full text-left rounded-lg border border-slate-200 dark:border-slate-800 transition-all duration-200 {selectedMessageIndex ===
                 i
                   ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800 shadow-sm'
                   : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}"
-                on:click={() => (selectedMessageIndex = i)}
               >
-                <div class="flex justify-between items-center">
-                  <span class="font-medium"
-                    >{showSyntheticMessages
-                      ? "Example"
-                      : `Message ${i + 1}`}</span
-                  >
-                </div>
+                <button
+                  class="w-full p-3"
+                  on:click={() => selectMessage(i)}
+                  type="button"
+                >
+                  <div class="flex justify-between items-center">
+                    <span class="font-medium"
+                      >{showSyntheticMessages
+                        ? "Example"
+                        : `Message ${i + 1}`}</span
+                    >
+                  </div>
+                </button>
                 {#if selectedMessageIndex === i}
                   <div
-                    class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800"
+                    class="p-3 border-t border-slate-200 dark:border-slate-800"
                   >
                     <h3
                       class="text-sm font-medium mb-2 text-slate-500 dark:text-slate-400"
                     >
                       Transform function arguments
                     </h3>
-                    <div
-                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4"
-                    >
-                      <div>
-                        <div class="font-semibold mb-1">record</div>
-                        <pre>{message.record}</pre>
-                      </div>
-                      <div>
-                        <div class="font-semibold mb-1">changes</div>
-                        <pre>{message.changes}</pre>
-                      </div>
-                      <div>
-                        <div class="font-semibold mb-1">action</div>
-                        <pre>{message.action}</pre>
-                      </div>
-                      <div>
-                        <div class="font-semibold mb-1">metadata</div>
-                        <pre>{message.metadata}</pre>
-                      </div>
-                    </div>
+                    <EditableArgument
+                      field="record"
+                      bind:selectedMessage
+                      bind:form
+                      bind:formErrors
+                    />
+                    <EditableArgument
+                      field="changes"
+                      bind:selectedMessage
+                      bind:form
+                      bind:formErrors
+                    />
+                    <EditableArgument
+                      field="action"
+                      bind:selectedMessage
+                      bind:form
+                      bind:formErrors
+                    />
+                    <EditableArgument
+                      field="metadata"
+                      bind:selectedMessage
+                      bind:form
+                      bind:formErrors
+                    />
                   </div>
                 {/if}
-              </button>
+              </div>
             {/each}
           </div>
         </div>
@@ -1111,15 +1116,15 @@ Please help me create or modify the Elixir function transform to achieve the des
         >
           <div class="p-4 flex items-center justify-between">
             <h3 class="text-lg font-semibold tracking-tight">Output</h3>
-            {#if messagesToShow[selectedMessageIndex].time}
+            {#if selectedMessage.time}
               <div class="flex items-center gap-1">
                 <span
                   class="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium cursor-help"
                 >
                   Executed in
-                  {messagesToShow[selectedMessageIndex].time >= 1000
-                    ? `${(messagesToShow[selectedMessageIndex].time / 1000).toFixed(2)}ms`
-                    : `${messagesToShow[selectedMessageIndex].time}μs`}
+                  {selectedMessage.time >= 1000
+                    ? `${(selectedMessage.time / 1000).toFixed(2)}ms`
+                    : `${selectedMessage.time}μs`}
                 </span>
                 <Popover>
                   <PopoverTrigger>
@@ -1142,16 +1147,16 @@ Please help me create or modify the Elixir function transform to achieve the des
           </div>
 
           <div class="p-4">
-            {#if !messagesToShow[selectedMessageIndex].error}
+            {#if !selectedMessage.error}
               <div
                 class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300"
               >
                 <div class="flex justify-center items-center p-4">
-                  {#if messagesToShow[selectedMessageIndex].transformed !== undefined}
+                  {#if selectedMessage.transformed !== undefined}
                     <div class="w-full overflow-auto">
                       <pre
                         class="text-slate-600 dark:text-slate-400">{JSON.stringify(
-                          messagesToShow[selectedMessageIndex].transformed,
+                          selectedMessage.transformed,
                           null,
                           2,
                         )}
@@ -1170,7 +1175,7 @@ Please help me create or modify the Elixir function transform to achieve the des
               </div>
             {:else}
               <div class="text-red-600 font-bold text-lg">
-                {messagesToShow[selectedMessageIndex].error.type}
+                {selectedMessage.error.type}
               </div>
 
               <div
@@ -1181,16 +1186,16 @@ Please help me create or modify the Elixir function transform to achieve the des
                   style="grid-template-columns: minmax(8em, min-content) 1fr;"
                 >
                   {#each errorKeyOrder as key}
-                    {#if messagesToShow[selectedMessageIndex].error.info && messagesToShow[selectedMessageIndex].error.info[key]}
+                    {#if selectedMessage.error.info && selectedMessage.error.info[key]}
                       <div class="font-semibold">{key}</div>
                       <div>
-                        {messagesToShow[selectedMessageIndex].error.info[key]}
+                        {selectedMessage.error.info[key]}
                       </div>
                     {/if}
                   {/each}
                   <!-- Extra keys -->
-                  {#if messagesToShow[selectedMessageIndex].error.info}
-                    {#each Object.entries(messagesToShow[selectedMessageIndex].error.info) as [key, value]}
+                  {#if selectedMessage.error.info}
+                    {#each Object.entries(selectedMessage.error.info) as [key, value]}
                       {#if !errorKeyOrder.includes(key)}
                         <div class="font-semibold">{key}</div>
                         <pre>{typeof value === "object"

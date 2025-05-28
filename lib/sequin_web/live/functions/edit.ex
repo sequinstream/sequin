@@ -166,14 +166,39 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
     if database_id && table_oid do
       test_messages = TestMessages.get_test_messages(database_id, table_oid)
+      existing_test_messages = socket.assigns.test_messages
 
-      if length(test_messages) >= @max_test_messages do
+      # Merge new messages with existing modifications
+      merged_messages =
+        Enum.map(test_messages, fn msg ->
+          case Enum.find(existing_test_messages, &(&1.id == msg.id)) do
+            nil ->
+              msg
+
+            existing_msg ->
+              # Preserve user modifications
+              %{msg | data: Map.merge(msg.data, existing_msg.data)}
+          end
+        end)
+
+      # Preserve any user modifications from the existing message
+      if length(merged_messages) >= @max_test_messages do
         TestMessages.unregister_needs_messages(database_id)
       end
 
-      {:noreply, socket |> assign(test_messages: test_messages) |> assign_encoded_messages()}
+      socket =
+        socket
+        |> assign(test_messages: merged_messages)
+        |> assign_encoded_messages()
+
+      {:noreply, socket}
     else
-      {:noreply, socket |> assign(test_messages: []) |> assign_encoded_messages()}
+      socket =
+        socket
+        |> assign(test_messages: [])
+        |> assign_encoded_messages()
+
+      {:noreply, socket}
     end
   end
 
@@ -186,12 +211,62 @@ defmodule SequinWeb.FunctionsLive.Edit do
     form_data = changeset_to_form_data(changeset)
     form_errors = Sequin.Error.errors_on(changeset)
 
-    {:noreply,
-     socket
-     |> assign(:changeset, changeset)
-     |> assign(:form_data, form_data)
-     |> assign(:form_errors, form_errors)
-     |> assign_encoded_messages()}
+    # Validate and transform the serialized maps using MiniElixir
+    modified_test_messages =
+      case params["modified_test_messages"] do
+        nil ->
+          %{}
+
+        messages when is_map(messages) ->
+          Map.new(messages, fn {id, message} ->
+            {id, validate_test_message(message)}
+          end)
+      end
+
+    synthetic_test_message = socket.assigns.synthetic_test_message
+
+    synthetic_test_message =
+      case modified_test_messages[synthetic_test_message.id] do
+        {:ok, result} ->
+          %{synthetic_test_message | data: Map.merge(synthetic_test_message.data, result)}
+
+        _ ->
+          synthetic_test_message
+      end
+
+    test_messages =
+      Enum.map(socket.assigns.test_messages, fn message ->
+        case modified_test_messages[message.id] do
+          {:ok, result} ->
+            %{message | data: Map.merge(message.data, result)}
+
+          _ ->
+            message
+        end
+      end)
+
+    form_errors =
+      Map.put(
+        form_errors,
+        :modified_test_messages,
+        Enum.reduce(modified_test_messages, %{}, fn {id, result}, acc ->
+          case result do
+            {:ok, _} -> acc
+            %{error: errors} -> Map.put(acc, id, errors)
+          end
+        end)
+      )
+
+    socket =
+      socket
+      |> assign(:changeset, changeset)
+      |> assign(:form_data, form_data)
+      |> assign(:form_errors, form_errors)
+      |> assign(:synthetic_test_message, synthetic_test_message)
+      |> assign(:test_messages, test_messages)
+      |> assign_encoded_messages()
+
+    {:noreply, socket}
   end
 
   def handle_event("save", %{"function" => params}, socket) do
@@ -243,10 +318,10 @@ defmodule SequinWeb.FunctionsLive.Edit do
     case TestMessages.get_test_messages(database_id, table_oid) do
       messages when length(messages) < @max_test_messages ->
         TestMessages.register_needs_messages(database_id)
-        {:noreply, assign(socket, test_messages: messages)}
+        {:noreply, socket |> assign(test_messages: messages) |> assign_encoded_messages()}
 
       messages ->
-        {:noreply, assign(socket, test_messages: messages)}
+        {:noreply, socket |> assign(test_messages: messages) |> assign_encoded_messages()}
     end
   end
 
@@ -290,7 +365,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp assign_encoded_messages(socket) do
-    cache_key = {socket.assigns.form_data[:function], socket.assigns.test_messages}
+    cache_key = {socket.assigns.form_data[:function], socket.assigns.test_messages, socket.assigns.synthetic_test_message}
 
     if socket.assigns[:cache_key] == cache_key do
       socket
@@ -376,6 +451,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   defp format_test_message(m) do
     %{
+      id: m.id,
       record: inspect(m.data.record, pretty: true),
       changes: inspect(m.data.changes, pretty: true),
       action: inspect(to_string(m.data.action), pretty: true),
@@ -476,4 +552,40 @@ defmodule SequinWeb.FunctionsLive.Edit do
   defp schedule_poll_test_messages do
     Process.send_after(self(), :poll_test_messages, 1000)
   end
+
+  defp validate_test_message(message) do
+    with {:ok, record} <- validate_field(message["record"], "record"),
+         {:ok, metadata} <- validate_field(message["metadata"], "metadata"),
+         {:ok, changes} <- validate_field(message["changes"], "changes"),
+         {:ok, action} <- validate_action(message["action"]) do
+      {:ok, %{record: record, action: action, metadata: metadata, changes: changes}}
+    else
+      {:error, field, error} -> %{error: %{field => error}}
+    end
+  end
+
+  defp validate_field(value, field) when is_binary(value) do
+    with {:ok, parsed} <- MiniElixir.eval_raw_string(value, field),
+         :ok <- validate_field(parsed, field) do
+      {:ok, parsed}
+    end
+  end
+
+  defp validate_field(nil, _field), do: {:ok, nil}
+  defp validate_field(value, _field) when is_map(value), do: {:ok, value}
+
+  defp validate_field(_, field),
+    do: {:error, field, %{type: "Type error", info: %{description: ~s(Must be a map such as %{"key" => "value"})}}}
+
+  defp validate_action(action) when is_binary(action) do
+    case action |> String.trim("\"") |> String.downcase() do
+      action when action in ["insert", "update", "delete", "read"] ->
+        {:ok, action}
+
+      _ ->
+        {:error, "action", "Action must be one of: insert, update, delete, read"}
+    end
+  end
+
+  defp validate_action(_), do: {:error, "action", "Action must be a string"}
 end

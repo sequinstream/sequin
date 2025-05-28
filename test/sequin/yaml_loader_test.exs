@@ -1173,8 +1173,7 @@ defmodule Sequin.YamlLoaderTest do
                    table: "Characters"
                    destination:
                      type: "kinesis"
-                     stream_name: "my-stream"
-                     region: "us-east-1"
+                     stream_arn: "arn:aws:kinesis:us-west-2:1:stream/test"
                      access_key_id: "AKIAXXXXXXXXXXXXXXXX"
                      secret_access_key: "secret123"
                """)
@@ -1187,8 +1186,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert %KinesisSink{
                type: :kinesis,
-               stream_name: "my-stream",
-               region: "us-east-1",
+               stream_arn: "arn:aws:kinesis:us-west-2:1:stream/test",
                access_key_id: "AKIAXXXXXXXXXXXXXXXX",
                secret_access_key: "secret123"
              } = consumer.sink

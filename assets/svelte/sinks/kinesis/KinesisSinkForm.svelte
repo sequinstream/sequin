@@ -18,26 +18,16 @@
   </CardHeader>
   <CardContent class="flex flex-col gap-4">
     <div class="flex flex-col gap-2">
-      <Label for="stream-name">Stream Name</Label>
+      <Label for="stream-arn">Stream ARN</Label>
       <Input
-        id="stream-name"
-        bind:value={form.sink.stream_name}
-        placeholder="my-stream"
+        id="stream-arn"
+        bind:value={form.sink.stream_arn}
+        placeholder="arn:aws:kinesis:..."
       />
-      {#if errors.sink?.stream_name}
-        <p class="text-destructive text-sm">{errors.sink.stream_name}</p>
-      {:else if errors.sink?.region}
-        <p class="text-destructive text-sm">{errors.sink.region}</p>
-      {/if}
-    </div>
 
-    <div class="flex flex-col gap-2">
-      <Label for="region">Region</Label>
-      <Input
-        id="region"
-        bind:value={form.sink.region}
-        placeholder="us-east-1"
-      />
+      {#if errors.sink?.stream_arm}
+        <p class="text-destructive text-sm">{errors.sink.stream_arn}</p>
+      {/if}
     </div>
 
     <div class="flex flex-col gap-2">

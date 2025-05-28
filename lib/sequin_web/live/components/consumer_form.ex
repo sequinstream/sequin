@@ -374,10 +374,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
       client = KinesisSink.aws_client(sink)
 
-      case Sequin.Aws.Kinesis.put_records(client, sink.stream_name, [
-             %{"Data" => "test", "PartitionKey" => "test"}
-           ]) do
-        :ok -> :ok
+      case Sequin.Aws.Kinesis.describe_stream(client, sink.stream_arn) do
+        {:ok, _} -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
@@ -668,8 +666,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp decode_sink(:kinesis, sink) do
     %{
       "type" => "kinesis",
-      "stream_name" => sink["stream_name"],
-      "region" => sink["region"],
+      "stream_arn" => sink["stream_arn"],
       "access_key_id" => sink["access_key_id"],
       "secret_access_key" => sink["secret_access_key"]
     }
@@ -896,8 +893,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp encode_sink(%KinesisSink{} = sink) do
     %{
       "type" => "kinesis",
-      "stream_name" => sink.stream_name,
-      "region" => sink.region,
+      "stream_arn" => sink.stream_arn,
       "access_key_id" => sink.access_key_id,
       "secret_access_key" => sink.secret_access_key
     }

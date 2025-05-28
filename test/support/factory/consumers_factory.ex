@@ -214,8 +214,16 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %KinesisSink{
         type: :kinesis,
-        stream_name: Factory.word(),
-        region: Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
+        stream_arn:
+          :erlang.iolist_to_binary([
+            "arn:aws:kinesis",
+            ":",
+            Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
+            ":",
+            Factory.integer(),
+            ":stream/",
+            Factory.word()
+          ]),
         access_key_id: Factory.word(),
         secret_access_key: Factory.word()
       },

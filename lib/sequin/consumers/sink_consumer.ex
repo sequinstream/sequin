@@ -117,7 +117,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       types: [
         http_push: HttpPushSink,
         sqs: SqsSink,
-        kinesis: Sequin.Consumers.KinesisSink,
+        kinesis: KinesisSink,
         sns: SnsSink,
         redis_stream: RedisStreamSink,
         redis_string: RedisStringSink,

@@ -5,6 +5,20 @@
   import type { KinesisConsumer } from "../../consumers/types";
 
   export let consumer: KinesisConsumer;
+
+  var awsConsoleUrl = "#";
+
+  $: {
+    const arnMatch =
+      consumer.sink.stream_arn &&
+      consumer.sink.stream_arn.match(
+        /^arn:aws:kinesis:([^:]+):[^:]+:stream\/(.+)$/,
+      );
+    if (arnMatch) {
+      const [, region, streamName] = arnMatch;
+      awsConsoleUrl = `https://${region}.console.aws.amazon.com/kinesis/home?region=${region}#/streams/details/${encodeURIComponent(streamName)}`;
+    }
+  }
 </script>
 
 <Card>
@@ -12,11 +26,7 @@
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-lg font-semibold">Kinesis Configuration</h2>
       <div class="flex space-x-2">
-        <a
-          href={`https://${consumer.sink.region}.console.aws.amazon.com/kinesis/home?region=${consumer.sink.region}#/streams/details/${encodeURIComponent(consumer.sink.stream_name)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <a href={awsConsoleUrl} target="_blank" rel="noopener noreferrer">
           <Button variant="outline" size="sm">
             <ExternalLink class="h-4 w-4 mr-2" />
             View in AWS Console
@@ -28,18 +38,12 @@
     <div class="space-y-4">
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <span class="text-sm text-gray-500">Region</span>
-          <div class="mt-2">
-            <span>{consumer.sink.region}</span>
-          </div>
-        </div>
-        <div>
-          <span class="text-sm text-gray-500">Stream Name</span>
+          <span class="text-sm text-gray-500">Stream ARN</span>
           <div class="mt-2">
             <span
               class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >
-              {consumer.sink.stream_name}
+              {consumer.sink.stream_arn}
             </span>
           </div>
         </div>

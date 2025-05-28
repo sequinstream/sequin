@@ -4,10 +4,9 @@ defmodule Sequin.Aws.Kinesis do
   alias AWS.Client
   alias Sequin.Error
 
-  @spec put_records(Client.t(), String.t(), list(map())) :: :ok | {:error, any()}
-  def put_records(%Client{} = client, stream_name, records) when is_list(records) do
+  def put_records(%Client{} = client, stream_arn, records) when is_list(records) do
     request_body = %{
-      "StreamName" => stream_name,
+      "StreamARN" => stream_arn,
       "Records" => records
     }
 
@@ -23,6 +22,19 @@ defmodule Sequin.Aws.Kinesis do
 
       {:error, error} ->
         {:error, Error.service(service: :aws_kinesis, message: "Failed to put records", details: error)}
+    end
+  end
+
+  def describe_stream(%Client{} = client, stream_arn) do
+    case AWS.Kinesis.describe_stream(client, %{"StreamARN" => stream_arn}) do
+      {:ok, resp, _} ->
+        {:ok, resp}
+
+      {:error, {:unexpected_response, details}} ->
+        handle_unexpected_response(details)
+
+      {:error, error} ->
+        {:error, Error.service(service: :aws_kinesis, message: "Failed to get stream info", details: error)}
     end
   end
 

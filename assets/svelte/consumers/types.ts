@@ -81,8 +81,7 @@ export type SqsConsumer = BaseConsumer & {
 export type KinesisConsumer = BaseConsumer & {
   sink: {
     type: "kinesis";
-    stream_name: string;
-    region: string;
+    stream_arn: string;
     access_key_id: string;
     secret_access_key: string;
   };

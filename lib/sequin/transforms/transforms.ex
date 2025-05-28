@@ -253,8 +253,7 @@ defmodule Sequin.Transforms do
   def to_external(%KinesisSink{} = sink, show_sensitive) do
     Sequin.Map.reject_nil_values(%{
       type: "kinesis",
-      stream_name: sink.stream_name,
-      region: sink.region,
+      stream_arn: sink.stream_arn,
       access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
       secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive)
     })
@@ -879,8 +878,7 @@ defmodule Sequin.Transforms do
     {:ok,
      %{
        type: :kinesis,
-       stream_name: attrs["stream_name"],
-       region: attrs["region"],
+       stream_arn: attrs["stream_arn"],
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"]
      }}

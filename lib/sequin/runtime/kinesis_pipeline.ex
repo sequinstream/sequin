@@ -40,7 +40,7 @@ defmodule Sequin.Runtime.KinesisPipeline do
         }
       end)
 
-    case Kinesis.put_records(kinesis_client, sink.stream_name, records) do
+    case Kinesis.put_records(kinesis_client, sink.stream_arn, records) do
       :ok -> {:ok, messages, context}
       {:error, error} -> {:error, error}
     end

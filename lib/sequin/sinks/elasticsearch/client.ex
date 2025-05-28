@@ -21,31 +21,35 @@ defmodule Sequin.Sinks.Elasticsearch.Client do
           {:ok, [index_result()]} | {:error, Error.t()}
   def import_documents(%ElasticsearchSink{} = sink, index_name, ndjson) do
     req = base_request(sink)
+    req = Req.merge(req, url: "/#{index_name}/_bulk", headers: [{"Content-Type", "application/x-ndjson"}], body: ndjson)
 
-    case Req.post(req,
-           url: "/#{index_name}/_bulk",
-           headers: [{"Content-Type", "application/x-ndjson"}],
-           body: ndjson
-         ) do
-      {:ok, %{status: 200, body: %{"items" => items}}} ->
+    case Req.post(req) do
+      {:ok, %{status: 200, body: %{"items" => items}} = res} ->
+        Trace.info(sink.id, "Documents imported to Elasticsearch", {req, res})
         {:ok, operation_results(items)}
 
-      {:ok, %{status: status, body: body}} ->
+      {:ok, %{status: status, body: body} = res} ->
         error_message = extract_error_message(body)
 
-        {:error,
-         Error.service(
-           service: :elasticsearch,
-           message: "Batch import failed: #{error_message}",
-           details: %{status: status, body: body}
-         )}
+        error =
+          Error.service(
+            service: :elasticsearch,
+            message: "Batch import failed: #{error_message}",
+            details: %{status: status, body: body}
+          )
+
+        Trace.error(sink.id, "Batch import failed to Elasticsearch", {req, error})
+        {:error, error}
 
       {:error, %Req.TransportError{} = error} ->
-        Logger.error("[Elasticsearch] Transport error: #{Exception.message(error)}")
-        {:error, Error.service(service: :elasticsearch, message: "Transport error: #{Exception.message(error)}")}
+        error = Error.service(service: :elasticsearch, message: "Transport error: #{Exception.message(error)}")
+        Trace.error(sink.id, "Batch import failed to Elasticsearch", {req, error})
+        {:error, error}
 
       {:error, reason} ->
-        {:error, Error.service(service: :elasticsearch, message: "Unknown error", details: reason)}
+        error = Error.service(service: :elasticsearch, message: "Unknown error", details: reason)
+        Trace.error(sink.id, "Batch import failed to Elasticsearch", {req, error})
+        {:error, error}
     end
   end
 

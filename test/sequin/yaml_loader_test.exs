@@ -1158,8 +1158,8 @@ defmodule Sequin.YamlLoaderTest do
                topic_arn: "arn:aws:sns:us-west-2:123456789012:MyTopic",
                region: "us-west-2",
                access_key_id: "AKIAXXXXXXXXXXXXXXXX",
-              secret_access_key: "secret123"
-            } = consumer.sink
+               secret_access_key: "secret123"
+             } = consumer.sink
     end
 
     test "creates kinesis sink consumer" do

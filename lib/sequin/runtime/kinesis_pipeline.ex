@@ -3,8 +3,8 @@ defmodule Sequin.Runtime.KinesisPipeline do
   @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Aws.Kinesis
-  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Runtime.SinkPipeline
 
   @impl SinkPipeline
@@ -47,6 +47,7 @@ defmodule Sequin.Runtime.KinesisPipeline do
   end
 
   defp setup_allowances(nil), do: :ok
+
   defp setup_allowances(test_pid) do
     Req.Test.allow(Sequin.Aws.HttpClient, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())

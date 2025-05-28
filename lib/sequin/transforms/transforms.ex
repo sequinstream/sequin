@@ -12,12 +12,12 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
-  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink

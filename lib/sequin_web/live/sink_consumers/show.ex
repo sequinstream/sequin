@@ -1528,7 +1528,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         alertTitle: "Notice: Webhooks failed to deliver after being pulled from SQS",
         alertMessage: """
         This sink is configured to send payloads to SQS, and then pull async to deliver.
-        The sink believes all is well, but at least one message has failed to actually deliver.
+        At least one message has failed to actually deliver to the destination.
         """,
         refreshable: false,
         dismissable: true

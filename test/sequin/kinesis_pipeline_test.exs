@@ -2,7 +2,6 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Aws.HttpClient
-  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
@@ -11,8 +10,6 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.SinkPipeline
-  alias Sequin.Runtime.SlotMessageStore
-  alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.TestSupport.Models.Character
 
   describe "events are sent to Kinesis" do

@@ -220,7 +220,7 @@ defmodule Sequin.Factory.ConsumersFactory do
             ":",
             Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
             ":",
-            Factory.integer(),
+            to_string(Factory.integer()),
             ":stream/",
             Factory.word()
           ]),

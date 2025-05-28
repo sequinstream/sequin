@@ -10,6 +10,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SequenceFilter

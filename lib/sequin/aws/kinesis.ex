@@ -14,8 +14,8 @@ defmodule Sequin.Aws.Kinesis do
       {:ok, %{"FailedRecordCount" => 0}, _} ->
         :ok
 
-      {:ok, resp, %{body: body}} ->
-        {:error, resp, %{body: body}}
+      {:ok, resp, %{body: _body}} ->
+        {:error, resp}
 
       {:error, {:unexpected_response, details}} ->
         handle_unexpected_response(details)

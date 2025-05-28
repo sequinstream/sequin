@@ -47,6 +47,18 @@ sequin:{table_name}:{primary_key}
 
 For composite primary keys, values are joined with a colon.
 
+### Routing
+
+You can use a [routing function](/reference/routing) to customize the key used for each message. For example, you can use the record's `id` field with your own prefix:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{
+    key: "my_app:users:#{record["id"]}"
+  }
+end
+```
+
 ## Data format
 
 Records are stored as JSON strings. The specific format depends on the transform applied to the data:

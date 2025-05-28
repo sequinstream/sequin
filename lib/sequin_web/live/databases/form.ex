@@ -396,6 +396,8 @@ defmodule SequinWeb.DatabasesLive.Form do
   end
 
   defp encode_database(%PostgresDatabase{} = database) do
+    ssl = if database.ssl == false, do: false, else: true
+
     %{
       "id" => database.id,
       "name" => database.name || Name.generate(99),
@@ -404,7 +406,7 @@ defmodule SequinWeb.DatabasesLive.Form do
       "port" => database.port || 5432,
       "username" => database.username || "postgres",
       "password" => database.password,
-      "ssl" => database.ssl || true,
+      "ssl" => ssl,
       "publication_name" => database.replication_slot.publication_name || "sequin_pub",
       "slot_name" => database.replication_slot.slot_name || "sequin_slot",
       "useLocalTunnel" => database.use_local_tunnel || false,

@@ -866,9 +866,7 @@ defmodule Sequin.Health do
     Enum.each(active_replications, &snapshot_entity/1)
 
     # Update consumers
-    Consumers.list_active_sink_consumers()
-    |> Enum.filter(&(&1.replication_slot_id in active_replication_ids))
-    |> Enum.each(&snapshot_entity/1)
+    Enum.each(Consumers.list_active_sink_consumers(), &snapshot_entity/1)
 
     # Update WAL pipelines
     Replication.list_active_wal_pipelines()

@@ -6,24 +6,25 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
-  alias Sequin.Consumers.FunctionTransform
+  alias Sequin.Consumers.FilterFunction
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
-  alias Sequin.Consumers.PathTransform
+  alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.KinesisSink
-  alias Sequin.Consumers.RoutingTransform
+  alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases
@@ -32,6 +33,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Error.ValidationError
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
 
@@ -62,8 +64,12 @@ defmodule Sequin.Transforms do
       password: maybe_obfuscate(database.password, show_sensitive),
       hostname: database.hostname,
       database: database.database,
-      slot_name: database.replication_slot.slot_name,
-      publication_name: database.replication_slot.publication_name,
+      slot: %{
+        name: database.replication_slot.slot_name
+      },
+      publication: %{
+        name: database.replication_slot.publication_name
+      },
       port: database.port,
       pool_size: database.pool_size,
       ssl: database.ssl,
@@ -148,7 +154,8 @@ defmodule Sequin.Transforms do
       timestamp_format: consumer.timestamp_format,
       active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
       max_retry_count: consumer.max_retry_count,
-      load_shedding_policy: consumer.load_shedding_policy
+      load_shedding_policy: consumer.load_shedding_policy,
+      annotations: consumer.annotations
     }
   end
 
@@ -293,7 +300,6 @@ defmodule Sequin.Transforms do
       endpoint_url: sink.endpoint_url,
       collection_name: sink.collection_name,
       api_key: maybe_obfuscate(sink.api_key, show_sensitive),
-      import_action: sink.import_action,
       batch_size: sink.batch_size,
       timeout_seconds: sink.timeout_seconds
     })
@@ -310,31 +316,40 @@ defmodule Sequin.Transforms do
     })
   end
 
-  def to_external(%Transform{transform: %PathTransform{}} = transform, _show_sensitive) do
+  def to_external(%Function{function: %PathFunction{}} = function, _show_sensitive) do
     %{
-      name: transform.name,
-      description: transform.description,
-      type: transform.type,
-      path: transform.transform.path
+      name: function.name,
+      description: function.description,
+      type: function.type,
+      path: function.function.path
     }
   end
 
-  def to_external(%Transform{transform: %FunctionTransform{}} = transform, _show_sensitive) do
+  def to_external(%Function{function: %TransformFunction{}} = function, _show_sensitive) do
     %{
-      name: transform.name,
-      description: transform.description,
-      type: transform.type,
-      code: transform.transform.code
+      name: function.name,
+      description: function.description,
+      type: function.type,
+      code: function.function.code
     }
   end
 
-  def to_external(%Transform{transform: %RoutingTransform{}} = transform, _show_sensitive) do
+  def to_external(%Function{function: %RoutingFunction{}} = function, _show_sensitive) do
     %{
-      name: transform.name,
-      description: transform.description,
-      type: transform.type,
-      sink_type: transform.transform.sink_type,
-      code: transform.transform.code
+      name: function.name,
+      description: function.description,
+      type: function.type,
+      sink_type: function.function.sink_type,
+      code: function.function.code
+    }
+  end
+
+  def to_external(%Function{function: %FilterFunction{}} = function, _show_sensitive) do
+    %{
+      name: function.name,
+      description: function.description,
+      type: function.type,
+      code: function.function.code
     }
   end
 
@@ -567,8 +582,17 @@ defmodule Sequin.Transforms do
 
         "encrypted_headers" ->
           case parse_headers(value) do
-            {:ok, headers} -> {:cont, {:ok, Map.put(acc, :encrypted_headers, headers)}}
-            {:error, error} -> {:halt, {:error, error}}
+            {:ok, headers} ->
+              {:cont, {:ok, Map.put(acc, :encrypted_headers, headers)}}
+
+            {:error,
+             %ValidationError{
+               summary: "Headers appear to be encrypted. Please provide decrypted headers as a list of key-value pairs."
+             }} ->
+              {:cont, {:ok, acc}}
+
+            {:error, error} ->
+              {:halt, {:error, error}}
           end
 
         "webhook.site" ->
@@ -668,13 +692,17 @@ defmodule Sequin.Transforms do
   end
 
   def from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints) do
-    Enum.reduce_while(consumer_attrs, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
+    consumer_attrs
+    |> Enum.reduce_while({:ok, %{}}, fn {key, value}, {:ok, acc} ->
       case key do
         "name" ->
           {:cont, {:ok, Map.put(acc, :name, value)}}
 
         "status" ->
           {:cont, {:ok, Map.put(acc, :status, parse_status(value))}}
+
+        "annotations" ->
+          {:cont, {:ok, Map.put(acc, :annotations, value)}}
 
         "batch_size" ->
           case value do
@@ -690,7 +718,7 @@ defmodule Sequin.Transforms do
           databases = Repo.preload(databases, [:sequences, :replication_slot])
 
           with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
-               {:ok, sequence} <- find_sequence_by_name(databases, consumer_attrs["database"], value) do
+               {:ok, sequence} <- find_sequence_by_name(database, value) do
             table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
 
             {:cont,
@@ -732,6 +760,12 @@ defmodule Sequin.Transforms do
               {:halt, {:error, error}}
           end
 
+        "filter" ->
+          case parse_transform_id(account_id, value) do
+            {:ok, transform_id} -> {:cont, {:ok, Map.put(acc, :filter_id, transform_id)}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+
         "timestamp_format" ->
           {:cont, {:ok, Map.put(acc, :timestamp_format, value)}}
 
@@ -768,6 +802,20 @@ defmodule Sequin.Transforms do
           {:halt, {:error, Error.validation(summary: "Unknown field: #{key}")}}
       end
     end)
+    |> case do
+      {:ok, acc} ->
+        {:ok,
+         acc
+         # These put_news will remove the transform, filter, and routing keys from the sink
+         # if the keys are not present in the consumer_attrs
+         |> Map.put_new(:transform_id, nil)
+         |> Map.put_new(:filter_id, nil)
+         |> Map.put_new(:routing_id, nil)
+         |> Map.put_new(:routing_mode, "static")}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   defp parse_sink(nil, _resources), do: {:error, Error.validation(summary: "`sink` is required on sink consumers.")}
@@ -930,7 +978,6 @@ defmodule Sequin.Transforms do
        endpoint_url: attrs["endpoint_url"],
        collection_name: attrs["collection_name"],
        api_key: attrs["api_key"],
-       import_action: attrs["import_action"],
        batch_size: attrs["batch_size"],
        timeout_seconds: attrs["timeout_seconds"]
      }}
@@ -980,10 +1027,10 @@ defmodule Sequin.Transforms do
   defp parse_transform_id(_account_id, nil), do: {:ok, nil}
   defp parse_transform_id(_account_id, "none"), do: {:ok, nil}
 
-  defp parse_transform_id(account_id, transform_name) do
-    case Consumers.find_transform(account_id, name: transform_name) do
-      {:ok, transform} -> {:ok, transform.id}
-      {:error, %NotFoundError{}} -> {:error, Error.validation(summary: "Transform '#{transform_name}' not found.")}
+  defp parse_transform_id(account_id, function_name) do
+    case Consumers.find_function(account_id, name: function_name) do
+      {:ok, function} -> {:ok, function.id}
+      {:error, %NotFoundError{}} -> {:error, Error.validation(summary: "Function '#{function_name}' not found.")}
     end
   end
 
@@ -1046,21 +1093,20 @@ defmodule Sequin.Transforms do
     end
   end
 
-  defp find_sequence_by_name(databases, database_name, table_name) do
+  defp find_sequence_by_name(%PostgresDatabase{} = database, table_name) do
     {schema, table_name} = parse_table_reference(table_name)
 
-    with %PostgresDatabase{tables: tables} = database <- Enum.find(databases, &(&1.name == database_name)),
-         %PostgresDatabaseTable{} = table <- Enum.find(tables, &(&1.schema == schema and &1.name == table_name)),
+    with %PostgresDatabaseTable{} = table <- Enum.find(database.tables, &(&1.schema == schema and &1.name == table_name)),
          {:ok, %Sequence{} = sequence} <- find_or_create_sequence(database, table) do
       {:ok, sequence}
     else
       {:error, error} -> {:error, error}
-      _ -> {:error, Error.not_found(entity: :sequence, params: %{database: database_name, table: table_name})}
+      _ -> {:error, Error.not_found(entity: :sequence, params: %{database: database.name, table: table_name})}
     end
   end
 
   # This is a hack while sequences are required
-  # Transforms should not perform any database operations
+  # Functions should not perform any database operations
   # TODO: Excise this once sequences are removed
   defp find_or_create_sequence(%PostgresDatabase{} = database, %PostgresDatabaseTable{} = table) do
     case Enum.find(database.sequences, &(&1.table_oid == table.oid)) do

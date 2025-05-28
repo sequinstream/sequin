@@ -2,6 +2,8 @@ defmodule Sequin.ConfigParser do
   @moduledoc false
   require Logger
 
+  @secret_generation_docs_link "https://sequinstream.com/docs/reference/configuration#secret-generation"
+
   def default_workers_per_sink(env) do
     case env["DEFAULT_WORKERS_PER_SINK"] do
       nil ->
@@ -13,7 +15,7 @@ defmodule Sequin.ConfigParser do
             workers
 
           _ ->
-            raise "DEFAULT_WORKERS_PER_SINK must be an integer >= 1. Got: #{inspect(workers_str)}"
+            raise ArgumentError, "DEFAULT_WORKERS_PER_SINK must be an integer >= 1. Got: #{inspect(workers_str)}"
         end
     end
   end
@@ -34,6 +36,55 @@ defmodule Sequin.ConfigParser do
     |> validate_log_level(default_level)
   end
 
+  def secret_key_base(env) do
+    secret = Map.get(env, "SECRET_KEY_BASE")
+    validate_required(secret, "SECRET_KEY_BASE")
+    validate_length_gte(secret, "SECRET_KEY_BASE", 64)
+    secret
+  end
+
+  def vault_key(env) do
+    secret = Map.get(env, "VAULT_KEY")
+    validate_required(secret, "VAULT_KEY")
+    validate_length_gte(secret, "VAULT_KEY", 32)
+    validate_base64(secret, "VAULT_KEY")
+    secret
+  end
+
+  defp validate_required(env_var, env_name) do
+    if is_nil(env_var) do
+      raise ArgumentError, """
+      Environment variable #{env_name} is not set.
+      """
+    end
+  end
+
+  defp validate_length_gte(env_var, env_name, expected_length) when is_binary(env_var) do
+    if byte_size(env_var) < expected_length do
+      raise ArgumentError, """
+      Environment variable #{env_name} is too short.
+
+      Expected at least #{expected_length} bytes. Got #{byte_size(env_var)} bytes.
+      """
+    end
+  end
+
+  defp validate_base64(secret, secret_name) do
+    case Base.decode64(secret) do
+      {:ok, _} ->
+        :ok
+
+      :error ->
+        raise ArgumentError, """
+        Secret #{secret_name} is not valid base64.
+
+        Got: #{inspect(secret)}
+
+        See: #{@secret_generation_docs_link}
+        """
+    end
+  end
+
   defp validate_log_level(level, _default_level) when level in @valid_log_levels, do: level
 
   defp validate_log_level(level, default_level) do
@@ -47,7 +98,7 @@ defmodule Sequin.ConfigParser do
   end
 
   defp put_redis_url(_opts, _env) do
-    raise "REDIS_URL is not set. Please set the REDIS_URL env variable. Docs: #{doc_link(:redis)}"
+    raise ArgumentError, "REDIS_URL is not set. Please set the REDIS_URL env variable. Docs: #{doc_link(:redis)}"
   end
 
   defp ensure_redis_port(url) do
@@ -71,7 +122,7 @@ defmodule Sequin.ConfigParser do
         Keyword.put(opts, :tls, nil)
 
       true ->
-        raise "REDIS_SSL must be true, 1, verify-none, false, or 0. Docs: #{doc_link(:redis)}"
+        raise ArgumentError, "REDIS_SSL must be true, 1, verify-none, false, or 0. Docs: #{doc_link(:redis)}"
     end
   end
 
@@ -118,15 +169,27 @@ defmodule Sequin.ConfigParser do
               "[ConfigParser] Failed to get total memory bytes, using very high limit (100GB). (This can happen if Sequin is running on a non-Linux system. See \"Configuration\" reference for more details.)"
             )
 
-            100 * 1024 * 1024 * 1024
+            Sequin.Size.gb(100)
         end
 
       mb_str ->
         # Use explicit limit with buffer
         mb_str
         |> String.to_integer()
-        |> Kernel.*(1024 * 1024)
+        |> Sequin.Size.mb()
         |> apply_buffer(buffer_percent)
+    end
+  end
+
+  def default_max_storage_bytes(env) do
+    case env["DEFAULT_MAX_STORAGE_MB"] do
+      nil ->
+        nil
+
+      mb_str ->
+        mb_str
+        |> String.to_integer()
+        |> Sequin.Size.mb()
     end
   end
 
@@ -149,7 +212,57 @@ defmodule Sequin.ConfigParser do
         size
 
       _ ->
-        raise "REDIS_POOL_SIZE must be a positive integer. Got: #{inspect(pool_size)}."
+        raise ArgumentError, "REDIS_POOL_SIZE must be a positive integer. Got: #{inspect(pool_size)}."
+    end
+  end
+
+  @doc """
+  Returns the value of REPLICATION_FLUSH_MAX_ACCUMULATED_BYTES as a positive integer, or nil if not set/invalid.
+  """
+  def replication_flush_max_accumulated_bytes(env) do
+    parse_positive_int(env["REPLICATION_FLUSH_MAX_ACCUMULATED_BYTES"], "REPLICATION_FLUSH_MAX_ACCUMULATED_BYTES")
+  end
+
+  @doc """
+  Returns the value of REPLICATION_FLUSH_MAX_ACCUMULATED_MESSAGES as a positive integer, or nil if not set/invalid.
+  """
+  def replication_flush_max_accumulated_messages(env) do
+    parse_positive_int(env["REPLICATION_FLUSH_MAX_ACCUMULATED_MESSAGES"], "REPLICATION_FLUSH_MAX_ACCUMULATED_MESSAGES")
+  end
+
+  @doc """
+  Returns the value of REPLICATION_FLUSH_MAX_ACCUMULATED_TIME_MS as a positive integer, or nil if not set/invalid.
+  """
+  def replication_flush_max_accumulated_time_ms(env) do
+    parse_positive_int(env["REPLICATION_FLUSH_MAX_ACCUMULATED_TIME_MS"], "REPLICATION_FLUSH_MAX_ACCUMULATED_TIME_MS")
+  end
+
+  # Parse a positive integer from an environment variable.
+  # Returns the integer if valid, or nil if the value is invalid or not positive (and raise: false).
+  #
+  # ## Options
+  # * `:raise` - If true, raises an ArgumentError when the value is invalid. Defaults to false.
+  #
+  defp parse_positive_int(env_value, env_name, opts \\ []) do
+    raise_error = Keyword.get(opts, :raise, false)
+
+    case env_value do
+      nil ->
+        nil
+
+      value ->
+        case Integer.parse(value) do
+          {int, ""} when int > 0 ->
+            int
+
+          _ ->
+            if raise_error do
+              raise ArgumentError, "#{env_name} must be a positive integer. Got: #{inspect(value)}."
+            else
+              Logger.warning("#{env_name} must be a positive integer. Got: #{inspect(value)}. Ignoring.")
+              nil
+            end
+        end
     end
   end
 end

@@ -65,15 +65,15 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   ]
 
   def max_accumulated_bytes do
-    Application.get_env(:sequin, :slot_processor_max_accumulated_bytes) || @max_accumulated_bytes
+    get_config(:max_accumulated_bytes) || @max_accumulated_bytes
   end
 
   def max_accumulated_messages do
-    Application.get_env(:sequin, :slot_processor_max_accumulated_messages) || @max_accumulated_messages
+    get_config(:max_accumulated_messages) || @max_accumulated_messages
   end
 
   def max_accumulated_messages_time_ms do
-    case Application.get_env(:sequin, :slot_processor_max_accumulated_messages_time_ms) do
+    case get_config(:max_accumulated_messages_time_ms) do
       nil ->
         if Application.get_env(:sequin, :env) == :test do
           # We can lower this even more when we handle heartbeat messages sync
@@ -81,7 +81,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           # regular messages get a chance to come through and be part of the batch.
           30
         else
-          10
+          50
         end
 
       value ->
@@ -90,15 +90,26 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   def set_max_accumulated_messages(value) do
-    Application.put_env(:sequin, :slot_processor_max_accumulated_messages, value)
+    put_config(:max_accumulated_messages, value)
   end
 
   def set_max_accumulated_bytes(value) do
-    Application.put_env(:sequin, :slot_processor_max_accumulated_bytes, value)
+    put_config(:max_accumulated_bytes, value)
   end
 
   def set_max_accumulated_messages_time_ms(value) do
-    Application.put_env(:sequin, :slot_processor_max_accumulated_messages_time_ms, value)
+    put_config(:max_accumulated_messages_time_ms, value)
+  end
+
+  defp get_config(key) do
+    config = Application.get_env(:sequin, __MODULE__, [])
+    Keyword.get(config, key)
+  end
+
+  defp put_config(key, value) do
+    current_config = Application.get_env(:sequin, __MODULE__, [])
+    updated_config = Keyword.put(current_config, key, value)
+    Application.put_env(:sequin, __MODULE__, updated_config)
   end
 
   def ets_table, do: __MODULE__
@@ -304,7 +315,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   @impl ReplicationConnection
   def handle_connect(state) do
-    Logger.debug("[SlotProcessorServer] Handling connect")
+    Logger.info("[SlotProcessorServer] Connected to database")
 
     {:ok, safe_wal_cursor} = Sequin.Replication.restart_wal_cursor(state.id)
 
@@ -409,6 +420,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   @decorate track_metrics("handle_data_sequin")
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
+    if is_nil(state.last_commit_lsn) and state.accumulated_msg_binaries.count == 0 do
+      Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
+    end
+
     raw_bytes_received = byte_size(msg)
     ProcessMetrics.increment_throughput("raw_bytes_received", raw_bytes_received)
 
@@ -791,6 +806,27 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         )
 
         {:keep_state, next_state}
+
+      {:error, :no_last_commit_lsn} ->
+        Logger.error(
+          "[SlotProcessorServer] Heartbeat verification failed - no last commit LSN yet (no bytes yet received)",
+          heartbeat_id: state.current_heartbeat_id
+        )
+
+        Health.put_event(
+          state.replication_slot,
+          %Event{
+            slug: :replication_heartbeat_verification,
+            status: :fail,
+            error:
+              Error.service(
+                service: :replication,
+                message: "Replication connection is up, but Sequin has not received any messages since connecting"
+              )
+          }
+        )
+
+        {:keep_state, next_state}
     end
   end
 
@@ -871,7 +907,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       is_nil(state.current_heartbeat_id) and is_nil(state.heartbeat_emitted_at) ->
         {:error, :no_heartbeat}
 
-      not is_nil(state.heartbeat_emitted_lsn) and state.last_commit_lsn > state.heartbeat_emitted_lsn ->
+      not is_nil(state.heartbeat_emitted_lsn) and not is_nil(state.last_commit_lsn) and
+          state.last_commit_lsn > state.heartbeat_emitted_lsn ->
         {:error, :lsn_advanced}
 
       # We have an outstanding heartbeat and we have received a message since it was emitted
@@ -889,6 +926,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       # This means the replication slot is somehow disconnected
       not is_nil(state.current_heartbeat_id) ->
         {:error, :stale_connection}
+
+      is_nil(state.last_commit_lsn) ->
+        {:error, :no_last_commit_lsn}
     end
   end
 

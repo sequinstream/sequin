@@ -31,6 +31,12 @@ defmodule SequinWeb.Router do
     plug :admin_basic_auth
   end
 
+  # if the user is not authenticated, we redirect them to the register page
+  # Currently it's only used for the accept-invite flow
+  pipeline :redirect_to_register_if_unauthenticated do
+    plug :require_authenticated_user, unauthenticated_redirect: :register
+  end
+
   scope "/", SequinWeb do
     pipe_through [:browser]
 
@@ -79,6 +85,15 @@ defmodule SequinWeb.Router do
   end
 
   scope "/", SequinWeb do
+    pipe_through [:browser, :redirect_to_register_if_unauthenticated]
+
+    live_session :accept_invite, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
+      live "/accept-invite/:token", AcceptInviteLive, :accept_invite
+      live "/accept-team-invite/:token", AcceptInviteLive, :accept_team_invite
+    end
+  end
+
+  scope "/", SequinWeb do
     pipe_through [:browser, :require_authenticated_user]
 
     live_session :require_authenticated_user,
@@ -97,11 +112,12 @@ defmodule SequinWeb.Router do
       live "/sinks/:type/:id", SinkConsumersLive.Show, :show
       live "/sinks/:type/:id/messages", SinkConsumersLive.Show, :messages
       live "/sinks/:type/:id/messages/:ack_id", SinkConsumersLive.Show, :messages
+      live "/sinks/:type/:id/trace", SinkConsumersLive.Show, :trace
       live "/sinks/:type/:id/edit", SinkConsumersLive.Form, :edit
 
-      live "/functions", TransformsLive.Index, :index
-      live "/functions/new", TransformsLive.Edit, :new
-      live "/functions/:id", TransformsLive.Edit, :edit
+      live "/functions", FunctionsLive.Index, :index
+      live "/functions/new", FunctionsLive.Edit, :new
+      live "/functions/:id", FunctionsLive.Edit, :edit
 
       live "/databases", DatabasesLive.Index, :index
       live "/databases/new", DatabasesLive.Form, :new
@@ -126,9 +142,6 @@ defmodule SequinWeb.Router do
       get "/easter-egg", EasterEggController, :home
 
       live "/settings/accounts", Settings.AccountSettingsLive, :index
-
-      live "/accept-invite/:token", AcceptInviteLive, :accept_invite
-      live "/accept-team-invite/:token", AcceptInviteLive, :accept_team_invite
     end
 
     get "/admin/impersonate/:secret", UserSessionController, :impersonate

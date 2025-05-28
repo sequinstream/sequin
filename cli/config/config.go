@@ -15,6 +15,7 @@ import (
 
 type PlanResponse struct {
 	Changes []Change `json:"changes"`
+	Actions []Action `json:"actions"`
 }
 
 type Change struct {
@@ -22,6 +23,10 @@ type Change struct {
 	Action       string      `json:"action"`
 	Old          interface{} `json:"old,omitempty"`
 	New          interface{} `json:"new,omitempty"`
+}
+
+type Action struct {
+	Description string `json:"description"`
 }
 
 type ApplyResponse struct {
@@ -43,10 +48,22 @@ func processEnvVars(yamlContent []byte) ([]byte, error) {
 
 // Interpolate reads a YAML file, processes environment variables, and outputs the result
 func Interpolate(inputPath, outputPath string) error {
-	// Read YAML file
-	yamlContent, err := os.ReadFile(inputPath)
-	if err != nil {
-		return fmt.Errorf("failed to read YAML file: %w", err)
+	var yamlContent []byte
+	var err error
+
+	// Read YAML content from stdin or file
+	if inputPath == "-" {
+		// Read from stdin
+		yamlContent, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+	} else {
+		// Read from file
+		yamlContent, err = os.ReadFile(inputPath)
+		if err != nil {
+			return fmt.Errorf("failed to read YAML file: %w", err)
+		}
 	}
 
 	// Process environment variables

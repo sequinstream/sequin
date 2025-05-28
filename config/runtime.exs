@@ -72,6 +72,29 @@ end
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
+# Configure SQS integration for HTTP Push sinks
+sqs_config =
+  if System.get_env("HTTP_PUSH_VIA_SQS_QUEUE_URL") do
+    %{
+      queue_url: System.get_env("HTTP_PUSH_VIA_SQS_QUEUE_URL"),
+      region: System.get_env("HTTP_PUSH_VIA_SQS_REGION"),
+      access_key_id: System.get_env("HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID"),
+      secret_access_key: System.get_env("HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY")
+    }
+  end
+
+# Enable via_sqs_for_new_sinks? flag for HttpPushSink
+config :sequin, Sequin.Consumers.HttpPushSink,
+  via_sqs_for_new_sinks?: System.get_env("HTTP_PUSH_VIA_SQS_NEW_SINKS") in ~w(true 1)
+
+# Configure the SQS pipeline with credentials
+config :sequin, Sequin.Runtime.HttpPushSqsPipeline, sqs: sqs_config
+
+config :sequin, Sequin.Runtime.SlotProcessorServer,
+  max_accumulated_bytes: ConfigParser.replication_flush_max_accumulated_bytes(env_vars),
+  max_accumulated_messages: ConfigParser.replication_flush_max_accumulated_messages(env_vars),
+  max_accumulated_messages_time_ms: ConfigParser.replication_flush_max_accumulated_time_ms(env_vars)
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server
@@ -127,12 +150,7 @@ if config_env() == :prod and self_hosted do
         url
     end
 
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+  secret_key_base = ConfigParser.secret_key_base(env_vars)
 
   repo_ssl =
     case System.get_env("PG_SSL") do
@@ -175,8 +193,7 @@ if config_env() == :prod and self_hosted do
   config :sequin, SequinWeb.Endpoint,
     # `url` is used for configuring links in the console. So it corresponds to the *external*
     # host and port of the application
-    # TODO: Default to 443
-    url: [host: server_host, port: server_port, scheme: "https"],
+    url: [host: server_host, port: 443, scheme: "https"],
     check_origin: check_origin,
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
@@ -210,22 +227,16 @@ if config_env() == :prod and self_hosted do
 
   config :sequin,
     api_base_url: "http://#{server_host}:#{server_port}",
-    config_file_path: System.get_env("CONFIG_FILE_PATH"),
-    config_file_yaml: System.get_env("CONFIG_FILE_YAML"),
     release_version: System.get_env("RELEASE_VERSION"),
     backfill_max_pending_messages: backfill_max_pending_messages,
-    max_memory_bytes: ConfigParser.max_memory_bytes(env_vars)
+    max_memory_bytes: ConfigParser.max_memory_bytes(env_vars),
+    default_max_storage_bytes: ConfigParser.default_max_storage_bytes(env_vars)
 end
 
 if config_env() == :prod and not self_hosted do
   database_url = System.fetch_env!("PG_URL")
 
-  secret_key_base =
-    System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+  secret_key_base = ConfigParser.secret_key_base(env_vars)
 
   function_transforms =
     if System.get_env("FEATURE_FUNCTION_TRANSFORMS", "disabled") in enabled_feature_values, do: :enabled, else: :disabled
@@ -282,7 +293,7 @@ default_workers_per_sink = ConfigParser.default_workers_per_sink(env_vars)
 config :sequin, Sequin.Runtime.SinkPipeline, default_workers_per_sink: default_workers_per_sink
 
 if config_env() == :prod do
-  vault_key = System.get_env("VAULT_KEY") || raise("VAULT_KEY is not set")
+  vault_key = ConfigParser.vault_key(env_vars)
 
   datadog_api_key = get_env.("DATADOG_API_KEY")
   datadog_app_key = get_env.("DATADOG_APP_KEY")

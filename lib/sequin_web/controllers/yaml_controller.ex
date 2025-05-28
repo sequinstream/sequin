@@ -3,9 +3,9 @@ defmodule SequinWeb.YamlController do
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Consumers.Transform
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Posthog
@@ -27,7 +27,7 @@ defmodule SequinWeb.YamlController do
     })
 
     case YamlLoader.apply_from_yml(account_id, yaml) do
-      {:ok, {:ok, resources}} ->
+      {:ok, resources} ->
         Posthog.capture("YAML Applied", %{
           distinct_id: "00000000-0000-0000-0000-000000000000",
           properties: %{
@@ -38,9 +38,6 @@ defmodule SequinWeb.YamlController do
         })
 
         json(conn, %{resources: resources})
-
-      {:ok, {:error, error}} ->
-        {:error, error}
 
       {:error, error} ->
         {:error, error}
@@ -58,7 +55,7 @@ defmodule SequinWeb.YamlController do
     })
 
     case YamlLoader.plan_from_yml(account_id, yaml) do
-      {:ok, planned_resources, current_resources} ->
+      {:ok, planned_resources, current_resources, actions} ->
         envelopes = diff_resources(planned_resources, current_resources)
 
         Posthog.capture("YAML Planned", %{
@@ -72,7 +69,7 @@ defmodule SequinWeb.YamlController do
           }
         })
 
-        json(conn, %{changes: envelopes})
+        json(conn, %{changes: envelopes, actions: actions})
 
       {:error, error} ->
         {:error, error}
@@ -178,7 +175,7 @@ defmodule SequinWeb.YamlController do
   defp get_resource_type(%Sequence{}), do: "stream"
   defp get_resource_type(%User{}), do: "user"
   defp get_resource_type(%WalPipeline{}), do: "change_retention"
-  defp get_resource_type(%Transform{}), do: "transform"
+  defp get_resource_type(%Function{}), do: "function"
 
   defp same_resource?(%Account{name: name}, %Account{name: name}), do: true
   defp same_resource?(%HttpEndpoint{name: name}, %HttpEndpoint{name: name}), do: true
@@ -187,6 +184,6 @@ defmodule SequinWeb.YamlController do
   defp same_resource?(%Sequence{name: name}, %Sequence{name: name}), do: true
   defp same_resource?(%User{email: email}, %User{email: email}), do: true
   defp same_resource?(%WalPipeline{name: name}, %WalPipeline{name: name}), do: true
-  defp same_resource?(%Transform{name: name}, %Transform{name: name}), do: true
+  defp same_resource?(%Function{name: name}, %Function{name: name}), do: true
   defp same_resource?(_, _), do: false
 end

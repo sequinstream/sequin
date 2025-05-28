@@ -36,7 +36,7 @@ Currently, routing functions are supported by the following sinks:
 
 ### HTTP Webhook sink
 
-For HTTP webhooks, your routing function must return a map with these keys:
+For [HTTP webhooks](/reference/sinks/webhooks), your routing function must return a map with these keys:
 
 | Key | Type | Description | Example |
 |-----|------|-------------|---------|
@@ -44,6 +44,20 @@ For HTTP webhooks, your routing function must return a map with these keys:
 | `endpoint_path` | String | The path to append to your webhook base URL | `"/users/123"` |
 
 The `endpoint_path` you specify will be appended to the base URL of your webhook endpoint. For example, if your webhook endpoint is `https://api.example.com` and your routing function returns `endpoint_path: "/users/123"`, the message will be sent to `https://api.example.com/users/123`.
+
+### Redis String sink
+
+For [Redis String](/reference/sinks/redis-string), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `key` | String | The key to use for the message | `"users:123"` |
+
+The `key` is used to determine the key in Redis where the message will be stored in the `SET` operation:
+
+```redis
+SET key value
+```
 
 ## Common routing patterns
 

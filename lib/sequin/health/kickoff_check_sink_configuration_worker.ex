@@ -14,13 +14,8 @@ defmodule Sequin.Health.KickoffCheckSinkConfigurationWorker do
 
   @impl Oban.Worker
   def perform(_) do
-    Consumers.list_active_sink_consumers()
-    |> Enum.with_index()
-    |> Enum.each(fn {consumer, index} ->
-      # Integer division to get the delay in seconds (10 per second)
-      delay_seconds = div(index, 10)
-
-      CheckSinkConfigurationWorker.enqueue_in(consumer.id, delay_seconds)
+    Enum.each(Consumers.list_active_sink_consumers(), fn consumer ->
+      CheckSinkConfigurationWorker.enqueue(consumer.id)
     end)
 
     :ok

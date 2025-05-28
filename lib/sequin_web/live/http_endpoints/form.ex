@@ -106,7 +106,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     if socket.assigns.changeset.valid? do
       case create_or_update_http_endpoint(socket, params["http_endpoint"]) do
         {:ok, http_endpoint} ->
-          CheckHttpEndpointHealthWorker.enqueue(http_endpoint.id)
+          CheckHttpEndpointHealthWorker.enqueue_for_user(http_endpoint.id)
           {:reply, %{ok: true}, push_navigate(socket, to: ~p"/http-endpoints/#{http_endpoint.id}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->

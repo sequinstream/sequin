@@ -260,9 +260,6 @@
     },
     "posthog": {
       "apiKey": "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
-    },
-    "intercom": {
-      "appId": "btt358pc"
     }
   },
   "redirects": [

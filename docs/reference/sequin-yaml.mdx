@@ -60,12 +60,22 @@ databases:
     port: 5432                  # Default: 5432
     database: "my_database"     # Required
     pool_size: 10               # Default: 3
-    slot_name: "sequin_slot"    # Required
-    publication_name: "sequin_pub" # Required
+    slot:
+      name: "sequin_slot"        # Required
+      create_if_not_exists: false   # Optional, default: false
+    publication:
+      name: "sequin_pub"         # Required
+      create_if_not_exists: false   # Optional, default: false
+      init_sql: |-               # Optional, SQL to run to create the publication. Defaults to create a publication for schema "public"
+        create publication sequin_pub for tables in schema public with (publish_via_partition_root = true)
     await_database:             # Optional, configuration for database connection retry behavior
       timeout_ms: 30000         # Default: 30000 (30 seconds)
       interval_ms: 3000         # Default: 3000 (3 seconds)
 ```
+
+<Note>
+  These database entries tell Sequin which Postgres instances to capture changes from. They are separate from the Postgres database that Sequin itself uses, which is configured via the `PG_*` [environment variables](/reference/configuration#postgres-configuration).
+</Note>
 
 #### Replica database configuration
 
@@ -80,8 +90,10 @@ databases:
     port: 5432                  # Default: 5432
     database: "my_database"     # Required
     pool_size: 10               # Default: 3
-    slot_name: "sequin_slot"    # Required
-    publication_name: "sequin_pub" # Required
+    slot:
+      name: "sequin_slot"        # Required
+    publication:
+      name: "sequin_pub"         # Required
     await_database:             # Optional, configuration for database connection retry behavior
       timeout_ms: 30000         # Default: 30000 (30 seconds)
       interval_ms: 3000         # Default: 3000 (3 seconds)
@@ -94,6 +106,37 @@ databases:
       database: "my_database"      # Required
 ```
 
+#### Replication slot and publication configuration
+
+Sequin uses PostgreSQL's logical replication to capture changes from your database. This requires a [replication slot and a publication](/connect-postgres#replication-configuration).
+
+##### Replication slot
+
+After following the instructions in the Sequin console to create a replication slot, you can indicate the name of the slot in the `slot` block. Alternatively, you can choose to have Sequin create the slot for you by setting `create_if_not_exists` to `true`:
+
+```yaml
+slot:
+  name: "sequin_slot"         # Required
+  create_if_not_exists: true     # Optional, default: false
+```
+
+<Warning>
+  Replication slots are durable and can accumulate data if not in use (i.e. if Sequin is not running). So while Sequin can automatically create slots for you, slots will hang around until you drop them–even if you disconnect Sequin.
+</Warning>
+
+##### Publication
+
+After following the instructions in the Sequin console to create a publication, you can indicate the name of the publication in the `publication` block. Alternatively, you can choose to have Sequin create the publication for you by setting `create_if_not_exists` to `true`:
+
+```yaml
+publication:
+  name: "sequin_pub"          # Required
+  create_if_not_exists: true     # Optional, default: false
+  init_sql: |-               # Optional, SQL to run to create the publication. Defaults to create a publication for schema "public"
+    create publication sequin_pub for tables in schema public with (publish_via_partition_root = true)
+```
+
+When `create_if_not_exists` is `true`, Sequin will attempt to create the publication if it doesn't exist. If you specify `init_sql`, Sequin will run that SQL to create the publication. Otherwise, Sequin will create a publication for the schema "public".
 
 #### Database connection retry
 
@@ -101,46 +144,8 @@ When creating a database, Sequin needs to be able to connect to the database in 
 
 By default, Sequin will wait up to 30 seconds for the database to be ready and will retry every 3 seconds. You can customize this behavior by setting the `timeout_ms` and `interval_ms` options.
 
-### HTTP endpoint configuration
 
-You can configure HTTP endpoints in three ways:
 
-#### 1. External URL
-```yaml
-http_endpoints:
-  - name: "external-endpoint"         # Required
-    url: "https://api.example.com/webhook"  # Required
-    headers:                          # Optional
-      - key: "Content-Type"
-        value: "application/json"
-    encrypted_headers:                # Optional, for sensitive headers
-      - key: "Authorization" 
-        value: "Bearer token123"
-```
-
-#### 2. Local development endpoint
-
-Sequin Cloud offers tunneling to your local machine for development. Learn more about tunneling in the [CLI documentation](/reference/cli/overview#tunnel).
-
-```yaml
-http_endpoints:
-  - name: "local-endpoint"     # Required
-    local: "true"             # Required
-    path: "/webhook"          # Optional
-    headers:                  # Optional
-      - key: "X-Test"
-        value: "test"
-    encrypted_headers:        # Optional
-      - key: "X-Secret"
-        value: "secret123"
-```
-
-#### 3. Webhook.site testing endpoint
-```yaml
-http_endpoints:
-  - name: "webhook-site"     # Required
-    webhook.site: "true"     # Required
-```
 
 ### Sink configuration
 
@@ -154,7 +159,11 @@ sinks:
     batch_size: 1                  # Optional, messages per batch, default: 1
     status: "active"               # Optional: active or disabled, default: active
     group_column_names: ["id"]     # Optional, columns to group messages by
-    transform: "my-transform"       # Optional, reference to a transform name or "none"
+    transform: "my-transform"       # Optional, reference to a transform function name or "none"
+    filter: "my-filter"            # Optional, reference to a filter function name or "none"
+    routing: "my-routing"          # Optional, reference to a routing function name or "none"
+    annotations:                   # Optional, JSON object containing additional metadata that you've added
+      my_data: "value"
     actions:                       # Optional, defaults to all
       - insert
       - update
@@ -172,6 +181,34 @@ sinks:
       type: "..."                  # Required, sink type
       ...                          # Additional sink-specific options
 ```
+
+The `transform`, `filter`, and `routing` fields allow you to attach functions to your sink. Each field can be set to either:
+- The name of a function defined in the `functions` section
+- `"none"` to explicitly disable that type of function
+
+For example, to attach a transform function to your sink:
+
+```yaml
+functions:
+  - name: "my-transform"
+    type: "transform"
+    code: |-
+      def transform(action, record, changes, metadata) do
+        %{
+          id: record["id"],
+          action: action
+        }
+      end
+
+sinks:
+  - name: "my-sink"
+    transform: "my-transform"  # Reference the transform function
+    ...
+```
+
+See [Function configuration](#function-configuration) for more details on how to define functions.
+
+#### Destination configuration
 
 The `destination` configuration varies by sink type. Below are the configurations for each sink type:
 
@@ -306,7 +343,7 @@ The GCP PubSub sink requires a service account with permissions to publish to th
 
 Project ID must be between 6 and 30 characters, start with a letter, and contain only lowercase letters, numbers, and hyphens. Topic ID must be between 3 and 255 characters and match the pattern: `[a-zA-Z][a-zA-Z0-9-_.~+%]*`.
 
-### Sink filters
+#### Sink filters
 
 All sink types support filtering messages based on columns in your source table. The filtering syntax is consistent across sink types:
 
@@ -346,36 +383,120 @@ sinks:
 ```
 
 
-### Sink transforms
+### Function configuration
 
-[Transforms](/reference/transforms) allow you to modify the structure of [messages](/reference/messages) before they are sent to a sink. You can define transforms at the top level of your configuration and reference them in your sinks.
+Functions allow you to filter, transform, and route your data as it flows through Sequin. You can define functions at the top level of your configuration and then attach them to your sinks.
+
+#### Function types
+
+Sequin supports four types of functions:
+
+1. [**Path functions**](/reference/transforms#path-transform) - Extract data from a specific path in your message
+2. [**Transform functions**](/reference/transforms#function-transform) - Modify the structure of your messages
+3. [**Filter functions**](/reference/filters#filter-functions) - Filter which messages to process
+4. [**Routing functions**](/reference/routing) - Dynamically direct messages to different destinations
+
+You can define functions in your configuration like this:
 
 ```yaml
-transforms:
-  - name: "my-path-transform"           # Required, unique name for this transform
-    description: "Extract record"       # Optional, description of the transform
-    transform:                          # Required, transform configuration
-      type: "path"                      # Required, "path" or "function"
-      path: "record"                    # Optional, path to extract from the message (Required if type is "path")
-  - name: "my-function-transform"
-    transform:
-      type: "function"
-      code: |-                          # Optional, Elixir code to transform the message (Required if type is "function")
-        def transform(action, record, changes, metadata) do
-          %{
-            id: record["id"],
-            action: action
-          }
-        end
+functions:
+  # Path function example
+  - name: "my-path-function"
+    description: "Extract record"       # Optional
+    type: "path"
+    path: "record"                     # Required for path functions
+
+  # Transform function example
+  - name: "my-transform-function"
+    description: "Extract ID and action"
+    type: "transform"
+    code: |-                          # Required for transform functions
+      def transform(action, record, changes, metadata) do
+        %{
+          id: record["id"],
+          action: action
+        }
+      end
+
+  # Filter function example
+  - name: "my-filter-function"
+    description: "Filter VIP customers"
+    type: "filter"
+    code: |-                          # Required for filter functions
+      def filter(action, record, changes, metadata) do
+        record["customer_type"] == "VIP"
+      end
+
+  # Routing function example
+  - name: "my-routing-function"
+    description: "Route to REST API"
+    type: "routing"
+    sink_type: "webhook"              # Required, sink type to route to
+    code: |-                          # Required for routing functions
+      def route(action, record, changes, metadata) do
+        %{
+          method: "POST",
+          endpoint_path: "/api/users/#{record["id"]}"
+        }
+      end
 ```
 
-You can reference transforms in your sinks by name:
+#### Using functions in sinks
+
+You can attach functions to your sinks using the `transform`, `filter`, and `routing` fields:
 
 ```yaml
 sinks:
   - name: "my-sink"
-    transform: "my-path-transform"       # Reference the transform by name (or "none" for no transform)
+    transform: "my-transform-function"  # Reference a transform function
+    filter: "my-filter-function"       # Reference a filter function
+    routing: "my-routing-function"     # Reference a routing function
     ...
+```
+
+Each field can be set to either:
+- The name of a function defined in the `functions` section
+- `"none"` to explicitly disable that type of function
+
+### HTTP endpoint configuration
+
+You can configure HTTP endpoints in three ways:
+
+#### 1. External URL
+```yaml
+http_endpoints:
+  - name: "external-endpoint"         # Required
+    url: "https://api.example.com/webhook"  # Required
+    headers:                          # Optional
+      - key: "Content-Type"
+        value: "application/json"
+    encrypted_headers:                # Optional, for sensitive headers
+      - key: "Authorization" 
+        value: "Bearer token123"
+```
+
+#### 2. Local development endpoint
+
+Sequin Cloud offers tunneling to your local machine for development. Learn more about tunneling in the [CLI documentation](/reference/cli/overview#tunnel).
+
+```yaml
+http_endpoints:
+  - name: "local-endpoint"     # Required
+    local: "true"             # Required
+    path: "/webhook"          # Optional
+    headers:                  # Optional
+      - key: "X-Test"
+        value: "test"
+    encrypted_headers:        # Optional
+      - key: "X-Secret"
+        value: "secret123"
+```
+
+#### 3. Webhook.site testing endpoint
+```yaml
+http_endpoints:
+  - name: "webhook-site"     # Required
+    webhook.site: "true"     # Required
 ```
 
 ### Change retention configuration
@@ -488,8 +609,13 @@ databases:
   - name: "production-db"
     hostname: "prod.db.example.com"  
     database: "app_production"
-    slot_name: "sequin_slot"
-    publication_name: "sequin_pub"
+    slot:
+      name: "sequin_slot"
+      create_if_not_exists: true
+    publication:
+      name: "sequin_pub"
+      create_if_not_exists: true
+      schemas: ["public"]
 
 http_endpoints:
   - name: "webhook-endpoint"

@@ -6,10 +6,11 @@ defmodule Sequin.Application do
 
   alias Sequin.Accounts
   alias Sequin.CheckSystemHealthWorker
+  alias Sequin.Functions.TestMessages
   alias Sequin.Health.KickoffCheckPostgresReplicationSlotWorker
   alias Sequin.Health.KickoffCheckSinkConfigurationWorker
   alias Sequin.MutexedSupervisor
-  alias Sequin.Transforms.TestMessages
+  alias Sequin.Runtime.HttpPushSqsPipeline
 
   require Logger
 
@@ -31,6 +32,7 @@ defmodule Sequin.Application do
 
     TestMessages.create_ets_table()
     Accounts.initialize_account_features_cache()
+    Req.default_options(finch: Sequin.Finch)
 
     Sequin.Sentry.init()
 
@@ -45,18 +47,25 @@ defmodule Sequin.Application do
   end
 
   defp children(_) do
-    base_children() ++
-      [
-        SequinWeb.Telemetry,
-        MutexedSupervisor.child_spec(
-          Sequin.Runtime.MutexedSupervisor,
-          [
-            Sequin.Runtime.Supervisor
-          ]
-        ),
-        # Sequin.Tracer.Starter,
-        Sequin.Telemetry.PosthogReporter
-      ]
+    children =
+      base_children() ++
+        [
+          SequinWeb.Telemetry,
+          MutexedSupervisor.child_spec(
+            Sequin.Runtime.MutexedSupervisor,
+            [
+              Sequin.Runtime.Supervisor
+            ]
+          ),
+          # Sequin.Tracer.Starter,
+          Sequin.Telemetry.PosthogReporter
+        ]
+
+    if HttpPushSqsPipeline.enabled?() do
+      children ++ [HttpPushSqsPipeline.child_spec()]
+    else
+      children
+    end
   end
 
   defp base_children do
@@ -73,7 +82,7 @@ defmodule Sequin.Application do
       Sequin.Cache.child_spec(),
       {Oban, Application.fetch_env!(:sequin, Oban)},
       {Registry, keys: :duplicate, name: TestMessages.registry()},
-      Sequin.Transforms.MiniElixir,
+      Sequin.Functions.MiniElixir,
       Sequin.Databases.ConnectionCache,
       Sequin.Sinks.Redis.ConnectionCache,
       Sequin.Sinks.Kafka.ConnectionCache,

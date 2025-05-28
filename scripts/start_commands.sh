@@ -47,45 +47,25 @@ migrate() {
 apply_config() {
   echo "Applying config"
 
-  # Get the config file path from the application
-  CONFIG_FILE_PATH=$(./prod/rel/sequin/bin/sequin eval "IO.puts Sequin.YamlLoader.config_file_path()")
-
   # Check if CONFIG_FILE_YAML is provided (base64 encoded YAML)
   if [ -n "${CONFIG_FILE_YAML:-}" ]; then
-    echo "CONFIG_FILE_YAML environment variable found, decoding and using it"
-    YAML_FILENAME="config_from_env.yml"
-    RAW_CONFIG_PATH="${APP_HOME_DIR}/${YAML_FILENAME}"
-
-    # Decode base64 content and write to file
-    echo "${CONFIG_FILE_YAML}" | base64 -d > "${RAW_CONFIG_PATH}"
-    echo "Decoded YAML config to ${RAW_CONFIG_PATH}"
-
-    # Update CONFIG_FILE_PATH to use this file
-    CONFIG_FILE_PATH="${RAW_CONFIG_PATH}"
-
-    # Unset CONFIG_FILE_YAML to prevent the app from attempting to use it directly
+    echo "CONFIG_FILE_YAML environment variable found, decoding and piping to application"
+    echo "${CONFIG_FILE_YAML}" \
+        | base64 -d \
+        | sequin config interpolate - \
+        | ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
+    echo "Config applied from environment variable"
     unset CONFIG_FILE_YAML
-    echo "Unset CONFIG_FILE_YAML after processing"
-  fi
-
-  if [ -n "${CONFIG_FILE_PATH}" ] && [ -f "${CONFIG_FILE_PATH}" ]; then
-    echo "Substituting environment variables in ${CONFIG_FILE_PATH}"
-    # Copy to app home directory where the app user has write permissions
-    CONFIG_FILENAME=$(basename "${CONFIG_FILE_PATH}")
-    INTERPOLATED_CONFIG_PATH="${APP_HOME_DIR}/${CONFIG_FILENAME}.interpolated.yml"
-
-    # Use sequin-cli to interpolate environment variables
-    sequin-cli config interpolate "${CONFIG_FILE_PATH}" --output "${INTERPOLATED_CONFIG_PATH}"
-    echo "Environment variable substitution complete in ${INTERPOLATED_CONFIG_PATH}"
-
-    # Update CONFIG_FILE_PATH to use the interpolated file
-    export CONFIG_FILE_PATH="${INTERPOLATED_CONFIG_PATH}"
   else
-    echo "No config file found or path is empty, skipping environment variable substitution"
+    if [ -n "${CONFIG_FILE_PATH:-}" ] && [ -f "${CONFIG_FILE_PATH:-}" ]; then
+      echo "Interpolating and applying config from ${CONFIG_FILE_PATH}"
+      sequin config interpolate "${CONFIG_FILE_PATH}" \
+          | ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
+      echo "Config applied from file"
+    else
+      echo "No config file found or path is empty, skipping config loading"
+    fi
   fi
-
-  ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply!"
-  echo "Config applied"
 }
 
 start_application() {

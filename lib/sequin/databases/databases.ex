@@ -30,6 +30,12 @@ defmodule Sequin.Databases do
     Repo.all(PostgresDatabase)
   end
 
+  def list_active_dbs do
+    PostgresDatabase.join_replication_slot()
+    |> PostgresReplicationSlot.where_status(:active)
+    |> Repo.all()
+  end
+
   def list_dbs_for_account(account_id, preload \\ []) do
     account_id
     |> PostgresDatabase.where_account()
@@ -110,7 +116,7 @@ defmodule Sequin.Databases do
 
       case res do
         {:ok, updated_db} ->
-          CheckPostgresReplicationSlotWorker.enqueue(updated_db.id, unique: false)
+          CheckPostgresReplicationSlotWorker.enqueue(updated_db.id)
           DatabaseLifecycleEventWorker.enqueue(:update, :postgres_database, updated_db.id)
           {:ok, updated_db}
 
@@ -362,7 +368,7 @@ defmodule Sequin.Databases do
   end
 
   def with_uncached_connection(%PostgresDatabase{} = db, fun) do
-    with {:ok, conn} <- start_link(db) do
+    with {:ok, conn} <- start_link(db, %{pool_size: 1}) do
       try do
         fun.(conn)
       after
@@ -491,76 +497,6 @@ defmodule Sequin.Databases do
     with_connection(database, fn conn ->
       Postgres.verify_table_in_publication(conn, pub_name, table_oid)
     end)
-  end
-
-  def setup_replication(%PostgresDatabase{} = database, slot_name, publication_name, tables) do
-    with_connection(database, fn conn ->
-      Postgrex.transaction(conn, fn t_conn ->
-        with :ok <- create_replication_slot(t_conn, slot_name),
-             :ok <- create_publication(t_conn, publication_name, tables) do
-          %{slot_name: slot_name, publication_name: publication_name, tables: tables}
-        else
-          {:error, %Postgrex.Error{} = error} ->
-            message = (error.postgres && error.postgres.message) || "Unknown Postgres error"
-            code = (error.postgres && error.postgres.code) || "unknown"
-            Postgrex.rollback(t_conn, Error.service(service: :external_postgres, message: message, code: code))
-
-          {:error, error} ->
-            Logger.error("Failed to setup replication: #{inspect(error)}", error: error)
-            Postgrex.rollback(t_conn, error)
-        end
-      end)
-    end)
-  end
-
-  defp create_replication_slot(conn, slot_name) do
-    # First, check if the slot already exists
-    check_query = "SELECT 1 FROM pg_replication_slots WHERE slot_name = $1"
-
-    case Postgres.query(conn, check_query, [slot_name]) do
-      {:ok, %{num_rows: 0}} ->
-        # Slot doesn't exist, create it
-        # ::text is important, as Postgrex can't handle return type pg_lsn
-        create_query = "SELECT pg_create_logical_replication_slot($1, 'pgoutput')::text"
-
-        case Postgres.query(conn, create_query, [slot_name]) do
-          {:ok, _} -> :ok
-          {:error, error} -> {:error, error}
-        end
-
-      {:ok, _} ->
-        # Slot already exists
-        :ok
-
-      {:error, error} ->
-        {:error, "Failed to check for existing replication slot: #{inspect(error)}"}
-    end
-  end
-
-  defp create_publication(conn, publication_name, tables) do
-    # Check if publication exists
-    check_query = "SELECT 1 FROM pg_publication WHERE pubname = $1"
-
-    case Postgres.query(conn, check_query, [publication_name]) do
-      {:ok, %{num_rows: 0}} ->
-        # Publication doesn't exist, create it
-        table_list = Enum.map_join(tables, ", ", fn [schema, table] -> ~s{"#{schema}"."#{table}"} end)
-
-        create_query =
-          "CREATE PUBLICATION #{publication_name} FOR TABLE #{table_list} WITH (publish_via_partition_root = true)"
-
-        case Postgres.query(conn, create_query, []) do
-          {:ok, _} -> :ok
-          {:error, error} -> {:error, "Failed to create publication: #{inspect(error)}"}
-        end
-
-      {:ok, _} ->
-        # Publication already exists
-        :ok
-
-      {:error, error} ->
-        {:error, "Failed to check for existing publication: #{inspect(error)}"}
-    end
   end
 
   def check_replica_identity(%PostgresDatabase{} = db, oid) do

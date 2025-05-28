@@ -8,7 +8,9 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
     max_attempts: 3
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.Function
+  alias Sequin.Databases
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Health
   alias Sequin.Health.CheckHttpEndpointHealthWorker
   alias Sequin.Health.CheckSinkConfigurationWorker
@@ -17,12 +19,11 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.Supervisor, as: RuntimeSupervisor
-  alias Sequin.Transforms.MiniElixir
 
   require Logger
 
   @events ~w(create update delete)a
-  @entities ~w(sink_consumer http_endpoint backfill transform)a
+  @entities ~w(sink_consumer http_endpoint backfill function)a
 
   @spec enqueue(event :: atom(), entity_type :: atom(), entity_id :: String.t(), data :: map() | nil) ::
           {:ok, Oban.Job.t()} | {:error, Oban.Job.changeset() | term()}
@@ -44,8 +45,8 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
       "backfill" ->
         handle_backfill_event(event, entity_id)
 
-      "transform" ->
-        handle_transform_event(event, entity_id)
+      "function" ->
+        handle_function_event(event, entity_id)
     end
   end
 
@@ -58,7 +59,10 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
     case event do
       "create" ->
         with {:ok, consumer} <- Consumers.get_consumer(id) do
-          CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
+          consumer = Repo.preload(consumer, :postgres_database)
+          # Lazy, just do this on every sink create. Eventually, we'll retire Sequence
+          Databases.update_sequences_from_db(consumer.postgres_database)
+          CheckSinkConfigurationWorker.enqueue(consumer.id)
           RuntimeSupervisor.start_for_sink_consumer(consumer)
           :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
           RuntimeSupervisor.maybe_start_table_reader(consumer)
@@ -68,7 +72,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
       "update" ->
         with {:ok, consumer} <- Consumers.get_consumer(id) do
           consumer = Repo.preload(consumer, :replication_slot)
-          CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
+          CheckSinkConfigurationWorker.enqueue(consumer.id)
 
           # Restart the entire supervision tree for replication, including slot processor, smss, etc.
           # This is safest- later we can be a bit more intelligent about when to restart (ie. when name changes we don't have to restart)
@@ -88,6 +92,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
   defp handle_http_endpoint_event(event, id) do
     Logger.metadata(http_endpoint_id: id)
     Logger.info("[LifecycleEventWorker] Handling event `#{event}` for http_endpoint")
+    Consumers.invalidate_cached_http_endpoint(id)
 
     case event do
       "create" ->
@@ -142,43 +147,51 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
     end
   end
 
-  defp handle_transform_event(event, id) when is_binary(id) do
-    Logger.metadata(transform_id: id)
-    Logger.info("[LifecycleEventWorker] Handling event `#{event}` for transform")
+  defp handle_function_event(event, id) when is_binary(id) do
+    Logger.metadata(function_id: id)
+    Logger.info("[LifecycleEventWorker] Handling event `#{event}` for function")
 
-    case Consumers.get_transform(id) do
-      {:ok, %Transform{type: "path"}} -> :ok
-      {:ok, transform} -> handle_transform_event(event, transform)
-      {:error, error} -> {:error, error}
+    with {:ok, function} <- Consumers.get_function(id) do
+      handle_function_event(event, function)
     end
   end
 
-  defp handle_transform_event(event, %Transform{} = transform) do
+  defp handle_function_event(event, %Function{} = function) do
     case event do
       "create" ->
-        case MiniElixir.create(transform.id, transform.transform.code) do
-          {:ok, _} ->
+        case maybe_recompile_function(function) do
+          :ok ->
             :ok
 
           {:error, error} ->
-            Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
+            Logger.error("[LifecycleEventWorker] Failed to create function", error: error)
             {:error, error}
         end
 
       "update" ->
-        consumers = Consumers.list_consumers_for_transform(transform.account_id, transform.id, [:replication_slot])
+        consumers = Consumers.list_consumers_for_function(function.account_id, function.id, [:replication_slot])
         replication_slots = consumers |> Enum.map(& &1.replication_slot) |> Enum.uniq_by(& &1.id)
         Enum.each(replication_slots, &RuntimeSupervisor.stop_replication/1)
 
-        case MiniElixir.create(transform.id, transform.transform.code) do
-          {:ok, _} ->
+        case maybe_recompile_function(function) do
+          :ok ->
             Enum.each(replication_slots, &RuntimeSupervisor.restart_replication/1)
             :ok
 
           {:error, error} ->
-            Logger.error("[LifecycleEventWorker] Failed to create transform", error: error)
+            Logger.error("[LifecycleEventWorker] Failed to create function", error: error)
             {:error, error}
         end
+    end
+  end
+
+  # Path functions don't require compilation
+  defp maybe_recompile_function(%Function{type: "path"}), do: :ok
+
+  defp maybe_recompile_function(%Function{} = function) do
+    case MiniElixir.create(function.id, function.function.code) do
+      {:ok, _} -> :ok
+      {:error, error} -> {:error, error}
     end
   end
 end

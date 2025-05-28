@@ -13,6 +13,7 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.InvariantError
+  alias Sequin.Functions.TestMessages
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Replication
@@ -23,9 +24,9 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.TableReaderServer
-  alias Sequin.Transforms.TestMessages
 
   require Logger
 
@@ -104,6 +105,7 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
+  @spec handle_messages(Context.t(), [Message.t()]) :: {:ok, non_neg_integer()} | {:error, Sequin.Error.t()}
   def handle_messages(%Context{}, []) do
     {:ok, 0}
   end
@@ -201,6 +203,7 @@ defmodule Sequin.Runtime.MessageHandler do
     payload_size = :erlang.external_size(data)
 
     %ConsumerEvent{
+      id: Ecto.UUID.generate(),
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,
@@ -316,7 +319,8 @@ defmodule Sequin.Runtime.MessageHandler do
       commit_lsn: message.commit_lsn,
       consumer: %{
         id: consumer.id,
-        name: consumer.name
+        name: consumer.name,
+        annotations: consumer.annotations
       },
       transaction_annotations: nil,
       idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}")
@@ -411,12 +415,15 @@ defmodule Sequin.Runtime.MessageHandler do
     Map.new(ctx.consumers, fn consumer ->
       matching_messages =
         execute_timed(:filter_matching_messages, fn ->
-          Enum.filter(messages, &Consumers.matches_message?(consumer, &1))
+          # We do some filtering here on the
+          Enum.filter(messages, fn %SlotProcessor.Message{} = message ->
+            Consumers.matches_message?(consumer, message)
+          end)
         end)
 
       consumer_messages =
         execute_timed(:map_to_consumer_messages, fn ->
-          Enum.map(matching_messages, fn message ->
+          Enum.map(matching_messages, fn %SlotProcessor.Message{} = message ->
             cond do
               consumer.message_kind == :event ->
                 consumer_event(consumer, message)
@@ -435,6 +442,7 @@ defmodule Sequin.Runtime.MessageHandler do
         consumer_messages
         |> Stream.reject(&is_nil/1)
         |> Stream.reject(&violates_payload_size?(ctx.replication_slot_id, &1))
+        |> Stream.filter(&Consumers.matches_filter?(consumer, &1))
         |> Enum.to_list()
 
       {consumer, messages}
@@ -521,13 +529,13 @@ defmodule Sequin.Runtime.MessageHandler do
     # This should be way more assertive - we should error if we don't find the source table
     # We have a lot of tests that do not line up consumer source_tables with the message table oid
     if consumer.sequence_filter.group_column_attnums do
-      Enum.map_join(consumer.sequence_filter.group_column_attnums, ",", fn attnum ->
+      Enum.map_join(consumer.sequence_filter.group_column_attnums, ":", fn attnum ->
         fields = if message.action == :delete, do: message.old_fields, else: message.fields
         field = Sequin.Enum.find!(fields, &(&1.column_attnum == attnum))
         to_string(field.value)
       end)
     else
-      Enum.map_join(message.ids, ",", &to_string/1)
+      Enum.map_join(message.ids, ":", &to_string/1)
     end
   end
 
@@ -596,7 +604,8 @@ defmodule Sequin.Runtime.MessageHandler do
           message_kind: :event,
           name: "test-consumer",
           postgres_database: ctx.postgres_database,
-          sequence_filter: %SequenceFilter{}
+          sequence_filter: %SequenceFilter{},
+          annotations: %{"test_message" => true, "info" => "Test messages are not associated with any sink"}
         }
 
         message = consumer_event(test_consumer, message)

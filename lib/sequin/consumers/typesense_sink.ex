@@ -5,23 +5,20 @@ defmodule Sequin.Consumers.TypesenseSink do
 
   import Ecto.Changeset
 
-  @import_actions [:create, :upsert, :update, :emplace]
-
-  @derive {Jason.Encoder, only: [:endpoint_url, :collection_name, :import_action]}
+  @derive {Jason.Encoder, only: [:endpoint_url, :collection_name]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:typesense], default: :typesense
     field :endpoint_url, :string
     field :collection_name, :string
     field :api_key, Sequin.Encrypted.Binary
-    field :import_action, Ecto.Enum, values: @import_actions, default: :emplace
     field :batch_size, :integer, default: 100
     field :timeout_seconds, :integer, default: 5
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:endpoint_url, :collection_name, :api_key, :import_action, :batch_size, :timeout_seconds])
+    |> cast(params, [:endpoint_url, :collection_name, :api_key, :batch_size, :timeout_seconds])
     |> validate_required([:endpoint_url, :collection_name, :api_key])
     |> validate_endpoint_url()
     |> validate_length(:collection_name, max: 1024)

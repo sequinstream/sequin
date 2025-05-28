@@ -12,25 +12,26 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ElasticsearchSink
-  alias Sequin.Consumers.FunctionTransform
+  alias Sequin.Consumers.FilterFunction
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.NatsSink
-  alias Sequin.Consumers.PathTransform
+  alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
-  alias Sequin.Consumers.RoutingTransform
+  alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -41,6 +42,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Repo
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.Trace
   alias Sequin.Transforms.Message
   alias SequinWeb.RouteHelpers
 
@@ -48,6 +50,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   # For message management
   @page_size 25
+  @trace_page_size 25
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id} = params, _session, socket) do
@@ -74,7 +77,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:last_completed_backfill, last_completed_backfill)
           |> assign(:api_tokens, ApiTokens.list_tokens_for_account(current_account.id))
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
-          |> assign(:transforms, Consumers.list_transforms_for_account(current_account.id))
+          |> assign(:functions, Consumers.list_functions_for_account(current_account.id))
           |> assign_metrics()
           |> assign(:paused, false)
           |> assign(:show_acked, params["showAcked"] == "true")
@@ -83,6 +86,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:total_count, 0)
           |> assign(:cursor_position, nil)
           |> assign(:cursor_task_ref, nil)
+          |> assign(:trace, initial_trace())
           |> load_consumer_messages()
           |> load_consumer_message_by_ack_id()
 
@@ -102,7 +106,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
-        |> Repo.preload([:postgres_database, :sequence, :active_backfill, :replication_slot, :transform, :routing],
+        |> Repo.preload(
+          [:postgres_database, :sequence, :active_backfill, :replication_slot, :transform, :routing, :filter],
           force: true
         )
         |> SinkConsumer.preload_http_endpoint()
@@ -161,7 +166,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   cursor_position: encode_backfill(@consumer, @last_completed_backfill),
                   apiBaseUrl: @api_base_url,
                   apiTokens: encode_api_tokens(@api_tokens),
-                  transform: encode_transform(@consumer.transform)
+                  transform: encode_function(@consumer.transform)
                 }
               }
             />
@@ -185,10 +190,44 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                 }
               }
             />
+          <% {:trace, _consumer} -> %>
+            <!-- ShowTrace component -->
+            <.svelte
+              name="consumers/ShowTrace"
+              props={
+                %{
+                  consumer: encode_consumer(@consumer),
+                  trace: encode_trace(@trace),
+                  parent: "consumer-show"
+                }
+              }
+            />
         <% end %>
       </div>
     </div>
     """
+  end
+
+  # FIXME: TEMP
+  defp encode_trace(trace) do
+    %{
+      events: Enum.map(trace.events, &encode_trace_event/1),
+      total_count: trace.total_count,
+      page_size: trace.page_size,
+      page: trace.page,
+      page_count: ceil(trace.total_count / trace.page_size),
+      paused: trace.paused
+    }
+  end
+
+  defp encode_trace_event(%Trace.Event{} = event) do
+    %{
+      message: event.message,
+      content: event.content,
+      timestamp: event.published_at,
+      type: "trace",
+      status: event.status
+    }
   end
 
   def handle_event("edit", _params, socket) do
@@ -415,13 +454,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("refresh_health", _params, socket) do
-    CheckSinkConfigurationWorker.enqueue(socket.assigns.consumer.id, unique: false)
+    CheckSinkConfigurationWorker.enqueue_for_user(socket.assigns.consumer.id)
     consumer = put_health(socket.assigns.consumer)
     {:noreply, assign(socket, :consumer, consumer)}
   end
 
   def handle_event("refresh_check", %{"slug" => "sink_configuration"}, socket) do
-    CheckSinkConfigurationWorker.enqueue(socket.assigns.consumer.id, unique: false)
+    CheckSinkConfigurationWorker.enqueue_for_user(socket.assigns.consumer.id)
     {:noreply, socket}
   end
 
@@ -457,6 +496,30 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:reply, %{ok: false},
          put_flash(socket, :toast, %{kind: :error, title: "Failed to reset message visibility: #{inspect(reason)}"})}
     end
+  end
+
+  def handle_event("trace_stop", _params, socket) do
+    Trace.unsubscribe(socket.assigns.consumer.id)
+    {:noreply, update(socket, :trace, fn trace -> %{trace | paused: true} end)}
+  end
+
+  def handle_event("trace_start", _params, socket) do
+    Trace.subscribe(socket.assigns.consumer.id)
+
+    # Reset trace state on start
+    {:noreply, assign(socket, trace: %{initial_trace() | paused: false})}
+  end
+
+  def handle_event("trace_toggle_show_acked", %{"show_acked" => show_acked}, socket) do
+    {:noreply,
+     socket
+     |> assign(:trace_show_acked, show_acked)
+     |> assign(:trace_page, 0)
+     |> push_patch(to: RouteHelpers.consumer_path(socket.assigns.consumer, "/trace?showAcked=#{show_acked}"))}
+  end
+
+  def handle_event("trace_change_page", %{"page" => page}, socket) do
+    {:noreply, assign(socket, trace_page: page)}
   end
 
   @impl Phoenix.LiveView
@@ -528,6 +591,53 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def handle_info(:sink_config_checked, socket) do
     consumer = put_health(socket.assigns.consumer)
     {:noreply, assign(socket, :consumer, consumer)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:trace_event, event}, socket) do
+    paused? = socket.assigns.trace.paused
+    over_limit? = length(socket.assigns.trace.events) >= socket.assigns.trace.event_limit
+
+    if socket.assigns.live_action == :trace and not paused? and not over_limit? do
+      trace = socket.assigns.trace
+      event = coerce_trace_event_content(event)
+      events = [event | trace.events]
+      total_count = length(events)
+
+      if total_count >= trace.event_limit do
+        Trace.unsubscribe(socket.assigns.consumer.id)
+      end
+
+      {:noreply, assign(socket, trace: %{trace | events: events, total_count: total_count})}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  defp initial_trace do
+    %{
+      events: [],
+      total_count: 0,
+      page_size: @trace_page_size,
+      page: 0,
+      page_count: 0,
+      event_limit: 100,
+      paused: true
+    }
+  end
+
+  defp coerce_trace_event_content(%Trace.Event{} = event) do
+    content =
+      case Jason.encode(event.content) do
+        {:ok, _content} ->
+          event.content
+
+        {:error, _} ->
+          Logger.warning("Failed to encode trace event content", event: event)
+          inspect(event.content)
+      end
+
+    %Trace.Event{event | content: content}
   end
 
   @smoothing_window 5
@@ -621,7 +731,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       table: encode_table(table),
       transform_id: consumer.transform_id,
       routing_id: consumer.routing_id,
-      routing: encode_transform(consumer.routing)
+      routing: encode_function(consumer.routing),
+      filter_id: consumer.filter_id,
+      filter: encode_function(consumer.filter)
     }
   end
 
@@ -764,7 +876,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       type: :typesense,
       endpoint_url: sink.endpoint_url,
       collection_name: sink.collection_name,
-      import_action: sink.import_action,
       batch_size: sink.batch_size,
       timeout_seconds: sink.timeout_seconds
     }
@@ -838,21 +949,22 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_transform(nil), do: nil
+  defp encode_function(nil), do: nil
 
-  defp encode_transform(%Transform{type: type, transform: inner_transform} = transform) do
+  defp encode_function(%Function{type: type, function: inner_function} = function) do
     %{
-      id: transform.id,
-      name: transform.name,
-      description: transform.description,
-      transform: Map.merge(%{type: type}, encode_transform_inner(inner_transform))
+      id: function.id,
+      name: function.name,
+      description: function.description,
+      function: Map.merge(%{type: type}, encode_function_inner(inner_function))
     }
   end
 
-  defp encode_transform_inner(%PathTransform{path: path}), do: %{path: path}
-  defp encode_transform_inner(%FunctionTransform{code: code}), do: %{code: code}
+  defp encode_function_inner(%PathFunction{path: path}), do: %{path: path}
+  defp encode_function_inner(%TransformFunction{code: code}), do: %{code: code}
+  defp encode_function_inner(%FilterFunction{code: code}), do: %{code: code}
 
-  defp encode_transform_inner(%RoutingTransform{sink_type: sink_type, code: code}) do
+  defp encode_function_inner(%RoutingFunction{sink_type: sink_type, code: code}) do
     %{sink_type: sink_type, code: code}
   end
 
@@ -1065,7 +1177,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           state_color: get_message_state_color(consumer, state),
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
-          transformed_message: maybe_transform_message(consumer, message)
+          functioned_message: maybe_function_message(consumer, message)
         }
 
       %ConsumerEvent{} = message ->
@@ -1087,7 +1199,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           state_color: get_message_state_color(consumer, state),
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
-          transformed_message: maybe_transform_message(consumer, message)
+          functioned_message: maybe_function_message(consumer, message)
         }
 
       %AcknowledgedMessage{} = message ->
@@ -1114,14 +1226,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  defp maybe_transform_message(consumer, message) do
-    case consumer.transform do
+  defp maybe_function_message(consumer, message) do
+    case consumer.function do
       nil -> nil
       _ -> Message.to_external(consumer, message)
     end
   rescue
     error ->
-      "Error transforming message: #{Exception.message(error)}"
+      "Error functioning message: #{Exception.message(error)}"
   end
 
   defp encode_backfill(consumer, last_completed_backfill) do

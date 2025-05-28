@@ -108,6 +108,10 @@ defmodule Sequin.Logs do
 
     File.mkdir_p!(Path.dirname(log_file_path()))
     File.write!(log_file_path(), [entries, "\n"], [:append])
+  rescue
+    _error ->
+      # Can't write if on a read-only file system
+      :ok
   end
 
   defp log_to_file(level, account_id, consumer_id, trace_id, message) do
@@ -124,6 +128,10 @@ defmodule Sequin.Logs do
     log_line = Jason.encode!(log_entry) <> "\n"
     File.mkdir_p!(Path.dirname(log_file_path()))
     File.write!(log_file_path(), log_line, [:append])
+  rescue
+    _error ->
+      # Can't write if on a read-only file system
+      :ok
   end
 
   defp log_entry(level, account_id, consumer_id, trace_id, message) do

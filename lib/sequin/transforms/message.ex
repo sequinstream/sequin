@@ -4,13 +4,11 @@ defmodule Sequin.Transforms.Message do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.FunctionTransform
-  alias Sequin.Consumers.PathTransform
-  alias Sequin.Consumers.RoutingTransform
+  alias Sequin.Consumers.Function
+  alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Consumers.Transform
-  alias Sequin.Runtime.SinkPipeline
-  alias Sequin.Transforms.MiniElixir
+  alias Sequin.Consumers.TransformFunction
+  alias Sequin.Functions.MiniElixir
 
   def to_external(%SinkConsumer{transform: nil, legacy_transform: :none}, %ConsumerEvent{} = event) do
     %{
@@ -36,31 +34,19 @@ defmodule Sequin.Transforms.Message do
     record.data.record
   end
 
-  # TODO: move this / refactor functions elsewhere
-  def to_external(%SinkConsumer{transform: %Transform{id: id, transform: %FunctionTransform{}} = transform}, %c{
-        data: data
-      })
+  def to_external(%SinkConsumer{transform: %Function{id: nil}}, _), do: raise("Transform function lacks id")
+
+  def to_external(%SinkConsumer{transform: %Function{function: %TransformFunction{}} = function}, %c{data: data})
       when c in [ConsumerEvent, ConsumerRecord] do
-    # Presence or abscence of ID is intended to indicate whether we are evaluating for test messages
-    if id do
-      MiniElixir.run_compiled(transform, data)
-    else
-      MiniElixir.run_interpreted(transform, data)
-    end
+    MiniElixir.run_compiled(function, data)
   end
 
-  def to_external(%SinkConsumer{transform: %Transform{transform: %RoutingTransform{}} = transform} = sc, %c{data: data})
-      when c in [ConsumerEvent, ConsumerRecord] do
-    res = MiniElixir.run_interpreted(transform, data)
-    SinkPipeline.apply_routing(sc, res)
-  end
-
-  def to_external(%SinkConsumer{transform: %Transform{transform: %PathTransform{path: path}}}, %ConsumerEvent{} = event) do
+  def to_external(%SinkConsumer{transform: %Function{function: %PathFunction{path: path}}}, %ConsumerEvent{} = event) do
     keys = String.split(path || "", ".")
     traverse_path(event.data, keys)
   end
 
-  def to_external(%SinkConsumer{transform: %Transform{transform: %PathTransform{path: path}}}, %ConsumerRecord{} = record) do
+  def to_external(%SinkConsumer{transform: %Function{function: %PathFunction{path: path}}}, %ConsumerRecord{} = record) do
     keys = String.split(path || "", ".")
     traverse_path(record.data, keys)
   end

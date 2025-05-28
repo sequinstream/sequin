@@ -1,6 +1,7 @@
 import Config
 
 alias Sequin.Postgres.PostgrexTypes
+alias Sequin.Runtime.HttpPushSqsPipeline
 alias Sequin.Test.UnboxedRepo
 
 # Only in tests, remove the complexity from the password hashing algorithm
@@ -27,13 +28,15 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
+config :sequin, HttpPushSqsPipeline, req_opts: [plug: {Req.Test, HttpPushSqsPipeline}]
 config :sequin, Oban, testing: :manual, prefix: "sequin_config"
 
 config :sequin, Sequin,
   datetime_mod: Sequin.TestSupport.DateTimeMock,
   uuid_mod: Sequin.TestSupport.UUIDMock,
   enum_mod: Sequin.TestSupport.EnumMock,
-  process_mod: Sequin.TestSupport.ProcessMock
+  process_mod: Sequin.TestSupport.ProcessMock,
+  application_mod: Sequin.TestSupport.ApplicationMock
 
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Test
 

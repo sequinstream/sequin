@@ -1,5 +1,5 @@
 import type { Table } from "../databases/types";
-import type { Transform } from "../transforms/types";
+import type { Function } from "../functions/types";
 
 // Base consumer type with shared properties
 export type BaseConsumer = {
@@ -40,7 +40,9 @@ export type BaseConsumer = {
     }>;
   };
   routing_id: string | null;
-  routing: Transform | null;
+  routing: Function | null;
+  filter_id: string | null;
+  filter: Function | null;
   table: Table;
   postgres_database: {
     id: string;
@@ -193,7 +195,6 @@ export type TypesenseConsumer = BaseConsumer & {
     type: "typesense";
     endpoint_url: string;
     collection_name: string;
-    import_action: "create" | "upsert" | "update" | "emplace";
     batch_size: number;
     timeout_seconds: number;
   };

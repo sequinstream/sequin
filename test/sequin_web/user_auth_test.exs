@@ -237,6 +237,16 @@ defmodule SequinWeb.UserAuthTest do
                "Please log in to continue."
     end
 
+    test "redirects to registration page when :unauthenticated_redirect is :register", %{conn: conn} do
+      conn = conn |> fetch_flash() |> UserAuth.require_authenticated_user(unauthenticated_redirect: :register)
+      assert conn.halted
+
+      assert redirected_to(conn) == ~p"/register"
+
+      assert flash_text(conn, :error) =~
+               "Please register to continue."
+    end
+
     test "stores the path to redirect to on GET", %{conn: conn} do
       halted_conn =
         %{conn | path_info: ["foo"], query_string: ""}

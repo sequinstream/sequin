@@ -2,14 +2,16 @@ defmodule Sequin.Consumers do
   @moduledoc false
   import Ecto.Query
 
+  alias Ecto.Changeset
   alias Sequin.Accounts
+  alias Sequin.Cache
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.FunctionTransform
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
@@ -18,21 +20,22 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
-  alias Sequin.Consumers.Transform
+  alias Sequin.Consumers.TransformFunction
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.Error
+  alias Sequin.Functions.MiniElixir
+  alias Sequin.Functions.MiniElixir.Validator
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
+  alias Sequin.Runtime.SlotProcessor
   alias Sequin.Time
   alias Sequin.Tracer.Server, as: TracerServer
-  alias Sequin.Transforms.Message
-  alias Sequin.Transforms.MiniElixir.Validator
 
   require Logger
 
@@ -93,6 +96,31 @@ defmodule Sequin.Consumers do
     end
   end
 
+  @spec get_cached_consumer(consumer_id :: SinkConsumer.id()) ::
+          {:ok, consumer :: SinkConsumer.t()} | {:error, Error.t()}
+  def get_cached_consumer(consumer_id) do
+    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+
+    Cache.get_or_store(
+      consumer_id,
+      fn ->
+        case get_consumer(consumer_id) do
+          {:ok, consumer} ->
+            consumer = Repo.preload(consumer, [:transform, :routing])
+            {:ok, consumer}
+
+          {:error, _} = error ->
+            error
+        end
+      end,
+      ttl
+    )
+  end
+
+  def invalidate_cached_consumer(consumer_id) do
+    Cache.delete(consumer_id)
+  end
+
   def get_consumer_for_account(account_id, consumer_id) do
     account_id
     |> SinkConsumer.where_account_id()
@@ -134,6 +162,21 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
+  def list_sink_consumers_for_account_paginated(account_id, page, page_size, opts \\ []) do
+    preload = Keyword.get(opts, :preload, [])
+    order_by = Keyword.get(opts, :order_by, desc: :updated_at, desc: :name)
+
+    offset = page * page_size
+
+    account_id
+    |> SinkConsumer.where_account_id()
+    |> order_by([sc], ^order_by)
+    |> preload(^preload)
+    |> limit(^page_size)
+    |> offset(^offset)
+    |> Repo.all()
+  end
+
   def count_sink_consumers_for_account(account_id) do
     account_id
     |> SinkConsumer.where_account_id()
@@ -146,59 +189,59 @@ defmodule Sequin.Consumers do
     |> Repo.aggregate(:count, :id)
   end
 
-  def list_transforms_for_account(account_id) do
+  def list_functions_for_account(account_id) do
     account_id
-    |> Transform.where_account_id()
+    |> Function.where_account_id()
     |> Repo.all()
   end
 
-  def get_transform(id) do
-    case Repo.get(Transform, id) do
-      nil -> {:error, Error.not_found(entity: :transform, params: %{id: id})}
-      transform -> {:ok, transform}
+  def get_function(id) do
+    case Repo.get(Function, id) do
+      nil -> {:error, Error.not_found(entity: :function, params: %{id: id})}
+      function -> {:ok, function}
     end
   end
 
-  def get_transform_for_account(account_id, id) do
+  def get_function_for_account(account_id, id) do
     account_id
-    |> Transform.where_account_id()
-    |> Transform.where_id(id)
+    |> Function.where_account_id()
+    |> Function.where_id(id)
     |> Repo.one()
     |> case do
-      nil -> {:error, Error.not_found(entity: :transform, params: %{id: id, account_id: account_id})}
-      transform -> {:ok, transform}
+      nil -> {:error, Error.not_found(entity: :function, params: %{id: id, account_id: account_id})}
+      function -> {:ok, function}
     end
   end
 
-  def get_transform_for_account!(account_id, id) do
-    case get_transform_for_account(account_id, id) do
-      {:ok, transform} -> transform
+  def get_function_for_account!(account_id, id) do
+    case get_function_for_account(account_id, id) do
+      {:ok, function} -> function
       {:error, error} -> raise error
     end
   end
 
-  def find_transform(account_id, params) do
+  def find_function(account_id, params) do
     params
-    |> Enum.reduce(Transform.where_account_id(account_id), fn
-      {:name, name}, query -> Transform.where_name(query, name)
-      {:id, id}, query -> Transform.where_id(query, id)
+    |> Enum.reduce(Function.where_account_id(account_id), fn
+      {:name, name}, query -> Function.where_name(query, name)
+      {:id, id}, query -> Function.where_id(query, id)
     end)
     |> Repo.one()
     |> case do
-      nil -> {:error, Error.not_found(entity: :transform, params: params)}
-      transform -> {:ok, transform}
+      nil -> {:error, Error.not_found(entity: :function, params: params)}
+      function -> {:ok, function}
     end
   end
 
-  def create_transform(account_id, params) do
+  def create_function(account_id, params) do
     Repo.transact(fn ->
-      %Transform{account_id: account_id}
-      |> Transform.create_changeset(params)
+      %Function{account_id: account_id}
+      |> Function.create_changeset(params)
       |> Repo.insert()
       |> case do
-        {:ok, transform} ->
-          ConsumerLifecycleEventWorker.enqueue(:create, :transform, transform.id)
-          {:ok, transform}
+        {:ok, function} ->
+          ConsumerLifecycleEventWorker.enqueue(:create, :function, function.id)
+          {:ok, function}
 
         {:error, error} ->
           {:error, error}
@@ -206,15 +249,15 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  def update_transform(account_id, id, params) do
+  def update_function(account_id, id, params) do
     Repo.transact(fn ->
-      %Transform{id: id, account_id: account_id}
-      |> Transform.update_changeset(params)
+      %Function{id: id, account_id: account_id}
+      |> Function.update_changeset(params)
       |> Repo.update()
       |> case do
-        {:ok, transform} ->
-          ConsumerLifecycleEventWorker.enqueue(:update, :transform, transform.id)
-          {:ok, transform}
+        {:ok, function} ->
+          ConsumerLifecycleEventWorker.enqueue(:update, :function, function.id)
+          {:ok, function}
 
         {:error, error} ->
           {:error, error}
@@ -222,11 +265,11 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  def delete_transform(account_id, id) do
-    with {:ok, transform} <- get_transform_for_account(account_id, id) do
-      transform
-      |> Transform.changeset(%{})
-      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_transform_id_fkey")
+  def delete_function(account_id, id) do
+    with {:ok, function} <- get_function_for_account(account_id, id) do
+      function
+      |> Function.changeset(%{})
+      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_function_id_fkey")
       |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_routing_id_fkey")
       |> Repo.delete()
     end
@@ -239,6 +282,17 @@ defmodule Sequin.Consumers do
           non_neg_integer()
   def max_memory_bytes_for_consumer(%SinkConsumer{} = consumer) do
     round(Sequin.Size.mb(consumer.max_memory_mb) * 0.8)
+  end
+
+  @doc """
+  Calculates the maximum storage bytes allowed for a consumer.
+  """
+  @spec max_storage_bytes_for_consumer(SinkConsumer.t()) ::
+          non_neg_integer() | nil
+  def max_storage_bytes_for_consumer(%SinkConsumer{max_storage_mb: nil}), do: nil
+
+  def max_storage_bytes_for_consumer(%SinkConsumer{max_storage_mb: max_storage_mb}) do
+    round(Sequin.Size.mb(max_storage_mb) * 0.8)
   end
 
   def earliest_sink_consumer_inserted_at_for_account(account_id) do
@@ -259,10 +313,10 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
-  def list_consumers_for_transform(account_id, transform_id, preload \\ []) do
+  def list_consumers_for_function(account_id, function_id, preload \\ []) do
     account_id
     |> SinkConsumer.where_account_id()
-    |> SinkConsumer.where_transform_or_function_id(transform_id)
+    |> SinkConsumer.where_any_function_id(function_id)
     |> preload(^preload)
     |> Repo.all()
   end
@@ -345,6 +399,16 @@ defmodule Sequin.Consumers do
     end)
   end
 
+  def set_http_push_to_via_sqs(%SinkConsumer{} = consumer) do
+    sink = Map.from_struct(consumer.sink)
+    update_sink_consumer(consumer, %{sink: Map.put(sink, :via_sqs, true)})
+  end
+
+  def set_http_push_to_not_via_sqs(%SinkConsumer{} = consumer) do
+    sink = Map.from_struct(consumer.sink)
+    update_sink_consumer(consumer, %{sink: Map.put(sink, :via_sqs, false)})
+  end
+
   def delete_sink_consumer(consumer) do
     Repo.transact(fn ->
       with {:ok, _} <- Repo.delete(consumer),
@@ -411,6 +475,9 @@ defmodule Sequin.Consumers do
   def list_active_sink_consumers(preloads \\ []) do
     :active
     |> SinkConsumer.where_status()
+    |> SinkConsumer.join_postgres_database()
+    |> PostgresDatabase.join_replication_slot()
+    |> PostgresReplicationSlot.where_status(:active)
     |> preload(^preloads)
     |> Repo.all()
   end
@@ -483,6 +550,55 @@ defmodule Sequin.Consumers do
     |> Enum.map(&ConsumerEvent.deserialize/1)
   end
 
+  @spec stream_consumer_messages_for_consumer(SinkConsumer.t(), Keyword.t()) ::
+          Enumerable.t(ConsumerRecord.t() | ConsumerEvent.t())
+  def stream_consumer_messages_for_consumer(%SinkConsumer{id: consumer_id} = consumer, opts \\ []) do
+    batch_size = Keyword.get(opts, :batch_size, 1000)
+
+    module =
+      case consumer.message_kind do
+        :event -> ConsumerEvent
+        :record -> ConsumerRecord
+      end
+
+    initial_query =
+      module
+      |> where([m], m.consumer_id == ^consumer_id)
+      |> order_by([m], asc: m.commit_lsn, asc: m.commit_idx)
+      |> limit(^batch_size)
+
+    # Query, prev_results, last_cursor
+    # last_cursor is {commit_lsn, commit_idx} of the last record
+    {initial_query, [], nil}
+    |> Stream.unfold(fn
+      # No more results, perform query with the current cursor
+      {query, [], cursor} ->
+        updated_query =
+          if is_nil(cursor) do
+            query
+          else
+            {commit_lsn, commit_idx} = cursor
+            where(query, [m], {m.commit_lsn, m.commit_idx} > {^commit_lsn, ^commit_idx})
+          end
+
+        case Repo.all(updated_query) do
+          # Database has nothing more
+          [] ->
+            nil
+
+          [h | t] = results ->
+            # Get the last record's cursor for next pagination
+            last_record = List.last(results)
+            next_cursor = {last_record.commit_lsn, last_record.commit_idx}
+            {h, {query, t, next_cursor}}
+        end
+
+      {query, [h | t], cursor} ->
+        {h, {query, t, cursor}}
+    end)
+    |> Stream.map(&module.deserialize/1)
+  end
+
   def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
     case consumer.message_kind do
       :event -> upsert_consumer_events(messages)
@@ -497,7 +613,11 @@ defmodule Sequin.Consumers do
 
     events =
       Enum.map(consumer_events, fn %ConsumerEvent{} = event ->
+        attrs = ConsumerEvent.map_from_struct(event)
+
         %ConsumerEvent{event | updated_at: now, inserted_at: now}
+        |> ConsumerEvent.create_changeset(attrs)
+        |> Changeset.apply_changes()
         |> Sequin.Map.from_ecto()
         |> drop_virtual_fields()
       end)
@@ -619,13 +739,15 @@ defmodule Sequin.Consumers do
     now = DateTime.utc_now()
 
     records =
-      consumer_records
-      |> Stream.map(fn %ConsumerRecord{} = record ->
+      Enum.map(consumer_records, fn %ConsumerRecord{} = record ->
+        attrs = ConsumerRecord.map_from_struct(record)
+
         %ConsumerRecord{record | updated_at: now, inserted_at: now}
+        |> ConsumerRecord.create_changeset(attrs)
+        |> Changeset.apply_changes()
+        |> Sequin.Map.from_ecto()
+        |> drop_virtual_fields()
       end)
-      # insert_all expects a plain outer-map, but struct embeds
-      |> Stream.map(&Sequin.Map.from_ecto/1)
-      |> Enum.map(&drop_virtual_fields/1)
 
     {count, _records} =
       Repo.insert_all(
@@ -665,6 +787,19 @@ defmodule Sequin.Consumers do
            drop table if exists #{stream_schema()}.#{partition_name(consumer)};
            """) do
       :ok
+    end
+  end
+
+  def consumer_partition_size_bytes(%SinkConsumer{} = consumer) do
+    case Repo.query("SELECT pg_total_relation_size('#{stream_schema()}.#{partition_name(consumer)}')") do
+      {:ok, %Postgrex.Result{rows: [[size]]}} when is_integer(size) ->
+        {:ok, size}
+
+      {:ok, %Postgrex.Result{rows: []}} ->
+        {:error, Error.not_found(entity: :consumer_partition)}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -879,6 +1014,37 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
+  @spec get_cached_http_endpoint(endpoint_id :: HttpEndpoint.id()) ::
+          {:ok, endpoint :: HttpEndpoint.t()} | {:error, Error.t()}
+  def get_cached_http_endpoint(endpoint_id) do
+    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+
+    Cache.get_or_store(
+      {:http_endpoint, endpoint_id},
+      fn ->
+        case get_http_endpoint(endpoint_id) do
+          {:ok, endpoint} ->
+            {:ok, endpoint}
+
+          {:error, _} = error ->
+            error
+        end
+      end,
+      ttl
+    )
+  end
+
+  def get_cached_http_endpoint!(endpoint_id) do
+    case get_cached_http_endpoint(endpoint_id) do
+      {:ok, endpoint} -> endpoint
+      {:error, _} -> raise Error.not_found(entity: :http_endpoint)
+    end
+  end
+
+  def invalidate_cached_http_endpoint(endpoint_id) do
+    Cache.delete({:http_endpoint, endpoint_id})
+  end
+
   def list_http_endpoints_for_account(account_id, preload \\ []) do
     account_id
     |> HttpEndpoint.where_account_id()
@@ -1006,7 +1172,7 @@ defmodule Sequin.Consumers do
   # Source Table Matching
   def matches_message?(
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
-        message
+        %SlotProcessor.Message{} = message
       ) do
     matches? = matches_message?(sequence, sequence_filter, message)
 
@@ -1028,7 +1194,7 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
-  def matches_message?(consumer_or_wal_pipeline, message) do
+  def matches_message?(consumer_or_wal_pipeline, %SlotProcessor.Message{} = message) do
     matches? =
       Enum.any?(consumer_or_wal_pipeline.source_tables, fn %SourceTable{} = source_table ->
         table_matches = source_table.oid == message.table_oid
@@ -1073,7 +1239,7 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
-  def matches_message?(%Sequence{} = sequence, %SequenceFilter{} = sequence_filter, message) do
+  def matches_message?(%Sequence{} = sequence, %SequenceFilter{} = sequence_filter, %SlotProcessor.Message{} = message) do
     table_matches? = sequence.table_oid == message.table_oid
     actions_match? = action_matches?(sequence_filter.actions, message.action)
     column_filters_match? = column_filters_match_message?(sequence_filter.column_filters, message)
@@ -1084,10 +1250,10 @@ defmodule Sequin.Consumers do
   def matches_record?(
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         table_oid,
-        record
+        record_attnums_to_values
       ) do
     table_matches? = sequence.table_oid == table_oid
-    column_filters_match? = column_filters_match_record?(sequence_filter.column_filters, record)
+    column_filters_match? = column_filters_match_record?(sequence_filter.column_filters, record_attnums_to_values)
 
     Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
@@ -1101,6 +1267,25 @@ defmodule Sequin.Consumers do
     Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
     matches?
+  end
+
+  def matches_filter?(%SinkConsumer{filter: nil}, _), do: true
+
+  def matches_filter?(%SinkConsumer{filter: filter} = consumer, %cm{data: data})
+      when cm in [ConsumerRecord, ConsumerEvent] do
+    filter
+    |> MiniElixir.run_compiled(data)
+    |> check_filter_return(consumer)
+  end
+
+  defp check_filter_return(true, _), do: true
+  defp check_filter_return(false, _), do: false
+
+  defp check_filter_return(e, consumer) do
+    val = e |> inspect() |> String.slice(0, 128)
+    msg = "Filter functions must return true or false, got: #{val}"
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :fail, error: Error.invariant(message: msg)})
+    raise "filter function failed to return boolean"
   end
 
   defp action_matches?(source_table_actions, message_action) do
@@ -1117,7 +1302,7 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  defp column_filters_match_record?([], _message), do: true
+  defp column_filters_match_record?([], _record_attnums_to_values), do: true
 
   defp column_filters_match_record?(column_filters, record_attnums_to_values) do
     Enum.all?(column_filters, fn %ColumnFilter{} = filter ->
@@ -1234,16 +1419,6 @@ defmodule Sequin.Consumers do
   """
   def any_unmigrated_consumers? do
     Enum.any?(all_consumers(), fn consumer -> is_nil(consumer.sequence_id) end)
-  end
-
-  def group_column_values(%SinkConsumer{} = consumer, record_data) do
-    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-    group_column_attnums = consumer.sequence_filter.group_column_attnums
-    group_column_names = PostgresDatabaseTable.column_attnums_to_names(table, group_column_attnums)
-
-    Enum.map(group_column_names, fn group_column_name ->
-      Map.get(record_data.record, group_column_name)
-    end)
   end
 
   def get_backfill(id) do
@@ -1391,11 +1566,7 @@ defmodule Sequin.Consumers do
   end
 
   def safe_evaluate_code(code) do
-    Message.to_external(
-      %SinkConsumer{id: nil, transform: %Transform{transform: %FunctionTransform{code: code}}},
-      synthetic_message()
-    )
-
+    MiniElixir.run_interpreted(%Function{function: %TransformFunction{code: code}}, synthetic_message().data)
     :ok
   rescue
     error ->
@@ -1404,6 +1575,7 @@ defmodule Sequin.Consumers do
 
   def synthetic_message do
     %ConsumerEvent{
+      id: Ecto.UUID.generate(),
       data: %ConsumerEventData{
         record: %{
           "id" => 1,

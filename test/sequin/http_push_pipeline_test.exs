@@ -1,7 +1,6 @@
 defmodule Sequin.Runtime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
@@ -160,15 +159,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       end
 
       # Start pipeline with legacy_event_singleton_transform enabled
-      start_supervised!(
-        {SinkPipeline,
-         [
-           consumer: consumer,
-           req_opts: [adapter: adapter],
-           test_pid: test_pid,
-           features: [legacy_event_singleton_transform: true]
-         ]}
-      )
+      start_pipeline!(consumer, adapter, features: [legacy_event_singleton_transform: true])
 
       ref = send_test_event(consumer, event)
       assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
@@ -235,7 +226,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer, [event1, event2])
 
       # Start the pipeline
-      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_pipeline!(consumer, adapter, dummy_producer: false)
 
       # Verify that the second message was sent
       assert_receive {:http_request, _req}, 1_000
@@ -313,31 +304,34 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   describe "messages flow from SlotMessageStore to http end-to-end" do
     setup ctx do
       account = AccountsFactory.insert_account!()
-      http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
+      http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
 
-      database = DatabasesFactory.postgres_database(account_id: account.id)
-      sequence = DatabasesFactory.sequence(postgres_database_id: database.id)
-      replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+      sequence = DatabasesFactory.insert_sequence!(postgres_database_id: database.id, account_id: account.id)
+
+      replication =
+        ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: database.id)
 
       consumer =
-        ConsumersFactory.sink_consumer(
+        ConsumersFactory.insert_sink_consumer!(
           id: UUID.uuid4(),
           account_id: account.id,
           type: :http_push,
-          sink: %{type: :http_push, http_endpoint_id: http_endpoint.id, http_endpoint: http_endpoint},
+          sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           replication_slot_id: replication.id,
           sequence_id: sequence.id,
           message_kind: :event,
           legacy_transform: ctx[:legacy_transform] || :none
         )
 
-      :ok = Consumers.create_consumer_partition(consumer)
-
-      {:ok, %{consumer: consumer}}
+      {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
     end
 
     @tag legacy_transform: :none
-    test "messages are sent from postgres to http endpoint without transforms", %{consumer: consumer} do
+    test "messages are sent from postgres to http endpoint without transforms", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
       test_pid = self()
 
       # Mock the HTTP adapter
@@ -379,13 +373,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer, [consumer_event])
 
       # Start the pipeline
-      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_pipeline!(consumer, adapter, dummy_producer: false)
 
       # Wait for the message to be processed
       assert_receive {:http_request, req}, 1_000
 
       # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(consumer.sink.http_endpoint)
+      assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
       %{"data" => [json]} = Jason.decode!(req.body)
 
       assert json["record"] == record
@@ -399,7 +393,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
     end
 
     @tag legacy_transform: :record_only
-    test "messages are sent from postgres to http endpoint with record-only transform", %{consumer: consumer} do
+    test "messages are sent from postgres to http endpoint with record-only transform", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
       test_pid = self()
 
       # Mock the HTTP adapter
@@ -439,13 +436,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer, [consumer_event])
 
       # Start the pipeline
-      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_pipeline!(consumer, adapter, dummy_producer: false)
 
       # Wait for the message to be processed
       assert_receive {:http_request, req}, 1_000
 
       # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(consumer.sink.http_endpoint)
+      assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
       %{"data" => [json]} = Jason.decode!(req.body)
 
       assert json["name"] == "John Doe"
@@ -497,7 +494,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer, [event1, event2])
 
       # Start the pipeline with the failing adapter
-      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_pipeline!(consumer, adapter, dummy_producer: false)
 
       # Assert that the ack receives the failed events
       assert_receive :sent, 1_000
@@ -546,7 +543,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer, [event])
 
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
-      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: self()]})
+      start_pipeline!(consumer, adapter, dummy_producer: false)
 
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 1_000
 
@@ -557,19 +554,21 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   describe "messages flow from SlotMessageStore to http end-to-end for message_kind=record" do
     setup ctx do
       account = AccountsFactory.insert_account!()
-      http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
+      http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
 
-      database = DatabasesFactory.postgres_database(account_id: account.id, tables: :character_tables)
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
       ConnectionCache.cache_connection(database, Repo)
-      sequence = DatabasesFactory.sequence(postgres_database_id: database.id)
-      replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
+      sequence = DatabasesFactory.insert_sequence!(postgres_database_id: database.id, account_id: account.id)
+
+      replication =
+        ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: database.id)
 
       consumer =
-        ConsumersFactory.sink_consumer(
+        ConsumersFactory.insert_sink_consumer!(
           id: UUID.uuid4(),
           account_id: account.id,
           type: :http_push,
-          sink: %{type: :http_push, http_endpoint_id: http_endpoint.id, http_endpoint: http_endpoint},
+          sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           replication_slot_id: replication.id,
           postgres_database: database,
           sequence_id: sequence.id,
@@ -577,13 +576,14 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           legacy_transform: ctx[:legacy_transform] || :none
         )
 
-      :ok = Consumers.create_consumer_partition(consumer)
-
-      {:ok, %{consumer: consumer}}
+      {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
     end
 
     @tag legacy_transform: :none
-    test "messages are sent from postgres to http endpoint without transforms", %{consumer: consumer} do
+    test "messages are sent from postgres to http endpoint without transforms", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
       test_pid = self()
 
       # Mock the HTTP adapter
@@ -622,13 +622,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
       # Start the pipeline
-      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_pipeline!(consumer, adapter, dummy_producer: false)
 
       # Wait for the message to be processed
       assert_receive {:http_request, req}, 5_000
 
       # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(consumer.sink.http_endpoint)
+      assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
       %{"data" => [json]} = Jason.decode!(req.body)
 
       assert json["record"]["name"] == "character_name"
@@ -644,7 +644,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
     end
 
     @tag legacy_transform: :record_only
-    test "messages are sent from postgres to http endpoint with record-only transform", %{consumer: consumer} do
+    test "messages are sent from postgres to http endpoint with record-only transform", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
       test_pid = self()
 
       # Mock the HTTP adapter
@@ -682,13 +685,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
       # Start the pipeline
-      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_pipeline!(consumer, adapter, dummy_producer: false)
 
       # Wait for the message to be processed
       assert_receive {:http_request, req}, 5_000
 
       # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(consumer.sink.http_endpoint)
+      assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
       %{"data" => [json]} = Jason.decode!(req.body)
 
       assert json["name"] == "character_name"
@@ -700,7 +703,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert [] == SlotMessageStore.peek_messages(consumer, 10)
     end
 
-    test "legacy event transform is applied when feature flag is enabled", %{consumer: consumer} do
+    test "legacy event transform is applied when feature flag is enabled", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
       test_pid = self()
 
       # Mock the HTTP adapter
@@ -732,21 +738,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer, [record])
 
       # Start the pipeline with legacy_event_transform feature enabled
-      start_supervised!(
-        {SinkPipeline,
-         [
-           consumer: consumer,
-           req_opts: [adapter: adapter],
-           test_pid: test_pid,
-           features: [legacy_event_transform: true]
-         ]}
-      )
+      start_pipeline!(consumer, adapter, features: [legacy_event_transform: true], dummy_producer: false)
 
       # Wait for the message to be processed
       assert_receive {:http_request, req}, 5_000
 
       # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(consumer.sink.http_endpoint)
+      assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
       json = Jason.decode!(req.body)
 
       # Assert the transformed structure
@@ -848,16 +846,137 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
     end
   end
 
-  defp start_pipeline!(consumer, adapter) do
-    start_supervised!(
-      {SinkPipeline,
-       [
-         consumer: consumer,
-         req_opts: [adapter: adapter],
-         producer: Broadway.DummyProducer,
-         test_pid: self()
-       ]}
-    )
+  describe "HttpPushSink with via_sqs enabled" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
+
+      # Configure via SQS for testing
+      via_config = %{
+        queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
+        region: "us-east-1",
+        access_key_id: "test-access-key",
+        secret_access_key: "test-secret-key"
+      }
+
+      expect_application_get_env(2, fn
+        :sequin, Sequin.Consumers.HttpPushSink -> [via_sqs_for_new_sinks?: true]
+        :sequin, Sequin.Runtime.HttpPushSqsPipeline -> [sqs: via_config]
+        app, key -> Application.get_env(app, key)
+      end)
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          type: :http_push,
+          sink: %{
+            type: :http_push,
+            http_endpoint_id: http_endpoint.id,
+            batch: false,
+            via_sqs: true
+          },
+          message_kind: :event
+        )
+
+      assert consumer.sink.via_sqs == true
+
+      consumer = Repo.preload(consumer, [:sequence, :transform, :routing])
+
+      {:ok, %{consumer: consumer, http_endpoint: http_endpoint, account: account, via_config: via_config}}
+    end
+
+    test "sends message to SQS with correct payload format", %{consumer: consumer, via_config: via_config} do
+      test_pid = self()
+
+      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+
+      # Stub AWS HTTP client for SQS
+      Req.Test.stub(Sequin.Aws.HttpClient, fn %Plug.Conn{} = conn ->
+        send(test_pid, {:aws_req, conn})
+
+        # Mock successful SQS response
+        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "test-msg-id"}], "Failed" => []})
+      end)
+
+      # Create a dummy adapter for the pipeline - it should never be called
+      # since we're routing to SQS
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:direct_http_req, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      # Send a test event into the pipeline
+      start_pipeline!(consumer, adapter)
+      ref = send_test_event(consumer, event)
+
+      # Assert SQS request was made
+      assert_receive {:aws_req, %Plug.Conn{} = conn}, 1_000
+
+      # Assert direct HTTP request was NOT made
+      refute_received {:direct_http_req, _}
+
+      # 1. Correct SQS service endpoint URL
+      assert via_config.queue_url =~ conn.host
+
+      # 2. Correct HTTP method (POST for SQS)
+      assert conn.method == "POST"
+
+      # 3. Check content type for AWS API
+      assert {_, content_type} = List.keyfind(conn.req_headers, "content-type", 0)
+      assert content_type == "application/x-amz-json-1.0"
+
+      # 4. Decode the request body
+      decoded_body = conn |> Plug.Conn.read_body() |> elem(1) |> Jason.decode!()
+
+      # 5. Verify the SQS SendMessageBatch structure
+      assert %{
+               "Entries" => [
+                 %{
+                   "Id" => _id,
+                   "MessageAttributes" => %{},
+                   "MessageBody" => message_body
+                 }
+               ]
+             } = decoded_body
+
+      # 6. The MessageBody should be a JSON string with Base64-encoded binary data
+      %{"data" => body_base64} = Jason.decode!(message_body)
+      binary_data = Base.decode64!(body_base64)
+
+      # Deserialize the binary back to a term
+      deserialized_event = :erlang.binary_to_term(binary_data)
+
+      # Verify it's akin to a ConsumerEvent struct with the expected data
+      assert deserialized_event.id == event.id
+      assert deserialized_event.consumer_id == consumer.id
+      assert deserialized_event.data.action == :insert
+
+      # Assert ack for the message (indicating successful handoff to SQS)
+      assert_receive {:ack, ^ref, [_acked_message], []}, 1_000
+    end
+  end
+
+  defp start_pipeline!(consumer, adapter, opts \\ []) do
+    {dummy_producer, opts} = Keyword.pop(opts, :dummy_producer, true)
+
+    opts =
+      Keyword.merge(
+        [
+          consumer: consumer,
+          req_opts: [adapter: adapter],
+          test_pid: self()
+        ],
+        opts
+      )
+
+    opts =
+      if dummy_producer do
+        Keyword.put(opts, :producer, Broadway.DummyProducer)
+      else
+        opts
+      end
+
+    start_supervised!({SinkPipeline, opts})
   end
 
   defp send_test_event(consumer, event \\ nil) do

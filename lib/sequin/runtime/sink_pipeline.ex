@@ -10,6 +10,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   use Broadway
 
   alias Broadway.Message
+  alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
@@ -21,6 +22,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Prometheus
   alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
+  alias Sequin.Runtime.Trace
 
   require Logger
 
@@ -103,7 +105,9 @@ defmodule Sequin.Runtime.SinkPipeline do
       consumer =
       opts
       |> Keyword.fetch!(:consumer)
-      |> Repo.lazy_preload([:sequence, :postgres_database, :transform, :routing])
+      |> preload_consumer()
+      # Ensure db is not on there
+      |> Ecto.reset_fields([:postgres_database])
 
     slot_message_store_mod = Keyword.get(opts, :slot_message_store_mod, Sequin.Runtime.SlotMessageStore)
     producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
@@ -112,17 +116,17 @@ defmodule Sequin.Runtime.SinkPipeline do
 
     context = %{
       pipeline_mod: pipeline_mod,
-      consumer: consumer,
+      pipeline_mod_opts: Keyword.take(opts, [:req_opts, :features]),
+      consumer_id: consumer.id,
+      account_id: consumer.account_id,
       slot_message_store_mod: slot_message_store_mod,
       test_pid: test_pid
     }
 
-    context = pipeline_mod.init(context, opts)
-
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
       producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid]}
+        module: {producer, [consumer_id: consumer.id, test_pid: test_pid]}
       ],
       processors: processors_config(pipeline_mod, consumer),
       batchers: batchers_config(pipeline_mod, consumer),
@@ -148,9 +152,11 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   @impl Broadway
   def handle_message(_, message, %{pipeline_mod: pipeline_mod} = context) do
+    setup_allowances(context[:test_pid])
+
     Logger.metadata(
-      account_id: context.consumer.account_id,
-      consumer_id: context.consumer.id
+      account_id: context.account_id,
+      consumer_id: context.consumer_id
     )
 
     context = context(context)
@@ -178,8 +184,8 @@ defmodule Sequin.Runtime.SinkPipeline do
     setup_allowances(context[:test_pid])
 
     Logger.metadata(
-      account_id: context.consumer.account_id,
-      consumer_id: context.consumer.id
+      account_id: context.account_id,
+      consumer_id: context.consumer_id
     )
 
     context = context(context)
@@ -211,12 +217,23 @@ defmodule Sequin.Runtime.SinkPipeline do
         Prometheus.increment_message_deliver_success(context.consumer.id, context.consumer.name, length(delivered))
         Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :ok, t)
 
+        Trace.info(context.consumer.id, "Messages delivered to sink", %{
+          delivered_count: length(delivered),
+          delivered: Enum.map(delivered, & &1.data)
+        })
+
         update_context(context, next_context)
         delivered ++ already_delivered
 
       {t, {:error, error}} ->
         Prometheus.increment_message_deliver_failure(context.consumer.id, context.consumer.name, length(to_deliver))
         Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :error, t)
+
+        Trace.error(context.consumer.id, "Failed to deliver messages to sink", %{
+          error: Exception.message(error),
+          failed_count: length(to_deliver),
+          failed: Enum.map(to_deliver, & &1.data)
+        })
 
         failed =
           Enum.map(to_deliver, fn message ->
@@ -234,8 +251,34 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   # Give processes a way to modify their context, which allows them to use it as a k/v store
   defp context(context) do
-    ctx = Process.get(:runtime_context, %{})
-    Map.merge(context, ctx)
+    case Process.get(:runtime_context) do
+      nil ->
+        init_runtime_context(context)
+
+      runtime_ctx ->
+        Map.merge(context, runtime_ctx)
+    end
+  end
+
+  defp init_runtime_context(context) do
+    # Add jitter for thundering herd
+    unless Application.get_env(:sequin, :env) == :test do
+      :timer.sleep(:rand.uniform(50))
+    end
+
+    consumer =
+      context
+      |> Map.fetch!(:consumer_id)
+      |> Consumers.get_sink_consumer!()
+      |> preload_consumer()
+
+    context =
+      context
+      |> Map.put(:consumer, consumer)
+      |> context.pipeline_mod.init(context.pipeline_mod_opts)
+
+    Process.put(:runtime_context, context)
+    context
   end
 
   defp update_context(context, next_context) when context == next_context, do: :ok
@@ -472,6 +515,12 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Mox.allow(Sequin.TestSupport.ApplicationMock, test_pid, self())
+    Sandbox.allow(Sequin.Repo, test_pid, self())
+  end
+
+  defp preload_consumer(consumer) do
+    Repo.lazy_preload(consumer, [:sequence, :transform, :routing])
   end
 
   # Formats timestamps according to the consumer's timestamp_format setting

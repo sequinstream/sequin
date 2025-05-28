@@ -24,6 +24,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.TestEventLogFactory
+  alias Sequin.Functions.TestMessages
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime
@@ -40,7 +41,6 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.TestSupport.Models.CharacterMultiPK
   alias Sequin.TestSupport.Models.TestEventLogPartitioned
   alias Sequin.TestSupport.ReplicationSlots
-  alias Sequin.Transforms.TestMessages
 
   @moduletag :unboxed
 

@@ -2174,6 +2174,140 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
+  describe "list_active_sink_consumers" do
+    test "returns active sink consumers with active replication slot" do
+      account = AccountsFactory.insert_account!()
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          status: :active,
+          postgres_database_id: db.id
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          postgres_database_id: db.id,
+          replication_slot_id: slot.id
+        )
+
+      assert Consumers.list_active_sink_consumers() == [consumer]
+    end
+
+    test "does not return disabled sink with active replication slot" do
+      account = AccountsFactory.insert_account!()
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          status: :active,
+          postgres_database_id: db.id
+        )
+
+      ConsumersFactory.insert_sink_consumer!(
+        account_id: account.id,
+        postgres_database_id: db.id,
+        replication_slot_id: slot.id,
+        status: :disabled
+      )
+
+      assert Consumers.list_active_sink_consumers() == []
+    end
+
+    test "does not return sink consumers with disabled replication slot" do
+      account = AccountsFactory.insert_account!()
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          status: :disabled,
+          postgres_database_id: db.id
+        )
+
+      ConsumersFactory.insert_sink_consumer!(
+        account_id: account.id,
+        postgres_database_id: db.id,
+        replication_slot_id: slot.id,
+        status: :active
+      )
+
+      assert Consumers.list_active_sink_consumers() == []
+    end
+  end
+
+  describe "list_sink_consumers_for_account_paginated/3" do
+    import Sequin.Test.Assertions, only: [assert_lists_equal: 2]
+
+    test "paginates sink consumers for an account with custom ordering" do
+      # Create an account
+      account = AccountsFactory.insert_account!()
+
+      # Create 10 sink consumers with different names in reverse order
+      # This will help prove the ordering is working correctly
+      for i <- 10..1//-1 do
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          name: "consumer-#{String.pad_leading(Integer.to_string(i), 2, "0")}"
+        )
+      end
+
+      # First page (0-based index) with 3 items per page, ordered by name asc
+      page_0 = Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 3, order_by: [asc: :name])
+      assert length(page_0) == 3
+      assert_lists_equal(Enum.map(page_0, & &1.name), ["consumer-01", "consumer-02", "consumer-03"])
+
+      # Second page with 3 items
+      page_1 = Consumers.list_sink_consumers_for_account_paginated(account.id, 1, 3, order_by: [asc: :name])
+      assert length(page_1) == 3
+      assert_lists_equal(Enum.map(page_1, & &1.name), ["consumer-04", "consumer-05", "consumer-06"])
+
+      # Third page with 3 items
+      page_2 = Consumers.list_sink_consumers_for_account_paginated(account.id, 2, 3, order_by: [asc: :name])
+      assert length(page_2) == 3
+      assert_lists_equal(Enum.map(page_2, & &1.name), ["consumer-07", "consumer-08", "consumer-09"])
+
+      # Fourth page with remaining items
+      page_3 = Consumers.list_sink_consumers_for_account_paginated(account.id, 3, 3, order_by: [asc: :name])
+      assert length(page_3) == 1
+      assert_lists_equal(Enum.map(page_3, & &1.name), ["consumer-10"])
+
+      # Empty page beyond available data
+      page_4 = Consumers.list_sink_consumers_for_account_paginated(account.id, 4, 3, order_by: [asc: :name])
+      assert Enum.empty?(page_4)
+
+      # Test with different page size
+      page_large = Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 5, order_by: [asc: :name])
+      assert length(page_large) == 5
+
+      assert_lists_equal(
+        Enum.map(page_large, & &1.name),
+        ["consumer-01", "consumer-02", "consumer-03", "consumer-04", "consumer-05"]
+      )
+
+      # Test with name descending order
+      page_desc = Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 3, order_by: [desc: :name])
+      assert length(page_desc) == 3
+      assert_lists_equal(Enum.map(page_desc, & &1.name), ["consumer-10", "consumer-09", "consumer-08"])
+
+      # Test with preloads
+      page_with_preloads =
+        Consumers.list_sink_consumers_for_account_paginated(account.id, 0, 3,
+          preload: [:postgres_database],
+          order_by: [asc: :name]
+        )
+
+      assert length(page_with_preloads) == 3
+      # Verify preloads worked - would raise error if not preloaded
+      for consumer <- page_with_preloads do
+        assert %Ecto.Association.NotLoaded{} != consumer.postgres_database
+      end
+    end
+  end
+
   describe "consumer_features/1" do
     test "returns legacy_event_transform feature when conditions are met" do
       account = AccountsFactory.account(features: ["legacy_event_transform"])
@@ -2231,8 +2365,19 @@ defmodule Sequin.ConsumersTest do
       assert inserted_msg.ack_id == msg.ack_id
     end
 
-    test "updates existing message" do
+    test "inserts a new message with record_serializers" do
       consumer = ConsumersFactory.insert_sink_consumer!()
+      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+      msg = put_in(msg.data.record["date_field"], Date.utc_today())
+
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
+
+      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
+      assert %Date{} = inserted_msg.data.record["date_field"]
+    end
+
+    test "updates existing message" do
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
 
       existing_msg =
         ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
@@ -2364,6 +2509,117 @@ defmodule Sequin.ConsumersTest do
       assert is_struct(retrieved_record["datetime_field"], DateTime)
       assert is_struct(retrieved_record["naive_datetime_field"], NaiveDateTime)
       assert is_struct(retrieved_record["decimal_field"], Decimal)
+    end
+  end
+
+  describe "stream_messages/3" do
+    test "streams consummer messages ordered by commit_lsn and commit_idx" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      # Create events with different commit_lsn and commit_idx values
+      # The order here is intentionally mixed up
+      events = [
+        # LSN: 200, IDX: 2
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 200,
+          commit_idx: 2
+        ),
+        # LSN: 100, IDX: 2
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 100,
+          commit_idx: 2
+        ),
+        # LSN: 200, IDX: 1
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 200,
+          commit_idx: 1
+        ),
+        # LSN: 100, IDX: 1
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: 100,
+          commit_idx: 1
+        )
+      ]
+
+      # Expected order based on [commit_lsn, commit_idx] asc
+      expected_ordered_ids = [
+        # LSN: 100, IDX: 1
+        Enum.at(events, 3).id,
+        # LSN: 100, IDX: 2
+        Enum.at(events, 1).id,
+        # LSN: 200, IDX: 1
+        Enum.at(events, 2).id,
+        # LSN: 200, IDX: 2
+        Enum.at(events, 0).id
+      ]
+
+      streamed_messages =
+        consumer
+        |> Consumers.stream_consumer_messages_for_consumer()
+        |> Enum.to_list()
+
+      streamed_ids = Enum.map(streamed_messages, & &1.id)
+      assert streamed_ids == expected_ordered_ids
+    end
+
+    test "cursor-based pagination works correctly" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      # Create 10 events with increasing LSNs
+      Enum.map(1..10, fn i ->
+        ConsumersFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          commit_lsn: i * 100,
+          commit_idx: 1
+        )
+      end)
+
+      # Stream with a small batch size to force pagination
+      batch_size = 3
+
+      streamed_messages =
+        consumer
+        |> Consumers.stream_consumer_messages_for_consumer(batch_size: batch_size)
+        |> Enum.to_list()
+
+      # All 10 events should be retrieved in order
+      assert length(streamed_messages) == 10
+
+      # Check if they're in the correct LSN order
+      streamed_lsns = Enum.map(streamed_messages, & &1.commit_lsn)
+      assert streamed_lsns == Enum.map(1..10, fn i -> i * 100 end)
+    end
+  end
+
+  describe "consumer_partition_size_bytes/1" do
+    test "returns the size of the consumer partition" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      # Insert some messages to ensure the table exists and has data
+      for _ <- 1..5 do
+        ConsumersFactory.insert_consumer_message!(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+      end
+
+      # Check the size is positive
+      {:ok, size} = Consumers.consumer_partition_size_bytes(consumer)
+      assert is_integer(size)
+      assert size > 0
+
+      # Check that a non-existent consumer ID returns an error
+      nonexistent_consumer = %{consumer | seq: Factory.unique_integer()}
+      assert {:error, %Postgrex.Error{}} = Consumers.consumer_partition_size_bytes(nonexistent_consumer)
     end
   end
 end

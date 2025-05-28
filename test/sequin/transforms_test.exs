@@ -2,17 +2,15 @@ defmodule Sequin.TransformsTest do
   use Sequin.DataCase
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.FunctionTransform
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Consumers.Transform
-  alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.FunctionsFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.ConsumerLifecycleEventWorker, as: CLEW
   alias Sequin.Transforms
-  alias Sequin.Transforms.MiniElixir
 
   describe "to_external/1" do
     test "returns a map of the account" do
@@ -52,8 +50,8 @@ defmodule Sequin.TransformsTest do
                password: "********",
                hostname: hostname,
                database: database_name,
-               slot_name: slot_name,
-               publication_name: publication_name,
+               slot: %{name: slot_name},
+               publication: %{name: publication_name},
                port: port,
                pool_size: pool_size,
                ssl: ssl,
@@ -517,82 +515,84 @@ defmodule Sequin.TransformsTest do
   end
 
   describe "path_transform/1" do
-    test "transforms a consumer message with a top-level field path" do
+    test "functions a consumer message with a top-level field path" do
       message = ConsumersFactory.consumer_message()
-      path_transform = ConsumersFactory.path_transform(path: "record")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "record"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == message.data.record
     end
 
-    test "transforms a consumer message with a nested field path" do
+    test "functions a consumer message with a nested field path" do
       message = ConsumersFactory.consumer_message()
-      path_transform = ConsumersFactory.path_transform(path: "record.id")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "record.id"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == get_in(message.data.record, ["id"])
     end
 
-    test "transforms a consumer message with metadata path" do
+    test "functions a consumer message with metadata path" do
       message = ConsumersFactory.consumer_message()
-      path_transform = ConsumersFactory.path_transform(path: "metadata.table_schema")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "metadata.table_schema"])
+
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == message.data.metadata.table_schema
     end
 
-    test "transforms a consumer message with changes path" do
+    test "functions a consumer message with changes path" do
       message = ConsumersFactory.consumer_message(message_kind: :event)
-      path_transform = ConsumersFactory.path_transform(path: "changes")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "changes"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == message.data.changes
     end
 
-    test "transforms a consumer record .changes to null" do
+    test "functions a consumer record .changes to null" do
       message = ConsumersFactory.consumer_message(message_kind: :record)
-      path_transform = ConsumersFactory.path_transform(path: "changes")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "changes"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == nil
     end
 
-    test "transforms a consumer message with action path" do
+    test "functions a consumer message with action path" do
       message = ConsumersFactory.consumer_message(message_kind: :event)
-      path_transform = ConsumersFactory.path_transform(path: "action")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "action"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == message.data.action
     end
 
-    test "transforms a consumer message with transaction annotations path" do
+    test "functions a consumer message with transaction annotations path" do
       message = ConsumersFactory.consumer_message(message_kind: :event)
-      path_transform = ConsumersFactory.path_transform(path: "metadata.transaction_annotations")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "metadata.transaction_annotations"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == message.data.metadata.transaction_annotations
     end
 
-    test "transforms a consumer message with consumer path" do
+    test "functions a consumer message with consumer path" do
       message = ConsumersFactory.consumer_message()
-      path_transform = ConsumersFactory.path_transform(path: "metadata.consumer")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "metadata.consumer"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == message.data.metadata.consumer |> Map.from_struct() |> Sequin.Map.stringify_keys()
     end
 
-    test "transforms a consumer message with consumer name path" do
+    test "functions a consumer message with consumer name path" do
       message = ConsumersFactory.consumer_message()
-      path_transform = ConsumersFactory.path_transform(path: "metadata.consumer.name")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "metadata.consumer.name"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == message.data.metadata.consumer.name
@@ -600,8 +600,8 @@ defmodule Sequin.TransformsTest do
 
     test "handles non-existent nested field gracefully" do
       message = ConsumersFactory.consumer_message(message_kind: :record)
-      path_transform = ConsumersFactory.path_transform(path: "record.nonexistent_field")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "record.nonexistent_field"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == nil
@@ -609,8 +609,11 @@ defmodule Sequin.TransformsTest do
 
     test "handles non-existent deeply nested field gracefully" do
       message = ConsumersFactory.consumer_message(message_kind: :record)
-      path_transform = ConsumersFactory.path_transform(path: "record.nonexistent_field.nonexistent_field")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      path_function =
+        FunctionsFactory.insert_path_function!(function_attrs: [path: "record.nonexistent_field.nonexistent_field"])
+
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == nil
@@ -618,8 +621,8 @@ defmodule Sequin.TransformsTest do
 
     test "handles non-existent metadata field gracefully" do
       message = ConsumersFactory.consumer_message(message_kind: :record)
-      path_transform = ConsumersFactory.path_transform(path: "metadata.nonexistent_field")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "metadata.nonexistent_field"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == nil
@@ -627,8 +630,13 @@ defmodule Sequin.TransformsTest do
 
     test "handles non-existent transaction annotation field gracefully" do
       message = ConsumersFactory.consumer_message(message_kind: :record)
-      path_transform = ConsumersFactory.path_transform(path: "metadata.transaction_annotations.nonexistent_field")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+
+      path_function =
+        FunctionsFactory.insert_path_function!(
+          function_attrs: [path: "metadata.transaction_annotations.nonexistent_field"]
+        )
+
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == nil
@@ -636,43 +644,22 @@ defmodule Sequin.TransformsTest do
 
     test "handles non-existent sink field gracefully" do
       message = ConsumersFactory.consumer_message(message_kind: :record)
-      path_transform = ConsumersFactory.path_transform(path: "metadata.sink.nonexistent_field")
-      consumer = %SinkConsumer{transform: %Transform{transform: path_transform}}
+      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "metadata.sink.nonexistent_field"])
+      consumer = %SinkConsumer{transform: path_function}
 
       result = Transforms.Message.to_external(consumer, message)
       assert result == nil
     end
   end
 
-  def consumer_with_function(code, id \\ nil) do
-    xf =
-      case %Transform{transform: %FunctionTransform{code: code}} do
-        e when is_nil(id) -> e
-        e -> %Transform{e | id: id}
-      end
-
-    %SinkConsumer{transform: xf}
-  end
-
-  def mkfunction(body) do
-    """
-    def transform(action, record, changes, metadata) do
-      #{body}
-    end
-    """
-  end
-
-  describe "function transform" do
-    test "simple interpreted" do
+  describe "transform function" do
+    test "fails for unsaved function" do
       message = ConsumersFactory.consumer_message(message_kind: :event)
 
-      consumer =
-        consumer_with_function(
-          mkfunction("""
-          %{it: record["column"]}
-          """)
-        )
+      transform =
+        FunctionsFactory.insert_transform_function!(function_attrs: [body: ~s(%{it: record["column"]})])
 
+      consumer = %SinkConsumer{transform: transform}
       result = Transforms.Message.to_external(consumer, message)
 
       colval = message.data.record["column"]
@@ -682,11 +669,10 @@ defmodule Sequin.TransformsTest do
     test "compiler worker creates and updates" do
       account = AccountsFactory.insert_account!()
 
-      assert {:ok, xf} =
-               Consumers.create_transform(
-                 account.id,
-                 %{name: Factory.unique_word(), transform: %{type: :function, code: mkfunction("1")}}
-               )
+      transform_attrs =
+        FunctionsFactory.function_attrs(function_type: :transform, function_attrs: [body: "1"])
+
+      assert {:ok, xf} = Consumers.create_function(account.id, transform_attrs)
 
       assert_enqueued(worker: CLEW, args: %{"event" => "create"})
 
@@ -697,10 +683,11 @@ defmodule Sequin.TransformsTest do
       md5 = mod.__info__(:md5)
 
       assert {:ok, _} =
-               Consumers.update_transform(account.id, xf.id, %{
-                 name: xf.name,
-                 transform: %{type: :function, code: mkfunction("2")}
-               })
+               Consumers.update_function(
+                 account.id,
+                 xf.id,
+                 FunctionsFactory.function_attrs(function_type: :transform, function_attrs: [body: "2"])
+               )
 
       assert_enqueued(worker: CLEW, args: %{"event" => "update"})
 
@@ -717,9 +704,9 @@ defmodule Sequin.TransformsTest do
       account = AccountsFactory.insert_account!()
 
       assert {:ok, xf} =
-               Consumers.create_transform(
+               Consumers.create_function(
                  account.id,
-                 %{name: Factory.unique_word(), transform: %{type: :function, code: mkfunction("1")}}
+                 FunctionsFactory.function_attrs(function_type: :transform, function_attrs: [body: "1"])
                )
 
       consumer = %SinkConsumer{transform: xf}
@@ -731,16 +718,13 @@ defmodule Sequin.TransformsTest do
     test "error reporting line number" do
       account = AccountsFactory.insert_account!()
 
-      code =
-        mkfunction("""
-        q = record["nothing"]
-        Map.get(q, "q")
-        """)
-
       assert {:ok, xf} =
-               Consumers.create_transform(
+               Consumers.create_function(
                  account.id,
-                 %{name: Factory.unique_word(), transform: %{type: :function, code: code}}
+                 FunctionsFactory.function_attrs(
+                   function_type: :transform,
+                   function_attrs: [body: ~s{q = record["nothing"]\nMap.get(q, "q")}]
+                 )
                )
 
       consumer = %SinkConsumer{transform: xf}
@@ -752,6 +736,24 @@ defmodule Sequin.TransformsTest do
         end
 
       assert Exception.message(ex) =~ "line: 3"
+    end
+
+    test "access sink annotations" do
+      account = AccountsFactory.insert_account!()
+
+      assert {:ok, xf} =
+               Consumers.create_function(
+                 account.id,
+                 FunctionsFactory.function_attrs(
+                   function_type: :transform,
+                   function_attrs: [body: "metadata.consumer.annotations"]
+                 )
+               )
+
+      consumer = %SinkConsumer{transform: xf}
+      message = ConsumersFactory.consumer_message(message_kind: :event)
+      result = Transforms.Message.to_external(consumer, message)
+      assert %{"test" => true} == result
     end
   end
 end

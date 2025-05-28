@@ -12,6 +12,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
@@ -25,7 +26,6 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.Transform
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
@@ -49,6 +49,7 @@ defmodule Sequin.Consumers.SinkConsumer do
              :status,
              :health,
              :max_memory_mb,
+             :max_storage_mb,
              :legacy_transform,
              :timestamp_format,
              :batch_timeout_ms,
@@ -70,6 +71,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :batch_timeout_ms, :integer, default: nil
     field :annotations, :map, default: %{}
     field :max_memory_mb, :integer, default: 128
+    field :max_storage_mb, :integer, default: nil
     field :partition_count, :integer, default: 1
     field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
@@ -106,8 +108,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
-    belongs_to :transform, Transform
-    belongs_to :routing, Transform
+
+    belongs_to :transform, Function
+    belongs_to :routing, Function
+    belongs_to :filter, Function
 
     polymorphic_embeds_one(:sink,
       types: [
@@ -141,14 +145,17 @@ defmodule Sequin.Consumers.SinkConsumer do
       :sequence_id,
       :message_kind,
       :max_memory_mb,
+      :max_storage_mb,
       :transform_id,
-      :routing_id
+      :routing_id,
+      :filter_id
     ])
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
     |> foreign_key_constraint(:sequence_id)
     |> foreign_key_constraint(:transform_id)
     |> foreign_key_constraint(:routing_id)
+    |> foreign_key_constraint(:filter_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:sequence_filter, name: "sequence_filter_check")
     |> check_constraint(:batch_size,
@@ -182,10 +189,12 @@ defmodule Sequin.Consumers.SinkConsumer do
       :status,
       :annotations,
       :max_memory_mb,
+      :max_storage_mb,
       :partition_count,
       :legacy_transform,
       :transform_id,
       :routing_id,
+      :filter_id,
       :timestamp_format,
       :batch_timeout_ms,
       :load_shedding_policy
@@ -199,6 +208,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:batch_size, less_than_or_equal_to: 1_000)
     |> validate_number(:batch_timeout_ms, greater_than: 0)
     |> validate_number(:max_memory_mb, greater_than_or_equal_to: 128)
+    |> validate_number(:max_storage_mb, greater_than_or_equal_to: 256)
     |> validate_number(:partition_count, greater_than_or_equal_to: 1)
     |> validate_number(:max_retry_count, greater_than: 0)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
@@ -235,6 +245,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> put_change(:max_waiting, get_field(changeset, :max_waiting) || 20)
     |> put_change(:max_ack_pending, get_field(changeset, :max_ack_pending) || 10_000)
     |> put_change(:max_memory_mb, get_field(changeset, :max_memory_mb) || 128)
+    |> put_change(:max_storage_mb, get_field(changeset, :max_storage_mb) || default_max_storage_mb())
     |> put_change(:partition_count, get_field(changeset, :partition_count) || 1)
     |> put_change(:legacy_transform, get_field(changeset, :legacy_transform) || :none)
     |> put_change(:message_kind, get_field(changeset, :message_kind) || :event)
@@ -258,8 +269,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: c.transform_id == ^transform_id)
   end
 
-  def where_transform_or_function_id(query \\ base_query(), transform_id) do
-    from([consumer: c] in query, where: c.transform_id == ^transform_id or c.routing_id == ^transform_id)
+  def where_any_function_id(query \\ base_query(), function_id) do
+    from([consumer: c] in query,
+      where: c.transform_id == ^function_id or c.routing_id == ^function_id or c.filter_id == ^function_id
+    )
   end
 
   def where_type(query \\ base_query(), type) do
@@ -305,6 +318,13 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: c.status != ^status)
   end
 
+  def join_postgres_database(query \\ base_query()) do
+    from([consumer: c] in query,
+      join: postgres_database in assoc(c, :postgres_database),
+      as: :database
+    )
+  end
+
   defp base_query(query \\ __MODULE__) do
     from(c in query, as: :consumer)
   end
@@ -330,4 +350,22 @@ defmodule Sequin.Consumers.SinkConsumer do
   end
 
   def preload_http_endpoint(consumer), do: consumer
+
+  def preload_cached_http_endpoint(%HttpPushSink{http_endpoint: nil} = sink) do
+    http_endpoint = Consumers.get_cached_http_endpoint!(sink.http_endpoint_id)
+    %{sink | http_endpoint: http_endpoint}
+  end
+
+  def preload_cached_http_endpoint(%SinkConsumer{sink: %HttpPushSink{http_endpoint: nil}} = consumer) do
+    %{consumer | sink: preload_cached_http_endpoint(consumer.sink)}
+  end
+
+  def preload_cached_http_endpoint(consumer), do: consumer
+
+  defp default_max_storage_mb do
+    case Application.get_env(:sequin, :default_max_storage_bytes) do
+      nil -> nil
+      bytes -> round(bytes / 1024 / 1024)
+    end
+  end
 end

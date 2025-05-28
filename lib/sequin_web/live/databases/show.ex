@@ -121,7 +121,7 @@ defmodule SequinWeb.DatabasesLive.Show do
     case Replication.update_pg_replication(database.replication_slot, %{status: :active}) do
       {:ok, updated_slot} ->
         updated_db = %{database | replication_slot: updated_slot}
-        CheckPostgresReplicationSlotWorker.enqueue(database.id)
+        CheckPostgresReplicationSlotWorker.enqueue_for_user(database.id)
 
         socket =
           socket
@@ -157,12 +157,12 @@ defmodule SequinWeb.DatabasesLive.Show do
   @impl Phoenix.LiveView
   def handle_event("refresh_health", _params, socket) do
     # Will receive a :postgres_replication_slot_checked message when the worker finishes
-    CheckPostgresReplicationSlotWorker.enqueue(socket.assigns.database.id, unique: false)
+    CheckPostgresReplicationSlotWorker.enqueue_for_user(socket.assigns.database.id)
     {:noreply, assign_health(socket)}
   end
 
   def handle_event("refresh_check", %{"slug" => "replication_configuration"}, socket) do
-    CheckPostgresReplicationSlotWorker.enqueue(socket.assigns.database.id, unique: false)
+    CheckPostgresReplicationSlotWorker.enqueue_for_user(socket.assigns.database.id)
     {:noreply, socket}
   end
 

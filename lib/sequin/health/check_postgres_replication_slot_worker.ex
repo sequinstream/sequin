@@ -4,7 +4,11 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   use Oban.Worker,
     queue: :health_checks,
     max_attempts: 1,
-    unique: [period: 10, timestamp: :scheduled_at]
+    unique: [
+      period: :infinity,
+      states: ~w(available scheduled retryable)a,
+      timestamp: :scheduled_at
+    ]
 
   import Sequin.Error.Guards, only: [is_error: 1]
 
@@ -53,16 +57,9 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
     |> Oban.insert()
   end
 
-  def enqueue(postgres_database_id, unique: false) do
+  def enqueue_for_user(postgres_database_id) do
     %{postgres_database_id: postgres_database_id}
-    # Effectively disable unique constraint for this job
-    |> new(unique: [states: [:available], period: 1])
-    |> Oban.insert()
-  end
-
-  def enqueue_in(postgres_database_id, delay_seconds) do
-    %{postgres_database_id: postgres_database_id}
-    |> new(schedule_in: delay_seconds)
+    |> new(queue: :user_submitted)
     |> Oban.insert()
   end
 

@@ -57,7 +57,7 @@
     id: string;
     name: string;
     description: string;
-    transform: {
+    function: {
       type: string;
       path: string;
       code: string;
@@ -1083,12 +1083,60 @@
         }}
       />
 
+      {#if consumer.filter}
+        <Card>
+          <CardContent class="p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-semibold flex items-center gap-2">
+                Filter
+              </h2>
+              <a
+                href="/functions/{consumer.filter.id}"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <Button variant="outline" size="sm">
+                  <ExternalLink class="h-4 w-4 mr-2" />
+                  View Filter
+                </Button>
+              </a>
+            </div>
+            <div class="grid grid-cols-1 gap-4">
+              <div>
+                <span class="text-sm text-gray-500">Name</span>
+                <div class="mt-2">
+                  <span class="">{consumer.filter.name}</span>
+                </div>
+              </div>
+
+              {#if consumer.filter.description}
+                <div>
+                  <span class="text-sm text-gray-500">Description</span>
+                  <div class="mt-2">
+                    <span class="">{consumer.filter.description}</span>
+                  </div>
+                </div>
+              {/if}
+
+              <div>
+                <span class="text-sm text-gray-500">Code</span>
+                <div class="mt-2">
+                  <pre
+                    class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
+                      >{consumer.filter.function.code}</code
+                    ></pre>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      {/if}
+
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold flex items-center gap-2">
               Transform
-              <Beta size="sm" variant="subtle" />
             </h2>
             {#if transform && !isRedisStreamConsumer(consumer)}
               <a
@@ -1130,23 +1178,23 @@
                 </div>
               {/if}
 
-              {#if transform.transform.type === "path"}
+              {#if transform.function.type === "path"}
                 <div>
                   <span class="text-sm text-gray-500">Path</span>
                   <div class="mt-2">
                     <span
                       class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-                      >{transform.transform.path}</span
+                      >{transform.function.path}</span
                     >
                   </div>
                 </div>
-              {:else if transform.transform.type === "function"}
+              {:else if transform.function.type === "transform"}
                 <div>
                   <span class="text-sm text-gray-500">Code</span>
                   <div class="mt-2">
                     <pre
                       class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
-                        >{transform.transform.code}</code
+                        >{transform.function.code}</code
                       ></pre>
                   </div>
                 </div>
@@ -1160,6 +1208,22 @@
           {/if}
         </CardContent>
       </Card>
+
+      {#if 0 < Object.keys(consumer.annotations).length}
+        <Card>
+          <CardContent class="p-6">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
+              Annotations
+            </h2>
+            <pre
+              class="mt-2 font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto">{JSON.stringify(
+                consumer.annotations,
+                null,
+                2,
+              )}</pre>
+          </CardContent>
+        </Card>
+      {/if}
 
       {#if isHttpPushConsumer(consumer)}
         <SinkCardHttpPush {consumer} />

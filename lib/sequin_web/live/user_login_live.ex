@@ -9,14 +9,19 @@ defmodule SequinWeb.UserLoginLive do
         <.alert :if={@accepting_invite?} class="mb-4">
           <.alert_title>Accepting invite</.alert_title>
           <.alert_description>
-            Sign in or sign up with the same email address as your invite to join the account.
+            Sign in or <.link navigate={~p"/register"}>sign up</.link>
+            with the same email address as your invite to join the account.
           </.alert_description>
         </.alert>
 
         <.alert :if={@accepting_team_invite?} class="mb-4">
           <.alert_title>Accepting invite</.alert_title>
           <.alert_description>
-            Sign in or sign up to join the account.
+            Sign in or
+            <.link navigate={~p"/register"} class="font-semibold text-brand hover:underline">
+              sign up
+            </.link>
+            to join the account.
           </.alert_description>
         </.alert>
 
@@ -129,7 +134,7 @@ defmodule SequinWeb.UserLoginLive do
       |> assign(redirect_to: session["user_return_to"])
       |> assign(accepting_invite?: accepting_invite?(session))
       |> assign(accepting_team_invite?: accepting_team_invite?(session))
-      |> assign(account_self_signup?: Sequin.feature_enabled?(:account_self_signup))
+      |> assign(account_self_signup?: accepting_team_invite?(session) || Sequin.feature_enabled?(:account_self_signup))
       |> assign(display_default_user_login?: Sequin.Accounts.only_default_user_and_first_login?())
 
     {:ok, socket, temporary_assigns: [form: form]}

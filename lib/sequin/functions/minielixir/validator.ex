@@ -1,9 +1,8 @@
-defmodule Sequin.Transforms.MiniElixir.Validator do
+defmodule Sequin.Functions.MiniElixir.Validator do
   @moduledoc false
-  @allowed_funname [:transform, :route]
+  @allowed_funname [:transform, :route, :filter]
   @args [:action, :record, :changes, :metadata]
-  @error_bad_toplevel "Expecting only `def transform` or `def route` at the top level"
-  @error_invalid_name "Only function names `transform` or `route` are allowed"
+  @error_bad_toplevel "Expecting only `def transform`, `def route` or `def filter` at the top level"
   @error_bad_args "The parameter list `#{Enum.join(@args, ", ")}` is required"
 
   def create_expr(body_ast, modname) do
@@ -46,7 +45,7 @@ defmodule Sequin.Transforms.MiniElixir.Validator do
   end
 
   defp unwrap_fnname(fnname) when fnname in @allowed_funname, do: :ok
-  defp unwrap_fnname(_), do: {:error, :validator, @error_invalid_name}
+  defp unwrap_fnname(_), do: {:error, :validator, @error_bad_toplevel}
 
   defp unwrap_params(args, acc \\ [])
 

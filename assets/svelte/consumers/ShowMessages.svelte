@@ -17,6 +17,7 @@
   import { slide, fade } from "svelte/transition";
   import * as Popover from "$lib/components/ui/popover";
   import { toast } from "svelte-sonner";
+  import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
 
   // Receive necessary props
   export let messages: any[];
@@ -62,6 +63,8 @@
   $: isMessageDelivered =
     selectedMessage?.state === "delivered" ||
     selectedMessage?.state === "acknowledged";
+
+  $: pageCount = Math.ceil(totalCount / pageSize);
 
   onMount(() => {
     // Calculate row height after the component is mounted
@@ -333,592 +336,447 @@
       isResettingAll = false;
     });
   }
-
-  $: pageCount = Math.ceil(totalCount / pageSize);
 </script>
 
-<div class="flex flex-col flex-1">
-  <!-- Content container with overflow handling -->
-  <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
-    <!-- Header Div -->
-    <div class="flex items-center justify-between mb-4 messages-header">
-      <h1 class="text-2xl font-bold">Messages</h1>
-      <div class="flex items-center space-x-4">
+<TableWithDrawer
+  title="Messages"
+  items={messages}
+  {pageSize}
+  {loading}
+  {page}
+  {pageCount}
+  onPageChange={changePage}
+  onRowClick={openDrawer}
+  {isDrawerOpen}
+  onCloseDrawer={closeDrawer}
+>
+  <svelte:fragment slot="titleActions">
+    <Button
+      variant="outline"
+      size="sm"
+      class="flex items-center space-x-2"
+      on:click={toggleShowAcked}
+    >
+      <Switch checked={showAcked} />
+      <span>Show Acked</span>
+    </Button>
+
+    <Popover.Root bind:open={isPopoverOpen}>
+      <Popover.Trigger asChild let:builder>
         <Button
+          builders={[builder]}
           variant="outline"
           size="sm"
+          disabled={metrics.messages_failing_count === 0 || isResettingAll}
           class="flex items-center space-x-2"
-          on:click={toggleShowAcked}
         >
-          <Switch checked={showAcked} />
-          <span>Show Acked</span>
+          {#if isResettingAll}
+            <Loader2 class="h-4 w-4 mr-1 animate-spin" />
+          {:else}
+            <RotateCw class="h-4 w-4 mr-1" />
+          {/if}
+          <span>Redeliver All</span>
         </Button>
-
-        <Popover.Root bind:open={isPopoverOpen}>
-          <Popover.Trigger asChild let:builder>
+      </Popover.Trigger>
+      <Popover.Content class="w-80 p-4">
+        <div class="grid gap-4">
+          <div class="space-y-2">
+            <h4 class="font-medium leading-none">Confirm Redeliver All</h4>
+            <p class="text-sm text-muted-foreground">
+              This will clear the backoff for all messages, causing them to be
+              redelivered. Are you sure you want to continue?
+            </p>
+          </div>
+          <div class="flex justify-end gap-2">
             <Button
-              builders={[builder]}
               variant="outline"
               size="sm"
-              disabled={metrics.messages_failing_count === 0 || isResettingAll}
-              class="flex items-center space-x-2"
+              on:click={() => (isPopoverOpen = false)}
             >
-              {#if isResettingAll}
-                <Loader2 class="h-4 w-4 mr-1 animate-spin" />
-              {:else}
-                <RotateCw class="h-4 w-4 mr-1" />
-              {/if}
-              <span>Redeliver All</span>
+              Cancel
             </Button>
-          </Popover.Trigger>
-          <Popover.Content class="w-80 p-4">
-            <div class="grid gap-4">
-              <div class="space-y-2">
-                <h4 class="font-medium leading-none">Confirm Redeliver All</h4>
-                <p class="text-sm text-muted-foreground">
-                  This will clear the backoff for all messages, causing them to
-                  be redelivered. Are you sure you want to continue?
-                </p>
-              </div>
-              <div class="flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  on:click={() => (isPopoverOpen = false)}
-                >
-                  Cancel
-                </Button>
-                <Button variant="default" size="sm" on:click={handleResetAll}>
-                  Confirm
-                </Button>
-              </div>
-            </div>
-          </Popover.Content>
-        </Popover.Root>
-
-        <Button
-          variant={paused ? "default" : "outline"}
-          size="sm"
-          on:click={togglePause}
-        >
-          {#if paused}
-            <Play class="h-4 w-4 mr-1" /> Resume Updates
-          {:else}
-            <Pause class="h-4 w-4 mr-1" /> Pause Updates
-          {/if}
-        </Button>
-      </div>
-    </div>
-
-    {#if loading}
-      <div
-        class="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10"
-      >
-        <Loader2 class="h-6 w-6 animate-spin text-gray-500" />
-      </div>
-    {/if}
-    {#if messages.length === 0}
-      <div
-        class="w-full bg-white border border-gray-300 rounded-lg p-6 text-center space-y-2 min-h-96 flex flex-col items-center justify-center"
-      >
-        <h1 class="text-2xl font-bold">No Messages</h1>
-        <h2 class="text-gray-600">
-          {#if showAcked}
-            Messages will appear here when they are pending, delivered, or
-            acknowledged.
-          {:else}
-            You have no pending messages. Try toggling "Show Acked" to see
-            acknowledged messages.
-          {/if}
-        </h2>
-      </div>
-    {:else}
-      <table class="w-full bg-white border border-gray-300">
-        <thead>
-          <tr class="bg-gray-100">
-            <th
-              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
-            >
-              Seq
-            </th>
-            <th
-              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]"
-            >
-              State
-            </th>
-            <th
-              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
-            >
-              PKs
-            </th>
-
-            <th
-              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
-            >
-              Deliver Count
-            </th>
-            <th
-              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
-            >
-              Last Delivered At
-            </th>
-            <th
-              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
-            >
-              Backoff Until
-            </th>
-            <th
-              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
-            >
-              Committed At
-            </th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-200">
-          <tr
-            class="sample-row"
-            style="visibility: hidden; position: absolute;"
-          >
-            <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
-              sample
-            </td>
-            <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
-              sample
-            </td>
-            <td class="px-2 py-1 whitespace-nowrap text-2xs">sample</td>
-            <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
-              sample
-            </td>
-          </tr>
-          {#each messages as message}
-            <tr
-              class="relative hover:bg-gray-50 cursor-pointer"
-              on:click={() => openDrawer(message)}
-            >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{message.seq}</td
-              >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs min-w-[150px]">
-                <span
-                  class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getMessageStateColor(message.state_color)} text-gray-800`}
-                >
-                  {message.state}
-                </span>
-              </td>
-              <td class="px-2 py-1 whitespace-nowrap text-2xs">
-                {message.record_pks}
-              </td>
-
-              <td
-                class="px-2 py-1 whitespace-nowrap text-2xs"
-                class:text-red-600={isHighDeliveryCount(message.deliver_count)}
-                class:font-bold={isHighDeliveryCount(message.deliver_count)}
-              >
-                {message.deliver_count}
-              </td>
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
-                {message.last_delivered_at
-                  ? formatDate(message.last_delivered_at)
-                  : "N/A"}
-              </td>
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
-                {message.not_visible_until
-                  ? formatDate(message.not_visible_until)
-                  : "N/A"}
-              </td>
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{formatDate(message.commit_timestamp)}</td
-              >
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-      <!-- Pagination Div -->
-      <div class="flex items-center justify-between mt-4 messages-footer">
-        <div class="flex space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            on:click={() => changePage(page - 1)}
-            disabled={page === 0}
-            class="flex items-center"
-          >
-            <ChevronLeft class="h-4 w-4 mr-1" />
-            <span>Previous</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            on:click={() => changePage(page + 1)}
-            disabled={page >= pageCount - 1}
-            class="flex items-center"
-          >
-            <span>Next</span>
-            <ChevronRight class="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-        <div class="text-sm text-gray-600">
-          Page {page + 1} of {pageCount}
-        </div>
-      </div>
-    {/if}
-  </div>
-</div>
-
-<!-- Side Drawer -->
-{#if isDrawerOpen}
-  <div class="fixed inset-0 overflow-hidden z-50">
-    <div class="absolute inset-0 overflow-hidden">
-      <div
-        class="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-        on:click={closeDrawer}
-        transition:fade={{ duration: 200 }}
-        role="button"
-        tabindex="0"
-        on:keydown={(e) => e.key === "Enter" && closeDrawer()}
-      ></div>
-      <section
-        class="absolute inset-y-0 right-0 pl-10 max-w-full flex sm:pl-16"
-      >
-        <div
-          class="w-screen max-w-2xl"
-          transition:slide={{ duration: 300, axis: "x" }}
-        >
-          <div
-            class="h-full flex flex-col py-6 bg-white shadow-xl overflow-y-scroll"
-          >
-            <div class="px-4 sm:px-6">
-              <div class="flex items-start justify-between">
-                <h2 class="text-lg font-medium text-gray-900">
-                  Message Details
-                </h2>
-                <div class="ml-3 h-7 flex items-center">
-                  <button
-                    on:click={closeDrawer}
-                    class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                  >
-                    <span class="sr-only">Close panel</span>
-                    <X class="h-6 w-6" />
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="mt-6 relative flex-1 px-4 sm:px-6">
-              {#if selectedMessage}
-                <div class="space-y-4">
-                  <!-- Message Details & Timestamps Combined -->
-                  <div class="bg-gray-50 p-4 rounded-lg space-y-2">
-                    <div class="flex justify-between items-center">
-                      <span class="text-sm font-medium text-gray-500"
-                        >State:</span
-                      >
-                      <span
-                        class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getMessageStateColor(selectedMessage.state_color)} text-gray-800`}
-                      >
-                        {selectedMessage.state}
-                      </span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                      <span class="text-sm font-medium text-gray-500"
-                        >Record PKs:</span
-                      >
-                      <span class="text-sm text-gray-900"
-                        >{selectedMessage.record_pks}</span
-                      >
-                    </div>
-                    <div class="flex justify-between items-center">
-                      <span class="text-sm font-medium text-gray-500"
-                        >Commit LSN:</span
-                      >
-                      <span class="text-sm text-gray-900"
-                        >{selectedMessage.commit_lsn}</span
-                      >
-                    </div>
-                    <div class="flex justify-between items-center">
-                      <span class="text-sm font-medium text-gray-500"
-                        >Deliver Count:</span
-                      >
-                      <span class="text-sm text-gray-900"
-                        >{selectedMessage.deliver_count}</span
-                      >
-                    </div>
-                    <div class="flex justify-between items-center">
-                      <span class="text-sm font-medium text-gray-500"
-                        >Last Delivered:</span
-                      >
-                      <span class="text-sm text-gray-900">
-                        {selectedMessage.last_delivered_at
-                          ? formatDate(selectedMessage.last_delivered_at)
-                          : "N/A"}
-                      </span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                      <span class="text-sm font-medium text-gray-500"
-                        >Not visible until:</span
-                      >
-                      <span class="text-sm text-gray-900">
-                        {selectedMessage.not_visible_until
-                          ? formatDate(selectedMessage.not_visible_until)
-                          : "N/A"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <!-- Actions Section -->
-                  <div class="bg-gray-50 p-4 rounded-lg space-y-4">
-                    <div class="flex items-center justify-between">
-                      <h3 class="text-sm font-semibold">Actions</h3>
-                      <Popover.Root>
-                        <Popover.Trigger asChild let:builder>
-                          <Button
-                            builders={[builder]}
-                            variant="ghost"
-                            size="sm"
-                          >
-                            <Info class="h-4 w-4" />
-                          </Button>
-                        </Popover.Trigger>
-                        <Popover.Content class="w-80">
-                          <div class="p-4 space-y-2">
-                            <h4 class="font-medium">About Actions</h4>
-                            <p class="text-sm text-gray-600">
-                              <strong>Redeliver</strong>
-                              <br />
-                              Reset visibility window to immediately redeliver backed-off
-                              messages.<br /><br />
-                              <strong>Acknowledge</strong>
-                              <br />
-                              Remove message from the sink's delivery queue.
-                            </p>
-                          </div>
-                        </Popover.Content>
-                      </Popover.Root>
-                    </div>
-
-                    <div class="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        on:click={() => {
-                          resettingMessageVisibility = true;
-                          resetMessageVisibility(selectedMessage.ack_id);
-                        }}
-                        disabled={selectedMessage.state !== "backing off" ||
-                          resettingMessageVisibility}
-                        class="flex items-center space-x-2"
-                      >
-                        <RotateCw class="h-4 w-4" />
-                        <span>Redeliver</span>
-                      </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        on:click={() =>
-                          acknowledgeMessage(selectedMessage.ack_id)}
-                        disabled={selectedMessageAcked || isAcknowledging}
-                        class="flex items-center space-x-2"
-                      >
-                        {#if isAcknowledging}
-                          <Loader2 class="h-4 w-4 animate-spin" />
-                        {:else}
-                          <Check class="h-4 w-4" />
-                        {/if}
-                        <span>Acknowledge</span>
-                      </Button>
-                    </div>
-                  </div>
-
-                  <!-- Message Shape Accordion -->
-                  <div class="border rounded-lg">
-                    <button
-                      class="w-full px-4 py-2 flex flex-col items-start"
-                      on:click={() =>
-                        !isMessageDelivered &&
-                        (messageShapeOpen = !messageShapeOpen)}
-                      class:opacity-50={isMessageDelivered}
-                      class:cursor-not-allowed={isMessageDelivered}
-                    >
-                      <div class="w-full flex justify-between items-center">
-                        <span class="font-medium">Message Shape</span>
-                        {#if !isMessageDelivered}
-                          <div class:rotate-180={messageShapeOpen}>
-                            <ChevronDown
-                              class="h-4 w-4 transform transition-transform"
-                            />
-                          </div>
-                        {/if}
-                      </div>
-                      {#if isMessageDelivered}
-                        <span class="text-sm text-gray-500 mt-1"
-                          >Message payloads are not retained after delivery</span
-                        >
-                      {/if}
-                    </button>
-
-                    {#if messageShapeOpen && !isMessageDelivered}
-                      <div class="px-4 pb-4">
-                        {#if isLoadingMessageData}
-                          <div class="flex justify-center items-center h-32">
-                            <Loader2
-                              class="h-8 w-8 animate-spin text-gray-500"
-                            />
-                          </div>
-                        {:else if messageDataError}
-                          <div
-                            class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
-                            role="alert"
-                          >
-                            <strong class="font-bold">Error:</strong>
-                            <span class="block sm:inline"
-                              >{messageDataError}</span
-                            >
-                          </div>
-                        {:else if messageData}
-                          {#if selectedMessage.transformed_message}
-                            <span class="text-sm font-medium"
-                              >Original Message</span
-                            >
-                          {/if}
-                          <pre
-                            class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code
-                              >{JSON.stringify(messageData, null, 2)}</code
-                            ></pre>
-                        {/if}
-
-                        <!-- Transformed Message Section -->
-                        {#if selectedMessage.transformed_message}
-                          <div class="mt-4">
-                            <span class="text-sm font-medium"
-                              >Transformed Message</span
-                            >
-
-                            <div class="mt-2">
-                              <pre
-                                class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code
-                                  >{JSON.stringify(
-                                    selectedMessage.transformed_message,
-                                    null,
-                                    2,
-                                  )}</code
-                                ></pre>
-                            </div>
-                          </div>
-                        {/if}
-                      </div>
-                    {/if}
-                  </div>
-
-                  <!-- Logs Accordion (open by default) -->
-                  <div class="border rounded-lg">
-                    <button
-                      class="w-full px-4 py-2 flex justify-between items-center"
-                      on:click={() => (logsOpen = !logsOpen)}
-                    >
-                      <span class="font-medium">Logs</span>
-                      <div class="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          on:click={(e) => {
-                            e.stopPropagation();
-                            refreshLogs();
-                          }}
-                          disabled={isRefreshingLogs}
-                        >
-                          {#if isRefreshingLogs}
-                            <Loader2 class="h-4 w-4 animate-spin" />
-                          {:else}
-                            <RotateCw class="h-4 w-4" />
-                          {/if}
-                        </Button>
-                        <div class:rotate-180={logsOpen}>
-                          <ChevronDown
-                            class="h-4 w-4 transform transition-transform"
-                          />
-                        </div>
-                      </div>
-                    </button>
-
-                    {#if logsOpen}
-                      <div class="px-4 pb-4">
-                        {#if messageLogsError}
-                          <div
-                            class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
-                            role="alert"
-                          >
-                            <strong class="font-bold">Error:</strong>
-                            <span class="block sm:inline"
-                              >{messageLogsError}</span
-                            >
-                          </div>
-                        {:else if messageLogs && messageLogs.length > 0}
-                          <div class="overflow-x-auto">
-                            <table class="w-full">
-                              <tbody>
-                                {#each messageLogs as log}
-                                  <tr>
-                                    <td class="py-1" colspan="3">
-                                      <div
-                                        class="flex border border-gray-200 rounded overflow-hidden"
-                                      >
-                                        <div
-                                          class={`w-1 ${getLogLevelColor(log.status)}`}
-                                        ></div>
-                                        <div class="flex-grow p-2">
-                                          <div
-                                            class="text-xs text-gray-500 mb-1"
-                                          >
-                                            {new Date(
-                                              log.timestamp,
-                                            ).toLocaleString()}
-                                          </div>
-                                          <div class="text-sm text-gray-900">
-                                            {log.message}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                {/each}
-                              </tbody>
-                            </table>
-                          </div>
-                        {:else if isLoadingMessageLogs}
-                          <div class="space-y-2 animate-pulse">
-                            {#each Array(3) as _}
-                              <div
-                                class="flex border border-gray-200 rounded overflow-hidden"
-                              >
-                                <div class="w-1 bg-gray-200"></div>
-                                <div class="flex-grow p-2">
-                                  <div
-                                    class="w-1/3 h-2 my-2 bg-gray-200 rounded-full"
-                                  ></div>
-                                  <div
-                                    class="w-2/3 h-3 my-2 bg-gray-200 rounded-full"
-                                  ></div>
-                                </div>
-                              </div>
-                            {/each}
-                          </div>
-                        {:else}
-                          <div class="text-sm text-gray-500">
-                            No logs available for this message.
-                          </div>
-                        {/if}
-                      </div>
-                    {/if}
-                  </div>
-                </div>
-              {/if}
-            </div>
+            <Button variant="default" size="sm" on:click={handleResetAll}>
+              Confirm
+            </Button>
           </div>
         </div>
-      </section>
-    </div>
-  </div>
-{/if}
+      </Popover.Content>
+    </Popover.Root>
+
+    <Button
+      variant={paused ? "default" : "outline"}
+      size="sm"
+      on:click={togglePause}
+    >
+      {#if paused}
+        <Play class="h-4 w-4 mr-1" /> Resume Updates
+      {:else}
+        <Pause class="h-4 w-4 mr-1" /> Pause Updates
+      {/if}
+    </Button>
+  </svelte:fragment>
+
+  <svelte:fragment slot="emptyState">
+    {#if showAcked}
+      Messages will appear here when they are pending, delivered, or
+      acknowledged.
+    {:else}
+      You have no pending messages. Try toggling "Show Acked" to see
+      acknowledged messages.
+    {/if}
+  </svelte:fragment>
+
+  <svelte:fragment slot="header">
+    <th
+      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
+    >
+      Seq
+    </th>
+    <th
+      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]"
+    >
+      State
+    </th>
+    <th
+      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
+    >
+      PKs
+    </th>
+    <th
+      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
+    >
+      Deliver Count
+    </th>
+    <th
+      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
+    >
+      Last Delivered At
+    </th>
+    <th
+      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
+    >
+      Backoff Until
+    </th>
+    <th
+      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
+    >
+      Committed At
+    </th>
+  </svelte:fragment>
+
+  <svelte:fragment slot="sampleRow">
+    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">sample</td>
+    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">sample</td>
+    <td class="px-2 py-1 whitespace-nowrap text-2xs">sample</td>
+    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">sample</td>
+  </svelte:fragment>
+
+  <svelte:fragment slot="row" let:item>
+    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
+      >{item.seq}</td
+    >
+    <td class="px-2 py-1 whitespace-nowrap text-2xs min-w-[150px]">
+      <span
+        class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getMessageStateColor(item.state_color)} text-gray-800`}
+      >
+        {item.state}
+      </span>
+    </td>
+    <td class="px-2 py-1 whitespace-nowrap text-2xs">{item.record_pks}</td>
+    <td
+      class="px-2 py-1 whitespace-nowrap text-2xs"
+      class:text-red-600={isHighDeliveryCount(item.deliver_count)}
+      class:font-bold={isHighDeliveryCount(item.deliver_count)}
+    >
+      {item.deliver_count}
+    </td>
+    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+      {item.last_delivered_at ? formatDate(item.last_delivered_at) : "N/A"}
+    </td>
+    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+      {item.not_visible_until ? formatDate(item.not_visible_until) : "N/A"}
+    </td>
+    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
+      >{formatDate(item.commit_timestamp)}</td
+    >
+  </svelte:fragment>
+
+  <svelte:fragment slot="drawerTitle">Message Details</svelte:fragment>
+
+  <svelte:fragment slot="drawerContent">
+    {#if selectedMessage}
+      <div class="space-y-4">
+        <!-- Message Details & Timestamps Combined -->
+        <div class="bg-gray-50 p-4 rounded-lg space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-500">State:</span>
+            <span
+              class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getMessageStateColor(selectedMessage.state_color)} text-gray-800`}
+            >
+              {selectedMessage.state}
+            </span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-500">Record PKs:</span>
+            <span class="text-sm text-gray-900"
+              >{selectedMessage.record_pks}</span
+            >
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-500">Commit LSN:</span>
+            <span class="text-sm text-gray-900"
+              >{selectedMessage.commit_lsn}</span
+            >
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-500">Deliver Count:</span
+            >
+            <span class="text-sm text-gray-900"
+              >{selectedMessage.deliver_count}</span
+            >
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-500"
+              >Last Delivered:</span
+            >
+            <span class="text-sm text-gray-900">
+              {selectedMessage.last_delivered_at
+                ? formatDate(selectedMessage.last_delivered_at)
+                : "N/A"}
+            </span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-500"
+              >Not visible until:</span
+            >
+            <span class="text-sm text-gray-900">
+              {selectedMessage.not_visible_until
+                ? formatDate(selectedMessage.not_visible_until)
+                : "N/A"}
+            </span>
+          </div>
+        </div>
+
+        <!-- Actions Section -->
+        <div class="bg-gray-50 p-4 rounded-lg space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold">Actions</h3>
+            <Popover.Root>
+              <Popover.Trigger asChild let:builder>
+                <Button builders={[builder]} variant="ghost" size="sm">
+                  <Info class="h-4 w-4" />
+                </Button>
+              </Popover.Trigger>
+              <Popover.Content class="w-80">
+                <div class="p-4 space-y-2">
+                  <h4 class="font-medium">About Actions</h4>
+                  <p class="text-sm text-gray-600">
+                    <strong>Redeliver</strong>
+                    <br />
+                    Reset visibility window to immediately redeliver backed-off messages.<br
+                    /><br />
+                    <strong>Acknowledge</strong>
+                    <br />
+                    Remove message from the sink's delivery queue.
+                  </p>
+                </div>
+              </Popover.Content>
+            </Popover.Root>
+          </div>
+
+          <div class="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={() => resetMessageVisibility(selectedMessage.ack_id)}
+              disabled={selectedMessage.state !== "backing off"}
+              class="flex items-center space-x-2"
+            >
+              <RotateCw class="h-4 w-4" />
+              <span>Redeliver</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={() => acknowledgeMessage(selectedMessage.ack_id)}
+              disabled={selectedMessageAcked || isAcknowledging}
+              class="flex items-center space-x-2"
+            >
+              {#if isAcknowledging}
+                <Loader2 class="h-4 w-4 animate-spin" />
+              {:else}
+                <Check class="h-4 w-4" />
+              {/if}
+              <span>Acknowledge</span>
+            </Button>
+          </div>
+        </div>
+
+        <!-- Message Shape Accordion -->
+        <div class="border rounded-lg">
+          <button
+            class="w-full px-4 py-2 flex flex-col items-start"
+            on:click={() =>
+              !isMessageDelivered && (messageShapeOpen = !messageShapeOpen)}
+            class:opacity-50={isMessageDelivered}
+            class:cursor-not-allowed={isMessageDelivered}
+          >
+            <div class="w-full flex justify-between items-center">
+              <span class="font-medium">Message Shape</span>
+              {#if !isMessageDelivered}
+                <div class:rotate-180={messageShapeOpen}>
+                  <ChevronDown class="h-4 w-4 transform transition-transform" />
+                </div>
+              {/if}
+            </div>
+            {#if isMessageDelivered}
+              <span class="text-sm text-gray-500 mt-1"
+                >Message payloads are not retained after delivery</span
+              >
+            {/if}
+          </button>
+
+          {#if messageShapeOpen && !isMessageDelivered}
+            <div class="px-4 pb-4">
+              {#if isLoadingMessageData}
+                <div class="flex justify-center items-center h-32">
+                  <Loader2 class="h-8 w-8 animate-spin text-gray-500" />
+                </div>
+              {:else if messageDataError}
+                <div
+                  class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
+                  role="alert"
+                >
+                  <strong class="font-bold">Error:</strong>
+                  <span class="block sm:inline">{messageDataError}</span>
+                </div>
+              {:else if messageData}
+                {#if selectedMessage.transformed_message}
+                  <span class="text-sm font-medium">Original Message</span>
+                {/if}
+                <pre class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code
+                    >{JSON.stringify(messageData, null, 2)}</code
+                  ></pre>
+              {/if}
+
+              <!-- Transformed Message Section -->
+              {#if selectedMessage.transformed_message}
+                <div class="mt-4">
+                  <span class="text-sm font-medium">Transformed Message</span>
+                  <div class="mt-2">
+                    <pre
+                      class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code
+                        >{JSON.stringify(
+                          selectedMessage.transformed_message,
+                          null,
+                          2,
+                        )}</code
+                      ></pre>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
+        <!-- Logs Accordion (open by default) -->
+        <div class="border rounded-lg">
+          <button
+            class="w-full px-4 py-2 flex justify-between items-center"
+            on:click={() => (logsOpen = !logsOpen)}
+          >
+            <span class="font-medium">Logs</span>
+            <div class="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                on:click={(e) => {
+                  e.stopPropagation();
+                  refreshLogs();
+                }}
+                disabled={isRefreshingLogs}
+              >
+                {#if isRefreshingLogs}
+                  <Loader2 class="h-4 w-4 animate-spin" />
+                {:else}
+                  <RotateCw class="h-4 w-4" />
+                {/if}
+              </Button>
+              <div class:rotate-180={logsOpen}>
+                <ChevronDown class="h-4 w-4 transform transition-transform" />
+              </div>
+            </div>
+          </button>
+
+          {#if logsOpen}
+            <div class="px-4 pb-4">
+              {#if messageLogsError}
+                <div
+                  class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
+                  role="alert"
+                >
+                  <strong class="font-bold">Error:</strong>
+                  <span class="block sm:inline">{messageLogsError}</span>
+                </div>
+              {:else if messageLogs && messageLogs.length > 0}
+                <div class="overflow-x-auto">
+                  <table class="w-full">
+                    <tbody>
+                      {#each messageLogs as log}
+                        <tr>
+                          <td class="py-1" colspan="3">
+                            <div
+                              class="flex border border-gray-200 rounded overflow-hidden"
+                            >
+                              <div
+                                class={`w-1 ${getLogLevelColor(log.status)}`}
+                              ></div>
+                              <div class="flex-grow p-2">
+                                <div class="text-xs text-gray-500 mb-1">
+                                  {new Date(log.timestamp).toLocaleString()}
+                                </div>
+                                <div class="text-sm text-gray-900">
+                                  {log.message}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              {:else if isLoadingMessageLogs}
+                <div class="space-y-2 animate-pulse">
+                  {#each Array(3) as _}
+                    <div
+                      class="flex border border-gray-200 rounded overflow-hidden"
+                    >
+                      <div class="w-1 bg-gray-200"></div>
+                      <div class="flex-grow p-2">
+                        <div
+                          class="w-1/3 h-2 my-2 bg-gray-200 rounded-full"
+                        ></div>
+                        <div
+                          class="w-2/3 h-3 my-2 bg-gray-200 rounded-full"
+                        ></div>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              {:else}
+                <div class="text-sm text-gray-500">
+                  No logs available for this message.
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  </svelte:fragment>
+</TableWithDrawer>
 
 <style>
   table {

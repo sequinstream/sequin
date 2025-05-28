@@ -1,11 +1,11 @@
-defmodule Sequin.Transforms.TestMessages do
+defmodule Sequin.Functions.TestMessages do
   @moduledoc """
   Manages :ets table for storing messages for testing transforms.
 
-  Users use these messages to see the before/after when writing ie. PathTransforms in the console.
+  Users use these messages to see the before/after when writing ie. PathFunctions in the console.
   """
 
-  alias Sequin.Transforms.TestMessagesRegistry
+  alias Sequin.Functions.TestMessagesRegistry
 
   require Logger
 

@@ -31,12 +31,12 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
 
   @impl SinkPipeline
   def handle_message(message, context) do
-    %{consumer: consumer, test_pid: test_pid} = context
+    %{test_pid: test_pid} = context
     setup_allowances(test_pid)
 
     record_or_event = message.data
 
-    ordering_key = ordering_key(consumer, record_or_event.data)
+    ordering_key = record_or_event.group_id
     message = Broadway.Message.put_batch_key(message, ordering_key)
 
     {:ok, message, context}
@@ -69,7 +69,7 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
         "type" => "record",
         "table_name" => record.data.metadata.table_name
       },
-      ordering_key: ordering_key(consumer, record.data)
+      ordering_key: record.group_id
     }
   end
 
@@ -82,14 +82,8 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
         "table_name" => event.data.metadata.table_name,
         "action" => to_string(event.data.action)
       },
-      ordering_key: ordering_key(consumer, event.data)
+      ordering_key: event.group_id
     }
-  end
-
-  defp ordering_key(consumer, data) do
-    consumer
-    |> Sequin.Consumers.group_column_values(data)
-    |> Enum.join(":")
   end
 
   defp setup_allowances(nil), do: :ok

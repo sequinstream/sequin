@@ -129,7 +129,7 @@ defmodule SequinWeb.UserRegistrationLive do
   end
 
   def mount(_params, session, socket) do
-    if Sequin.feature_enabled?(:account_self_signup) do
+    if accepting_invite?(session) or accepting_team_invite?(session) or Sequin.feature_enabled?(:account_self_signup) do
       changeset = Accounts.change_user_registration(%User{})
 
       socket =

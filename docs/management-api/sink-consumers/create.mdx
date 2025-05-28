@@ -252,6 +252,11 @@ Creates a new sink consumer.
   Acknowledgement timeout in milliseconds (minimum 500ms)
 </ParamField>
 
+<ParamField body="annotations" type="object">
+  Additional metadata you can attach to this sink consumer. Annotations can be any JSON object (not a list or a scalar).
+  You can use annotations in your [transform](/reference/transforms), to attach additional information about the sink to each message.
+</ParamField>
+
 ## Response fields
 
 <SinkConsumerResponseSnippet />

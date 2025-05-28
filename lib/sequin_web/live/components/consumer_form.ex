@@ -6,6 +6,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -15,14 +16,13 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
-  alias Sequin.Consumers.RoutingTransform
+  alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.Transform
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
@@ -67,7 +67,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> assign(:encoded_errors, encoded_errors)
       |> assign(:encoded_databases, Enum.map(assigns.databases, &encode_database/1))
       |> assign(:encoded_http_endpoints, Enum.map(assigns.http_endpoints, &encode_http_endpoint/1))
-      |> assign(:encoded_transforms, Enum.map(assigns.transforms, &encode_transform/1))
+      |> assign(:encoded_functions, Enum.map(assigns.functions, &encode_function/1))
       |> assign(:consumer_title, consumer_title(assigns.consumer))
       |> assign(:self_hosted, self_hosted?())
 
@@ -85,7 +85,7 @@ defmodule SequinWeb.Components.ConsumerForm do
             parent: @id,
             databases: @encoded_databases,
             httpEndpoints: @encoded_http_endpoints,
-            transforms: @encoded_transforms,
+            functions: @encoded_functions,
             isSelfHosted: @self_hosted
           }
         }
@@ -128,7 +128,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       )
       |> assign_databases()
       |> assign_http_endpoints()
-      |> assign_transforms()
+      |> assign_functions()
       |> reset_changeset()
 
     :syn.join(:account, {:database_tables_updated, current_account_id(socket)}, self())
@@ -233,8 +233,8 @@ defmodule SequinWeb.Components.ConsumerForm do
     {:noreply, assign_http_endpoints(socket)}
   end
 
-  def handle_event("refresh_transforms", _params, socket) do
-    {:noreply, assign_transforms(socket)}
+  def handle_event("refresh_functions", _params, socket) do
+    {:noreply, assign_functions(socket)}
   end
 
   def handle_event("test_connection", _params, socket) do
@@ -606,6 +606,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "initial_backfill" => decode_initial_backfill(form),
         "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
         "routing_id" => if(form["routingId"] === "none", do: nil, else: form["routingId"]),
+        "filter_id" => if(form["filterId"] === "none", do: nil, else: form["filterId"]),
         "routing_mode" => form["routingMode"],
         "timestamp_format" => form["timestampFormat"]
       }
@@ -783,7 +784,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       "endpoint_url" => sink["endpoint_url"],
       "collection_name" => sink["collection_name"],
       "api_key" => sink["api_key"],
-      "import_action" => sink["import_action"],
       "batch_size" => sink["batch_size"],
       "timeout_seconds" => sink["timeout_seconds"]
     }
@@ -851,7 +851,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "table_oid" => source_table && source_table.oid,
       "type" => consumer.type,
       "transform_id" => consumer.transform_id,
-      "timestamp_format" => consumer.timestamp_format
+      "timestamp_format" => consumer.timestamp_format,
+      "filter_id" => consumer.filter_id
     }
   end
 
@@ -1021,7 +1022,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       "endpoint_url" => sink.endpoint_url,
       "collection_name" => sink.collection_name,
       "api_key" => sink.api_key,
-      "import_action" => sink.import_action,
       "batch_size" => sink.batch_size,
       "timeout_seconds" => sink.timeout_seconds
     }
@@ -1079,11 +1079,11 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
-  defp encode_transform(%Transform{} = transform) do
+  defp encode_function(%Function{} = function) do
     Map.merge(
-      %{"id" => transform.id, "name" => transform.name, "type" => transform.type, "description" => transform.description},
-      case transform.transform do
-        %RoutingTransform{} = rt -> %{"sink_type" => rt.sink_type}
+      %{"id" => function.id, "name" => function.name, "type" => function.type, "description" => function.description},
+      case function.function do
+        %RoutingFunction{} = rt -> %{"sink_type" => rt.sink_type}
         _ -> %{}
       end
     )
@@ -1267,10 +1267,10 @@ defmodule SequinWeb.Components.ConsumerForm do
     assign(socket, :http_endpoints, http_endpoints)
   end
 
-  defp assign_transforms(socket) do
+  defp assign_functions(socket) do
     account_id = current_account_id(socket)
-    transforms = Consumers.list_transforms_for_account(account_id)
-    assign(socket, :transforms, transforms)
+    functions = Consumers.list_functions_for_account(account_id)
+    assign(socket, :functions, functions)
   end
 
   defp maybe_put_replication_slot_id(%{"postgres_database_id" => nil} = params, _socket) do

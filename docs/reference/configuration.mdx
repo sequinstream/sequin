@@ -38,6 +38,8 @@ You can provide a YAML configuration file to Sequin. This configuration file wil
 
 ### Postgres configuration
 
+Sequin uses a Postgres database to store state, such as your database connections and sinks. This database is separate from the Postgres databases you stream from (and can configure in [`sequin.yaml`](/reference/sequin-yaml#database-configuration)). It is recommended to give Sequin its own logical database, though it may reside on the same physical Postgres database as your source databases.
+
 - `PG_URL`: Complete Postgres connection URL (alternative to individual PG_* variables below)
   - (e.g. `postgres://sequin:password@localhost:5432/sequin`)
 - `PG_PORT`: Postgres port number (default: 5432)
@@ -140,7 +142,8 @@ To use GitHub OAuth as a sign-in/sign-up method, provide the following environme
 
 - `GITHUB_CLIENT_ID`: GitHub OAuth client ID
 - `GITHUB_CLIENT_SECRET`: GitHub OAuth client secret
-- `GITHUB_CLIENT_REDIRECT_URI`: GitHub OAuth callback URL
+- `GITHUB_CLIENT_REDIRECT_URI`: GitHub OAuth callback URL, including the path `/auth/github/callback`
+  - Example: `https://console.sequinstream.com/auth/github/callback`
 
 ### Metrics configuration
 
@@ -152,6 +155,16 @@ To use GitHub OAuth as a sign-in/sign-up method, provide the following environme
   If **either** variable is set, Sequin secures the `/metrics` endpoint with HTTP Basic Authentication. With both unset, the endpoint is publicly accessible (recommended only for local development).
 
 See [Metrics](/reference/metrics) reference for more information on the metrics exposed by Sequin.
+
+## Replication slot flush intervals
+
+Sequin's replication slot accumulates messages in memory before flushing them downstream. Flushing occurs whenever any of the three thresholds—maximum bytes, maximum messages, or maximum time—are reached. By default, the system uses settings that balance throughput and memory usage for most workloads. However, you can tune the following environment variables to experiment with flush intervals and batch sizes for your specific workload:
+
+- `REPLICATION_FLUSH_MAX_ACCUMULATED_BYTES`: Maximum number of bytes to accumulate in memory before flushing the replication batch downstream. (Default: 100MB)
+- `REPLICATION_FLUSH_MAX_ACCUMULATED_MESSAGES`: Maximum number of messages to accumulate before flushing. (Default: 100,000)
+- `REPLICATION_FLUSH_MAX_ACCUMULATED_TIME_MS`: Maximum time (in milliseconds) to wait before flushing accumulated messages, even if neither of the above thresholds is reached. (Default: 50ms)
+
+These settings allow you to control the batching behavior of Sequin's logical replication slot. The defaults are chosen to work well for most environments.
 
 ## Deploying to production
 

@@ -1,7 +1,6 @@
 defmodule Sequin.Runtime.RedisPipelineTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.SinkConsumer
@@ -123,20 +122,24 @@ defmodule Sequin.Runtime.RedisPipelineTest do
     setup do
       account = AccountsFactory.insert_account!()
 
-      database = DatabasesFactory.configured_postgres_database(account_id: account.id)
+      database =
+        DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: :character_tables)
+
       ConnectionCache.cache_connection(database, Sequin.Repo)
 
       sequence =
-        DatabasesFactory.sequence(
+        DatabasesFactory.insert_sequence!(
           postgres_database_id: database.id,
           postgres_database: database,
-          table_oid: CharacterDetailed.table_oid()
+          table_oid: CharacterDetailed.table_oid(),
+          account_id: account.id
         )
 
-      replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
+      replication =
+        ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: database.id)
 
       consumer =
-        ConsumersFactory.sink_consumer(
+        ConsumersFactory.insert_sink_consumer!(
           id: UUID.uuid4(),
           account_id: account.id,
           type: :redis_stream,
@@ -146,8 +149,6 @@ defmodule Sequin.Runtime.RedisPipelineTest do
           message_kind: :record,
           postgres_database: database
         )
-
-      :ok = Consumers.create_consumer_partition(consumer)
 
       {:ok, %{consumer: consumer}}
     end

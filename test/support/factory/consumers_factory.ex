@@ -9,6 +9,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -24,7 +25,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Consumers.Transform
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -115,7 +115,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
-        max_memory_mb: Enum.random(200..2048),
+        max_memory_mb: Enum.random(128..1024),
+        max_storage_mb: Enum.random([nil, Enum.random(2048..4096)]),
         message_kind: message_kind,
         name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,
@@ -124,7 +125,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         status: :active,
         sequence_id: sequence_id,
         sequence_filter: sequence_filter,
-        legacy_transform: Enum.random([:none, :record_only]),
+        legacy_transform: :none,
         timestamp_format: :iso8601
       },
       attrs
@@ -508,7 +509,10 @@ defmodule Sequin.Factory.ConsumersFactory do
           commit_lsn: Factory.unique_integer(),
           consumer: %ConsumerEventData.Metadata.Sink{
             id: Factory.uuid(),
-            name: Factory.word()
+            name: Factory.word(),
+            annotations: %{
+              "test" => true
+            }
           }
         }
       },
@@ -761,6 +765,26 @@ defmodule Sequin.Factory.ConsumersFactory do
     end
   end
 
+  def consumer_message_data(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
+
+    case message_kind do
+      :record -> consumer_record_data(attrs)
+      :event -> consumer_event_data(attrs)
+    end
+  end
+
+  def consumer_message_data_attrs(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
+
+    case message_kind do
+      :record -> consumer_record_data_attrs(attrs)
+      :event -> consumer_event_data_attrs(attrs)
+    end
+  end
+
   def sequence_filter(attrs \\ []) do
     attrs = Map.new(attrs)
 
@@ -888,30 +912,30 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> insert_backfill!()
   end
 
-  # Transform
+  # Function
   def transform(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {transform_type, attrs} = Map.pop_lazy(attrs, :transform_type, fn -> :path end)
+    {function_type, attrs} = Map.pop_lazy(attrs, :function_type, fn -> :path end)
 
-    transform_attrs =
-      case transform_type do
+    function_attrs =
+      case function_type do
         :path -> path_transform()
       end
 
     merge_attributes(
-      %Transform{
+      %Function{
         id: Factory.uuid(),
         account_id: Factory.uuid(),
         name: Factory.unique_word(),
-        type: to_string(transform_type),
-        transform: transform_attrs
+        type: to_string(function_type),
+        function: function_attrs
       },
       attrs
     )
   end
 
-  # PathTransform
+  # PathFunction
   def path_transform(attrs \\ []) do
     valid_paths = [
       "record",
@@ -932,7 +956,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     ]
 
     merge_attributes(
-      %Sequin.Consumers.PathTransform{
+      %Sequin.Consumers.PathFunction{
         type: :path,
         path: Enum.random(valid_paths)
       },

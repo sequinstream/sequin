@@ -755,16 +755,14 @@ defmodule Sequin.Health do
     base_check = %Check{slug: :messages_delivered, status: :waiting}
     delivered_event = find_event(events, :messages_delivered)
     load_shedding_policy_discarded_event = find_event(events, :load_shedding_policy_discarded)
-    load_shedding_policy_discarded_dismissed_event = find_event(events, :load_shedding_policy_discarded_dismissed)
-
     show_load_shedding_policy_error =
-      unless is_nil(load_shedding_policy_discarded_event) do
-        is_nil(load_shedding_policy_discarded_dismissed_event) or
-          DateTime.after?(
-            load_shedding_policy_discarded_event.last_event_at,
-            load_shedding_policy_discarded_dismissed_event.last_event_at
-          )
-      end
+      load_shedding_policy_discarded_event
+      && is_nil(find_newer_event(events, load_shedding_policy_discarded_event, :load_shedding_policy_discarded_dismissed)
+
+    sqs_delivery_failed_event = find_event(events, :sqs_delivery_failed)
+    show_sqs_delivery_failed_error =
+      sqs_delivery_failed_event
+      && is_nil(find_newer_event(events, sqs_delivery_failed_event, :sqs_delivery_failed_dismissed)
 
     cond do
       is_nil(delivered_event) ->
@@ -780,12 +778,22 @@ defmodule Sequin.Health do
           [load_shedding_policy_discarded_event]
         )
 
+      show_sqs_delivery_failed_error ->
+        put_check_timestamps(
+          %{
+            base_check
+            | status: :error,
+              error_slug: :sqs_delivery_failed
+          },
+          [sqs_delivery_failed_event]
+        )
+        
       delivered_event.status == :fail ->
         put_check_timestamps(
           %{base_check | status: :error, error: delivered_event.error, extra: delivered_event.extra},
           [delivered_event]
         )
-
+        
       true ->
         status = if delivered_event.status == :success, do: :healthy, else: :warning
         put_check_timestamps(%{base_check | status: status}, [delivered_event])
@@ -820,6 +828,11 @@ defmodule Sequin.Health do
       true ->
         base_check
     end
+  end
+
+  defp find_newer_event(events, base_event, newer_type) do
+    newer = find_event(events, newer_type)
+    newer && DateTime.after?(base_event.last_event_at, newer.last_event_at)
   end
 
   defp expected_event_error(entity_id, event_slug) do

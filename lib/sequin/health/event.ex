@@ -54,7 +54,8 @@ defmodule Sequin.Health.Event do
     :invalid_transaction_annotation_received,
     :invalid_transaction_annotation_received_dismissed,
     :load_shedding_policy_discarded,
-    :load_shedding_policy_discarded_dismissed
+    :load_shedding_policy_discarded_dismissed,
+    :sqs_delivery_failed
   ]
 
   @http_endpoint_event_slugs [

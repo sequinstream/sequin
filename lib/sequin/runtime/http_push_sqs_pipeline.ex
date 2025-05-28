@@ -25,6 +25,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   alias Sequin.Prometheus
   alias Sequin.Runtime.Trace
   alias Sequin.Transforms
+  alias Sequin.Health
 
   require Logger
 
@@ -160,6 +161,8 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
             Trace.error(consumer_id, "Failed to deliver message to HTTP endpoint", %{
               error: Exception.message(error)
             })
+
+            Health.put_event(consumer, %Event{slug: :sqs_delivery_failed, status: :fail})
 
             if final_delivery? do
               Logger.error("[HttpPushSqsPipeline] Discarding message after #{consumer.max_retry_count} retries")

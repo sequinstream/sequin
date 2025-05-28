@@ -221,6 +221,16 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
       |> Req.new()
       |> Req.merge(default_req_opts())
 
+    Trace.info(consumer.id, "Making HTTP request", %{
+      request: %{
+        method: req.method,
+        base_url: req.options.base_url,
+        url: URI.to_string(req.url),
+        headers: req.headers,
+        body: transformed_data
+      }
+    })
+
     # Make the HTTP request
     case Req.request(req) do
       {:ok, %Req.Response{} = response} ->

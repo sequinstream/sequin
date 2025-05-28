@@ -37,9 +37,9 @@
   function togglePause() {
     paused = !paused;
     if (paused) {
-      live.pushEventTo(`#${parent}`, "trace_pause_updates");
+      live.pushEventTo(`#${parent}`, "trace_stop");
     } else {
-      live.pushEventTo(`#${parent}`, "trace_resume_updates");
+      live.pushEventTo(`#${parent}`, "trace_start");
     }
   }
 
@@ -160,7 +160,7 @@
       {item.message}
     </td>
     <td
-      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500"
+      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500 font-mono"
     >
       {formatContent(item.content)}
     </td>
@@ -198,7 +198,7 @@
           <div class="bg-gray-50 p-4 rounded-lg">
             <h3 class="text-sm font-medium text-gray-500 mb-2">Content:</h3>
             <pre
-              class="text-sm text-gray-900 whitespace-pre-wrap overflow-x-auto">{formatContent(
+              class="text-sm text-gray-900 whitespace-pre-wrap overflow-x-auto font-mono">{formatContent(
                 selectedEvent.content,
               )}</pre>
           </div>

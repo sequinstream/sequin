@@ -21,6 +21,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Error.ServiceError
   alias Sequin.Metrics
   alias Sequin.Prometheus
   alias Sequin.Runtime.Trace
@@ -148,8 +149,9 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
               Prometheus.observe_http_via_sqs_message_total_latency_us(consumer_id, consumer.name, total_latency)
             end
 
-            Trace.info(consumer_id, "Message delivered to HTTP endpoint", %{
-              response: Map.from_struct(response)
+            Trace.info(consumer_id, %Trace.Event{
+              message: "Message delivered to HTTP endpoint",
+              req_response: Map.from_struct(response)
             })
 
             message
@@ -157,13 +159,19 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
           {:error, error} ->
             Logger.error("[HttpPushSqsPipeline] Failed to deliver message to HTTP endpoint: #{inspect(error)}")
 
-            Trace.error(consumer_id, "Failed to deliver message to HTTP endpoint", %{
-              error: Exception.message(error)
-            })
-
             if final_delivery? do
               Logger.error("[HttpPushSqsPipeline] Discarding message after #{consumer.max_retry_count} retries")
+
               Prometheus.increment_http_via_sqs_message_discard_count(consumer_id, consumer.name)
+
+              Trace.error(consumer_id, %Trace.Event{
+                message: "Discarding message after max retries",
+                error: error,
+                extra: %{
+                  max_retry_count: consumer.max_retry_count
+                }
+              })
+
               message
             else
               Message.failed(message, "Failed to deliver message: #{inspect(error)}")
@@ -221,20 +229,25 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
       |> Req.new()
       |> Req.merge(default_req_opts())
 
-    Trace.info(consumer.id, "Making HTTP request", %{
-      request: %{
-        method: req.method,
-        base_url: req.options.base_url,
-        url: URI.to_string(req.url),
-        headers: req.headers,
-        body: transformed_data
-      }
-    })
-
     # Make the HTTP request
-    case Req.request(req) do
-      {:ok, %Req.Response{} = response} ->
-        ensure_status(response, consumer)
+    with {:ok, resp} <- Req.request(req),
+         :ok <- ensure_status(resp, consumer) do
+      Trace.info(consumer.id, %Trace.Event{
+        message: "Message delivered to HTTP endpoint",
+        req_request: req,
+        req_response: resp
+      })
+
+      {:ok, resp}
+    else
+      {:error, %ServiceError{} = error} ->
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to deliver message to HTTP endpoint",
+          req_request: req,
+          error: error
+        })
+
+        {:error, error}
 
       {:error, %Mint.TransportError{reason: reason} = error} ->
         Prometheus.increment_http_via_sqs_message_deliver_failure_count(consumer.id, consumer.name, reason)
@@ -243,6 +256,12 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
           "[HttpPushSqsPipeline] #{req.method} to webhook endpoint failed with Mint.TransportError: #{Exception.message(error)}",
           error: error
         )
+
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to deliver message to HTTP endpoint",
+          req_request: req,
+          error: error
+        })
 
         {:error,
          Error.service(
@@ -260,6 +279,12 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
           error: error
         )
 
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to deliver message to HTTP endpoint",
+          req_request: req,
+          error: error
+        })
+
         {:error,
          Error.service(
            service: :http_endpoint,
@@ -269,8 +294,15 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
          )}
 
       {:error, reason} ->
-        {:error,
-         Error.service(service: :http_endpoint, code: "unknown_error", message: "Request failed", details: reason)}
+        error = Error.service(service: :http_endpoint, code: "unknown_error", message: "Request failed", details: reason)
+
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to deliver message to HTTP endpoint",
+          req_request: req,
+          error: error
+        })
+
+        {:error, error}
     end
   end
 
@@ -278,7 +310,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   defp ensure_status(%Req.Response{} = response, %SinkConsumer{} = consumer) do
     if response.status in 200..299 do
       Metrics.incr_http_endpoint_throughput(consumer.sink.http_endpoint)
-      {:ok, response}
+      :ok
     else
       Prometheus.increment_http_via_sqs_message_deliver_failure_count(consumer.id, consumer.name, response.status)
 

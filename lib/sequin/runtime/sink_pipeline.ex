@@ -192,20 +192,9 @@ defmodule Sequin.Runtime.SinkPipeline do
 
     case reject_delivered_messages(context, messages) do
       {[], already_delivered} ->
-        Trace.warning(context.consumer.id, "Messages filtered out for idempotency", %{
-          message_count: length(already_delivered)
-        })
-
         already_delivered
 
       {to_deliver, already_delivered} ->
-        unless already_delivered == [] do
-          Trace.warning(context.consumer.id, "Messages filtered out for idempotency", %{
-            already_delivered_count: length(already_delivered),
-            already_delivered: Enum.map(already_delivered, & &1.data)
-          })
-        end
-
         Prometheus.increment_message_deliver_attempt(context.consumer.id, context.consumer.name, length(to_deliver))
         deliver_messages(pipeline_mod, batch_name, to_deliver, already_delivered, batch_info, context)
     end

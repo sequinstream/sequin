@@ -497,14 +497,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  def handle_event("trace_pause_updates", _params, socket) do
+  def handle_event("trace_stop", _params, socket) do
     Trace.unsubscribe(socket.assigns.consumer.id)
     {:noreply, update(socket, :trace, fn trace -> %{trace | paused: true} end)}
   end
 
-  def handle_event("trace_resume_updates", _params, socket) do
+  def handle_event("trace_start", _params, socket) do
     Trace.subscribe(socket.assigns.consumer.id)
-    {:noreply, update(socket, :trace, fn trace -> %{trace | paused: false} end)}
+
+    # Reset trace state on start
+    {:noreply, assign(socket, trace: %{initial_trace() | paused: false})}
   end
 
   def handle_event("trace_toggle_show_acked", %{"show_acked" => show_acked}, socket) do
@@ -592,12 +594,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_info({:trace_event, event}, socket) do
-    if socket.assigns.live_action == :trace and not socket.assigns.trace.paused do
-      trace = socket.assigns.trace
-      trace_events = Enum.take([event | trace.events], trace.event_limit)
-      trace = %{trace | events: trace_events, total_count: length(trace_events)}
+    paused? = socket.assigns.trace.paused
+    over_limit? = length(socket.assigns.trace.events) >= socket.assigns.trace.event_limit
 
-      {:noreply, assign(socket, trace: trace)}
+    if socket.assigns.live_action == :trace and not paused? and not over_limit? do
+      trace = socket.assigns.trace
+      event = coerce_trace_event_content(event)
+      events = [event | trace.events]
+      total_count = length(events)
+
+      if total_count >= trace.event_limit do
+        Trace.unsubscribe(socket.assigns.consumer.id)
+      end
+
+      {:noreply, assign(socket, trace: %{trace | events: events, total_count: total_count})}
     else
       {:noreply, socket}
     end
@@ -613,6 +623,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       event_limit: 100,
       paused: true
     }
+  end
+
+  defp coerce_trace_event_content(%Trace.Event{} = event) do
+    content =
+      case Jason.encode(event.content) do
+        {:ok, _content} ->
+          event.content
+
+        {:error, _} ->
+          Logger.warning("Failed to encode trace event content", event: event)
+          inspect(event.content)
+      end
+
+    %Trace.Event{event | content: content}
   end
 
   @smoothing_window 5

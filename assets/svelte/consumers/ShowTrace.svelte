@@ -22,7 +22,6 @@
   let page = trace.page;
   let loading = trace.loading;
   let paused = trace.paused;
-  let showAcked = trace.show_acked;
   let selectedEvent = null;
   let isDrawerOpen = false;
 
@@ -160,7 +159,7 @@
       {item.message}
     </td>
     <td
-      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500 font-mono"
+      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500 font-mono overflow-hidden max-w-lg"
     >
       {formatContent(item.content)}
     </td>

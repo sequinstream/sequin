@@ -90,15 +90,25 @@
             {#each consumer.sequence.column_filters as filter}
               <TableRow>
                 <TableCell
-                  ><code>
+                  class="whitespace-normal break-words max-w-[200px] align-top"
+                >
+                  <code>
                     {filter.column}
                     {#if filter.is_jsonb && filter.jsonb_path}
                       -> {filter.jsonb_path}
-                    {/if}</code
-                  ></TableCell
+                    {/if}
+                  </code>
+                </TableCell>
+                <TableCell
+                  class="whitespace-normal break-words max-w-[150px] align-top"
                 >
-                <TableCell><code>{filter.operator}</code></TableCell>
-                <TableCell><code>{filter.value}</code></TableCell>
+                  <code>{filter.operator}</code>
+                </TableCell>
+                <TableCell
+                  class="whitespace-normal break-words max-w-[300px] align-top"
+                >
+                  <code>{filter.value}</code>
+                </TableCell>
               </TableRow>
             {/each}
           </TableBody>

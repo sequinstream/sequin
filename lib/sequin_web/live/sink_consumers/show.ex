@@ -186,10 +186,35 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                 }
               }
             />
+          <% {:trace, _consumer} -> %>
+            <!-- ShowTrace component -->
+            <.svelte
+              name="consumers/ShowTrace"
+              props={
+                %{
+                  consumer: encode_consumer(@consumer),
+                  trace: encode_trace(@consumer, nil)
+                }
+              }
+            />
         <% end %>
       </div>
     </div>
     """
+  end
+
+  # FIXME: TEMP
+  defp encode_trace(consumer, trace) do
+    %{
+      events: [],
+      total_count: 0,
+      page_size: 50,
+      page: 0,
+      page_count: 0,
+      loading: false,
+      paused: false,
+      show_acked: false
+    }
   end
 
   def handle_event("edit", _params, socket) do

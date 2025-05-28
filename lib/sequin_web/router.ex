@@ -112,6 +112,7 @@ defmodule SequinWeb.Router do
       live "/sinks/:type/:id", SinkConsumersLive.Show, :show
       live "/sinks/:type/:id/messages", SinkConsumersLive.Show, :messages
       live "/sinks/:type/:id/messages/:ack_id", SinkConsumersLive.Show, :messages
+      live "/sinks/:type/:id/trace", SinkConsumersLive.Show, :trace
       live "/sinks/:type/:id/edit", SinkConsumersLive.Form, :edit
 
       live "/functions", FunctionsLive.Index, :index

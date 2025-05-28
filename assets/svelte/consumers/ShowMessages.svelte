@@ -341,7 +341,6 @@
 <TableWithDrawer
   title="Messages"
   items={messages}
-  {totalCount}
   {pageSize}
   {loading}
   {page}

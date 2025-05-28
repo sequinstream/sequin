@@ -2,7 +2,9 @@ defmodule Sequin.Sinks.Azure.EventHub do
   @moduledoc false
   import Sequin.Error.Guards, only: [is_error: 1]
 
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Runtime.Trace
 
   @eventhub_data_plane_suffix ".servicebus.windows.net"
 
@@ -32,18 +34,21 @@ defmodule Sequin.Sinks.Azure.EventHub do
     }
   end
 
-  @spec publish_messages(Client.t(), [map()]) :: :ok | {:error, any()}
-  def publish_messages(%Client{} = client, messages) do
+  @spec publish_messages(SinkConsumer.t(), Client.t(), [map()]) :: :ok | {:error, any()}
+  def publish_messages(%SinkConsumer{} = consumer, %Client{} = client, messages) do
     path = "#{client.event_hub_name}/messages"
     encoded_messages = Enum.map(messages, &to_encoded_message/1)
     req = base_req(client, path, method: :post, json: encoded_messages)
 
     case Req.request(req) do
-      {:ok, %{status: 201}} ->
+      {:ok, %{status: 201} = res} ->
+        Trace.info(consumer.id, "Messages delivered to Azure Event Hub", {req, res})
         :ok
 
       error ->
-        handle_error(client, error, "publish messages")
+        error = handle_error(client, error, "publish messages")
+        Trace.error(consumer.id, "Failed to deliver messages to Azure Event Hub", {req, error})
+        {:error, error}
     end
   end
 
@@ -62,7 +67,7 @@ defmodule Sequin.Sinks.Azure.EventHub do
         if body =~ "The requested HTTP operation is not supported in an EventHub" do
           :ok
         else
-          handle_error(client, error, "test connection")
+          {:error, handle_error(client, error, "test connection")}
         end
 
       # This means the namespace is vaild, but not the event hub name
@@ -74,7 +79,7 @@ defmodule Sequin.Sinks.Azure.EventHub do
          )}
 
       error ->
-        handle_error(client, error, "test connection")
+        {:error, handle_error(client, error, "test connection")}
     end
   end
 
@@ -118,37 +123,29 @@ defmodule Sequin.Sinks.Azure.EventHub do
   defp handle_error(%Client{} = client, error, req_desc) do
     case error do
       {:ok, %{status: 404}} ->
-        {:error,
-         Error.not_found(
-           entity: :event_hub,
-           params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
-         )}
+        Error.not_found(
+          entity: :event_hub,
+          params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
+        )
 
       {:error, %Req.TransportError{reason: :nxdomain}} ->
-        {:error,
-         Error.not_found(
-           entity: :event_hub,
-           params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
-         )}
+        Error.not_found(
+          entity: :event_hub,
+          params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
+        )
 
       {:error, error} when is_error(error) ->
-        {:error, error}
+        error
 
       {:ok, %Req.Response{} = res} ->
-        {:error,
-         Error.service(
-           service: :azure_event_hub,
-           message: "Request failed: #{req_desc}, bad status (status=#{res.status})",
-           details: Map.from_struct(res)
-         )}
+        Error.service(
+          service: :azure_event_hub,
+          message: "Request failed: #{req_desc}, bad status (status=#{res.status})",
+          details: Map.from_struct(res)
+        )
 
       {:error, error} ->
-        {:error,
-         Error.service(
-           service: :azure_event_hub,
-           message: "Request failed: #{req_desc}",
-           details: error
-         )}
+        Error.service(service: :azure_event_hub, message: "Request failed: #{req_desc}", details: error)
     end
   end
 end

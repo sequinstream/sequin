@@ -39,7 +39,7 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
         build_event_hub_message(consumer, data)
       end)
 
-    case EventHub.publish_messages(event_hub_client, event_hub_messages) do
+    case EventHub.publish_messages(consumer, event_hub_client, event_hub_messages) do
       :ok ->
         {:ok, messages, context}
 

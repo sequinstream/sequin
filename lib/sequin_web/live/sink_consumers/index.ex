@@ -101,7 +101,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       |> assign(:total_count, total_count)
       |> assign(:encoded_consumers, nil)
       |> async_assign_consumers()
-      |> push_patch(to: ~p"/sinks?page=#{page}")
+      |> push_navigate(to: ~p"/sinks?page=#{page}", replace: true)
 
     {:noreply, socket}
   end

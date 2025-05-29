@@ -34,8 +34,8 @@ defmodule Sequin.Runtime.HttpPushSqsPipelineTest do
         )
 
       # Configure the pipeline for testing
-      expect_application_get_env(3, fn
-        :sequin, HttpPushSqsPipeline -> [sqs: @sqs_config]
+      expect_application_get_env(4, fn
+        :sequin, HttpPushSqsPipeline -> [sqs: @sqs_config, discards_disabled?: false]
       end)
 
       {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}

@@ -89,7 +89,9 @@ config :sequin, Sequin.Consumers.HttpPushSink,
   via_sqs_for_new_sinks?: System.get_env("HTTP_PUSH_VIA_SQS_NEW_SINKS") in ~w(true 1)
 
 # Configure the SQS pipeline with credentials
-config :sequin, Sequin.Runtime.HttpPushSqsPipeline, sqs: sqs_config
+config :sequin, Sequin.Runtime.HttpPushSqsPipeline,
+  sqs: sqs_config,
+  discards_disabled?: System.get_env("HTTP_PUSH_VIA_SQS_DISCARDS_DISABLED") in ~w(true 1)
 
 config :sequin, Sequin.Runtime.SlotProcessorServer,
   max_accumulated_bytes: ConfigParser.replication_flush_max_accumulated_bytes(env_vars),

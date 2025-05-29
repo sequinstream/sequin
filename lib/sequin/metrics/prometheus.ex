@@ -83,7 +83,7 @@ defmodule Sequin.Prometheus do
 
     Histogram.new(
       name: :sequin_http_via_sqs_message_total_latency_us,
-      labels: [:consumer_id, :consumer_name],
+      labels: [:consumer_id, :consumer_name, :queue_kind],
       buckets: [10, 100, 1000, 10_000, 50_000, 100_000, 500_000, 1_000_000, 5_000_000, 10_000_000, 50_000_000],
       duration_unit: false,
       help: "The HTTP via SQS message total latency in microseconds."
@@ -388,11 +388,12 @@ defmodule Sequin.Prometheus do
   @spec observe_http_via_sqs_message_total_latency_us(
           consumer_id :: String.t(),
           consumer_name :: String.t(),
+          queue_kind :: :dlq | :main,
           latency_us :: number()
         ) :: :ok
-  def observe_http_via_sqs_message_total_latency_us(consumer_id, consumer_name, latency_us) do
+  def observe_http_via_sqs_message_total_latency_us(consumer_id, consumer_name, queue_kind, latency_us) do
     Histogram.observe(
-      [name: :sequin_http_via_sqs_message_total_latency_us, labels: [consumer_id, consumer_name]],
+      [name: :sequin_http_via_sqs_message_total_latency_us, labels: [consumer_id, consumer_name, queue_kind]],
       latency_us
     )
   end

@@ -8,7 +8,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipelineTest do
   alias Sequin.Runtime.HttpPushSqsPipeline
 
   @sqs_config %{
-    queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
+    main_queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
     region: "us-east-1",
     access_key_id: "test-access-key",
     secret_access_key: "test-secret-key"
@@ -167,7 +167,9 @@ defmodule Sequin.Runtime.HttpPushSqsPipelineTest do
     pipeline_config = [
       name: @sqs_pipeline_name,
       producer_mod: Broadway.DummyProducer,
-      test_pid: self()
+      test_pid: self(),
+      queue_url: @sqs_config.main_queue_url,
+      queue_kind: :main
     ]
 
     # Start the pipeline and process the message

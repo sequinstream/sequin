@@ -340,7 +340,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     # Send to SQS - now sending multiple messages in a batch
     %{sqs_config: sqs_config} = context
 
-    case SQS.send_messages(sqs_client, sqs_config.queue_url, sqs_messages) do
+    case SQS.send_messages(sqs_client, sqs_config.main_queue_url, sqs_messages) do
       :ok ->
         Logger.debug(
           "[HttpPushPipeline] Successfully routed HTTP request to SQS via configuration for consumer #{consumer.id}"

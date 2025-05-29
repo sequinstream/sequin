@@ -29,10 +29,36 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
 
   require Logger
 
-  @spec child_spec(keyword()) :: Supervisor.child_spec() | nil
-  def child_spec(opts \\ []) do
+  @spec main_queue_child_spec(keyword()) :: Supervisor.child_spec() | nil
+  def main_queue_child_spec(opts \\ []) do
+    queue_url = Map.fetch!(fetch_sqs_config!(), :main_queue_url)
+    name = Keyword.get(opts, :name, __MODULE__)
+
+    opts =
+      opts
+      |> Keyword.put(:queue_url, queue_url)
+      |> Keyword.put(:queue_kind, :main)
+      |> Keyword.put(:name, name)
+
     %{
-      id: Keyword.get(opts, :name, __MODULE__),
+      id: name,
+      start: {__MODULE__, :start_link, [opts]}
+    }
+  end
+
+  @spec dlq_child_spec(keyword()) :: Supervisor.child_spec() | nil
+  def dlq_child_spec(opts \\ []) do
+    queue_url = Map.fetch!(fetch_sqs_config!(), :dlq_url)
+    name = Keyword.get(opts, :name, Module.concat(__MODULE__, Dlq))
+
+    opts =
+      opts
+      |> Keyword.put(:queue_url, queue_url)
+      |> Keyword.put(:queue_kind, :dlq)
+      |> Keyword.put(:name, name)
+
+    %{
+      id: name,
       start: {__MODULE__, :start_link, [opts]}
     }
   end
@@ -66,17 +92,22 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
     Keyword.fetch(config(), :sqs)
   end
 
+  def fetch_sqs_config! do
+    Keyword.fetch!(config(), :sqs)
+  end
+
   @doc """
   Starts the Broadway pipeline.
 
   This is called by the application supervisor if SQS configuration is available.
   """
   def start_link(opts) do
-    name = Keyword.get(opts, :name, __MODULE__)
+    queue_url = Keyword.fetch!(opts, :queue_url)
+    queue_kind = Keyword.fetch!(opts, :queue_kind)
+    name = Keyword.fetch!(opts, :name)
 
     {:ok,
      %{
-       queue_url: queue_url,
        region: region,
        access_key_id: access_key_id,
        secret_access_key: secret_access_key
@@ -109,13 +140,15 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
         ]
       ],
       context: %{
-        test_pid: Keyword.get(opts, :test_pid)
+        test_pid: Keyword.get(opts, :test_pid),
+        queue_kind: queue_kind
       }
     )
   end
 
   @impl true
   def handle_message(_processor, %Message{data: data} = message, context) do
+    %{queue_kind: queue_kind} = context
     setup_allowances(context)
 
     # The message body is a JSON string with a "data" field containing Base64-encoded binary
@@ -132,7 +165,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
     case fetch_consumer(consumer_id) do
       {:ok, consumer} ->
         Prometheus.increment_http_via_sqs_message_deliver_attempt_count(consumer_id, consumer.name)
-        {latency_us, result} = :timer.tc(&deliver_to_http_endpoint/2, [consumer, consumer_event])
+        {latency_us, result} = :timer.tc(&deliver_to_http_endpoint/3, [consumer, consumer_event, queue_kind])
 
         # Is `1` on first delivery
         %{metadata: %{attributes: %{"approximate_receive_count" => receive_count}}} = message
@@ -146,16 +179,26 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
 
             if ingested_at = consumer_event.ingested_at do
               total_latency = DateTime.diff(DateTime.utc_now(), ingested_at, :microsecond)
-              Prometheus.observe_http_via_sqs_message_total_latency_us(consumer_id, consumer.name, total_latency)
+
+              Prometheus.observe_http_via_sqs_message_total_latency_us(
+                consumer_id,
+                consumer.name,
+                queue_kind,
+                total_latency
+              )
             end
 
             message
 
           {:error, error} ->
-            Logger.error("[HttpPushSqsPipeline] Failed to deliver message to HTTP endpoint: #{inspect(error)}")
+            Logger.warning("[HttpPushSqsPipeline] Failed to deliver message to HTTP endpoint: #{inspect(error)}")
 
             if final_delivery? do
-              Logger.error("[HttpPushSqsPipeline] Discarding message after #{consumer.max_retry_count} retries")
+              Logger.warning("[HttpPushSqsPipeline] Discarding message after #{consumer.max_retry_count} retries")
+
+              Trace.warning(consumer_id, %Trace.Event{
+                message: "Discarding message after #{consumer.max_retry_count} retries"
+              })
 
               Prometheus.increment_http_via_sqs_message_discard_count(consumer_id, consumer.name)
 
@@ -199,7 +242,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   end
 
   # Deliver the message to the HTTP endpoint
-  defp deliver_to_http_endpoint(consumer, consumer_event) do
+  defp deliver_to_http_endpoint(consumer, consumer_event, queue_kind) do
     http_endpoint = consumer.sink.http_endpoint
 
     # Transform the message data
@@ -224,6 +267,14 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
       |> Req.new()
       |> Req.merge(default_req_opts())
 
+    Trace.info(consumer.id, %Trace.Event{
+      message: "Fetched from SQS, making HTTP request (queue=#{queue_kind})",
+      req_request: req,
+      extra: %{
+        transformed_data: transformed_data
+      }
+    })
+
     # Make the HTTP request
     with {:ok, resp} <- Req.request(req),
          :ok <- ensure_status(resp, consumer) do
@@ -247,7 +298,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
       {:error, %Mint.TransportError{reason: reason} = error} ->
         Prometheus.increment_http_via_sqs_message_deliver_failure_count(consumer.id, consumer.name, reason)
 
-        Logger.error(
+        Logger.warning(
           "[HttpPushSqsPipeline] #{req.method} to webhook endpoint failed with Mint.TransportError: #{Exception.message(error)}",
           error: error
         )
@@ -269,7 +320,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
       {:error, %Req.TransportError{reason: reason} = error} ->
         Prometheus.increment_http_via_sqs_message_deliver_failure_count(consumer.id, consumer.name, reason)
 
-        Logger.error(
+        Logger.warning(
           "[HttpPushSqsPipeline] #{req.method} to webhook endpoint failed with Req.TransportError: #{Exception.message(error)}",
           error: error
         )

@@ -690,8 +690,7 @@ defmodule Sequin.Transforms do
   end
 
   def from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints) do
-    consumer_attrs
-    |> Enum.reduce_while({:ok, %{}}, fn {key, value}, {:ok, acc} ->
+    Enum.reduce_while(consumer_attrs, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
       case key do
         "name" ->
           {:cont, {:ok, Map.put(acc, :name, value)}}
@@ -800,20 +799,6 @@ defmodule Sequin.Transforms do
           {:halt, {:error, Error.validation(summary: "Unknown field: #{key}")}}
       end
     end)
-    |> case do
-      {:ok, acc} ->
-        {:ok,
-         acc
-         # These put_news will remove the transform, filter, and routing keys from the sink
-         # if the keys are not present in the consumer_attrs
-         |> Map.put_new(:transform_id, nil)
-         |> Map.put_new(:filter_id, nil)
-         |> Map.put_new(:routing_id, nil)
-         |> Map.put_new(:routing_mode, "static")}
-
-      {:error, error} ->
-        {:error, error}
-    end
   end
 
   defp parse_sink(nil, _resources), do: {:error, Error.validation(summary: "`sink` is required on sink consumers.")}

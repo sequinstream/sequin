@@ -139,7 +139,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
         final_delivery? = receive_count - 1 >= consumer.max_retry_count
 
         case result do
-          {:ok, %Req.Response{} = response} ->
+          {:ok, %Req.Response{}} ->
             # Track success metrics
             Prometheus.increment_http_via_sqs_message_success_count(consumer_id, consumer.name)
             Prometheus.observe_http_via_sqs_message_deliver_latency_us(consumer_id, consumer.name, latency_us)
@@ -148,11 +148,6 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
               total_latency = DateTime.diff(DateTime.utc_now(), ingested_at, :microsecond)
               Prometheus.observe_http_via_sqs_message_total_latency_us(consumer_id, consumer.name, total_latency)
             end
-
-            Trace.info(consumer_id, %Trace.Event{
-              message: "Message delivered to HTTP endpoint",
-              req_response: Map.from_struct(response)
-            })
 
             message
 

@@ -310,7 +310,11 @@ defmodule Sequin.Runtime.HttpPushPipeline do
         %ConsumerEvent{} = consumer_event = message.data
 
         # Convert to binary
-        binary_data = consumer_event |> ConsumerEvent.map_from_struct() |> :erlang.term_to_binary() |> Base.encode64()
+        binary_data =
+          consumer_event
+          |> ConsumerEvent.map_from_struct()
+          |> :erlang.term_to_binary(compressed: 6)
+          |> Base.encode64()
 
         # Build SQS message with binary data as the message body
         %{

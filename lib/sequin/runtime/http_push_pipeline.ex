@@ -104,17 +104,12 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
   @impl SinkPipeline
   def handle_batch(:default, messages, _batch_info, context) when uses_via_sqs?(context) do
-    %{
-      consumer: consumer,
-      http_endpoint: http_endpoint,
-      req_opts: req_opts,
-      test_pid: test_pid
-    } = context
+    %{consumer: consumer, test_pid: test_pid} = context
 
     setup_allowances(test_pid)
 
-    case push_to_sqs(http_endpoint, consumer, messages, req_opts, context) do
-      :ok ->
+    case push_to_sqs(consumer, messages, context) do
+      {:ok, messages} ->
         {:ok, messages, context}
 
       {:error, error} when is_exception(error) ->
@@ -296,9 +291,12 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     end
   end
 
+  @invalid_message_or_request_size_error [:invalid_message_contents, :batch_request_too_long]
+
   # Handle pushing messages to SQS when via configuration is present
-  defp push_to_sqs(%HttpEndpoint{} = _http_endpoint, %SinkConsumer{} = consumer, messages, _req_opts, context) do
+  defp push_to_sqs(%SinkConsumer{} = consumer, messages, context) do
     Logger.debug("[HttpPushPipeline] Pushing #{length(messages)} messages to SQS for consumer #{consumer.id}")
+    message_count = length(messages)
 
     %{sqs_client: sqs_client} = context
 
@@ -355,7 +353,22 @@ defmodule Sequin.Runtime.HttpPushPipeline do
           }
         })
 
-        :ok
+        {:ok, messages}
+
+      {:error, %Error.ServiceError{code: code}}
+      when code in @invalid_message_or_request_size_error and message_count == 1 ->
+        Logger.info("[HttpPushPipeline] Discarding message due to SQS error: #{code}")
+        {:ok, messages}
+
+      {:error, %Error.ServiceError{code: code}} when code in @invalid_message_or_request_size_error ->
+        Logger.info("[HttpPushPipeline] Batch was rejected due to SQS error: #{code}. Retrying messages individually.")
+
+        Enum.reduce_while(messages, {:ok, []}, fn message, {:ok, messages} ->
+          case push_to_sqs(consumer, [message], context) do
+            {:ok, [_msg]} -> {:cont, {:ok, [message | messages]}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+        end)
 
       {:error, error} ->
         Logger.error("[HttpPushPipeline] Failed to send message to SQS: #{inspect(error)}")

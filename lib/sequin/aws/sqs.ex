@@ -285,20 +285,52 @@ defmodule Sequin.Aws.SQS do
   end
 
   defp handle_unexpected_response(%{body: body, status_code: status_code}) do
-    message =
-      case Jason.decode(body) do
-        {:ok, %{"message" => message}} ->
-          message
+    case Jason.decode(body) do
+      # Handle standard AWS SQS error format with __type and message fields
+      {:ok, %{"__type" => "com.amazonaws.sqs#BatchRequestTooLong", "message" => error_message}} ->
+        {:error,
+         Error.service(
+           service: :aws_sqs,
+           code: :batch_request_too_long,
+           message: "SQS batch request exceeds the maximum allowed size: #{error_message}",
+           details: %{status_code: status_code, body: body}
+         )}
 
-        _ ->
+      {:ok, %{"__type" => "com.amazonaws.sqs#" <> error_type, "message" => error_message}} ->
+        {:error,
+         Error.service(
+           service: :aws_sqs,
+           code: error_type,
+           message: "SQS error: #{error_message} (status=#{status_code})",
+           details: %{status_code: status_code, body: body}
+         )}
+
+      # Fallback for other JSON formats with just a message field
+      {:ok, %{"message" => message}} ->
+        {:error,
+         Error.service(
+           service: :aws_sqs,
+           code: :unknown_error,
+           message: "Error from AWS SQS: #{message} (status=#{status_code})",
+           details: %{status_code: status_code, body: body}
+         )}
+
+      # Fallback for non-parseable or unexpected formats
+      _ ->
+        message =
           if is_binary(body) do
             body
           else
             inspect(body)
           end
-      end
 
-    {:error,
-     Error.service(service: :aws_sqs, message: "Error from AWS: #{message} (status=#{status_code})", details: message)}
+        {:error,
+         Error.service(
+           service: :aws_sqs,
+           code: :unknown_error,
+           message: "Error from AWS SQS: #{message} (status=#{status_code})",
+           details: %{status_code: status_code, body: body}
+         )}
+    end
   end
 end

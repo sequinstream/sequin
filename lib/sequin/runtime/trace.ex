@@ -43,7 +43,7 @@ defmodule Sequin.Runtime.Trace do
     defp format_external(%Req.Request{} = req) do
       %{
         method: req.method,
-        url: format_external(req.url),
+        url: format_req_url(req),
         headers: req.headers,
         body: format_external(req.body) || format_external(req.options.json)
       }
@@ -86,6 +86,24 @@ defmodule Sequin.Runtime.Trace do
           Logger.warning("Failed to encode unknown value for format_external: #{inspect(unknown)}", error: error)
           inspect(unknown)
       end
+    end
+
+    defp format_req_url(%Req.Request{} = req) do
+      base_url =
+        case Req.Request.get_option(req, :base_url) do
+          nil -> ""
+          base_url when is_binary(base_url) -> base_url
+          %URI{} = base_url -> URI.to_string(base_url)
+        end
+
+      url =
+        case Req.Request.get_option(req, :url) do
+          nil -> ""
+          %URI{} = url -> URI.to_string(url)
+          url when is_binary(url) -> url
+        end
+
+      base_url <> url
     end
   end
 

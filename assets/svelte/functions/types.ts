@@ -61,7 +61,7 @@ export interface FormErrors {
 }
 
 export interface TestMessage {
-  id: string;
+  replication_message_trace_id: string;
   record: string;
   changes: string;
   action: string;

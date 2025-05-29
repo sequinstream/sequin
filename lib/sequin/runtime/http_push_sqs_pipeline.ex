@@ -162,7 +162,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
               error: Exception.message(error)
             })
 
-            Health.put_event(consumer, %Event{slug: :sqs_delivery_failed, status: :fail})
+            Health.put_event(consumer, %Health.Event{slug: :sqs_delivery_failed, status: :fail})
 
             if final_delivery? do
               Logger.error("[HttpPushSqsPipeline] Discarding message after #{consumer.max_retry_count} retries")

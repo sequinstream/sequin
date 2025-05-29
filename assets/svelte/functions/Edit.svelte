@@ -10,6 +10,10 @@
   } from "$lib/components/ui/select";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
+  import * as Command from "$lib/components/ui/command";
+  import { Check, ChevronsUpDown } from "lucide-svelte";
+  import { cn } from "$lib/utils";
+  import { tick } from "svelte";
   import { Label } from "$lib/components/ui/label";
   import { onMount, onDestroy } from "svelte";
   import { Info, BookText } from "lucide-svelte";
@@ -271,6 +275,23 @@
     }
   }
 
+  let tableComboboxOpen = false;
+
+  function closeTableComboboxAndFocusTrigger(triggerId: string) {
+    tableComboboxOpen = false;
+    tick().then(() => {
+      document.getElementById(triggerId)?.focus();
+    });
+  }
+
+  function handleTableSelectCombobox(tableOid: number) {
+    selectedTableOid = tableOid;
+    pushEvent("table_selected", {
+      database_id: selectedDatabaseId,
+      table_oid: selectedTableOid,
+    });
+  }
+
   // let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
   // let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
 
@@ -293,14 +314,6 @@
     selectedDatabaseId = event.value;
     selectedTableOid = null; // Reset table selection when database changes
     testMessages = [];
-  }
-
-  function handleTableSelect(event: any) {
-    selectedTableOid = event.value;
-    pushEvent("table_selected", {
-      database_id: selectedDatabaseId,
-      table_oid: selectedTableOid,
-    });
   }
 
   // function refreshDatabases() {
@@ -391,11 +404,11 @@
     }
 
     if (databases.length === 1 && !selectedDatabaseId) {
-      handleDatabaseSelect({ value: databases[0].id });
+      handleDatabaseSelectCombobox({ value: databases[0].id });
     }
 
     if (selectedDatabase && selectedDatabase.tables.length === 1) {
-      handleTableSelect(selectedDatabase.tables[0]);
+      handleTableSelectCombobox(selectedDatabase.tables[0]);
     }
 
     maybeSetInitialCode();
@@ -1008,27 +1021,52 @@ Please help me create or modify the Elixir function transform to achieve the des
 
           <div class="flex-1 space-y-2">
             <Label for="table-select">Table</Label>
-            <Select
-              onSelectedChange={handleTableSelect}
-              selected={{
-                value: selectedTableOid,
-                label: selectedTable
-                  ? `${selectedTable.schema}.${selectedTable.name}`
-                  : undefined,
-              }}
-              disabled={!selectedDatabaseId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a table" />
-              </SelectTrigger>
-              <SelectContent class="max-h-[80vh] overflow-y-auto">
-                {#each selectedDatabase.tables as table}
-                  <SelectItem value={table.oid}
-                    >{table.schema}.{table.name}</SelectItem
-                  >
-                {/each}
-              </SelectContent>
-            </Select>
+            <Popover bind:open={tableComboboxOpen} let:ids>
+              <PopoverTrigger asChild let:builder>
+                <Button
+                  builders={[builder]}
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={tableComboboxOpen}
+                  class="w-full justify-between"
+                  disabled={!selectedDatabaseId}
+                  id="table-combobox-trigger"
+                >
+                  {selectedTable
+                    ? `${selectedTable.schema}.${selectedTable.name}`
+                    : "Select a table"}
+                  <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent class="p-0" align="start">
+                <Command.Root>
+                  <Command.Input placeholder="Search tables..." />
+                  <Command.Empty>No table found.</Command.Empty>
+                  <Command.Group>
+                    <div class="max-h-[300px] overflow-y-auto">
+                      {#each selectedDatabase?.tables || [] as table}
+                        <Command.Item
+                          value={`${table.schema}.${table.name}`}
+                          onSelect={() => {
+                            handleTableSelectCombobox(table.oid);
+                            closeTableComboboxAndFocusTrigger(ids.trigger);
+                          }}
+                        >
+                          <Check
+                            class={cn(
+                              "mr-2 h-4 w-4",
+                              selectedTableOid !== table.oid &&
+                                "text-transparent",
+                            )}
+                          />
+                          {table.schema}.{table.name}
+                        </Command.Item>
+                      {/each}
+                    </div>
+                  </Command.Group>
+                </Command.Root>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </div>

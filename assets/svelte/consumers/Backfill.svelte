@@ -158,22 +158,18 @@
     </div>
 
     {#if !isBackfillSupported}
-      <div
-        class="flex items-start gap-2 p-3 rounded-md bg-amber-50 text-amber-800 mb-4"
-      >
-        <div>
-          <p class="text-sm">
-            Backfills are not supported for PostgreSQL 12 and 13.
-            <a
-              href="https://docs.sequinstream.com/reference/databases#postgresql-12-and-13"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="underline font-medium"
-            >
-              Learn more
-            </a>
-          </p>
-        </div>
+      <div>
+        <p class="text-sm">
+          Backfills are not supported for PostgreSQL 12 and 13.
+          <a
+            href="https://docs.sequinstream.com/reference/databases#postgresql-12-and-13"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline font-medium"
+          >
+            Learn more
+          </a>
+        </p>
       </div>
     {/if}
 

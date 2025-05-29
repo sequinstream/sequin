@@ -74,7 +74,7 @@ defmodule Sequin.Error do
     defexception [:code, :message, :service, :details]
 
     @type t :: %__MODULE__{
-            code: String.t(),
+            code: atom() | String.t(),
             message: String.t(),
             service: atom(),
             details: term()

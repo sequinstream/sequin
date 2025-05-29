@@ -870,7 +870,7 @@ Please help me create or modify the Elixir function transform to achieve the des
               </AlertDialogContent>
             </AlertDialog>
 
-            {#if form.function.type === "function"}
+            {#if form.function.type === "transform"}
               <CopyToClipboard
                 textFn={handleCopyForChatGPT}
                 buttonText="Copy for ChatGPT"

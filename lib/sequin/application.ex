@@ -62,7 +62,7 @@ defmodule Sequin.Application do
         ]
 
     if HttpPushSqsPipeline.enabled?() do
-      children ++ [HttpPushSqsPipeline.child_spec()]
+      children ++ [HttpPushSqsPipeline.main_queue_child_spec(), HttpPushSqsPipeline.dlq_child_spec()]
     else
       children
     end

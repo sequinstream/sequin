@@ -22,7 +22,6 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Prometheus
   alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
-  alias Sequin.Runtime.Trace
 
   require Logger
 
@@ -217,23 +216,12 @@ defmodule Sequin.Runtime.SinkPipeline do
         Prometheus.increment_message_deliver_success(context.consumer.id, context.consumer.name, length(delivered))
         Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :ok, t)
 
-        Trace.info(context.consumer.id, "Messages delivered to sink", %{
-          delivered_count: length(delivered),
-          delivered: Enum.map(delivered, & &1.data)
-        })
-
         update_context(context, next_context)
         delivered ++ already_delivered
 
       {t, {:error, error}} ->
         Prometheus.increment_message_deliver_failure(context.consumer.id, context.consumer.name, length(to_deliver))
         Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :error, t)
-
-        Trace.error(context.consumer.id, "Failed to deliver messages to sink", %{
-          error: Exception.message(error),
-          failed_count: length(to_deliver),
-          failed: Enum.map(to_deliver, & &1.data)
-        })
 
         failed =
           Enum.map(to_deliver, fn message ->

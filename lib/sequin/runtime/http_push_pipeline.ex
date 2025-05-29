@@ -9,9 +9,11 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Error.ServiceError
   alias Sequin.Functions.MiniElixir
   alias Sequin.Metrics
   alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Runtime.Trace
   alias Sequin.Transforms
 
   require Logger
@@ -102,17 +104,12 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
   @impl SinkPipeline
   def handle_batch(:default, messages, _batch_info, context) when uses_via_sqs?(context) do
-    %{
-      consumer: consumer,
-      http_endpoint: http_endpoint,
-      req_opts: req_opts,
-      test_pid: test_pid
-    } = context
+    %{consumer: consumer, test_pid: test_pid} = context
 
     setup_allowances(test_pid)
 
-    case push_to_sqs(http_endpoint, consumer, messages, req_opts, context) do
-      :ok ->
+    case push_to_sqs(consumer, messages, context) do
+      {:ok, messages} ->
         {:ok, messages, context}
 
       {:error, error} when is_exception(error) ->
@@ -226,15 +223,34 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       |> Keyword.merge(req_opts)
       |> Req.new()
 
-    case Req.request(req) do
-      {:ok, response} ->
-        ensure_status(response, consumer)
+    with {:ok, resp} <- Req.request(req),
+         :ok <- ensure_status(resp, consumer) do
+      Trace.info(consumer.id, %Trace.Event{
+        message: "Messages delivered to HTTP endpoint",
+        req_request: req,
+        req_response: resp
+      })
+
+      :ok
+    else
+      {:error, %ServiceError{} = error} ->
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to deliver messages to HTTP endpoint",
+          error: error
+        })
+
+        {:error, error}
 
       {:error, %Mint.TransportError{reason: reason} = error} ->
         Logger.error(
           "[HttpPushPipeline] #{req.method} to webhook endpoint failed with Mint.TransportError: #{Exception.message(error)}",
           error: error
         )
+
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to deliver messages to HTTP endpoint [transport error]",
+          error: error
+        })
 
         {:error,
          Error.service(
@@ -250,6 +266,11 @@ defmodule Sequin.Runtime.HttpPushPipeline do
           error: error
         )
 
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to deliver messages to HTTP endpoint [transport error]",
+          error: error
+        })
+
         {:error,
          Error.service(
            service: :http_endpoint,
@@ -259,14 +280,23 @@ defmodule Sequin.Runtime.HttpPushPipeline do
          )}
 
       {:error, reason} ->
-        {:error,
-         Error.service(service: :http_endpoint, code: "unknown_error", message: "Request failed", details: reason)}
+        error = Error.service(service: :http_endpoint, code: "unknown_error", message: "Request failed", details: reason)
+
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to deliver messages to HTTP endpoint",
+          error: error
+        })
+
+        {:error, error}
     end
   end
 
+  @invalid_message_or_request_size_error [:invalid_message_contents, :batch_request_too_long]
+
   # Handle pushing messages to SQS when via configuration is present
-  defp push_to_sqs(%HttpEndpoint{} = _http_endpoint, %SinkConsumer{} = consumer, messages, _req_opts, context) do
+  defp push_to_sqs(%SinkConsumer{} = consumer, messages, context) do
     Logger.debug("[HttpPushPipeline] Pushing #{length(messages)} messages to SQS for consumer #{consumer.id}")
+    message_count = length(messages)
 
     %{sqs_client: sqs_client} = context
 
@@ -278,7 +308,11 @@ defmodule Sequin.Runtime.HttpPushPipeline do
         %ConsumerEvent{} = consumer_event = message.data
 
         # Convert to binary
-        binary_data = consumer_event |> ConsumerEvent.map_from_struct() |> :erlang.term_to_binary() |> Base.encode64()
+        binary_data =
+          consumer_event
+          |> ConsumerEvent.map_from_struct()
+          |> :erlang.term_to_binary(compressed: 6)
+          |> Base.encode64()
 
         # Build SQS message with binary data as the message body
         %{
@@ -306,16 +340,44 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     # Send to SQS - now sending multiple messages in a batch
     %{sqs_config: sqs_config} = context
 
-    case SQS.send_messages(sqs_client, sqs_config.queue_url, sqs_messages) do
+    case SQS.send_messages(sqs_client, sqs_config.main_queue_url, sqs_messages) do
       :ok ->
         Logger.debug(
           "[HttpPushPipeline] Successfully routed HTTP request to SQS via configuration for consumer #{consumer.id}"
         )
 
-        :ok
+        Trace.info(consumer.id, %Trace.Event{
+          message: "Sent messages to SQS",
+          extra: %{
+            sqs_messages: sqs_messages
+          }
+        })
+
+        {:ok, messages}
+
+      {:error, %Error.ServiceError{code: code}}
+      when code in @invalid_message_or_request_size_error and message_count == 1 ->
+        Logger.info("[HttpPushPipeline] Discarding message due to SQS error: #{code}")
+        {:ok, messages}
+
+      {:error, %Error.ServiceError{code: code}} when code in @invalid_message_or_request_size_error ->
+        Logger.info("[HttpPushPipeline] Batch was rejected due to SQS error: #{code}. Retrying messages individually.")
+
+        Enum.reduce_while(messages, {:ok, []}, fn message, {:ok, messages} ->
+          case push_to_sqs(consumer, [message], context) do
+            {:ok, [_msg]} -> {:cont, {:ok, [message | messages]}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+        end)
 
       {:error, error} ->
         Logger.error("[HttpPushPipeline] Failed to send message to SQS: #{inspect(error)}")
+
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to send messages to SQS",
+          error: error
+        })
+
         {:error, Error.service(service: :sqs, message: "Failed to send to SQS", details: error)}
     end
   end

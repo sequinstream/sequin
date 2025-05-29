@@ -76,10 +76,11 @@ end
 sqs_config =
   if System.get_env("HTTP_PUSH_VIA_SQS_QUEUE_URL") do
     %{
-      queue_url: System.get_env("HTTP_PUSH_VIA_SQS_QUEUE_URL"),
-      region: System.get_env("HTTP_PUSH_VIA_SQS_REGION"),
-      access_key_id: System.get_env("HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID"),
-      secret_access_key: System.get_env("HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY")
+      main_queue_url: System.fetch_env!("HTTP_PUSH_VIA_SQS_QUEUE_URL"),
+      dlq_url: System.fetch_env!("HTTP_PUSH_VIA_SQS_DLQ_URL"),
+      region: System.fetch_env!("HTTP_PUSH_VIA_SQS_REGION"),
+      access_key_id: System.fetch_env!("HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID"),
+      secret_access_key: System.fetch_env!("HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY")
     }
   end
 
@@ -88,7 +89,9 @@ config :sequin, Sequin.Consumers.HttpPushSink,
   via_sqs_for_new_sinks?: System.get_env("HTTP_PUSH_VIA_SQS_NEW_SINKS") in ~w(true 1)
 
 # Configure the SQS pipeline with credentials
-config :sequin, Sequin.Runtime.HttpPushSqsPipeline, sqs: sqs_config
+config :sequin, Sequin.Runtime.HttpPushSqsPipeline,
+  sqs: sqs_config,
+  discards_disabled?: System.get_env("HTTP_PUSH_VIA_SQS_DISCARDS_DISABLED") in ~w(true 1)
 
 config :sequin, Sequin.Runtime.SlotProcessorServer,
   max_accumulated_bytes: ConfigParser.replication_flush_max_accumulated_bytes(env_vars),

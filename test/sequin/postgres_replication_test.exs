@@ -29,6 +29,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime
   alias Sequin.Runtime.MessageHandler
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageHandlerMock
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor.Message
@@ -814,6 +815,113 @@ defmodule Sequin.PostgresReplicationTest do
       # Assert the consumer event details
       assert consumer_event.consumer_id == consumer.id
       assert consumer_event.table_oid == TestEventLogPartitioned.table_oid()
+    end
+  end
+
+  describe "PostgresReplication end-to-end with http push" do
+    setup do
+      # Create source database
+      account_id = AccountsFactory.insert_account!().id
+      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id, pg_major_version: 17)
+
+      ConnectionCache.cache_connection(source_db, UnboxedRepo)
+
+      # Create PostgresReplicationSlot entity
+      pg_replication =
+        ReplicationFactory.insert_postgres_replication!(
+          postgres_database_id: source_db.id,
+          slot_name: replication_slot(),
+          publication_name: @publication,
+          account_id: account_id,
+          status: :active
+        )
+
+      character_sequence =
+        DatabasesFactory.insert_sequence!(
+          account_id: account_id,
+          postgres_database_id: source_db.id,
+          table_oid: Character.table_oid()
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "consumer",
+          type: :http_push,
+          status: :active,
+          partition_count: 1,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [],
+          sequence_id: character_sequence.id,
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              actions: [:insert, :update, :delete],
+              column_filters: [],
+              group_column_attnums: [Character.column_attnum("id")]
+            )
+        )
+
+      consumer = Repo.preload(consumer, :postgres_database)
+
+      %{consumer: consumer, pg_replication: pg_replication}
+    end
+
+    test "messages are successfully delivered to HTTP", %{consumer: consumer, pg_replication: pg_replication} do
+      test_pid = self()
+
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:http_request, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      sup = Module.concat(__MODULE__, Runtime.Supervisor)
+      start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
+
+      {:ok, _} =
+        Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: test_pid, req_opts: [adapter: adapter])
+
+      # Insert a character
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {:http_request, req}, 500
+      assert to_string(req.body) =~ "Characters"
+      assert to_string(req.body) =~ "insert"
+      assert to_string(req.body) =~ to_string(character.id)
+
+      assert_receive {SinkPipeline, :ack_finished, [_ack_id], []}, 500
+
+      assert [] == list_messages(consumer)
+    end
+
+    @tag capture_log: true
+    test "failed messages are written to disk", %{consumer: consumer, pg_replication: pg_replication} do
+      test_pid = self()
+
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:http_request, req})
+        {req, Req.Response.new(status: 500)}
+      end
+
+      sup = Module.concat(__MODULE__, Runtime.Supervisor)
+      start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
+
+      {:ok, _} =
+        Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: test_pid, req_opts: [adapter: adapter])
+
+      # Insert a character
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {:http_request, req}, 500
+      assert to_string(req.body) =~ "Characters"
+      assert to_string(req.body) =~ "insert"
+      assert to_string(req.body) =~ to_string(character.id)
+
+      assert_receive {SinkPipeline, :ack_finished, [], [_ack_id]}, 500
+
+      assert [failed_message] = list_messages(consumer)
+      assert failed_message.deliver_count == 1
     end
   end
 

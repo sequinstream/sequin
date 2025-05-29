@@ -82,7 +82,7 @@
   });
 </script>
 
-<div class="flex flex-col flex-1">
+<div class="flex flex-col flex-1 max-w-8xl">
   <!-- Content container with overflow handling -->
   <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
     <!-- Header Div -->
@@ -181,9 +181,7 @@
         tabindex="0"
         on:keydown={(e) => e.key === "Enter" && onCloseDrawer()}
       ></div>
-      <section
-        class="absolute inset-y-0 right-0 pl-10 max-w-full flex sm:pl-16"
-      >
+      <section class="absolute inset-y-0 right-0 max-w-full flex">
         <div
           class="w-screen max-w-2xl"
           transition:slide={{ duration: 300, axis: "x" }}

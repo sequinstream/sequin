@@ -1,6 +1,7 @@
 defmodule Sequin.Runtime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Aws.HttpClient
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
@@ -853,13 +854,13 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       # Configure via SQS for testing
       via_config = %{
-        queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
+        main_queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
         region: "us-east-1",
         access_key_id: "test-access-key",
         secret_access_key: "test-secret-key"
       }
 
-      expect_application_get_env(2, fn
+      stub_application_get_env(fn
         :sequin, Sequin.Consumers.HttpPushSink -> [via_sqs_for_new_sinks?: true]
         :sequin, Sequin.Runtime.HttpPushSqsPipeline -> [sqs: via_config]
         app, key -> Application.get_env(app, key)
@@ -891,11 +892,11 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
 
       # Stub AWS HTTP client for SQS
-      Req.Test.stub(Sequin.Aws.HttpClient, fn %Plug.Conn{} = conn ->
+      Req.Test.stub(HttpClient, fn %Plug.Conn{} = conn ->
         send(test_pid, {:aws_req, conn})
 
         # Mock successful SQS response
-        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "test-msg-id"}], "Failed" => []})
+        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "test-msg-id"}]})
       end)
 
       # Create a dummy adapter for the pipeline - it should never be called
@@ -916,7 +917,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       refute_received {:direct_http_req, _}
 
       # 1. Correct SQS service endpoint URL
-      assert via_config.queue_url =~ conn.host
+      assert via_config.main_queue_url =~ conn.host
 
       # 2. Correct HTTP method (POST for SQS)
       assert conn.method == "POST"
@@ -953,6 +954,37 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       # Assert ack for the message (indicating successful handoff to SQS)
       assert_receive {:ack, ^ref, [_acked_message], []}, 1_000
+    end
+
+    test "handles SQS unretryable failure by ack'ing the message", %{consumer: consumer} do
+      test_pid = self()
+
+      # Create multiple events for the batch
+      event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+
+      Req.Test.expect(HttpClient, 1, fn %Plug.Conn{} = conn ->
+        conn
+        |> Plug.Conn.put_status(400)
+        |> Req.Test.json(%{
+          "__type" => "com.amazonaws.sqs#BatchRequestTooLong",
+          "message" => "Batch requests cannot be longer than 262144 bytes. You have sent 1336187 bytes."
+        })
+      end)
+
+      # Create a dummy adapter for the pipeline - it should never be called
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:direct_http_req, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      # Start the pipeline and send the batch
+      start_pipeline!(consumer, adapter)
+      ref = send_test_batch(consumer, [event1])
+
+      assert_receive {:ack, ^ref, [_msg], []}, 1_000
+
+      # Assert direct HTTP request was NOT made
+      refute_received {:direct_http_req, _}
     end
   end
 

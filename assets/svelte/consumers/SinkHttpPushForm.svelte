@@ -317,7 +317,7 @@
         <SelectTrigger class="w-full" disabled={httpEndpoints.length === 0}>
           <SelectValue placeholder="Select an endpoint" />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent class="max-h-[60vh] overflow-y-auto">
           {#each httpEndpoints as endpoint}
             <SelectItem value={endpoint.id}>{endpoint.name}</SelectItem>
           {/each}

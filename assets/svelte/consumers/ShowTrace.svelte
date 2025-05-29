@@ -20,11 +20,12 @@
   export let parent;
 
   let page = trace.page;
-  let loading = trace.loading;
   let paused = trace.paused;
-  let showAcked = trace.show_acked;
+  let loading = trace.loading;
   let selectedEvent = null;
   let isDrawerOpen = false;
+
+  $: paused = trace.paused;
 
   function changePage(newPage: number) {
     if (newPage >= 0 && newPage < trace.page_count) {
@@ -77,12 +78,52 @@
     }
   }
 
-  function formatContent(content: any): string {
+  function formatEventAsRow(event: any): string {
     try {
-      return JSON.stringify(content, null, 2);
+      if (event === null || event === undefined) return "";
+
+      // For the table row view, we want a compact representation
+      const parts = [];
+
+      // Show error first as it is likely to be important
+      if (event.error) {
+        parts.push(`Error: ${String(event.error)}`);
+      }
+
+      if (event.req_request) {
+        parts.push(
+          `Request: ${event.req_request.method} ${event.req_request.url}`,
+        );
+      }
+
+      if (event.req_response) {
+        parts.push(`Response: ${event.req_response.status}`);
+      }
+
+      return parts.join(" | ");
     } catch (e) {
-      return String(content);
+      return String(event);
     }
+  }
+
+  function formatRequest(req: any): string {
+    if (!req) return "";
+    return `${req.method} ${req.url}\nHeaders: ${JSON.stringify(req.headers, null, 2)}\nBody: ${JSON.stringify(req.body, null, 2)}`;
+  }
+
+  function formatResponse(resp: any): string {
+    if (!resp) return "";
+    return `Status: ${resp.status}\nHeaders: ${JSON.stringify(resp.headers, null, 2)}\nBody: ${JSON.stringify(resp.body, null, 2)}`;
+  }
+
+  function formatError(error: any): string {
+    if (!error) return "";
+    return JSON.stringify(error, null, 2);
+  }
+
+  function formatExtra(extra: any): string {
+    if (!extra) return "";
+    return JSON.stringify(extra, null, 2);
   }
 </script>
 
@@ -132,7 +173,7 @@
     <th
       class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
     >
-      Content
+      Event
     </th>
   </svelte:fragment>
 
@@ -154,15 +195,15 @@
       {/if}
     </td>
     <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs text-gray-500">
-      {formatDate(item.timestamp)}
+      {formatDate(item.published_at)}
     </td>
     <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs">
       {item.message}
     </td>
     <td
-      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500 font-mono"
+      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500 font-mono overflow-hidden max-w-lg"
     >
-      {formatContent(item.content)}
+      {formatEventAsRow(item)}
     </td>
   </svelte:fragment>
 
@@ -171,17 +212,13 @@
   <svelte:fragment slot="drawerContent">
     {#if selectedEvent}
       <div class="space-y-4">
-        <!-- Event Details -->
+        <!-- Basic Event Details -->
         <div class="bg-gray-50 p-4 rounded-lg space-y-2">
           <div class="flex justify-between items-center">
             <span class="text-sm font-medium text-gray-500">Timestamp:</span>
             <span class="text-sm text-gray-900"
-              >{formatDate(selectedEvent.timestamp)}</span
+              >{formatDate(selectedEvent.published_at)}</span
             >
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="text-sm font-medium text-gray-500">Type:</span>
-            <span class="text-sm text-gray-900">{selectedEvent.type}</span>
           </div>
           <div class="flex justify-between items-center">
             <span class="text-sm font-medium text-gray-500">Status:</span>
@@ -193,13 +230,46 @@
           </div>
         </div>
 
-        <!-- Content -->
-        {#if selectedEvent.content}
+        <!-- Request -->
+        {#if selectedEvent.req_request}
           <div class="bg-gray-50 p-4 rounded-lg">
-            <h3 class="text-sm font-medium text-gray-500 mb-2">Content:</h3>
+            <h3 class="text-sm font-medium text-gray-500 mb-2">Request:</h3>
             <pre
-              class="text-sm text-gray-900 whitespace-pre-wrap overflow-x-auto font-mono">{formatContent(
-                selectedEvent.content,
+              class="text-sm text-gray-900 whitespace-pre-wrap overflow-x-auto font-mono">{formatRequest(
+                selectedEvent.req_request,
+              )}</pre>
+          </div>
+        {/if}
+
+        <!-- Response -->
+        {#if selectedEvent.req_response}
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h3 class="text-sm font-medium text-gray-500 mb-2">Response:</h3>
+            <pre
+              class="text-sm text-gray-900 whitespace-pre-wrap overflow-x-auto font-mono">{formatResponse(
+                selectedEvent.req_response,
+              )}</pre>
+          </div>
+        {/if}
+
+        <!-- Error -->
+        {#if selectedEvent.error}
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h3 class="text-sm font-medium text-gray-500 mb-2">Error:</h3>
+            <pre
+              class="text-sm text-gray-900 whitespace-pre-wrap overflow-x-auto font-mono">{formatError(
+                selectedEvent.error,
+              )}</pre>
+          </div>
+        {/if}
+
+        <!-- Extra -->
+        {#if selectedEvent.extra && Object.keys(selectedEvent.extra).length > 0}
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h3 class="text-sm font-medium text-gray-500 mb-2">Extra:</h3>
+            <pre
+              class="text-sm text-gray-900 whitespace-pre-wrap overflow-x-auto font-mono">{formatExtra(
+                selectedEvent.extra,
               )}</pre>
           </div>
         {/if}

@@ -365,6 +365,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   defp ensure_status(%Req.Response{} = response, %SinkConsumer{} = consumer) do
     if response.status in 200..299 do
       Metrics.incr_http_endpoint_throughput(consumer.sink.http_endpoint)
+      Health.put_event(consumer, %Health.Event{slug: :messages_delivered, status: :success})
       :ok
     else
       Prometheus.increment_http_via_sqs_message_deliver_failure_count(consumer.id, consumer.name, response.status)

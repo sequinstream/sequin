@@ -203,6 +203,7 @@ defmodule Sequin.Runtime.MessageHandler do
     payload_size = :erlang.external_size(data)
 
     %ConsumerEvent{
+      id: message.trace_id,
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,

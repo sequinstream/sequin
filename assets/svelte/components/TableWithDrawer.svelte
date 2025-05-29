@@ -181,9 +181,7 @@
         tabindex="0"
         on:keydown={(e) => e.key === "Enter" && onCloseDrawer()}
       ></div>
-      <section
-        class="absolute inset-y-0 right-0 pl-10 max-w-full flex sm:pl-16"
-      >
+      <section class="absolute inset-y-0 right-0 max-w-full flex">
         <div
           class="w-screen max-w-2xl"
           transition:slide={{ duration: 300, axis: "x" }}

@@ -85,6 +85,11 @@
       // For the table row view, we want a compact representation
       const parts = [];
 
+      // Show error first as it is likely to be important
+      if (event.error) {
+        parts.push(`Error: ${String(event.error)}`);
+      }
+
       if (event.req_request) {
         parts.push(
           `Request: ${event.req_request.method} ${event.req_request.url}`,
@@ -93,10 +98,6 @@
 
       if (event.req_response) {
         parts.push(`Response: ${event.req_response.status}`);
-      }
-
-      if (event.error) {
-        parts.push(`Error: ${String(event.error)}`);
       }
 
       return parts.join(" | ");

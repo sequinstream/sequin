@@ -20,6 +20,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
+  alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SnsSink
@@ -103,6 +104,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     # FIXME: Refactor / remove both of these?
     belongs_to :sequence, Sequence
     embeds_one :sequence_filter, SequenceFilter, on_replace: :delete
+    embeds_one :schema_filter, SchemaFilter, on_replace: :delete
 
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
@@ -150,6 +152,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     ])
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
+    |> cast_embed(:schema_filter, with: &SchemaFilter.create_changeset/2)
     |> foreign_key_constraint(:sequence_id)
     |> foreign_key_constraint(:transform_id)
     |> foreign_key_constraint(:routing_id)
@@ -160,6 +163,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       name: "ensure_batch_size_one",
       message: "batch_size must be 1 when batch is false for webhook sinks"
     )
+    |> validate_filter_constraints()
     |> Sequin.Changeset.validate_name()
   end
 
@@ -167,10 +171,12 @@ defmodule Sequin.Consumers.SinkConsumer do
     consumer
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
+    |> cast_embed(:schema_filter, with: &SchemaFilter.create_changeset/2)
     |> check_constraint(:batch_size,
       name: "ensure_batch_size_one",
       message: "batch_size must be 1 when batch is false for webhook sinks"
     )
+    |> validate_filter_constraints()
   end
 
   def changeset(consumer, attrs) do
@@ -233,6 +239,22 @@ defmodule Sequin.Consumers.SinkConsumer do
 
       zz ->
         add_error(cs, :routing_id, "unknown routing mode! #{inspect(zz)}")
+    end
+  end
+
+  defp validate_filter_constraints(changeset) do
+    sequence_filter = get_field(changeset, :sequence_filter)
+    schema_filter = get_field(changeset, :schema_filter)
+
+    cond do
+      is_nil(sequence_filter) and is_nil(schema_filter) ->
+        add_error(changeset, :base, "either sequence_filter or schema_filter must be set")
+
+      not is_nil(sequence_filter) and not is_nil(schema_filter) ->
+        add_error(changeset, :base, "cannot set both sequence_filter and schema_filter")
+
+      true ->
+        changeset
     end
   end
 

@@ -80,6 +80,7 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       assert length(consumers) == 2
       atomized_consumers = Enum.map(consumers, &Sequin.Map.atomize_keys/1)
       assert_lists_equal([sink_consumer, another_consumer], atomized_consumers, &(&1.name == &2.name))
+      assert Enum.all?(atomized_consumers, & &1.health)
     end
 
     test "does not list sink consumers from another account", %{
@@ -98,6 +99,7 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       assert sink_consumer_json = json_response(conn, 200)
 
       assert sink_consumer.name == sink_consumer_json["name"]
+      assert is_map(sink_consumer_json["health"])
     end
 
     test "returns 404 if sink consumer belongs to another account", %{

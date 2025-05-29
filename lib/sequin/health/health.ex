@@ -826,13 +826,15 @@ defmodule Sequin.Health do
     end
   end
 
-  defp dismissable_event(events, error_slug, dismissal_slug) do
-    main = find_event(events, error_slug)
+  # Dismissable events are events that can be dismissed by the user, typically
+  # from the console.
+  defp dismissable_event(events, dismissable_slug, dismissal_slug) do
+    dismissable_event = find_event(events, dismissable_slug)
 
     cond do
-      is_nil(main) -> nil
-      find_newer_event(events, main, dismissal_slug) -> nil
-      true -> main
+      is_nil(dismissable_event) -> nil
+      find_newer_event(events, dismissable_event, dismissal_slug) -> nil
+      true -> dismissable_event
     end
   end
 

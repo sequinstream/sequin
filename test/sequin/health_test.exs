@@ -235,6 +235,7 @@ defmodule Sequin.HealthTest do
       :ok
     end
 
+    @tag capture_log: true
     test "alerts PagerDuty when database status changes to error" do
       entity =
         postgres_replication(

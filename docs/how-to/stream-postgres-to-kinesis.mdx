@@ -1,0 +1,118 @@
+---
+title: "How to stream Postgres to AWS Kinesis"
+sidebarTitle: "AWS Kinesis"
+description: "Connect Postgres to Kinesis with Sequin. Stream database changes for real-time analytics and event-driven pipelines."
+---
+
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to Kinesis using Sequin.
+
+With Postgres data streaming to Kinesis, you can trigger workflows, feed analytics pipelines, and fan-out events to other AWS services.
+
+By the end of this how-to, you'll have database changes flowing to a Kinesis data stream.
+
+## Prerequisites
+
+If you're self-hosting Sequin, you'll need:
+
+1. [Sequin installed](/running-sequin)
+2. [A database connected](/connect-postgres)
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/connect-postgres)
+
+## Basic setup
+
+### Create a Kinesis stream
+
+If you don't have a stream already, create one in the AWS console.
+
+### Create an IAM user for Sequin
+
+Create an IAM user with permission to put records into your stream:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["kinesis:PutRecords", "kinesis:DescribeStream"],
+      "Resource": "<your-stream-arn>"
+    }
+  ]
+}
+```
+
+Replace `<your-stream-arn>` with your stream's ARN.
+
+Save the Access Key ID and Secret Access Key; you'll use these when configuring the sink.
+
+### (Optional) Enable retention for changes
+
+You can send either [changes or rows](/reference/messages) to Kinesis. If you're sending changes and want to replay them later, consider [change retention](reference/change-retention).
+
+## Create Kinesis sink
+
+Navigate to the "Sinks" tab, click "Create Sink", and select "Kinesis Sink".
+
+### Configure the source
+
+<Steps>
+  <Step title="Select source table">
+    Under "Source", select the table you want to stream data from.
+  </Step>
+
+  <Step title="Choose message type">
+    Decide whether you want [changes or rows](/reference/messages). If unsure, leave "Changes" selected.
+  </Step>
+
+  <Step title="Specify filters">
+    For changes you can restrict to `insert`, `update`, and/or `delete` actions. You can also apply [SQL filters](/reference/filters).
+  </Step>
+
+  <Step title="Specify backfill">
+    Optionally send a [backfill](/reference/backfills) of existing rows. Toggle "Backfill" off if you only need new changes.
+  </Step>
+</Steps>
+
+### Configure Kinesis
+
+<Steps>
+  <Step title="Enter stream details">
+    Fill in the stream ARN as well as the AWS access key and secret you created for Sequin.
+  </Step>
+
+  <Step title="Create the sink">
+    Give your sink a name, then click "Create Kinesis Sink".
+  </Step>
+</Steps>
+
+## Verify & debug
+
+To verify that your Kinesis sink is working:
+
+1. Make some changes in your source table.
+2. Verify that the count of messages for your sink increases in the Sequin web console.
+3. Use your preferred Kinesis consumer to read from the stream and confirm the events arrive.
+
+If messages don't seem to be flowing:
+
+1. Click the "Messages" tab to view the state of messages for your sink
+2. Click any failed message
+3. Check the delivery logs for error details, including any AWS API errors
+
+## Next steps
+
+- **Process the events**
+
+  Build a consumer to read from your Kinesis stream and process the data. Refer to the [Kinesis sink reference](/reference/sinks/kinesis) for the shape of messages that Sequin publishes.
+
+- **Deploy your implementation**
+
+  When you're ready to deploy your implementation, see "[How to deploy to production](/how-to/deploy-to-production)".
+
+- **Advanced configuration**
+
+  For more about how Kinesis sinks work, see the [Kinesis sink reference](/reference/sinks/kinesis).

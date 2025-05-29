@@ -544,6 +544,31 @@ defmodule Sequin.HealthTest do
       assert config_check.status == :healthy
       assert is_nil(config_check.error_slug)
     end
+
+    test "shows appropriate warnings for load shedding policy events" do
+      entity = sink_consumer(message_kind: :event)
+
+      # Set up base delivery check
+      :ok = Health.put_event(entity, %Event{slug: :messages_delivered, status: :success})
+
+      # Add load shedding policy discarded event
+      :ok = Health.put_event(entity, %Event{slug: :load_shedding_policy_discarded, status: :success})
+
+      # Should now show load shedding warning
+      {:ok, health} = Health.health(entity)
+      delivery_check = Enum.find(health.checks, &(&1.slug == :messages_delivered))
+      assert delivery_check.status == :warning
+      assert delivery_check.error_slug == :load_shedding_policy_discarded
+
+      # Dismiss load shedding warning
+      :ok = Health.put_event(entity, %Event{slug: :load_shedding_policy_discarded_dismissed, status: :success})
+
+      # Should now be healthy again
+      {:ok, health} = Health.health(entity)
+      delivery_check = Enum.find(health.checks, &(&1.slug == :messages_delivered))
+      assert delivery_check.status == :healthy
+      assert is_nil(delivery_check.error_slug)
+    end
   end
 
   defp sink_consumer(opts \\ []) do

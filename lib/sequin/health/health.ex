@@ -826,19 +826,20 @@ defmodule Sequin.Health do
     end
   end
 
-  defp dismissable_event(events, t_main, t_dismissal) do
-    main = find_event(events, t_main)
+  defp dismissable_event(events, error_slug, dismissal_slug) do
+    main = find_event(events, error_slug)
 
     cond do
       is_nil(main) -> nil
-      find_newer_event(events, main, t_dismissal) -> nil
+      find_newer_event(events, main, dismissal_slug) -> nil
       true -> main
     end
   end
 
-  defp find_newer_event(events, base_event, newer_type) do
-    newer = find_event(events, newer_type)
-    newer && DateTime.after?(base_event.last_event_at, newer.last_event_at)
+  defp find_newer_event(events, base_event, newer_slug) do
+    newer = find_event(events, newer_slug)
+    # If newer is after last event, then it's newer
+    newer && DateTime.after?(newer.last_event_at, base_event.last_event_at)
   end
 
   defp expected_event_error(entity_id, event_slug) do

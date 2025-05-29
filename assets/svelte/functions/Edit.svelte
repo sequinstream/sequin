@@ -404,7 +404,7 @@
     }
 
     if (databases.length === 1 && !selectedDatabaseId) {
-      handleDatabaseSelectCombobox({ value: databases[0].id });
+      handleDatabaseSelect({ value: databases[0].id });
     }
 
     if (selectedDatabase && selectedDatabase.tables.length === 1) {

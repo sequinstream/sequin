@@ -76,10 +76,11 @@ end
 sqs_config =
   if System.get_env("HTTP_PUSH_VIA_SQS_QUEUE_URL") do
     %{
-      queue_url: System.get_env("HTTP_PUSH_VIA_SQS_QUEUE_URL"),
-      region: System.get_env("HTTP_PUSH_VIA_SQS_REGION"),
-      access_key_id: System.get_env("HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID"),
-      secret_access_key: System.get_env("HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY")
+      main_queue_url: System.fetch_env!("HTTP_PUSH_VIA_SQS_QUEUE_URL"),
+      dlq_url: System.fetch_env!("HTTP_PUSH_VIA_SQS_DLQ_URL"),
+      region: System.fetch_env!("HTTP_PUSH_VIA_SQS_REGION"),
+      access_key_id: System.fetch_env!("HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID"),
+      secret_access_key: System.fetch_env!("HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY")
     }
   end
 

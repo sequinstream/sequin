@@ -854,7 +854,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       # Configure via SQS for testing
       via_config = %{
-        queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
+        main_queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
         region: "us-east-1",
         access_key_id: "test-access-key",
         secret_access_key: "test-secret-key"
@@ -896,7 +896,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         send(test_pid, {:aws_req, conn})
 
         # Mock successful SQS response
-        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "test-msg-id"}], "Failed" => []})
+        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "test-msg-id"}]})
       end)
 
       # Create a dummy adapter for the pipeline - it should never be called
@@ -917,7 +917,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       refute_received {:direct_http_req, _}
 
       # 1. Correct SQS service endpoint URL
-      assert via_config.queue_url =~ conn.host
+      assert via_config.main_queue_url =~ conn.host
 
       # 2. Correct HTTP method (POST for SQS)
       assert conn.method == "POST"

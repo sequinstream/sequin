@@ -156,7 +156,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
 
     # Decode Base64 and deserialize to get the ConsumerEvent
     binary_data = Base.decode64!(base64_data)
-    %ConsumerEvent{} = consumer_event = binary_data |> :erlang.binary_to_term() |> ConsumerEvent.struct_from_map()
+    %ConsumerEvent{} = consumer_event = binary_data |> :erlang.binary_to_term([:safe]) |> ConsumerEvent.struct_from_map()
 
     consumer_id = consumer_event.consumer_id
     Logger.metadata(consumer_id: consumer_id)
@@ -169,7 +169,13 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
 
         # Is `1` on first delivery
         %{metadata: %{attributes: %{"approximate_receive_count" => receive_count}}} = message
-        final_delivery? = receive_count - 1 >= consumer.max_retry_count
+
+        final_delivery? =
+          if Keyword.fetch!(config(), :discards_disabled?) do
+            false
+          else
+            receive_count - 1 >= consumer.max_retry_count
+          end
 
         case result do
           {:ok, %Req.Response{}} ->
@@ -375,6 +381,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   defp setup_allowances(%{test_pid: test_pid}) do
     Req.Test.allow(__MODULE__, test_pid, self())
     Sandbox.allow(Sequin.Repo, test_pid, self())
+    Mox.allow(Sequin.TestSupport.ApplicationMock, test_pid, self())
   end
 
   defp default_req_opts do

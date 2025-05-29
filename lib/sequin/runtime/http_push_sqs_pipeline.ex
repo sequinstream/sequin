@@ -21,11 +21,11 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Prometheus
   alias Sequin.Runtime.Trace
   alias Sequin.Transforms
-  alias Sequin.Health
 
   require Logger
 

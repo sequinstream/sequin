@@ -758,7 +758,7 @@ defmodule Sequin.Health do
     load_shedding_policy_discarded_event =
       dismissable_event(events, :load_shedding_policy_discarded, :load_shedding_policy_discarded_dismissed)
 
-    sqs_delivery_failed_event = dismissable_event(events, :sqs_delivery_failed, :sqs_delivery_failed_dismissed)
+    http_via_sqs_delivery_event = find_event(events, :http_via_sqs_delivery)
 
     cond do
       is_nil(delivered_event) ->
@@ -774,14 +774,14 @@ defmodule Sequin.Health do
           [load_shedding_policy_discarded_event]
         )
 
-      sqs_delivery_failed_event ->
+      not is_nil(http_via_sqs_delivery_event) and http_via_sqs_delivery_event.status == :fail ->
         put_check_timestamps(
           %{
             base_check
             | status: :error,
-              error_slug: :sqs_delivery_failed
+              error_slug: :http_via_sqs_delivery
           },
-          [sqs_delivery_failed_event]
+          [http_via_sqs_delivery_event]
         )
 
       delivered_event.status == :fail ->

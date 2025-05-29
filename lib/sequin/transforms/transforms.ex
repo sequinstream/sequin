@@ -33,6 +33,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Error.ValidationError
+  alias Sequin.Health
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
 
@@ -138,24 +139,28 @@ defmodule Sequin.Transforms do
     table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
     filters = consumer.sequence_filter.column_filters || []
 
-    %{
-      id: consumer.id,
-      name: consumer.name,
-      database: consumer.sequence.postgres_database.name,
-      status: consumer.status,
-      group_column_names: group_column_names(consumer.sequence_filter.group_column_attnums, table),
-      table: "#{table.schema}.#{table.name}",
-      actions: consumer.sequence_filter.actions,
-      destination: to_external(sink, show_sensitive),
-      filters: Enum.map(filters, &format_filter(&1, table)),
-      batch_size: consumer.batch_size,
-      transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
-      timestamp_format: consumer.timestamp_format,
-      active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
-      max_retry_count: consumer.max_retry_count,
-      load_shedding_policy: consumer.load_shedding_policy,
-      annotations: consumer.annotations
-    }
+    Sequin.Map.put_if_present(
+      %{
+        id: consumer.id,
+        name: consumer.name,
+        database: consumer.sequence.postgres_database.name,
+        status: consumer.status,
+        group_column_names: group_column_names(consumer.sequence_filter.group_column_attnums, table),
+        table: "#{table.schema}.#{table.name}",
+        actions: consumer.sequence_filter.actions,
+        destination: to_external(sink, show_sensitive),
+        filters: Enum.map(filters, &format_filter(&1, table)),
+        batch_size: consumer.batch_size,
+        transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
+        timestamp_format: consumer.timestamp_format,
+        active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
+        max_retry_count: consumer.max_retry_count,
+        load_shedding_policy: consumer.load_shedding_policy,
+        annotations: consumer.annotations
+      },
+      :health,
+      if(consumer.health, do: to_external(consumer.health, show_sensitive))
+    )
   end
 
   def to_external(%HttpPushSink{} = sink, _show_sensitive) do
@@ -393,6 +398,10 @@ defmodule Sequin.Transforms do
       inserted_at: backfill.inserted_at,
       updated_at: backfill.updated_at
     }
+  end
+
+  def to_external(%Health{} = health, _show_sensitive) do
+    Health.to_external(health)
   end
 
   def group_column_names(nil, _table), do: []

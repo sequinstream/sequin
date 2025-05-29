@@ -6,6 +6,7 @@ defmodule SequinWeb.SinkConsumerControllerTest do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.FunctionsFactory
   alias Sequin.Factory.ReplicationFactory
 
   setup :authenticated_conn
@@ -350,6 +351,23 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       conn = put(conn, ~p"/api/sinks/#{sink_consumer.id}", valid_attrs)
       assert res = json_response(conn, 422)
       assert res["error"]["summary"] =~ "non_existent_table"
+    end
+
+    test "updating a sink consumer with functions does not remove those functions", %{
+      conn: conn,
+      sink_consumer: sink_consumer
+    } do
+      transform = FunctionsFactory.insert_transform_function!(account_id: sink_consumer.account_id)
+      filter = FunctionsFactory.insert_filter_function!(account_id: sink_consumer.account_id)
+      Consumers.update_sink_consumer(sink_consumer, %{transform_id: transform.id, filter_id: filter.id})
+
+      conn = put(conn, ~p"/api/sinks/#{sink_consumer.id}", %{name: "new-name"})
+      assert %{"id" => id} = json_response(conn, 200)
+
+      {:ok, updated_consumer} = Consumers.find_sink_consumer(sink_consumer.account_id, id: id)
+      assert updated_consumer.transform_id == transform.id
+      assert updated_consumer.filter_id == filter.id
+      assert updated_consumer.name == "new-name"
     end
   end
 

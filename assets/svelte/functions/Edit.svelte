@@ -36,6 +36,11 @@
   import CopyToClipboard from "$lib/components/ui/CopyToClipboard.svelte";
   import DeleteFunctionDialog from "$lib/components/DeleteFunctionDialog.svelte";
   import { clearStorage } from "./messageLocalStorage";
+  import {
+    saveFunctionCodeToStorage,
+    loadFunctionCodeFromStorage,
+    clearAllFunctionCodeStorage,
+  } from "./functionLocalStorage";
   import type {
     FormData,
     FormErrors,
@@ -193,6 +198,7 @@
       showUpdateDialog = true;
     } else {
       clearMessageFieldsLocalStorage();
+      clearAllFunctionCodeStorage();
       saving = true;
       pushEvent("save", { function: form }, () => {
         saving = false;
@@ -200,42 +206,42 @@
     }
   }
 
-  function handleTypeSelect(event: any, oldType: string) {
-    const oldInitialCode = initialCodeFor(oldType, form.function.sink_type);
-    const newInitialCode = initialCodeFor(event.value, form.function.sink_type);
-
-    if (form.function.code === oldInitialCode || !form.function.code) {
-      form.function.code = newInitialCode;
-      functionEditorView.dispatch({
-        changes: {
-          from: 0,
-          to: functionEditorView.state.doc.length,
-          insert: newInitialCode,
-        },
-      });
-      console.log("Replaced untouched initial code");
-    } else {
-      console.log("Did not replace initial code");
-    }
-
+  function handleTypeSelect(event: any) {
     form.function.type = event.value;
+    loadStoredOrInitialCode();
   }
 
-  function handleRoutingSinkTypeSelect(event: any, oldSinkType: string) {
-    const oldInitialCode = initialCodeFor(form.function.type, oldSinkType);
-    const newInitialCode = initialCodeFor(form.function.type, event.value);
+  function handleRoutingSinkTypeSelect(event: any) {
+    form.function.sink_type = event.value;
+    loadStoredOrInitialCode();
+  }
 
-    if (form.function.code === oldInitialCode || !form.function.code) {
-      form.function.code = newInitialCode;
+  function loadStoredOrInitialCode() {
+    if (!isEditing) {
+      const storedCode = loadFunctionCodeFromStorage(
+        form.function.type,
+        form.function.sink_type,
+      );
+      if (storedCode) {
+        // Load stored code
+        form.function.code = storedCode;
+      } else {
+        // Load initial code
+        const newInitialCode = initialCodeFor(
+          form.function.type,
+          form.function.sink_type,
+        );
+        form.function.code = newInitialCode;
+      }
+
       functionEditorView.dispatch({
         changes: {
           from: 0,
           to: functionEditorView.state.doc.length,
-          insert: newInitialCode,
+          insert: form.function.code,
         },
       });
     }
-    form.function.sink_type = event.value;
   }
 
   function handleDelete() {
@@ -316,7 +322,6 @@
 
   function initialCodeFor(type: string, sinkType: string | null) {
     const key = type + (type === "routing" ? "_" + sinkType : "");
-    console.log("key", key);
     return initialCodeMap[key];
   }
 
@@ -453,6 +458,7 @@
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             form.function.code = update.state.doc.toString();
+            saveFunctionCodeToStorage(form);
           }
         }),
       ],
@@ -519,6 +525,12 @@ Please help me create or modify the Elixir function transform to achieve the des
     });
   }
 
+  function handleClose() {
+    clearMessageFieldsLocalStorage();
+    clearAllFunctionCodeStorage();
+    pushEvent("form_closed");
+  }
+
   // Clean up timeout on component destroy
   onDestroy(() => {
     if (copyTimeout) {
@@ -530,10 +542,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 <FullPageForm
   title={isEditing ? "Edit Function" : "New Function"}
   showConfirmOnExit={isDirty}
-  on:close={() => {
-    clearMessageFieldsLocalStorage();
-    pushEvent("form_closed");
-  }}
+  on:close={handleClose}
 >
   <form on:submit={handleSubmit} class="space-y-4">
     <div
@@ -630,10 +639,7 @@ Please help me create or modify the Elixir function transform to achieve the des
             </div>
 
             <Select
-              onSelectedChange={(event) => {
-                const old = form.function.type;
-                handleTypeSelect(event, old);
-              }}
+              onSelectedChange={handleTypeSelect}
               selected={{
                 value: form.function.type,
                 label: functionInternalToExternal[form.function.type],
@@ -670,10 +676,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 
             {#if form.function.type === "routing"}
               <Select
-                onSelectedChange={(event) => {
-                  const oldSinkType = form.function.sink_type;
-                  handleRoutingSinkTypeSelect(event, oldSinkType);
-                }}
+                onSelectedChange={handleRoutingSinkTypeSelect}
                 selected={{
                   value: form.function.sink_type,
                   label: sinkTypeInternalToExternal[form.function.sink_type],

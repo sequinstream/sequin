@@ -22,6 +22,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Error.ServiceError
+  alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Prometheus
   alias Sequin.Runtime.Trace
@@ -198,6 +199,8 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
 
           {:error, error} ->
             Logger.warning("[HttpPushSqsPipeline] Failed to deliver message to HTTP endpoint: #{inspect(error)}")
+
+            Health.put_event(consumer, %Health.Event{slug: :sqs_delivery_failed, status: :fail})
 
             if final_delivery? do
               Logger.warning("[HttpPushSqsPipeline] Discarding message after #{consumer.max_retry_count} retries")
@@ -382,6 +385,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
     Req.Test.allow(__MODULE__, test_pid, self())
     Sandbox.allow(Sequin.Repo, test_pid, self())
     Mox.allow(Sequin.TestSupport.ApplicationMock, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 
   defp default_req_opts do

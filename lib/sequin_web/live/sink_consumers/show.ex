@@ -464,6 +464,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         :toast_columns_detected -> :alert_toast_columns_detected_dismissed
         :invalid_transaction_annotation_received -> :invalid_transaction_annotation_received_dismissed
         :load_shedding_policy_discarded -> :load_shedding_policy_discarded_dismissed
+        :sqs_delivery_failed -> :sqs_delivery_failed_dismissed
       end
 
     Health.put_event(consumer, %Health.Event{slug: event_slug})
@@ -1490,6 +1491,21 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         This sink is configured with a [load shedding policy](https://sequinstream.com/docs/reference/sinks/overview#load-shedding-policy) of `discard_on_full`. The sink buffer reached its limit and messages were dropped.
 
         If the sink is still failing, please address the root cause of messages not being delivered or disable the sink.
+        """,
+        refreshable: false,
+        dismissable: true
+      }
+    )
+  end
+
+  defp maybe_augment_alert(%{error_slug: :sqs_delivery_failed} = check, _consumer) do
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Notice: Webhooks failed to deliver after being pulled from SQS",
+        alertMessage: """
+        This sink is configured to send payloads to SQS, and then pull async to deliver.
+        At least one message has failed to actually deliver to the destination.
         """,
         refreshable: false,
         dismissable: true

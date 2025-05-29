@@ -35,6 +35,16 @@
   } from "$lib/components/ui/alert-dialog";
   import CopyToClipboard from "$lib/components/ui/CopyToClipboard.svelte";
   import DeleteFunctionDialog from "$lib/components/DeleteFunctionDialog.svelte";
+  import { clearStorage } from "./messageLocalStorage";
+  import type {
+    FormData,
+    FormErrors,
+    TestMessage,
+    Consumer,
+    FieldType,
+    ActionType,
+  } from "./types";
+  import { FieldValues } from "./types";
 
   // CodeMirror imports
   import { EditorView, basicSetup } from "codemirror";
@@ -43,7 +53,6 @@
   import { keymap } from "@codemirror/view";
   import { indentWithTab } from "@codemirror/commands";
   import { autocompletion } from "@codemirror/autocomplete";
-  import type { FormData, FormErrors, TestMessage, Consumer } from "./types";
 
   export let formData: FormData;
   export let formErrors: FormErrors = {};
@@ -183,6 +192,7 @@
     if (usedByConsumers.length > 0) {
       showUpdateDialog = true;
     } else {
+      clearMessageFieldsLocalStorage();
       saving = true;
       pushEvent("save", { function: form }, () => {
         saving = false;
@@ -482,6 +492,16 @@ Please help me create or modify the Elixir function transform to achieve the des
     return prompt;
   }
 
+  function clearMessageFieldsLocalStorage() {
+    // Clean up synthetic and test messages
+    syntheticTestMessages.concat(testMessages).forEach((message) => {
+      FieldValues.forEach((field) => {
+        console.log("Clearing", field, "for", message.id);
+        clearStorage(message, field);
+      });
+    });
+  }
+
   // Clean up timeout on component destroy
   onDestroy(() => {
     if (copyTimeout) {
@@ -493,7 +513,10 @@ Please help me create or modify the Elixir function transform to achieve the des
 <FullPageForm
   title={isEditing ? "Edit Function" : "New Function"}
   showConfirmOnExit={isDirty}
-  on:close={() => pushEvent("form_closed")}
+  on:close={() => {
+    clearMessageFieldsLocalStorage();
+    pushEvent("form_closed");
+  }}
 >
   <form on:submit={handleSubmit} class="space-y-4">
     <div

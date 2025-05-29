@@ -12,7 +12,7 @@ A **sink** in Sequin is a destination for your Postgres data.
 
 # Delivery Guarantees
 
-Sequin provides exactly-once delivery under most circumstances, but [exactly-once delivery is not always possible](https://blog.sequinstream.com/at-most-once-at-least-once-and-exactly-once-delivery/). Therefore, Sequin implements at-least-once delivery with [idempotency keys](/reference/messages#idempotency). 
+Sequin provides exactly-once delivery under most circumstances, but [exactly-once delivery is not always possible](https://blog.sequinstream.com/at-most-once-at-least-once-and-exactly-once-delivery/). Therefore, Sequin implements at-least-once delivery with [idempotency keys](/reference/messages#idempotency).
 
 If a message is not delivered successfully, Sequin will automatically retry with exponential backoff, increasing the retry interval up to a maximum of 3 minutes between attempts.
 
@@ -50,12 +50,18 @@ You can click into any failed message to view the delivery logs and error detail
 
 ## Advanced configuration
 
+### Max memory usage
+When sink destinations can't keep up with incoming messages, Sequin continues to advance the Postgres replication slot and buffer messages in memory.
+
+By default, each sink is set to a max memory usage of 128MB. You can configure the max memory usage for a sink by setting the `max_memory_mb` parameter in the sink configuration.
+
 ### Load shedding policy
+If a sink's in-memory buffer fills up, the `load_shedding_policy` will be triggered. There are two available load shedding policies:
 
-When sink consumers can't keep up with incoming messages from Postgres, Sequin will still advance the Postgres replication slot and buffer messages in memory. When the in-memory buffer fills up, the `load_shedding_policy` will be triggered. There are two available load shedding policies:
+`pause_on_full` (default) — pauses replication for all sinks on the slot until the buffer has room again. In this case, Postgres guarantees no lost messages. However, in order to do this, Postgres has to save the messages on disk. This means the replication slot can grow without bound. Unmanaged, this will cause your database to run out of disk space.
 
-`pause_on_full` (default) — pauses replication for all consumers on the slot until the buffer has room again. In this case, Postgres guarantees no lost messages. However, in order to do this, Postgres has to save the messages on disk. This means the replication slot can grow without bound. Unmanaged, this will cause your database to run out of disk space.
+`discard_on_full` — Sequin will continue reading messages from the replication slot. However, messages intended for the overloaded sink(s) will be dropped. Other sinks will not be impacted. This limits possibility that your database will run out of disk space but will cause sinks to be inconsistent with the state of the database.
 
-`discard_on_full` — Sequin will continue reading messages from the replication slot. However, messages intended for the overloaded sink consumer(s) will be dropped. Other sink consumers will not be impacted. This limits possibility that your database will run out of disk space but will cause consumers to be inconsistent with the state of the database.
-
+<Warning>
 There is no way to recover dropped messages. You can run a [backfill](/reference/backfills) to replay rows that may have been missed, but those backfill messages will not contain the discrete [change data](/reference/messages#change-messages) that was lost.
+</Warning>

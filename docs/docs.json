@@ -116,11 +116,11 @@
               "reference/sinks/gcp-pubsub",
               "reference/sinks/nats",
               "reference/sinks/rabbitmq",
-              "reference/sinks/sequin-stream",
               "reference/sinks/azure-event-hubs",
               {
-                "group": "Sequin Stream API",
+                "group": "Sequin Stream sink",
                 "pages": [
+                  "reference/sinks/sequin-stream",
                   "reference/sequin-stream-api/receive",
                   "reference/sequin-stream-api/ack",
                   "reference/sequin-stream-api/nack"

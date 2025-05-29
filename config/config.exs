@@ -56,8 +56,8 @@ config :sequin, Oban,
        {"* * * * *", Sequin.CheckSystemHealthWorker},
        # Runs every 2 minutes
        {"*/2 * * * *", Sequin.Health.SnapshotHealthWorker},
-       # Runs every 3 minutes
-       {"*/3 * * * *", Sequin.Health.KickoffCheckPostgresReplicationSlotWorker},
+       # Runs every 1 minute
+       {"* * * * *", Sequin.Health.KickoffCheckPostgresReplicationSlotWorker},
        # Runs every 5 minutes
        {"*/5 * * * *", Sequin.Health.KickoffCheckSinkConfigurationWorker},
        # Runs every 5 minutes

@@ -362,19 +362,38 @@
     if (
       oldSelectedMessage &&
       formErrors.modified_test_messages &&
-      oldSelectedMessage.id === selectedMessage.id &&
-      formErrors.modified_test_messages[selectedMessage.id]
+      oldSelectedMessage.replication_message_trace_id ===
+        selectedMessage.replication_message_trace_id &&
+      formErrors.modified_test_messages[
+        selectedMessage.replication_message_trace_id
+      ]
     ) {
-      if (formErrors.modified_test_messages[selectedMessage.id].record) {
+      if (
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].record
+      ) {
         selectedMessage.record = oldSelectedMessage.record;
       }
-      if (formErrors.modified_test_messages[selectedMessage.id].metadata) {
+      if (
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].metadata
+      ) {
         selectedMessage.metadata = oldSelectedMessage.metadata;
       }
-      if (formErrors.modified_test_messages[selectedMessage.id].action) {
+      if (
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].action
+      ) {
         selectedMessage.action = oldSelectedMessage.action;
       }
-      if (formErrors.modified_test_messages[selectedMessage.id].changes) {
+      if (
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].changes
+      ) {
         selectedMessage.changes = oldSelectedMessage.changes;
       }
     }
@@ -480,10 +499,8 @@ Please help me create or modify the Elixir function transform to achieve the des
   }
 
   function clearMessageFieldsLocalStorage() {
-    // Clean up synthetic and test messages
     syntheticTestMessages.concat(testMessages).forEach((message) => {
       FieldValues.forEach((field) => {
-        console.log("Clearing", field, "for", message.id);
         clearStorage(message, field);
       });
     });

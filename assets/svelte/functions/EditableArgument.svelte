@@ -65,7 +65,8 @@
       selectedMessage[field] = editorView.state.doc.toString();
     }
     saveToStorage(selectedMessage, field);
-    form.modified_test_messages[selectedMessage.id] = selectedMessage;
+    form.modified_test_messages[selectedMessage.replication_message_trace_id] =
+      selectedMessage;
     isEditingField = false;
   }
 
@@ -116,7 +117,9 @@
     storedContent = loadFromStorage(selectedMessage, field);
     if (storedContent) {
       selectedMessage[field] = storedContent;
-      form.modified_test_messages[selectedMessage.id] = selectedMessage;
+      form.modified_test_messages[
+        selectedMessage.replication_message_trace_id
+      ] = selectedMessage;
     }
 
     updateMessageEditor(selectedMessage);
@@ -187,10 +190,13 @@
     <div hidden={!isEditingField} bind:this={editorElement} />
     <pre hidden={isEditingField}>{selectedMessage[field]}</pre>
   {/if}
-  {#if formErrors?.modified_test_messages?.[selectedMessage.id]?.[field]}
+  {#if formErrors?.modified_test_messages?.[selectedMessage.replication_message_trace_id]?.[field]}
     <p class="text-sm text-red-500 dark:text-red-400">
-      {formErrors.modified_test_messages[selectedMessage.id][field].type}: {formErrors
-        .modified_test_messages[selectedMessage.id][field].info.description}
+      {formErrors.modified_test_messages[
+        selectedMessage.replication_message_trace_id
+      ][field].type}: {formErrors.modified_test_messages[
+        selectedMessage.replication_message_trace_id
+      ][field].info.description}
     </p>
   {/if}
 </div>

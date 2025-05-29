@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import { Switch } from "$lib/components/ui/switch";
-  import { Play, Pause, Loader2 } from "lucide-svelte";
+  import { Play, Pause } from "lucide-svelte";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
 
   // Props

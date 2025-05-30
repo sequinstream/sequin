@@ -65,6 +65,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     |> validate_required([:publication_name, :slot_name])
     |> unique_constraint([:slot_name, :postgres_database_id])
     |> foreign_key_constraint(:postgres_database_id, name: "postgres_replication_slots_postgres_database_id_fkey")
+    |> Sequin.Changeset.annotations_check_constraint()
   end
 
   def update_changeset(replication, attrs) do
@@ -72,6 +73,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     |> cast(attrs, [:publication_name, :slot_name, :status, :annotations, :partition_count])
     |> validate_required([:publication_name, :slot_name])
     |> unique_constraint([:slot_name, :postgres_database_id])
+    |> Sequin.Changeset.annotations_check_constraint()
   end
 
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()

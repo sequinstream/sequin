@@ -3,7 +3,13 @@
   export let href;
 </script>
 
-<a {href} {...$$restProps} data-phx-link="patch" data-phx-link-state="push">
+<a
+  {href}
+  {...$$restProps}
+  on:click={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+  data-phx-link="patch"
+  data-phx-link-state="push"
+>
   {#if $$slots.default}
     <slot />
   {/if}

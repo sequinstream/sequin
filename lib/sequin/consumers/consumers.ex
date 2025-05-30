@@ -1170,6 +1170,8 @@ defmodule Sequin.Consumers do
   end
 
   # Source Table Matching
+  def matches_message?(%SinkConsumer{message_kind: :record}, %SlotProcessor.Message{action: :delete}), do: false
+
   def matches_message?(
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         %SlotProcessor.Message{} = message

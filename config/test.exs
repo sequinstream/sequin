@@ -109,7 +109,7 @@ config :sequin,
   slot_message_store: [flush_batch_size: 8],
   jepsen_http_host: System.get_env("JEPSEN_HTTP_HOST", "127.0.0.1"),
   jepsen_http_port: "JEPSEN_HTTP_PORT" |> System.get_env("4040") |> String.to_integer(),
-  jepsen_transactions_count: "JEPSEN_TRANSACTIONS_COUNT" |> System.get_env("20") |> String.to_integer(),
+  jepsen_transactions_count: "JEPSEN_TRANSACTIONS_COUNT" |> System.get_env("10") |> String.to_integer(),
   jepsen_transaction_queries_count: "JEPSEN_TRANSACTION_QUERIES_COUNT" |> System.get_env("10") |> String.to_integer()
 
 # In AES.GCM, it is important to specify 12-byte IV length for

@@ -280,6 +280,7 @@ defmodule Sequin.PostgresReplicationTest do
       {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       %{
+        sup: sup,
         pg_replication: pg_replication,
         source_db: source_db,
         event_character_consumer: event_character_consumer,
@@ -853,7 +854,8 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     @tag :jepsen
-    test "batch updates are delivered in sequence order via HTTP" do
+    @tag capture_log: true
+    test "batch updates are delivered in sequence order via HTTP", %{sup: sup} do
       {:ok, pid} = SimpleHttpServer.start_link(%{caller: self()})
 
       on_exit(fn ->
@@ -884,6 +886,7 @@ defmodule Sequin.PostgresReplicationTest do
       end)
 
       assert wait_and_validate_data(inspect(ref), -1, transactions_count * transaction_queries_count)
+      stop_supervised!(sup)
     end
   end
 

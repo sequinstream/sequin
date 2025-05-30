@@ -32,7 +32,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   use Sequin.ProcessMetrics,
     metric_prefix: "sequin.slot_message_store"
 
-  use Sequin.ProcessMetrics.Decorator
+  use Sequin.ProcessMetrics.Prometheus, labels: [:consumer_id, :partition]
 
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages

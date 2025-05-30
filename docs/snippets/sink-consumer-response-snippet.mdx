@@ -60,6 +60,20 @@
             </ResponseField>
         </Expandable>
 
+        <Expandable title="Kinesis properties" >
+            <ResponseField name="type" type="string" >
+                Must be "kinesis"
+            </ResponseField>
+            <ResponseField name="stream_arn" type="string" >
+                Kinesis stream ARN
+            </ResponseField>
+            <ResponseField name="access_key_id" type="string" >
+                AWS access key ID
+            </ResponseField>
+            <ResponseField name="secret_access_key" type="string" >
+                AWS secret access key
+            </ResponseField>
+        </Expandable>
 
         <Expandable title="RabbitMQ properties" >
             <ResponseField name="type" type="string" >

@@ -384,24 +384,72 @@ defmodule Sequin.Runtime.MessageHandler do
 
   @decorate track_metrics("messages_by_consumer")
   defp messages_by_consumer(%Context{} = ctx, messages) do
-    Map.new(ctx.consumers, fn consumer ->
-      matching_messages = filter_replication_messages(messages, consumer)
+    # We group_by consumer_id throughput because consumer as a key is slow!
+    # So we need to do fast lookups by consumer_id
+    consumers_by_id = Map.new(ctx.consumers, fn consumer -> {consumer.id, consumer} end)
 
-      consumer_messages = map_to_consumer_messages(matching_messages, consumer)
+    # We lookup consumers that match the SlotProcessor.Message table oid for fast fan out to many consumers
+    consumers_by_table_oid = Enum.group_by(ctx.consumers, fn consumer -> consumer.sequence.table_oid end)
 
-      messages = filter_consumer_messages(ctx, consumer_messages, consumer)
+    messages
+    # First we get a list of consumer_ids that match the SlotProcessor.Message
+    |> Stream.map(fn %SlotProcessor.Message{} = message ->
+      # First we filter on the SlotProcessor.Message table oid
+      consumers = Map.get(consumers_by_table_oid, message.table_oid, [])
 
-      {consumer, messages}
+      matching_consumer_ids =
+        consumers
+        # Then we filter on the SlotProcessor.Message
+        |> Enum.filter(&Consumers.matches_message?(&1, message))
+        |> Enum.map(& &1.id)
+
+      {message, matching_consumer_ids}
+    end)
+    # Next we flat_map it to a list of {matching_consumer_id, consumer_message} tuples,
+    # because each consumer_message is unique to a consumer
+    |> Stream.flat_map(fn {message, matching_consumer_ids} ->
+      Enum.map(matching_consumer_ids, fn consumer_id ->
+        consumer = Map.fetch!(consumers_by_id, consumer_id)
+
+        # Just for type clarity
+        consumer_message =
+          case consumer_message(consumer, message) do
+            %ConsumerEvent{} = consumer_message -> consumer_message
+            %ConsumerRecord{} = consumer_message -> consumer_message
+          end
+
+        cond do
+          # We filter out messages that are too large for the replication slot
+          violates_payload_size?(ctx.replication_slot_id, consumer_message) ->
+            nil
+
+          # Then we filter on the consumer message
+          Consumers.matches_filter?(consumer, consumer_message) ->
+            {consumer_id, consumer_message}
+
+          true ->
+            nil
+        end
+      end)
+    end)
+    # We filter out nil values
+    |> Stream.filter(& &1)
+    # Finally we return a list of tuples of {consumer, consumer_messages}
+    |> Enum.group_by(
+      fn {consumer_id, _consumer_message} -> consumer_id end,
+      fn {_, consumer_message} -> consumer_message end
+    )
+    |> Enum.map(fn {consumer_id, messages} ->
+      {Map.fetch!(consumers_by_id, consumer_id), messages}
     end)
   end
 
-  @decorate track_metrics("filter_consumer_messages")
-  defp filter_consumer_messages(%Context{} = ctx, consumer_messages, consumer) do
-    consumer_messages
-    |> Stream.reject(&is_nil/1)
-    |> Stream.reject(&violates_payload_size?(ctx.replication_slot_id, &1))
-    |> Stream.filter(&Consumers.matches_filter?(consumer, &1))
-    |> Enum.to_list()
+  @decorate track_metrics("map_to_consumer_message")
+  defp consumer_message(%SinkConsumer{} = consumer, %SlotProcessor.Message{} = message) do
+    case consumer.message_kind do
+      :event -> consumer_event(consumer, message)
+      :record -> consumer_record(consumer, message)
+    end
   end
 
   @decorate track_metrics("insert_wal_events")
@@ -575,35 +623,11 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   @decorate track_metrics("message_ledgers")
-  defp message_ledgers(consumer, messages) do
+  defp message_ledgers(%SinkConsumer{} = consumer, messages) do
     if env() != :prod or Sequin.random(1..100) == 1 do
       all_wal_cursors = Enum.map(messages, &MessageLedgers.wal_cursor_from_message/1)
       :ok = MessageLedgers.wal_cursors_ingested(consumer.id, all_wal_cursors)
     end
-  end
-
-  @decorate track_metrics("filter_replication_messages")
-  defp filter_replication_messages(messages, consumer) do
-    Enum.filter(messages, fn %SlotProcessor.Message{} = message ->
-      Consumers.matches_message?(consumer, message)
-    end)
-  end
-
-  @decorate track_metrics("map_to_consumer_messages")
-  defp map_to_consumer_messages(matching_messages, consumer) do
-    Enum.map(matching_messages, fn %SlotProcessor.Message{} = message ->
-      cond do
-        consumer.message_kind == :event ->
-          consumer_event(consumer, message)
-
-        consumer.message_kind == :record and message.action == :delete ->
-          # We do not propagate delete messages to record consumers
-          nil
-
-        consumer.message_kind == :record ->
-          consumer_record(consumer, message)
-      end
-    end)
   end
 
   @decorate track_metrics("wal_events")

@@ -47,14 +47,14 @@ func applyEnvSubst(node interface{}) interface{} {
 			result[key] = applyEnvSubst(value)
 		}
 		return result
-		
+
 	case []interface{}:
 		result := make([]interface{}, len(v))
 		for i, item := range v {
 			result[i] = applyEnvSubst(item)
 		}
 		return result
-		
+
 	case string:
 		substituted, err := envsubst.String(v)
 		if err != nil {
@@ -62,7 +62,7 @@ func applyEnvSubst(node interface{}) interface{} {
 			return v
 		}
 		return substituted
-		
+
 	default:
 		return v
 	}
@@ -74,9 +74,9 @@ func processFunctions(node interface{}) interface{} {
 	if !ok {
 		return node // Not a map at top level, return as-is
 	}
-	
+
 	result := make(map[string]interface{})
-	
+
 	for key, value := range topLevel {
 		if key == "functions" {
 			// Process the functions list/object
@@ -86,7 +86,7 @@ func processFunctions(node interface{}) interface{} {
 			result[key] = value
 		}
 	}
-	
+
 	return result
 }
 
@@ -96,7 +96,7 @@ func processFunctionsList(node interface{}) interface{} {
 	case map[string]interface{}:
 		// Single function object
 		return processFileInFunction(v)
-		
+
 	case []interface{}:
 		// Array of function objects
 		result := make([]interface{}, len(v))
@@ -108,7 +108,7 @@ func processFunctionsList(node interface{}) interface{} {
 			}
 		}
 		return result
-		
+
 	default:
 		return v
 	}
@@ -119,13 +119,13 @@ func processFileInFunction(funcObj map[string]interface{}) map[string]interface{
 	if filePathRaw, hasFile := funcObj["file"]; hasFile {
 		if filePath, ok := filePathRaw.(string); ok {
 			fmt.Printf("Processing file reference: %s\n", filePath)
-			
+
 			content, err := os.ReadFile(filePath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error reading file %s: %v\n", filePath, err)
 				return funcObj // Keep original on error
 			}
-			
+
 			// Copy everything except "file", add "code"
 			result := make(map[string]interface{})
 			for k, val := range funcObj {
@@ -137,7 +137,7 @@ func processFileInFunction(funcObj map[string]interface{}) map[string]interface{
 			return result
 		}
 	}
-	
+
 	// No file key or not a string, return unchanged
 	return funcObj
 }
@@ -158,15 +158,6 @@ func processYAML(yamlContent []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to re-encode YAML: %w", err)
 	}
 
-	return processed, nil
-}
-
-// processEnvVars replaces environment variables in the YAML content using envsubst library
-func processEnvVars(yamlContent []byte) ([]byte, error) {
-	processed, err := envsubst.Bytes(yamlContent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to process environment variables: %w", err)
-	}
 	return processed, nil
 }
 

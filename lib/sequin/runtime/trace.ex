@@ -97,7 +97,7 @@ defmodule Sequin.Runtime.Trace do
         end
 
       url =
-        case Req.Request.get_option(req, :url) do
+        case req.url do
           nil -> ""
           %URI{} = url -> URI.to_string(url)
           url when is_binary(url) -> url

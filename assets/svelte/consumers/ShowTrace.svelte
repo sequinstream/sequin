@@ -107,12 +107,12 @@
 
   function formatRequest(req: any): string {
     if (!req) return "";
-    return `${req.method} ${req.url}\nHeaders: ${JSON.stringify(req.headers, null, 2)}\nBody: ${JSON.stringify(req.body, null, 2)}`;
+    return `${req.method} ${req.url}\n\nHeaders: ${JSON.stringify(req.headers, null, 2)}\n\nBody: ${JSON.stringify(req.body, null, 2)}`;
   }
 
   function formatResponse(resp: any): string {
     if (!resp) return "";
-    return `Status: ${resp.status}\nHeaders: ${JSON.stringify(resp.headers, null, 2)}\nBody: ${JSON.stringify(resp.body, null, 2)}`;
+    return `Status: ${resp.status}\n\nHeaders: ${JSON.stringify(resp.headers, null, 2)}\n\nBody: ${JSON.stringify(resp.body, null, 2)}`;
   }
 
   function formatError(error: any): string {

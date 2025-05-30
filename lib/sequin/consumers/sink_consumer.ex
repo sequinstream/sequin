@@ -210,6 +210,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:max_retry_count, greater_than: 0)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
     |> validate_routing(attrs)
+    |> Sequin.Changeset.annotations_check_constraint()
   end
 
   defp validate_routing(cs, attrs) do

@@ -92,4 +92,8 @@ defmodule Sequin.Changeset do
       end
     end)
   end
+
+  def annotations_check_constraint(%Ecto.Changeset{} = changeset) do
+    check_constraint(changeset, :annotations, name: :annotations_size_limit, message: "annotations size limit exceeded")
+  end
 end

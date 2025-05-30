@@ -2600,6 +2600,18 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
+  describe "annotations size constraint" do
+    test "fails when annotations exceed max size constraint" do
+      # Generate a string larger than 8192 bytes (the max size constraint defined in the migration)
+      large_annotation = String.duplicate("x", 8193)
+      account = AccountsFactory.insert_account!()
+      attrs = ConsumersFactory.sink_consumer_attrs(account_id: account.id, annotations: %{data: large_annotation})
+
+      assert {:error, %Ecto.Changeset{} = changeset} = Consumers.create_sink_consumer(account.id, attrs)
+      assert [annotations: {"annotations size limit exceeded", _}] = changeset.errors
+    end
+  end
+
   describe "consumer_partition_size_bytes/1" do
     test "returns the size of the consumer partition" do
       consumer = ConsumersFactory.insert_sink_consumer!()

@@ -35,6 +35,7 @@
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
+  import { pageStore } from "../stores/pageStore";
 
   export let consumers: Array<{
     id: string;
@@ -145,6 +146,12 @@
       icon: ElasticsearchIcon,
     },
   ];
+
+  function handleConsumerClick(id: string, type: string) {
+    // Store current page before navigation
+    pageStore.set(page.toString());
+    live.pushEvent("consumer_clicked", { id, type });
+  }
 
   function createMiniChart(element, data, options = {}) {
     const config = {

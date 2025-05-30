@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { pageStore } from "../stores/pageStore";
   import {
     ArrowLeft,
     Clock,
@@ -133,7 +134,9 @@
   <div class="container mx-auto px-4 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-4">
-        <LinkPushNavigate href="/sinks">
+        <LinkPushNavigate
+          href={$pageStore ? `/sinks?page=${$pageStore}` : "/sinks"}
+        >
           <Button variant="ghost" size="sm">
             <ArrowLeft class="h-4 w-4" />
           </Button>

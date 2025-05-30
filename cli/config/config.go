@@ -142,6 +142,24 @@ func processFileInFunction(funcObj map[string]interface{}) map[string]interface{
 	return funcObj
 }
 
+// processYAML applies environment variable substitution and file processing to YAML content
+func processYAML(yamlContent []byte) ([]byte, error) {
+	var yamlData interface{}
+	if err := yaml.Unmarshal(yamlContent, &yamlData); err != nil {
+		return nil, fmt.Errorf("Failed to parse YAML content: %w", err)
+	}
+
+	with_subst := applyEnvSubst(yamlData)
+	with_files := processFunctions(with_subst)
+	final := with_files
+
+	processed, err := yaml.Marshal(final)
+	if err != nil {
+		return nil, fmt.Errorf("failed to re-encode YAML: %w", err)
+	}
+
+	return processed, nil
+}
 
 // processEnvVars replaces environment variables in the YAML content using envsubst library
 func processEnvVars(yamlContent []byte) ([]byte, error) {
@@ -172,18 +190,9 @@ func Interpolate(inputPath, outputPath string) error {
 		}
 	}
 
-	var yamlData interface{}
-	if err := yaml.Unmarshal(yamlContent, &yamlData); err != nil {
-		return fmt.Errorf("Failed to parse YAML content: %w", err)
-	}
-
-	with_subst := applyEnvSubst(yamlData)
-	with_files := processFunctions(with_subst)
-	final := with_files
-
-	processed, err := yaml.Marshal(final)
+	processed, err := processYAML(yamlContent)
 	if err != nil {
-		return fmt.Errorf("failed to re-encode YAML: %w", err)
+		return err
 	}
 
 	// Write output
@@ -234,8 +243,8 @@ func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 		return nil, fmt.Errorf("failed to read YAML file: %w", err)
 	}
 
-	// Process environment variables
-	yamlContent, err = processEnvVars(yamlContent)
+	// Process YAML content
+	yamlContent, err = processYAML(yamlContent)
 	if err != nil {
 		return nil, err
 	}
@@ -303,8 +312,8 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 		return nil, fmt.Errorf("failed to read YAML file: %w", err)
 	}
 
-	// Process environment variables
-	yamlContent, err = processEnvVars(yamlContent)
+	// Process YAML content
+	yamlContent, err = processYAML(yamlContent)
 	if err != nil {
 		return nil, err
 	}
@@ -407,3 +416,4 @@ func Export(ctx *context.Context, showSensitive bool) (*ExportResponse, error) {
 
 	return &exportResp, nil
 }
+

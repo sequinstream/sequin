@@ -107,7 +107,7 @@ create publication sequin_publication for table table1, table2, table3;
 Or all tables in a schema:
 
 ```sql
-create publication sequin_publication for all tables in schema public;
+create publication sequin_publication for tables in schema public;
 ```
 
 ### Working with partitioned tables
@@ -144,9 +144,9 @@ alter publication sequin_publication add table table1, table2, table3;
 -- Drop tables
 alter publication sequin_publication drop table table1, table2, table3;
 -- Add all tables in a schema
-alter publication sequin_publication add all tables in schema my_schema;
+alter publication sequin_publication add tables in schema my_schema;
 -- Drop all tables in a schema
-alter publication sequin_publication drop all tables in schema my_schema;
+alter publication sequin_publication drop tables in schema my_schema;
 ```
 
 ### Deleting a Publication

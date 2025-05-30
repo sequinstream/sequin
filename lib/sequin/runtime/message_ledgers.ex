@@ -127,7 +127,7 @@ defmodule Sequin.Runtime.MessageLedgers do
              query_name: query_name
            ),
          {:ok, final_size} <- Redis.command(["ZCARD", key], query_name: query_name) do
-      Logger.info("[MessageLedgers] Trimmed delivered_cursors set to: #{inspect(wal_cursor)}",
+      Logger.debug("[MessageLedgers] Trimmed delivered_cursors set to: #{inspect(wal_cursor)}",
         commit: wal_cursor,
         consumer_id: consumer_id,
         initial_size: initial_size,

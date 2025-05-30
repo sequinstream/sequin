@@ -213,11 +213,11 @@ defmodule Sequin.Logs do
 
     case File.write(log_file, "", [:write]) do
       :ok ->
-        Logger.info("Cleared consumer messages log file: #{log_file}")
+        Logger.debug("Cleared consumer messages log file: #{log_file}")
         :ok
 
       {:error, :enoent} ->
-        Logger.info("Consumer messages log file does not exist: #{log_file}")
+        Logger.debug("Consumer messages log file does not exist: #{log_file}")
         :ok
 
       {:error, reason} ->

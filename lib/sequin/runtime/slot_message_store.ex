@@ -801,7 +801,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   def handle_info(:flush_messages, %State{} = state) do
     with_metrics("flush_messages", fn ->
-      Logger.info("[SlotMessageStore] Checking for messages to flush")
+      Logger.debug("[SlotMessageStore] Checking for messages to flush")
       start_time = System.monotonic_time(:millisecond)
 
       batch_size = flush_batch_size()
@@ -848,7 +848,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   def handle_info(:check_visibility, %State{} = state) do
-    Logger.info("[SlotMessageStore] Checking for messages to make visible")
+    Logger.debug("[SlotMessageStore] Checking for messages to make visible")
 
     messages = State.messages_to_make_visible(state)
 
@@ -1044,14 +1044,16 @@ defmodule Sequin.Runtime.SlotMessageStore do
         duration_ms: duration_ms
       )
     else
-      Logger.info("[SlotMessageStore] Loaded messages from disk",
-        consumer_id: state.consumer_id,
-        partition: state.partition,
-        message_count: message_count,
-        size_bytes: current_size_bytes,
-        all_loaded?: all_loaded?,
-        duration_ms: duration_ms
-      )
+      if message_count > 0 do
+        Logger.info("[SlotMessageStore] Loaded messages from disk",
+          consumer_id: state.consumer_id,
+          partition: state.partition,
+          message_count: message_count,
+          size_bytes: current_size_bytes,
+          all_loaded?: all_loaded?,
+          duration_ms: duration_ms
+        )
+      end
     end
 
     # Now put the messages into state

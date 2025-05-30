@@ -126,8 +126,32 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         _ -> true
       end
 
-    socket = assign(socket, :show_acked, show_acked)
+    socket =
+      socket
+      |> assign(:show_acked, show_acked)
+      |> apply_action(socket.assigns.live_action)
+
     {:noreply, socket}
+  end
+
+  defp apply_action(socket, :show) do
+    %{consumer: consumer} = socket.assigns
+    assign(socket, :page_title, "#{consumer.name} | Sequin")
+  end
+
+  defp apply_action(socket, :messages) do
+    %{consumer: consumer} = socket.assigns
+    assign(socket, :page_title, "#{consumer.name} | Messages | Sequin")
+  end
+
+  defp apply_action(socket, :trace) do
+    %{consumer: consumer} = socket.assigns
+    assign(socket, :page_title, "#{consumer.name} | Trace | Sequin")
+  end
+
+  defp apply_action(socket, _) do
+    %{consumer: consumer} = socket.assigns
+    assign(socket, :page_title, "#{consumer.name} | Sequin")
   end
 
   @impl Phoenix.LiveView

@@ -75,6 +75,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   # docs are not available at runtime in our release.
   @function_completions AutoComplete.function_completions()
 
+  @impl Phoenix.LiveView
   def mount(params, _session, socket) do
     id = params["id"]
 
@@ -130,6 +131,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
     {:ok, socket, layout: {SequinWeb.Layouts, :app_no_sidenav}}
   end
 
+  @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
     <div id="function_new">
@@ -158,6 +160,29 @@ defmodule SequinWeb.FunctionsLive.Edit do
     """
   end
 
+  @impl Phoenix.LiveView
+  def handle_params(params, _url, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  defp apply_action(socket, _action, _params) do
+    %{id: id} = socket.assigns
+
+    title =
+      case id do
+        nil ->
+          "Create Function"
+
+        _ ->
+          Ecto.Changeset.get_field(socket.assigns.changeset, :name)
+      end
+
+    socket
+    |> assign(:page_title, "#{title} | Sequin")
+    |> assign(:live_action, :index)
+  end
+
+  @impl Phoenix.LiveView
   def handle_info(:poll_test_messages, socket) do
     database_id = socket.assigns.selected_database_id
     table_oid = socket.assigns.selected_table_oid
@@ -202,6 +227,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
     end
   end
 
+  @impl Phoenix.LiveView
   def handle_event("validate", %{"function" => params}, socket) do
     changeset =
       %Function{account_id: current_account_id(socket)}

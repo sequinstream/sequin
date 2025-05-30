@@ -45,6 +45,17 @@ defmodule SequinWeb.DatabasesLive.Index do
     {:noreply, assign(socket, :databases, load_database_health(socket.assigns.databases))}
   end
 
+  @impl Phoenix.LiveView
+  def handle_params(params, _url, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  defp apply_action(socket, :index, _params) do
+    socket
+    |> assign(:page_title, "Databases | Sequin")
+    |> assign(:live_action, :index)
+  end
+
   defp load_database_health(databases) do
     Enum.map(databases, fn database ->
       case Health.health(database.replication_slot) do

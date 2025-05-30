@@ -417,13 +417,16 @@
   </svelte:fragment>
 
   <svelte:fragment slot="emptyState">
-    {#if showAcked}
-      Messages will appear here when they are pending, delivered, or
-      acknowledged.
-    {:else}
-      You have no pending messages. Try toggling "Show Acked" to see
-      acknowledged messages.
-    {/if}
+    <h1 class="text-2xl font-bold">No Messages</h1>
+    <h2 class="text-gray-600">
+      {#if showAcked}
+        Messages will appear here when they are pending, delivered, or
+        acknowledged.
+      {:else}
+        You have no pending messages. Try toggling "Show Acked" to see
+        acknowledged messages.
+      {/if}
+    </h2>
   </svelte:fragment>
 
   <svelte:fragment slot="header">

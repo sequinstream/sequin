@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import { Play, Pause } from "lucide-svelte";
+  import { Play, Pause, Loader2 } from "lucide-svelte";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
 
   // Props
@@ -153,8 +153,19 @@
   </svelte:fragment>
 
   <svelte:fragment slot="emptyState">
-    No trace events yet. Hit "Start trace" then wait for messages to flow
-    through this sink.
+    {#if paused}
+      <h1 class="text-2xl font-bold">No Trace Events</h1>
+      <h2 class="text-gray-600">
+        No trace events yet. Hit "Start Trace" then wait for messages to flow
+        through this sink.
+      </h2>
+    {:else}
+      <h1 class="text-2xl font-bold">No Trace Events</h1>
+      <div class="flex items-center gap-2 text-gray-600">
+        <Loader2 class="h-5 w-5 animate-spin" />
+        <h2>Waiting for trace events...</h2>
+      </div>
+    {/if}
   </svelte:fragment>
 
   <svelte:fragment slot="header">
@@ -276,10 +287,3 @@
     {/if}
   </svelte:fragment>
 </TableWithDrawer>
-
-<style>
-  .text-2xs {
-    font-size: 0.65rem;
-    line-height: 1rem;
-  }
-</style>

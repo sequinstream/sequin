@@ -608,24 +608,29 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
+  # If the trace is paused, don't add any more events
+  def handle_info({:trace_event, _event}, %{assigns: %{trace: %{paused: true}}} = socket) do
+    {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
+  # If the live action is not :trace, don't add any more events
+  def handle_info({:trace_event, _event}, %{assigns: %{live_action: live_action}} = socket) when live_action != :trace do
+    {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
   def handle_info({:trace_event, event}, socket) do
-    paused? = socket.assigns.trace.paused
-    over_limit? = length(socket.assigns.trace.events) >= socket.assigns.trace.event_limit
+    trace = socket.assigns.trace
+    events = [event | trace.events]
+    total_count = length(events)
+    to_pause? = total_count >= trace.event_limit
 
-    if socket.assigns.live_action == :trace and not paused? and not over_limit? do
-      trace = socket.assigns.trace
-      events = [event | trace.events]
-      total_count = length(events)
-      to_pause? = total_count >= trace.event_limit
-
-      if to_pause? do
-        Trace.unsubscribe(socket.assigns.consumer.id)
-      end
-
-      {:noreply, assign(socket, trace: %{trace | events: events, total_count: total_count, paused: to_pause?})}
-    else
-      {:noreply, socket}
+    if to_pause? do
+      Trace.unsubscribe(socket.assigns.consumer.id)
     end
+
+    {:noreply, assign(socket, trace: %{trace | events: events, total_count: total_count, paused: to_pause?})}
   end
 
   defp initial_trace do

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"github.com/a8m/envsubst"
 	"github.com/sequinstream/sequin/cli/context"
 )
@@ -36,6 +37,111 @@ type ApplyResponse struct {
 type ExportResponse struct {
 	YAML string `json:"yaml"`
 }
+
+// Apply envsubst to all string values everywhere
+func applyEnvSubst(node interface{}) interface{} {
+	switch v := node.(type) {
+	case map[string]interface{}:
+		result := make(map[string]interface{})
+		for key, value := range v {
+			result[key] = applyEnvSubst(value)
+		}
+		return result
+		
+	case []interface{}:
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			result[i] = applyEnvSubst(item)
+		}
+		return result
+		
+	case string:
+		substituted, err := envsubst.String(v)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: envsubst error: %v\n", err)
+			return v
+		}
+		return substituted
+		
+	default:
+		return v
+	}
+}
+
+// Process file substitutions only within top-level "functions"
+func processFunctions(node interface{}) interface{} {
+	topLevel, ok := node.(map[string]interface{})
+	if !ok {
+		return node // Not a map at top level, return as-is
+	}
+	
+	result := make(map[string]interface{})
+	
+	for key, value := range topLevel {
+		if key == "functions" {
+			// Process the functions list/object
+			result[key] = processFunctionsList(value)
+		} else {
+			// Copy everything else unchanged
+			result[key] = value
+		}
+	}
+	
+	return result
+}
+
+// Process each function object in the functions collection
+func processFunctionsList(node interface{}) interface{} {
+	switch v := node.(type) {
+	case map[string]interface{}:
+		// Single function object
+		return processFileInFunction(v)
+		
+	case []interface{}:
+		// Array of function objects
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			if funcObj, ok := item.(map[string]interface{}); ok {
+				result[i] = processFileInFunction(funcObj)
+			} else {
+				result[i] = item
+			}
+		}
+		return result
+		
+	default:
+		return v
+	}
+}
+
+// Handle file: -> code: transformation for a single function object
+func processFileInFunction(funcObj map[string]interface{}) map[string]interface{} {
+	if filePathRaw, hasFile := funcObj["file"]; hasFile {
+		if filePath, ok := filePathRaw.(string); ok {
+			fmt.Printf("Processing file reference: %s\n", filePath)
+			
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading file %s: %v\n", filePath, err)
+				return funcObj // Keep original on error
+			}
+			
+			// Copy everything except "file", add "code"
+			result := make(map[string]interface{})
+			for k, val := range funcObj {
+				if k != "file" {
+					result[k] = val
+				}
+			}
+			result["code"] = string(content)
+			return result
+		}
+	}
+	
+	// No file key or not a string, return unchanged
+	return funcObj
+}
+
 
 // processEnvVars replaces environment variables in the YAML content using envsubst library
 func processEnvVars(yamlContent []byte) ([]byte, error) {
@@ -66,10 +172,18 @@ func Interpolate(inputPath, outputPath string) error {
 		}
 	}
 
-	// Process environment variables
-	processed, err := processEnvVars(yamlContent)
+	var yamlData interface{}
+	if err := yaml.Unmarshal(yamlContent, &yamlData); err != nil {
+		return fmt.Errorf("Failed to parse YAML content: %w", err)
+	}
+
+	with_subst := applyEnvSubst(yamlData)
+	with_files := processFunctions(with_subst)
+	final := with_files
+
+	processed, err := yaml.Marshal(final)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to re-encode YAML: %w", err)
 	}
 
 	// Write output

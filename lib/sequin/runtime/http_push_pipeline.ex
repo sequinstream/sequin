@@ -42,7 +42,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     if consumer.sink.via_sqs do
       # Get SQS configuration directly
       case Sequin.Runtime.HttpPushSqsPipeline.fetch_sqs_config() do
-        {:ok, sqs_config} ->
+        {:ok, sqs_config} when is_map(sqs_config) ->
           # Create SQS client with the configuration
           sqs_client = create_aws_client(sqs_config)
           # Store the config in context for SQS operations
@@ -100,7 +100,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     end
   end
 
-  defguardp uses_via_sqs?(context) when context.consumer.sink.via_sqs == true
+  defguardp uses_via_sqs?(context) when context.consumer.sink.via_sqs == true and is_map(context.sqs_config)
 
   @impl SinkPipeline
   def handle_batch(:default, messages, _batch_info, context) when uses_via_sqs?(context) do

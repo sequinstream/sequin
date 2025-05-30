@@ -44,6 +44,8 @@ config :sequin, Oban,
   ],
   repo: Sequin.Repo,
   plugins: [
+    # Prune jobs that are older than 14 days
+    {Oban.Plugins.Pruner, max_age: 14 * 24 * 60 * 60, limit: 5_000, interval: 20_000},
     {Oban.Plugins.Cron,
      crontab: [
        # Runs every 6 hours (at minute 0)

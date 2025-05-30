@@ -1629,24 +1629,26 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     cond do
       sink_consumer_ids != message_handler_sink_consumer_ids ->
-        {:error,
-         Error.invariant(
-           message: """
-           Sink consumer IDs do not match message handler sink consumer IDs.
-           Sink consumers: #{inspect(sink_consumer_ids)}.
-           Message handler: #{inspect(message_handler_sink_consumer_ids)}
-           """
-         )}
+        msg = """
+        Sink consumer IDs do not match message handler sink consumer IDs.
+        Sink consumers: #{inspect(sink_consumer_ids)}.
+        Message handler: #{inspect(message_handler_sink_consumer_ids)}
+        """
+
+        Logger.error(msg)
+
+        {:error, Error.invariant(message: msg)}
 
       sink_consumer_ids != monitored_sink_consumer_ids ->
-        {:error,
-         Error.invariant(
-           message: """
-           Sink consumer IDs do not match monitored sink consumer IDs.
-           Sink consumers: #{inspect(sink_consumer_ids)}.
-           Monitored: #{inspect(monitored_sink_consumer_ids)}
-           """
-         )}
+        msg = """
+        Sink consumer IDs do not match monitored sink consumer IDs.
+        Sink consumers: #{inspect(sink_consumer_ids)}.
+        Monitored: #{inspect(monitored_sink_consumer_ids)}
+        """
+
+        Logger.error(msg)
+
+        {:error, Error.invariant(message: msg)}
 
       true ->
         :ok

@@ -114,7 +114,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
         max_memory_mb: Enum.random(128..1024),
-        max_storage_mb: Enum.random([nil, Enum.random(2048..4096)]),
         message_kind: message_kind,
         name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,

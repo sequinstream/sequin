@@ -89,6 +89,7 @@ defmodule Sequin.ConfigParser do
 
   defp validate_log_level(level, default_level) do
     Logger.warning("[ConfigParser] Invalid log level: #{inspect(level)}. Using default #{inspect(default_level)} level.")
+
     default_level
   end
 
@@ -178,18 +179,6 @@ defmodule Sequin.ConfigParser do
         |> String.to_integer()
         |> Sequin.Size.mb()
         |> apply_buffer(buffer_percent)
-    end
-  end
-
-  def default_max_storage_bytes(env) do
-    case env["DEFAULT_MAX_STORAGE_MB"] do
-      nil ->
-        nil
-
-      mb_str ->
-        mb_str
-        |> String.to_integer()
-        |> Sequin.Size.mb()
     end
   end
 

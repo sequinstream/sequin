@@ -1227,7 +1227,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp process_message(%State{} = state, %Message{} = msg) do
     state =
-      if is_logical_message_table_upsert?(state, msg) do
+      if logical_message_table_upsert?(state, msg) do
         content = Enum.find(msg.fields, fn field -> field.column_name == "content" end)
         handle_logical_message_content(state, content.value)
       else
@@ -1284,14 +1284,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     state
   end
 
-  defp is_logical_message_table_upsert?(%State{postgres_database: %{pg_major_version: pg_major_version}}, %Message{
+  defp logical_message_table_upsert?(%State{postgres_database: %{pg_major_version: pg_major_version}}, %Message{
          table_name: @logical_message_table_name
        })
        when pg_major_version < 14 do
     true
   end
 
-  defp is_logical_message_table_upsert?(%State{}, %Message{}), do: false
+  defp logical_message_table_upsert?(%State{}, %Message{}), do: false
 
   defp handle_logical_message_content(%State{} = state, content) do
     case Jason.decode(content) do

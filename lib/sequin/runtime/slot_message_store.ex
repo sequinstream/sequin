@@ -545,7 +545,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     messages = Enum.map(messages, &%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
 
-    {to_persist, to_put} = Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
+    {to_persist, to_put} = Enum.split_with(messages, &State.message_group_persisted?(state, &1.group_id))
 
     with {:ok, state} <- State.put_table_reader_batch(state, to_put, batch_id),
          :ok <- upsert_messages(state, to_persist) do
@@ -621,7 +621,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     persisted_messages_to_drop =
       state
       |> State.peek_messages(cursor_tuples)
-      |> Enum.filter(&State.is_message_persisted?(state, &1))
+      |> Enum.filter(&State.message_persisted?(state, &1))
 
     {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
@@ -662,7 +662,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     persisted_messages_to_drop =
       state
       |> State.peek_messages(cursor_tuples)
-      |> Enum.filter(&State.is_message_persisted?(state, &1))
+      |> Enum.filter(&State.message_persisted?(state, &1))
 
     {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
@@ -897,7 +897,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       if state.consumer.status == :disabled do
         {messages, []}
       else
-        Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
+        Enum.split_with(messages, &State.message_group_persisted?(state, &1.group_id))
       end
 
     {:ok, state} = State.put_messages(state, to_put)

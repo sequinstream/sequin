@@ -362,7 +362,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert message.commit_lsn == message2.commit_lsn
     end
 
-    test "is_message_group_persisted? returns false for nil group_ids", %{event_consumer: consumer} do
+    test "message_group_persisted? returns false for nil group_ids", %{event_consumer: consumer} do
       # Create and persist a message with nil group_id
       message =
         ConsumersFactory.consumer_message(
@@ -384,9 +384,9 @@ defmodule Sequin.SlotMessageStoreTest do
 
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
-      # Peek at state to verify is_message_group_persisted? returns false
+      # Peek at state to verify message_group_persisted? returns false
       Enum.each(SlotMessageStore.peek(consumer), fn state ->
-        refute State.is_message_group_persisted?(state, nil)
+        refute State.message_group_persisted?(state, nil)
       end)
     end
 

@@ -85,11 +85,6 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("consumer_clicked", %{"id" => id, "type" => type}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/sinks/#{type}/#{id}")}
-  end
-
-  @impl Phoenix.LiveView
   def handle_event("change_page", %{"page" => page}, socket) do
     account_id = current_account_id(socket)
     total_count = Consumers.count_sink_consumers_for_account(account_id)

@@ -625,10 +625,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
-    if persisted_messages_to_drop == [] do
-      :ok
-    else
-      :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
+    unless state.consumer.id == "8bc6d2cb-bdeb-44c6-879e-6ecb01350c3c" do
+      if persisted_messages_to_drop == [] do
+        :ok
+      else
+        :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
+      end
     end
 
     state = maybe_pull_messages_from_disk(state)

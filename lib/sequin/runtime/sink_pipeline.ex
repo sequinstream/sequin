@@ -388,6 +388,10 @@ defmodule Sequin.Runtime.SinkPipeline do
     :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
     :ok = MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "consumer_producer.ack", wal_cursors)
 
+    if consumer.id == "8bc6d2cb-bdeb-44c6-879e-6ecb01350c3c" do
+      {:ok, _count} = Consumers.ack_messages(consumer, successful_ack_ids)
+    end
+
     case slot_message_store_mod.messages_succeeded(consumer, successful_ack_ids) do
       {:ok, _count} -> :ok
       {:error, error} -> raise error

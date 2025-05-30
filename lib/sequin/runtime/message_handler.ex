@@ -1,6 +1,8 @@
 defmodule Sequin.Runtime.MessageHandler do
   @moduledoc false
 
+  use Sequin.ProcessMetrics.Decorator
+
   alias Sequin.Constants
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
@@ -106,66 +108,37 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   @spec handle_messages(Context.t(), [Message.t()]) :: {:ok, non_neg_integer()} | {:error, Sequin.Error.t()}
+  @decorate track_metrics("handle_messages")
   def handle_messages(%Context{}, []) do
     {:ok, 0}
   end
 
+  @decorate track_metrics("handle_messages")
   def handle_messages(%Context{} = ctx, messages) do
-    execute_timed(:handle_messages, fn ->
-      Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
+    Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
 
-      messages = load_unchanged_toasts(ctx, messages)
+    messages = load_unchanged_toasts(ctx, messages)
 
-      save_test_messages(ctx, messages)
+    save_test_messages(ctx, messages)
 
-      messages_by_consumer =
-        execute_timed(:messages_by_consumer, fn ->
-          messages_by_consumer(ctx, messages)
-        end)
+    messages_by_consumer = messages_by_consumer(ctx, messages)
 
-      wal_events =
-        execute_timed(:wal_events, fn ->
-          Enum.flat_map(messages, fn message ->
-            ctx.wal_pipelines
-            |> Enum.filter(&Consumers.matches_message?(&1, message))
-            |> Enum.map(fn pipeline ->
-              wal_event(pipeline, message)
-            end)
-          end)
-        end)
+    wal_events = wal_events(ctx, messages)
 
-      matching_pipeline_ids = wal_events |> Enum.map(& &1.wal_pipeline_id) |> Enum.uniq()
+    matching_pipeline_ids = wal_events |> Enum.map(& &1.wal_pipeline_id) |> Enum.uniq()
 
-      res =
-        with {:ok, count} <-
-               execute_timed(:call_consumer_message_stores, fn ->
-                 call_consumer_message_stores(messages_by_consumer)
-               end) do
-          {:ok, wal_event_count} =
-            execute_timed(:insert_wal_events, fn ->
-              insert_wal_events(ctx, wal_events, matching_pipeline_ids)
-            end)
+    res =
+      with {:ok, count} <- call_consumer_message_stores(messages_by_consumer) do
+        {:ok, wal_event_count} = insert_wal_events(ctx, wal_events, matching_pipeline_ids)
 
-          # # Trace Messages
-          # messages_with_consumer
-          # |> Enum.group_by(
-          #   fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
-          #   fn {{_action, event_or_record}, _consumer} -> event_or_record end
-          # )
-          # |> Enum.each(fn
-          #   {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
-          #   {{:delete, _consumer}, _messages} -> :ok
-          # end)
+        {:ok, count + wal_event_count}
+      end
 
-          {:ok, count + wal_event_count}
-        end
-
-      Enum.each(matching_pipeline_ids, fn wal_pipeline_id ->
-        :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)
-      end)
-
-      res
+    Enum.each(matching_pipeline_ids, fn wal_pipeline_id ->
+      :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)
     end)
+
+    res
   end
 
   @high_watermark_prefix Constants.backfill_batch_high_watermark()
@@ -362,22 +335,16 @@ defmodule Sequin.Runtime.MessageHandler do
     |> Map.new()
   end
 
+  @decorate track_metrics("call_consumer_message_stores")
   defp call_consumer_message_stores(messages_by_consumer) do
     res =
       Enum.reduce_while(messages_by_consumer, :ok, fn {consumer, messages}, :ok ->
-        execute_timed(:message_ledgers, fn ->
-          if env() != :prod or Sequin.random(1..100) == 1 do
-            all_wal_cursors = Enum.map(messages, &MessageLedgers.wal_cursor_from_message/1)
-            :ok = MessageLedgers.wal_cursors_ingested(consumer.id, all_wal_cursors)
-          end
-        end)
+        message_ledgers(consumer, messages)
 
-        execute_timed(:put_messages, fn ->
-          case put_messages(consumer, messages) do
-            :ok -> {:cont, :ok}
-            {:error, _} = error -> {:halt, error}
-          end
-        end)
+        case put_messages(consumer, messages) do
+          :ok -> {:cont, :ok}
+          {:error, _} = error -> {:halt, error}
+        end
       end)
 
     with :ok <- res do
@@ -387,7 +354,12 @@ defmodule Sequin.Runtime.MessageHandler do
 
   @max_backoff_ms :timer.seconds(1)
   @max_attempts 5
-  defp put_messages(consumer, messages_to_ingest, attempt \\ 1) do
+  @decorate track_metrics("put_messages")
+  defp put_messages(consumer, messages_to_ingest) do
+    do_put_messages(consumer, messages_to_ingest)
+  end
+
+  defp do_put_messages(consumer, messages_to_ingest, attempt \\ 1) do
     case SlotMessageStore.put_messages(consumer, messages_to_ingest) do
       :ok ->
         Health.put_event(:sink_consumer, consumer.id, %Event{slug: :messages_ingested, status: :success})
@@ -402,7 +374,7 @@ defmodule Sequin.Runtime.MessageHandler do
         )
 
         Process.sleep(backoff)
-        put_messages(consumer, messages_to_ingest, attempt + 1)
+        do_put_messages(consumer, messages_to_ingest, attempt + 1)
 
       {:error, error} ->
         Health.put_event(:sink_consumer, consumer.id, %Event{slug: :messages_ingested, status: :fail, error: error})
@@ -410,46 +382,32 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
+  @decorate track_metrics("messages_by_consumer")
   defp messages_by_consumer(%Context{} = ctx, messages) do
     Map.new(ctx.consumers, fn consumer ->
-      matching_messages =
-        execute_timed(:filter_matching_messages, fn ->
-          # We do some filtering here on the
-          Enum.filter(messages, fn %SlotProcessor.Message{} = message ->
-            Consumers.matches_message?(consumer, message)
-          end)
-        end)
+      matching_messages = filter_replication_messages(messages, consumer)
 
-      consumer_messages =
-        execute_timed(:map_to_consumer_messages, fn ->
-          Enum.map(matching_messages, fn %SlotProcessor.Message{} = message ->
-            cond do
-              consumer.message_kind == :event ->
-                consumer_event(consumer, message)
+      consumer_messages = map_to_consumer_messages(matching_messages, consumer)
 
-              consumer.message_kind == :record and message.action == :delete ->
-                # We do not propagate delete messages to record consumers
-                nil
-
-              consumer.message_kind == :record ->
-                consumer_record(consumer, message)
-            end
-          end)
-        end)
-
-      messages =
-        consumer_messages
-        |> Stream.reject(&is_nil/1)
-        |> Stream.reject(&violates_payload_size?(ctx.replication_slot_id, &1))
-        |> Stream.filter(&Consumers.matches_filter?(consumer, &1))
-        |> Enum.to_list()
+      messages = filter_consumer_messages(ctx, consumer_messages, consumer)
 
       {consumer, messages}
     end)
   end
 
+  @decorate track_metrics("filter_consumer_messages")
+  defp filter_consumer_messages(%Context{} = ctx, consumer_messages, consumer) do
+    consumer_messages
+    |> Stream.reject(&is_nil/1)
+    |> Stream.reject(&violates_payload_size?(ctx.replication_slot_id, &1))
+    |> Stream.filter(&Consumers.matches_filter?(consumer, &1))
+    |> Enum.to_list()
+  end
+
+  @decorate track_metrics("insert_wal_events")
   defp insert_wal_events(%Context{}, [], _matching_pipeline_ids), do: {:ok, 0}
 
+  @decorate track_metrics("insert_wal_events")
   defp insert_wal_events(%Context{} = ctx, wal_events, matching_pipeline_ids) do
     Repo.transact(fn ->
       {:ok, wal_event_count} = insert_wal_events(wal_events)
@@ -538,6 +496,7 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
+  @decorate track_metrics("load_unchanged_toasts")
   defp load_unchanged_toasts(%Context{} = ctx, messages) do
     # Skip if no messages have unchanged TOASTs
     if Enum.any?(messages, &has_unchanged_toast?/1) do
@@ -591,8 +550,10 @@ defmodule Sequin.Runtime.MessageHandler do
     end)
   end
 
+  @decorate track_metrics("save_test_messages")
   defp save_test_messages(%Context{}, []), do: :ok
 
+  @decorate track_metrics("save_test_messages")
   defp save_test_messages(%Context{} = ctx, messages) do
     # Early out if no sequences need messages
     if TestMessages.needs_test_messages?(ctx.postgres_database.id) do
@@ -613,16 +574,47 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
-  defp execute_timed(name, fun) do
-    {time, result} = :timer.tc(fun, :millisecond)
-    incr_counter(:"#{name}_total_ms", time)
-    incr_counter(:"#{name}_count")
-    result
+  @decorate track_metrics("message_ledgers")
+  defp message_ledgers(consumer, messages) do
+    if env() != :prod or Sequin.random(1..100) == 1 do
+      all_wal_cursors = Enum.map(messages, &MessageLedgers.wal_cursor_from_message/1)
+      :ok = MessageLedgers.wal_cursors_ingested(consumer.id, all_wal_cursors)
+    end
   end
 
-  defp incr_counter(name, amount \\ 1) do
-    current = Process.get(name, 0)
-    Process.put(name, current + amount)
+  @decorate track_metrics("filter_replication_messages")
+  defp filter_replication_messages(messages, consumer) do
+    Enum.filter(messages, fn %SlotProcessor.Message{} = message ->
+      Consumers.matches_message?(consumer, message)
+    end)
+  end
+
+  @decorate track_metrics("map_to_consumer_messages")
+  defp map_to_consumer_messages(matching_messages, consumer) do
+    Enum.map(matching_messages, fn %SlotProcessor.Message{} = message ->
+      cond do
+        consumer.message_kind == :event ->
+          consumer_event(consumer, message)
+
+        consumer.message_kind == :record and message.action == :delete ->
+          # We do not propagate delete messages to record consumers
+          nil
+
+        consumer.message_kind == :record ->
+          consumer_record(consumer, message)
+      end
+    end)
+  end
+
+  @decorate track_metrics("wal_events")
+  defp wal_events(ctx, messages) do
+    Enum.flat_map(messages, fn message ->
+      ctx.wal_pipelines
+      |> Enum.filter(&Consumers.matches_message?(&1, message))
+      |> Enum.map(fn pipeline ->
+        wal_event(pipeline, message)
+      end)
+    end)
   end
 
   defp env do

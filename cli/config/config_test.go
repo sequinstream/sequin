@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sequinstream/sequin/cli/testutil"
 )
 
 func TestProcessEnvVars(t *testing.T) {
@@ -69,11 +71,11 @@ func TestProcessEnvVars(t *testing.T) {
 			}
 
 			// Call the function
-			result, err := processEnvVars([]byte(tt.input))
+			result, err := applyEnvSubst(tt.input)
 
 			// Check error
 			if (err != nil) != tt.wantErr {
-				t.Errorf("processEnvVars() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("applyEnvSubst() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
@@ -83,8 +85,8 @@ func TestProcessEnvVars(t *testing.T) {
 			}
 
 			// Check result
-			if string(result) != tt.expected {
-				t.Errorf("processEnvVars() = %q, want %q", string(result), tt.expected)
+			if result != tt.expected {
+				t.Errorf("applyEnvSubst() = %q, want %q", result, tt.expected)
 			}
 		})
 	}
@@ -119,7 +121,7 @@ database: ${DB_NAME:-default_db}
 	// Define the expected output once, to be used in both tests
 	expectedOutput := `
 username: testuser
-port: 9000
+port: "9000"
 host: localhost
 database: default_db
 `
@@ -136,11 +138,8 @@ database: default_db
 		t.Fatalf("Failed to read output file: %v", err)
 	}
 
-	// Check the result with exact match
-	if string(outputContent) != expectedOutput {
-		t.Errorf("Interpolate() output file content does not match.\nGot:\n%s\nWant:\n%s",
-			string(outputContent), expectedOutput)
-	}
+	// Check the result using compareYAML
+	testutil.CompareYAML(t, string(outputContent), expectedOutput)
 
 	// Test 2: Output to stdout
 	// Create a pipe to capture stdout
@@ -161,11 +160,8 @@ database: default_db
 	io.Copy(&buf, r)
 	stdoutContent := buf.String()
 
-	// Check the result with exact match
-	if stdoutContent != expectedOutput {
-		t.Errorf("Interpolate() stdout content does not match.\nGot:\n%s\nWant:\n%s",
-			stdoutContent, expectedOutput)
-	}
+	// Check the result using compareYAML
+	testutil.CompareYAML(t, stdoutContent, expectedOutput)
 
 	// Test 3: Error handling - nonexistent input file
 	if err := Interpolate("nonexistent.yaml", ""); err == nil {

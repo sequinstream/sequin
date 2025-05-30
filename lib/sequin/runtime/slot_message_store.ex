@@ -602,7 +602,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
       Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
       {:reply, {:ok, messages}, state}
     else
-      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
       {:reply, {:ok, []}, state, :hibernate}
     end
   end

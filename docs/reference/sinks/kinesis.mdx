@@ -3,8 +3,11 @@ title: "AWS Kinesis sink"
 sidebarTitle: "AWS Kinesis sink"
 description: "Reference for configuring and using the AWS Kinesis sink with Sequin."
 ---
-
 The Kinesis sink sends messages to an Amazon Kinesis data stream.
+
+Kinesis is a durable, distributed, sharded queue that stores messages for up to 1 year, with ordering guaranteed within each shard based on partition keys.
+
+Unlike SQS or SNS, Kinesis maintains message ordering and enables multiple consumers to process the same data stream independently.
 
 ## Configuration
 
@@ -41,7 +44,7 @@ Replace `<your-stream-arn>` with your actual stream ARN.
 
 ## Message format
 
-Sequin sends messages to Kinesis as JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
+Sequin sends messages to Kinesis as base64-encoded JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
 
 ## Retry behavior
 
@@ -49,7 +52,13 @@ If Sequin is unable to deliver a message to Kinesis, it will retry the message i
 
 ## Max record size
 
-Kinesis has a [maximum record size of 1 MB](https://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html). If Kinesis rejects a message due to size limitations, Sequin will cancel the message's delivery.
+Kinesis has a [maximum record size of 1 MB](https://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html). If Kinesis rejects a message due to size limitations, Sequin will retry it indefinitely.
+
+This means that the failing message will be saved until you take appropriate action and/or manually discard the message in the Sequin console.
+
+For example, if one particular column caused the issue, you could define a [transform function](/reference/transforms) which removed that column from the message payload.
+
+Then, after attaching that transform to your Kinesis sink, the next retry of the oversize message (automatic or manual) should succeed.
 
 <Info>
   If you want to see logging/alerting for this situation, please [upvote the corresponding issue](https://github.com/sequinstream/sequin/issues/596).

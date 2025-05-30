@@ -26,7 +26,12 @@ If you're using Sequin Cloud, you'll need:
 
 ### Create a Kinesis stream
 
-If you don't have a stream already, create one in the AWS console.
+If you don't have a stream already, create one using the AWS console or the AWS cli:
+```bash
+aws kinesis create-stream \
+    --stream-name my-test-stream \
+    --shard-count 1
+```
 
 ### Create an IAM user for Sequin
 
@@ -49,9 +54,7 @@ Replace `<your-stream-arn>` with your stream's ARN.
 
 Save the Access Key ID and Secret Access Key; you'll use these when configuring the sink.
 
-### (Optional) Enable retention for changes
-
-You can send either [changes or rows](/reference/messages) to Kinesis. If you're sending changes and want to replay them later, consider [change retention](reference/change-retention).
+The `kinesis:DescribeStream` permission is technically optional: it's only used for testing the connection to Kinesis in the Sequin console.
 
 ## Create Kinesis sink
 
@@ -64,12 +67,8 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Kinesis Sink".
     Under "Source", select the table you want to stream data from.
   </Step>
 
-  <Step title="Choose message type">
-    Decide whether you want [changes or rows](/reference/messages). If unsure, leave "Changes" selected.
-  </Step>
-
   <Step title="Specify filters">
-    For changes you can restrict to `insert`, `update`, and/or `delete` actions. You can also apply [SQL filters](/reference/filters).
+    For changes you can restrict to `insert`, `update`, and/or `delete` actions. You can also apply [filters](/reference/filters).
   </Step>
 
   <Step title="Specify backfill">
@@ -107,12 +106,16 @@ If messages don't seem to be flowing:
 
 - **Process the events**
 
-  Build a consumer to read from your Kinesis stream and process the data. Refer to the [Kinesis sink reference](/reference/sinks/kinesis) for the shape of messages that Sequin publishes.
+  Build a consumer to read from your Kinesis stream and process the data.  Sequin's messages will be base64-encoded JSON; refer to the [Kinesis sink reference](/reference/sinks/kinesis) for more information.
 
 - **Deploy your implementation**
 
-  When you're ready to deploy your implementation, see "[How to deploy to production](/how-to/deploy-to-production)".
+  When you're ready to deploy, see "[How to deploy to production](/how-to/deploy-to-production)".
 
 - **Advanced configuration**
 
   For more about how Kinesis sinks work, see the [Kinesis sink reference](/reference/sinks/kinesis).
+
+- **Start from scratch**
+
+   If you need more detailed steps to get Kinesis up and running, see the [Kinesis sink quickstart](/quickstart/kinesis).

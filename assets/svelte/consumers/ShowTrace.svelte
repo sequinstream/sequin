@@ -204,14 +204,14 @@
         <div class="px-[2px] py-[10px] bg-orange-500 text-xs rounded-sm"></div>
       {/if}
     </td>
-    <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs text-gray-500">
+    <td class="px-2 py-1 w-fit whitespace-nowrap text-xs text-gray-500">
       {formatDate(item.published_at)}
     </td>
-    <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs">
+    <td class="px-2 py-1 w-fit whitespace-nowrap text-xs max-w-xs">
       {item.message}
     </td>
     <td
-      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500 font-mono overflow-hidden max-w-lg"
+      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-xs text-gray-500 font-mono overflow-hidden max-w-xs"
     >
       {formatEventAsRow(item)}
     </td>

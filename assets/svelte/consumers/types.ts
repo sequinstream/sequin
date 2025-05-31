@@ -8,6 +8,7 @@ export type BaseConsumer = {
     | "http_push"
     | "sqs"
     | "sns"
+    | "kinesis"
     | "redis_stream"
     | "kafka"
     | "sequin_stream"
@@ -73,6 +74,16 @@ export type SqsConsumer = BaseConsumer & {
     queue_url: string;
     region: string;
     is_fifo: boolean;
+  };
+};
+
+// Kinesis specific sink
+export type KinesisConsumer = BaseConsumer & {
+  sink: {
+    type: "kinesis";
+    stream_arn: string;
+    access_key_id: string;
+    secret_access_key: string;
   };
 };
 
@@ -215,6 +226,7 @@ export type ElasticsearchConsumer = BaseConsumer & {
 export type Consumer =
   | HttpPushConsumer
   | SqsConsumer
+  | KinesisConsumer
   | RedisStreamConsumer
   | KafkaConsumer
   | SequinStreamConsumer

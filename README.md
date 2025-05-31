@@ -63,10 +63,16 @@ In our production benchmarks with AWS RDS Postgres and MSK Kafka, Sequin maintai
 | HTTP Pull (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Consume changes directly from Sequin with exactly-once processing |
 | Kafka | ✅ Real-time streaming<br />✅ Backfill existing rows | Stream changes to Apache Kafka topics |
 | NATS | ✅ Real-time streaming<br />✅ Backfill existing rows | Stream changes to NATS subjects |
-| Postgres | 🛠️ Coming April 2025 | Replicate changes to another Postgres |
+| Postgres | 🛠️ Coming June 2025 | Replicate changes to another Postgres |
 | RabbitMQ | ✅ Real-time streaming<br />✅ Backfill existing rows | Publish messages to RabbitMQ exchanges |
-| Redis | ✅ Real-time streaming<br />✅ Backfill existing rows | `XADD` to Redis Streams |
+| Redis Stream | ✅ Real-time streaming<br />✅ Backfill existing rows | `XADD` to Redis Streams |
+| Redis String | ✅ Real-time streaming<br />✅ Backfill existing rows | `SET` to Redis keys  |
 | SQS | ✅ Real-time streaming<br />✅ Backfill existing rows | Send messages to Amazon SQS queues |
+| Kinesis | ✅ Real-time streaming<br />✅ Backfill existing rows | Send messages to Amazon Kinesis streams queues |
+| Typesense | ✅ Real-time streaming<br />✅ Backfill existing rows | Index database changes with Typesense |
+| Elasticsearch | ✅ Real-time streaming<br />✅ Backfill existing rows | Index database changes with Elasticsearch |
+
+
 | Webhook Subscription (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Send changes to any HTTP endpoint |
 
 ## Change data capture use cases

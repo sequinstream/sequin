@@ -1,0 +1,241 @@
+---
+title: 'Get started with AWS Kinesis'
+sidebarTitle: 'AWS Kinesis'
+description: 'Stream Postgres changes to an Amazon Kinesis stream in minutes with Sequin.'
+---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to an Amazon Kinesis data stream. You'll:
+
+- Set up a Kinesis stream using the AWS CLI
+- Create an IAM user with the minimal required permissions
+- Boot Sequin and connect to a sample playground database
+- Configure Sequin to stream database changes to your Kinesis stream
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin and Kinesis.
+
+## Prerequisites
+
+- AWS CLI installed and configured with your AWS credentials
+- An AWS account with permissions to create Kinesis streams and IAM users
+
+## Step 1: Set up your Kinesis stream
+
+First, let's create a Kinesis stream and the necessary AWS resources using the AWS CLI.
+
+<Steps>
+  <Step title="Create a Kinesis stream">
+    Run this command to create a new Kinesis stream called `sequin-quickstart`:
+
+    ```bash
+    aws kinesis create-stream \
+      --stream-name sequin-quickstart \
+      --shard-count 1
+    ```
+
+    Wait for the stream to become active (this takes about 1-2 minutes):
+
+    ```bash
+    aws kinesis describe-stream --stream-name sequin-quickstart
+    ```
+
+    Look for `"StreamStatus": "ACTIVE"` in the response.
+  </Step>
+
+  <Step title="Get your stream ARN">
+    Once active, note down your stream ARN from the describe-stream output. It will look like:
+    
+    ```
+    arn:aws:kinesis:us-east-1:123456789012:stream/sequin-quickstart
+    ```
+
+    You can also get just the ARN with:
+
+    ```bash
+    aws kinesis describe-stream --stream-name sequin-quickstart --query 'StreamDescription.StreamARN' --output text
+    ```
+  </Step>
+
+  <Step title="Create an IAM policy">
+    Create a policy file called `sequin-kinesis-policy.json`:
+
+    ```json
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "kinesis:PutRecords",
+            "kinesis:DescribeStream"
+          ],
+          "Resource": "arn:aws:kinesis:*:*:stream/sequin-quickstart"
+        }
+      ]
+    }
+    ```
+
+    Create the policy in AWS:
+
+    ```bash
+    aws iam create-policy \
+      --policy-name SequinKinesisPolicy \
+      --policy-document file://sequin-kinesis-policy.json
+    ```
+
+    Note the policy ARN from the response - you'll need it in the next step.
+  </Step>
+
+  <Step title="Create an IAM user">
+    Create a dedicated IAM user for Sequin:
+
+    ```bash
+    aws iam create-user --user-name sequin-kinesis-user
+    ```
+
+    Attach the policy to the user (replace `YOUR_ACCOUNT_ID` with your AWS account ID):
+
+    ```bash
+    aws iam attach-user-policy \
+      --user-name sequin-kinesis-user \
+      --policy-arn arn:aws:iam::YOUR_ACCOUNT_ID:policy/SequinKinesisPolicy
+    ```
+
+    If you don't have your account ID handy, you can ask AWS like this:
+
+    ```bash
+    aws sts get-caller-identity --query Account --output text
+    ```
+    
+  </Step>
+
+  <Step title="Create access keys">
+    Generate access keys for the user:
+
+    ```bash
+    aws iam create-access-key --user-name sequin-kinesis-user
+    ```
+
+    **Important**: Save the `AccessKeyId` and `SecretAccessKey` from the response - you'll need these for Sequin configuration and they won't be shown again.
+  </Step>
+</Steps>
+
+<Steps titleSize="h2">
+  <QuickstartInitialSteps />
+  <Step title="Create a Kinesis Sink" icon="aws">
+    With the playground database connected, create a [sink](/reference/sinks/overview) that will send changes to your Kinesis stream:
+
+    <Steps>
+      <Step title="Navigate to Sinks">
+        Click "Sinks" in the sidebar navigation, then click "Create Sink".
+      </Step>
+
+      <Step title="Select sink type">
+        Select "Amazon Kinesis" as the sink type and click "Continue".
+      </Step>
+
+      <Step title='Note "Source" configuration'>
+        In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
+
+        <Frame>
+          <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
+        </Frame>
+      </Step>
+
+      <Step title="Setup a backfill">
+        Toggle open the "Initial backfill" card and select "Backfill all rows":
+
+        <Frame>
+          <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
+        </Frame>
+      </Step>
+
+      <Step title='Configure Kinesis connection'>
+        In the Kinesis configuration card, enter:
+        
+        - **Stream ARN**: The ARN you noted from Step 1 (e.g., `arn:aws:kinesis:us-east-1:123456789012:stream/sequin-quickstart`)
+        - **AWS Access Key ID**: The `AccessKeyId` from Step 1
+        - **AWS Secret Access Key**: The `SecretAccessKey` from Step 1
+        - **AWS Region**: The region where you created your stream (e.g., `us-east-1`)
+      </Step>
+
+      <Step title="Create the sink">
+        Click "Create Sink" to finish setting up your Kinesis sink.
+      </Step>
+    </Steps>
+  </Step>
+
+  <Step title="See changes flow to your Kinesis stream" icon="waveform-lines">
+    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to your stream.
+
+    <Steps>
+      <Step title="Messages tab">
+        Click the "Messages" tab to see recently delivered messages.
+      </Step>
+
+      <Step title="Verify in AWS (optional)">
+        You can also verify data is flowing by checking your Kinesis stream in the AWS Console or using the CLI:
+
+        ```bash
+        aws kinesis get-records \
+          --shard-iterator $(aws kinesis get-shard-iterator \
+            --stream-name sequin-quickstart \
+            --shard-id shardId-000000000000 \
+            --shard-iterator-type TRIM_HORIZON \
+            --query 'ShardIterator' --output text) \
+          --query 'Records[0].Data' --output text | base64 -d
+        ```
+      </Step>
+    </Steps>
+  </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Created a Kinesis stream with the AWS CLI
+- Set up an IAM user with minimal required permissions
+- Connected Sequin to stream Postgres changes to Kinesis
+- Loaded existing data through a backfill
+- Verified changes are flowing to your Kinesis stream
+
+## Clean up (optional)
+
+If you want to clean up the AWS resources created in this quickstart:
+
+```bash
+# Delete the Kinesis stream
+aws kinesis delete-stream --stream-name sequin-quickstart
+
+# Detach policy from user
+aws iam detach-user-policy \
+  --user-name sequin-kinesis-user \
+  --policy-arn arn:aws:iam::YOUR_ACCOUNT_ID:policy/SequinKinesisPolicy
+
+# Delete access key (replace with your actual access key ID)
+aws iam delete-access-key \
+  --user-name sequin-kinesis-user \
+  --access-key-id YOUR_ACCESS_KEY_ID
+
+# Delete user and policy
+aws iam delete-user --user-name sequin-kinesis-user
+aws iam delete-policy --policy-arn arn:aws:iam::YOUR_ACCOUNT_ID:policy/SequinKinesisPolicy
+```
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  <Card title="Guide: Setting up a Kinesis sink" icon="aws" href="/how-to/stream-postgres-to-kinesis">
+    Setup a Kinesis sink to send changes to your stream.
+  </Card>
+</CardGroup>

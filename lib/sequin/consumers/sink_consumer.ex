@@ -16,6 +16,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -78,6 +79,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       values: [
         :http_push,
         :sqs,
+        :kinesis,
         :redis_stream,
         :redis_string,
         :kafka,
@@ -113,6 +115,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       types: [
         http_push: HttpPushSink,
         sqs: SqsSink,
+        kinesis: KinesisSink,
         sns: SnsSink,
         redis_stream: RedisStreamSink,
         redis_string: RedisStringSink,

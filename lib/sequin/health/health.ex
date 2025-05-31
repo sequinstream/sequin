@@ -50,8 +50,8 @@ defmodule Sequin.Health do
   alias Sequin.Health.Check
   alias Sequin.Health.Event
   alias Sequin.Health.HealthSnapshot
-  alias Sequin.Pagerduty
   alias Sequin.IncidentIO
+  alias Sequin.Pagerduty
   alias Sequin.Redis
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
@@ -930,7 +930,7 @@ defmodule Sequin.Health do
     "b5059660-8d9b-48cf-8c92-d0291e2f7688",
     "d2043d7b-cb7a-4624-90ec-bea0c247d7f6",
     "93a07e40-f90e-4fbd-a974-e73577f3f7fd",
-    "9f6b94b2-6d83-448d-b8cf-912a1130130c",
+    "9f6b94b2-6d83-448d-b8cf-912a1130130c"
   ]
 
   def on_status_change(%struct{} = _entity, _old_status, _new_status) when struct in [SinkConsumer, WalPipeline] do
@@ -953,10 +953,11 @@ defmodule Sequin.Health do
           Pagerduty.alert(dedup_key, summary, severity: :warning)
 
           if entity.id in @incident_slots do
-            IncidentIO.alert(:critical, %{
-                  name: "[Health] #{name} is unhealthy",
-                  summary: summary
-                  idempotency_key: dedup_key})
+            IncidentIO.alert(:critical,
+              name: "[Health] #{name} is unhealthy",
+              summary: summary,
+              idempotency_key: dedup_key
+            )
           end
 
         _ ->

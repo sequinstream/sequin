@@ -344,9 +344,8 @@ if config_env() == :prod do
       client_secret: get_env.("GITHUB_CLIENT_SECRET")
     ]
 
-  config :sequin, :retool_workflow_key, System.get_env("RETOOL_WORKFLOW_KEY")
-
   config :sequin, :incident_io_api_key, System.get_env("INCIDENT_IO_API_KEY")
+  config :sequin, :retool_workflow_key, System.get_env("RETOOL_WORKFLOW_KEY")
 
   config :sequin,
     datadog: [

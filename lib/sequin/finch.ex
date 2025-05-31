@@ -25,7 +25,9 @@ defmodule Sequin.Finch do
           min(400, max(50, trunc(base_size)))
       end
 
-    {Finch, name: __MODULE__, pools: %{default: [size: pool_size, count: config!(:pool_count)]}}
+    pools = %{default: [size: pool_size, count: config!(:pool_count)]}
+
+    {Finch, name: __MODULE__, pools: pools, pool_timeout: :timer.seconds(10)}
   end
 
   defp config!(key) do

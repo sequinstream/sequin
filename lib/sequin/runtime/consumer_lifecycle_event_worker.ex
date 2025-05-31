@@ -79,6 +79,8 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
             # This is safest- later we can be a bit more intelligent about when to restart (ie. when name changes we don't have to restart)
             {:ok, _} = RuntimeSupervisor.restart_replication(consumer.replication_slot)
           end
+
+          :ok
         end
 
       "delete" ->

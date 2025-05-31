@@ -337,6 +337,8 @@ if config_env() == :prod do
 
   config :sequin, :retool_workflow_key, System.get_env("RETOOL_WORKFLOW_KEY")
 
+  config :sequin, :incident_io_api_key, System.get_env("INCIDENT_IO_API_KEY")
+
   config :sequin,
     datadog: [
       configured: is_binary(datadog_api_key) and is_binary(datadog_app_key),

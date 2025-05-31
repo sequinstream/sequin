@@ -400,7 +400,12 @@ defmodule Sequin.ConsumersTest do
 
       assert Consumers.matches_message?(consumer, insert_message)
       assert Consumers.matches_message?(consumer, update_message)
-      assert Consumers.matches_message?(consumer, delete_message)
+
+      if consumer.message_kind == :record do
+        refute Consumers.matches_message?(consumer, delete_message)
+      else
+        assert Consumers.matches_message?(consumer, delete_message)
+      end
     end
 
     test "matches when all column filters match" do

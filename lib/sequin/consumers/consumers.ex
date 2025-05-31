@@ -284,17 +284,6 @@ defmodule Sequin.Consumers do
     round(Sequin.Size.mb(consumer.max_memory_mb) * 0.8)
   end
 
-  @doc """
-  Calculates the maximum storage bytes allowed for a consumer.
-  """
-  @spec max_storage_bytes_for_consumer(SinkConsumer.t()) ::
-          non_neg_integer() | nil
-  def max_storage_bytes_for_consumer(%SinkConsumer{max_storage_mb: nil}), do: nil
-
-  def max_storage_bytes_for_consumer(%SinkConsumer{max_storage_mb: max_storage_mb}) do
-    round(Sequin.Size.mb(max_storage_mb) * 0.8)
-  end
-
   def earliest_sink_consumer_inserted_at_for_account(account_id) do
     account_id
     |> SinkConsumer.where_account_id()
@@ -1170,6 +1159,8 @@ defmodule Sequin.Consumers do
   end
 
   # Source Table Matching
+  def matches_message?(%SinkConsumer{message_kind: :record}, %SlotProcessor.Message{action: :delete}), do: false
+
   def matches_message?(
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         %SlotProcessor.Message{} = message

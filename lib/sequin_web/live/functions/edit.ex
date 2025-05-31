@@ -7,6 +7,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   alias Sequin.Consumers
   alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
+  alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.TransformFunction
@@ -454,6 +455,9 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
         %FilterFunction{} ->
           %SinkConsumer{consumer | filter: function}
+
+        %PathFunction{} ->
+          %SinkConsumer{consumer | transform: function}
       end
 
     Enum.map(test_messages, fn test_message ->
@@ -486,7 +490,13 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp run_function(%SinkConsumer{transform: %Function{} = function}, message) do
-    MiniElixir.run_interpreted(function, message.data)
+    case function.function do
+      %TransformFunction{} ->
+        MiniElixir.run_interpreted(function, message.data)
+
+      %PathFunction{} = path_function ->
+        PathFunction.apply(path_function, message.data)
+    end
   end
 
   defp run_function(%SinkConsumer{routing: %Function{} = function} = sink_consumer, message) do

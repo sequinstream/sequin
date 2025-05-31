@@ -2,8 +2,14 @@ defmodule Sequin.Finch do
   @moduledoc false
   def child_spec do
     pool_size =
-      case Application.get_env(:sequin, :default_workers_per_sink) do
-        nil ->
+      cond do
+        finch_pool_size = config!(:pool_size) ->
+          finch_pool_size
+
+        default_workers = Application.get_env(:sequin, :default_workers_per_sink) ->
+          default_workers * 1.5
+
+        true ->
           # Sort out how big the machine is, use as a proxy for capability
           cores = System.schedulers_online()
 
@@ -17,11 +23,18 @@ defmodule Sequin.Finch do
           base_size = :math.sqrt(cores) * 30
 
           min(400, max(50, trunc(base_size)))
-
-        workers ->
-          workers * 1.5
       end
 
-    {Finch, name: __MODULE__, pools: %{default: [size: pool_size, count: 1]}}
+    pools = %{default: [size: pool_size, count: config!(:pool_count)]}
+
+    {Finch, name: __MODULE__, pools: pools, pool_timeout: :timer.seconds(10)}
+  end
+
+  defp config!(key) do
+    Keyword.fetch!(config!(), key)
+  end
+
+  defp config! do
+    Application.fetch_env!(:sequin, Sequin.Finch)
   end
 end

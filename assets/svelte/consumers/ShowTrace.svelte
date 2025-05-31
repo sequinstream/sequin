@@ -107,12 +107,12 @@
 
   function formatRequest(req: any): string {
     if (!req) return "";
-    return `${req.method} ${req.url}\nHeaders: ${JSON.stringify(req.headers, null, 2)}\nBody: ${JSON.stringify(req.body, null, 2)}`;
+    return `${req.method} ${req.url}\n\nHeaders: ${JSON.stringify(req.headers, null, 2)}\n\nBody: ${JSON.stringify(req.body, null, 2)}`;
   }
 
   function formatResponse(resp: any): string {
     if (!resp) return "";
-    return `Status: ${resp.status}\nHeaders: ${JSON.stringify(resp.headers, null, 2)}\nBody: ${JSON.stringify(resp.body, null, 2)}`;
+    return `Status: ${resp.status}\n\nHeaders: ${JSON.stringify(resp.headers, null, 2)}\n\nBody: ${JSON.stringify(resp.body, null, 2)}`;
   }
 
   function formatError(error: any): string {
@@ -204,14 +204,14 @@
         <div class="px-[2px] py-[10px] bg-orange-500 text-xs rounded-sm"></div>
       {/if}
     </td>
-    <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs text-gray-500">
+    <td class="px-2 py-1 w-fit whitespace-nowrap text-xs text-gray-500">
       {formatDate(item.published_at)}
     </td>
-    <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs">
+    <td class="px-2 py-1 w-fit whitespace-nowrap text-xs max-w-xs">
       {item.message}
     </td>
     <td
-      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500 font-mono overflow-hidden max-w-lg"
+      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-xs text-gray-500 font-mono overflow-hidden max-w-xs"
     >
       {formatEventAsRow(item)}
     </td>

@@ -92,8 +92,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(15)),
       message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2)),
       visibility_check_interval: Keyword.get(opts, :visibility_check_interval, :timer.minutes(5)),
-      max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2)),
-      storage_available_fn: Keyword.get(opts, :storage_available_fn, &storage_available?/2)
+      max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2))
     }
 
     Sequin.ProcessMetrics.start()
@@ -130,25 +129,26 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     :ok = State.setup_ets(state)
 
-    # First set max_memory_bytes and max_storage_bytes to have the limits available
-    state =
-      state
-      |> put_max_memory_bytes()
-      |> put_max_storage_bytes()
+    # First set max_memory_bytes to have the limits available
+    state = put_max_memory_bytes(state)
 
-    state = stream_messages_into_state(state)
+    case stream_messages_into_state(state) do
+      {:ok, state} ->
+        Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
 
-    Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
+        schedule_max_memory_check()
+        schedule_flush_check(state.flush_interval)
+        schedule_visibility_check(state.visibility_check_interval)
 
-    schedule_max_memory_check()
-    schedule_flush_check(state.flush_interval)
-    schedule_visibility_check(state.visibility_check_interval)
+        if test_pid = state.test_pid do
+          send(test_pid, :init_complete)
+        end
 
-    if test_pid = state.test_pid do
-      send(test_pid, :init_complete)
+        {:noreply, state}
+
+      error ->
+        {:stop, error, state}
     end
-
-    {:noreply, state}
   end
 
   @doc """
@@ -475,7 +475,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   @impl GenServer
   @decorate track_metrics("put_messages")
-  def handle_call({:put_messages, messages}, from, %State{all_loaded?: true} = state) do
+  def handle_call({:put_messages, messages}, from, %State{} = state) do
     # Validate first
     case State.validate_put_messages(state, messages) do
       {:ok, _incoming_payload_size_bytes} ->
@@ -486,55 +486,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
         {:noreply, put_messages_after_reply(state, messages)}
 
       {:error, %InvariantError{code: :payload_size_limit_exceeded} = error} ->
-        estimated_size = Enum.sum_by(messages, & &1.payload_size_bytes)
-
-        cond do
-          storage_enabled?(state) and state.storage_available_fn.(state, estimated_size) ->
-            Logger.warning("[SlotMessageStore] Storage available, upserting messages")
-
-            # Reply early since this frees up the SlotProcessorServer to continue
-            # calling other SMSs, accumulating messages, etc.
-            GenServer.reply(from, :ok)
-            :ok = upsert_messages(state, messages)
-
-            if state.test_pid do
-              send(state.test_pid, {:put_messages_to_disk, messages})
-            end
-
-            {:noreply, state}
-
-          state.consumer.load_shedding_policy == :discard_on_full ->
-            Health.put_event(state.consumer, %Event{slug: :load_shedding_policy_discarded, status: :fail})
-
-            {:reply, :ok, state}
-
-          true ->
-            # Reply with error if validation fails
-            {:reply, {:error, error}, state}
-        end
-    end
-  end
-
-  @decorate track_metrics("put_messages")
-  def handle_call({:put_messages, messages}, from, %State{all_loaded?: false} = state) do
-    estimated_size = Enum.sum_by(messages, & &1.payload_size_bytes)
-
-    if storage_enabled?(state) and state.storage_available_fn.(state, estimated_size) do
-      # Reply early since this frees up the SlotProcessorServer to continue
-      # calling other SMSs, accumulating messages, etc.
-      GenServer.reply(from, :ok)
-
-      :ok = upsert_messages(state, messages)
-
-      if state.test_pid do
-        send(state.test_pid, {:put_messages_to_disk, messages})
-      end
-
-      {:noreply, state}
-    else
-      Logger.warning("[SlotMessageStore] Storage not available, rejecting messages")
-
-      {:noreply, state}
+        # Reply with error if validation fails
+        {:reply, {:error, error}, state}
     end
   end
 
@@ -602,7 +555,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
       Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
       {:reply, {:ok, messages}, state}
     else
-      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
       {:reply, {:ok, []}, state, :hibernate}
     end
   end
@@ -630,8 +582,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
     else
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
     end
-
-    state = maybe_pull_messages_from_disk(state)
 
     maybe_finish_table_reader_batch(prev_state, state)
 
@@ -669,7 +619,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
     count = length(dropped_messages)
 
     :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
-    state = maybe_pull_messages_from_disk(state)
 
     maybe_finish_table_reader_batch(prev_state, state)
 
@@ -713,7 +662,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     with :ok <- handle_discarded_messages(state, discarded_messages),
          :ok <- upsert_messages(state, messages) do
-      state = maybe_pull_messages_from_disk(state)
       maybe_finish_table_reader_batch(prev_state, state)
       {:reply, :ok, state}
     else
@@ -801,7 +749,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   def handle_info(:flush_messages, %State{} = state) do
     with_metrics("flush_messages", fn ->
-      Logger.info("[SlotMessageStore] Checking for messages to flush")
+      Logger.debug("[SlotMessageStore] Checking for messages to flush")
       start_time = System.monotonic_time(:millisecond)
 
       batch_size = flush_batch_size()
@@ -848,7 +796,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   def handle_info(:check_visibility, %State{} = state) do
-    Logger.info("[SlotMessageStore] Checking for messages to make visible")
+    Logger.debug("[SlotMessageStore] Checking for messages to make visible")
 
     messages = State.messages_to_make_visible(state)
 
@@ -951,14 +899,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
     state
   end
 
-  defp put_max_storage_bytes(%State{} = state) do
-    consumer = state.consumer
-
-    max_storage_bytes = Consumers.max_storage_bytes_for_consumer(consumer)
-
-    %{state | max_storage_bytes: max_storage_bytes}
-  end
-
   defp exit_to_sequin_error({:timeout, {GenServer, :call, [_, _, timeout]}}) do
     Error.invariant(message: "[SlotMessageStore] call timed out after #{timeout}ms")
   end
@@ -989,75 +929,69 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end)
   end
 
-  defp maybe_pull_messages_from_disk(%State{all_loaded?: true} = state), do: state
-
-  defp maybe_pull_messages_from_disk(%State{all_loaded?: false} = state) do
-    should_pull_more_messages? =
-      state.payload_size_bytes < div(state.max_memory_bytes, 2) and map_size(state.messages) < 100
-
-    if should_pull_more_messages? do
-      stream_messages_into_state(state)
-    else
-      state
-    end
-  end
-
   defp stream_messages_into_state(%State{} = state) do
+    # Allow for a padding of 2x max_memory_bytes on initial load from disk
+    max_memory_bytes = state.max_memory_bytes * 2
+    max_messages = state.setting_max_messages * 2
+
     # Stream messages and stop when we reach max_memory_bytes
-    {time, {persisted_messages, current_size_bytes, message_count, all_loaded?}} =
+    {time, res} =
       :timer.tc(fn ->
         state.consumer
         |> Consumers.stream_consumer_messages_for_consumer()
         |> Stream.filter(&(message_partition(&1, state.consumer.partition_count) == state.partition))
         |> Stream.reject(&State.message_exists?(state, &1))
-        |> Enum.reduce_while({[], 0, 0, true}, fn msg, {messages, current_size, message_count, _all_loaded?} ->
+        |> Enum.reduce_while({:ok, {[], 0, 0}}, fn msg, {:ok, {messages, current_size, message_count}} ->
           msg = %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
           new_size = current_size + msg.payload_size_bytes
           new_message_count = message_count + 1
 
-          if new_size <= state.max_memory_bytes and new_message_count <= state.setting_max_messages and
-               new_message_count < 1_000 do
-            {:cont, {[msg | messages], new_size, new_message_count, true}}
+          if new_size <= max_memory_bytes and new_message_count <= max_messages do
+            {:cont, {:ok, {[msg | messages], new_size, new_message_count}}}
           else
-            Logger.info(
-              "[SlotMessageStore] Reached memory limit or message_count limit, not loading more persisted messages",
-              consumer_id: state.consumer_id,
-              partition: state.partition,
-              max_memory_bytes: state.max_memory_bytes,
-              current_size_bytes: current_size
-            )
+            error =
+              {:error,
+               Error.invariant(
+                 message:
+                   "Max memory limit exceeded. Sink has more messages on disk than can fit in memory. Please increase max_memory_bytes or max_messages on the sink."
+               )}
 
-            {:halt, {messages, current_size, message_count, false}}
+            {:halt, error}
           end
         end)
       end)
 
-    duration_ms = time / 1000
+    case res do
+      {:ok, {persisted_messages, current_size_bytes, message_count}} ->
+        duration_ms = time / 1000
 
-    if duration_ms > 100 do
-      Logger.warning("[SlotMessageStore] Loaded messages from disk (duration=#{duration_ms}ms)",
-        consumer_id: state.consumer_id,
-        partition: state.partition,
-        message_count: message_count,
-        size_bytes: current_size_bytes,
-        all_loaded?: all_loaded?,
-        duration_ms: duration_ms
-      )
-    else
-      Logger.info("[SlotMessageStore] Loaded messages from disk",
-        consumer_id: state.consumer_id,
-        partition: state.partition,
-        message_count: message_count,
-        size_bytes: current_size_bytes,
-        all_loaded?: all_loaded?,
-        duration_ms: duration_ms
-      )
+        if duration_ms > 100 do
+          Logger.warning("[SlotMessageStore] Loaded messages from disk (duration=#{duration_ms}ms)",
+            consumer_id: state.consumer_id,
+            partition: state.partition,
+            message_count: message_count,
+            size_bytes: current_size_bytes,
+            duration_ms: duration_ms
+          )
+        else
+          if message_count > 0 do
+            Logger.info("[SlotMessageStore] Loaded messages from disk",
+              consumer_id: state.consumer_id,
+              partition: state.partition,
+              message_count: message_count,
+              size_bytes: current_size_bytes,
+              duration_ms: duration_ms
+            )
+          end
+        end
+
+        # Now put the messages into state
+        {:ok, State.put_persisted_messages(state, persisted_messages)}
+
+      {:error, error} ->
+        Logger.error("[SlotMessageStore] Failed to load messages from disk", error: error)
+        {:error, error}
     end
-
-    # Now put the messages into state
-    state = State.put_persisted_messages(state, persisted_messages)
-
-    %State{state | all_loaded?: all_loaded?}
   end
 
   @decorate track_metrics("delete_messages_noop")
@@ -1114,16 +1048,5 @@ defmodule Sequin.Runtime.SlotMessageStore do
   defp flush_batch_size do
     conf = Application.get_env(:sequin, :slot_message_store, [])
     conf[:flush_batch_size] || @default_flush_batch_size
-  end
-
-  defp storage_enabled?(%State{max_storage_bytes: nil}), do: false
-  defp storage_enabled?(%State{max_storage_bytes: _}), do: true
-
-  defp storage_available?(%State{max_storage_bytes: nil}, _buffer_bytes), do: false
-
-  defp storage_available?(%State{consumer: consumer, max_storage_bytes: max_storage_bytes}, buffer_bytes)
-       when is_integer(max_storage_bytes) do
-    {:ok, size} = Consumers.consumer_partition_size_bytes(consumer)
-    size + buffer_bytes < max_storage_bytes
   end
 end

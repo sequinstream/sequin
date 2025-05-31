@@ -232,8 +232,7 @@ if config_env() == :prod and self_hosted do
     api_base_url: "http://#{server_host}:#{server_port}",
     release_version: System.get_env("RELEASE_VERSION"),
     backfill_max_pending_messages: backfill_max_pending_messages,
-    max_memory_bytes: ConfigParser.max_memory_bytes(env_vars),
-    default_max_storage_bytes: ConfigParser.default_max_storage_bytes(env_vars)
+    max_memory_bytes: ConfigParser.max_memory_bytes(env_vars)
 end
 
 if config_env() == :prod and not self_hosted do
@@ -293,6 +292,16 @@ end
 
 # Set the default workers per sink setting from environment variable if available
 default_workers_per_sink = ConfigParser.default_workers_per_sink(env_vars)
+
+http_pool_size =
+  if size = System.get_env("HTTP_POOL_SIZE") do
+    String.to_integer(size)
+  end
+
+config :sequin, Sequin.Finch,
+  pool_size: http_pool_size,
+  pool_count: String.to_integer(System.get_env("HTTP_POOL_COUNT", "1"))
+
 config :sequin, Sequin.Runtime.SinkPipeline, default_workers_per_sink: default_workers_per_sink
 
 if config_env() == :prod do

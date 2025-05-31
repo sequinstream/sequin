@@ -10,9 +10,17 @@ defmodule Sequin.Runtime.SlotMessageStoreSupervisor do
   def child_spec(opts) do
     consumer = Keyword.fetch!(opts, :consumer)
 
+    restart =
+      if Application.get_env(:sequin, :env) == :test do
+        Keyword.get(opts, :restart, :permanent)
+      else
+        :permanent
+      end
+
     %{
       id: via_tuple(consumer.id),
-      start: {__MODULE__, :start_link, [opts]}
+      start: {__MODULE__, :start_link, [opts]},
+      restart: restart
     }
   end
 

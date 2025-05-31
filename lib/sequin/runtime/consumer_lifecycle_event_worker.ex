@@ -65,6 +65,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
           CheckSinkConfigurationWorker.enqueue(consumer.id)
           RuntimeSupervisor.start_for_sink_consumer(consumer)
           :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+          :ok = SlotProcessorServer.monitor_message_store(consumer.replication_slot_id, consumer)
           RuntimeSupervisor.maybe_start_table_reader(consumer)
           :ok
         end

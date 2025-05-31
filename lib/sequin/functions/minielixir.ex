@@ -19,10 +19,16 @@ defmodule Sequin.Functions.MiniElixir do
 
   def run_compiled(%Function{account_id: account_id} = function, data) do
     if Sequin.feature_enabled?(account_id, :function_transforms) do
-      __MODULE__
-      |> Task.async(:run_compiled_inner, [function, data])
-      |> Task.await(@timeout)
-      |> case do
+      %Task{} = task = Task.async(__MODULE__, :run_compiled_inner, [function, data])
+      result = Task.await(task, @timeout)
+
+      # We explicitly demonitor and flush messages to prevent :EXIT :normal messages
+      # from being sent to the caller. These messages can accumulate as a message queue
+      # when the caller runs multiple functions before handling it's inbox, ie. in Broadway
+      # with batches.
+      Process.demonitor(task.ref, [:flush])
+
+      case result do
         {:ok, answer} -> answer
         {:error, error} -> raise error
         {:error, :validator, error} -> raise error

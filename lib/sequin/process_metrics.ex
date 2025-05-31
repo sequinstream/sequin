@@ -468,7 +468,10 @@ defmodule Sequin.ProcessMetrics.Decorator do
 
   * `name` - The name of the function to track
   """
-  def track_metrics(name, body, _context) do
+  def track_metrics(name, body, context) do
+    Module.put_attribute(context.module, :sequin_metrics_track, name)
+    labels = Module.get_attribute(context.module, :sequin_metrics_labels)
+
     quote do
       # Execute the function and time it
       {time, result} = :timer.tc(fn -> unquote(body) end)
@@ -477,7 +480,74 @@ defmodule Sequin.ProcessMetrics.Decorator do
       time_ms = div(time, 1000)
       Sequin.ProcessMetrics.update_timing(unquote(name), time_ms)
 
+      unquote do
+        prefix = List.last(Module.split(context.module))
+
+        unless is_nil(labels) do
+          quote do
+            tags = Sequin.ProcessMetrics.get_metadata()
+
+            Prometheus.Metric.Histogram.observe(
+              [
+                name: unquote(String.to_atom("#{prefix}_#{name}")),
+                labels: for(lbl <- unquote(labels), do: tags[lbl])
+              ],
+              time_ms
+            )
+          end
+        end
+      end
+
       result
+    end
+  end
+end
+
+defmodule Sequin.ProcessMetrics.Prometheus do
+  @moduledoc false
+  defmacro __using__(opts) do
+    labels = Keyword.get(opts, :labels, [])
+
+    quote do
+      use Sequin.ProcessMetrics.Decorator
+
+      Module.register_attribute(__MODULE__, :sequin_metrics_track, accumulate: true, persist: true)
+
+      @on_load :__populate__
+      @sequin_metrics_labels unquote(labels)
+
+      @before_compile unquote(__MODULE__)
+    end
+  end
+
+  defmacro __before_compile__(env) do
+    names = Module.get_attribute(env.module, :sequin_metrics_track)
+    labels = Module.get_attribute(env.module, :sequin_metrics_labels)
+
+    quote do
+      def __get_metric_names__, do: unquote(names)
+
+      def __populate__ do
+        names = __get_metric_names__()
+        prefix = List.last(Module.split(__MODULE__))
+
+        my_metrics =
+          for name <- names do
+            {:histogram,
+             [
+               name: String.to_atom("#{prefix}_#{name}"),
+               labels: unquote(labels),
+               buckets: [10, 100, 1000, 10_000, 50_000, 100_000, 500_000, 1_000_000, 5_000_000, 10_000_000, 50_000_000],
+               duration_unit: false,
+               help: "Instrumented #{__MODULE__} #{name}"
+             ]}
+          end
+
+        :global.trans({:populate_prometheus_env, __MODULE__}, fn ->
+          prev = Application.get_env(:prometheus, :default_metrics, [])
+          Application.put_env(:prometheus, :default_metrics, prev ++ my_metrics)
+        end)
+      end
     end
   end
 end

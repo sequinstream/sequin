@@ -71,8 +71,6 @@ In our production benchmarks with AWS RDS Postgres and MSK Kafka, Sequin maintai
 | Kinesis | ✅ Real-time streaming<br />✅ Backfill existing rows | Send messages to Amazon Kinesis streams queues |
 | Typesense | ✅ Real-time streaming<br />✅ Backfill existing rows | Index database changes with Typesense |
 | Elasticsearch | ✅ Real-time streaming<br />✅ Backfill existing rows | Index database changes with Elasticsearch |
-
-
 | Webhook Subscription (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Send changes to any HTTP endpoint |
 
 ## Change data capture use cases

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"path/filepath"
 
 	"github.com/goccy/go-yaml"
 	"github.com/a8m/envsubst"
@@ -36,6 +37,60 @@ type ApplyResponse struct {
 
 type ExportResponse struct {
 	YAML string `json:"yaml"`
+}
+
+type ProcessingContext struct {
+	YamlPath string
+	SearchPaths []string
+}
+
+// NewProcessingContext creates a new processing context with search paths set up
+func NewProcessingContext(yamlPath string) (*ProcessingContext, error) {
+	var searchPaths []string
+
+	// First search path: current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+	searchPaths = append(searchPaths, cwd)
+
+	// Second search path: YAML file directory
+	yamlDir := filepath.Dir(yamlPath)
+	// Only add if it's different from cwd
+	if yamlDir != cwd {
+		searchPaths = append(searchPaths, yamlDir)
+	}
+
+	return &ProcessingContext{
+		YamlPath:    yamlPath,
+		SearchPaths: searchPaths,
+	}, nil
+}
+
+// resolveFilePath resolves a file path by trying each search path in order
+func resolveFilePath(pctx *ProcessingContext, filePath string) (string, error) {
+	// If it's already an absolute path, use it as-is
+	if filepath.IsAbs(filePath) {
+		if _, err := os.Stat(filePath); err != nil {
+			return "", fmt.Errorf("file not found: %s", filePath)
+		}
+		return filePath, nil
+	}
+
+	// Try each search path in order
+	var triedPaths []string
+	for _, searchPath := range pctx.SearchPaths {
+		candidatePath := filepath.Join(searchPath, filePath)
+		triedPaths = append(triedPaths, candidatePath)
+
+		if _, err := os.Stat(candidatePath); err == nil {
+			return filepath.Abs(candidatePath)
+		}
+	}
+
+	// All attempts failed
+	return "", fmt.Errorf("file not found: tried %s", strings.Join(triedPaths, ", "))
 }
 
 // Apply envsubst to all string values everywhere
@@ -68,65 +123,89 @@ func applyEnvSubst(node interface{}) interface{} {
 	}
 }
 
-// Process file substitutions only within top-level "functions"
-func processFunctions(node interface{}) interface{} {
+func processYAML(pctx *ProcessingContext, yamlContent []byte) ([]byte, error) {
+	var yamlData interface{}
+	if err := yaml.Unmarshal(yamlContent, &yamlData); err != nil {
+		return nil, fmt.Errorf("Failed to parse YAML content: %w", err)
+	}
+
+	with_subst := applyEnvSubst(yamlData)
+	with_files, err := processFunctions(pctx, with_subst)
+	if err != nil {
+		return nil, err
+	}
+
+	processed, err := yaml.Marshal(with_files)
+	if err != nil {
+		return nil, fmt.Errorf("failed to re-encode YAML: %w", err)
+	}
+
+	return processed, nil
+}
+
+func processFunctions(pctx *ProcessingContext, node interface{}) (interface{}, error) {
 	topLevel, ok := node.(map[string]interface{})
 	if !ok {
-		return node // Not a map at top level, return as-is
+		return node, nil
 	}
 
 	result := make(map[string]interface{})
 
 	for key, value := range topLevel {
 		if key == "functions" {
-			// Process the functions list/object
-			result[key] = processFunctionsList(value)
+			processed, err := processFunctionsList(pctx, value)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = processed
 		} else {
-			// Copy everything else unchanged
 			result[key] = value
 		}
 	}
 
-	return result
+	return result, nil
 }
 
-// Process each function object in the functions collection
-func processFunctionsList(node interface{}) interface{} {
+func processFunctionsList(pctx *ProcessingContext, node interface{}) (interface{}, error) {
 	switch v := node.(type) {
 	case map[string]interface{}:
-		// Single function object
-		return processFileInFunction(v)
+		return processFileInFunction(pctx, v)
 
 	case []interface{}:
-		// Array of function objects
 		result := make([]interface{}, len(v))
 		for i, item := range v {
 			if funcObj, ok := item.(map[string]interface{}); ok {
-				result[i] = processFileInFunction(funcObj)
+				processed, err := processFileInFunction(pctx, funcObj)
+				if err != nil {
+					return nil, err
+				}
+				result[i] = processed
 			} else {
 				result[i] = item
 			}
 		}
-		return result
+		return result, nil
 
 	default:
-		return v
+		return v, nil
 	}
 }
 
-// Handle file: -> code: transformation for a single function object
-func processFileInFunction(funcObj map[string]interface{}) map[string]interface{} {
+func processFileInFunction(pctx *ProcessingContext, funcObj map[string]interface{}) (map[string]interface{}, error) {
 	if filePathRaw, hasFile := funcObj["file"]; hasFile {
 		if filePath, ok := filePathRaw.(string); ok {
 			fmt.Printf("Processing file reference: %s\n", filePath)
 
-			content, err := os.ReadFile(filePath)
+			resolvedPath, err := resolveFilePath(pctx, filePath)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading file %s: %v\n", filePath, err)
-				return funcObj // Keep original on error
+				return nil, fmt.Errorf("error resolving file path %s: %w", filePath, err)
 			}
 
-			// Copy everything except "file", add "code"
+			content, err := os.ReadFile(resolvedPath)
+			if err != nil {
+				return nil, fmt.Errorf("error reading file %s: %w", resolvedPath, err)
+			}
+
 			result := make(map[string]interface{})
 			for k, val := range funcObj {
 				if k != "file" {
@@ -134,32 +213,13 @@ func processFileInFunction(funcObj map[string]interface{}) map[string]interface{
 				}
 			}
 			result["code"] = string(content)
-			return result
+			return result, nil
 		}
 	}
 
-	// No file key or not a string, return unchanged
-	return funcObj
+	return funcObj, nil
 }
 
-// processYAML applies environment variable substitution and file processing to YAML content
-func processYAML(yamlContent []byte) ([]byte, error) {
-	var yamlData interface{}
-	if err := yaml.Unmarshal(yamlContent, &yamlData); err != nil {
-		return nil, fmt.Errorf("Failed to parse YAML content: %w", err)
-	}
-
-	with_subst := applyEnvSubst(yamlData)
-	with_files := processFunctions(with_subst)
-	final := with_files
-
-	processed, err := yaml.Marshal(final)
-	if err != nil {
-		return nil, fmt.Errorf("failed to re-encode YAML: %w", err)
-	}
-
-	return processed, nil
-}
 
 // Interpolate reads a YAML file, processes environment variables, and outputs the result
 func Interpolate(inputPath, outputPath string) error {
@@ -181,7 +241,11 @@ func Interpolate(inputPath, outputPath string) error {
 		}
 	}
 
-	processed, err := processYAML(yamlContent)
+	pctx, err := NewProcessingContext(inputPath)
+	if err != nil {
+		return err
+	}
+	processed, err := processYAML(pctx, yamlContent)
 	if err != nil {
 		return err
 	}
@@ -235,7 +299,11 @@ func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 	}
 
 	// Process YAML content
-	yamlContent, err = processYAML(yamlContent)
+	pctx, err := NewProcessingContext(yamlPath)
+	if err != nil {
+		return nil, err
+	}
+	yamlContent, err = processYAML(pctx, yamlContent)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +372,11 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 	}
 
 	// Process YAML content
-	yamlContent, err = processYAML(yamlContent)
+	pctx, err := NewProcessingContext(yamlPath)
+	if err != nil {
+		return nil, err
+	}
+	yamlContent, err = processYAML(pctx, yamlContent)
 	if err != nil {
 		return nil, err
 	}

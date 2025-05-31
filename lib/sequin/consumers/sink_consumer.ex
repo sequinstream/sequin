@@ -100,6 +100,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     has_one :active_backfill, Backfill, where: [state: :active]
 
     # Sequences
+    # FIXME: Refactor / remove both of these?
     belongs_to :sequence, Sequence
     embeds_one :sequence_filter, SequenceFilter, on_replace: :delete
 

@@ -61,7 +61,7 @@ export interface FormErrors {
 }
 
 export interface TestMessage {
-  id: string;
+  replication_message_trace_id: string;
   record: string;
   changes: string;
   action: string;
@@ -83,3 +83,8 @@ export interface TestMessageError {
   changes: string;
   metadata: string;
 }
+
+export const ActionValues = ["insert", "update", "delete", "read"];
+export type ActionType = (typeof ActionValues)[number];
+export const FieldValues = ["record", "metadata", "changes", "action"];
+export type FieldType = (typeof FieldValues)[number];

@@ -35,6 +35,21 @@
   } from "$lib/components/ui/alert-dialog";
   import CopyToClipboard from "$lib/components/ui/CopyToClipboard.svelte";
   import DeleteFunctionDialog from "$lib/components/DeleteFunctionDialog.svelte";
+  import { clearStorage } from "./messageLocalStorage";
+  import {
+    saveFunctionCodeToStorage,
+    loadFunctionCodeFromStorage,
+    clearAllFunctionCodeStorage,
+  } from "./functionLocalStorage";
+  import type {
+    FormData,
+    FormErrors,
+    TestMessage,
+    Consumer,
+    FieldType,
+    ActionType,
+  } from "./types";
+  import { FieldValues } from "./types";
 
   // CodeMirror imports
   import { EditorView, basicSetup } from "codemirror";
@@ -43,7 +58,6 @@
   import { keymap } from "@codemirror/view";
   import { indentWithTab } from "@codemirror/commands";
   import { autocompletion } from "@codemirror/autocomplete";
-  import type { FormData, FormErrors, TestMessage, Consumer } from "./types";
 
   export let formData: FormData;
   export let formErrors: FormErrors = {};
@@ -183,6 +197,8 @@
     if (usedByConsumers.length > 0) {
       showUpdateDialog = true;
     } else {
+      clearMessageFieldsLocalStorage();
+      clearAllFunctionCodeStorage();
       saving = true;
       pushEvent("save", { function: form }, () => {
         saving = false;
@@ -190,42 +206,42 @@
     }
   }
 
-  function handleTypeSelect(event: any, oldType: string) {
-    const oldInitialCode = initialCodeFor(oldType, form.function.sink_type);
-    const newInitialCode = initialCodeFor(event.value, form.function.sink_type);
-
-    if (form.function.code === oldInitialCode || !form.function.code) {
-      form.function.code = newInitialCode;
-      functionEditorView.dispatch({
-        changes: {
-          from: 0,
-          to: functionEditorView.state.doc.length,
-          insert: newInitialCode,
-        },
-      });
-      console.log("Replaced untouched initial code");
-    } else {
-      console.log("Did not replace initial code");
-    }
-
+  function handleTypeSelect(event: any) {
     form.function.type = event.value;
+    loadStoredOrInitialCode();
   }
 
-  function handleRoutingSinkTypeSelect(event: any, oldSinkType: string) {
-    const oldInitialCode = initialCodeFor(form.function.type, oldSinkType);
-    const newInitialCode = initialCodeFor(form.function.type, event.value);
+  function handleRoutingSinkTypeSelect(event: any) {
+    form.function.sink_type = event.value;
+    loadStoredOrInitialCode();
+  }
 
-    if (form.function.code === oldInitialCode || !form.function.code) {
-      form.function.code = newInitialCode;
+  function loadStoredOrInitialCode() {
+    if (!isEditing) {
+      const storedCode = loadFunctionCodeFromStorage(
+        form.function.type,
+        form.function.sink_type,
+      );
+      if (storedCode) {
+        // Load stored code
+        form.function.code = storedCode;
+      } else {
+        // Load initial code
+        const newInitialCode = initialCodeFor(
+          form.function.type,
+          form.function.sink_type,
+        );
+        form.function.code = newInitialCode;
+      }
+
       functionEditorView.dispatch({
         changes: {
           from: 0,
           to: functionEditorView.state.doc.length,
-          insert: newInitialCode,
+          insert: form.function.code,
         },
       });
     }
-    form.function.sink_type = event.value;
   }
 
   function handleDelete() {
@@ -306,7 +322,6 @@
 
   function initialCodeFor(type: string, sinkType: string | null) {
     const key = type + (type === "routing" ? "_" + sinkType : "");
-    console.log("key", key);
     return initialCodeMap[key];
   }
 
@@ -365,19 +380,38 @@
     if (
       oldSelectedMessage &&
       formErrors.modified_test_messages &&
-      oldSelectedMessage.id === selectedMessage.id &&
-      formErrors.modified_test_messages[selectedMessage.id]
+      oldSelectedMessage.replication_message_trace_id ===
+        selectedMessage.replication_message_trace_id &&
+      formErrors.modified_test_messages[
+        selectedMessage.replication_message_trace_id
+      ]
     ) {
-      if (formErrors.modified_test_messages[selectedMessage.id].record) {
+      if (
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].record
+      ) {
         selectedMessage.record = oldSelectedMessage.record;
       }
-      if (formErrors.modified_test_messages[selectedMessage.id].metadata) {
+      if (
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].metadata
+      ) {
         selectedMessage.metadata = oldSelectedMessage.metadata;
       }
-      if (formErrors.modified_test_messages[selectedMessage.id].action) {
+      if (
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].action
+      ) {
         selectedMessage.action = oldSelectedMessage.action;
       }
-      if (formErrors.modified_test_messages[selectedMessage.id].changes) {
+      if (
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].changes
+      ) {
         selectedMessage.changes = oldSelectedMessage.changes;
       }
     }
@@ -424,6 +458,7 @@
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             form.function.code = update.state.doc.toString();
+            saveFunctionCodeToStorage(form);
           }
         }),
       ],
@@ -482,6 +517,20 @@ Please help me create or modify the Elixir function transform to achieve the des
     return prompt;
   }
 
+  function clearMessageFieldsLocalStorage() {
+    syntheticTestMessages.concat(testMessages).forEach((message) => {
+      FieldValues.forEach((field) => {
+        clearStorage(message, field);
+      });
+    });
+  }
+
+  function handleClose() {
+    clearMessageFieldsLocalStorage();
+    clearAllFunctionCodeStorage();
+    pushEvent("form_closed");
+  }
+
   // Clean up timeout on component destroy
   onDestroy(() => {
     if (copyTimeout) {
@@ -493,7 +542,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 <FullPageForm
   title={isEditing ? "Edit Function" : "New Function"}
   showConfirmOnExit={isDirty}
-  on:close={() => pushEvent("form_closed")}
+  on:close={handleClose}
 >
   <form on:submit={handleSubmit} class="space-y-4">
     <div
@@ -590,10 +639,7 @@ Please help me create or modify the Elixir function transform to achieve the des
             </div>
 
             <Select
-              onSelectedChange={(event) => {
-                const old = form.function.type;
-                handleTypeSelect(event, old);
-              }}
+              onSelectedChange={handleTypeSelect}
               selected={{
                 value: form.function.type,
                 label: functionInternalToExternal[form.function.type],
@@ -630,10 +676,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 
             {#if form.function.type === "routing"}
               <Select
-                onSelectedChange={(event) => {
-                  const oldSinkType = form.function.sink_type;
-                  handleRoutingSinkTypeSelect(event, oldSinkType);
-                }}
+                onSelectedChange={handleRoutingSinkTypeSelect}
                 selected={{
                   value: form.function.sink_type,
                   label: sinkTypeInternalToExternal[form.function.sink_type],

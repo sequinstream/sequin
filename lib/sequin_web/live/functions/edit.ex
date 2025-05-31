@@ -245,15 +245,15 @@ defmodule SequinWeb.FunctionsLive.Edit do
           %{}
 
         messages when is_map(messages) ->
-          Map.new(messages, fn {id, message} ->
-            {id, validate_test_message(message)}
+          Map.new(messages, fn {replication_message_trace_id, message} ->
+            {replication_message_trace_id, validate_test_message(message)}
           end)
       end
 
     synthetic_test_message = socket.assigns.synthetic_test_message
 
     synthetic_test_message =
-      case modified_test_messages[synthetic_test_message.id] do
+      case modified_test_messages[synthetic_test_message.replication_message_trace_id] do
         {:ok, result} ->
           %{synthetic_test_message | data: Map.merge(synthetic_test_message.data, result)}
 
@@ -263,7 +263,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
     test_messages =
       Enum.map(socket.assigns.test_messages, fn message ->
-        case modified_test_messages[message.id] do
+        case modified_test_messages[message.replication_message_trace_id] do
           {:ok, result} ->
             %{message | data: Map.merge(message.data, result)}
 
@@ -276,10 +276,10 @@ defmodule SequinWeb.FunctionsLive.Edit do
       Map.put(
         form_errors,
         :modified_test_messages,
-        Enum.reduce(modified_test_messages, %{}, fn {id, result}, acc ->
+        Enum.reduce(modified_test_messages, %{}, fn {replication_message_trace_id, result}, acc ->
           case result do
             {:ok, _} -> acc
-            %{error: errors} -> Map.put(acc, id, errors)
+            %{error: errors} -> Map.put(acc, replication_message_trace_id, errors)
           end
         end)
       )
@@ -481,7 +481,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   defp format_test_message(m) do
     %{
-      id: m.id,
+      replication_message_trace_id: m.replication_message_trace_id,
       record: inspect(m.data.record, pretty: true),
       changes: inspect(m.data.changes, pretty: true),
       action: inspect(to_string(m.data.action), pretty: true),

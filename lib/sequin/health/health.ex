@@ -953,7 +953,7 @@ defmodule Sequin.Health do
           Pagerduty.alert(dedup_key, summary, severity: :warning)
 
           if entity.id in @incident_slots do
-            IncidentIO.alert(:critical,
+            IncidentIO.create_incident(:critical,
               name: "[Health] #{name} is unhealthy",
               summary: summary,
               idempotency_key: dedup_key

@@ -7,11 +7,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"path/filepath"
+	"strings"
+	"time"
 
-	"github.com/goccy/go-yaml"
 	"github.com/a8m/envsubst"
+	"github.com/goccy/go-yaml"
 	"github.com/sequinstream/sequin/cli/context"
 )
 
@@ -40,26 +41,57 @@ type ExportResponse struct {
 }
 
 type ProcessingContext struct {
-	YamlPath string
+	YamlPath    string
 	SearchPaths []string
+}
+
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		DisableKeepAlives:     false,
+	},
 }
 
 // NewProcessingContext creates a new processing context with search paths set up
 func NewProcessingContext(yamlPath string) (*ProcessingContext, error) {
+	if yamlPath == "" {
+		return nil, fmt.Errorf("yaml path cannot be empty")
+	}
+
+	// Handle stdin case
+	if yamlPath == "-" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current directory: %w", err)
+		}
+		return &ProcessingContext{
+			YamlPath:    yamlPath,
+			SearchPaths: []string{cwd},
+		}, nil
+	}
+
+	// Clean the path
+	yamlPath = filepath.Clean(yamlPath)
+
 	var searchPaths []string
 
-	// First search path: current working directory
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
 	searchPaths = append(searchPaths, cwd)
 
-	// Second search path: YAML file directory
 	yamlDir := filepath.Dir(yamlPath)
-	// Only add if it's different from cwd
-	if yamlDir != cwd {
-		searchPaths = append(searchPaths, yamlDir)
+	absYamlDir, err := filepath.Abs(yamlDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve yaml directory: %w", err)
+	}
+
+	if absYamlDir != cwd {
+		searchPaths = append(searchPaths, absYamlDir)
 	}
 
 	return &ProcessingContext{
@@ -94,32 +126,39 @@ func resolveFilePath(pctx *ProcessingContext, filePath string) (string, error) {
 }
 
 // Apply envsubst to all string values everywhere
-func applyEnvSubst(node interface{}) interface{} {
+func applyEnvSubst(node interface{}) (interface{}, error) {
 	switch v := node.(type) {
 	case map[string]interface{}:
 		result := make(map[string]interface{})
 		for key, value := range v {
-			result[key] = applyEnvSubst(value)
+			processed, err := applyEnvSubst(value)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = processed
 		}
-		return result
+		return result, nil
 
 	case []interface{}:
 		result := make([]interface{}, len(v))
 		for i, item := range v {
-			result[i] = applyEnvSubst(item)
+			processed, err := applyEnvSubst(item)
+			if err != nil {
+				return nil, err
+			}
+			result[i] = processed
 		}
-		return result
+		return result, nil
 
 	case string:
 		substituted, err := envsubst.String(v)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: envsubst error: %v\n", err)
-			return v
+			return nil, fmt.Errorf("environment variable substitution failed for '%s': %w", v, err)
 		}
-		return substituted
+		return substituted, nil
 
 	default:
-		return v
+		return v, nil
 	}
 }
 
@@ -129,7 +168,11 @@ func processYAML(pctx *ProcessingContext, yamlContent []byte) ([]byte, error) {
 		return nil, fmt.Errorf("Failed to parse YAML content: %w", err)
 	}
 
-	with_subst := applyEnvSubst(yamlData)
+	with_subst, err := applyEnvSubst(yamlData)
+	if err != nil {
+		return nil, err
+	}
+
 	with_files, err := processFunctions(pctx, with_subst)
 	if err != nil {
 		return nil, err
@@ -219,7 +262,6 @@ func processFileInFunction(pctx *ProcessingContext, funcObj map[string]interface
 
 	return funcObj, nil
 }
-
 
 // Interpolate reads a YAML file, processes environment variables, and outputs the result
 func Interpolate(inputPath, outputPath string) error {
@@ -336,8 +378,7 @@ func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ctx.ApiToken))
 
 	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -409,8 +450,7 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ctx.ApiToken))
 
 	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -453,8 +493,7 @@ func Export(ctx *context.Context, showSensitive bool) (*ExportResponse, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ctx.ApiToken))
 
 	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -479,4 +518,3 @@ func Export(ctx *context.Context, showSensitive bool) (*ExportResponse, error) {
 
 	return &exportResp, nil
 }
-

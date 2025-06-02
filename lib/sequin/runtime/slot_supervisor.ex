@@ -53,7 +53,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
         not_disabled_sink_consumers: [:sequence]
       )
 
-    opts = Keyword.put(opts, :replication_slot, pg_replication)
+    opts = Keyword.put(opts, :replication_slot_id, pg_replication.id)
     slot_processor_spec = SlotProcessorSupervisor.child_spec(opts)
     sup = via_tuple(pg_replication.id)
 
@@ -125,7 +125,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
   end
 
   defp slot_message_store_supervisor_child_spec(%SinkConsumer{} = sink_consumer, opts) do
-    opts = Keyword.put(opts, :consumer, sink_consumer)
+    opts = Keyword.put(opts, :consumer_id, sink_consumer.id)
     {SlotMessageStoreSupervisor, opts}
   end
 

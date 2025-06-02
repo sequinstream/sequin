@@ -34,6 +34,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   use Sequin.ProcessMetrics.Decorator
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
@@ -60,8 +61,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    consumer = opts[:consumer]
-    consumer_id = if consumer, do: consumer.id, else: Keyword.fetch!(opts, :consumer_id)
+    consumer_id = Keyword.fetch!(opts, :consumer_id)
     partition = Keyword.fetch!(opts, :partition)
     GenServer.start_link(__MODULE__, opts, id: via_tuple(consumer_id, partition), name: via_tuple(consumer_id, partition))
   end
@@ -74,9 +74,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   @impl GenServer
   def init(opts) do
-    consumer = opts[:consumer]
-    consumer_id = if consumer, do: consumer.id, else: Keyword.fetch!(opts, :consumer_id)
+    consumer_id = Keyword.fetch!(opts, :consumer_id)
     partition = Keyword.fetch!(opts, :partition)
+
+    if test_pid = opts[:test_pid] do
+      Sandbox.allow(Sequin.Repo, test_pid, self())
+    end
+
+    %SinkConsumer{} = consumer = Consumers.get_sink_consumer!(consumer_id)
 
     Logger.metadata(consumer_id: consumer_id)
     Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
@@ -111,7 +116,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     # Allow test process to access the database connection
     if state.test_pid do
-      Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
+      Sandbox.allow(Sequin.Repo, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
     end

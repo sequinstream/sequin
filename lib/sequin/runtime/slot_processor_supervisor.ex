@@ -6,16 +6,17 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
   use Supervisor
 
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime.MessageHandler
   alias Sequin.Runtime.SlotMessageHandler
   alias Sequin.Runtime.SlotProcessorServer
 
   def child_spec(opts) do
-    %PostgresReplicationSlot{} = slot = Keyword.fetch!(opts, :replication_slot)
+    replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
 
     spec = %{
-      id: via_tuple(slot.id),
+      id: via_tuple(replication_slot_id),
       start: {__MODULE__, :start_link, [opts]}
     }
 
@@ -23,8 +24,8 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
   end
 
   def start_link(opts) do
-    replication_slot = Keyword.fetch!(opts, :replication_slot)
-    Supervisor.start_link(__MODULE__, opts, name: via_tuple(replication_slot.id))
+    replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
+    Supervisor.start_link(__MODULE__, opts, name: via_tuple(replication_slot_id))
   end
 
   def via_tuple(id) do
@@ -32,7 +33,9 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
   end
 
   def init(opts) do
-    {slot, opts} = Keyword.pop!(opts, :replication_slot)
+    {replication_slot_id, opts} = Keyword.pop!(opts, :replication_slot_id)
+    %PostgresReplicationSlot{} = slot = Replication.get_pg_replication!(replication_slot_id)
+    slot = Sequin.Repo.preload(slot, :postgres_database)
     message_handler_module = Keyword.get_lazy(opts, :message_handler_module, &default_message_handler_module/0)
 
     default_opts =

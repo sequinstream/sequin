@@ -22,7 +22,7 @@ defmodule Sequin.SlotMessageStoreTest do
       msg1 = ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
       msg2 = ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       %{consumer: consumer, msg1: msg1, msg2: msg2}
     end
@@ -98,7 +98,7 @@ defmodule Sequin.SlotMessageStoreTest do
           pid =
             start_supervised!(
               {SlotMessageStoreSupervisor,
-               consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self(), restart: :temporary}
+               consumer_id: consumer.id, max_memory_bytes: max_memory_bytes, test_pid: self(), restart: :temporary}
             )
 
           Process.monitor(pid)
@@ -132,7 +132,7 @@ defmodule Sequin.SlotMessageStoreTest do
           pid =
             start_supervised!(
               {SlotMessageStoreSupervisor,
-               consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self(), restart: :temporary}
+               consumer_id: consumer.id, max_memory_bytes: max_memory_bytes, test_pid: self(), restart: :temporary}
             )
 
           Process.monitor(pid)
@@ -150,8 +150,8 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
       event_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
-      start_supervised!({SlotMessageStoreSupervisor, consumer: event_consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: event_consumer.id, test_pid: self()})
       %{consumer: consumer, event_consumer: event_consumer}
     end
 
@@ -480,7 +480,7 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       %{consumer: consumer}
     end
@@ -524,7 +524,7 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       %{consumer: consumer}
     end
@@ -547,7 +547,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       start_supervised!(
         {SlotMessageStoreSupervisor,
-         consumer: consumer, test_pid: self(), flush_interval: 100, message_age_before_flush_ms: 100}
+         consumer_id: consumer.id, test_pid: self(), flush_interval: 100, message_age_before_flush_ms: 100}
       )
 
       %{consumer: consumer}
@@ -617,7 +617,7 @@ defmodule Sequin.SlotMessageStoreTest do
       sup =
         start_supervised!(
           {SlotMessageStoreSupervisor,
-           consumer: consumer, test_pid: self(), flush_interval: 999_999_999, message_age_before_flush_ms: 0}
+           consumer_id: consumer.id, test_pid: self(), flush_interval: 999_999_999, message_age_before_flush_ms: 0}
         )
 
       [pid] = for {_name, pid, _, _} <- Supervisor.which_children(sup), do: pid
@@ -666,7 +666,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       start_supervised!(
         {SlotMessageStoreSupervisor,
-         consumer: consumer, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
+         consumer_id: consumer.id, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
       )
 
       %{consumer: consumer}
@@ -720,7 +720,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       start_supervised!(
         {SlotMessageStoreSupervisor,
-         consumer: consumer, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
+         consumer_id: consumer.id, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
       )
 
       %{consumer: consumer}
@@ -777,7 +777,7 @@ defmodule Sequin.SlotMessageStoreTest do
     test "keeps messages when max_retry_count is nil", %{consumer: _consumer} do
       # Create a consumer with nil max_retry_count
       consumer = ConsumersFactory.insert_sink_consumer!(max_retry_count: nil)
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       # Create a message
       message =
@@ -820,7 +820,7 @@ defmodule Sequin.SlotMessageStoreTest do
           max_memory_mb: 128
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       # Create a message with a specific group_id to ensure consistent partitioning
       message =
@@ -839,7 +839,7 @@ defmodule Sequin.SlotMessageStoreTest do
       consumer = ConsumersFactory.insert_sink_consumer!(load_shedding_policy: :discard_on_full)
 
       start_supervised!(
-        {SlotMessageStoreSupervisor, consumer: consumer, test_pid: self(), setting_system_max_memory_bytes: 1}
+        {SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self(), setting_system_max_memory_bytes: 1}
       )
 
       # Create a message with a specific group_id to ensure consistent partitioning

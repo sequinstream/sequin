@@ -163,7 +163,10 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
       consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: test_pid, persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
       start_supervised!({SinkPipeline, [consumer_id: consumer.id, test_pid: test_pid]})

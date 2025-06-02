@@ -38,8 +38,8 @@ defmodule SequinWeb.PullControllerTest do
         legacy_transform: ctx[:legacy_transform] || :none
       )
 
-    start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
-    start_supervised!({SlotMessageStoreSupervisor, consumer: other_consumer, test_pid: self()})
+    start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+    start_supervised!({SlotMessageStoreSupervisor, consumer_id: other_consumer.id, test_pid: self()})
 
     %{consumer: consumer, other_consumer: other_consumer}
   end

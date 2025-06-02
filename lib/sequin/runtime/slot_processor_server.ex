@@ -1619,8 +1619,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       state.replication_slot
       |> Sequin.Repo.preload(:not_disabled_sink_consumers, force: true)
       |> Map.fetch!(:not_disabled_sink_consumers)
-      # Filter out sink consumers that have been inserted in the last 2 minutes
-      |> Enum.filter(&DateTime.before?(&1.inserted_at, DateTime.add(Sequin.utc_now(), -2, :minute)))
+      # Filter out sink consumers that have been inserted in the last 10 minutes
+      |> Enum.filter(&DateTime.before?(&1.inserted_at, DateTime.add(Sequin.utc_now(), -10, :minute)))
       |> Enum.map(& &1.id)
 
     monitored_sink_consumer_ids = Map.keys(state.message_store_refs)

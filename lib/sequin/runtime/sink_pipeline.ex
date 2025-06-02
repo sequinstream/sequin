@@ -103,7 +103,8 @@ defmodule Sequin.Runtime.SinkPipeline do
     %SinkConsumer{} =
       consumer =
       opts
-      |> Keyword.fetch!(:consumer)
+      |> Keyword.fetch!(:consumer_id)
+      |> Consumers.get_sink_consumer!()
       |> preload_consumer()
       # Ensure db is not on there
       |> Ecto.reset_fields([:postgres_database])

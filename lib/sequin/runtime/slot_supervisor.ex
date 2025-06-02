@@ -136,7 +136,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
     if consumer.type == :sequin_stream do
       :ok
     else
-      default_opts = [consumer: consumer]
+      default_opts = [consumer_id: consumer.id]
       consumer_features = Consumers.consumer_features(consumer)
 
       {features, opts} = Keyword.pop(opts, :features, [])

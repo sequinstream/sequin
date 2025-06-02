@@ -190,7 +190,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
     {dummy_producer, _opts} = Keyword.pop(opts, :dummy_producer, true)
 
     opts = [
-      consumer: consumer,
+      consumer_id: consumer.id,
       test_pid: self()
     ]
 

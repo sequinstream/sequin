@@ -166,7 +166,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
       start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
-      start_supervised!({SinkPipeline, [consumer: consumer, test_pid: test_pid]})
+      start_supervised!({SinkPipeline, [consumer_id: consumer.id, test_pid: test_pid]})
 
       assert_receive {:redis_request, _sink, _redis_messages}, 5_000
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
@@ -177,7 +177,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
     start_supervised!(
       {SinkPipeline,
        [
-         consumer: consumer,
+         consumer_id: consumer.id,
          producer: Broadway.DummyProducer,
          test_pid: self()
        ]}

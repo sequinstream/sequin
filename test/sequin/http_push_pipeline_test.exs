@@ -2,6 +2,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Aws.HttpClient
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
@@ -111,7 +112,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :update)
 
       # Set batch size to 2
-      consumer = %{consumer | batch_size: 2}
+      Consumers.update_sink_consumer(consumer, %{batch_size: 2})
 
       adapter = fn %Req.Request{} = req ->
         assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
@@ -187,7 +188,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       SlotMessageStore.put_messages(consumer, [event])
 
       # Start the pipeline
-      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_supervised!({SinkPipeline, [consumer_id: consumer.id, req_opts: [adapter: adapter], test_pid: test_pid]})
 
       # Verify that no HTTP request was made since the message was rejected
       refute_receive {:http_request, _req}, 200
@@ -994,7 +995,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
     opts =
       Keyword.merge(
         [
-          consumer: consumer,
+          consumer_id: consumer.id,
           req_opts: [adapter: adapter],
           test_pid: self()
         ],

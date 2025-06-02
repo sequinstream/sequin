@@ -4,6 +4,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Runtime.SinkPipeline
@@ -18,9 +19,10 @@ defmodule Sequin.Runtime.SlotSupervisor do
   end
 
   def start_link(opts) do
-    %PostgresReplicationSlot{} = pg_replication = Keyword.fetch!(opts, :pg_replication)
+    pg_replication_id = Keyword.fetch!(opts, :pg_replication_id)
+    %PostgresReplicationSlot{} = pg_replication = Replication.get_pg_replication!(pg_replication_id)
 
-    case DynamicSupervisor.start_link(__MODULE__, opts, name: via_tuple(pg_replication.id)) do
+    case DynamicSupervisor.start_link(__MODULE__, opts, name: via_tuple(pg_replication_id)) do
       {:ok, pid} ->
         {:ok, _} = start_children(pg_replication, opts)
         {:ok, pid}

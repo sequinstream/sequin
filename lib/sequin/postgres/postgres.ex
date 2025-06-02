@@ -526,7 +526,11 @@ defmodule Sequin.Postgres do
         {:ok, nil}
 
       {:ok, %{rows: []}} ->
-        {:error, Error.not_found(entity: :replication_slot, params: %{name: db.replication_slot})}
+        {:error,
+         Error.not_found(
+           entity: :replication_slot,
+           params: %{name: db.replication_slot.slot_name, id: db.replication_slot.id}
+         )}
 
       {:error, _} = error ->
         error

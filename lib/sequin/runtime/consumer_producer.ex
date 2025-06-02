@@ -81,6 +81,8 @@ defmodule Sequin.Runtime.ConsumerProducer do
       |> Consumers.get_consumer!()
       |> Repo.preload(postgres_database: [:replication_slot])
 
+    Logger.metadata(replication_slot_id: consumer.replication_slot.id)
+
     state =
       state
       |> schedule_receive_messages()

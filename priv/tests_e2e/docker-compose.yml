@@ -120,4 +120,3 @@ volumes:
 networks:
   sequin-e2e:
     driver: bridge
- 

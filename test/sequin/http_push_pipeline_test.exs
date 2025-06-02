@@ -183,7 +183,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 200)}
       end
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       event = %ConsumerEvent{event | payload_size_bytes: 1000}
       SlotMessageStore.put_messages(consumer, [event])
 
@@ -222,7 +225,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 200)}
       end
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       event1 = %ConsumerEvent{event1 | payload_size_bytes: 1000}
       event2 = %ConsumerEvent{event2 | payload_size_bytes: 1000}
       SlotMessageStore.put_messages(consumer, [event1, event2])
@@ -371,7 +377,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised({SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer, [consumer_event])
 
       # Start the pipeline
@@ -434,7 +440,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised({SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer, [consumer_event])
 
       # Start the pipeline
@@ -488,7 +494,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 500)}
       end
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self()]})
+      start_supervised!({SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self()]})
 
       expect_uuid4(fn -> event1.ack_id end)
       expect_uuid4(fn -> event2.ack_id end)
@@ -541,7 +547,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert :ok = MessageLedgers.wal_cursors_ingested(consumer.id, [wal_cursor])
       assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [event])
 
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
@@ -620,7 +629,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           }
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
       # Start the pipeline
@@ -683,7 +695,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           }
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
       # Start the pipeline
@@ -736,7 +751,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [record])
 
       # Start the pipeline with legacy_event_transform feature enabled

@@ -1619,16 +1619,17 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       state.replication_slot
       |> Sequin.Repo.preload(:not_disabled_sink_consumers, force: true)
       |> Map.fetch!(:not_disabled_sink_consumers)
+      # Filter out sink consumers that have been inserted in the last 2 minutes
+      |> Enum.filter(&DateTime.before?(&1.inserted_at, DateTime.add(Sequin.utc_now(), -2, :minute)))
       |> Enum.map(& &1.id)
-      |> Enum.sort()
 
-    monitored_sink_consumer_ids = Enum.sort(Map.keys(state.message_store_refs))
+    monitored_sink_consumer_ids = Map.keys(state.message_store_refs)
 
     %MessageHandler.Context{consumers: message_handler_consumers} = state.message_handler_ctx
-    message_handler_sink_consumer_ids = Enum.sort(Enum.map(message_handler_consumers, & &1.id))
+    message_handler_sink_consumer_ids = Enum.map(message_handler_consumers, & &1.id)
 
     cond do
-      sink_consumer_ids != message_handler_sink_consumer_ids ->
+      not Enum.all?(sink_consumer_ids, &(&1 in message_handler_sink_consumer_ids)) ->
         msg = """
         Sink consumer IDs do not match message handler sink consumer IDs.
         Sink consumers: #{inspect(sink_consumer_ids)}.
@@ -1639,7 +1640,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
         {:error, Error.invariant(message: msg)}
 
-      sink_consumer_ids != monitored_sink_consumer_ids ->
+      not Enum.all?(sink_consumer_ids, &(&1 in monitored_sink_consumer_ids)) ->
         msg = """
         Sink consumer IDs do not match monitored sink consumer IDs.
         Sink consumers: #{inspect(sink_consumer_ids)}.

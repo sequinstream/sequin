@@ -20,9 +20,9 @@
 
 ## What is Sequin?
 
-Sequin is the [fastest](#performance) change data capture (CDC) platform for Postgres. Sequin makes it easy to stream Postgres to streaming platforms, queues, and more (e.g. Kafka, GCP Pub/Sub, another Postgres, etc.). You can backfill existing rows and stream new changes in real-time.
+Sequin is the [fastest](#performance) change data capture (CDC) platform for Postgres. Sequin makes it easy to stream Postgres to streaming platforms, queues, search indexes, and more (e.g. Kafka, GCP Pub/Sub, another Postgres, etc.). You can backfill existing rows and stream new changes in real-time.
 
-Sequin uses a logical replication slot to detect and stream changes in real-time.
+Sequin uses a logical replication slot to ensure it never misses a change, and can capture old values for updates and deletes.
 
 Sequin is a standalone Docker container that you can deploy next to your Postgres database. Alternatively, you can use [our hosted offering](https://console.sequinstream.com) or we'll [manage Sequin](https://sequinstream.com/docs/sequin-managed/overview) for you in your cloud.
 
@@ -90,13 +90,13 @@ Sequin works great for change data capture use cases like:
 
 - **Never miss a change:** Sequin ensures all database changes are delivered to sinks.
 - **The fastest CDC:** Sequin delivers industry-leading performance for change data capture (CDC), sustaining [40k operations per second with 55ms average latency](https://sequinstream.com/docs/performance).
-- **Bring your database:** Sequin is not an extension. It works with any Postgres database version 14\+.
-- **SQL-based routing:** Filter and route messages to sinks using SQL `where` conditions.
+- **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12\+.
+- **Filtering and routing:** Filter and route messages to sinks using SQL `where` conditions or complex functions.
+- **Transforms**: Transform message payloads with custom functions.
 - **Backfills:** Backfill existing rows from your tables to sinks at any time.
-- **Transforms** \(coming soon\!\): Transform message payloads by writing functions in Lua, JavaScript, or Go.
-- **Infrastructure as code:** Manage Sequin as code using a YAML file paired with the Sequin CLI. Or use our management API.
+- **Infrastructure as code:** Manage Sequin as code using a YAML file paired with the Sequin CLI. Or use our [Management API](https://sequinstream.com/docs/management-api/introduction).
 - **Rich web console:** Your team can configure and monitor sinks from a full feature web console.
-- **Observability:** Built in monitoring and metrics.
+- **Observability:** Sequin ships a [Prometheus metrics endpoint](https://sequinstream.com/docs/reference/metrics).
 
 ## How Sequin works
 
@@ -106,7 +106,7 @@ When you setup a sink, you can opt to backfill data from the source table to the
 
 After setup, Sequin will stream new changes to the sink as they occur in real-time. If there are any issues with delivery, Sequin will automatically retry delivery with exponential backoff.
 
-Sequin comes with a web console/UI for configuration and monitoring. You can also configure Sequin as code using YAML config files and our management API.
+Sequin comes with a web console/UI for configuration and monitoring. You can also configure Sequin as code using [YAML config files](https://sequinstream.com/docs/reference/sequin-yaml) and our [Management API](https://sequinstream.com/docs/management-api/introduction).
 
 ## How Sequin compares
 
@@ -151,6 +151,7 @@ Sequin is purpose-built for real-time operational use cases. Key differences:
 Many teams build custom change data capture solutions using triggers, LISTEN/NOTIFY, or logical replication. While these can work, they often:
 
 - Lack exactly-once processing guarantees
+- Have consistency issues
 - Don't scale
 - Don't handle backfills well
 - Need ongoing maintenance

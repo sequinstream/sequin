@@ -134,3 +134,27 @@ docs: ## Run mintlify dev server for documentation
 redis-console-consumer: ## Read from redis stream <stream-key> [from-beginning]
 	@./scripts/redis-console-consumer.sh $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 
+.PHONY: e2e-up e2e-down e2e-rebuild e2e-restart e2e-test e2e-clean e2e-logs
+
+e2e-up:
+	cd priv/tests_e2e && docker compose up -d
+
+e2e-down:
+	cd priv/tests_e2e && docker compose down -v
+
+e2e-rebuild:
+	cd priv/tests_e2e && docker compose build --no-cache
+	make e2e-restart
+
+e2e-restart: e2e-down e2e-up
+
+e2e-test:
+	cd priv/tests_e2e && elixir tests.exs
+
+e2e-clean:
+	docker stop sequin-e2e-kafka || true
+	docker rm sequin-e2e-kafka || true
+
+e2e-logs:
+	cd priv/tests_e2e && docker compose logs -f
+

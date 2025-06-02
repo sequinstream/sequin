@@ -42,4 +42,5 @@ sinks:
       type: "kafka"
       hosts: "${KAFKA_BROKERS:-kafka:29092}"
       topic: "demo-topic"
-      tls: false 
+      tls: false
+ 

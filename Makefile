@@ -134,8 +134,6 @@ docs: ## Run mintlify dev server for documentation
 redis-console-consumer: ## Read from redis stream <stream-key> [from-beginning]
 	@./scripts/redis-console-consumer.sh $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 
-.PHONY: e2e-up e2e-down e2e-rebuild e2e-restart e2e-test e2e-clean e2e-logs
-
 e2e-up:
 	cd priv/tests_e2e && docker compose up -d
 

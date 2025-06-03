@@ -138,15 +138,18 @@ e2e-up:
 	cd priv/tests_e2e && docker compose up -d
 
 e2e-down:
-	cd priv/tests_e2e && docker compose down -v
+	cd priv/tests_e2e && docker compose down -v --remove-orphans
+	docker rm -f sequin-e2e-kafka tests_e2e-postgres-1 tests_e2e-redis-1 2>/dev/null || true
 
 e2e-rebuild:
+	cd priv/tests_e2e && docker compose down -v --remove-orphans
+	docker rm -f sequin-e2e-kafka tests_e2e-postgres-1 tests_e2e-redis-1 2>/dev/null || true
 	cd priv/tests_e2e && docker compose build --no-cache
-	make e2e-restart
+	make e2e-up
 
 e2e-restart: e2e-down e2e-up
 
-e2e-test:
+e2e-tests:
 	cd priv/tests_e2e && elixir tests.exs
 
 e2e-clean:

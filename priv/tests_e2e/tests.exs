@@ -1,18 +1,4 @@
-Mix.install([
-  {:postgrex, "~> 0.17.5"},
-  {:jason, "~> 1.4"},
-  {:kafka_ex, "~> 0.13.0"}
-])
-
-Application.put_env(:kafka_ex, :brokers, [{"localhost", 9092}])
-Application.put_env(:kafka_ex, :consumer_group, "e2e_test_group")
-Application.put_env(:kafka_ex, :use_ssl, false)
-Application.put_env(:kafka_ex, :kafka_version, "0.10.0")
-
-{:ok, _} = Application.ensure_all_started(:postgrex)
-{:ok, _} = Application.ensure_all_started(:kafka_ex)
-
-ExUnit.start()
+Code.require_file("init.exs", __DIR__)
 
 defmodule Sequin.E2E.KafkaTest do
   use ExUnit.Case, async: false
@@ -27,19 +13,29 @@ defmodule Sequin.E2E.KafkaTest do
   ]
 
   @test_topics ["demo-topic"]
-
+  @max_retries 10
+  @retry_delay 500
   @expected_count String.to_integer(System.get_env("TEST_MESSAGES_COUNT", "1000"))
 
-  setup do
-    Process.sleep(5_000)
+  setup_all do
+    wait_for_sequin()
+    wait_for_kafka()
 
-    # clear_test_data()
+    {:ok, conn} = Postgrex.start_link(@db_config)
+    on_exit(fn -> GenServer.stop(conn) end)
+
+    {:ok, %{conn: conn}}
+  end
+
+  setup %{conn: _conn} do
+    # clear_test_data(conn)
     clear_kafka_topics()
+    :ok
   end
 
   describe "sequin integration" do
-    test "changes are streamed to kafka" do
-      insert_test_data(@expected_count)
+    test "changes are streamed to kafka", %{conn: conn} do
+      insert_test_data(conn, @expected_count)
 
       end_time = System.system_time(:second) + 30
       messages = get_messages_until_complete(@expected_count, end_time)
@@ -61,14 +57,35 @@ defmodule Sequin.E2E.KafkaTest do
     end
   end
 
+  # Health check functions
+  defp wait_for_sequin(retries \\ 0) do
+    case :httpc.request(:get, {~c"http://localhost:7376/health", []}, [], []) do
+      {:ok, {{_, 200, _}, _, _}} -> :ok
+      _ when retries < @max_retries ->
+        Logger.warning("Sequin not ready, retrying in #{@retry_delay}ms... (#{retries + 1}/#{@max_retries})")
+        Process.sleep(@retry_delay)
+        wait_for_sequin(retries + 1)
+      _ ->
+        raise "Sequin is not available after #{@max_retries} retries"
+    end
+  end
+
+  defp wait_for_kafka(retries \\ 0) do
+    case match?(%{brokers: [_|_]}, KafkaEx.metadata()) do
+      true -> :ok
+      _ when retries < @max_retries ->
+        Logger.warning("Kafka not ready, retrying in #{@retry_delay}ms... (#{retries + 1}/#{@max_retries})")
+        Process.sleep(@retry_delay)
+        wait_for_kafka(retries + 1)
+      _ ->
+        raise "Kafka is not available after #{@max_retries} retries"
+    end
+  end
+
   # Internal functions
 
-  defp pg_conn, do: Postgrex.start_link(@db_config)
-
-  defp clear_test_data do
-    {:ok, pid} = pg_conn()
-    Postgrex.query(pid, "DELETE FROM demo_table", [])
-    GenServer.stop(pid)
+  defp clear_test_data(conn) do
+    Postgrex.query(conn, "DELETE FROM demo_table", [])
   end
 
   defp clear_kafka_topics do
@@ -89,14 +106,15 @@ defmodule Sequin.E2E.KafkaTest do
     Process.sleep(1_000)
   end
 
-  defp insert_test_data(expected_count) do
-    {:ok, pid} = pg_conn()
-
-    for n <- 0..(expected_count - 1) do
-      {:ok, _} = Postgrex.query(pid, "INSERT INTO demo_table (demo_text) VALUES ($1)", ["Generated text entry ##{n}"])
-    end
-
-    GenServer.stop(pid)
+  defp insert_test_data(conn, expected_count) do
+    0..(expected_count - 1)
+    |> Task.async_stream(
+      fn n ->
+        {:ok, _} = Postgrex.query(conn, "INSERT INTO demo_table (demo_text) VALUES ($1)", ["Generated text entry ##{n}"])
+      end,
+      max_concurrency: 10
+    )
+    |> Stream.run()
   end
 
   defp get_messages_until_complete(expected_count, end_time, acc \\ []) do

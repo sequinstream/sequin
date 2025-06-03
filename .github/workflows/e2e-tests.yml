@@ -1,0 +1,27 @@
+name: E2E Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Start E2E environment
+      run: |
+        make e2e-rebuild
+        # Wait for containers to be healthy
+        timeout 60s bash -c 'until docker ps | grep -q "(healthy)"; do sleep 1; done'
+
+    - name: Run E2E tests
+      run: make e2e-tests
+
+    - name: Show docker logs on failure
+      if: failure()
+      run: make e2e-logs

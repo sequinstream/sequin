@@ -27,6 +27,9 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       |> assign(:page_size, page_size)
       |> assign(:total_count, total_count)
       |> assign(:encoded_consumers, nil)
+      |> assign(:database_names, %{})
+      |> assign(:consumer_health, %{})
+      |> assign(:consumer_metrics, %{})
       |> async_assign_consumers()
 
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
@@ -113,10 +116,17 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   end
 
   @impl Phoenix.LiveView
-  def handle_async(:consumers_task, {:ok, consumers}, socket) do
-    encoded_consumers = Enum.map(consumers, &encode_consumer/1)
+  def handle_async(:consumers_task, {:ok, {consumers, database_names, consumer_health, consumer_metrics}}, socket) do
+    encoded_consumers = Enum.map(consumers, &encode_consumer(&1, database_names, consumer_health, consumer_metrics))
     Process.send_after(self(), :update_consumers, 1000)
-    socket = assign(socket, :encoded_consumers, encoded_consumers)
+
+    socket =
+      socket
+      |> assign(:encoded_consumers, encoded_consumers)
+      |> assign(:database_names, database_names)
+      |> assign(:consumer_health, consumer_health)
+      |> assign(:consumer_metrics, consumer_metrics)
+
     {:noreply, socket}
   end
 
@@ -129,32 +139,32 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   end
 
   defp load_consumers(account_id, page, page_size) do
-    account_id
-    |> Consumers.list_sink_consumers_for_account_paginated(page, page_size,
-      preload: [
-        :postgres_database,
-        :replication_slot,
-        :active_backfill
-      ]
-    )
-    |> load_consumer_health()
-    |> load_consumer_metrics()
+    consumers =
+      Consumers.list_sink_consumers_for_account_paginated(account_id, page, page_size,
+        preload: [:replication_slot, :active_backfill]
+      )
+
+    {consumers, load_database_names(consumers), load_consumer_health(consumers), load_consumer_metrics(consumers)}
+  end
+
+  defp load_database_names(consumers) do
+    Databases.db_names_for_consumer_ids(Enum.map(consumers, & &1.id))
   end
 
   defp load_consumer_health(consumers) do
-    Enum.map(consumers, fn consumer ->
+    Map.new(consumers, fn consumer ->
       with {:ok, health} <- Health.health(consumer),
            {:ok, slot_health} <- Health.health(consumer.replication_slot) do
         health = Health.add_slot_health_to_consumer_health(health, slot_health)
-        %{consumer | health: health}
+        {consumer.id, health}
       else
-        {:error, _} -> consumer
+        {:error, _} -> {consumer.id, nil}
       end
     end)
   end
 
   defp load_consumer_metrics(consumers) do
-    Enum.map(consumers, fn consumer ->
+    Map.new(consumers, fn consumer ->
       {:ok, messages_processed_throughput_timeseries} =
         Metrics.get_consumer_messages_processed_throughput_timeseries_smoothed(
           consumer,
@@ -162,26 +172,25 @@ defmodule SequinWeb.SinkConsumersLive.Index do
           @smoothing_window
         )
 
-      Map.put(consumer, :metrics, %{
-        messages_processed_throughput_timeseries: messages_processed_throughput_timeseries
-      })
+      {consumer.id,
+       %{
+         messages_processed_throughput_timeseries: messages_processed_throughput_timeseries
+       }}
     end)
   end
 
-  defp encode_consumer(consumer) do
+  defp encode_consumer(consumer, database_names, consumer_health, consumer_metrics) do
     %{
       id: consumer.id,
       name: consumer.name,
       insertedAt: consumer.inserted_at,
       type: consumer.type,
       status: consumer.status,
-      database_name: consumer.postgres_database.name,
-      health: Health.to_external(consumer.health),
+      database_name: database_names[consumer.id],
+      health: Health.to_external(consumer_health[consumer.id]),
       href: RouteHelpers.consumer_path(consumer),
       active_backfill: not is_nil(consumer.active_backfill),
-      metrics: %{
-        messages_processed_throughput_timeseries: consumer.metrics.messages_processed_throughput_timeseries
-      }
+      metrics: consumer_metrics[consumer.id]
     }
   end
 end

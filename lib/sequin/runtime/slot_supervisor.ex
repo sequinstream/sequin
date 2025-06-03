@@ -2,6 +2,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
   @moduledoc false
   use DynamicSupervisor
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Replication
@@ -61,7 +62,20 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
     # First start all message stores for consumers
     opts = Keyword.put(opts, :skip_monitor, true)
-    Enum.each(pg_replication.not_disabled_sink_consumers, &start_stores_and_pipeline!(&1, opts))
+
+    pg_replication.not_disabled_sink_consumers
+    |> Task.async_stream(
+      fn consumer ->
+        if test_pid = opts[:test_pid], do: Sandbox.allow(Sequin.Repo, test_pid, self())
+        start_stores_and_pipeline!(consumer, opts)
+      end,
+      max_concurrency: 10
+    )
+    |> Stream.map(fn
+      {:ok, :ok} -> :ok
+      {:error, error} -> raise error
+    end)
+    |> Stream.run()
 
     # Then start the slot processor
     case Sequin.DynamicSupervisor.maybe_start_child(sup, slot_processor_spec) do

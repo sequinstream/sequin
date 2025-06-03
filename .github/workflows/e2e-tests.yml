@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: '0 17 * * *'  # 10:00 PDT (UTC-7)
   workflow_dispatch:
 
 jobs:

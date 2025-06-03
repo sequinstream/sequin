@@ -3,6 +3,7 @@ defmodule Sequin.Databases do
   import Ecto.Query, only: [preload: 2]
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabasePrimary
@@ -56,6 +57,15 @@ defmodule Sequin.Databases do
       nil -> {:error, Error.not_found(entity: :postgres_database)}
       db -> {:ok, db}
     end
+  end
+
+  def db_names_for_consumer_ids(consumer_ids) do
+    consumer_ids
+    |> SinkConsumer.where_id_in()
+    |> SinkConsumer.join_postgres_database()
+    |> Ecto.Query.select([consumer: sc, database: db], {sc.id, db.name})
+    |> Repo.all()
+    |> Map.new()
   end
 
   def get_db!(id) do

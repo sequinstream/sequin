@@ -278,6 +278,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: c.id == ^id)
   end
 
+  def where_id_in(query \\ base_query(), ids) do
+    from([consumer: c] in query, where: c.id in ^ids)
+  end
+
   def where_sequence_id(query \\ base_query(), sequence_id) do
     from([consumer: c] in query, where: c.sequence_id == ^sequence_id)
   end

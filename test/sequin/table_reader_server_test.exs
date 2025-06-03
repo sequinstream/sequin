@@ -727,7 +727,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
 
   defp produce_and_ack_messages(consumer, page_size) do
     {:ok, messages} = SlotMessageStore.produce(consumer, page_size, self())
-    SlotMessageStore.messages_succeeded(consumer, messages)
+    SlotMessageStore.messages_succeeded(consumer, Enum.map(messages, & &1.ack_id))
     messages
   end
 end

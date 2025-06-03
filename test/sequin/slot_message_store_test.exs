@@ -47,8 +47,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert {:ok, delivered} = SlotMessageStore.produce(consumer, 10, self())
       assert length(delivered) == 2
 
-      ack_ids = Enum.map(delivered, & &1.ack_id)
-      {:ok, 2} = SlotMessageStore.messages_succeeded(consumer, ack_ids)
+      {:ok, 2} = SlotMessageStore.messages_succeeded(consumer, delivered)
 
       assert [] == Consumers.list_consumer_messages_for_consumer(consumer)
     end
@@ -171,8 +170,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert length(delivered) == 2
 
       # For acks
-      ack_ids = Enum.map(delivered, & &1.ack_id)
-      {:ok, 2} = SlotMessageStore.messages_succeeded(consumer, ack_ids)
+      {:ok, 2} = SlotMessageStore.messages_succeeded(consumer, delivered)
 
       # Produce messages, none should be delivered
       {:ok, []} = SlotMessageStore.produce(consumer, 2, self())
@@ -211,7 +209,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Redeliver and succeed the message
       {:ok, [redelivered]} = SlotMessageStore.produce(consumer, 1, self())
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [redelivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [redelivered])
 
       # Verify message was deleted from postgres
       assert [] = Consumers.list_consumer_messages_for_consumer(consumer)
@@ -250,7 +248,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Redeliver and succeed the message
       {:ok, [redelivered]} = SlotMessageStore.produce(consumer, 1, self())
-      {:ok, 1} = SlotMessageStore.messages_already_succeeded(consumer, [redelivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_already_succeeded(consumer, [redelivered])
 
       # Verify message was deleted from postgres
       assert [] = Consumers.list_consumer_messages_for_consumer(consumer)
@@ -442,7 +440,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert delivered.commit_idx == 1
 
       # Ack the message
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered])
 
       # Verify no bytes are accumulated
       Enum.each(SlotMessageStore.peek(consumer), fn state ->
@@ -566,7 +564,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert {:ok, ["test-batch-id"]} == SlotMessageStore.unpersisted_table_reader_batch_ids(consumer)
 
       # For acks
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered])
 
       # Produce messages, none should be delivered
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
@@ -574,7 +572,7 @@ defmodule Sequin.SlotMessageStoreTest do
       # Delivered messages don't "complete" a batch
       assert {:ok, ["test-batch-id"]} == SlotMessageStore.unpersisted_table_reader_batch_ids(consumer)
 
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered])
 
       assert_received :table_reader_batches_changed
 

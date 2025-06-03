@@ -48,8 +48,8 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
         {:ok, []}
       end)
 
-      stub(SlotMessageStoreMock, :messages_succeeded, fn _consumer, ack_ids ->
-        {:ok, length(ack_ids)}
+      stub(SlotMessageStoreMock, :messages_succeeded, fn _consumer, consumer_messages ->
+        {:ok, length(consumer_messages)}
       end)
 
       %{consumer: consumer}
@@ -63,8 +63,8 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
       expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg1, msg2]} end)
       stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)
 
-      expect(SlotMessageStoreMock, :messages_succeeded, fn _consumer, ack_ids ->
-        assert length(ack_ids) == 2
+      expect(SlotMessageStoreMock, :messages_succeeded, fn _consumer, consumer_messages ->
+        assert length(consumer_messages) == 2
         {:ok, 2}
       end)
 

@@ -254,12 +254,20 @@ defmodule Sequin.Runtime.SlotMessageStore do
   def messages_succeeded_returning_messages(consumer, ack_ids) do
     consumer
     |> partitions()
-    |> Enum.reduce_while({:ok, []}, fn partition, {:ok, acc_messages} ->
+    |> Enum.reduce_while({:ok, [], []}, fn partition, {:ok, acc_messages, acc_ack_ids} ->
       case GenServer.call(via_tuple(consumer.id, partition), {:messages_succeeded, ack_ids, true}) do
-        {:ok, messages} -> {:cont, {:ok, acc_messages ++ messages}}
+        {:ok, messages, ack_ids} -> {:cont, {:ok, acc_messages ++ messages, acc_ack_ids ++ ack_ids}}
         error -> {:halt, error}
       end
     end)
+    |> case do
+      {:ok, messages, ack_ids} ->
+        Consumers.ack_messages(consumer, ack_ids)
+        {:ok, messages}
+
+      {:error, error} ->
+        {:error, error}
+    end
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -268,15 +276,31 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @impl SlotMessageStoreBehaviour
   def messages_succeeded(_consumer, []), do: {:ok, 0}
 
-  def messages_succeeded(consumer, ack_ids) do
+  def messages_succeeded(consumer, consumer_messages) do
+    ack_ids_by_partition = Enum.group_by(consumer_messages, &message_partition(&1, consumer.partition_count), & &1.ack_id)
+
     consumer
     |> partitions()
-    |> Enum.reduce_while({:ok, 0}, fn partition, {:ok, acc_count} ->
-      case GenServer.call(via_tuple(consumer.id, partition), {:messages_succeeded, ack_ids, false}) do
-        {:ok, count} -> {:cont, {:ok, acc_count + count}}
-        error -> {:halt, error}
+    |> Enum.reduce_while({:ok, 0, []}, fn partition, {:ok, acc_count, acc_ack_ids} ->
+      case Map.get(ack_ids_by_partition, partition, []) do
+        [] ->
+          {:cont, {:ok, acc_count, acc_ack_ids}}
+
+        ack_ids ->
+          case GenServer.call(via_tuple(consumer.id, partition), {:messages_succeeded, ack_ids, false}) do
+            {:ok, count, ack_ids} -> {:cont, {:ok, acc_count + count, acc_ack_ids ++ ack_ids}}
+            error -> {:halt, error}
+          end
       end
     end)
+    |> case do
+      {:ok, count, ack_ids} ->
+        Consumers.ack_messages(consumer, ack_ids)
+        {:ok, count}
+
+      {:error, error} ->
+        {:error, error}
+    end
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -288,15 +312,31 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @impl SlotMessageStoreBehaviour
   def messages_already_succeeded(_consumer, []), do: :ok
 
-  def messages_already_succeeded(consumer, ack_ids) do
+  def messages_already_succeeded(consumer, consumer_messages) do
+    ack_ids_by_partition = Enum.group_by(consumer_messages, &message_partition(&1, consumer.partition_count), & &1.ack_id)
+
     consumer
     |> partitions()
-    |> Enum.reduce_while({:ok, 0}, fn partition, {:ok, acc_count} ->
-      case GenServer.call(via_tuple(consumer.id, partition), {:messages_already_succeeded, ack_ids}) do
-        {:ok, count} -> {:cont, {:ok, count + acc_count}}
-        error -> {:halt, error}
+    |> Enum.reduce_while({:ok, 0, []}, fn partition, {:ok, acc_count, acc_ack_ids} ->
+      case Map.get(ack_ids_by_partition, partition, []) do
+        [] ->
+          {:cont, {:ok, acc_count, acc_ack_ids}}
+
+        ack_ids ->
+          case GenServer.call(via_tuple(consumer.id, partition), {:messages_already_succeeded, ack_ids}) do
+            {:ok, count, ack_ids} -> {:cont, {:ok, count + acc_count, acc_ack_ids ++ ack_ids}}
+            error -> {:halt, error}
+          end
       end
     end)
+    |> case do
+      {:ok, count, ack_ids} ->
+        Consumers.ack_messages(consumer, ack_ids)
+        {:ok, count}
+
+      {:error, error} ->
+        {:error, error}
+    end
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -566,7 +606,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   @decorate track_metrics("messages_succeeded_noop")
   def handle_call({:messages_succeeded, [], _return_messages?}, _from, state) do
-    {:reply, {:ok, 0}, state}
+    {:reply, {:ok, 0, []}, state}
   end
 
   @decorate track_metrics("messages_succeeded")
@@ -575,18 +615,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
 
-    persisted_messages_to_drop =
+    ack_ids_to_ack =
       state
       |> State.peek_messages(cursor_tuples)
       |> Enum.filter(&State.message_persisted?(state, &1))
+      |> Enum.map(& &1.ack_id)
 
     {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
-
-    if persisted_messages_to_drop == [] do
-      :ok
-    else
-      :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
-    end
 
     maybe_finish_table_reader_batch(prev_state, state)
 
@@ -596,10 +631,10 @@ defmodule Sequin.Runtime.SlotMessageStore do
     Sequin.ProcessMetrics.gauge("message_count", map_size(state.messages))
 
     if return_messages? do
-      {:reply, {:ok, dropped_messages}, state}
+      {:reply, {:ok, dropped_messages, ack_ids_to_ack}, state}
     else
       # Optionally, avoid returning full messages (more CPU/memory intensive)
-      {:reply, {:ok, length(dropped_messages)}, state}
+      {:reply, {:ok, length(dropped_messages), ack_ids_to_ack}, state}
     end
   end
 
@@ -614,16 +649,15 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
 
-    persisted_messages_to_drop =
+    ack_ids_to_ack =
       state
       |> State.peek_messages(cursor_tuples)
       |> Enum.filter(&State.message_persisted?(state, &1))
+      |> Enum.map(& &1.ack_id)
 
     {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
     count = length(dropped_messages)
-
-    :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
     maybe_finish_table_reader_batch(prev_state, state)
 
@@ -632,7 +666,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     Sequin.ProcessMetrics.increment_throughput("messages_already_succeeded", count)
     Sequin.ProcessMetrics.gauge("message_count", map_size(state.messages))
 
-    {:reply, {:ok, count}, state}
+    {:reply, {:ok, count, ack_ids_to_ack}, state}
   end
 
   @decorate track_metrics("messages_failed")
@@ -659,14 +693,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {discarded_messages, messages} =
       maybe_discard_messages(messages, state.consumer.max_retry_count)
 
-    state = State.put_persisted_messages(state, messages)
-
     Sequin.ProcessMetrics.increment_throughput("messages_failed", length(messages))
     Sequin.ProcessMetrics.increment_throughput("messages_discarded", length(discarded_messages))
     Sequin.ProcessMetrics.gauge("message_count", map_size(state.messages))
 
     with :ok <- handle_discarded_messages(state, discarded_messages),
          :ok <- upsert_messages(state, messages) do
+      state = State.put_persisted_messages(state, messages)
       maybe_finish_table_reader_batch(prev_state, state)
       {:reply, :ok, state}
     else

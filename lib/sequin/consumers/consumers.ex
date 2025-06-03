@@ -588,6 +588,8 @@ defmodule Sequin.Consumers do
     |> Stream.map(&module.deserialize/1)
   end
 
+  @spec upsert_consumer_messages(SinkConsumer.t(), list(ConsumerEvent.t()) | list(ConsumerRecord.t())) ::
+          {:ok, non_neg_integer()}
   def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
     case consumer.message_kind do
       :event -> upsert_consumer_events(messages)

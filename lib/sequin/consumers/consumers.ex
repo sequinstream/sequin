@@ -588,9 +588,7 @@ defmodule Sequin.Consumers do
     |> Stream.map(&module.deserialize/1)
   end
 
-  @spec upsert_consumer_messages(SinkConsumer.t(), list(ConsumerEvent.t()) | list(ConsumerRecord.t())) ::
-          {:ok, list(ConsumerEvent.t()) | list(ConsumerRecord.t())}
-  def(upsert_consumer_messages(%SinkConsumer{} = consumer, messages)) do
+  def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
     case consumer.message_kind do
       :event -> upsert_consumer_events(messages)
       :record -> upsert_consumer_records(messages)
@@ -614,16 +612,15 @@ defmodule Sequin.Consumers do
       end)
 
     # insert_all expects a plain outer-map, but struct embeds
-    {_count, events} =
+    {count, _events} =
       Repo.insert_all(
         ConsumerEvent,
         events,
         on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: [:consumer_id, :ack_id],
-        returning: true
+        conflict_target: [:consumer_id, :ack_id]
       )
 
-    {:ok, Enum.map(events, &ConsumerEvent.deserialize/1)}
+    {:ok, count}
   end
 
   @exponential_backoff_max :timer.minutes(10)
@@ -741,16 +738,15 @@ defmodule Sequin.Consumers do
         |> drop_virtual_fields()
       end)
 
-    {_count, records} =
+    {count, _records} =
       Repo.insert_all(
         ConsumerRecord,
         records,
         on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: [:consumer_id, :ack_id],
-        returning: true
+        conflict_target: [:consumer_id, :ack_id]
       )
 
-    {:ok, Enum.map(records, &ConsumerRecord.deserialize/1)}
+    {:ok, count}
   end
 
   # Consumer Lifecycle

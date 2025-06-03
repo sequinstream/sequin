@@ -785,7 +785,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "cursor_tuples_to_flush/1" do
+  describe "messages_to_flush/1" do
     test "returns old unpersisted messages", %{state: state} do
       now = DateTime.utc_now()
       past = DateTime.add(now, -2000, :millisecond)
@@ -803,10 +803,10 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       stub_utc_now(fn -> now end)
 
       # Only old message should be returned
-      cursor_tuples_to_flush = State.cursor_tuples_to_flush(state)
-      assert length(cursor_tuples_to_flush) == 1
-      [{commit_lsn, commit_idx}] = cursor_tuples_to_flush
-      assert {commit_lsn, commit_idx} == {old_msg.commit_lsn, old_msg.commit_idx}
+      messages_to_flush = State.messages_to_flush(state)
+      assert length(messages_to_flush) == 1
+      [msg] = messages_to_flush
+      assert {msg.commit_lsn, msg.commit_idx} == {old_msg.commit_lsn, old_msg.commit_idx}
     end
 
     test "excludes persisted messages regardless of age", %{state: state} do
@@ -829,10 +829,10 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       stub_utc_now(fn -> now end)
 
       # Only unpersisted old message should be returned
-      cursor_tuples_to_flush = State.cursor_tuples_to_flush(state)
-      assert length(cursor_tuples_to_flush) == 1
-      [{commit_lsn, commit_idx}] = cursor_tuples_to_flush
-      assert {commit_lsn, commit_idx} == {old_unpersisted_msg.commit_lsn, old_unpersisted_msg.commit_idx}
+      messages_to_flush = State.messages_to_flush(state)
+      assert length(messages_to_flush) == 1
+      [msg] = messages_to_flush
+      assert {msg.commit_lsn, msg.commit_idx} == {old_unpersisted_msg.commit_lsn, old_unpersisted_msg.commit_idx}
     end
 
     test "returns messages in order", %{state: state} do
@@ -852,16 +852,15 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       sorted = Enum.sort_by(msgs, fn m -> {m.commit_lsn, m.commit_idx} end)
 
       # Messages returned in order
-      cursor_tuples1 = State.cursor_tuples_to_flush(state, 1)
-      assert [{1, 0}] == cursor_tuples1
-      state = State.put_persisted_messages(state, [Enum.at(sorted, 0)])
+      msgs1 = State.messages_to_flush(state, 1)
+      assert [Enum.at(sorted, 0)] == msgs1
+      state = State.put_persisted_messages(state, msgs1)
 
-      cursor_tuples2 = State.cursor_tuples_to_flush(state, 1)
-      assert [{1, 1}] == cursor_tuples2
-      state = State.put_persisted_messages(state, [Enum.at(sorted, 1)])
+      msgs2 = State.messages_to_flush(state, 1)
+      assert [Enum.at(sorted, 1)] == msgs2
+      state = State.put_persisted_messages(state, msgs2)
 
-      rest = State.cursor_tuples_to_flush(state)
-      assert [{2, 3}, {4, 0}, {8, 8}, {9, 0}] == rest
+      assert Enum.drop(sorted, 2) == State.messages_to_flush(state)
     end
   end
 

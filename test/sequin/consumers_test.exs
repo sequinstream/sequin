@@ -2364,8 +2364,9 @@ defmodule Sequin.ConsumersTest do
       consumer = ConsumersFactory.insert_sink_consumer!()
       msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      assert {:ok, [inserted_msg]} = Consumers.upsert_consumer_messages(consumer, [msg])
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
 
+      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       assert inserted_msg.ack_id == msg.ack_id
     end
 
@@ -2374,8 +2375,9 @@ defmodule Sequin.ConsumersTest do
       msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
       msg = put_in(msg.data.record["date_field"], Date.utc_today())
 
-      assert {:ok, [inserted_msg]} = Consumers.upsert_consumer_messages(consumer, [msg])
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
 
+      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       assert %Date{} = inserted_msg.data.record["date_field"]
     end
 
@@ -2390,8 +2392,9 @@ defmodule Sequin.ConsumersTest do
         | not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
       }
 
-      assert {:ok, [updated_msg]} = Consumers.upsert_consumer_messages(consumer, [updated_attrs])
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [updated_attrs])
 
+      assert [updated_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       refute updated_msg.not_visible_until == existing_msg.not_visible_until
     end
   end

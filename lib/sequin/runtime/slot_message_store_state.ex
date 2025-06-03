@@ -500,8 +500,8 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   This helps prevent slot advancement from being blocked by slow message processing (often
   due to slow group processing or sequin stream syncs.)
   """
-  @spec cursor_tuples_to_flush(State.t(), non_neg_integer()) :: list(message())
-  def cursor_tuples_to_flush(%State{} = state, limit \\ 2000) do
+  @spec messages_to_flush(State.t(), non_neg_integer()) :: list(message())
+  def messages_to_flush(%State{} = state, limit \\ 2000) do
     now = Sequin.utc_now()
     age_threshold = DateTime.add(now, -state.message_age_before_flush_ms, :millisecond)
 
@@ -510,7 +510,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     |> sorted_message_stream()
     |> Stream.reject(&message_persisted?(state, &1))
     |> Stream.filter(&DateTime.before?(&1.ingested_at, age_threshold))
-    |> Stream.map(fn msg -> {msg.commit_lsn, msg.commit_idx} end)
     |> Enum.take(limit)
   end
 

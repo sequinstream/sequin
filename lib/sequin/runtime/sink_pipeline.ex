@@ -381,6 +381,7 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   defp ack_successful(consumer, slot_message_store_mod, successful) do
     successful_messages = Enum.map(successful, & &1.data)
+    successful_ack_ids = Enum.map(successful_messages, & &1.ack_id)
 
     # Mark wal_cursors as delivered
     wal_cursors =
@@ -389,7 +390,7 @@ defmodule Sequin.Runtime.SinkPipeline do
     :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
     :ok = MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "consumer_producer.ack", wal_cursors)
 
-    case slot_message_store_mod.messages_succeeded(consumer, successful_messages) do
+    case slot_message_store_mod.messages_succeeded(consumer, successful_ack_ids) do
       {:ok, _count} -> :ok
       {:error, error} -> raise error
     end
@@ -493,7 +494,7 @@ defmodule Sequin.Runtime.SinkPipeline do
         message_count: length(already_delivered)
       )
 
-      slot_message_store_mod.messages_already_succeeded(consumer, Enum.map(already_delivered, & &1.data))
+      slot_message_store_mod.messages_already_succeeded(consumer, Enum.map(already_delivered, & &1.data.ack_id))
 
       {to_deliver, already_delivered}
     end

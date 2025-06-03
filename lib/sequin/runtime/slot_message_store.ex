@@ -260,15 +260,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
         error -> {:halt, error}
       end
     end)
-    |> case do
-      {:ok, messages} ->
-        persisted_ack_ids = messages |> Stream.filter(& &1.inserted_at) |> Enum.map(& &1.ack_id)
-        Consumers.ack_messages(consumer, persisted_ack_ids)
-        {:ok, messages}
-
-      {:error, error} ->
-        {:error, error}
-    end
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -277,32 +268,15 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @impl SlotMessageStoreBehaviour
   def messages_succeeded(_consumer, []), do: {:ok, 0}
 
-  def messages_succeeded(consumer, consumer_messages) do
-    ack_ids_by_partition = Enum.group_by(consumer_messages, &message_partition(&1, consumer.partition_count), & &1.ack_id)
-
+  def messages_succeeded(consumer, ack_ids) do
     consumer
     |> partitions()
     |> Enum.reduce_while({:ok, 0}, fn partition, {:ok, acc_count} ->
-      case Map.get(ack_ids_by_partition, partition, []) do
-        [] ->
-          {:cont, {:ok, acc_count}}
-
-        ack_ids ->
-          case GenServer.call(via_tuple(consumer.id, partition), {:messages_succeeded, ack_ids, false}) do
-            {:ok, count} -> {:cont, {:ok, acc_count + count}}
-            error -> {:halt, error}
-          end
+      case GenServer.call(via_tuple(consumer.id, partition), {:messages_succeeded, ack_ids, false}) do
+        {:ok, count} -> {:cont, {:ok, acc_count + count}}
+        error -> {:halt, error}
       end
     end)
-    |> case do
-      {:ok, count} ->
-        persisted_ack_ids = consumer_messages |> Stream.filter(& &1.inserted_at) |> Enum.map(& &1.ack_id)
-        Consumers.ack_messages(consumer, persisted_ack_ids)
-        {:ok, count}
-
-      {:error, error} ->
-        {:error, error}
-    end
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -314,32 +288,15 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @impl SlotMessageStoreBehaviour
   def messages_already_succeeded(_consumer, []), do: :ok
 
-  def messages_already_succeeded(consumer, consumer_messages) do
-    ack_ids_by_partition = Enum.group_by(consumer_messages, &message_partition(&1, consumer.partition_count), & &1.ack_id)
-
+  def messages_already_succeeded(consumer, ack_ids) do
     consumer
     |> partitions()
     |> Enum.reduce_while({:ok, 0}, fn partition, {:ok, acc_count} ->
-      case Map.get(ack_ids_by_partition, partition, []) do
-        [] ->
-          {:cont, {:ok, acc_count}}
-
-        ack_ids ->
-          case GenServer.call(via_tuple(consumer.id, partition), {:messages_already_succeeded, ack_ids}) do
-            {:ok, count} -> {:cont, {:ok, count + acc_count}}
-            error -> {:halt, error}
-          end
+      case GenServer.call(via_tuple(consumer.id, partition), {:messages_already_succeeded, ack_ids}) do
+        {:ok, count} -> {:cont, {:ok, count + acc_count}}
+        error -> {:halt, error}
       end
     end)
-    |> case do
-      {:ok, count} ->
-        persisted_ack_ids = consumer_messages |> Stream.filter(& &1.inserted_at) |> Enum.map(& &1.ack_id)
-        Consumers.ack_messages(consumer, persisted_ack_ids)
-        {:ok, count}
-
-      {:error, error} ->
-        {:error, error}
-    end
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -548,17 +505,16 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     {to_persist, to_put} = Enum.split_with(messages, &State.message_group_persisted?(state, &1.table_oid, &1.group_id))
 
-    case State.put_table_reader_batch(state, to_put, batch_id) do
-      {:ok, state} ->
-        persisted_messages = upsert_messages(state, to_persist)
-        state = State.put_persisted_messages(state, persisted_messages)
-        Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
-        :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
+    with {:ok, state} <- State.put_table_reader_batch(state, to_put, batch_id),
+         :ok <- upsert_messages(state, to_persist) do
+      state = State.put_persisted_messages(state, to_persist)
+      Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
+      :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
 
-        Sequin.ProcessMetrics.increment_throughput("table_reader_batch_messages", length(messages))
-        Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
-        {:reply, :ok, state}
-
+      Sequin.ProcessMetrics.increment_throughput("table_reader_batch_messages", length(messages))
+      Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
+      {:reply, :ok, state}
+    else
       error ->
         {:reply, error, state}
     end
@@ -703,17 +659,17 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {discarded_messages, messages} =
       maybe_discard_messages(messages, state.consumer.max_retry_count)
 
+    state = State.put_persisted_messages(state, messages)
+
     Sequin.ProcessMetrics.increment_throughput("messages_failed", length(messages))
     Sequin.ProcessMetrics.increment_throughput("messages_discarded", length(discarded_messages))
     Sequin.ProcessMetrics.gauge("message_count", map_size(state.messages))
 
-    case handle_discarded_messages(state, discarded_messages) do
-      :ok ->
-        persisted_messages = upsert_messages(state, messages)
-        state = State.put_persisted_messages(state, persisted_messages)
-        maybe_finish_table_reader_batch(prev_state, state)
-        {:reply, :ok, state}
-
+    with :ok <- handle_discarded_messages(state, discarded_messages),
+         :ok <- upsert_messages(state, messages) do
+      maybe_finish_table_reader_batch(prev_state, state)
+      {:reply, :ok, state}
+    else
       error ->
         {:reply, error, state}
     end
@@ -802,20 +758,19 @@ defmodule Sequin.Runtime.SlotMessageStore do
       start_time = System.monotonic_time(:millisecond)
 
       batch_size = flush_batch_size()
-      cursor_tuples = State.cursor_tuples_to_flush(state, batch_size)
+      messages = State.messages_to_flush(state, batch_size)
 
       state =
-        if length(cursor_tuples) > 0 do
-          {messages, state} = State.pop_messages(state, cursor_tuples)
-
+        if length(messages) > 0 do
           Logger.warning(
             "[SlotMessageStore] Flushing #{length(messages)} old messages to allow slot advancement",
             consumer_id: state.consumer_id,
             partition: state.partition
           )
 
-          persisted_messages = upsert_messages(state, messages)
-          state = State.put_persisted_messages(state, persisted_messages)
+          upsert_messages(state, messages)
+
+          state = State.put_persisted_messages(state, messages)
 
           if state.test_pid do
             send(state.test_pid, {:flush_messages_done, state.consumer_id})
@@ -839,7 +794,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
         end
 
       # Flush again immediately we are likely to have more work to do
-      schedule_flush_check(if length(cursor_tuples) == batch_size, do: 0, else: state.flush_interval)
+      schedule_flush_check(if length(messages) == batch_size, do: 0, else: state.flush_interval)
 
       {:noreply, state}
     end)
@@ -900,8 +855,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     {:ok, state} = State.put_messages(state, to_put)
 
-    persisted_messages = upsert_messages(state, to_persist)
-    state = State.put_persisted_messages(state, persisted_messages)
+    :ok = upsert_messages(state, to_persist)
+    state = State.put_persisted_messages(state, to_persist)
 
     Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
     :syn.publish(:consumers, {:messages_maybe_available, state.consumer.id}, :messages_maybe_available)
@@ -966,19 +921,17 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @decorate track_metrics("upsert_messages")
-  defp upsert_messages(%State{}, []), do: []
+  defp upsert_messages(%State{}, []), do: :ok
 
   @decorate track_metrics("upsert_messages")
   defp upsert_messages(%State{} = state, messages) do
     messages
     # This value is calculated based on the number of parameters in our consumer_events/consumer_records
     # upserts and the Postgres limit of 65535 parameters per query.
-    |> Stream.chunk_every(2_000)
-    |> Stream.flat_map(fn chunk ->
-      {:ok, messages} = Consumers.upsert_consumer_messages(state.consumer, chunk)
-      messages
+    |> Enum.chunk_every(2_000)
+    |> Enum.each(fn chunk ->
+      {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, chunk)
     end)
-    |> Enum.map(fn msg -> %{msg | payload_size_bytes: :erlang.external_size(msg.data)} end)
   end
 
   defp stream_messages_into_state(%State{} = state) do

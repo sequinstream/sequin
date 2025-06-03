@@ -1005,6 +1005,33 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       # Assert direct HTTP request was NOT made
       refute_received {:direct_http_req, _}
     end
+
+    test "batches sqs messages", %{consumer: consumer} do
+      test_pid = self()
+
+      # Stub AWS HTTP client for SQS
+      Req.Test.stub(HttpClient, fn %Plug.Conn{} = conn ->
+        send(test_pid, {:aws_req, conn})
+
+        # Mock successful SQS response
+        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "test-msg-id"}]})
+      end)
+
+      # Create multiple events for the batch
+      event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+      event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:direct_http_req, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+      ref = send_test_batch(consumer, [event1, event2])
+
+      # Assert that the messages succeeded in a batch
+      assert_receive {:ack, ^ref, [_msg1, _msg2], []}, 1_000
+    end
   end
 
   defp start_pipeline!(consumer, adapter, opts \\ []) do

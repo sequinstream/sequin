@@ -212,7 +212,8 @@
       showUpdateDialog = true;
     } else {
       clearMessageFieldsLocalStorage();
-      clearAllFunctionCodeStorage();
+      clearFunctionCodeStorage(form.id);
+      clearFunctionTypeStorage();
       saving = true;
       pushEvent("save", { function: form }, () => {
         saving = false;

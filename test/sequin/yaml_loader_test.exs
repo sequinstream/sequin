@@ -1064,6 +1064,166 @@ defmodule Sequin.YamlLoaderTest do
       assert %SequinStreamSink{} = consumer.sink
     end
 
+    test "creates sink consumer with schema filter" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "schema-consumer"
+                   database: "test-db"
+                   schema: "public"
+                   destination:
+                     type: "sequin_stream"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, [:sequence])
+
+      assert consumer.name == "schema-consumer"
+      assert is_nil(consumer.sequence)
+      assert is_nil(consumer.sequence_filter)
+      assert consumer.schema_filter.schema == "public"
+      assert %SequinStreamSink{} = consumer.sink
+    end
+
+    test "creates webhook subscription with schema filter" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "schema-webhook-consumer"
+                   database: "test-db"
+                   schema: "public"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, [:sequence])
+
+      assert consumer.name == "schema-webhook-consumer"
+      assert is_nil(consumer.sequence)
+      assert is_nil(consumer.sequence_filter)
+      assert consumer.schema_filter.schema == "public"
+      assert consumer.sink.type == :http_push
+    end
+
+    @tag :skip
+    test "updates sink consumer from table to schema filter" do
+      # First create consumer with table
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "update-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "sequin_stream"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, [:sequence])
+      assert consumer.sequence.name == "test-db.public.Characters"
+      assert is_nil(consumer.schema_filter)
+
+      # Now update to use schema filter
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "update-consumer"
+                   database: "test-db"
+                   schema: "public"
+                   destination:
+                     type: "sequin_stream"
+               """)
+
+      assert [updated_consumer] = Repo.all(SinkConsumer)
+      updated_consumer = Repo.preload(updated_consumer, [:sequence])
+      assert is_nil(updated_consumer.sequence)
+      assert is_nil(updated_consumer.sequence_filter)
+      assert updated_consumer.schema_filter.schema == "public"
+    end
+
+    @tag :skip
+    test "updates sink consumer from schema to table filter" do
+      # First create consumer with schema
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "reverse-update-consumer"
+                   database: "test-db"
+                   schema: "public"
+                   destination:
+                     type: "sequin_stream"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, [:sequence])
+      assert is_nil(consumer.sequence)
+      assert consumer.schema_filter.schema == "public"
+
+      # Now update to use table filter
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "reverse-update-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "sequin_stream"
+               """)
+
+      assert [updated_consumer] = Repo.all(SinkConsumer)
+      updated_consumer = Repo.preload(updated_consumer, [:sequence])
+      assert updated_consumer.sequence.name == "test-db.public.Characters"
+      assert is_nil(updated_consumer.schema_filter)
+    end
+
+    test "fails when both schema and table are specified" do
+      assert_raise RuntimeError, ~r/Cannot specify both `schema` and `table`/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_db_and_sequence_yml()}
+
+        sinks:
+          - name: "invalid-consumer"
+            database: "test-db"
+            schema: "public"
+            table: "Characters"
+            destination:
+              type: "sequin_stream"
+        """)
+      end
+    end
+
+    test "fails when neither schema nor table are specified" do
+      assert_raise RuntimeError, ~r/Failed to apply config:/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_db_and_sequence_yml()}
+
+        sinks:
+          - name: "invalid-consumer"
+            database: "test-db"
+            destination:
+              type: "sequin_stream"
+        """)
+      end
+    end
+
     test "creates kafka sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""

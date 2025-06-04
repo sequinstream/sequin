@@ -39,8 +39,15 @@
   import {
     saveFunctionCodeToStorage,
     loadFunctionCodeFromStorage,
-    clearAllFunctionCodeStorage,
+    clearFunctionCodeStorage,
   } from "./functionLocalStorage";
+  import {
+    saveFunctionTypeToStorage,
+    saveSinkTypeToStorage,
+    loadFunctionTypeFromStorage,
+    loadSinkTypeFromStorage,
+    clearFunctionTypeStorage,
+  } from "./functionTypeStorage";
   import type {
     FormData,
     FormErrors,
@@ -96,6 +103,8 @@
     function: { ...formData.function },
     modified_test_messages: { ...formData.modified_test_messages },
   };
+  let persistedCode = form.function.code;
+  let isCodeModified = false;
 
   let isEditing = form.id !== null;
   let initialFormState = JSON.stringify(form);
@@ -208,40 +217,50 @@
 
   function handleTypeSelect(event: any) {
     form.function.type = event.value;
+    if (!isEditing) {
+      saveFunctionTypeToStorage(event.value);
+    }
     loadStoredOrInitialCode();
   }
 
   function handleRoutingSinkTypeSelect(event: any) {
     form.function.sink_type = event.value;
+    if (!isEditing) {
+      saveSinkTypeToStorage(event.value);
+    }
     loadStoredOrInitialCode();
   }
 
+  function checkIfCodeModified(code: string) {
+    isCodeModified = persistedCode !== code;
+  }
+
   function loadStoredOrInitialCode() {
-    if (!isEditing) {
-      const storedCode = loadFunctionCodeFromStorage(
+    const storedCode = loadFunctionCodeFromStorage(
+      form.function.type,
+      form.function.sink_type,
+      form.id,
+    );
+    if (storedCode) {
+      // Load stored code
+      form.function.code = storedCode;
+      checkIfCodeModified(storedCode);
+    } else if (form.id == null && form.function.type) {
+      // Load initial code
+      const newInitialCode = initialCodeFor(
         form.function.type,
         form.function.sink_type,
       );
-      if (storedCode) {
-        // Load stored code
-        form.function.code = storedCode;
-      } else {
-        // Load initial code
-        const newInitialCode = initialCodeFor(
-          form.function.type,
-          form.function.sink_type,
-        );
-        form.function.code = newInitialCode;
-      }
-
-      functionEditorView.dispatch({
-        changes: {
-          from: 0,
-          to: functionEditorView.state.doc.length,
-          insert: form.function.code,
-        },
-      });
+      form.function.code = newInitialCode;
     }
+
+    functionEditorView.dispatch({
+      changes: {
+        from: 0,
+        to: functionEditorView.state.doc.length,
+        insert: form.function.code,
+      },
+    });
   }
 
   function handleDelete() {
@@ -310,15 +329,6 @@
 
   // let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
   // let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
-
-  function maybeSetInitialCode() {
-    if (form.id == null && form.function.type) {
-      form.function.code = initialCodeFor(
-        form.function.type,
-        form.function.sink_type,
-      );
-    }
-  }
 
   function initialCodeFor(type: string, sinkType: string | null) {
     const key = type + (type === "routing" ? "_" + sinkType : "");
@@ -425,6 +435,12 @@
       const typeParam = urlParams.get("type");
       if (typeParam && functionInternalToExternal[typeParam]) {
         form.function.type = typeParam;
+      } else {
+        // Try to load from storage if not in URL params
+        const storedType = loadFunctionTypeFromStorage();
+        if (storedType && functionInternalToExternal[storedType]) {
+          form.function.type = storedType;
+        }
       }
 
       const sinkTypeParam = urlParams.get("sink_type");
@@ -434,6 +450,12 @@
         sinkTypeInternalToExternal[sinkTypeParam]
       ) {
         form.function.sink_type = sinkTypeParam;
+      } else if (form.function.type === "routing") {
+        // Try to load from storage if not in URL params
+        const storedSinkType = loadSinkTypeFromStorage();
+        if (storedSinkType && sinkTypeInternalToExternal[storedSinkType]) {
+          form.function.sink_type = storedSinkType;
+        }
       }
     }
 
@@ -445,9 +467,7 @@
       handleTableSelectCombobox(selectedDatabase.tables[0]);
     }
 
-    maybeSetInitialCode();
-
-    // Initialize CodeMirror for function function if it exists
+    // Initialize CodeMirror for function if it exists
     const startState = EditorState.create({
       doc: form.function.code || "",
       extensions: [
@@ -457,8 +477,10 @@
         keymap.of([indentWithTab]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            form.function.code = update.state.doc.toString();
+            const code = update.state.doc.toString();
+            form.function.code = code;
             saveFunctionCodeToStorage(form);
+            checkIfCodeModified(code);
           }
         }),
       ],
@@ -468,6 +490,8 @@
       state: startState,
       parent: functionEditorElement,
     });
+
+    loadStoredOrInitialCode();
 
     return () => {
       functionEditorView.destroy();
@@ -527,7 +551,8 @@ Please help me create or modify the Elixir function transform to achieve the des
 
   function handleClose() {
     clearMessageFieldsLocalStorage();
-    clearAllFunctionCodeStorage();
+    clearFunctionCodeStorage(form.id);
+    clearFunctionTypeStorage();
     pushEvent("form_closed");
   }
 
@@ -844,6 +869,12 @@ Please help me create or modify the Elixir function transform to achieve the des
                         </div>
                       </PopoverContent>
                     </Popover>
+                    {#if isCodeModified && isEditing}
+                      <span
+                        class="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-0 rounded-full font-medium"
+                        >unsaved</span
+                      >
+                    {/if}
                     <a
                       href="https://sequinstream.com/docs/reference/transforms#function-transform"
                       target="_blank"

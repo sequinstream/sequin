@@ -1,11 +1,9 @@
 import type { FormData } from "./types";
 
 const KEY_PREFIX = "function_code";
-function getStorageKey(type: string, sinkType?: string) {
-  if (type === "routing") {
-    return `${KEY_PREFIX}_${type}_${sinkType}`;
-  }
-  return `${KEY_PREFIX}_${type}`;
+function getStorageKey(type: string, sinkType?: string, id?: string) {
+  const keyFragment = type === "routing" ? `${type}_${sinkType}` : `${type}`;
+  return `${KEY_PREFIX}_${id}__${keyFragment}`;
 }
 
 export function saveFunctionCodeToStorage(form: FormData) {
@@ -16,20 +14,25 @@ export function saveFunctionCodeToStorage(form: FormData) {
   ) {
     return;
   }
-  const key = getStorageKey(form.function.type, form.function.sink_type);
+  const key = getStorageKey(
+    form.function.type,
+    form.function.sink_type,
+    form.id,
+  );
   localStorage.setItem(key, form.function.code);
 }
 
 export function loadFunctionCodeFromStorage(
   type: string,
   sinkType?: string,
+  id?: string,
 ): string | null {
-  const key = getStorageKey(type, sinkType);
+  const key = getStorageKey(type, sinkType, id);
   return localStorage.getItem(key);
 }
 
-export function clearAllFunctionCodeStorage() {
+export function clearFunctionCodeStorage(id?: string) {
   Object.keys(localStorage)
-    .filter((key) => key.startsWith(`${KEY_PREFIX}_`))
+    .filter((key) => key.startsWith(`${KEY_PREFIX}_${id}`))
     .forEach((key) => localStorage.removeItem(key));
 }

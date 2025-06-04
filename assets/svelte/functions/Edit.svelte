@@ -11,12 +11,11 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import * as Command from "$lib/components/ui/command";
-  import { Check, ChevronsUpDown } from "lucide-svelte";
+  import { Check, ChevronsUpDown, Info, BookText, Trash2 } from "lucide-svelte";
   import { cn } from "$lib/utils";
   import { tick } from "svelte";
   import { Label } from "$lib/components/ui/label";
   import { onMount, onDestroy } from "svelte";
-  import { Info, BookText } from "lucide-svelte";
   import FunctionTransformSnippet from "$lib/mdx/function-transform-snippet.mdx";
   import {
     Popover,
@@ -65,6 +64,12 @@
   import { keymap } from "@codemirror/view";
   import { indentWithTab } from "@codemirror/commands";
   import { autocompletion } from "@codemirror/autocomplete";
+
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+  } from "$lib/components/ui/tooltip";
 
   export let formData: FormData;
   export let formErrors: FormErrors = {};
@@ -232,7 +237,15 @@
   }
 
   function checkIfCodeModified(code: string) {
-    isCodeModified = persistedCode !== code;
+    if (isEditing) {
+      isCodeModified = persistedCode !== code;
+    } else {
+      const initialCode = initialCodeFor(
+        form.function.type,
+        form.function.sink_type,
+      );
+      isCodeModified = initialCode !== code;
+    }
   }
 
   function loadStoredOrInitialCode() {
@@ -556,6 +569,25 @@ Please help me create or modify the Elixir function transform to achieve the des
     pushEvent("form_closed");
   }
 
+  function resetOriginalCode() {
+    if (isEditing) {
+      form.function.code = persistedCode;
+    } else {
+      form.function.code = initialCodeFor(
+        form.function.type,
+        form.function.sink_type,
+      );
+    }
+    functionEditorView.dispatch({
+      changes: {
+        from: 0,
+        to: functionEditorView.state.doc.length,
+        insert: form.function.code,
+      },
+    });
+    isCodeModified = false;
+  }
+
   // Clean up timeout on component destroy
   onDestroy(() => {
     if (copyTimeout) {
@@ -869,12 +901,6 @@ Please help me create or modify the Elixir function transform to achieve the des
                         </div>
                       </PopoverContent>
                     </Popover>
-                    {#if isCodeModified && isEditing}
-                      <span
-                        class="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-0 rounded-full font-medium"
-                        >unsaved</span
-                      >
-                    {/if}
                     <a
                       href="https://sequinstream.com/docs/reference/transforms#function-transform"
                       target="_blank"
@@ -885,8 +911,32 @@ Please help me create or modify the Elixir function transform to achieve the des
                   </div>
                   <div
                     bind:this={functionEditorElement}
-                    class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden"
-                  ></div>
+                    class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden relative"
+                  >
+                    <div
+                      class="absolute bottom-2 right-2 flex items-center gap-2 z-10"
+                    >
+                      {#if isCodeModified}
+                        <span
+                          class="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded-full font-medium select-none"
+                          >modified</span
+                        >
+                      {/if}
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <button
+                            type="button"
+                            class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            on:click={resetOriginalCode}
+                            disabled={!isCodeModified}
+                          >
+                            <Trash2 class="w-4 h-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Reset to original code</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
 
                   <p
                     class="-mb-2 min-h-10 text-sm text-red-500 dark:text-red-400"

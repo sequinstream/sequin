@@ -2485,6 +2485,7 @@ defmodule Sequin.ConsumersTest do
             table_name: "test_table",
             commit_timestamp: now,
             commit_lsn: 123_456,
+            commit_idx: 1,
             consumer: %{
               id: consumer.id,
               name: consumer.name

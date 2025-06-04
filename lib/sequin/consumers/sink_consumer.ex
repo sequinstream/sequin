@@ -339,25 +339,28 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> DateTime.compare(now) == :lt
   end
 
-  def preload_http_endpoint(%HttpPushSink{http_endpoint: nil} = sink) do
+  def preload_http_endpoint!(%HttpPushSink{http_endpoint: nil} = sink) do
     http_endpoint = Consumers.get_http_endpoint!(sink.http_endpoint_id)
     %{sink | http_endpoint: http_endpoint}
   end
 
-  def preload_http_endpoint(%SinkConsumer{sink: %HttpPushSink{http_endpoint: nil}} = consumer) do
-    %{consumer | sink: preload_http_endpoint(consumer.sink)}
+  def preload_http_endpoint!(%SinkConsumer{sink: %HttpPushSink{http_endpoint: nil}} = consumer) do
+    %{consumer | sink: preload_http_endpoint!(consumer.sink)}
   end
 
-  def preload_http_endpoint(consumer), do: consumer
+  def preload_http_endpoint!(consumer), do: consumer
 
   def preload_cached_http_endpoint(%HttpPushSink{http_endpoint: nil} = sink) do
-    http_endpoint = Consumers.get_cached_http_endpoint!(sink.http_endpoint_id)
-    %{sink | http_endpoint: http_endpoint}
+    with {:ok, http_endpoint} <- Consumers.get_cached_http_endpoint(sink.http_endpoint_id) do
+      {:ok, %{sink | http_endpoint: http_endpoint}}
+    end
   end
 
   def preload_cached_http_endpoint(%SinkConsumer{sink: %HttpPushSink{http_endpoint: nil}} = consumer) do
-    %{consumer | sink: preload_cached_http_endpoint(consumer.sink)}
+    with {:ok, sink} <- preload_cached_http_endpoint(consumer.sink) do
+      {:ok, %{consumer | sink: sink}}
+    end
   end
 
-  def preload_cached_http_endpoint(consumer), do: consumer
+  def preload_cached_http_endpoint(consumer), do: {:ok, consumer}
 end

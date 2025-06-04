@@ -178,7 +178,7 @@ defmodule Sequin.YamlLoader do
     sink_consumers =
       account_id
       |> Consumers.list_sink_consumers_for_account(sequence: [:postgres_database])
-      |> Enum.map(&SinkConsumer.preload_http_endpoint/1)
+      |> Enum.map(&SinkConsumer.preload_http_endpoint!/1)
 
     [account | users] ++ databases ++ wal_pipelines ++ http_endpoints ++ functions ++ sink_consumers
   end

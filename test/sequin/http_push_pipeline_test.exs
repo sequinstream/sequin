@@ -834,6 +834,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
               table_schema: "public",
               commit_timestamp: timestamp,
               commit_lsn: 123_456,
+              commit_idx: 0,
               database_name: "postgres",
               consumer: %{
                 id: consumer.id,

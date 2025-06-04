@@ -1585,6 +1585,7 @@ defmodule Sequin.Consumers do
           table_name: "characters",
           commit_timestamp: DateTime.utc_now(),
           commit_lsn: 309_018_972_104,
+          commit_idx: 0,
           database_name: "dune",
           transaction_annotations: nil,
           consumer: %Metadata.Sink{

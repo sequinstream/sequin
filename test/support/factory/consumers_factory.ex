@@ -514,6 +514,7 @@ defmodule Sequin.Factory.ConsumersFactory do
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
           commit_lsn: Factory.unique_integer(),
+          commit_idx: Factory.unique_integer(),
           consumer: %ConsumerEventData.Metadata.Sink{
             id: Factory.uuid(),
             name: Factory.word(),

@@ -265,7 +265,22 @@ defmodule Sequin.TransformsTest do
                  type: "gcp_pubsub",
                  project_id: project_id,
                  topic_id: topic_id,
-                 credentials: "(credentials present) - sha256sum: " <> _
+                 credentials: %{
+                   type: "service_account",
+                   private_key: "********",
+                   api_key: nil,
+                   client_id: "********",
+                   client_secret: nil,
+                   project_id: "my-project",
+                   auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+                   auth_uri: "https://accounts.google.com/o/oauth2/auth",
+                   client_email: "********",
+                   client_x509_cert_url:
+                     "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com",
+                   private_key_id: "********",
+                   token_uri: "https://oauth2.googleapis.com/token",
+                   universe_domain: nil
+                 }
                },
                group_column_names: group_column_names,
                filters: filters

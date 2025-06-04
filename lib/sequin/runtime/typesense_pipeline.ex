@@ -6,6 +6,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Typesense.Client
+  alias Sequin.Transforms.Message
 
   require Logger
 
@@ -61,7 +62,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
     external_messages =
       Enum.map(messages, fn %{data: data} ->
         consumer
-        |> Sequin.Transforms.Message.to_external(data)
+        |> Message.to_external(data)
         |> ensure_id_string()
       end)
 
@@ -70,7 +71,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
         {:ok, messages, context}
 
       [message] ->
-        case Client.index_document(client, sink.collection_name, message) do
+        case Client.index_document(consumer, client, sink.collection_name, message) do
           {:ok, _response} ->
             {:ok, messages, context}
 
@@ -81,7 +82,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
       _ ->
         jsonl = encode_as_jsonl(external_messages)
 
-        case Client.import_documents(client, sink.collection_name, jsonl) do
+        case Client.import_documents(consumer, client, sink.collection_name, jsonl) do
           {:error, error} ->
             {:error, error}
 
@@ -102,17 +103,24 @@ defmodule Sequin.Runtime.TypesensePipeline do
   @impl SinkPipeline
   def handle_batch(:delete, messages, _batch_info, context) do
     %{
-      consumer: %SinkConsumer{sink: sink},
+      consumer: %SinkConsumer{sink: sink} = consumer,
       typesense_client: client,
       test_pid: test_pid
     } = context
 
     setup_allowances(test_pid)
 
-    case messages do
-      [%{data: dd}] ->
-        if document_id = dd.data.record["id"] do
-          case Client.delete_document(client, sink.collection_name, document_id) do
+    external_messages =
+      Enum.map(messages, fn %{data: data} ->
+        consumer
+        |> Message.to_external(data)
+        |> ensure_id_string()
+      end)
+
+    case external_messages do
+      [external_message] ->
+        if document_id = external_message["id"] do
+          case Client.delete_document(consumer, client, sink.collection_name, document_id) do
             {:ok, _response} ->
               {:ok, messages, context}
 

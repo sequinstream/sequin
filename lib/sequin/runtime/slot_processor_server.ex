@@ -1227,7 +1227,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp process_message(%State{} = state, %Message{} = msg) do
     state =
-      if is_logical_message_table_upsert?(state, msg) do
+      if logical_message_table_upsert?(state, msg) do
         content = Enum.find(msg.fields, fn field -> field.column_name == "content" end)
         handle_logical_message_content(state, content.value)
       else
@@ -1284,14 +1284,14 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     state
   end
 
-  defp is_logical_message_table_upsert?(%State{postgres_database: %{pg_major_version: pg_major_version}}, %Message{
+  defp logical_message_table_upsert?(%State{postgres_database: %{pg_major_version: pg_major_version}}, %Message{
          table_name: @logical_message_table_name
        })
        when pg_major_version < 14 do
     true
   end
 
-  defp is_logical_message_table_upsert?(%State{}, %Message{}), do: false
+  defp logical_message_table_upsert?(%State{}, %Message{}), do: false
 
   defp handle_logical_message_content(%State{} = state, content) do
     case Jason.decode(content) do
@@ -1619,34 +1619,37 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       state.replication_slot
       |> Sequin.Repo.preload(:not_disabled_sink_consumers, force: true)
       |> Map.fetch!(:not_disabled_sink_consumers)
+      # Filter out sink consumers that have been inserted in the last 10 minutes
+      |> Enum.filter(&DateTime.before?(&1.inserted_at, DateTime.add(Sequin.utc_now(), -10, :minute)))
       |> Enum.map(& &1.id)
-      |> Enum.sort()
 
-    monitored_sink_consumer_ids = Enum.sort(Map.keys(state.message_store_refs))
+    monitored_sink_consumer_ids = Map.keys(state.message_store_refs)
 
     %MessageHandler.Context{consumers: message_handler_consumers} = state.message_handler_ctx
-    message_handler_sink_consumer_ids = Enum.sort(Enum.map(message_handler_consumers, & &1.id))
+    message_handler_sink_consumer_ids = Enum.map(message_handler_consumers, & &1.id)
 
     cond do
-      sink_consumer_ids != message_handler_sink_consumer_ids ->
-        {:error,
-         Error.invariant(
-           message: """
-           Sink consumer IDs do not match message handler sink consumer IDs.
-           Sink consumers: #{inspect(sink_consumer_ids)}.
-           Message handler: #{inspect(message_handler_sink_consumer_ids)}
-           """
-         )}
+      not Enum.all?(sink_consumer_ids, &(&1 in message_handler_sink_consumer_ids)) ->
+        msg = """
+        Sink consumer IDs do not match message handler sink consumer IDs.
+        Sink consumers: #{inspect(sink_consumer_ids)}.
+        Message handler: #{inspect(message_handler_sink_consumer_ids)}
+        """
 
-      sink_consumer_ids != monitored_sink_consumer_ids ->
-        {:error,
-         Error.invariant(
-           message: """
-           Sink consumer IDs do not match monitored sink consumer IDs.
-           Sink consumers: #{inspect(sink_consumer_ids)}.
-           Monitored: #{inspect(monitored_sink_consumer_ids)}
-           """
-         )}
+        Logger.error(msg)
+
+        {:error, Error.invariant(message: msg)}
+
+      not Enum.all?(sink_consumer_ids, &(&1 in monitored_sink_consumer_ids)) ->
+        msg = """
+        Sink consumer IDs do not match monitored sink consumer IDs.
+        Sink consumers: #{inspect(sink_consumer_ids)}.
+        Monitored: #{inspect(monitored_sink_consumer_ids)}
+        """
+
+        Logger.error(msg)
+
+        {:error, Error.invariant(message: msg)}
 
       true ->
         :ok

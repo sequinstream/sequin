@@ -73,15 +73,18 @@ defmodule SequinWeb.DatabasesLive.Show do
   end
 
   defp apply_action(socket, :show, _params) do
-    assign(socket, :page_title, "Show Database")
+    %{database: database} = socket.assigns
+    assign(socket, :page_title, "#{database.name} | Sequin")
   end
 
   defp apply_action(socket, :edit, _params) do
-    assign(socket, :page_title, "Edit Database")
+    %{database: database} = socket.assigns
+    assign(socket, :page_title, "#{database.name} | Edit | Sequin")
   end
 
   defp apply_action(socket, :messages, _params) do
-    assign(socket, :page_title, "Messages")
+    %{database: database} = socket.assigns
+    assign(socket, :page_title, "#{database.name} | Messages | Sequin")
   end
 
   @impl Phoenix.LiveView
@@ -200,7 +203,9 @@ defmodule SequinWeb.DatabasesLive.Show do
   end
 
   def handle_info(:postgres_replication_slot_checked, socket) do
-    {:noreply, assign_health(socket)}
+    socket = socket |> assign_health() |> assign_metrics()
+
+    {:noreply, socket}
   end
 
   @impl Phoenix.LiveView

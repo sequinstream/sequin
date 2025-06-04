@@ -48,7 +48,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
       consumer: nil,
       receive_timer: nil,
       trim_timer: nil,
-      batch_timeout: Keyword.get(opts, :batch_timeout, :timer.minutes(1)),
+      batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
       test_pid: test_pid,
       scheduled_handle_demand: false,
       slot_message_store_mod: slot_message_store_mod
@@ -80,6 +80,8 @@ defmodule Sequin.Runtime.ConsumerProducer do
       state.consumer_id
       |> Consumers.get_consumer!()
       |> Repo.preload(postgres_database: [:replication_slot])
+
+    Logger.metadata(replication_slot_id: consumer.replication_slot.id)
 
     state =
       state

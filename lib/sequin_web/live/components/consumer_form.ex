@@ -11,6 +11,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -161,7 +162,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> maybe_put_replication_slot_id(socket)
 
     res =
-      if is_edit?(socket) do
+      if edit?(socket) do
         update_consumer(socket, params)
       else
         create_consumer(socket, params)
@@ -181,7 +182,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     consumer = socket.assigns.consumer
 
     socket =
-      if is_edit?(socket) do
+      if edit?(socket) do
         push_navigate(socket, to: RouteHelpers.consumer_path(consumer))
       else
         push_navigate(socket, to: ~p"/sinks")
@@ -262,6 +263,12 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       :sns ->
         case test_sns_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
+
+      :kinesis ->
+        case test_kinesis_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
@@ -347,6 +354,28 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       case Sequin.Aws.SNS.topic_meta(client, sink.topic_arn) do
         :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
+  defp test_kinesis_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %KinesisSink{} = sink -> KinesisSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+      client = KinesisSink.aws_client(sink)
+
+      case Sequin.Aws.Kinesis.describe_stream(client, sink.stream_arn) do
+        {:ok, _} -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
@@ -634,6 +663,15 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp decode_sink(:kinesis, sink) do
+    %{
+      "type" => "kinesis",
+      "stream_arn" => sink["stream_arn"],
+      "access_key_id" => sink["access_key_id"],
+      "secret_access_key" => sink["secret_access_key"]
+    }
+  end
+
   defp decode_sink(:kafka, sink) do
     %{
       "type" => "kafka",
@@ -852,6 +890,15 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp encode_sink(%KinesisSink{} = sink) do
+    %{
+      "type" => "kinesis",
+      "stream_arn" => sink.stream_arn,
+      "access_key_id" => sink.access_key_id,
+      "secret_access_key" => sink.secret_access_key
+    }
+  end
+
   defp encode_sink(%KafkaSink{} = sink) do
     %{
       "type" => "kafka",
@@ -1013,7 +1060,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "schema" => table.schema,
       "name" => table.name,
       "default_group_columns" => default_group_columns,
-      "is_event_table" => Postgres.is_event_table?(table),
+      "is_event_table" => Postgres.event_table?(table),
       "columns" => Enum.map(table.columns, &encode_column/1)
     }
   end
@@ -1252,7 +1299,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp is_edit?(socket) do
+  defp edit?(socket) do
     not is_nil(socket.assigns.consumer) and not is_nil(socket.assigns.consumer.id)
   end
 
@@ -1265,6 +1312,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :redis_string -> "Redis String Sink"
       :sqs -> "SQS Sink"
       :sns -> "SNS Sink"
+      :kinesis -> "Kinesis Sink"
       :sequin_stream -> "Sequin Stream Sink"
       :gcp_pubsub -> "GCP Pub/Sub Sink"
       :nats -> "NATS Sink"
@@ -1300,6 +1348,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         :http_push -> {%HttpPushSink{}, %{}}
         :sqs -> {%SqsSink{}, %{batch_size: 10}}
         :sns -> {%SnsSink{}, %{batch_size: 10}}
+        :kinesis -> {%KinesisSink{}, %{batch_size: 10}}
         :kafka -> {%KafkaSink{tls: false}, %{batch_size: 10}}
         :redis_stream -> {%RedisStreamSink{}, %{batch_size: 10}}
         :sequin_stream -> {%SequinStreamSink{}, %{}}

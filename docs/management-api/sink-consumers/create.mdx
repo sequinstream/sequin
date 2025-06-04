@@ -70,6 +70,21 @@ Creates a new sink consumer.
     </ParamField>
   </Expandable>
 
+  <Expandable title="Kinesis">
+    <ParamField body="type" type="string" required>
+      Must be "kinesis"
+    </ParamField>
+    <ParamField body="stream_arm" type="string" required>
+      Kinesis stream ARN
+    </ParamField>
+    <ParamField body="access_key_id" type="string" required>
+      AWS access key ID
+    </ParamField>
+    <ParamField body="secret_access_key" type="string" required>
+      AWS secret access key
+    </ParamField>
+  </Expandable>
+
   <Expandable title="RabbitMQ">
     <ParamField body="type" type="string" required>
       Must be "rabbitmq"

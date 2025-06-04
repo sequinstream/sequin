@@ -2,6 +2,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Aws.HttpClient
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
@@ -111,7 +112,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :update)
 
       # Set batch size to 2
-      consumer = %{consumer | batch_size: 2}
+      Consumers.update_sink_consumer(consumer, %{batch_size: 2})
 
       adapter = fn %Req.Request{} = req ->
         assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
@@ -182,12 +183,15 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 200)}
       end
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       event = %ConsumerEvent{event | payload_size_bytes: 1000}
       SlotMessageStore.put_messages(consumer, [event])
 
       # Start the pipeline
-      start_supervised!({SinkPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+      start_supervised!({SinkPipeline, [consumer_id: consumer.id, req_opts: [adapter: adapter], test_pid: test_pid]})
 
       # Verify that no HTTP request was made since the message was rejected
       refute_receive {:http_request, _req}, 200
@@ -221,7 +225,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 200)}
       end
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       event1 = %ConsumerEvent{event1 | payload_size_bytes: 1000}
       event2 = %ConsumerEvent{event2 | payload_size_bytes: 1000}
       SlotMessageStore.put_messages(consumer, [event1, event2])
@@ -370,7 +377,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised({SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer, [consumer_event])
 
       # Start the pipeline
@@ -433,7 +440,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised({SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer, [consumer_event])
 
       # Start the pipeline
@@ -487,7 +494,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 500)}
       end
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self()]})
+      start_supervised!({SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self()]})
 
       expect_uuid4(fn -> event1.ack_id end)
       expect_uuid4(fn -> event2.ack_id end)
@@ -540,7 +547,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert :ok = MessageLedgers.wal_cursors_ingested(consumer.id, [wal_cursor])
       assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [event])
 
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
@@ -619,7 +629,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           }
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
       # Start the pipeline
@@ -682,7 +695,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           }
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
       # Start the pipeline
@@ -735,7 +751,10 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [record])
 
       # Start the pipeline with legacy_event_transform feature enabled
@@ -815,6 +834,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
               table_schema: "public",
               commit_timestamp: timestamp,
               commit_lsn: 123_456,
+              commit_idx: 0,
               database_name: "postgres",
               consumer: %{
                 id: consumer.id,
@@ -986,6 +1006,33 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       # Assert direct HTTP request was NOT made
       refute_received {:direct_http_req, _}
     end
+
+    test "batches sqs messages", %{consumer: consumer} do
+      test_pid = self()
+
+      # Stub AWS HTTP client for SQS
+      Req.Test.stub(HttpClient, fn %Plug.Conn{} = conn ->
+        send(test_pid, {:aws_req, conn})
+
+        # Mock successful SQS response
+        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "test-msg-id"}]})
+      end)
+
+      # Create multiple events for the batch
+      event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+      event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:direct_http_req, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+      ref = send_test_batch(consumer, [event1, event2])
+
+      # Assert that the messages succeeded in a batch
+      assert_receive {:ack, ^ref, [_msg1, _msg2], []}, 1_000
+    end
   end
 
   defp start_pipeline!(consumer, adapter, opts \\ []) do
@@ -994,7 +1041,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
     opts =
       Keyword.merge(
         [
-          consumer: consumer,
+          consumer_id: consumer.id,
           req_opts: [adapter: adapter],
           test_pid: self()
         ],

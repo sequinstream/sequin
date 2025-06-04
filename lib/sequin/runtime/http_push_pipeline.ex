@@ -7,6 +7,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Error.ServiceError
@@ -58,6 +59,21 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     else
       context
     end
+  end
+
+  @impl SinkPipeline
+  def batchers_config(%SinkConsumer{sink: %HttpPushSink{via_sqs: false}}) do
+    []
+  end
+
+  def batchers_config(%SinkConsumer{sink: %HttpPushSink{via_sqs: true}}) do
+    [
+      default: [
+        concurrency: min(System.schedulers_online() * 2, 80),
+        batch_size: 10,
+        batch_timeout: 50
+      ]
+    ]
   end
 
   # Helper function to create AWS SQS client

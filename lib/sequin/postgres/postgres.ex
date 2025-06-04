@@ -42,8 +42,8 @@ defmodule Sequin.Postgres do
   @doc """
   Checks if the given table is an event table by verifying it has all the required columns.
   """
-  @spec is_event_table?(PostgresDatabaseTable.t()) :: boolean()
-  def is_event_table?(%PostgresDatabaseTable{} = table) do
+  @spec event_table?(PostgresDatabaseTable.t()) :: boolean()
+  def event_table?(%PostgresDatabaseTable{} = table) do
     required_column_names = MapSet.new(@event_table_columns, & &1.name)
     table_column_names = MapSet.new(table.columns, & &1.name)
     MapSet.subset?(required_column_names, table_column_names)
@@ -58,7 +58,7 @@ defmodule Sequin.Postgres do
   """
   @spec event_table_version(PostgresDatabaseTable.t()) :: {:ok, :v0 | :"v3.28.25"} | {:error, Error.t()}
   def event_table_version(%PostgresDatabaseTable{} = table) do
-    if is_event_table?(table) do
+    if event_table?(table) do
       has_transaction_annotations = Enum.any?(table.columns, &(&1.name == "transaction_annotations"))
       if has_transaction_annotations, do: {:ok, :"v3.28.25"}, else: {:ok, :v0}
     else
@@ -269,7 +269,7 @@ defmodule Sequin.Postgres do
 
   # Helper function to cast values using Ecto's type system
   def cast_value(value, "uuid") do
-    if Sequin.String.is_uuid?(value) do
+    if Sequin.String.uuid?(value) do
       Sequin.String.string_to_binary!(value)
     else
       value
@@ -526,7 +526,11 @@ defmodule Sequin.Postgres do
         {:ok, nil}
 
       {:ok, %{rows: []}} ->
-        {:error, Error.not_found(entity: :replication_slot, params: %{name: db.replication_slot})}
+        {:error,
+         Error.not_found(
+           entity: :replication_slot,
+           params: %{name: db.replication_slot.slot_name, id: db.replication_slot.id}
+         )}
 
       {:error, _} = error ->
         error

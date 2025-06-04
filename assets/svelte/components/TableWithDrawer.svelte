@@ -105,10 +105,7 @@
       <div
         class="w-full bg-white border border-gray-300 rounded-lg p-6 text-center space-y-2 min-h-96 flex flex-col items-center justify-center"
       >
-        <h1 class="text-2xl font-bold">No Items</h1>
-        <h2 class="text-gray-600">
-          <slot name="emptyState" />
-        </h2>
+        <slot name="emptyState" />
       </div>
     {:else}
       <div class="w-full overflow-hidden">

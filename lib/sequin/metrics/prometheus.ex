@@ -218,23 +218,29 @@ defmodule Sequin.Prometheus do
   end
 
   def ecto_event([:sequin, :repo, :query], measurements, metadata, _config) do
-    # IO.inspect(measurements, label: "measurements")
     lbls = [String.slice(metadata.query, 0, 100)]
 
-    Histogram.observe([name: :sequin_repo_query_query, labels: lbls], measurements.query_time)
-    Histogram.observe([name: :sequin_repo_query_total, labels: lbls], measurements.total_time)
+    case Map.fetch(measurements, :query_time) do
+      {:ok, t} -> Histogram.observe([name: :sequin_repo_query_query, labels: lbls], t)
+      _ -> nil
+    end
 
-    case Map.fetch(metadata, :idle_time) do
+    case Map.fetch(measurements, :total_time) do
+      {:ok, t} -> Histogram.observe([name: :sequin_repo_query_total, labels: lbls], t)
+      _ -> nil
+    end
+
+    case Map.fetch(measurements, :idle_time) do
       {:ok, t} -> Histogram.observe([name: :sequin_repo_query_idle, labels: lbls], t)
       _ -> nil
     end
 
-    case Map.fetch(metadata, :decode_time) do
+    case Map.fetch(measurements, :decode_time) do
       {:ok, t} -> Histogram.observe([name: :sequin_repo_query_decode, labels: lbls], t)
       _ -> nil
     end
 
-    case Map.fetch(metadata, :queue_time) do
+    case Map.fetch(measurements, :queue_time) do
       {:ok, t} -> Histogram.observe([name: :sequin_repo_query_queue, labels: lbls], t)
       _ -> nil
     end

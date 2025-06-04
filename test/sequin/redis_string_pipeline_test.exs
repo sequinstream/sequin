@@ -157,7 +157,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
     start_supervised!(
       {SinkPipeline,
        [
-         consumer: consumer,
+         consumer_id: consumer.id,
          producer: Broadway.DummyProducer,
          test_pid: self()
        ]}

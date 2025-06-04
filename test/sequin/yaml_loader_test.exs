@@ -10,6 +10,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SequenceFilter
@@ -397,7 +398,7 @@ defmodule Sequin.YamlLoaderTest do
       assert endpoint.scheme == :https
       assert endpoint.host == "webhook.site"
       assert "/" <> uuid = endpoint.path
-      assert Sequin.String.is_uuid?(uuid)
+      assert Sequin.String.uuid?(uuid)
     end
 
     test "creates local endpoint" do
@@ -1157,6 +1158,36 @@ defmodule Sequin.YamlLoaderTest do
                type: :sns,
                topic_arn: "arn:aws:sns:us-west-2:123456789012:MyTopic",
                region: "us-west-2",
+               access_key_id: "AKIAXXXXXXXXXXXXXXXX",
+               secret_access_key: "secret123"
+             } = consumer.sink
+    end
+
+    test "creates kinesis sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "kinesis-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "kinesis"
+                     stream_arn: "arn:aws:kinesis:us-west-2:1:stream/test"
+                     access_key_id: "AKIAXXXXXXXXXXXXXXXX"
+                     secret_access_key: "secret123"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "kinesis-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      assert %KinesisSink{
+               type: :kinesis,
+               stream_arn: "arn:aws:kinesis:us-west-2:1:stream/test",
                access_key_id: "AKIAXXXXXXXXXXXXXXXX",
                secret_access_key: "secret123"
              } = consumer.sink

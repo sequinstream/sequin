@@ -2,7 +2,7 @@
 
 Sequin provides fast, real-time Postgres change data capture into streams and queues.
 
-This log is organized by week to track our feature releases and updates.
+This log is organized by week to track our feature releases and updates. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
 ## Week of March 31, 2025 
 

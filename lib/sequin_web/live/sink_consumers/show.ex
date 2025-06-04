@@ -18,6 +18,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
@@ -126,8 +127,32 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         _ -> true
       end
 
-    socket = assign(socket, :show_acked, show_acked)
+    socket =
+      socket
+      |> assign(:show_acked, show_acked)
+      |> apply_action(socket.assigns.live_action)
+
     {:noreply, socket}
+  end
+
+  defp apply_action(socket, :show) do
+    %{consumer: consumer} = socket.assigns
+    assign(socket, :page_title, "#{consumer.name} | Sequin")
+  end
+
+  defp apply_action(socket, :messages) do
+    %{consumer: consumer} = socket.assigns
+    assign(socket, :page_title, "#{consumer.name} | Messages | Sequin")
+  end
+
+  defp apply_action(socket, :trace) do
+    %{consumer: consumer} = socket.assigns
+    assign(socket, :page_title, "#{consumer.name} | Trace | Sequin")
+  end
+
+  defp apply_action(socket, _) do
+    %{consumer: consumer} = socket.assigns
+    assign(socket, :page_title, "#{consumer.name} | Sequin")
   end
 
   @impl Phoenix.LiveView
@@ -464,7 +489,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         :toast_columns_detected -> :alert_toast_columns_detected_dismissed
         :invalid_transaction_annotation_received -> :invalid_transaction_annotation_received_dismissed
         :load_shedding_policy_discarded -> :load_shedding_policy_discarded_dismissed
-        :sqs_delivery_failed -> :sqs_delivery_failed_dismissed
       end
 
     Health.put_event(consumer, %Health.Event{slug: event_slug})
@@ -585,24 +609,29 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
+  # If the trace is paused, don't add any more events
+  def handle_info({:trace_event, _event}, %{assigns: %{trace: %{paused: true}}} = socket) do
+    {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
+  # If the live action is not :trace, don't add any more events
+  def handle_info({:trace_event, _event}, %{assigns: %{live_action: live_action}} = socket) when live_action != :trace do
+    {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
   def handle_info({:trace_event, event}, socket) do
-    paused? = socket.assigns.trace.paused
-    over_limit? = length(socket.assigns.trace.events) >= socket.assigns.trace.event_limit
+    trace = socket.assigns.trace
+    events = [event | trace.events]
+    total_count = length(events)
+    to_pause? = total_count >= trace.event_limit
 
-    if socket.assigns.live_action == :trace and not paused? and not over_limit? do
-      trace = socket.assigns.trace
-      events = [event | trace.events]
-      total_count = length(events)
-      to_pause? = total_count >= trace.event_limit
-
-      if to_pause? do
-        Trace.unsubscribe(socket.assigns.consumer.id)
-      end
-
-      {:noreply, assign(socket, trace: %{trace | events: events, total_count: total_count, paused: to_pause?})}
-    else
-      {:noreply, socket}
+    if to_pause? do
+      Trace.unsubscribe(socket.assigns.consumer.id)
     end
+
+    {:noreply, assign(socket, trace: %{trace | events: events, total_count: total_count, paused: to_pause?})}
   end
 
   defp initial_trace do
@@ -737,6 +766,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       topic_arn: sink.topic_arn,
       region: sink.region,
       is_fifo: sink.is_fifo
+    }
+  end
+
+  defp encode_sink(%SinkConsumer{sink: %KinesisSink{} = sink}) do
+    %{
+      type: :kinesis,
+      stream_arn: sink.stream_arn
     }
   end
 
@@ -1320,6 +1356,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :redis_string}}), do: "Redis String Sink"
   defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"
   defp consumer_title(%{sink: %{type: :sns}}), do: "SNS Sink"
+  defp consumer_title(%{sink: %{type: :kinesis}}), do: "Kinesis Sink"
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"
   defp consumer_title(%{sink: %{type: :typesense}}), do: "Typesense Sink"
 
@@ -1498,17 +1535,17 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     )
   end
 
-  defp maybe_augment_alert(%{error_slug: :sqs_delivery_failed} = check, _consumer) do
+  defp maybe_augment_alert(%{error_slug: :http_via_sqs_delivery} = check, _consumer) do
     Map.merge(
       check,
       %{
         alertTitle: "Notice: Webhooks failed to deliver after being pulled from SQS",
         alertMessage: """
         This sink is configured to send payloads to SQS, and then pull async to deliver.
-        At least one message has failed to actually deliver to the destination.
+        At least one message is failing to actually deliver to the destination.
         """,
         refreshable: false,
-        dismissable: true
+        dismissable: false
       }
     )
   end

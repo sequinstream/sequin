@@ -70,7 +70,7 @@ defmodule Sequin.Posthog do
   end
 
   defp post(body, opts) do
-    unless is_disabled(opts) do
+    unless disabled?(opts) do
       body
       |> base_req(opts)
       |> Req.run()
@@ -78,7 +78,7 @@ defmodule Sequin.Posthog do
   end
 
   defp async_post(body, opts) do
-    unless is_disabled(opts) do
+    unless disabled?(opts) do
       Task.Supervisor.start_child(Sequin.TaskSupervisor, fn ->
         body
         |> base_req(opts)
@@ -87,7 +87,7 @@ defmodule Sequin.Posthog do
     end
   end
 
-  defp is_disabled(opts) do
+  defp disabled?(opts) do
     cond do
       Keyword.get(opts, :is_disabled, false) -> true
       is_nil(Keyword.get(opts, :api_key)) -> true

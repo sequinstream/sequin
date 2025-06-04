@@ -57,7 +57,9 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
@@ -129,7 +131,9 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
@@ -217,8 +221,13 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer1, test_pid: self(), persisted_mode?: false]})
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer2, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer1.id, test_pid: self(), persisted_mode?: false]}
+      )
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer2.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       consumer1 = Repo.preload(consumer1, [:postgres_database, :sequence, :filter])
       consumer2 = Repo.preload(consumer2, [:postgres_database, :sequence, :filter])
@@ -286,8 +295,13 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer1, test_pid: self(), persisted_mode?: false]})
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer2, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer1.id, test_pid: self(), persisted_mode?: false]}
+      )
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer2.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       consumer1 = Repo.preload(consumer1, [:postgres_database, :sequence, :filter])
       consumer2 = Repo.preload(consumer2, [:postgres_database, :sequence, :filter])
@@ -353,7 +367,9 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
@@ -376,8 +392,11 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 456)
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
+      consumer = Repo.preload(consumer, :sequence)
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       database = Repo.preload(consumer, postgres_database: :sequences).postgres_database
 
@@ -428,7 +447,9 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
@@ -462,8 +483,11 @@ defmodule Sequin.MessageHandlerTest do
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
+      consumer = Repo.preload(consumer, :sequence)
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       # Ensure the message has a non-matching field for the filter
       field = ReplicationFactory.field(column_attnum: 1, value: "not_test")
@@ -655,7 +679,9 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
@@ -716,7 +742,9 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
@@ -955,7 +983,10 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
 
       database = Repo.preload(database, :sequences)
 

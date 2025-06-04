@@ -52,7 +52,7 @@ apply_config() {
     echo "CONFIG_FILE_YAML environment variable found, decoding and piping to application"
     echo "${CONFIG_FILE_YAML}" \
         | base64 -d \
-        | sequin config interpolate - \
+        | sequin config interpolate -- - \
         | ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply_from_stdin!"
     echo "Config applied from environment variable"
     unset CONFIG_FILE_YAML

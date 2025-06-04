@@ -117,7 +117,7 @@ defmodule Sequin.RoutingTest do
       start_supervised!(
         {SinkPipeline,
          [
-           consumer: consumer,
+           consumer_id: consumer.id,
            req_opts: [adapter: adapter],
            producer: Broadway.DummyProducer,
            test_pid: test_pid

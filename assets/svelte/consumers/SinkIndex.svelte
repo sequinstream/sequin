@@ -21,6 +21,7 @@
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
   import SnsIcon from "../sinks/sns/SnsIcon.svelte";
+  import KinesisIcon from "../sinks/kinesis/KinesisIcon.svelte";
   import RedisIcon from "../sinks/redis_shared/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
@@ -35,6 +36,7 @@
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
+  import { pageStore } from "../stores/pageStore";
 
   export let consumers: Array<{
     id: string;
@@ -44,6 +46,7 @@
       | "http_push"
       | "sqs"
       | "sns"
+      | "kinesis"
       | "redis_stream"
       | "kafka"
       | "gcp_pubsub"
@@ -93,6 +96,11 @@
       id: "sns",
       name: "Amazon SNS",
       icon: SnsIcon,
+    },
+    {
+      id: "kinesis",
+      name: "Amazon Kinesis",
+      icon: KinesisIcon,
     },
     {
       id: "redis_stream",
@@ -147,6 +155,8 @@
   ];
 
   function handleConsumerClick(id: string, type: string) {
+    // Store current page before navigation
+    pageStore.set(page.toString());
     live.pushEvent("consumer_clicked", { id, type });
   }
 
@@ -358,46 +368,48 @@
           {/each}
         {:else}
           {#each consumers as consumer}
-            <Table.Row
-              on:click={() => handleConsumerClick(consumer.id, consumer.type)}
-              class="cursor-pointer"
-            >
-              <Table.Cell class="w-8">
-                {#each sinks.filter((d) => d.id === consumer.type) as dest}
-                  <svelte:component this={dest.icon} class="h-6 w-6" />
-                {/each}
-              </Table.Cell>
-              <Table.Cell class="w-32">{consumer.name}</Table.Cell>
-              <Table.Cell class="w-24">
-                <div class="flex items-center gap-2">
-                  {#if consumer.status === "paused"}
-                    <Badge variant="warning">
-                      <Pause class="h-4 w-4 mr-1" />
-                      <span>Paused</span>
-                    </Badge>
-                  {:else if consumer.status === "disabled"}
-                    <Badge variant="secondary">
-                      <StopCircle class="h-4 w-4 mr-1" />
-                      <span>Disabled</span>
-                    </Badge>
-                  {:else}
-                    <HealthPill status={consumer.health.status} />
-                  {/if}
-                  {#if consumer.active_backfill}
-                    <Badge variant="secondary">
-                      <ArrowDownSquare class="h-4 w-4 mr-1" />
-                      <span>Backfilling</span>
-                    </Badge>
-                  {/if}
-                </div>
-              </Table.Cell>
-              <Table.Cell class="w-40">{consumer.database_name}</Table.Cell>
-              <Table.Cell class="w-48">
-                <div use:bindChartElement={consumer.id} class="w-48 h-8" />
-              </Table.Cell>
-              <Table.Cell class="w-24"
-                >{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
+            <Table.Row class="cursor-pointer">
+              <LinkPatchNavigate
+                href={`/sinks/${consumer.type}/${consumer.id}`}
+                class="contents"
               >
+                <Table.Cell class="w-8">
+                  {#each sinks.filter((d) => d.id === consumer.type) as dest}
+                    <svelte:component this={dest.icon} class="h-6 w-6" />
+                  {/each}
+                </Table.Cell>
+                <Table.Cell class="w-32">{consumer.name}</Table.Cell>
+                <Table.Cell class="w-24">
+                  <div class="flex items-center gap-2">
+                    {#if consumer.status === "paused"}
+                      <Badge variant="warning">
+                        <Pause class="h-4 w-4 mr-1" />
+                        <span>Paused</span>
+                      </Badge>
+                    {:else if consumer.status === "disabled"}
+                      <Badge variant="secondary">
+                        <StopCircle class="h-4 w-4 mr-1" />
+                        <span>Disabled</span>
+                      </Badge>
+                    {:else}
+                      <HealthPill status={consumer.health.status} />
+                    {/if}
+                    {#if consumer.active_backfill}
+                      <Badge variant="secondary">
+                        <ArrowDownSquare class="h-4 w-4 mr-1" />
+                        <span>Backfilling</span>
+                      </Badge>
+                    {/if}
+                  </div>
+                </Table.Cell>
+                <Table.Cell class="w-40">{consumer.database_name}</Table.Cell>
+                <Table.Cell class="w-48">
+                  <div use:bindChartElement={consumer.id} class="w-48 h-8" />
+                </Table.Cell>
+                <Table.Cell class="w-24"
+                  >{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
+                >
+              </LinkPatchNavigate>
             </Table.Row>
           {/each}
         {/if}

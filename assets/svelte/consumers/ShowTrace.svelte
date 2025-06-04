@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import { Switch } from "$lib/components/ui/switch";
   import { Play, Pause, Loader2 } from "lucide-svelte";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
 
@@ -108,12 +107,12 @@
 
   function formatRequest(req: any): string {
     if (!req) return "";
-    return `${req.method} ${req.url}\nHeaders: ${JSON.stringify(req.headers, null, 2)}\nBody: ${JSON.stringify(req.body, null, 2)}`;
+    return `${req.method} ${req.url}\n\nHeaders: ${JSON.stringify(req.headers, null, 2)}\n\nBody: ${JSON.stringify(req.body, null, 2)}`;
   }
 
   function formatResponse(resp: any): string {
     if (!resp) return "";
-    return `Status: ${resp.status}\nHeaders: ${JSON.stringify(resp.headers, null, 2)}\nBody: ${JSON.stringify(resp.body, null, 2)}`;
+    return `Status: ${resp.status}\n\nHeaders: ${JSON.stringify(resp.headers, null, 2)}\n\nBody: ${JSON.stringify(resp.body, null, 2)}`;
   }
 
   function formatError(error: any): string {
@@ -154,8 +153,19 @@
   </svelte:fragment>
 
   <svelte:fragment slot="emptyState">
-    No trace events yet. Hit "Start trace" then wait for messages to flow
-    through this sink.
+    {#if paused}
+      <h1 class="text-2xl font-bold">No Trace Events</h1>
+      <h2 class="text-gray-600">
+        No trace events yet. Hit "Start Trace" then wait for messages to flow
+        through this sink.
+      </h2>
+    {:else}
+      <h1 class="text-2xl font-bold">No Trace Events</h1>
+      <div class="flex items-center gap-2 text-gray-600">
+        <Loader2 class="h-5 w-5 animate-spin" />
+        <h2>Waiting for trace events...</h2>
+      </div>
+    {/if}
   </svelte:fragment>
 
   <svelte:fragment slot="header">
@@ -194,14 +204,16 @@
         <div class="px-[2px] py-[10px] bg-orange-500 text-xs rounded-sm"></div>
       {/if}
     </td>
-    <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs text-gray-500">
+    <td class="px-2 py-1 w-fit whitespace-nowrap text-xs text-gray-500">
       {formatDate(item.published_at)}
     </td>
-    <td class="px-2 py-1 w-fit whitespace-nowrap text-2xs">
+    <td
+      class="px-2 py-1 w-fit whitespace-nowrap text-xs overflow-hidden max-w-xs"
+    >
       {item.message}
     </td>
     <td
-      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-2xs text-gray-500 font-mono overflow-hidden max-w-lg"
+      class="px-2 py-1 mr-auto w-full whitespace-nowrap text-xs text-gray-500 font-mono overflow-hidden max-w-xs"
     >
       {formatEventAsRow(item)}
     </td>
@@ -277,10 +289,3 @@
     {/if}
   </svelte:fragment>
 </TableWithDrawer>
-
-<style>
-  .text-2xs {
-    font-size: 0.65rem;
-    line-height: 1rem;
-  }
-</style>

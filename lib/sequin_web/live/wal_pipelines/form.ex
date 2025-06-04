@@ -150,7 +150,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
   end
 
   defp verify_source_not_event_table(%PostgresDatabaseTable{} = table) do
-    if Postgres.is_event_table?(table) do
+    if Postgres.event_table?(table) do
       {:error, Error.invariant(message: "Source table cannot be an event table.")}
     else
       :ok
@@ -282,8 +282,8 @@ defmodule SequinWeb.WalPipelinesLive.Form do
             "oid" => table.oid,
             "schema" => table.schema,
             "name" => table.name,
-            "isEventTable" => Postgres.is_event_table?(table),
-            "eventTableErrors" => if(Postgres.is_event_table?(table), do: Postgres.event_table_errors(table)),
+            "isEventTable" => Postgres.event_table?(table),
+            "eventTableErrors" => if(Postgres.event_table?(table), do: Postgres.event_table_errors(table)),
             "columns" =>
               Enum.map(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
                 %{

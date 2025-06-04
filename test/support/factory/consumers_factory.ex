@@ -14,6 +14,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -55,6 +56,7 @@ defmodule Sequin.Factory.ConsumersFactory do
           :redis_stream,
           :redis_string,
           :sqs,
+          :kinesis,
           :sns,
           :kafka,
           :sequin_stream,
@@ -114,7 +116,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
         max_memory_mb: Enum.random(128..1024),
-        max_storage_mb: Enum.random([nil, Enum.random(2048..4096)]),
         message_kind: message_kind,
         name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,
@@ -203,6 +204,27 @@ defmodule Sequin.Factory.ConsumersFactory do
         access_key_id: Factory.word(),
         secret_access_key: Factory.word(),
         is_fifo: Enum.random([true, false])
+      },
+      attrs
+    )
+  end
+
+  defp sink(:kinesis, _account_id, attrs) do
+    merge_attributes(
+      %KinesisSink{
+        type: :kinesis,
+        stream_arn:
+          :erlang.iolist_to_binary([
+            "arn:aws:kinesis",
+            ":",
+            Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
+            ":",
+            to_string(Factory.integer()),
+            ":stream/",
+            Factory.word()
+          ]),
+        access_key_id: Factory.word(),
+        secret_access_key: Factory.word()
       },
       attrs
     )
@@ -492,6 +514,7 @@ defmodule Sequin.Factory.ConsumersFactory do
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
           commit_lsn: Factory.unique_integer(),
+          commit_idx: Factory.unique_integer(),
           consumer: %ConsumerEventData.Metadata.Sink{
             id: Factory.uuid(),
             name: Factory.word(),

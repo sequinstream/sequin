@@ -284,17 +284,6 @@ defmodule Sequin.Consumers do
     round(Sequin.Size.mb(consumer.max_memory_mb) * 0.8)
   end
 
-  @doc """
-  Calculates the maximum storage bytes allowed for a consumer.
-  """
-  @spec max_storage_bytes_for_consumer(SinkConsumer.t()) ::
-          non_neg_integer() | nil
-  def max_storage_bytes_for_consumer(%SinkConsumer{max_storage_mb: nil}), do: nil
-
-  def max_storage_bytes_for_consumer(%SinkConsumer{max_storage_mb: max_storage_mb}) do
-    round(Sequin.Size.mb(max_storage_mb) * 0.8)
-  end
-
   def earliest_sink_consumer_inserted_at_for_account(account_id) do
     account_id
     |> SinkConsumer.where_account_id()
@@ -599,7 +588,9 @@ defmodule Sequin.Consumers do
     |> Stream.map(&module.deserialize/1)
   end
 
-  def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
+  @spec upsert_consumer_messages(SinkConsumer.t(), list(ConsumerEvent.t()) | list(ConsumerRecord.t())) ::
+          {:ok, list(ConsumerEvent.t()) | list(ConsumerRecord.t())}
+  def(upsert_consumer_messages(%SinkConsumer{} = consumer, messages)) do
     case consumer.message_kind do
       :event -> upsert_consumer_events(messages)
       :record -> upsert_consumer_records(messages)
@@ -623,15 +614,16 @@ defmodule Sequin.Consumers do
       end)
 
     # insert_all expects a plain outer-map, but struct embeds
-    {count, _events} =
+    {_count, events} =
       Repo.insert_all(
         ConsumerEvent,
         events,
         on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: [:consumer_id, :ack_id]
+        conflict_target: [:consumer_id, :ack_id],
+        returning: true
       )
 
-    {:ok, count}
+    {:ok, Enum.map(events, &ConsumerEvent.deserialize/1)}
   end
 
   @exponential_backoff_max :timer.minutes(10)
@@ -749,15 +741,16 @@ defmodule Sequin.Consumers do
         |> drop_virtual_fields()
       end)
 
-    {count, _records} =
+    {_count, records} =
       Repo.insert_all(
         ConsumerRecord,
         records,
         on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: [:consumer_id, :ack_id]
+        conflict_target: [:consumer_id, :ack_id],
+        returning: true
       )
 
-    {:ok, count}
+    {:ok, Enum.map(records, &ConsumerRecord.deserialize/1)}
   end
 
   # Consumer Lifecycle
@@ -1170,6 +1163,8 @@ defmodule Sequin.Consumers do
   end
 
   # Source Table Matching
+  def matches_message?(%SinkConsumer{message_kind: :record}, %SlotProcessor.Message{action: :delete}), do: false
+
   def matches_message?(
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         %SlotProcessor.Message{} = message
@@ -1590,6 +1585,7 @@ defmodule Sequin.Consumers do
           table_name: "characters",
           commit_timestamp: DateTime.utc_now(),
           commit_lsn: 309_018_972_104,
+          commit_idx: 0,
           database_name: "dune",
           transaction_annotations: nil,
           consumer: %Metadata.Sink{

@@ -92,9 +92,9 @@ defmodule SequinWeb.YamlControllerTest do
                ]
              } = json_response(conn, 200)
 
-      assert Sequin.String.is_uuid?(account_id)
-      assert Sequin.String.is_uuid?(user_id)
-      assert Sequin.String.is_uuid?(postgres_database_id)
+      assert Sequin.String.uuid?(account_id)
+      assert Sequin.String.uuid?(user_id)
+      assert Sequin.String.uuid?(postgres_database_id)
     end
 
     test "returns error for invalid yaml", %{conn: conn} do
@@ -263,10 +263,10 @@ defmodule SequinWeb.YamlControllerTest do
              } = json_response(conn, 200)
 
       assert is_binary(account_name)
-      assert Sequin.String.is_uuid?(account_id)
-      assert Sequin.String.is_uuid?(user_id)
-      assert Sequin.String.is_uuid?(database_id)
-      assert Sequin.String.is_uuid?(wal_pipeline_id)
+      assert Sequin.String.uuid?(account_id)
+      assert Sequin.String.uuid?(user_id)
+      assert Sequin.String.uuid?(database_id)
+      assert Sequin.String.uuid?(wal_pipeline_id)
     end
 
     test "returns nice error when table doesnt exist", %{conn: conn} do

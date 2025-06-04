@@ -12,6 +12,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
@@ -33,6 +34,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Error.ValidationError
+  alias Sequin.Health
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
 
@@ -138,24 +140,28 @@ defmodule Sequin.Transforms do
     table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
     filters = consumer.sequence_filter.column_filters || []
 
-    %{
-      id: consumer.id,
-      name: consumer.name,
-      database: consumer.sequence.postgres_database.name,
-      status: consumer.status,
-      group_column_names: group_column_names(consumer.sequence_filter.group_column_attnums, table),
-      table: "#{table.schema}.#{table.name}",
-      actions: consumer.sequence_filter.actions,
-      destination: to_external(sink, show_sensitive),
-      filters: Enum.map(filters, &format_filter(&1, table)),
-      batch_size: consumer.batch_size,
-      transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
-      timestamp_format: consumer.timestamp_format,
-      active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
-      max_retry_count: consumer.max_retry_count,
-      load_shedding_policy: consumer.load_shedding_policy,
-      annotations: consumer.annotations
-    }
+    Sequin.Map.put_if_present(
+      %{
+        id: consumer.id,
+        name: consumer.name,
+        database: consumer.sequence.postgres_database.name,
+        status: consumer.status,
+        group_column_names: group_column_names(consumer.sequence_filter.group_column_attnums, table),
+        table: "#{table.schema}.#{table.name}",
+        actions: consumer.sequence_filter.actions,
+        destination: to_external(sink, show_sensitive),
+        filters: Enum.map(filters, &format_filter(&1, table)),
+        batch_size: consumer.batch_size,
+        transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
+        timestamp_format: consumer.timestamp_format,
+        active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
+        max_retry_count: consumer.max_retry_count,
+        load_shedding_policy: consumer.load_shedding_policy,
+        annotations: consumer.annotations
+      },
+      :health,
+      if(consumer.health, do: to_external(consumer.health, show_sensitive))
+    )
   end
 
   def to_external(%HttpPushSink{} = sink, _show_sensitive) do
@@ -246,6 +252,15 @@ defmodule Sequin.Transforms do
       access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
       secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
       is_fifo: sink.is_fifo
+    })
+  end
+
+  def to_external(%KinesisSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "kinesis",
+      stream_arn: sink.stream_arn,
+      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
+      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive)
     })
   end
 
@@ -393,6 +408,10 @@ defmodule Sequin.Transforms do
       inserted_at: backfill.inserted_at,
       updated_at: backfill.updated_at
     }
+  end
+
+  def to_external(%Health{} = health, _show_sensitive) do
+    Health.to_external(health)
   end
 
   def group_column_names(nil, _table), do: []
@@ -681,8 +700,7 @@ defmodule Sequin.Transforms do
   end
 
   def from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints) do
-    consumer_attrs
-    |> Enum.reduce_while({:ok, %{}}, fn {key, value}, {:ok, acc} ->
+    Enum.reduce_while(consumer_attrs, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
       case key do
         "name" ->
           {:cont, {:ok, Map.put(acc, :name, value)}}
@@ -791,20 +809,6 @@ defmodule Sequin.Transforms do
           {:halt, {:error, Error.validation(summary: "Unknown field: #{key}")}}
       end
     end)
-    |> case do
-      {:ok, acc} ->
-        {:ok,
-         acc
-         # These put_news will remove the transform, filter, and routing keys from the sink
-         # if the keys are not present in the consumer_attrs
-         |> Map.put_new(:transform_id, nil)
-         |> Map.put_new(:filter_id, nil)
-         |> Map.put_new(:routing_id, nil)
-         |> Map.put_new(:routing_mode, "static")}
-
-      {:error, error} ->
-        {:error, error}
-    end
   end
 
   defp parse_sink(nil, _resources), do: {:error, Error.validation(summary: "`sink` is required on sink consumers.")}
@@ -859,6 +863,16 @@ defmodule Sequin.Transforms do
        type: :sns,
        topic_arn: attrs["topic_arn"],
        region: attrs["region"],
+       access_key_id: attrs["access_key_id"],
+       secret_access_key: attrs["secret_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "kinesis"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :kinesis,
+       stream_arn: attrs["stream_arn"],
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"]
      }}

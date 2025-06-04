@@ -400,7 +400,12 @@ defmodule Sequin.ConsumersTest do
 
       assert Consumers.matches_message?(consumer, insert_message)
       assert Consumers.matches_message?(consumer, update_message)
-      assert Consumers.matches_message?(consumer, delete_message)
+
+      if consumer.message_kind == :record do
+        refute Consumers.matches_message?(consumer, delete_message)
+      else
+        assert Consumers.matches_message?(consumer, delete_message)
+      end
     end
 
     test "matches when all column filters match" do
@@ -2359,9 +2364,8 @@ defmodule Sequin.ConsumersTest do
       consumer = ConsumersFactory.insert_sink_consumer!()
       msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
+      assert {:ok, [inserted_msg]} = Consumers.upsert_consumer_messages(consumer, [msg])
 
-      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       assert inserted_msg.ack_id == msg.ack_id
     end
 
@@ -2370,9 +2374,8 @@ defmodule Sequin.ConsumersTest do
       msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
       msg = put_in(msg.data.record["date_field"], Date.utc_today())
 
-      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
+      assert {:ok, [inserted_msg]} = Consumers.upsert_consumer_messages(consumer, [msg])
 
-      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       assert %Date{} = inserted_msg.data.record["date_field"]
     end
 
@@ -2387,9 +2390,8 @@ defmodule Sequin.ConsumersTest do
         | not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
       }
 
-      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [updated_attrs])
+      assert {:ok, [updated_msg]} = Consumers.upsert_consumer_messages(consumer, [updated_attrs])
 
-      assert [updated_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       refute updated_msg.not_visible_until == existing_msg.not_visible_until
     end
   end
@@ -2483,6 +2485,7 @@ defmodule Sequin.ConsumersTest do
             table_name: "test_table",
             commit_timestamp: now,
             commit_lsn: 123_456,
+            commit_idx: 1,
             consumer: %{
               id: consumer.id,
               name: consumer.name
@@ -2597,6 +2600,18 @@ defmodule Sequin.ConsumersTest do
       # Check if they're in the correct LSN order
       streamed_lsns = Enum.map(streamed_messages, & &1.commit_lsn)
       assert streamed_lsns == Enum.map(1..10, fn i -> i * 100 end)
+    end
+  end
+
+  describe "annotations size constraint" do
+    test "fails when annotations exceed max size constraint" do
+      # Generate a string larger than 8192 bytes (the max size constraint defined in the migration)
+      large_annotation = String.duplicate("x", 8193)
+      account = AccountsFactory.insert_account!()
+      attrs = ConsumersFactory.sink_consumer_attrs(account_id: account.id, annotations: %{data: large_annotation})
+
+      assert {:error, %Ecto.Changeset{} = changeset} = Consumers.create_sink_consumer(account.id, attrs)
+      assert [annotations: {"annotations size limit exceeded", _}] = changeset.errors
     end
   end
 

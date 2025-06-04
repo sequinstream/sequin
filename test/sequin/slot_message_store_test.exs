@@ -1,6 +1,8 @@
 defmodule Sequin.SlotMessageStoreTest do
   use Sequin.DataCase, async: true
 
+  import ExUnit.CaptureLog
+
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Error
@@ -20,7 +22,7 @@ defmodule Sequin.SlotMessageStoreTest do
       msg1 = ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
       msg2 = ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       %{consumer: consumer, msg1: msg1, msg2: msg2}
     end
@@ -45,8 +47,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert {:ok, delivered} = SlotMessageStore.produce(consumer, 10, self())
       assert length(delivered) == 2
 
-      ack_ids = Enum.map(delivered, & &1.ack_id)
-      {:ok, 2} = SlotMessageStore.messages_succeeded(consumer, ack_ids)
+      {:ok, 2} = SlotMessageStore.messages_succeeded(consumer, delivered)
 
       assert [] == Consumers.list_consumer_messages_for_consumer(consumer)
     end
@@ -72,10 +73,27 @@ defmodule Sequin.SlotMessageStoreTest do
 
       assert new_message.record_pks in Enum.map(persisted_messages, & &1.record_pks)
     end
+
+    test "messages persisted on put receive :inserted_at", %{consumer: consumer, msg1: msg1} do
+      new_message =
+        ConsumersFactory.consumer_message(
+          group_id: msg1.group_id,
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      :ok = SlotMessageStore.put_messages(consumer, [new_message])
+
+      consumer_id = consumer.id
+      assert_receive {:put_messages_done, ^consumer_id}, 1000
+
+      assert messages = SlotMessageStore.peek_messages(consumer, 10)
+      assert Enum.all?(messages, fn msg -> msg.inserted_at end)
+    end
   end
 
   describe "SlotMessageStore with persisted messages that exceed max_memory_bytes" do
-    setup do
+    test "raises an error" do
       consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1)
 
       data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
@@ -89,28 +107,22 @@ defmodule Sequin.SlotMessageStoreTest do
         )
       end
 
-      max_memory_bytes = data_size_bytes * 10
+      max_memory_bytes = data_size_bytes * 10 / 2
 
-      start_supervised!(
-        {SlotMessageStoreSupervisor, consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self()}
-      )
+      log =
+        capture_log(fn ->
+          pid =
+            start_supervised!(
+              {SlotMessageStoreSupervisor,
+               consumer_id: consumer.id, max_memory_bytes: max_memory_bytes, test_pid: self(), restart: :temporary}
+            )
 
-      %{consumer: consumer}
-    end
+          Process.monitor(pid)
 
-    test ":init loads only the first 10 messages", %{consumer: consumer} do
-      # 20 on disk
-      disk_messages = Consumers.list_consumer_messages_for_consumer(consumer)
-      assert length(disk_messages) == 20
+          assert_receive {:DOWN, _, :process, ^pid, _}
+        end)
 
-      # 10 in memory
-      memory_messages = SlotMessageStore.peek_messages(consumer, 100)
-      assert length(memory_messages) == 10
-      # Verify we loaded the messages with lowest LSNs
-      disk_lsns = Enum.map(disk_messages, & &1.commit_lsn)
-      memory_lsns = Enum.map(memory_messages, & &1.commit_lsn)
-
-      assert memory_lsns == Enum.take(Enum.sort(disk_lsns), 10)
+      assert log =~ "Max memory limit exceeded"
     end
   end
 
@@ -131,23 +143,22 @@ defmodule Sequin.SlotMessageStoreTest do
 
       max_memory_bytes = data_size_bytes * 3
 
-      start_supervised!(
-        {SlotMessageStoreSupervisor, consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self()}
-      )
+      log =
+        capture_log(fn ->
+          pid =
+            start_supervised!(
+              {SlotMessageStoreSupervisor,
+               consumer_id: consumer.id, max_memory_bytes: max_memory_bytes, test_pid: self(), restart: :temporary}
+            )
+
+          Process.monitor(pid)
+
+          assert_receive {:DOWN, _, :process, ^pid, _}
+        end)
+
+      assert log =~ "Max memory limit exceeded"
 
       %{consumer: consumer}
-    end
-
-    test ":init loads only the first  messages", %{consumer: consumer} do
-      # 100 on disk
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 100
-
-      for _ <- 1..consumer.partition_count do
-        assert_receive :init_complete
-      end
-
-      # 10 in memory
-      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 9
     end
   end
 
@@ -155,8 +166,8 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
       event_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
-      start_supervised!({SlotMessageStoreSupervisor, consumer: event_consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: event_consumer.id, test_pid: self()})
       %{consumer: consumer, event_consumer: event_consumer}
     end
 
@@ -175,8 +186,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert length(delivered) == 2
 
       # For acks
-      ack_ids = Enum.map(delivered, & &1.ack_id)
-      {:ok, 2} = SlotMessageStore.messages_succeeded(consumer, ack_ids)
+      {:ok, 2} = SlotMessageStore.messages_succeeded(consumer, delivered)
 
       # Produce messages, none should be delivered
       {:ok, []} = SlotMessageStore.produce(consumer, 2, self())
@@ -215,7 +225,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Redeliver and succeed the message
       {:ok, [redelivered]} = SlotMessageStore.produce(consumer, 1, self())
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [redelivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [redelivered])
 
       # Verify message was deleted from postgres
       assert [] = Consumers.list_consumer_messages_for_consumer(consumer)
@@ -254,7 +264,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Redeliver and succeed the message
       {:ok, [redelivered]} = SlotMessageStore.produce(consumer, 1, self())
-      {:ok, 1} = SlotMessageStore.messages_already_succeeded(consumer, [redelivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_already_succeeded(consumer, [redelivered])
 
       # Verify message was deleted from postgres
       assert [] = Consumers.list_consumer_messages_for_consumer(consumer)
@@ -296,6 +306,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert Enum.all?(messages, fn msg -> msg.deliver_count == 1 end)
       assert Enum.all?(messages, fn msg -> msg.last_delivered_at == now end)
       assert Enum.all?(messages, fn msg -> msg.not_visible_until == not_visible_until end)
+      assert Enum.all?(messages, fn msg -> msg.inserted_at end)
     end
 
     test "if the pid changes between calls of produce_messages, produced_messages are available for deliver", %{
@@ -362,7 +373,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert message.commit_lsn == message2.commit_lsn
     end
 
-    test "is_message_group_persisted? returns false for nil group_ids", %{event_consumer: consumer} do
+    test "message_group_persisted? returns false for nil group_ids", %{event_consumer: consumer} do
       # Create and persist a message with nil group_id
       message =
         ConsumersFactory.consumer_message(
@@ -384,9 +395,9 @@ defmodule Sequin.SlotMessageStoreTest do
 
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
-      # Peek at state to verify is_message_group_persisted? returns false
+      # Peek at state to verify message_group_persisted? returns false
       Enum.each(SlotMessageStore.peek(consumer), fn state ->
-        refute State.is_message_group_persisted?(state, nil)
+        refute State.message_group_persisted?(state, nil)
       end)
     end
 
@@ -446,7 +457,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert delivered.commit_idx == 1
 
       # Ack the message
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered])
 
       # Verify no bytes are accumulated
       Enum.each(SlotMessageStore.peek(consumer), fn state ->
@@ -485,7 +496,7 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       %{consumer: consumer}
     end
@@ -509,7 +520,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert {:ok, ["test-batch-id"]} == SlotMessageStore.unpersisted_table_reader_batch_ids(consumer)
 
       # For acks
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered])
 
       # Produce messages, none should be delivered
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
@@ -517,7 +528,7 @@ defmodule Sequin.SlotMessageStoreTest do
       # Delivered messages don't "complete" a batch
       assert {:ok, ["test-batch-id"]} == SlotMessageStore.unpersisted_table_reader_batch_ids(consumer)
 
-      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered.ack_id])
+      {:ok, 1} = SlotMessageStore.messages_succeeded(consumer, [delivered])
 
       assert_received :table_reader_batches_changed
 
@@ -529,7 +540,7 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       %{consumer: consumer}
     end
@@ -552,7 +563,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       start_supervised!(
         {SlotMessageStoreSupervisor,
-         consumer: consumer, test_pid: self(), flush_interval: 100, message_age_before_flush_ms: 100}
+         consumer_id: consumer.id, test_pid: self(), flush_interval: 100, message_age_before_flush_ms: 100}
       )
 
       %{consumer: consumer}
@@ -587,6 +598,9 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # This is the point- the wal cursor is now persisted!
       assert SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref) == []
+
+      messages = SlotMessageStore.peek_messages(consumer, 10)
+      assert Enum.all?(messages, fn msg -> msg.inserted_at end)
     end
 
     test "persisted messages are not identified for flushing regardless of age", %{consumer: consumer} do
@@ -622,7 +636,7 @@ defmodule Sequin.SlotMessageStoreTest do
       sup =
         start_supervised!(
           {SlotMessageStoreSupervisor,
-           consumer: consumer, test_pid: self(), flush_interval: 999_999_999, message_age_before_flush_ms: 0}
+           consumer_id: consumer.id, test_pid: self(), flush_interval: 999_999_999, message_age_before_flush_ms: 0}
         )
 
       [pid] = for {_name, pid, _, _} <- Supervisor.which_children(sup), do: pid
@@ -671,7 +685,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       start_supervised!(
         {SlotMessageStoreSupervisor,
-         consumer: consumer, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
+         consumer_id: consumer.id, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
       )
 
       %{consumer: consumer}
@@ -725,7 +739,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       start_supervised!(
         {SlotMessageStoreSupervisor,
-         consumer: consumer, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
+         consumer_id: consumer.id, test_pid: self(), visibility_check_interval: 100, max_time_since_delivered_ms: 500}
       )
 
       %{consumer: consumer}
@@ -782,7 +796,7 @@ defmodule Sequin.SlotMessageStoreTest do
     test "keeps messages when max_retry_count is nil", %{consumer: _consumer} do
       # Create a consumer with nil max_retry_count
       consumer = ConsumersFactory.insert_sink_consumer!(max_retry_count: nil)
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       # Create a message
       message =
@@ -822,11 +836,10 @@ defmodule Sequin.SlotMessageStoreTest do
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           load_shedding_policy: :pause_on_full,
-          max_memory_mb: 128,
-          max_storage_mb: nil
+          max_memory_mb: 128
         )
 
-      start_supervised!({SlotMessageStoreSupervisor, consumer: consumer, test_pid: self()})
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       # Create a message with a specific group_id to ensure consistent partitioning
       message =
@@ -842,14 +855,10 @@ defmodule Sequin.SlotMessageStoreTest do
     end
 
     test "returns ok when load_shedding_policy=discard_on_full" do
-      consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          load_shedding_policy: :discard_on_full,
-          max_storage_mb: nil
-        )
+      consumer = ConsumersFactory.insert_sink_consumer!(load_shedding_policy: :discard_on_full)
 
       start_supervised!(
-        {SlotMessageStoreSupervisor, consumer: consumer, test_pid: self(), setting_system_max_memory_bytes: 1}
+        {SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self(), setting_system_max_memory_bytes: 1}
       )
 
       # Create a message with a specific group_id to ensure consistent partitioning
@@ -863,194 +872,5 @@ defmodule Sequin.SlotMessageStoreTest do
       # Put message in store
       assert :ok = SlotMessageStore.put_messages(consumer, [message])
     end
-
-    test "returns ok when messages are stored on disk" do
-      consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1, max_memory_mb: 128, max_storage_mb: 512)
-
-      start_supervised!(
-        {SlotMessageStoreSupervisor,
-         consumer: consumer, test_pid: self(), max_memory_bytes: 1, storage_available_fn: fn _, _ -> true end}
-      )
-
-      message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      # Put message in store
-      assert :ok = SlotMessageStore.put_messages(consumer, [message])
-
-      assert_receive {:put_messages_to_disk, [^message]}, 1000
-      # Verify message is stored on disk
-      assert [_] = Consumers.list_consumer_messages_for_consumer(consumer)
-
-      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 0
-    end
-
-    test "returns error when messages will not fit on disk" do
-      consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1, max_memory_mb: 128, max_storage_mb: 512)
-
-      start_supervised!(
-        {SlotMessageStoreSupervisor,
-         consumer: consumer, test_pid: self(), max_memory_bytes: 1, storage_available_fn: fn _, _ -> false end}
-      )
-
-      message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      # Put message in store
-      assert {:error, %Error.InvariantError{}} = SlotMessageStore.put_messages(consumer, [message])
-    end
-
-    test "puts to disk if all_loaded? is false, even with room in memory" do
-      consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1, max_memory_mb: 128, max_storage_mb: 1024)
-
-      data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
-      data_size_bytes = :erlang.external_size(data)
-
-      for _ <- 1..20 do
-        ConsumersFactory.insert_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id,
-          data: data
-        )
-      end
-
-      max_memory_bytes = data_size_bytes * 10
-
-      start_supervised!(
-        {SlotMessageStoreSupervisor, consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self()}
-      )
-
-      # 20 on disk
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 20
-
-      # 10 in memory
-      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
-
-      acks_ids = Enum.map(SlotMessageStore.peek_messages(consumer, 3), & &1.ack_id)
-      assert {:ok, 3} = SlotMessageStore.messages_succeeded(consumer, acks_ids)
-
-      # 7 in memory, there is now room in memory for one more message!
-      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 7
-
-      # 10 on disk
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 17
-
-      new_message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      assert :ok = SlotMessageStore.put_messages(consumer, [new_message])
-
-      assert_receive {:put_messages_to_disk, [^new_message]}, 1000
-
-      # 18 on disk
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 18
-
-      # still 7 in memory
-      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 7
-    end
-  end
-
-  describe "disk usage integration" do
-    test "put_messages and messages_succeeded work together" do
-      consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1, max_memory_mb: 128, max_storage_mb: 1024)
-
-      data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
-      data_size_bytes = :erlang.external_size(data)
-
-      for _ <- 1..30 do
-        ConsumersFactory.insert_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id,
-          data: data
-        )
-      end
-
-      max_memory_bytes = data_size_bytes * 10
-
-      start_supervised!(
-        {SlotMessageStoreSupervisor, consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self()}
-      )
-
-      # 30 on disk
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 30
-
-      # 10 in memory
-      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
-
-      acks_ids = Enum.map(SlotMessageStore.peek_messages(consumer, 100), & &1.ack_id)
-      assert {:ok, 10} = SlotMessageStore.messages_succeeded(consumer, acks_ids)
-
-      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
-
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 20
-
-      new_message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      assert :ok = SlotMessageStore.put_messages(consumer, [new_message])
-
-      assert_receive {:put_messages_to_disk, [^new_message]}, 1000
-
-      assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 21
-      assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
-    end
-  end
-
-  test "put_messages and messages_succeeded work together with multiple partitions" do
-    consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 2, max_memory_mb: 128, max_storage_mb: 1024)
-
-    data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
-    data_size_bytes = :erlang.external_size(data)
-
-    for _ <- 1..100 do
-      ConsumersFactory.insert_consumer_message!(
-        message_kind: consumer.message_kind,
-        consumer_id: consumer.id,
-        data: data
-      )
-    end
-
-    max_memory_bytes = data_size_bytes * 5
-
-    start_supervised!(
-      {SlotMessageStoreSupervisor, consumer: consumer, max_memory_bytes: max_memory_bytes, test_pid: self()}
-    )
-
-    assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 100
-
-    assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
-
-    acks_ids = Enum.map(SlotMessageStore.peek_messages(consumer, 100), & &1.ack_id)
-    assert {:ok, 10} = SlotMessageStore.messages_succeeded(consumer, acks_ids)
-
-    assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
-
-    assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 90
-
-    new_message =
-      ConsumersFactory.consumer_message(
-        message_kind: consumer.message_kind,
-        consumer_id: consumer.id
-      )
-
-    assert :ok = SlotMessageStore.put_messages(consumer, [new_message])
-
-    assert_receive {:put_messages_to_disk, [^new_message]}, 1000
-
-    assert length(Consumers.list_consumer_messages_for_consumer(consumer)) == 91
-
-    assert length(SlotMessageStore.peek_messages(consumer, 100)) == 10
   end
 end

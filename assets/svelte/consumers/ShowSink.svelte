@@ -18,6 +18,7 @@
     HttpPushConsumer,
     SqsConsumer,
     SnsConsumer,
+    KinesisConsumer,
     RedisStreamConsumer,
     KafkaConsumer,
     SequinStreamConsumer,
@@ -31,6 +32,7 @@
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
   import SnsSinkCard from "../sinks/sns/SnsSinkCard.svelte";
+  import KinesisSinkCard from "../sinks/kinesis/KinesisSinkCard.svelte";
   import RedisStreamSinkCard from "../sinks/redis-stream/RedisStreamSinkCard.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SequinStreamSinkCard from "../sinks/sequin_stream/SequinStreamSinkCard.svelte";
@@ -46,7 +48,7 @@
   import BackfillForm from "../components/BackfillForm.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
-  import Beta from "../components/Beta.svelte";
+  import CollapsibleCode from "../components/CollapsibleCode.svelte";
 
   export let live;
   export let parent;
@@ -105,6 +107,10 @@
 
   function isSnsConsumer(consumer: Consumer): consumer is SnsConsumer {
     return consumer.sink.type === "sns";
+  }
+
+  function isKinesisConsumer(consumer: Consumer): consumer is KinesisConsumer {
+    return consumer.sink.type === "kinesis";
   }
 
   function isRedisStreamConsumer(
@@ -1114,12 +1120,7 @@
 
               <div>
                 <span class="text-sm text-gray-500">Code</span>
-                <div class="mt-2">
-                  <pre
-                    class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
-                      >{consumer.filter.function.code}</code
-                    ></pre>
-                </div>
+                <CollapsibleCode code={consumer.filter.function.code} />
               </div>
             </div>
           </CardContent>
@@ -1185,12 +1186,7 @@
               {:else if transform.function.type === "transform"}
                 <div>
                   <span class="text-sm text-gray-500">Code</span>
-                  <div class="mt-2">
-                    <pre
-                      class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
-                        >{transform.function.code}</code
-                      ></pre>
-                  </div>
+                  <CollapsibleCode code={transform.function.code} />
                 </div>
               {/if}
             </div>
@@ -1225,6 +1221,8 @@
         <SqsSinkCard {consumer} />
       {:else if isSnsConsumer(consumer)}
         <SnsSinkCard {consumer} />
+      {:else if isKinesisConsumer(consumer)}
+        <KinesisSinkCard {consumer} />
       {:else if isRedisStreamConsumer(consumer)}
         <RedisStreamSinkCard {consumer} />
       {:else if isKafkaConsumer(consumer)}

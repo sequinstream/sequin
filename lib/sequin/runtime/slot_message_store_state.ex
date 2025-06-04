@@ -31,7 +31,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :setting_system_max_memory_bytes, non_neg_integer() | nil
     field :setting_max_memory_check_interval, non_neg_integer(), default: :timer.minutes(5)
     field :max_memory_bytes, non_neg_integer()
-    field :max_storage_bytes, non_neg_integer() | nil
     field :payload_size_bytes, non_neg_integer(), default: 0
     field :slot_processor_monitor_ref, reference() | nil
     field :table_reader_batch_id, String.t() | nil
@@ -39,8 +38,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :last_logged_stats_at, non_neg_integer() | nil
     field :flush_interval, non_neg_integer()
     field :message_age_before_flush_ms, non_neg_integer()
-    field :storage_available_fn, (State.t(), non_neg_integer() -> boolean())
-    field :all_loaded?, boolean()
 
     # Rescue messages stuck in produced state
     field :visibility_check_interval, non_neg_integer()
@@ -215,18 +212,18 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     pop_messages(state, Map.keys(state.messages))
   end
 
-  @spec is_message_group_persisted?(State.t(), String.t()) :: boolean()
+  @spec message_group_persisted?(State.t(), String.t()) :: boolean()
   # Messages without group_ids do not belong to any group
-  def is_message_group_persisted?(%State{}, nil) do
+  def message_group_persisted?(%State{}, nil) do
     false
   end
 
-  def is_message_group_persisted?(%State{} = state, group_id) do
+  def message_group_persisted?(%State{} = state, group_id) do
     Multiset.member?(state.persisted_message_groups, group_id)
   end
 
-  @spec is_message_persisted?(State.t(), message()) :: boolean()
-  def is_message_persisted?(%State{} = state, msg) do
+  @spec message_persisted?(State.t(), message()) :: boolean()
+  def message_persisted?(%State{} = state, msg) do
     Multiset.value_member?(state.persisted_message_groups, msg.group_id, {msg.commit_lsn, msg.commit_idx})
   end
 
@@ -495,16 +492,17 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   This helps prevent slot advancement from being blocked by slow message processing (often
   due to slow group processing or sequin stream syncs.)
   """
-  @spec messages_to_flush(State.t(), non_neg_integer()) :: list(message())
-  def messages_to_flush(%State{} = state, limit \\ 2000) do
+  @spec cursor_tuples_to_flush(State.t(), non_neg_integer()) :: list(message())
+  def cursor_tuples_to_flush(%State{} = state, limit \\ 2000) do
     now = Sequin.utc_now()
     age_threshold = DateTime.add(now, -state.message_age_before_flush_ms, :millisecond)
 
     # Find first N messages that are older than threshold and not persisted
     state
     |> sorted_message_stream()
-    |> Stream.reject(&is_message_persisted?(state, &1))
+    |> Stream.reject(&message_persisted?(state, &1))
     |> Stream.filter(&DateTime.before?(&1.ingested_at, age_threshold))
+    |> Stream.map(fn msg -> {msg.commit_lsn, msg.commit_idx} end)
     |> Enum.take(limit)
   end
 

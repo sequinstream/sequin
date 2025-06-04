@@ -47,6 +47,7 @@ defmodule Sequin.Replication.WalPipeline do
     |> unique_constraint([:replication_slot_id, :name])
     |> foreign_key_constraint(:replication_slot_id)
     |> foreign_key_constraint(:destination_database_id)
+    |> Sequin.Changeset.annotations_check_constraint()
   end
 
   def where_account_id(query \\ base_query(), account_id) do
@@ -54,7 +55,7 @@ defmodule Sequin.Replication.WalPipeline do
   end
 
   def where_id_or_name(query \\ base_query(), id_or_name) do
-    if Sequin.String.is_uuid?(id_or_name) do
+    if Sequin.String.uuid?(id_or_name) do
       where_id(query, id_or_name)
     else
       where_name(query, id_or_name)

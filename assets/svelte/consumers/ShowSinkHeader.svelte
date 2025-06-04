@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { pageStore } from "../stores/pageStore";
   import {
     ArrowLeft,
     Clock,
@@ -18,6 +19,7 @@
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
   import SnsIcon from "../sinks/sns/SnsIcon.svelte";
+  import KinesisIcon from "../sinks/kinesis/KinesisIcon.svelte";
   import RedisIcon from "../sinks/redis_shared/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
@@ -133,7 +135,9 @@
   <div class="container mx-auto px-4 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-4">
-        <LinkPushNavigate href="/sinks">
+        <LinkPushNavigate
+          href={$pageStore ? `/sinks?page=${$pageStore}` : "/sinks"}
+        >
           <Button variant="ghost" size="sm">
             <ArrowLeft class="h-4 w-4" />
           </Button>
@@ -167,6 +171,8 @@
             <ElasticsearchIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "sns"}
             <SnsIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "kinesis"}
+            <KinesisIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumer.name}
@@ -273,7 +279,7 @@
           <AlertCircle class="h-4 w-4 text-red-600 ml-1" />
         {/if}
       </a>
-      {#if consumer.sink.type == "http_push"}
+      {#if consumer.sink.type == "http_push" || consumer.sink.type == "typesense"}
         <a
           href={traceUrl}
           class={`py-2 px-4 flex items-center font-medium border-b-2 ${

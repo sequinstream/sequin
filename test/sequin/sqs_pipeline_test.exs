@@ -176,7 +176,10 @@ defmodule Sequin.Runtime.SqsPipelineTest do
 
       consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
 
-      start_supervised!({SlotMessageStoreSupervisor, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: test_pid, persisted_mode?: false]}
+      )
+
       SlotMessageStore.put_messages(consumer, [consumer_record])
 
       start_pipeline!(consumer, dummy_producer: false)
@@ -190,7 +193,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
     {dummy_producer, _opts} = Keyword.pop(opts, :dummy_producer, true)
 
     opts = [
-      consumer: consumer,
+      consumer_id: consumer.id,
       test_pid: self()
     ]
 

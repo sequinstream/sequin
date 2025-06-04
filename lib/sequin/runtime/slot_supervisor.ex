@@ -2,8 +2,10 @@ defmodule Sequin.Runtime.SlotSupervisor do
   @moduledoc false
   use DynamicSupervisor
 
+  alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Runtime.SinkPipeline
@@ -18,9 +20,10 @@ defmodule Sequin.Runtime.SlotSupervisor do
   end
 
   def start_link(opts) do
-    %PostgresReplicationSlot{} = pg_replication = Keyword.fetch!(opts, :pg_replication)
+    pg_replication_id = Keyword.fetch!(opts, :pg_replication_id)
+    %PostgresReplicationSlot{} = pg_replication = Replication.get_pg_replication!(pg_replication_id)
 
-    case DynamicSupervisor.start_link(__MODULE__, opts, name: via_tuple(pg_replication.id)) do
+    case DynamicSupervisor.start_link(__MODULE__, opts, name: via_tuple(pg_replication_id)) do
       {:ok, pid} ->
         {:ok, _} = start_children(pg_replication, opts)
         {:ok, pid}
@@ -53,13 +56,26 @@ defmodule Sequin.Runtime.SlotSupervisor do
         not_disabled_sink_consumers: [:sequence]
       )
 
-    opts = Keyword.put(opts, :replication_slot, pg_replication)
+    opts = Keyword.put(opts, :replication_slot_id, pg_replication.id)
     slot_processor_spec = SlotProcessorSupervisor.child_spec(opts)
     sup = via_tuple(pg_replication.id)
 
     # First start all message stores for consumers
     opts = Keyword.put(opts, :skip_monitor, true)
-    Enum.each(pg_replication.not_disabled_sink_consumers, &start_stores_and_pipeline!(&1, opts))
+
+    pg_replication.not_disabled_sink_consumers
+    |> Task.async_stream(
+      fn consumer ->
+        if test_pid = opts[:test_pid], do: Sandbox.allow(Sequin.Repo, test_pid, self())
+        start_stores_and_pipeline!(consumer, opts)
+      end,
+      max_concurrency: 10
+    )
+    |> Stream.map(fn
+      {:ok, :ok} -> :ok
+      {:error, error} -> raise error
+    end)
+    |> Stream.run()
 
     # Then start the slot processor
     case Sequin.DynamicSupervisor.maybe_start_child(sup, slot_processor_spec) do
@@ -125,7 +141,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
   end
 
   defp slot_message_store_supervisor_child_spec(%SinkConsumer{} = sink_consumer, opts) do
-    opts = Keyword.put(opts, :consumer, sink_consumer)
+    opts = Keyword.put(opts, :consumer_id, sink_consumer.id)
     {SlotMessageStoreSupervisor, opts}
   end
 
@@ -136,7 +152,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
     if consumer.type == :sequin_stream do
       :ok
     else
-      default_opts = [consumer: consumer]
+      default_opts = [consumer_id: consumer.id]
       consumer_features = Consumers.consumer_features(consumer)
 
       {features, opts} = Keyword.pop(opts, :features, [])

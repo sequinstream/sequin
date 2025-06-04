@@ -31,6 +31,7 @@ defmodule Sequin.Accounts.Account do
     |> validate_required([:name])
     |> validate_length(:name, max: 80)
     |> validate_format(:contact_email, ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
+    |> Sequin.Changeset.annotations_check_constraint()
   end
 
   defp maybe_put_name(changeset) do

@@ -50,6 +50,7 @@ defmodule Sequin.Health do
   alias Sequin.Health.Check
   alias Sequin.Health.Event
   alias Sequin.Health.HealthSnapshot
+  alias Sequin.IncidentIO
   alias Sequin.Pagerduty
   alias Sequin.Redis
   alias Sequin.Replication
@@ -758,7 +759,7 @@ defmodule Sequin.Health do
     load_shedding_policy_discarded_event =
       dismissable_event(events, :load_shedding_policy_discarded, :load_shedding_policy_discarded_dismissed)
 
-    sqs_delivery_failed_event = dismissable_event(events, :sqs_delivery_failed, :sqs_delivery_failed_dismissed)
+    http_via_sqs_delivery_event = find_event(events, :http_via_sqs_delivery)
 
     cond do
       is_nil(delivered_event) ->
@@ -774,14 +775,14 @@ defmodule Sequin.Health do
           [load_shedding_policy_discarded_event]
         )
 
-      sqs_delivery_failed_event ->
+      not is_nil(http_via_sqs_delivery_event) and http_via_sqs_delivery_event.status == :fail ->
         put_check_timestamps(
           %{
             base_check
             | status: :error,
-              error_slug: :sqs_delivery_failed
+              error_slug: :http_via_sqs_delivery
           },
-          [sqs_delivery_failed_event]
+          [http_via_sqs_delivery_event]
         )
 
       delivered_event.status == :fail ->
@@ -826,19 +827,22 @@ defmodule Sequin.Health do
     end
   end
 
-  defp dismissable_event(events, t_main, t_dismissal) do
-    main = find_event(events, t_main)
+  # Dismissable events are events that can be dismissed by the user, typically
+  # from the console.
+  defp dismissable_event(events, dismissable_slug, dismissal_slug) do
+    dismissable_event = find_event(events, dismissable_slug)
 
     cond do
-      is_nil(main) -> nil
-      find_newer_event(events, main, t_dismissal) -> nil
-      true -> main
+      is_nil(dismissable_event) -> nil
+      find_newer_event(events, dismissable_event, dismissal_slug) -> nil
+      true -> dismissable_event
     end
   end
 
-  defp find_newer_event(events, base_event, newer_type) do
-    newer = find_event(events, newer_type)
-    newer && DateTime.after?(base_event.last_event_at, newer.last_event_at)
+  defp find_newer_event(events, base_event, newer_slug) do
+    newer = find_event(events, newer_slug)
+    # If newer is after last event, then it's newer
+    newer && DateTime.after?(newer.last_event_at, base_event.last_event_at)
   end
 
   defp expected_event_error(entity_id, event_slug) do
@@ -922,6 +926,13 @@ defmodule Sequin.Health do
     upsert_snapshot(entity)
   end
 
+  @incident_slots [
+    "b5059660-8d9b-48cf-8c92-d0291e2f7688",
+    "d2043d7b-cb7a-4624-90ec-bea0c247d7f6",
+    "93a07e40-f90e-4fbd-a974-e73577f3f7fd",
+    "9f6b94b2-6d83-448d-b8cf-912a1130130c"
+  ]
+
   def on_status_change(%struct{} = _entity, _old_status, _new_status) when struct in [SinkConsumer, WalPipeline] do
     :ok
   end
@@ -940,6 +951,14 @@ defmodule Sequin.Health do
           Logger.warning("[Health] #{name} is experiencing issues: #{summary}", Keyword.put(metadata, :status, status))
 
           Pagerduty.alert(dedup_key, summary, severity: :warning)
+
+          if entity.id in @incident_slots do
+            IncidentIO.create_incident(:critical,
+              name: "[Health] #{name} is unhealthy",
+              summary: summary,
+              idempotency_key: dedup_key
+            )
+          end
 
         _ ->
           Logger.info("[Health] #{name} is healthy", Keyword.put(metadata, :status, :healthy))

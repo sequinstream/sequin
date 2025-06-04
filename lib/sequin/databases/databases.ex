@@ -3,6 +3,7 @@ defmodule Sequin.Databases do
   import Ecto.Query, only: [preload: 2]
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabasePrimary
@@ -56,6 +57,15 @@ defmodule Sequin.Databases do
       nil -> {:error, Error.not_found(entity: :postgres_database)}
       db -> {:ok, db}
     end
+  end
+
+  def db_names_for_consumer_ids(consumer_ids) do
+    consumer_ids
+    |> SinkConsumer.where_id_in()
+    |> SinkConsumer.join_postgres_database()
+    |> Ecto.Query.select([consumer: sc, database: db], {sc.id, db.name})
+    |> Repo.all()
+    |> Map.new()
   end
 
   def get_db!(id) do
@@ -439,7 +449,7 @@ defmodule Sequin.Databases do
 
   def test_maybe_replica(%PostgresDatabase{} = db, db_primary) do
     cond do
-      not is_physical_replica?(db) ->
+      not physical_replica?(db) ->
         :ok
 
       is_nil(db_primary) ->
@@ -563,8 +573,8 @@ defmodule Sequin.Databases do
     end
   end
 
-  @spec is_physical_replica?(%PostgresDatabase{}) :: boolean()
-  def is_physical_replica?(%PostgresDatabase{} = db) do
+  @spec physical_replica?(%PostgresDatabase{}) :: boolean()
+  def physical_replica?(%PostgresDatabase{} = db) do
     with_uncached_connection(db, fn conn ->
       query = """
         SELECT pg_is_in_recovery() AS is_physical_replica

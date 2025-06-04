@@ -34,6 +34,17 @@ defmodule SequinWeb.FunctionsLive.Index do
     """
   end
 
+  @impl Phoenix.LiveView
+  def handle_params(params, _url, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  defp apply_action(socket, :index, _params) do
+    socket
+    |> assign(:page_title, "Functions | Sequin")
+    |> assign(:live_action, :index)
+  end
+
   defp encode_function(function) do
     account_id = function.account_id
     consumers = Consumers.list_consumers_for_function(account_id, function.id)

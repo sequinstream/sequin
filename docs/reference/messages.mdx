@@ -28,6 +28,7 @@ A change message has this shape:
     table_name: string;
     commit_timestamp: string;  // ISO timestamp
     commit_lsn: integer;  // Logical replication LSN of the transaction
+    commit_idx: integer;  // The index of the message within the transaction
     idempotency_key: string; // Opaque token
     transaction_annotations: null | {
       [key: string]: any;  // User-provided transaction context

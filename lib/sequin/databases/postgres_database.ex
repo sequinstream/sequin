@@ -100,6 +100,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     )
     |> Sequin.Changeset.validate_name()
     |> foreign_key_constraint(:account_id, name: "postgres_databases_account_id_fkey")
+    |> Sequin.Changeset.annotations_check_constraint()
   end
 
   def create_changeset(pd, attrs) do
@@ -141,7 +142,7 @@ defmodule Sequin.Databases.PostgresDatabase do
   end
 
   def where_id_or_name(query \\ base_query(), id_or_name) do
-    if Sequin.String.is_uuid?(id_or_name) do
+    if Sequin.String.uuid?(id_or_name) do
       where_id(query, id_or_name)
     else
       where_name(query, id_or_name)

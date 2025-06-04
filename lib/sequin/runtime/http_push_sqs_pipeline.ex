@@ -200,7 +200,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
           {:error, error} ->
             Logger.warning("[HttpPushSqsPipeline] Failed to deliver message to HTTP endpoint: #{inspect(error)}")
 
-            Health.put_event(consumer, %Health.Event{slug: :sqs_delivery_failed, status: :fail})
+            Health.put_event(consumer, %Health.Event{slug: :http_via_sqs_delivery, status: :fail})
 
             if final_delivery? do
               Logger.warning("[HttpPushSqsPipeline] Discarding message after #{consumer.max_retry_count} retries")
@@ -365,6 +365,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   defp ensure_status(%Req.Response{} = response, %SinkConsumer{} = consumer) do
     if response.status in 200..299 do
       Metrics.incr_http_endpoint_throughput(consumer.sink.http_endpoint)
+      Health.put_event(consumer, %Health.Event{slug: :http_via_sqs_delivery, status: :success})
       :ok
     else
       Prometheus.increment_http_via_sqs_message_deliver_failure_count(consumer.id, consumer.name, response.status)

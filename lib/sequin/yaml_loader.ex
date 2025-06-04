@@ -943,6 +943,7 @@ defmodule Sequin.YamlLoader do
       {:ok, existing_consumer} ->
         with {:ok, params} <-
                Transforms.from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints),
+             params = ensure_function_keys_are_nil_when_not_specified(params),
              {:ok, consumer} <- Sequin.Consumers.update_sink_consumer(existing_consumer, params) do
           Logger.info("Updated HTTP push consumer", consumer_id: consumer.id)
           {:ok, consumer}
@@ -957,6 +958,16 @@ defmodule Sequin.YamlLoader do
           {:ok, consumer}
         end
     end
+  end
+
+  # Ensures that transform_id, filter_id, and routing_id are set to nil when not explicitly specified in the YAML.
+  # This allows users to remove attached functions by omitting them from the YAML configuration.
+  defp ensure_function_keys_are_nil_when_not_specified(params) do
+    params
+    |> Map.put_new(:transform_id, nil)
+    |> Map.put_new(:filter_id, nil)
+    |> Map.put_new(:routing_id, nil)
+    |> Map.put_new(:routing_mode, "static")
   end
 
   ###############

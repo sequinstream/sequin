@@ -42,6 +42,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.TestSupport.Models.CharacterMultiPK
   alias Sequin.TestSupport.Models.TestEventLogPartitioned
   alias Sequin.TestSupport.ReplicationSlots
+  alias Sequin.TestSupport.SimpleHttpServer
 
   @moduletag :unboxed
 
@@ -119,6 +120,39 @@ defmodule Sequin.PostgresReplicationTest do
               actions: [:insert, :update, :delete],
               column_filters: [],
               group_column_attnums: [Character.column_attnum("id")]
+            )
+        )
+
+      http_endpoint =
+        ConsumersFactory.insert_http_endpoint!(
+          account_id: account_id,
+          scheme: :http,
+          host: Application.get_env(:sequin, :jepsen_http_host),
+          port: Application.get_env(:sequin, :jepsen_http_port),
+          path: "/",
+          headers: %{"Content-Type" => "application/json"}
+        )
+
+      test_event_log_partitioned_consumer_http =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account_id,
+          type: :http_push,
+          legacy_transform: :none,
+          sink: %{
+            type: :http_push,
+            http_endpoint_id: http_endpoint.id,
+            http_endpoint: http_endpoint,
+            batch: true
+          },
+          replication_slot_id: pg_replication.id,
+          message_kind: :event,
+          status: :active,
+          sequence_id: test_event_log_partitioned_sequence.id,
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              actions: [:insert, :update, :delete],
+              column_filters: [],
+              group_column_attnums: [1]
             )
         )
 
@@ -246,6 +280,7 @@ defmodule Sequin.PostgresReplicationTest do
       {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       %{
+        sup: sup,
         pg_replication: pg_replication,
         source_db: source_db,
         event_character_consumer: event_character_consumer,
@@ -254,7 +289,8 @@ defmodule Sequin.PostgresReplicationTest do
         record_character_consumer: record_character_consumer,
         record_character_ident_consumer: record_character_ident_consumer,
         record_character_multi_pk_consumer: record_character_multi_pk_consumer,
-        test_event_log_partitioned_consumer: test_event_log_partitioned_consumer
+        test_event_log_partitioned_consumer: test_event_log_partitioned_consumer,
+        test_event_log_partitioned_consumer_http: test_event_log_partitioned_consumer_http
       }
     end
 
@@ -816,6 +852,42 @@ defmodule Sequin.PostgresReplicationTest do
       assert consumer_event.consumer_id == consumer.id
       assert consumer_event.table_oid == TestEventLogPartitioned.table_oid()
     end
+
+    @tag :jepsen
+    @tag capture_log: true
+    test "batch updates are delivered in sequence order via HTTP", %{sup: sup} do
+      {:ok, pid} = SimpleHttpServer.start_link(%{caller: self()})
+
+      on_exit(fn ->
+        try do
+          GenServer.stop(pid)
+        catch
+          _, _ -> :ok
+        end
+      end)
+
+      ref = make_ref()
+      initial_seq = 0
+      event = [seq: initial_seq, source_table_schema: inspect(ref)]
+      event = TestEventLogFactory.insert_test_event_log_partitioned!(event, repo: UnboxedRepo)
+
+      transactions_count = Application.get_env(:sequin, :jepsen_transactions_count)
+      transaction_queries_count = Application.get_env(:sequin, :jepsen_transaction_queries_count)
+
+      Enum.reduce(1..transactions_count, initial_seq, fn _, seq ->
+        {events, seq} =
+          Enum.reduce(1..transaction_queries_count, {[], seq}, fn _, {acc, seq} ->
+            seq = seq + 1
+            {[%{seq: seq} | acc], seq}
+          end)
+
+        TestEventLogFactory.update_test_event_log_partitioned!(event, Enum.reverse(events), repo: UnboxedRepo)
+        seq
+      end)
+
+      assert wait_and_validate_data(inspect(ref), -1, transactions_count * transaction_queries_count)
+      stop_supervised!(sup)
+    end
   end
 
   describe "PostgresReplication end-to-end with http push" do
@@ -948,7 +1020,7 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: SlotMessageHandlerMock)
       assert_receive {:change, [change]}, :timer.seconds(5)
 
-      assert is_action(change, :insert), "Expected change to be an insert, got: #{inspect(change)}"
+      assert action?(change, :insert), "Expected change to be an insert, got: #{inspect(change)}"
 
       assert fields_equal?(change.fields, record)
 
@@ -985,13 +1057,13 @@ defmodule Sequin.PostgresReplicationTest do
       assert insert2.commit_idx == 1
       assert insert3.commit_idx == 2
 
-      assert is_action(insert1, :insert)
+      assert action?(insert1, :insert)
       assert get_field_value(insert1.fields, "name") == "Paul Atreides"
 
-      assert is_action(insert2, :insert)
+      assert action?(insert2, :insert)
       assert get_field_value(insert2.fields, "name") == "Leto Atreides"
 
-      assert is_action(insert3, :insert)
+      assert action?(insert3, :insert)
       assert get_field_value(insert3.fields, "name") == "Chani"
 
       # Insert another character
@@ -1037,7 +1109,7 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: SlotMessageHandlerMock)
 
       assert_receive {:change, [change]}, :timer.seconds(1)
-      assert is_action(change, :insert)
+      assert action?(change, :insert)
 
       # Should have received the record (it was re-delivered)
       assert fields_equal?(change.fields, record)
@@ -1060,7 +1132,7 @@ defmodule Sequin.PostgresReplicationTest do
       record = character |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
       assert_receive {:change, [create_change]}, :timer.seconds(1)
-      assert is_action(create_change, :insert)
+      assert action?(create_change, :insert)
       assert is_integer(create_change.commit_lsn)
       assert create_change.commit_idx == 0
 
@@ -1072,7 +1144,7 @@ defmodule Sequin.PostgresReplicationTest do
       record = Map.put(record, "planet", "Arrakis")
 
       assert_receive {:change, [update_change]}, :timer.seconds(1)
-      assert is_action(update_change, :update)
+      assert action?(update_change, :update)
       assert update_change.commit_lsn > create_change.commit_lsn
       assert update_change.commit_idx == 0
 
@@ -1085,7 +1157,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.delete!(character)
 
       assert_receive {:change, [delete_change]}, :timer.seconds(1)
-      assert is_action(delete_change, :delete)
+      assert action?(delete_change, :delete)
       assert delete_change.commit_lsn > update_change.commit_lsn
       assert delete_change.commit_idx == 0
 
@@ -1111,7 +1183,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Wait for the message to be handled
       assert_receive {:changes, [change]}, :timer.seconds(1)
-      assert is_action(change, :insert)
+      assert action?(change, :insert)
       assert get_field_value(change.fields, "id") == character1.id
 
       # Insert another record
@@ -1119,7 +1191,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Wait for the message to be handled
       assert_receive {:changes, [change]}, :timer.seconds(1)
-      assert is_action(change, :insert)
+      assert action?(change, :insert)
       assert get_field_value(change.fields, "id") == character2.id
 
       # write the low watermark for character2
@@ -1141,10 +1213,10 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {:changes, [change2, change3]}, :timer.seconds(1)
 
       # Verify we only get the records >= low watermark
-      assert is_action(change2, :insert)
+      assert action?(change2, :insert)
       assert get_field_value(change2.fields, "id") == character2.id
 
-      assert is_action(change3, :insert)
+      assert action?(change3, :insert)
       assert get_field_value(change3.fields, "id") == character3.id
     end
 
@@ -1955,7 +2027,7 @@ defmodule Sequin.PostgresReplicationTest do
     start_supervised!(SlotProcessorServer.child_spec(opts))
   end
 
-  defp is_action(change, action) do
+  defp action?(change, action) do
     is_struct(change, Message) and change.action == action
   end
 
@@ -1992,5 +2064,23 @@ defmodule Sequin.PostgresReplicationTest do
 
   defp list_messages(consumer) do
     SlotMessageStore.peek_messages(consumer, 1000)
+  end
+
+  @spec wait_and_validate_data(binary(), non_neg_integer(), non_neg_integer()) :: any()
+  defp wait_and_validate_data(_, _, 0), do: true
+
+  defp wait_and_validate_data(ref, prev_seq, expected_count) do
+    receive do
+      %{"action" => "update", "record" => %{"source_table_schema" => ^ref, "seq" => current_seq}} ->
+        if current_seq > prev_seq,
+          do: wait_and_validate_data(ref, current_seq, expected_count - 1),
+          else: flunk("Received message with seq #{current_seq} which is less than prev_seq #{prev_seq}")
+
+      _ ->
+        wait_and_validate_data(ref, prev_seq, expected_count)
+    after
+      5_000 ->
+        flunk("Did not receive :simple_http_server_loaded within 5 seconds")
+    end
   end
 end

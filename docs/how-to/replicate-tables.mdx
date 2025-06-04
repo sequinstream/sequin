@@ -15,12 +15,12 @@ This approach works well when you need to:
 - Consolidate data from multiple Postgres tables or databases to a single destination
 - Programmatically replicate data between development or staging environments
 
-## Prerequisites 
+## Prerequisites
 
 If you're self-hosting Sequin, you'll need:
 
 1. [Sequin installed](/running-sequin)
-2. [A database connected](/connect-postgres) 
+2. [A database connected](/connect-postgres)
 3. A destination database ready to receive updates
 4. A sink destination (like SQS, Kafka, Redis, or HTTP)
 
@@ -39,7 +39,7 @@ If you're using Sequin Cloud, you'll need:
 
 Your table replication pipeline will have these components:
 
-1. **Source table(s)**: The table(s) in Postgres that you want to replicate
+1. **Source table(s)**: The table(s) or schema(s) in Postgres that you want to replicate
 2. **Destination sink**: The message queue or webhook endpoint that delivers changes to your processing system (e.g. SQS, Kafka, or HTTP endpoint)
 3. **Replication processor**: An application or service you write that receives changes and upserts to your destination table
 
@@ -49,9 +49,9 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
 <Steps>
   <Step title="Select the source">
-    Select the table you want to replicate.
+    Select the table(s) or schema(s) you want to replicate.
 
-    Optionally add SQL filters to sync a subset of your source table to the destination.
+    Optionally add SQL filters to sync a subset of your source table(s) to the destination.
   </Step>
 
   <Step title="Select the message type">
@@ -60,7 +60,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
   <Step title="Leave message grouping default">
     If your sink supports message grouping, leave the default option selected for "Message grouping".
-    
+
     This will ensure that messages are [grouped by primary key](/reference/sinks/overview#grouping-and-ordering), helping eliminate race conditions as you write rows to your destination.
   </Step>
 
@@ -121,24 +121,24 @@ import uuid
 
 def process_change(change):
     product_id = uuid.UUID(change.record['id'])
-    
+
     if change.action in ['insert', 'update', 'read']:
         # Map source table to appropriate column
         record = {
             'product_id': product_id,
             'data': json.dumps(change.record)
         }
-        
+
         db.execute(f"""
             insert into replicated_products (product_id, data)
             values (%(product_id)s, %(data)s)
             on conflict (product_id) do update set
                 data = excluded.data
         """, record)
-        
+
     elif change.action == 'delete':
         db.execute(f"""
-            delete from replicated_products 
+            delete from replicated_products
             where product_id = %(product_id)s
         """, {'product_id': product_id})
 ```
@@ -172,7 +172,7 @@ Here's how to process changes with this schema:
 def process_change(change):
     source_table = change.metadata.table_name
     record_id = uuid.UUID(change.record['id'])
-    
+
     if change.action in ['insert', 'update', 'read']:
         # Map source table to appropriate column
         record = {
@@ -180,18 +180,18 @@ def process_change(change):
             'record_id': record_id,
             'data': json.dumps(change.record)
         }
-        
+
         db.execute("""
             insert into combined_records (source_table, record_id, data)
             values (%(source_table)s, %(record_id)s, %(data)s)
             on conflict (source_table, record_id) do update set
                 data = excluded.data
         """, record)
-        
+
     elif change.action == 'delete':
         db.execute("""
-            delete from combined_records 
-            where source_table = %(source_table)s 
+            delete from combined_records
+            where source_table = %(source_table)s
             and record_id = %(record_id)s
         """, {'source_table': source_table, 'record_id': record_id})
 ```
@@ -224,24 +224,24 @@ Here's how to process changes with this schema:
 def process_change(change):
     source_table = change.metadata.table_name
     record_id = uuid.UUID(change.record['id'])
-    
+
     if change.action in ['insert', 'update', 'read']:
         # Map source table to appropriate column
         record = {
             f"{source_table}_id": record_id,
             'data': json.dumps(change.record)
         }
-        
+
         db.execute(f"""
             insert into combined_records ({source_table}_id, data)
             values (%(id)s, %(data)s)
             on conflict ({source_table}_id) do update set
                 data = excluded.data
         """, record)
-        
+
     elif change.action == 'delete':
         db.execute(f"""
-            delete from combined_records 
+            delete from combined_records
             where {source_table}_id = %(id)s
         """, {'id': record_id})
 ```

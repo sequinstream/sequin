@@ -31,8 +31,8 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Redis Stream Sink"
 ### Configure the source
 
 <Steps>
-  <Step title="Select source table">
-    Under "Source", select the table you want to stream data from.
+  <Step title="Select source table(s) or schema(s)">
+    Under "Source", select the table(s) or schema(s) you want to stream data from.
   </Step>
 
   <Step title="Choose message type">
@@ -102,7 +102,7 @@ If messages don't seem to be flowing:
 - **Setup a processor**
 
    Now that your Postgres data is flowing into Redis, you can setup a processor to read from the stream and process the data. See the Redis docs on [`XREAD`](https://redis.io/docs/latest/commands/xread/).
-   
+
    Refer to the [Redis Stream sink reference](/reference/sinks/redis-stream) for the shape of messages that Sequin will publish to Redis.
 
 - **Deploy your implementation**

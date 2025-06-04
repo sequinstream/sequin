@@ -1,9 +1,7 @@
 ---
 title: "Transactionally start a Temporal workflow when data changes in your database"
-sidebarTitle: "Temporal"
+sidebarTitle: "Start a Temporal workflow"
 description: "Learn how to use Sequin to trigger a Temporal workflow when data changes in your database. Ensure consistency across services and build complex, transactionally-consistent workflows."
-icon: "radar"
-iconType: "sharp-solid"
 ---
 
 [Temporal](https://temporal.io/) is a workflow engine that reliably runs long-running business processes. Often, you need to guarantee consistency between business processes executed by Temporal and your database. For instance, no matter what service modifies the data in your database, you want to ensure a workflow is executed to process the change. That is, you need a transactionally-consistent workflow.

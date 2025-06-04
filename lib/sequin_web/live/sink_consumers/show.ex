@@ -69,15 +69,11 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           send(self(), :update_backfills)
         end
 
-        last_completed_backfill =
-          Consumers.find_backfill(consumer.id, state: :completed, limit: 1, order_by: [desc: :completed_at])
-
         # Initialize message-related assigns
         socket =
           socket
           |> assign(:consumer, consumer)
           |> assign(:show_ack_id, show_ack_id)
-          |> assign(:last_completed_backfill, last_completed_backfill)
           |> assign(:api_tokens, ApiTokens.list_tokens_for_account(current_account.id))
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
           |> assign(:functions, Consumers.list_functions_for_account(current_account.id))
@@ -632,22 +628,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   def handle_info(:update_backfills, socket) do
-    consumer = Repo.preload(socket.assigns.consumer, :active_backfills, force: true)
-
-    last_completed_backfill =
-      Consumers.find_backfill(consumer.id, state: :completed, limit: 1, order_by: [desc: :completed_at])
+    socket = load_consumer_backfills(socket)
 
     # Update backfill every 200ms if there is an active backfill, otherwise every second
-    case consumer.active_backfills do
+    case socket.assigns.consumer.active_backfills do
       [] -> Process.send_after(self(), :update_backfills, 1000)
       [_ | _] -> Process.send_after(self(), :update_backfills, 200)
     end
 
-    {:noreply,
-     socket
-     |> assign(:consumer, consumer)
-     |> assign(:last_completed_backfill, last_completed_backfill)
-     |> load_consumer_backfills()}
+    {:noreply, socket}
   end
 
   @impl Phoenix.LiveView
@@ -829,7 +818,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       routing: encode_function(consumer.routing),
       filter_id: consumer.filter_id,
       filter: encode_function(consumer.filter),
-      schemaFilter: encode_schema_filter(consumer.schema_filter)
+      schemaFilter: encode_schema_filter(consumer.schema_filter),
+      active_backfills: Enum.map(consumer.active_backfills, &encode_backfill/1)
     }
   end
 
@@ -1626,7 +1616,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   # Function to load backfills for the consumer
   defp load_consumer_backfills(%{assigns: %{live_action: action}} = socket) when action != :backfills do
-    assign(socket, backfills: [], backfills_total_count: 0)
+    consumer = Repo.preload(socket.assigns.consumer, :active_backfills, force: true)
+    assign(socket, consumer: consumer, backfills: [], backfills_total_count: 0)
   end
 
   defp load_consumer_backfills(
@@ -1640,7 +1631,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       |> Enum.drop(offset)
       |> Enum.take(page_size)
 
+    consumer = Repo.preload(socket.assigns.consumer, :active_backfills, force: true)
+
     socket
+    |> assign(:consumer, consumer)
     |> assign(:backfills, backfills)
     |> assign(:backfills_total_count, length(all_backfills))
   end

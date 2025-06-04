@@ -99,6 +99,7 @@
       startPosition: "beginning" | "specific" | "none";
       sortColumnAttnum: number | null;
       initialSortColumnValue: string | null;
+      selectedTableOids: number[];
     };
     groupColumnAttnums: number[];
     batchSize: number;
@@ -129,6 +130,7 @@
       startPosition: "none",
       sortColumnAttnum: null,
       initialSortColumnValue: null,
+      selectedTableOids: [],
     },
     groupColumnAttnums: consumer.group_column_attnums || [],
     batchSize: Number(consumer.batch_size) || 1,
@@ -169,63 +171,12 @@
   let selectedDatabase: Database | null = null;
   let selectedSchema: string | null = form.schema;
   let selectedTable: DatabaseTable | null = null;
+  let tablesInSchema: DatabaseTable[] | null = null;
   let isCreateConsumerDisabled: boolean = true;
 
   const pushEvent = (event, payload = {}, cb = (reply: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
-
-  const defaultSortColumnNames = [
-    // Updated/Modified columns
-    "updated_at",
-    "UpdatedAt",
-    "updatedAt",
-    "last_modified",
-    "LastModified",
-    "lastModified",
-    "last_modified_at",
-    "LastModifiedAt",
-    "lastModifiedAt",
-    "last_updated",
-    "lastUpdated",
-    "last_updated_at",
-    "lastUpdatedAt",
-    "modified_at",
-    "ModifiedAt",
-    "modifiedAt",
-    "modified_date",
-    "modifiedDate",
-    "modified_on",
-    "modifiedOn",
-    "update_time",
-    "updateTime",
-    "modification_date",
-    "modificationDate",
-    "dateModified",
-    "dateUpdated",
-
-    // Created/Inserted columns
-    "created_at",
-    "CreatedAt",
-    "createdAt",
-    "inserted_at",
-    "InsertedAt",
-    "insertedAt",
-    "creation_date",
-    "CreationDate",
-    "creationDate",
-    "creation_time",
-    "create_time",
-    "createTime",
-    "created_date",
-    "created_on",
-    "DateCreated",
-    "dateCreated",
-    "insert_date",
-    "insert_time",
-    "insertTime",
-    "timestamp",
-  ];
 
   $: {
     if (form.postgresDatabaseId) {
@@ -248,9 +199,17 @@
       }
     }
 
+    if (selectedSchema) {
+      tablesInSchema = selectedDatabase.tables.filter(
+        (table) => table.schema === selectedSchema,
+      );
+    }
+
     isCreateConsumerDisabled =
       !form.postgresDatabaseId || (!form.tableOid && !form.schema);
   }
+
+  $: console.log("form.backfill", form.backfill);
 
   const isEditMode = !!consumer.id;
 
@@ -366,10 +325,11 @@
   let backfillSectionEnabled = false;
   let backfillSectionExpanded = false;
   $: {
-    transformSectionEnabled = selectedTable && consumer.type !== "redis_stream";
+    transformSectionEnabled =
+      (selectedTable || selectedSchema) && consumer.type !== "redis_stream";
     transformSectionExpanded = transformSectionEnabled && !isEditMode;
 
-    backfillSectionEnabled = selectedTable && !isEditMode;
+    backfillSectionEnabled = (selectedTable || selectedSchema) && !isEditMode;
     backfillSectionExpanded = backfillSectionEnabled && !isEditMode;
   }
 
@@ -563,9 +523,9 @@
               class="text-primary underline">Let us know</a
             > if you want this.
           </p>
-        {:else if !selectedTable}
+        {:else if !selectedTable && !selectedSchema}
           <p class="text-sm text-muted-foreground">
-            Please select a table first.
+            Please select a table or schema first.
           </p>
         {:else if form.transform === "none"}
           <p class="text-sm text-muted-foreground">
@@ -629,9 +589,26 @@
 
         <svelte:fragment slot="summary">
           <p class="text-sm text-muted-foreground">
-            {#if !selectedTable}
+            {#if !selectedTable && !selectedSchema}
               <p class="text-sm text-muted-foreground">
-                Please select a table first.
+                Please select a table or schema first.
+              </p>
+            {:else if selectedSchema && form.backfill.selectedTableOids.length == tablesInSchema.length}
+              <p class="text-sm text-muted-foreground">
+                Backfilling all tables in the <b>{selectedSchema}</b> schema.
+              </p>
+            {:else if selectedSchema && form.backfill.selectedTableOids.length == 1}
+              <p class="text-sm text-muted-foreground">
+                Backfilling the <b
+                  >{tablesInSchema.find(
+                    (t) => t.oid === form.backfill.selectedTableOids[0],
+                  )?.name}</b
+                > table.
+              </p>
+            {:else if selectedSchema && form.backfill.selectedTableOids.length < tablesInSchema.length}
+              <p class="text-sm text-muted-foreground">
+                Backfilling {form.backfill.selectedTableOids.length} tables in the
+                <b>{selectedSchema}</b> schema.
               </p>
             {:else if form.backfill.startPosition === "none"}
               No initial backfill. You can run backfills at any time in the
@@ -650,6 +627,7 @@
         <svelte:fragment slot="content">
           <BackfillForm
             table={selectedTable}
+            {tablesInSchema}
             form={form.backfill}
             formErrors={errors.backfill}
           />

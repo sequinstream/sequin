@@ -12,6 +12,7 @@
     AlertTriangle,
     StopCircle,
     BookText,
+    ArrowDownSquare,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -30,6 +31,7 @@
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
   import ElasticsearchIcon from "../sinks/elasticsearch/ElasticsearchIcon.svelte";
   import StopSinkModal from "./StopSinkModal.svelte";
+  import { Badge } from "$lib/components/ui/badge";
 
   export let consumer;
   export let consumerTitle;
@@ -280,6 +282,12 @@
         data-phx-link-state="push"
       >
         Backfills
+        {#if consumer.active_backfills.length > 0}
+          <Badge variant="secondary" class="ml-1">
+            {consumer.active_backfills.length} active
+            <ArrowDownSquare class="h-4 w-4 ml-1" />
+          </Badge>
+        {/if}
       </a>
       <a
         href={messageUrl}

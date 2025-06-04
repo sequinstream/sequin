@@ -9,7 +9,7 @@ defmodule Sequin.EtsMultiset do
   """
   @type key :: any()
   @type value :: any()
-  @type t :: :ets.tid()
+  @type t :: :ets.tid() | atom()
   @type access :: :protected | :private | :public
 
   @doc """

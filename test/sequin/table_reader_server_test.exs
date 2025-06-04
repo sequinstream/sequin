@@ -648,7 +648,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       pks_to_mark_as_seen = [[to_string(char1.id)], [to_string(char2.id)]]
 
       # Call pks_seen to remove these PKs from all batches
-      assert :ok = TableReaderServer.pks_seen(consumer.id, pks_to_mark_as_seen)
+      assert :ok = TableReaderServer.pks_seen(table_oid, pks_to_mark_as_seen)
 
       # Flush the batch
       assert :ok =

@@ -852,13 +852,13 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       # Mock that only consumer1 has a running TableReaderServer
-      expect(TableReaderServerMock, :running_for_consumer?, 2, fn consumer_id ->
-        consumer_id == consumer1.id
+      expect(TableReaderServerMock, :active_table_oids, 1, fn ->
+        [123]
       end)
 
       # Expect pks_seen to be called only for consumer1's messages
-      expect(TableReaderServerMock, :pks_seen, 1, fn consumer_id, pks ->
-        assert consumer_id == consumer1.id
+      expect(TableReaderServerMock, :pks_seen, 1, fn table_oid, pks ->
+        assert table_oid == 123
         # Single composite pk
         assert pks == [[1, 2]]
         :ok
@@ -903,13 +903,13 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       # Mock that the consumer has a running TableReaderServer
-      expect(TableReaderServerMock, :running_for_consumer?, 1, fn consumer_id ->
-        consumer_id == consumer.id
+      expect(TableReaderServerMock, :active_table_oids, 1, fn ->
+        [123]
       end)
 
       # Expect pks_seen to be called with composite pks from both messages
-      expect(TableReaderServerMock, :pks_seen, 1, fn consumer_id, pks ->
-        assert consumer_id == consumer.id
+      expect(TableReaderServerMock, :pks_seen, 1, fn table_oid, pks ->
+        assert table_oid == 123
         # Two different composite pks
         assert pks == [[1, 2], [3, 4, 5]]
         :ok

@@ -144,6 +144,11 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
               Health.delete_event(consumer.id, "backfill_fetch_batch")
               Logger.info("Stopping TableReaderServer for backfill #{backfill.id}", backfill_status: s)
               RuntimeSupervisor.stop_table_reader(backfill.id)
+
+              Sequin.Runtime.TableReaderServer.remove_backfill_id_from_table_oid_to_backfill_id_ets_table(
+                backfill.table_oid,
+                backfill.id
+              )
           end
 
           :ok

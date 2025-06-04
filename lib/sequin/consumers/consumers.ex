@@ -322,7 +322,14 @@ defmodule Sequin.Consumers do
   end
 
   def table_reader_finished(%Backfill{} = backfill) do
-    update_backfill(backfill, %{state: :completed})
+    with {:ok, backfill} <- update_backfill(backfill, %{state: :completed}) do
+      Sequin.Runtime.TableReaderServer.remove_backfill_id_from_table_oid_to_backfill_id_ets_table(
+        backfill.table_oid,
+        backfill.id
+      )
+
+      {:ok, backfill}
+    end
   end
 
   def create_sink_consumer(account_id, attrs, opts \\ [])

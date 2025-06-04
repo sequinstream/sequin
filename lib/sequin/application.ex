@@ -26,6 +26,9 @@ defmodule Sequin.Application do
     # Add this line to create the new ETS table for health debouncing
     :ets.new(Sequin.Health.debounce_ets_table(), [:set, :public, :named_table])
 
+    # This is a global multiset of table_oid -> backfill_ids
+    Sequin.Runtime.TableReaderServer.setup_table_oid_to_backfill_id_ets_table()
+
     :ets.new(Sequin.Consumers.posthog_ets_table(), [:set, :public, :named_table])
 
     :syn.add_node_to_scopes([:account, :replication, :consumers])

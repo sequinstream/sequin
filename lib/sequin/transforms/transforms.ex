@@ -472,7 +472,7 @@ defmodule Sequin.Transforms do
 
   defp maybe_obfuscate(nil, _), do: nil
   defp maybe_obfuscate(value, true), do: value
-  defp maybe_obfuscate(_value, false), do: "********"
+  defp maybe_obfuscate(value, false), do: Sequin.String.obfuscate(value)
 
   def from_external_postgres_database(params, account_id) do
     with {:ok, db_params} <- parse_db_params(params) do

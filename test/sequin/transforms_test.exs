@@ -21,8 +21,9 @@ defmodule Sequin.TransformsTest do
 
     test "returns a map of the user" do
       user = AccountsFactory.user()
-      assert %{email: email, password: "********"} = Transforms.to_external(user)
+      assert %{email: email, password: password} = Transforms.to_external(user)
       assert email == user.email
+      assert password == Sequin.String.obfuscate(user.password)
     end
 
     test "returns a map of the postgres database" do
@@ -47,7 +48,7 @@ defmodule Sequin.TransformsTest do
                id: id,
                name: name,
                username: username,
-               password: "********",
+               password: password,
                hostname: hostname,
                database: database_name,
                slot: %{name: slot_name},
@@ -62,6 +63,7 @@ defmodule Sequin.TransformsTest do
       assert id == database.id
       assert name == database.name
       assert username == database.username
+      assert password == Sequin.String.obfuscate(database.password)
       assert hostname == database.hostname
       assert database_name == database.database
       assert port == database.port
@@ -176,7 +178,7 @@ defmodule Sequin.TransformsTest do
                local: true,
                path: "/webhook",
                headers: %{"Content-Type" => "application/json"},
-               encrypted_headers: %{"Authorization" => "********"}
+               encrypted_headers: %{"Authorization" => "s****t"}
              } = json
     end
 
@@ -198,7 +200,7 @@ defmodule Sequin.TransformsTest do
                name: "standard_endpoint",
                url: "https://api.example.com/webhook",
                headers: %{"Content-Type" => "application/json"},
-               encrypted_headers: %{"Authorization" => "********"}
+               encrypted_headers: %{"Authorization" => "s****t"}
              } = json
     end
 
@@ -267,17 +269,17 @@ defmodule Sequin.TransformsTest do
                  topic_id: topic_id,
                  credentials: %{
                    type: "service_account",
-                   private_key: "********",
+                   private_key: "---**********************************************************\n",
                    api_key: nil,
-                   client_id: "********",
+                   client_id: "1*******9",
                    client_secret: nil,
                    project_id: "my-project",
                    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
                    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-                   client_email: "********",
+                   client_email: "my-*************************************************m",
                    client_x509_cert_url:
                      "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com",
-                   private_key_id: "********",
+                   private_key_id: "k****3",
                    token_uri: "https://oauth2.googleapis.com/token",
                    universe_domain: nil
                  }
@@ -356,7 +358,7 @@ defmodule Sequin.TransformsTest do
                  endpoint_url: endpoint_url,
                  index_name: index_name,
                  auth_type: auth_type,
-                 auth_value: "********",
+                 auth_value: "sen*************y",
                  batch_size: batch_size
                },
                group_column_names: group_column_names,

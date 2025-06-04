@@ -1263,6 +1263,12 @@ defmodule Sequin.Consumers do
     table_matches? and column_filters_match?
   end
 
+  def matches_record?(%SinkConsumer{schema_filter: %SchemaFilter{}} = consumer, _table_oid, _record_attnums_to_values) do
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+
+    true
+  end
+
   def matches_record?(consumer, table_oid, record_attnums_to_values) do
     source_table = Sequin.Enum.find!(consumer.source_tables, &(&1.oid == table_oid))
     matches? = column_filters_match_record?(source_table.column_filters, record_attnums_to_values)
@@ -1453,6 +1459,7 @@ defmodule Sequin.Consumers do
     sink_consumer_id
     |> Backfill.where_sink_consumer_id()
     |> order_by(desc: :inserted_at)
+    |> order_by(desc: :id)
     |> Repo.all()
   end
 

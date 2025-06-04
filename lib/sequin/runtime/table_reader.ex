@@ -7,6 +7,7 @@ defmodule Sequin.Runtime.TableReader do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
@@ -482,6 +483,9 @@ defmodule Sequin.Runtime.TableReader do
       table |> record_pks(record_attnums_to_values) |> Enum.join(",")
     end
   end
+
+  # For schema filters, we group by defaults (pks)
+  defp group_column_attnums(%SinkConsumer{schema_filter: %SchemaFilter{}}), do: nil
 
   defp group_column_attnums(%{sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums}}) do
     group_column_attnums

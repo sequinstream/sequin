@@ -98,7 +98,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :health, :map, virtual: true
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
-    has_one :active_backfill, Backfill, where: [state: :active]
+    has_many :active_backfills, Backfill, where: [state: :active]
 
     # Sequences
     # FIXME: Refactor / remove both of these?

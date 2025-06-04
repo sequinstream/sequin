@@ -217,8 +217,8 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       assert cursor == nil
 
       # Verify that the consumer's backfill has been updated
-      consumer = Repo.preload(consumer, :active_backfill, force: true)
-      refute consumer.active_backfill
+      backfill = Repo.reload(backfill)
+      assert backfill.state == :completed
     end
 
     test "sets group_id based on PKs by default", %{
@@ -307,8 +307,8 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       assert cursor == :error
 
       # Verify that the consumer's backfill has been updated
-      filtered_consumer = Repo.preload(filtered_consumer, :active_backfill, force: true)
-      refute filtered_consumer.active_backfill
+      backfill = Repo.reload(filtered_consumer_backfill)
+      assert backfill.state == :completed
     end
 
     test "processes events for event consumers", %{
@@ -341,8 +341,8 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       assert cursor == :error
 
       # Verify that the consumer's backfill has been updated
-      event_consumer = Repo.preload(event_consumer, :active_backfill, force: true)
-      refute event_consumer.active_backfill
+      backfill = Repo.reload(event_consumer_backfill)
+      assert backfill.state == :completed
     end
 
     # TODO: Come back to this after we fix failed message path
@@ -491,7 +491,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       end
 
       # Then, mock the batch fetch to timeout on first call
-      fetch_batch = fn _conn, _consumer, _table, _cursor, _opts ->
+      fetch_batch = fn _conn, _consumer, _backfill, _table, _cursor, _opts ->
         count = :atomics.add_get(call_count2, 1, 1)
 
         case count do

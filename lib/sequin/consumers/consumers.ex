@@ -321,16 +321,8 @@ defmodule Sequin.Consumers do
     Repo.all(SinkConsumer.where_active_backfill())
   end
 
-  def table_reader_finished(consumer_id) do
-    consumer = get_consumer!(consumer_id)
-
-    case Repo.preload(consumer, :active_backfill) do
-      %{active_backfill: %Backfill{} = backfill} ->
-        update_backfill(backfill, %{state: :completed})
-
-      _ ->
-        :ok
-    end
+  def table_reader_finished(%Backfill{} = backfill) do
+    update_backfill(backfill, %{state: :completed})
   end
 
   def create_sink_consumer(account_id, attrs, opts \\ [])

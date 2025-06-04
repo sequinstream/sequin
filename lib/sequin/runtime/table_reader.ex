@@ -2,6 +2,7 @@ defmodule Sequin.Runtime.TableReader do
   @moduledoc false
   alias Sequin.Constants
   alias Sequin.Consumers
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
@@ -206,13 +207,21 @@ defmodule Sequin.Runtime.TableReader do
   @spec fetch_batch(
           db_or_conn :: Postgres.db_conn(),
           consumer :: SinkConsumer.t(),
+          backfill :: Backfill.t(),
           table :: PostgresDatabaseTable.t(),
           min_cursor :: KeysetCursor.cursor(),
           opts :: Keyword.t()
         ) ::
           {:ok, %{messages: [ConsumerRecord.t() | ConsumerEvent.t()], next_cursor: KeysetCursor.cursor() | nil}}
           | {:error, any()}
-  def fetch_batch(db_or_conn, %SinkConsumer{} = consumer, %PostgresDatabaseTable{} = table, min_cursor, opts \\ []) do
+  def fetch_batch(
+        db_or_conn,
+        %SinkConsumer{} = consumer,
+        %Backfill{} = backfill,
+        %PostgresDatabaseTable{} = table,
+        min_cursor,
+        opts \\ []
+      ) do
     timeout = Keyword.get(opts, :timeout, :timer.minutes(1))
     {sql, params} = fetch_batch_query(table, min_cursor, opts)
 
@@ -236,7 +245,7 @@ defmodule Sequin.Runtime.TableReader do
           table
           |> records_by_column_attnum(rows)
           |> Stream.filter(&Consumers.matches_record?(consumer, table.oid, &1))
-          |> Stream.map(&message_from_row(consumer, table, &1))
+          |> Stream.map(&message_from_row(consumer, backfill, table, &1))
           |> Enum.filter(&Consumers.matches_filter?(consumer, &1))
 
         {:ok, %{messages: messages, next_cursor: next_cursor}}
@@ -367,7 +376,12 @@ defmodule Sequin.Runtime.TableReader do
     end
   end
 
-  defp message_from_row(%SinkConsumer{message_kind: :record} = consumer, %PostgresDatabaseTable{} = table, record) do
+  defp message_from_row(
+         %SinkConsumer{message_kind: :record} = consumer,
+         %Backfill{},
+         %PostgresDatabaseTable{} = table,
+         record
+       ) do
     data = build_record_data(table, consumer, record)
 
     %ConsumerRecord{
@@ -381,9 +395,14 @@ defmodule Sequin.Runtime.TableReader do
     }
   end
 
-  defp message_from_row(%SinkConsumer{message_kind: :event} = consumer, %PostgresDatabaseTable{} = table, record) do
+  defp message_from_row(
+         %SinkConsumer{message_kind: :event} = consumer,
+         %Backfill{} = backfill,
+         %PostgresDatabaseTable{} = table,
+         record
+       ) do
     record_pks = record_pks(table, record)
-    data = build_event_data(table, consumer, record, record_pks)
+    data = build_event_data(table, consumer, backfill, record, record_pks)
 
     %ConsumerEvent{
       consumer_id: consumer.id,
@@ -414,7 +433,7 @@ defmodule Sequin.Runtime.TableReader do
     }
   end
 
-  defp build_event_data(table, consumer, record_attnums_to_values, record_pks) do
+  defp build_event_data(table, consumer, backfill, record_attnums_to_values, record_pks) do
     %ConsumerEventData{
       action: :read,
       record: build_record_payload(table, record_attnums_to_values),
@@ -427,7 +446,7 @@ defmodule Sequin.Runtime.TableReader do
           name: consumer.name
         },
         commit_timestamp: DateTime.utc_now(),
-        idempotency_key: Base.encode64("#{consumer.active_backfill.id}:#{record_pks}")
+        idempotency_key: Base.encode64("#{backfill.id}:#{record_pks}")
       }
     }
   end

@@ -137,7 +137,7 @@ defmodule Sequin.Transforms do
   def to_external(%SinkConsumer{sink: sink} = consumer, show_sensitive) do
     consumer =
       consumer
-      |> Repo.preload([:active_backfill, :transform, sequence: [:postgres_database]])
+      |> Repo.preload([:active_backfills, :transform, sequence: [:postgres_database]])
       |> SinkConsumer.preload_http_endpoint!()
 
     table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
@@ -157,7 +157,7 @@ defmodule Sequin.Transforms do
         batch_size: consumer.batch_size,
         transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
         timestamp_format: consumer.timestamp_format,
-        active_backfill: if(consumer.active_backfill, do: to_external(consumer.active_backfill, show_sensitive)),
+        active_backfills: Enum.map(consumer.active_backfills, &to_external(&1, show_sensitive)),
         max_retry_count: consumer.max_retry_count,
         load_shedding_policy: consumer.load_shedding_policy,
         annotations: consumer.annotations

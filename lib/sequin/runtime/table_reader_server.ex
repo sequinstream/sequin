@@ -135,21 +135,8 @@ defmodule Sequin.Runtime.TableReaderServer do
     end
   end
 
-  # Convenience function
-  def via_tuple(%SinkConsumer{} = consumer) do
-    consumer = Repo.preload(consumer, :active_backfill)
-    via_tuple(consumer.active_backfill.id)
-  end
-
   def via_tuple(backfill_id) when is_binary(backfill_id) do
     {:via, :syn, {:replication, {__MODULE__, backfill_id}}}
-  end
-
-  # Convenience function
-  def via_tuple_for_consumer(consumer_id) do
-    consumer_id
-    |> Consumers.get_consumer!()
-    |> via_tuple()
   end
 
   def child_spec(opts) do
@@ -271,7 +258,7 @@ defmodule Sequin.Runtime.TableReaderServer do
       setting_check_sms_timeout: Keyword.get(opts, :check_sms_timeout, :timer.seconds(5)),
       fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2),
       fetch_batch_pks: Keyword.get(opts, :fetch_batch_pks, &TableReader.fetch_batch_pks/4),
-      fetch_batch: Keyword.get(opts, :fetch_batch, &TableReader.fetch_batch/5),
+      fetch_batch: Keyword.get(opts, :fetch_batch, &TableReader.fetch_batch/6),
       task_supervisor: Keyword.get(opts, :task_supervisor, Sequin.TaskSupervisor)
     }
 
@@ -353,7 +340,7 @@ defmodule Sequin.Runtime.TableReaderServer do
         %State{current_id_fetch_task: nil, current_batch_fetch_task: nil} = state
       ) do
     execute_timed(:fetch_batch, fn ->
-      include_min = state.cursor == initial_min_cursor(state.consumer)
+      include_min = state.cursor == initial_min_cursor(state.backfill)
       batch_id = UUID.uuid4()
       Logger.metadata(current_batch_id: batch_id)
 
@@ -408,7 +395,7 @@ defmodule Sequin.Runtime.TableReaderServer do
         :running,
         %State{current_id_fetch_task: %{ref: ref, batch_id: batch_id, page_size: page_size}} = state
       ) do
-    include_min = state.cursor == initial_min_cursor(state.consumer)
+    include_min = state.cursor == initial_min_cursor(state.backfill)
     Process.demonitor(ref, [:flush])
     now = Sequin.utc_now()
     time_ms = DateTime.diff(now, state.current_id_fetch_task.started_at, :millisecond)
@@ -419,8 +406,8 @@ defmodule Sequin.Runtime.TableReaderServer do
         state = %{state | current_id_fetch_task: nil}
 
         if state.unflushed_batches == [] and state.flushed_batches == [] do
-          Consumers.table_reader_finished(state.consumer.id)
-          TableReader.delete_cursor(state.consumer.active_backfill.id)
+          Consumers.table_reader_finished(state.backfill)
+          TableReader.delete_cursor(state.backfill.id)
 
           Logger.info("[TableReaderServer] ID fetch returned no records. No batches to flush. Table pagination complete.",
             cursor: state.cursor
@@ -453,6 +440,7 @@ defmodule Sequin.Runtime.TableReaderServer do
         table = table(state)
         table_oid = state.backfill.table_oid
         consumer = state.consumer
+        backfill = state.backfill
         id = state.id
         slot_id = state.consumer.replication_slot.id
         cursor = state.cursor
@@ -472,6 +460,7 @@ defmodule Sequin.Runtime.TableReaderServer do
                   state.fetch_batch.(
                     t_conn,
                     consumer,
+                    backfill,
                     table,
                     cursor,
                     include_min: include_min,
@@ -677,6 +666,8 @@ defmodule Sequin.Runtime.TableReaderServer do
   end
 
   def handle_event({:timeout, :check_state}, _, _state_name, %State{} = state) do
+    state = reload_backfill(state)
+
     case preload_consumer(state.consumer) do
       nil ->
         Logger.info("[TableReaderServer] Consumer #{state.consumer.id} not found, shutting down")
@@ -690,8 +681,12 @@ defmodule Sequin.Runtime.TableReaderServer do
         stale_batch = Enum.find(state.unflushed_batches, fn batch -> current_slot_lsn > batch.appx_lsn end)
 
         cond do
-          is_nil(consumer.active_backfill) ->
-            Logger.info("[TableReaderServer] No active backfill found, shutting down")
+          state.backfill.state != :active ->
+            Logger.info("[TableReaderServer] Backfill #{state.backfill.id} is not active, shutting down",
+              backfill_id: state.backfill.id,
+              state: state.backfill.state
+            )
+
             {:stop, :normal}
 
           stale_batch ->
@@ -783,7 +778,7 @@ defmodule Sequin.Runtime.TableReaderServer do
           if batch_size == 0 do
             # Complete the batch immediately
             Logger.info("[TableReaderServer] Batch #{batch.id} is committed")
-            :ok = TableReader.update_cursor(state.consumer.active_backfill.id, batch.cursor)
+            :ok = TableReader.update_cursor(state.backfill.id, batch.cursor)
 
             {:keep_state, %{state | unflushed_batches: batches}, [maybe_fetch_timeout(), {:reply, from, :ok}]}
           else
@@ -871,7 +866,7 @@ defmodule Sequin.Runtime.TableReaderServer do
           # Complete each batch in order
           Enum.each(completed_batches, fn batch ->
             Logger.info("[TableReaderServer] Batch #{batch.id} is committed")
-            :ok = TableReader.update_cursor(state.consumer.active_backfill.id, batch.cursor)
+            :ok = TableReader.update_cursor(state.backfill.id, batch.cursor)
           end)
 
           state = maybe_update_backfill(state, completed_batches_size)
@@ -882,8 +877,8 @@ defmodule Sequin.Runtime.TableReaderServer do
           ]
 
           if state.unflushed_batches == [] and remaining_batches == [] and state.done_fetching do
-            Consumers.table_reader_finished(state.consumer.id)
-            TableReader.delete_cursor(state.consumer.active_backfill.id)
+            Consumers.table_reader_finished(state.backfill)
+            TableReader.delete_cursor(state.backfill.id)
             {:stop, :normal}
           else
             {:keep_state, %{state | flushed_batches: remaining_batches}, actions}
@@ -1019,8 +1014,8 @@ defmodule Sequin.Runtime.TableReaderServer do
     end
   end
 
-  defp initial_min_cursor(consumer) do
-    consumer.active_backfill.initial_min_cursor
+  defp initial_min_cursor(%Backfill{} = backfill) do
+    backfill.initial_min_cursor
   end
 
   defp maybe_setup_allowances(nil), do: :ok
@@ -1032,7 +1027,11 @@ defmodule Sequin.Runtime.TableReaderServer do
   end
 
   defp preload_consumer(consumer) do
-    Repo.preload(consumer, [:sequence, :active_backfill, :filter, replication_slot: :postgres_database], force: true)
+    Repo.preload(consumer, [:sequence, :filter, replication_slot: :postgres_database], force: true)
+  end
+
+  defp reload_backfill(%State{} = state) do
+    %{state | backfill: Repo.reload(state.backfill)}
   end
 
   defp fetch_slot_lsn(%State{} = state) do
@@ -1058,15 +1057,15 @@ defmodule Sequin.Runtime.TableReaderServer do
   defp maybe_update_backfill(%State{} = state, message_count) do
     {:ok, backfill} =
       Consumers.update_backfill(
-        state.consumer.active_backfill,
+        state.backfill,
         %{
-          rows_processed_count: state.consumer.active_backfill.rows_processed_count + message_count,
-          rows_ingested_count: state.consumer.active_backfill.rows_ingested_count + message_count
+          rows_processed_count: state.backfill.rows_processed_count + message_count,
+          rows_ingested_count: state.backfill.rows_ingested_count + message_count
         },
         skip_lifecycle: true
       )
 
-    %{state | consumer: %{state.consumer | active_backfill: backfill}}
+    %{state | backfill: backfill}
   end
 
   # Private helper functions for timing metrics

@@ -283,6 +283,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
+  # TODO: add tableOid to the frontend backfill form
   def handle_event(
         "run-backfill",
         %{
@@ -308,7 +309,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       sink_consumer_id: consumer.id,
       initial_min_cursor: initial_min_cursor,
       sort_column_attnum: sort_column_attnum,
-      state: :active
+      state: :active,
+      table_oid: table.oid
     }
 
     case Consumers.create_backfill(backfill_attrs) do

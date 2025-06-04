@@ -2,6 +2,7 @@ defmodule Sequin.Consumers.BackfillTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers.Backfill
+  alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Repo
@@ -9,10 +10,12 @@ defmodule Sequin.Consumers.BackfillTest do
   describe "backfill" do
     test "inserts a valid backfill for a consumer" do
       consumer = ConsumersFactory.insert_sink_consumer!()
+      table_oid = Factory.integer()
 
       attrs = %{
         account_id: consumer.account_id,
         sink_consumer_id: consumer.id,
+        table_oid: table_oid,
         state: :active,
         initial_min_cursor: %{0 => 0},
         rows_initial_count: 100
@@ -20,6 +23,7 @@ defmodule Sequin.Consumers.BackfillTest do
 
       assert {:ok, backfill} = Repo.insert(Backfill.create_changeset(%Backfill{}, attrs))
       assert backfill.state == :active
+      assert backfill.table_oid == table_oid
       assert backfill.rows_initial_count == 100
       assert backfill.rows_processed_count == 0
       assert backfill.rows_ingested_count == 0
@@ -72,6 +76,7 @@ defmodule Sequin.Consumers.BackfillTest do
                  account_id: consumer.account_id,
                  sink_consumer_id: consumer.id,
                  state: :active,
+                 table_oid: Factory.integer(),
                  initial_min_cursor: %{0 => 0}
                })
                |> Repo.insert()

@@ -98,7 +98,8 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       ConsumersFactory.insert_active_backfill!(
         account_id: database.account_id,
         sink_consumer_id: consumer.id,
-        initial_min_cursor: initial_min_cursor
+        initial_min_cursor: initial_min_cursor,
+        table_oid: table_oid
       )
 
     filtered_consumer =
@@ -114,7 +115,8 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       ConsumersFactory.insert_active_backfill!(
         account_id: database.account_id,
         sink_consumer_id: filtered_consumer.id,
-        initial_min_cursor: initial_min_cursor
+        initial_min_cursor: initial_min_cursor,
+        table_oid: table_oid
       )
 
     event_consumer =
@@ -130,7 +132,8 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       ConsumersFactory.insert_active_backfill!(
         account_id: database.account_id,
         sink_consumer_id: event_consumer.id,
-        initial_min_cursor: initial_min_cursor
+        initial_min_cursor: initial_min_cursor,
+        table_oid: table_oid
       )
 
     # Default stubs for PageSizeOptimizer.

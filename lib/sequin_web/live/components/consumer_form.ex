@@ -634,6 +634,10 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   defp update_params_for_sink(_, params, _), do: params
 
+  defp decode_initial_backfill(%{"backfill" => %{"selectedTableOids" => tableOids}}) when tableOids != [] do
+    %{"selected_table_oids" => tableOids}
+  end
+
   defp decode_initial_backfill(%{"backfill" => %{"startPosition" => "none"}}), do: nil
 
   defp decode_initial_backfill(%{"backfill" => backfill}) do
@@ -1130,17 +1134,14 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp create_consumer(socket, params) do
     account_id = current_account_id(socket)
     initial_backfill = params["initial_backfill"]
+    dbg(initial_backfill)
+    dbg(params)
 
     result =
       Repo.transact(fn ->
         with {:ok, params} <- maybe_put_sequence_id(account_id, params),
-             {:ok, consumer} <- Consumers.create_sink_consumer(account_id, params) do
-          # FIXME
-          # case maybe_create_backfill(socket, consumer, params, initial_backfill) do
-          #   :ok -> {:ok, Repo.preload(consumer, :active_backfill)}
-          #   {:ok, %Backfill{}} -> {:ok, Repo.preload(consumer, :active_backfill)}
-          #   {:error, changeset} -> {:error, changeset}
-          # end
+             {:ok, consumer} <- Consumers.create_sink_consumer(account_id, params),
+             :ok <- maybe_create_backfills(socket, consumer, params, initial_backfill) do
           {:ok, Repo.preload(consumer, :active_backfills)}
         end
       end)
@@ -1183,9 +1184,30 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp maybe_create_backfill(_socket, _consumer, _params, nil), do: :ok
+  defp maybe_create_backfills(_socket, _consumer, _params, nil), do: :ok
 
-  defp maybe_create_backfill(socket, consumer, params, backfill_params) do
+  defp maybe_create_backfills(socket, consumer, params, %{"selected_table_oids" => table_oids}) do
+    postgres_database_id = params["postgres_database_id"]
+
+    table_oids
+    |> Enum.each(fn table_oid ->
+      table = table(socket.assigns.databases, postgres_database_id, table_oid, nil)
+
+      Consumers.create_backfill(%{
+        "account_id" => consumer.account_id,
+        "sink_consumer_id" => consumer.id,
+        "table_oid" => table_oid,
+        "initial_min_cursor" => KeysetCursor.min_cursor(table),
+        "sort_column_attnum" => nil,
+        "state" => :active
+      })
+    end)
+    |> dbg()
+
+    :ok
+  end
+
+  defp maybe_create_backfills(socket, consumer, params, backfill_params) do
     table =
       table(
         socket.assigns.databases,

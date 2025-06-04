@@ -6,6 +6,8 @@ defmodule Sequin.Consumers.TypesenseSink do
   import Ecto.Changeset
 
   @derive {Jason.Encoder, only: [:endpoint_url, :collection_name]}
+  @derive {Inspect, except: [:api_key]}
+
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:typesense], default: :typesense

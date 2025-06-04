@@ -13,6 +13,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
            only: [
              :consumer_id,
              :commit_lsn,
+             :commit_idx,
              :ack_id,
              :deliver_count,
              :group_id,

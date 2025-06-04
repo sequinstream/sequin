@@ -1133,7 +1133,7 @@
             <h2 class="text-lg font-semibold flex items-center gap-2">
               Transform
             </h2>
-            {#if transform && !isRedisStreamConsumer(consumer)}
+            {#if transform}
               <a
                 href="/functions/{transform.id}"
                 data-phx-link="redirect"

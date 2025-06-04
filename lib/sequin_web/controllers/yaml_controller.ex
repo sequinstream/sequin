@@ -11,6 +11,7 @@ defmodule SequinWeb.YamlController do
   alias Sequin.Posthog
   alias Sequin.Replication.WalPipeline
   alias Sequin.Transforms
+  alias Sequin.Transforms.SensitiveValue
   alias Sequin.YamlLoader
   alias SequinWeb.ApiFallbackPlug
 
@@ -129,7 +130,7 @@ defmodule SequinWeb.YamlController do
         %{
           resource_type: get_resource_type(resource),
           action: "create",
-          new: Transforms.to_external(resource),
+          new: Transforms.to_external(resource, true),
           old: nil
         }
       end)
@@ -144,7 +145,7 @@ defmodule SequinWeb.YamlController do
           resource_type: get_resource_type(resource),
           action: "delete",
           new: nil,
-          old: Transforms.to_external(resource)
+          old: Transforms.to_external(resource, true)
         }
       end)
 
@@ -160,12 +161,38 @@ defmodule SequinWeb.YamlController do
         %{
           resource_type: get_resource_type(current_resource),
           action: "update",
-          new: Transforms.to_external(planned_resource),
-          old: Transforms.to_external(current_resource)
+          new: Transforms.to_external(planned_resource, true),
+          old: Transforms.to_external(current_resource, true)
         }
       end)
 
-    creates ++ updates ++ deletes
+    Enum.map(creates ++ updates ++ deletes, &compare_sensitive_values/1)
+  end
+
+  defp compare_sensitive_values(%{new: new_external, old: old_external} = diff) do
+    {new_acc, old_acc} =
+      Enum.reduce(new_external, {new_external, old_external}, fn {key, new_value}, {new_acc, old_acc} ->
+        case {new_value, Map.get(old_external, key)} do
+          {%SensitiveValue{value: new_val, show_value: true}, %SensitiveValue{value: old_val, show_value: true}} ->
+            if new_val == old_val do
+              {new_acc, old_acc}
+            else
+              {
+                Map.put(new_acc, key, "(new sensitive value)"),
+                Map.put(old_acc, key, "(old sensitive value)")
+              }
+            end
+
+          {new_val, old_val} when is_map(new_val) and is_map(old_val) ->
+            new_diff = compare_sensitive_values(%{new: new_val, old: old_val})
+            {Map.put(new_acc, key, new_diff.new), Map.put(old_acc, key, new_diff.old)}
+
+          _ ->
+            {new_acc, old_acc}
+        end
+      end)
+
+    %{diff | new: new_acc, old: old_acc}
   end
 
   defp get_resource_type(%Account{}), do: "account"

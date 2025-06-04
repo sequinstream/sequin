@@ -60,7 +60,7 @@ defmodule Sequin.Consumers.Backfill do
     |> validate_required([:account_id, :sink_consumer_id, :state, :initial_min_cursor, :table_oid])
     |> foreign_key_constraint(:sink_consumer_id)
     |> unique_constraint(:sink_consumer_id,
-      name: "backfills_sink_consumer_id_index",
+      name: "backfills_sink_consumer_id_table_oid_index",
       message: "already has an active backfill"
     )
   end

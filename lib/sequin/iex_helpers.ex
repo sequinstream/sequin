@@ -2,6 +2,7 @@ defmodule Sequin.IexHelpers do
   @moduledoc false
   alias Ecto.Repo
   alias Sequin.Consumers
+  alias Sequin.Consumers.Backfill
   alias Sequin.Databases
   alias Sequin.Repo
   alias Sequin.Runtime.SlotMessageStoreSupervisor
@@ -61,13 +62,16 @@ defmodule Sequin.IexHelpers do
       # Might be a sink consumer id
       case Consumers.get_consumer(backfill_id_or_sink_consumer_id) do
         {:ok, consumer} ->
-          consumer = Repo.preload(consumer, :active_backfill)
+          consumer = Repo.preload(consumer, :active_backfills)
 
-          if consumer.active_backfill do
-            :table_reader
-            |> via(consumer.active_backfill.id)
-            |> GenServer.whereis()
-          end
+          Map.new(consumer.active_backfills, fn %Backfill{id: backfill_id} ->
+            pid =
+              :table_reader
+              |> via(backfill_id)
+              |> GenServer.whereis()
+
+            {backfill_id, pid}
+          end)
 
         {:error, _} ->
           nil

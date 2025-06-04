@@ -322,6 +322,10 @@ defmodule Sequin.Postgres do
     end
   end
 
+  def fetch_tables_with_columns(_conn, []) do
+    {:error, Error.service(service: :postgres, message: "Fetch tables with columns: No schemas provided")}
+  end
+
   def fetch_tables_with_columns(conn, schemas) do
     schemas_list = Enum.map_join(schemas, ",", &"'#{&1}'")
 

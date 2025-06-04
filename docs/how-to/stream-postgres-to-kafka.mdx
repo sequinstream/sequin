@@ -113,8 +113,8 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Kafka Sink".
 ### Configure the source
 
 <Steps>
-  <Step title="Select source table">
-    Under "Source", select the table you want to stream data from.
+  <Step title="Select source table(s) or schema(s)">
+    Under "Source", select the table(s) or schema(s) you want to stream data from.
   </Step>
 
   <Step title="Choose message type">
@@ -185,7 +185,7 @@ If messages don't seem to be flowing:
 - **Setup a processor**
 
    Now that your Postgres data is flowing into Kafka, you can setup a consumer group to read from the topic and process the data.
-   
+
    Refer to the [Kafka sink reference](/reference/sinks/kafka) for the shape of messages that Sequin will publish to Kafka.
 
 - **Deploy your implementation**

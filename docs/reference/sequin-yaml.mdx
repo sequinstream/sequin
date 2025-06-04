@@ -149,7 +149,7 @@ By default, Sequin will wait up to 30 seconds for the database to be ready and w
 
 ### Sink configuration
 
-A sink streams data from a table to a destination (sink). All sinks share these configuration options:
+A sink streams data from one or more tables to a destination (sink). All sinks share these configuration options:
 
 ```yaml
 sinks:
@@ -169,7 +169,7 @@ sinks:
       - update
       - delete
     filters:                       # Optional, filter which rows to consume with `where` clause
-      - column_name: "status"      
+      - column_name: "status"
         operator: "="
         comparison_value: "active"
       - column_name: "metadata"    # JSONB example
@@ -350,10 +350,10 @@ All sink types support filtering messages based on columns in your source table.
 ```yaml
 filters:
   # Comparison filter
-  - column_name: "status"           
+  - column_name: "status"
     operator: "="                   # =, !=, >, >=, <, <=
     comparison_value: "active"
-  
+
   # List filter
   - column_name: "status"
     operator: "in"                  # in, not in
@@ -364,9 +364,9 @@ filters:
   # Is null filter
   - column_name: "status"
     operator: "is null"              # is null, is not null
-  
+
   # JSONB field filter
-  - column_name: "metadata"         
+  - column_name: "metadata"
     field_path: "preferences.theme" # Dot notation for nested fields
     operator: "="                   # =, !=, >, >=, <, <=
     comparison_value: "dark"
@@ -471,7 +471,7 @@ http_endpoints:
       - key: "Content-Type"
         value: "application/json"
     encrypted_headers:                # Optional, for sensitive headers
-      - key: "Authorization" 
+      - key: "Authorization"
         value: "Bearer token123"
 ```
 
@@ -507,14 +507,14 @@ change_retentions:
     source_table_schema: "public"         # Required
     source_table_name: "users"            # Required
     destination_database: "dest-db"       # Required
-    destination_table_schema: "public"    # Required  
+    destination_table_schema: "public"    # Required
     destination_table_name: "user_events" # Required
     actions:                             # Optional, defaults to all
       - insert
-      - update 
+      - update
       - delete
     filters:                             # Optional
-      - column_name: "status"           
+      - column_name: "status"
         operator: "="
         comparison_value: "active"
       - column_name: "metadata"          # JSONB column example
@@ -607,7 +607,7 @@ users:
 
 databases:
   - name: "production-db"
-    hostname: "prod.db.example.com"  
+    hostname: "prod.db.example.com"
     database: "app_production"
     slot:
       name: "sequin_slot"
@@ -627,14 +627,17 @@ http_endpoints:
 sinks:
   - name: "user-changes"
     database: "production-db"
-    table: "users"
+    tables:
+      - "public.users"
+      - "public.orders"
+      - "inventory.products"
     destination:
       type: "webhook"
       http_endpoint: "webhook-endpoint"
 
 change_retentions:
   - name: "user-audit"
-    source_database: "production-db" 
+    source_database: "production-db"
     source_table_schema: "public"
     source_table_name: "users"
     destination_database: "production-db"
@@ -668,13 +671,16 @@ gcp_pubsub_sink_template: &gcp_pubsub_sink_template
 sinks:
   - <<: *gcp_pubsub_sink_template
     name: "user-changes"
-    table: "users"
+    tables:
+      - "public.users"
   - <<: *gcp_pubsub_sink_template
     name: "account-changes"
-    table: "accounts"
+    tables:
+      - "public.accounts"
   - <<: *gcp_pubsub_sink_template
     name: "document-changes"
-    table: "documents"
+    tables:
+      - "inventory.documents"
 ```
 
 This setup will fan-in changes from all three tables into a single sink destination, all using the same YAML block for each table.

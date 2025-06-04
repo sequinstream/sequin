@@ -118,11 +118,11 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       </Frame>
 
        Click "Create Transform".
-       
+
        You can close the transform tab and navigate back to the Typesense sink create page.
 
        Now, select the `products-typesense` transform in the "Transform" list. (If you don't see it, click the refresh icon.)
-    </Step> 
+    </Step>
 
     <Step title="Setup a backfill">
       Toggle open the "Initial backfill" card and select "Backfill all rows":
@@ -149,7 +149,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
 
     <Step title="Create the sink">
       Give your sink a name, like `products-typesense`, and click "Create Sink".
- 
+
       As configured, the Typesense collection will first receive a backfill of all rows currently in the `products` table. Then, it will receive all changes to the `products` table in real-time.
     </Step>
   </Steps>
@@ -270,4 +270,4 @@ Now you're ready to connect your own database to Sequin and start streaming chan
   <Card title="Guide: Setting up a Typesense sink" icon="search" href="/how-to/stream-postgres-to-typesense">
     Setup a Typesense sink to keep your search index in sync.
   </Card>
-</CardGroup> 
+</CardGroup>

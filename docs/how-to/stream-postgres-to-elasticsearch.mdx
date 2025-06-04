@@ -6,7 +6,7 @@ description: "Build real‑time search indexes with Postgres change data capture
 
 This guide shows you how to capture Postgres changes with Sequin and stream them to an Elasticsearch index.
 
-With Postgres data flowing into Elasticsearch you can power 
+With Postgres data flowing into Elasticsearch you can power
 [full‑text search, vector retrieval, and analytics](https://www.elastic.co/docs/solutions/search) without manual re‑indexing.
 By the end of this guide you'll have an Elasticsearch index that stays continuously in sync with your database.
 
@@ -35,7 +35,7 @@ You need a reachable cluster:
   curl -fsSL https://elastic.co/start-local | sh
   ```
   The script starts Elasticsearch + Kibana and prints connection details:
-  
+
   ```text
   🔌 Elasticsearch API endpoint: http://localhost:9200
   🔑 API key: <api-key>
@@ -62,7 +62,7 @@ Navigate to **Sinks → Create sink → Elasticsearch** and follow the steps bel
 
 <Steps>
   <Step title="Source configuration">
-    Under **Source** pick the table whose changes you want to index.
+    Under **Source** pick the table(s) or schema(s) you want to index in Elasticsearch.
 
     Optionally:
     - Select which actions (`insert`, `update`, `delete`) you care about.
@@ -94,7 +94,7 @@ Navigate to **Sinks → Create sink → Elasticsearch** and follow the steps bel
 
   <Step title="Delivery settings">
     In the **Elasticsearch** card enter:
-    
+
     - Endpoint URL: `http://host.docker.internal:9200` (or your cluster URL)
     - Index name: `products`
     - Authentication type: `api_key`

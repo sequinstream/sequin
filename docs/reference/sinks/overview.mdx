@@ -1,16 +1,12 @@
 ---
-title: "General"
-sidebarTitle: "General"
+title: "General Sink Reference"
+sidebarTitle: "General Sink Reference"
 description: "Reference for the core concepts and behaviors of Sequin sinks. Learn about delivery guarantees, message grouping, ordering, backfill support, and monitoring capabilities."
 ---
 
 A **sink** in Sequin is a destination for your Postgres data.
 
-## Common sink behaviors
-
-### Guaranteed delivery
-
-# Delivery Guarantees
+## Delivery Guarantees
 
 Sequin provides exactly-once delivery under most circumstances, but [exactly-once delivery is not always possible](https://blog.sequinstream.com/at-most-once-at-least-once-and-exactly-once-delivery/). Therefore, Sequin implements at-least-once delivery with [idempotency keys](/reference/messages#idempotency).
 
@@ -18,7 +14,7 @@ If a message is not delivered successfully, Sequin will automatically retry with
 
 By default, Sequin retries messages indefinitely. You can configure a maximum number of retries for a sink by setting the `max_retry_count` parameter. If a message fails delivery after the specified number of retries, it will be discarded.
 
-### Message grouping and ordering
+## Message grouping and ordering
 
 Sequin has the ability to group messages by one or more fields. Changes for rows in the same group are guaranteed to arrive in the order they occurred (i.e. the order they were committed in Postgres) to your sink.
 
@@ -36,9 +32,9 @@ All this applies to how Sequin _delivers_ messages to your sink. Whether your si
   SQS supports ordering, but only when configured as a FIFO queue.
 </Note>
 
-### Backfill support
+## Backfill support
 
-Sequin supports backfilling to sinks. See the [backfills reference](/reference/backfills) for more details.
+Sequin supports backfilling to sinks. When you configure a sink with multiple tables, you can choose to backfill all tables or specific tables. See the [backfills reference](/reference/backfills) for more details.
 
 ## Monitoring and debugging
 

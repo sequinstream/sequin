@@ -61,7 +61,7 @@ defmodule Sequin.Runtime.Starter do
   end
 
   defp start(%SinkConsumer{} = consumer) do
-    Supervisor.start_table_reader(consumer)
+    Supervisor.maybe_start_table_readers(consumer)
   catch
     :exit, error ->
       Logger.error("[RuntimeStarter] Failed to start table reader", error: error, consumer_id: consumer.id)

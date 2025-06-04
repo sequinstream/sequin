@@ -102,6 +102,8 @@
 
   let activeTab: string;
 
+  $: backfillUrl = `${consumer.href}/backfills`;
+
   $: messageUrl = messages_failing
     ? `${consumer.href}/messages?showAcked=false`
     : `${consumer.href}/messages`;
@@ -110,6 +112,9 @@
 
   onMount(() => {
     switch (live_action) {
+      case "backfills":
+        activeTab = "backfills";
+        break;
       case "messages":
         activeTab = "messages";
         break;
@@ -263,6 +268,18 @@
         data-phx-link-state="push"
       >
         Overview
+      </a>
+      <a
+        href={backfillUrl}
+        class={`py-2 px-4 flex items-center font-medium border-b-2 ${
+          activeTab === "backfills"
+            ? "text-black border-black"
+            : "text-gray-500 hover:text-gray-700 border-transparent"
+        }`}
+        data-phx-link="redirect"
+        data-phx-link-state="push"
+      >
+        Backfills
       </a>
       <a
         href={messageUrl}

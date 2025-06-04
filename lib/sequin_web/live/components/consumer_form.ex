@@ -1135,21 +1135,19 @@ defmodule SequinWeb.Components.ConsumerForm do
       Repo.transact(fn ->
         with {:ok, params} <- maybe_put_sequence_id(account_id, params),
              {:ok, consumer} <- Consumers.create_sink_consumer(account_id, params) do
-          case maybe_create_backfill(socket, consumer, params, initial_backfill) do
-            :ok -> {:ok, Repo.preload(consumer, :active_backfill)}
-            {:ok, %Backfill{}} -> {:ok, Repo.preload(consumer, :active_backfill)}
-            {:error, changeset} -> {:error, changeset}
-          end
+          # FIXME
+          # case maybe_create_backfill(socket, consumer, params, initial_backfill) do
+          #   :ok -> {:ok, Repo.preload(consumer, :active_backfill)}
+          #   {:ok, %Backfill{}} -> {:ok, Repo.preload(consumer, :active_backfill)}
+          #   {:error, changeset} -> {:error, changeset}
+          # end
+          {:ok, Repo.preload(consumer, :active_backfills)}
         end
       end)
 
     case result do
       {:ok, consumer} ->
-        case consumer.active_backfill do
-          nil -> :ok
-          %Backfill{state: :active} -> Runtime.Supervisor.start_table_reader(consumer)
-          %Backfill{state: _} -> :ok
-        end
+        Runtime.Supervisor.maybe_start_table_readers(consumer)
 
         Posthog.capture("Consumer Created", %{
           distinct_id: socket.assigns.current_user.id,

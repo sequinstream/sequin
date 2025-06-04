@@ -92,7 +92,8 @@ defmodule Sequin.TableReaderTest do
       account_id: db.account_id,
       sink_consumer_id: character_consumer.id,
       initial_min_cursor: %{characters_table.sort_column_attnum => NaiveDateTime.utc_now()},
-      sort_column_attnum: characters_table.sort_column_attnum
+      sort_column_attnum: characters_table.sort_column_attnum,
+      table_oid: characters_table.oid
     )
 
     character_consumer = Repo.preload(character_consumer, :active_backfill)
@@ -123,7 +124,8 @@ defmodule Sequin.TableReaderTest do
       account_id: db.account_id,
       sink_consumer_id: character_detailed_consumer.id,
       initial_min_cursor: %{characters_table.sort_column_attnum => NaiveDateTime.utc_now()},
-      sort_column_attnum: characters_table.sort_column_attnum
+      sort_column_attnum: characters_table.sort_column_attnum,
+      table_oid: characters_table.oid
     )
 
     character_detailed_consumer = Repo.preload(character_detailed_consumer, :active_backfill)

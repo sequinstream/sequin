@@ -883,7 +883,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         rows_processed_count: 0,
         rows_ingested_count: 0,
         completed_at: nil,
-        canceled_at: nil
+        canceled_at: nil,
+        table_oid: Factory.unique_integer()
       },
       attrs
     )

@@ -39,7 +39,8 @@ defmodule SequinWeb.BackfillController do
            Map.merge(backfill_params, %{
              account_id: account_id,
              sink_consumer_id: sink_consumer.id,
-             initial_min_cursor: KeysetCursor.min_cursor(table)
+             initial_min_cursor: KeysetCursor.min_cursor(table),
+             table_oid: table.oid
            }),
          {:ok, backfill} <- Consumers.create_backfill(backfill_params) do
       render(conn, "show.json", backfill: backfill)

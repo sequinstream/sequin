@@ -279,7 +279,7 @@
           <AlertCircle class="h-4 w-4 text-red-600 ml-1" />
         {/if}
       </a>
-      {#if consumer.sink.type == "http_push"}
+      {#if consumer.sink.type == "http_push" || consumer.sink.type == "typesense"}
         <a
           href={traceUrl}
           class={`py-2 px-4 flex items-center font-medium border-b-2 ${

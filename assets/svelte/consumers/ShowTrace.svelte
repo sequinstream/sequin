@@ -207,7 +207,9 @@
     <td class="px-2 py-1 w-fit whitespace-nowrap text-xs text-gray-500">
       {formatDate(item.published_at)}
     </td>
-    <td class="px-2 py-1 w-fit whitespace-nowrap text-xs max-w-xs">
+    <td
+      class="px-2 py-1 w-fit whitespace-nowrap text-xs overflow-hidden max-w-xs"
+    >
       {item.message}
     </td>
     <td

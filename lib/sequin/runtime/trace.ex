@@ -45,7 +45,7 @@ defmodule Sequin.Runtime.Trace do
         method: req.method,
         url: format_req_url(req),
         headers: req.headers,
-        body: format_external(req.body) || format_external(req.options.json)
+        body: format_external(req.body) || format_external(req.options[:json])
       }
     end
 

@@ -58,6 +58,7 @@ defmodule Sequin.SlotMessageStoreTest do
     } do
       new_message =
         ConsumersFactory.consumer_message(
+          table_oid: msg1.table_oid,
           group_id: msg1.group_id,
           message_kind: consumer.message_kind,
           consumer_id: consumer.id
@@ -77,6 +78,7 @@ defmodule Sequin.SlotMessageStoreTest do
     test "messages persisted on put receive :inserted_at", %{consumer: consumer, msg1: msg1} do
       new_message =
         ConsumersFactory.consumer_message(
+          table_oid: msg1.table_oid,
           group_id: msg1.group_id,
           message_kind: consumer.message_kind,
           consumer_id: consumer.id
@@ -397,7 +399,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Peek at state to verify message_group_persisted? returns false
       Enum.each(SlotMessageStore.peek(consumer), fn state ->
-        refute State.message_group_persisted?(state, nil)
+        refute State.message_group_persisted?(state, message.table_oid, nil)
       end)
     end
 
@@ -488,6 +490,67 @@ defmodule Sequin.SlotMessageStoreTest do
       assert_lists_equal(Enum.map(returned_messages, & &1.ack_id), ack_ids)
 
       # Verify messages were removed from store
+      {:ok, []} = SlotMessageStore.produce(consumer, 2, self())
+    end
+
+    test "produces messages with same group_id from different tables simultaneously", %{} do
+      # Create a consumer with schema_filter instead of sequence_filter
+      schema_filter = ConsumersFactory.schema_filter_attrs(schema: "public")
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          message_kind: :event,
+          sequence_id: nil,
+          sequence_filter: nil,
+          schema_filter: schema_filter
+        )
+
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+
+      # Create two messages from different tables with the same group_id
+      shared_group_id = "shared-group-123"
+      table_oid_1 = 100
+      table_oid_2 = 200
+
+      message1 =
+        ConsumersFactory.consumer_message(
+          message_kind: :event,
+          consumer_id: consumer.id,
+          group_id: shared_group_id,
+          table_oid: table_oid_1,
+          commit_lsn: 1,
+          commit_idx: 1
+        )
+
+      message2 =
+        ConsumersFactory.consumer_message(
+          message_kind: :event,
+          consumer_id: consumer.id,
+          group_id: shared_group_id,
+          table_oid: table_oid_2,
+          commit_lsn: 2,
+          commit_idx: 1
+        )
+
+      # Put both messages in the store
+      :ok = SlotMessageStore.put_messages(consumer, [message1, message2])
+
+      # Both messages should be available for delivery simultaneously
+      # This tests that messages with the same group_id from different tables don't block each other
+      {:ok, delivered} = SlotMessageStore.produce(consumer, 2, self())
+
+      assert length(delivered) == 2
+
+      delivered_table_oids = delivered |> Enum.map(& &1.table_oid) |> Enum.sort()
+      assert delivered_table_oids == [table_oid_1, table_oid_2]
+
+      # Both should have the same group_id
+      assert Enum.all?(delivered, fn msg -> msg.group_id == shared_group_id end)
+
+      # Verify they can be acknowledged
+      {:ok, 2} = SlotMessageStore.messages_succeeded(consumer, delivered)
+
+      # No more messages should be available
       {:ok, []} = SlotMessageStore.produce(consumer, 2, self())
     end
   end

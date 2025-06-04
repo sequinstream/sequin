@@ -94,8 +94,9 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
   describe "put_persisted_messages/2" do
     test "updates persisted_message_groups", %{state: state} do
-      msg1 = ConsumersFactory.consumer_message(group_id: "group1")
-      msg2 = ConsumersFactory.consumer_message(group_id: "group1")
+      table_oid = 1
+      msg1 = ConsumersFactory.consumer_message(table_oid: table_oid, group_id: "group1")
+      msg2 = ConsumersFactory.consumer_message(table_oid: table_oid, group_id: "group1")
 
       state = State.put_persisted_messages(state, [msg1, msg2])
 
@@ -103,9 +104,19 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert_message_in_state(msg2, state)
 
       # Verify persisted_message_groups tracking
-      assert Multiset.value_member?(state.persisted_message_groups, "group1", {msg1.commit_lsn, msg1.commit_idx})
-      assert Multiset.value_member?(state.persisted_message_groups, "group1", {msg2.commit_lsn, msg2.commit_idx})
-      assert Multiset.count(state.persisted_message_groups, "group1") == 2
+      assert Multiset.value_member?(
+               state.persisted_message_groups,
+               {msg1.table_oid, "group1"},
+               {msg1.commit_lsn, msg1.commit_idx}
+             )
+
+      assert Multiset.value_member?(
+               state.persisted_message_groups,
+               {msg2.table_oid, "group1"},
+               {msg2.commit_lsn, msg2.commit_idx}
+             )
+
+      assert Multiset.count(state.persisted_message_groups, {msg1.table_oid, "group1"}) == 2
     end
 
     test "preserves existing messages when adding new persisted messages", %{state: state} do
@@ -123,19 +134,20 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert_message_in_state(msg2, state)
 
       # Only persisted message should be in persisted_message_groups
-      assert Multiset.count(state.persisted_message_groups, "group1") == 0
-      assert Multiset.count(state.persisted_message_groups, "group2") == 1
+      assert Multiset.count(state.persisted_message_groups, {msg1.table_oid, "group1"}) == 0
+      assert Multiset.count(state.persisted_message_groups, {msg2.table_oid, "group2"}) == 1
     end
 
     test "handles multiple groups in persisted_message_groups", %{state: state} do
-      msg1 = ConsumersFactory.consumer_message(group_id: "group1")
-      msg2 = ConsumersFactory.consumer_message(group_id: "group2")
-      msg3 = ConsumersFactory.consumer_message(group_id: "group1")
+      table_oid = 1
+      msg1 = ConsumersFactory.consumer_message(table_oid: table_oid, group_id: "group1")
+      msg2 = ConsumersFactory.consumer_message(table_oid: table_oid, group_id: "group2")
+      msg3 = ConsumersFactory.consumer_message(table_oid: table_oid, group_id: "group1")
 
       state = State.put_persisted_messages(state, [msg1, msg2, msg3])
 
-      assert Multiset.count(state.persisted_message_groups, "group1") == 2
-      assert Multiset.count(state.persisted_message_groups, "group2") == 1
+      assert Multiset.count(state.persisted_message_groups, {msg1.table_oid, "group1"}) == 2
+      assert Multiset.count(state.persisted_message_groups, {msg2.table_oid, "group2"}) == 1
     end
   end
 
@@ -176,11 +188,11 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
       # Produce the message to add it to produced_message_groups
       assert {[produced_msg], state} = State.produce_messages(state, 1)
-      assert Multiset.count(state.produced_message_groups, "group1") == 1
+      assert Multiset.count(state.produced_message_groups, {msg.table_oid, "group1"}) == 1
 
       # Pop the message and verify it's removed from produced_message_groups
       assert {[_msg], state} = State.pop_messages(state, [{produced_msg.commit_lsn, produced_msg.commit_idx}])
-      assert Multiset.count(state.produced_message_groups, "group1") == 0
+      assert Multiset.count(state.produced_message_groups, {msg.table_oid, "group1"}) == 0
     end
 
     test "when a persisted message is popped, its group_id is removed from persisted_message_groups", %{state: state} do
@@ -188,11 +200,11 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       state = State.put_persisted_messages(state, [msg])
 
       # Verify message is in persisted_message_groups
-      assert Multiset.count(state.persisted_message_groups, "group1") == 1
+      assert Multiset.count(state.persisted_message_groups, {msg.table_oid, "group1"}) == 1
 
       # Pop the message and verify it's removed from persisted_message_groups
       assert {[_msg], state} = State.pop_messages(state, [{msg.commit_lsn, msg.commit_idx}])
-      assert Multiset.count(state.persisted_message_groups, "group1") == 0
+      assert Multiset.count(state.persisted_message_groups, {msg.table_oid, "group1"}) == 0
     end
   end
 
@@ -222,9 +234,10 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     end
 
     test "when a message is popped, messages for that group_id are available for delivery", %{state: state} do
+      table_oid = 1
       group_id = "group1"
-      msg1 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0, group_id: group_id)
-      msg2 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 1, group_id: group_id)
+      msg1 = ConsumersFactory.consumer_message(table_oid: table_oid, commit_lsn: 1, commit_idx: 0, group_id: group_id)
+      msg2 = ConsumersFactory.consumer_message(table_oid: table_oid, commit_lsn: 1, commit_idx: 1, group_id: group_id)
 
       {:ok, state} = State.put_messages(state, [msg1, msg2])
       assert {[produced1], state} = State.produce_messages(state, 1)
@@ -287,13 +300,14 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
   describe "message_group_persisted?/2" do
     test "returns true if the message group is persisted", %{state: state} do
       # Add a persisted message to establish a blocked group
-      persisted_msg = ConsumersFactory.consumer_message(group_id: "group1")
-      other_msg = ConsumersFactory.consumer_message(group_id: "group2")
+      table_oid = 1
+      persisted_msg = ConsumersFactory.consumer_message(table_oid: table_oid, group_id: "group1")
+      other_msg = ConsumersFactory.consumer_message(table_oid: table_oid, group_id: "group2")
       state = State.put_persisted_messages(state, [persisted_msg])
       {:ok, state} = State.put_messages(state, [other_msg])
 
-      assert State.message_group_persisted?(state, "group1")
-      refute State.message_group_persisted?(state, "group2")
+      assert State.message_group_persisted?(state, table_oid, "group1")
+      refute State.message_group_persisted?(state, table_oid, "group2")
     end
   end
 
@@ -390,9 +404,10 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     end
 
     test "respects group_id for produced messages", %{state: state} do
+      table_oid = 1
       group_id = "group1"
-      msg1 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0, group_id: group_id)
-      msg2 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 1, group_id: group_id)
+      msg1 = ConsumersFactory.consumer_message(table_oid: table_oid, commit_lsn: 1, commit_idx: 0, group_id: group_id)
+      msg2 = ConsumersFactory.consumer_message(table_oid: table_oid, commit_lsn: 1, commit_idx: 1, group_id: group_id)
 
       {:ok, state} = State.put_messages(state, [msg1, msg2])
       assert {[produced1], state} = State.produce_messages(state, 1)
@@ -403,9 +418,10 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
     test "only returns one message per group_id regardless of requested count", %{state: state} do
       # Create 3 messages, where 2 share the same group_id
-      msg1 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0, group_id: "group1")
-      msg2 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 1, group_id: "group1")
-      msg3 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 2, group_id: "group2")
+      table_oid = 1
+      msg1 = ConsumersFactory.consumer_message(table_oid: table_oid, commit_lsn: 1, commit_idx: 0, group_id: "group1")
+      msg2 = ConsumersFactory.consumer_message(table_oid: table_oid, commit_lsn: 1, commit_idx: 1, group_id: "group1")
+      msg3 = ConsumersFactory.consumer_message(table_oid: table_oid, commit_lsn: 1, commit_idx: 2, group_id: "group2")
 
       {:ok, state} = State.put_messages(state, [msg1, msg2, msg3])
 
@@ -524,7 +540,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       state = State.nack_stale_produced_messages(state)
 
       # Message should still be in produced_message_groups
-      assert Multiset.count(state.produced_message_groups, msg.group_id) == 1
+      assert Multiset.count(state.produced_message_groups, {msg.table_oid, msg.group_id}) == 1
 
       # Message should not be available for production
       assert {[], _state} = State.produce_messages(state, 1)

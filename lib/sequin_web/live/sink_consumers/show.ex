@@ -111,7 +111,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           [:postgres_database, :sequence, :active_backfill, :replication_slot, :transform, :routing, :filter],
           force: true
         )
-        |> SinkConsumer.preload_http_endpoint()
+        |> SinkConsumer.preload_http_endpoint!()
         |> put_health()
 
       {:ok, consumer}

@@ -135,7 +135,7 @@ defmodule Sequin.Transforms do
     consumer =
       consumer
       |> Repo.preload([:active_backfill, :transform, sequence: [:postgres_database]])
-      |> SinkConsumer.preload_http_endpoint()
+      |> SinkConsumer.preload_http_endpoint!()
 
     table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
     filters = consumer.sequence_filter.column_filters || []
@@ -165,7 +165,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%HttpPushSink{} = sink, _show_sensitive) do
-    sink = SinkConsumer.preload_http_endpoint(sink)
+    sink = SinkConsumer.preload_http_endpoint!(sink)
 
     %{
       type: "webhook",

@@ -65,14 +65,14 @@ defmodule Sequin.Runtime.Supervisor do
   end
 
   def start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
-    consumer = Repo.preload(consumer, [:active_backfill, :sequence])
+    consumer = Repo.preload(consumer, [:active_backfill])
 
     if is_nil(consumer.active_backfill) do
       Logger.warning("Consumer #{consumer.id} has no active backfill, skipping start")
     else
       default_opts = [
         backfill_id: consumer.active_backfill.id,
-        table_oid: consumer.sequence.table_oid
+        table_oid: consumer.active_backfill.table_oid
       ]
 
       opts = Keyword.merge(default_opts, opts)

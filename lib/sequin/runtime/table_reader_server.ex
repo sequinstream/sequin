@@ -9,7 +9,6 @@ defmodule Sequin.Runtime.TableReaderServer do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Error.ServiceError
@@ -452,7 +451,7 @@ defmodule Sequin.Runtime.TableReaderServer do
         test_pid = state.test_pid
         database = database(state)
         table = table(state)
-        table_oid = table_oid(state.consumer)
+        table_oid = state.backfill.table_oid
         consumer = state.consumer
         id = state.id
         slot_id = state.consumer.replication_slot.id
@@ -981,9 +980,6 @@ defmodule Sequin.Runtime.TableReaderServer do
   defp database(%State{consumer: consumer}) do
     consumer.replication_slot.postgres_database
   end
-
-  defp table_oid(%{sequence: %Sequence{table_oid: table_oid}}), do: table_oid
-  defp table_oid(%{source_tables: [source_table | _]}), do: source_table.table_oid
 
   defp table(%State{} = state) do
     database = database(state)

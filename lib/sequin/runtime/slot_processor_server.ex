@@ -59,11 +59,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   @logical_message_table_name Constants.logical_messages_table_name()
 
-  @slots_ids_with_old_postgres [
-    "59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1",
-    "dcfba45f-d503-4fef-bb11-9221b9efa70a"
-  ]
-
   def max_accumulated_bytes do
     get_config(:max_accumulated_bytes) || @max_accumulated_bytes
   end
@@ -492,12 +487,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   def handle_data(<<?k, wal_end::64, clock::64, reply_requested>>, %State{} = state) do
     # Because these are <14 Postgres databases, they will not receive heartbeat messages
     # temporarily mark them as healthy if we receive a keepalive message
-    if state.id in @slots_ids_with_old_postgres do
-      Health.put_event(
-        state.replication_slot,
-        %Health.Event{slug: :replication_heartbeat_received, status: :success}
-      )
-    end
 
     send_ack? =
       cond do
@@ -636,29 +625,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   @impl ReplicationConnection
-  @decorate track_metrics("emit_heartbeat")
-  def handle_info(:emit_heartbeat, %State{id: id} = state) when id in @slots_ids_with_old_postgres do
-    # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
-    # This heartbeat is not used for health, but rather to advance the slot even if tables are dormant.
-    conn = get_primary_conn(state)
-
-    # We can schedule right away, as we'll not be receiving a heartbeat message
-    state = schedule_heartbeat(%{state | heartbeat_timer: nil})
-
-    q =
-      "insert into sequin_heartbeat(id, updated_at) values (1, now()) on conflict (id) do update set updated_at = now()"
-
-    case Postgres.query(conn, q) do
-      {:ok, _res} ->
-        Logger.info("Emitted legacy heartbeat", emitted_at: Sequin.utc_now())
-
-      {:error, error} ->
-        Logger.error("Error emitting legacy heartbeat: #{inspect(error)}")
-    end
-
-    {:keep_state, state}
-  end
-
   @decorate track_metrics("emit_heartbeat")
   def handle_info(:emit_heartbeat, %State{} = state) do
     heartbeat_id = UUID.uuid4()
@@ -892,10 +858,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   defp verify_heartbeat(%State{} = state) do
     cond do
-      # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
-      state.id in @slots_ids_with_old_postgres ->
-        {:ok, "Old Postgres"}
-
       # No outstanding heartbeat but we have emitted one in the last few minutes
       # This is the most likely clause we hit because we usually receive the heartbeat message
       # pretty quickly after emitting it

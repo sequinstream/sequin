@@ -119,20 +119,17 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   def before_handle_messages(%Context{} = ctx, messages) do
-    # First, filter to only consumers with running TableReaderServers
-    backfilling_consumers =
-      Enum.filter(ctx.consumers, fn consumer ->
-        ctx.table_reader_mod.running_for_consumer?(consumer.id)
-      end)
+    # Key ideas:
+    # 1. get the list of table oids for which there are active backfills
+    # 2. call pks_seen for each table_oid with the associated message pks
 
-    case backfilling_consumers do
+    case ctx.table_reader_mod.active_table_oids() do
       [] ->
         :ok
 
-      _ ->
-        # Get set of table_oids that have running TRSs for efficient lookup
-        backfilling_table_oids =
-          MapSet.new(backfilling_consumers, & &1.sequence.table_oid)
+      # Get set of table_oids that have running TRSs for efficient lookup
+      backfilling_table_oids ->
+        backfilling_table_oids = MapSet.new(backfilling_table_oids)
 
         # Create filtered map of messages, only including those for tables with running TRSs
         messages_by_table_oid =
@@ -141,14 +138,13 @@ defmodule Sequin.Runtime.MessageHandler do
           |> Enum.group_by(& &1.table_oid, & &1.ids)
           |> Map.new()
 
-        # Process each active consumer
-        Enum.each(backfilling_consumers, fn consumer ->
-          if table_oid = consumer.sequence.table_oid do
-            if pks = Map.get(messages_by_table_oid, table_oid) do
-              ctx.table_reader_mod.pks_seen(consumer.id, pks)
-            end
+        Enum.each(backfilling_table_oids, fn table_oid ->
+          if pks = Map.get(messages_by_table_oid, table_oid) do
+            ctx.table_reader_mod.pks_seen(table_oid, pks)
           end
         end)
+
+        :ok
     end
   end
 

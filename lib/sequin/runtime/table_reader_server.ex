@@ -31,20 +31,37 @@ defmodule Sequin.Runtime.TableReaderServer do
 
   @callback flush_batch(String.t() | pid(), map()) :: :ok
 
-  @callback pks_seen(String.t(), [any()]) :: :ok
-
-  @callback running_for_consumer?(String.t()) :: boolean()
+  # these could be scoped to a replication slot as well
+  @callback active_table_oids() :: [integer()]
+  @callback pks_seen(table_oid :: integer(), pks :: [any()]) :: :ok
 
   @max_backoff_ms :timer.seconds(1)
   @max_backoff_time :timer.minutes(1)
 
   @max_batches 3
 
+  @table_oid_to_backfill_ids_ets_table :table_oid_backfill_ids_multiset
+
   # Client API
 
   def start_link(opts \\ []) do
     backfill_id = Keyword.fetch!(opts, :backfill_id)
     GenStateMachine.start_link(__MODULE__, opts, name: via_tuple(backfill_id))
+  end
+
+  def setup_table_oid_to_backfill_id_ets_table do
+    EtsMultiset.new_named(@table_oid_to_backfill_ids_ets_table, access: :public)
+    :ok
+  end
+
+  defp add_backfill_id_to_table_oid_to_backfill_id_ets_table(table_oid, backfill_id) do
+    EtsMultiset.put(@table_oid_to_backfill_ids_ets_table, table_oid, backfill_id)
+    :ok
+  end
+
+  def remove_backfill_id_from_table_oid_to_backfill_id_ets_table(table_oid, backfill_id) do
+    EtsMultiset.delete(@table_oid_to_backfill_ids_ets_table, table_oid, backfill_id)
+    :ok
   end
 
   def flush_batch(backfill_id, batch_info) when is_binary(backfill_id) do
@@ -81,21 +98,10 @@ defmodule Sequin.Runtime.TableReaderServer do
   end
 
   @doc """
-  Checks if a table reader server is running for a given consumer ID.
-
-  ## Parameters
-    * `consumer_id` - The ID of the consumer to check
-
-  ## Returns
-    * `true` - If the table reader server is running
-    * `false` - If the table reader server is not running
+  Returns a list of table oids for which there are active backfills.
   """
-  @spec running_for_consumer?(String.t()) :: boolean()
-  def running_for_consumer?(consumer_id) when is_binary(consumer_id) do
-    case :ets.whereis(multiset_name(consumer_id)) do
-      :undefined -> false
-      _table -> true
-    end
+  def active_table_oids do
+    EtsMultiset.keys(@table_oid_to_backfill_ids_ets_table)
   end
 
   @doc """
@@ -105,32 +111,38 @@ defmodule Sequin.Runtime.TableReaderServer do
   making it more efficient for high-frequency operations.
 
   ## Parameters
-    * `backfill_id` - The ID of the backfill
+    * `table_oid` - The table oid
     * `pks` - A list of primary key lists to remove from all batches
 
   ## Returns
     * `:ok` - Always returns :ok, even if the table doesn't exist (to avoid race conditions)
   """
-  @spec pks_seen(String.t(), [any()]) :: :ok
-  def pks_seen(consumer_id, pks) do
-    table_name = multiset_name(consumer_id)
-
-    # Get the ETS table reference
-    case :ets.whereis(table_name) do
-      :undefined ->
-        # TableReaderServer not running, so we don't need to worry about dropping PKs
+  @spec pks_seen(integer(), [any()]) :: :ok
+  def pks_seen(table_oid, pks) do
+    # Get backfills running for this table
+    case EtsMultiset.get(@table_oid_to_backfill_ids_ets_table, table_oid) do
+      [] ->
         :ok
 
-      table ->
-        # Get all batch_ids (keys) from the multiset
-        batch_ids = EtsMultiset.keys(table)
-
-        # Create a MapSet of the primary keys for efficient lookups
+      backfill_ids ->
+        # Create a set of primary keys for efficient multiset diffs
         pks_set = MapSet.new(pks)
 
-        # Remove the primary keys from each batch
-        Enum.each(batch_ids, fn batch_id ->
-          EtsMultiset.difference(table, batch_id, pks_set)
+        Enum.each(backfill_ids, fn backfill_id ->
+          case :ets.whereis(multiset_name(backfill_id)) do
+            # TableReaderServer not running, so we don't need to worry about dropping PKs
+            :undefined ->
+              :ok
+
+            _ ->
+              # Get all batch_ids (keys) from the multiset
+              batch_ids = EtsMultiset.keys(multiset_name(backfill_id))
+
+              # Remove the primary keys from each batch
+              Enum.each(batch_ids, fn batch_id ->
+                EtsMultiset.difference(multiset_name(backfill_id), batch_id, pks_set)
+              end)
+          end
         end)
     end
   end
@@ -280,8 +292,9 @@ defmodule Sequin.Runtime.TableReaderServer do
 
     Logger.info("[TableReaderServer] Started")
 
-    # Create a named ETS multiset with public access
-    pk_multiset = EtsMultiset.new_named(multiset_name(consumer.id), access: :public)
+    # Create ETS tables
+    pk_multiset = EtsMultiset.new_named(multiset_name(backfill.id), access: :public)
+    add_backfill_id_to_table_oid_to_backfill_id_ets_table(backfill.table_oid, backfill.id)
 
     slot_message_store_ref =
       consumer.id
@@ -1087,7 +1100,7 @@ defmodule Sequin.Runtime.TableReaderServer do
 
   # Returns the name of the ETS multiset for a given backfill ID
   @doc false
-  defp multiset_name(consumer_id) do
-    Module.concat(__MODULE__, consumer_id)
+  defp multiset_name(backfill_id) do
+    Module.concat(__MODULE__, backfill_id)
   end
 end

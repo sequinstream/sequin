@@ -140,31 +140,65 @@ defmodule Sequin.Transforms do
       |> Repo.preload([:active_backfills, :transform, sequence: [:postgres_database]])
       |> SinkConsumer.preload_http_endpoint!()
 
-    table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-    filters = consumer.sequence_filter.column_filters || []
+    table =
+      cond do
+        is_nil(consumer.sequence) -> nil
+        table = Enum.find(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid)) -> table
+        true -> nil
+      end
 
-    Sequin.Map.put_if_present(
-      %{
-        id: consumer.id,
-        name: consumer.name,
-        database: consumer.sequence.postgres_database.name,
-        status: consumer.status,
-        group_column_names: group_column_names(consumer.sequence_filter.group_column_attnums, table),
-        table: "#{table.schema}.#{table.name}",
-        actions: consumer.sequence_filter.actions,
-        destination: to_external(sink, show_sensitive),
-        filters: Enum.map(filters, &format_filter(&1, table)),
-        batch_size: consumer.batch_size,
-        transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
-        timestamp_format: consumer.timestamp_format,
-        active_backfills: Enum.map(consumer.active_backfills, &to_external(&1, show_sensitive)),
-        max_retry_count: consumer.max_retry_count,
-        load_shedding_policy: consumer.load_shedding_policy,
-        annotations: consumer.annotations
-      },
-      :health,
-      if(consumer.health, do: to_external(consumer.health, show_sensitive))
-    )
+    filters =
+      cond do
+        is_nil(table) -> []
+        is_nil(consumer.sequence_filter) -> []
+        is_nil(consumer.sequence_filter.column_filters) -> []
+        true -> consumer.sequence_filter.column_filters
+      end
+
+    schema =
+      if is_nil(consumer.schema_filter) do
+        nil
+      else
+        consumer.schema_filter.schema
+      end
+
+    database_name =
+      if consumer.sequence do
+        consumer.sequence.postgres_database.name
+      else
+        # For schema filters, we need to get the database from the replication slot
+        consumer = Repo.preload(consumer, replication_slot: [:postgres_database])
+        consumer.replication_slot.postgres_database.name
+      end
+
+    actions =
+      if consumer.sequence_filter do
+        consumer.sequence_filter.actions
+      else
+        # For schema filters, we don't have specific actions, so use default
+        [:insert, :update, :delete]
+      end
+
+    %{
+      id: consumer.id,
+      name: consumer.name,
+      database: database_name,
+      status: consumer.status,
+      actions: actions,
+      destination: to_external(sink, show_sensitive),
+      filters: Enum.map(filters, &format_filter(&1, table)),
+      batch_size: consumer.batch_size,
+      transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
+      timestamp_format: consumer.timestamp_format,
+      active_backfills: Enum.map(consumer.active_backfills, &to_external(&1, show_sensitive)),
+      max_retry_count: consumer.max_retry_count,
+      load_shedding_policy: consumer.load_shedding_policy,
+      annotations: consumer.annotations
+    }
+    |> Sequin.Map.put_if_present(:table, if(table, do: "#{table.schema}.#{table.name}"))
+    |> Sequin.Map.put_if_present(:schema, schema)
+    |> Sequin.Map.put_if_present(:group_column_names, group_column_names(consumer, table))
+    |> Sequin.Map.put_if_present(:health, if(consumer.health, do: to_external(consumer.health, show_sensitive)))
   end
 
   def to_external(%HttpPushSink{} = sink, _show_sensitive) do
@@ -431,12 +465,28 @@ defmodule Sequin.Transforms do
     Health.to_external(health)
   end
 
-  def group_column_names(nil, _table), do: []
+  def group_column_names(%SinkConsumer{}, nil), do: nil
 
-  def group_column_names(column_attnums, table) when is_list(column_attnums) do
-    table.columns
-    |> Enum.filter(&(&1.attnum in column_attnums))
-    |> Enum.map(& &1.name)
+  def group_column_names(%SinkConsumer{} = consumer, table) do
+    default_group_column_names =
+      table.columns
+      |> Enum.filter(& &1.is_pk?)
+      |> Enum.sort_by(& &1.attnum)
+      |> Enum.map(& &1.name)
+
+    cond do
+      is_nil(consumer.sequence_filter) ->
+        default_group_column_names
+
+      is_nil(consumer.sequence_filter.group_column_attnums) ->
+        default_group_column_names
+
+      true ->
+        Enum.map(consumer.sequence_filter.group_column_attnums, fn attnum ->
+          column = Enum.find(table.columns, &(&1.attnum == attnum))
+          column.name
+        end)
+    end
   end
 
   # Helper functions
@@ -729,28 +779,55 @@ defmodule Sequin.Transforms do
           end
 
         "table" ->
-          {schema, table_name} = parse_table_reference(value)
-          databases = Repo.preload(databases, [:sequences, :replication_slot])
-
-          with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
-               {:ok, sequence} <- find_sequence_by_name(database, value) do
-            table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
-
-            {:cont,
-             {:ok,
-              acc
-              |> Map.put(:sequence_id, sequence.id)
-              |> Map.put(:replication_slot_id, database.replication_slot.id)
-              |> Map.put(:sequence_filter, %{
-                actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
-                group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
-                column_filters: column_filters(consumer_attrs["filters"], table)
-              })}}
+          # Check for mutual exclusion with schema
+          if consumer_attrs["schema"] do
+            {:halt, {:error, Error.validation(summary: "Cannot specify both `schema` and `table`. Choose one.")}}
           else
-            {:error, error} -> {:halt, {:error, error}}
+            {schema, table_name} = parse_table_reference(value)
+            databases = Repo.preload(databases, [:sequences, :replication_slot])
+
+            with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
+                 {:ok, sequence} <- find_sequence_by_name(database, value) do
+              table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
+
+              {:cont,
+               {:ok,
+                acc
+                |> Map.put(:sequence_id, sequence.id)
+                |> Map.put(:replication_slot_id, database.replication_slot.id)
+                |> Map.put(:sequence_filter, %{
+                  actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
+                  group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
+                  column_filters: column_filters(consumer_attrs["filters"], table)
+                })}}
+            else
+              {:error, error} -> {:halt, {:error, error}}
+            end
           end
 
-        # handled in "table"
+        "schema" ->
+          # Check for mutual exclusion with table
+          if consumer_attrs["table"] do
+            {:halt, {:error, Error.validation(summary: "Cannot specify both `schema` and `table`. Choose one.")}}
+          else
+            databases = Repo.preload(databases, [:replication_slot])
+
+            case find_database_by_name(consumer_attrs["database"], databases) do
+              {:ok, database} ->
+                {:cont,
+                 {:ok,
+                  acc
+                  |> Map.put(:replication_slot_id, database.replication_slot.id)
+                  |> Map.put(:schema_filter, %{
+                    schema: value
+                  })}}
+
+              {:error, error} ->
+                {:halt, {:error, error}}
+            end
+          end
+
+        # handled in "table" or "schema"
         key when key in ~w(database filters group_column_names actions) ->
           {:cont, {:ok, acc}}
 

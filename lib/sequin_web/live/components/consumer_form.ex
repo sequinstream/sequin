@@ -1134,8 +1134,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp create_consumer(socket, params) do
     account_id = current_account_id(socket)
     initial_backfill = params["initial_backfill"]
-    dbg(initial_backfill)
-    dbg(params)
 
     result =
       Repo.transact(fn ->
@@ -1189,8 +1187,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp maybe_create_backfills(socket, consumer, params, %{"selected_table_oids" => table_oids}) do
     postgres_database_id = params["postgres_database_id"]
 
-    table_oids
-    |> Enum.each(fn table_oid ->
+    Enum.each(table_oids, fn table_oid ->
       table = table(socket.assigns.databases, postgres_database_id, table_oid, nil)
 
       Consumers.create_backfill(%{
@@ -1202,7 +1199,6 @@ defmodule SequinWeb.Components.ConsumerForm do
         "state" => :active
       })
     end)
-    |> dbg()
 
     :ok
   end

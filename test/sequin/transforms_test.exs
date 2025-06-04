@@ -204,6 +204,16 @@ defmodule Sequin.TransformsTest do
              } = json
     end
 
+    test "returns a map of a sink consumer with a schema filter" do
+      schema_filter = ConsumersFactory.schema_filter(schema: "public")
+      consumer = ConsumersFactory.sink_consumer(schema_filter: schema_filter)
+      json = Transforms.to_external(consumer)
+
+      assert json.schema == "public"
+      refute Map.has_key?(json, :table)
+      refute Map.has_key?(json, :group_column_names)
+    end
+
     test "returns a map of the gcp pubsub consumer" do
       account = AccountsFactory.insert_account!()
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)

@@ -91,11 +91,14 @@ defmodule Sequin.Transforms do
     end
   end
 
-  def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint, _show_sensitive) do
+  def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint, show_sensitive) do
     %{
       id: http_endpoint.id,
       name: http_endpoint.name,
-      "webhook.site": true
+      "webhook.site": true,
+      headers: format_headers(http_endpoint.headers),
+      encrypted_headers:
+        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
     }
   end
 
@@ -264,14 +267,28 @@ defmodule Sequin.Transforms do
     })
   end
 
-  def to_external(%GcpPubsubSink{} = sink, _show_sensitive) do
+  def to_external(%GcpPubsubSink{} = sink, show_sensitive) do
     Sequin.Map.reject_nil_values(%{
       type: "gcp_pubsub",
       project_id: sink.project_id,
       topic_id: sink.topic_id,
       use_emulator: sink.use_emulator,
       emulator_base_url: sink.emulator_base_url,
-      credentials: "(credentials present) - sha256sum: #{sha256sum(sink.credentials)}"
+      credentials: %{
+        type: sink.credentials.type,
+        project_id: sink.credentials.project_id,
+        private_key_id: maybe_obfuscate(sink.credentials.private_key_id, show_sensitive),
+        private_key: maybe_obfuscate(sink.credentials.private_key, show_sensitive),
+        client_email: maybe_obfuscate(sink.credentials.client_email, show_sensitive),
+        client_id: maybe_obfuscate(sink.credentials.client_id, show_sensitive),
+        auth_uri: sink.credentials.auth_uri,
+        token_uri: sink.credentials.token_uri,
+        auth_provider_x509_cert_url: sink.credentials.auth_provider_x509_cert_url,
+        client_x509_cert_url: sink.credentials.client_x509_cert_url,
+        universe_domain: maybe_obfuscate(sink.credentials.universe_domain, show_sensitive),
+        client_secret: maybe_obfuscate(sink.credentials.client_secret, show_sensitive),
+        api_key: maybe_obfuscate(sink.credentials.api_key, show_sensitive)
+      }
     })
   end
 
@@ -449,25 +466,13 @@ defmodule Sequin.Transforms do
 
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: nil}), do: %{}
 
-  defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers})
-       when is_map(encrypted_headers) and map_size(encrypted_headers) == 0,
-       do: %{}
-
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}) do
-    "(#{map_size(encrypted_headers)} encrypted header(s)) - sha256sum: #{sha256sum(encrypted_headers)}"
-  end
-
-  defp sha256sum(encrypted_headers) do
-    encrypted_headers
-    |> :erlang.term_to_binary()
-    |> then(&:crypto.hash(:sha256, &1))
-    |> Base.encode16(case: :lower)
-    |> String.slice(0, 8)
+    Map.new(encrypted_headers, fn {key, value} -> {key, maybe_obfuscate(value, false)} end)
   end
 
   defp maybe_obfuscate(nil, _), do: nil
   defp maybe_obfuscate(value, true), do: value
-  defp maybe_obfuscate(_value, false), do: "********"
+  defp maybe_obfuscate(value, false), do: Sequin.String.obfuscate(value)
 
   def from_external_postgres_database(params, account_id) do
     with {:ok, db_params} <- parse_db_params(params) do
@@ -674,7 +679,10 @@ defmodule Sequin.Transforms do
     {:ok, Map.new(headers, fn %{"key" => key, "value" => value} -> {key, value} end)}
   end
 
+  @deprecated "Use parse_headers with is_map, or is_list guard"
   defp parse_headers(headers) when is_binary(headers) do
+    # NOTE: This encrypted header serialization format was used previously.
+    # We are keeping this for backwards compatibility, consider removing eventually.
     if Regex.match?(~r/\(\d+ encrypted header\(s\)\) - sha256sum: [a-f0-9]+/, headers) do
       {:error,
        Error.validation(

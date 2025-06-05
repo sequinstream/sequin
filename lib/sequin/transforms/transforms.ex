@@ -37,6 +37,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Health
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
+  alias Sequin.Sinks.Gcp
 
   def to_external(resource, show_sensitive \\ false)
 
@@ -301,7 +302,7 @@ defmodule Sequin.Transforms do
     })
   end
 
-  def to_external(%GcpPubsubSink{} = sink, show_sensitive) do
+  def to_external(%GcpPubsubSink{credentials: %Gcp.Credentials{} = credentials} = sink, show_sensitive) do
     Sequin.Map.reject_nil_values(%{
       type: "gcp_pubsub",
       project_id: sink.project_id,
@@ -309,19 +310,19 @@ defmodule Sequin.Transforms do
       use_emulator: sink.use_emulator,
       emulator_base_url: sink.emulator_base_url,
       credentials: %{
-        type: sink.credentials.type,
-        project_id: sink.credentials.project_id,
-        private_key_id: maybe_obfuscate(sink.credentials.private_key_id, show_sensitive),
-        private_key: maybe_obfuscate(sink.credentials.private_key, show_sensitive),
-        client_email: maybe_obfuscate(sink.credentials.client_email, show_sensitive),
-        client_id: maybe_obfuscate(sink.credentials.client_id, show_sensitive),
-        auth_uri: sink.credentials.auth_uri,
-        token_uri: sink.credentials.token_uri,
-        auth_provider_x509_cert_url: sink.credentials.auth_provider_x509_cert_url,
-        client_x509_cert_url: sink.credentials.client_x509_cert_url,
-        universe_domain: maybe_obfuscate(sink.credentials.universe_domain, show_sensitive),
-        client_secret: maybe_obfuscate(sink.credentials.client_secret, show_sensitive),
-        api_key: maybe_obfuscate(sink.credentials.api_key, show_sensitive)
+        type: credentials.type,
+        project_id: credentials.project_id,
+        private_key_id: maybe_obfuscate(credentials.private_key_id, show_sensitive),
+        private_key: maybe_obfuscate(credentials.private_key, show_sensitive),
+        client_email: maybe_obfuscate(credentials.client_email, show_sensitive),
+        client_id: maybe_obfuscate(credentials.client_id, show_sensitive),
+        auth_uri: credentials.auth_uri,
+        token_uri: credentials.token_uri,
+        auth_provider_x509_cert_url: credentials.auth_provider_x509_cert_url,
+        client_x509_cert_url: credentials.client_x509_cert_url,
+        universe_domain: maybe_obfuscate(credentials.universe_domain, show_sensitive),
+        client_secret: maybe_obfuscate(credentials.client_secret, show_sensitive),
+        api_key: maybe_obfuscate(credentials.api_key, show_sensitive)
       }
     })
   end

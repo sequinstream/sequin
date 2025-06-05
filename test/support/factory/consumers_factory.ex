@@ -135,7 +135,15 @@ defmodule Sequin.Factory.ConsumersFactory do
   def sink_consumer_attrs(attrs \\ []) do
     attrs
     |> sink_consumer()
-    |> Map.update!(:sink, &Sequin.Map.from_ecto/1)
+    |> Map.update!(:sink, fn
+      %GcpPubsubSink{} = sink ->
+        sink
+        |> Sequin.Map.from_ecto()
+        |> Map.update!(:credentials, &Sequin.Map.from_ecto/1)
+
+      sink ->
+        Sequin.Map.from_ecto(sink)
+    end)
     |> Map.update!(:source_tables, fn source_tables ->
       Enum.map(source_tables, fn source_table ->
         source_table
@@ -302,7 +310,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         type: :gcp_pubsub,
         project_id: "test-project-123",
         topic_id: "test-topic-#{Factory.word()}",
-        credentials: gcp_credential_attrs()
+        credentials: gcp_credential()
       },
       attrs
     )

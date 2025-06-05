@@ -6,6 +6,14 @@ description: "Reference for the core concepts and behaviors of Sequin sinks. Lea
 
 A **sink** in Sequin is a destination for your Postgres data.
 
+## Source tables
+
+Sequin sinks can be configured to stream changes for one or more tables in your database. You can either specify a single table or an entire schema.
+
+When specifying a schema, Sequin will stream changes for all tables in that schema. You can include/exclude tables in the schema when configuring the [publication](/reference/databases#publications).
+
+When specifying a single table, Sequin will stream changes for that table.
+
 ## Delivery Guarantees
 
 Sequin provides exactly-once delivery under most circumstances, but [exactly-once delivery is not always possible](https://blog.sequinstream.com/at-most-once-at-least-once-and-exactly-once-delivery/). Therefore, Sequin implements at-least-once delivery with [idempotency keys](/reference/messages#idempotency).

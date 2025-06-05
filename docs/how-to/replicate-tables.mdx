@@ -39,7 +39,7 @@ If you're using Sequin Cloud, you'll need:
 
 Your table replication pipeline will have these components:
 
-1. **Source table(s)**: The table(s) or schema(s) in Postgres that you want to replicate
+1. **Source tables**: The table or schema in Postgres that you want to replicate
 2. **Destination sink**: The message queue or webhook endpoint that delivers changes to your processing system (e.g. SQS, Kafka, or HTTP endpoint)
 3. **Replication processor**: An application or service you write that receives changes and upserts to your destination table
 
@@ -49,7 +49,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
 <Steps>
   <Step title="Select the source">
-    Select the table(s) or schema(s) you want to replicate.
+    Select the table or schema you want to replicate.
 
     Optionally add SQL filters to sync a subset of your source table(s) to the destination.
   </Step>

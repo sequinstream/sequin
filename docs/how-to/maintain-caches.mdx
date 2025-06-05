@@ -40,7 +40,7 @@ If you're using Sequin Cloud, you'll need:
 
 Your cache maintenance pipeline will have these components:
 
-1. **Source table(s)**: The table(s) or schema(s) in Postgres that contain the data you want to cache
+1. **Source tables**: The table or schema in Postgres that contain the data you want to cache
 2. **Destination sink**: The message queue or webhook endpoint that delivers changes to your processing system (e.g. SQS, Kafka, or HTTP endpoint)
 3. **Cache update processor**: An application or service you write that receives changes and updates your cache
 
@@ -50,7 +50,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
 <Steps>
   <Step title="Select the source">
-    Select the table(s) or schema(s) containing the data you want to cache.
+    Select the table or schema containing the data you want to cache.
 
     Optionally add SQL filters to sync a subset of your source table(s) to the destination.
   </Step>

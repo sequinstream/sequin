@@ -1,16 +1,11 @@
 <script lang="ts">
-  import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    ExpandableCard,
-  } from "$lib/components/ui/card";
-  import ChevronDown from "lucide-svelte/icons/chevron-down";
+  import { CardTitle, ExpandableCard } from "$lib/components/ui/card";
+  import type { Table } from "$lib/databases/types";
   import ColumnList from "./ColumnList.svelte";
   export let errors: any;
   export let isEditMode: boolean;
-  export let selectedTable: any;
+  export let selectedTable: Table;
+  export let selectedSchema: { name: string } | null;
   export let groupColumnAttnums: number[] = [];
   export let infoText: string | null = null;
 
@@ -128,13 +123,22 @@
     </svelte:fragment>
 
     <svelte:fragment slot="summary">
-      {#if !selectedTable}
+      {#if selectedSchema}
         <p class="text-sm text-muted-foreground">
-          Please select a table first.
+          When syncing all tables in a schema, Sequin groups messages by the
+          table and primary keys of the table. This ensures that messages are
+          processed serially for each row in each table.
+        </p>
+        <p class="text-sm text-muted-foreground">
+          Messages in different tables are processed in parallel.
+        </p>
+      {:else if selectedTable}
+        <p class="text-sm text-muted-foreground">
+          {summaryText}
         </p>
       {:else}
         <p class="text-sm text-muted-foreground">
-          {summaryText}
+          Please select a table or schema.
         </p>
       {/if}
     </svelte:fragment>

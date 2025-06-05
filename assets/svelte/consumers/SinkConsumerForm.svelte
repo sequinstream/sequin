@@ -525,7 +525,7 @@
           </p>
         {:else if !selectedTable && !selectedSchema}
           <p class="text-sm text-muted-foreground">
-            Please select a table or schema first.
+            Please select a table or schema.
           </p>
         {:else if form.transform === "none"}
           <p class="text-sm text-muted-foreground">
@@ -591,7 +591,7 @@
           <p class="text-sm text-muted-foreground">
             {#if !selectedTable && !selectedSchema}
               <p class="text-sm text-muted-foreground">
-                Please select a table or schema first.
+                Please select a table or schema.
               </p>
             {:else if selectedSchema && form.backfill.selectedTableOids.length == tablesInSchema.length}
               <p class="text-sm text-muted-foreground">
@@ -639,6 +639,7 @@
       errors={errors.consumer}
       {isEditMode}
       {selectedTable}
+      {selectedSchema}
       bind:groupColumnAttnums={form.groupColumnAttnums}
       infoText={consumer.type === "kafka"
         ? "For Kafka sinks, the group column values are joined with ':' delimiters to generate the message key. Messages are published using hash partitioning on the message key."

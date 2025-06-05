@@ -116,7 +116,13 @@ end
 ecto_socket_opts = if (System.get_env("ECTO_IPV6") || System.get_env("PG_IPV6")) in ~w(true 1), do: [:inet6], else: []
 
 if config_env() == :prod do
-  config :logger, default_handler: [formatter: {Datadog, metadata: :all}]
+  config :logger,
+    default_handler: [
+      formatter:
+        {Datadog,
+         metadata: :all,
+         redactors: [{Sequin.Logger.StaticRedactor, []}]}
+    ]
 end
 
 if config_env() == :prod and self_hosted do
@@ -174,7 +180,13 @@ if config_env() == :prod and self_hosted do
 
   case System.get_env("SEQUIN_LOG_FORMAT") do
     "DATADOG_JSON" ->
-      config :logger, default_handler: [formatter: {Datadog, metadata: :all}]
+      config :logger,
+        default_handler: [
+          formatter:
+            {Datadog,
+             metadata: :all,
+             redactors: [{Sequin.Logger.StaticRedactor, []}]}
+        ]
 
     _ ->
       # Fallback to ConsoleLogger, set in prod.exs

@@ -147,6 +147,7 @@
             "pages": [
               "guides/temporal",
               "guides/user-webhooks",
+              "guides/cloudflare-pipeline",
               "guides/cloudflare",
               "guides/inngest",
               "guides/lambda",
@@ -154,8 +155,7 @@
               "guides/trigger-dev",
               "guides/supabase-function",
               "guides/supabase-webhooks",
-              "guides/vercel",
-              "guides/cloudflare-pipeline"
+              "guides/vercel"
             ]
           }
         ]

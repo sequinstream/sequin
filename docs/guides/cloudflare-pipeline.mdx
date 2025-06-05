@@ -1,14 +1,17 @@
 ---
 title: "Sink to Cloudflare Pipeline and R2 Bucket"
-sidebarTitle: "Sink to Cloudflare R2 Bucket"
-description: "Learn how to sink every change in your database to a Cloudflare R2 bucket using a Cloudflare Pipeline"
+sidebarTitle: "Cloudflare Pipelines & R2"
+description: "Learn how to sink every change in your database to a Cloudflare R2 bucket using a Cloudflare Pipeline."
+icon: "cloudflare"
+iconType: "solid"
 ---
 
-By streaming every change in your database to a Cloudflare [Pipelines](https://developers.cloudflare.com/r2/pipelines/) using a [Sequin Webhook Sink](/reference/sinks/webhook), you can build a powerful, cost-effective data pipeline that captures all database activity in real-time. This approach comes with two key benefits:
+Sequin already integrates with Cloudflare's growing data platform. Using a [Webhook Sink](/reference/sinks/webhook), you can stream every change in your database to a Cloudflare [Pipelines](https://developers.cloudflare.com/r2/pipelines/) and ultimately into an R2 bucket. This approach comes with two key benefits:
 
 - **High-throughput ingestion:** Cloudflare Pipelines can handle massive scale, processing tens of thousands of requests per second via Cloudflare's global network.
 - **Zero egress fees:** With Cloudflare R2, you never pay to access your data regardless of how much you query or where you analyze it from.
 
+With every change in your database in R2, you are set up for analytics, long-term archival, or for audit and compliance use cases.
 
 This guide will show you how to setup and connect a Cloudflare pipeline, R2 bucket, and Sequin Webhook Sink to reliably capture every database change.
 
@@ -56,7 +59,7 @@ Create a Cloudflare pipeline with an HTTP source and an R2 bucket destination.
 
 <Steps titleSize="h3">
     <Step title="Create a new R2 bucket">
-        Run the following command to create a new R2 bucketcalled `sequin-r2-bucket`:
+        Run the following command to create a new R2 bucket called `sequin-r2-bucket`:
 
         ```bash
         npx wrangler r2 bucket create sequin-r2-bucket
@@ -115,13 +118,11 @@ Now that you've setup a Cloudflare pipeline and R2 bucket, you can setup a Sequi
       Select the the table(s) you want to sink (i.e. `public.users`).
     </Step>
     <Step title="Transform the payload for the Cloudflare pipeline">
-       The Cloudflare pipeline expects newline-delimited JSON with all the JSON objects wrapped in a single array. To achieve this, you'll need to add a transform to the sink.
+       The Cloudflare pipeline expects JSON objects wrapped in a single array. To achieve this, you'll need to add a transform to the sink.
 
        Skip down to the "Transform" section and click the **+ Create new transform** button.
 
-       In the New Function page create name your function `cloudflare-pipeline-transform` with the type set to **Transform function**.
-
-       Add the following code to the function:
+       In the "New Function" page that opens, name your function `cloudflare-pipeline-transform` with the type set to **Transform function**. Then, add the following code to the function:
 
        ```elixir
        def transform(action, record, changes, metadata) do
@@ -134,7 +135,7 @@ Now that you've setup a Cloudflare pipeline and R2 bucket, you can setup a Sequi
        end
        ```
 
-       This function will wrap the JSON object in a single array as required by the Cloudflare pipeline.
+       This function will wrap each JSON object in a single array as required by the Cloudflare pipeline.
 
        Click "Create Function" to save the function.
 

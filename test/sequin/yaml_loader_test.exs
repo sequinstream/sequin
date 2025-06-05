@@ -1224,6 +1224,57 @@ defmodule Sequin.YamlLoaderTest do
       end
     end
 
+    test "fails when group_column_names is specified with schema" do
+      assert_raise RuntimeError, ~r/Cannot specify `group_column_names` with `schema`/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_db_and_sequence_yml()}
+
+        sinks:
+          - name: "invalid-consumer"
+            database: "test-db"
+            schema: "public"
+            group_column_names: ["id"]
+            destination:
+              type: "sequin_stream"
+        """)
+      end
+    end
+
+    test "fails when group_column_names contains non-existent column" do
+      assert_raise RuntimeError, ~r/Column 'non_existent_column' does not exist for table 'public\.Characters'/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_db_and_sequence_yml()}
+
+        sinks:
+          - name: "invalid-consumer"
+            database: "test-db"
+            table: "Characters"
+            group_column_names: ["id", "non_existent_column"]
+            destination:
+              type: "sequin_stream"
+        """)
+      end
+    end
+
+    test "fails when column filter references non-existent column" do
+      assert_raise RuntimeError, ~r/Column 'non_existent_column' not found in table 'public\.Characters'/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_db_and_sequence_yml()}
+
+        sinks:
+          - name: "invalid-consumer"
+            database: "test-db"
+            table: "Characters"
+            filters:
+              - column_name: "non_existent_column"
+                operator: "="
+                comparison_value: "test"
+            destination:
+              type: "sequin_stream"
+        """)
+      end
+    end
+
     test "creates kafka sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""

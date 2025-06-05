@@ -11,7 +11,7 @@
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatNumberWithCommas } from "../utils";
   import HealthSummary from "../health/HealthSummary.svelte";
-  import ShowSequence from "./ShowSequence.svelte";
+  import ShowStream from "./ShowStream.svelte";
   import type {
     Consumer,
     HttpPushConsumer,
@@ -1156,7 +1156,7 @@
         <RedisStringSinkCard {consumer} />
       {/if}
 
-      <ShowSequence {consumer} />
+      <ShowStream {consumer} />
     </div>
   </div>
 </div>

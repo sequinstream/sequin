@@ -146,6 +146,7 @@
             "group": "Tutorials",
             "pages": [
               "guides/lambda",
+              "guides/cloudflare-pipeline",
               "guides/cloudflare",
               "guides/temporal",
               "guides/tinybird",

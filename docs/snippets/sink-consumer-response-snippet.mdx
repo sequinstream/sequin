@@ -11,6 +11,15 @@
     The source table for the sink consumer.
 
     The table name is of the format `schema.table`. Schema is optional and defaults to `public`.
+
+    Mutually exclusive with `schema`.
+</ResponseField>
+<ResponseField name="schema" type="string" >
+    The source schema for the sink consumer.
+
+    The sink consumer will stream changes from all tables in this schema.
+
+    Mutually exclusive with `table`.
 </ResponseField>
 <ResponseField name="filters" type="array" >
     Array of filters to apply to the source data
@@ -227,8 +236,18 @@
 
     This is the name of the transform that you created in the Sequin console.
 </ResponseField>
-<ResponseField name="active_backfill" type="string" >
-    The ID of the active backfill, if any.
+<ResponseField name="max_retry_count" type="integer" >
+    The maximum number of times a message will be retried if delivery fails. Once this limit is reached, the message will be discarded.
+
+    Defaults to `null`, meaning messages are retried indefinitely.
+</ResponseField>
+<ResponseField name="annotations" type="object" >
+    User-defined annotations for the sink consumer.
+
+    This is an object containing key-value pairs of metadata.
+</ResponseField>
+<ResponseField name="active_backfills" type="array" >
+    Array of active backfill IDs.
 
     Backfills that were completed or cancelled will not appear here.
 </ResponseField>
@@ -236,19 +255,6 @@
     Number of records to batch together (1-1000)
 
     This is the number of records that will be sent in a single message to the destination.
-</ResponseField>
-<ResponseField name="actions" type="array" >
-    The database actions to include in the sink.
-
-    Possible values include `insert`, `update`, `delete`.
-</ResponseField>
-<ResponseField name="group_column_names" type="array" >
-    Column names used for grouping records
-</ResponseField>
-<ResponseField name="max_retry_count" type="integer" >
-    The maximum number of times a message will be retried if delivery fails. Once this limit is reached, the message will be discarded.
-
-    Defaults to `null`, meaning messages are retried indefinitely.
 </ResponseField>
 <ResponseField name="load_shedding_policy" type="string" >
     Determines how Sequin handles overload when sink consumers can't keep up with incoming messages.
@@ -263,4 +269,12 @@
     The format of the timestamp in the source data.
 
     Possible values include `iso8601` and `unix_microsecond`.
+</ResponseField>
+<ResponseField name="actions" type="array" >
+    The database actions to include in the sink.
+
+    Possible values include `insert`, `update`, `delete`.
+</ResponseField>
+<ResponseField name="group_column_names" type="array" >
+    Column names used for grouping records
 </ResponseField>

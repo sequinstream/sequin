@@ -15,7 +15,7 @@ You can use a backfill to:
 
 During sink creation, you can optionally specify a backfill. Sequin will run the backfill first, then continue to stream any changes to the sink.
 
-After a sink is created, you can manually trigger a backfill on the sink's Overview page at any time.
+After a sink is created, you can manually trigger a backfill on the sink's backfill tab at any time. You can backfill all tables or specific tables.
 
 ## Backfill messages
 
@@ -46,6 +46,12 @@ When creating a backfill, you can indicate whether the backfill should:
 ## Backfill ordering
 
 Backfills send rows to your sink in the order of the sort column that you specify for your source table. For example, if you specify `updated_at` as the sort column, Sequin will send rows to your sink ordered by `updated_at asc`.
+
+<Info>
+
+Read more about how Sequin backfills work in our [blog post](https://blog.sequinstream.com/using-watermarks-to-coordinate-change-data-capture-in-postgres/).
+
+</Info>
 
 {/* TODO: Add details about monitoring backfills */}
 

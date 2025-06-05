@@ -787,9 +787,10 @@ defmodule Sequin.Transforms do
             databases = Repo.preload(databases, [:sequences, :replication_slot])
 
             with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
-                 {:ok, sequence} <- find_sequence_by_name(database, value) do
-              table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
-
+                 {:ok, sequence} <- find_sequence_by_name(database, value),
+                 table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name)),
+                 {:ok, group_column_attnums} <- group_column_attnums(consumer_attrs["group_column_names"], table),
+                 {:ok, column_filters} <- column_filters(consumer_attrs["filters"], table) do
               {:cont,
                {:ok,
                 acc
@@ -797,8 +798,8 @@ defmodule Sequin.Transforms do
                 |> Map.put(:replication_slot_id, database.replication_slot.id)
                 |> Map.put(:sequence_filter, %{
                   actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
-                  group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
-                  column_filters: column_filters(consumer_attrs["filters"], table)
+                  group_column_attnums: group_column_attnums,
+                  column_filters: column_filters
                 })}}
             else
               {:error, error} -> {:halt, {:error, error}}
@@ -807,24 +808,29 @@ defmodule Sequin.Transforms do
 
         "schema" ->
           # Check for mutual exclusion with table
-          if consumer_attrs["table"] do
-            {:halt, {:error, Error.validation(summary: "Cannot specify both `schema` and `table`. Choose one.")}}
-          else
-            databases = Repo.preload(databases, [:replication_slot])
+          cond do
+            Map.has_key?(consumer_attrs, "table") ->
+              {:halt, {:error, Error.validation(summary: "Cannot specify both `schema` and `table`. Choose one.")}}
 
-            case find_database_by_name(consumer_attrs["database"], databases) do
-              {:ok, database} ->
-                {:cont,
-                 {:ok,
-                  acc
-                  |> Map.put(:replication_slot_id, database.replication_slot.id)
-                  |> Map.put(:schema_filter, %{
-                    schema: value
-                  })}}
+            Map.has_key?(consumer_attrs, "group_column_names") ->
+              {:halt, {:error, Error.validation(summary: "Cannot specify `group_column_names` with `schema`.")}}
 
-              {:error, error} ->
-                {:halt, {:error, error}}
-            end
+            true ->
+              databases = Repo.preload(databases, [:replication_slot])
+
+              case find_database_by_name(consumer_attrs["database"], databases) do
+                {:ok, database} ->
+                  {:cont,
+                   {:ok,
+                    acc
+                    |> Map.put(:replication_slot_id, database.replication_slot.id)
+                    |> Map.put(:schema_filter, %{
+                      schema: value
+                    })}}
+
+                {:error, error} ->
+                  {:halt, {:error, error}}
+              end
           end
 
         # handled in "table" or "schema"
@@ -883,6 +889,9 @@ defmodule Sequin.Transforms do
 
         # Ignore until it is properly implemented
         "active_backfill" ->
+          {:cont, {:ok, acc}}
+
+        "active_backfills" ->
           {:cont, {:ok, acc}}
 
         # Ignore internal fields that might be present in the external data
@@ -1095,10 +1104,41 @@ defmodule Sequin.Transforms do
     end
   end
 
-  defp column_filters(nil, _table), do: []
+  defp column_filters(nil, _table), do: {:ok, []}
 
   defp column_filters(filters, table) when is_list(filters) do
-    Enum.map(filters, &parse_column_filter(&1, table))
+    filters
+    |> Enum.reduce_while({:ok, []}, fn filter, {:ok, acc} ->
+      case parse_column_filter(filter, table) do
+        {:ok, column_filter} -> {:cont, {:ok, [column_filter | acc]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+    |> case do
+      {:ok, filters} -> {:ok, Enum.reverse(filters)}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  def parse_column_filter(%{"column_name" => column_name} = filter, table) do
+    case Enum.find(table.columns, &(&1.name == column_name)) do
+      nil ->
+        {:error, Error.validation(summary: "Column '#{column_name}' not found in table '#{table.schema}.#{table.name}'")}
+
+      column ->
+        is_jsonb = filter["field_path"] != nil
+        value_type = determine_value_type(filter, column)
+
+        {:ok,
+         Sequin.Consumers.SequenceFilter.ColumnFilter.from_external(%{
+           "columnAttnum" => column.attnum,
+           "operator" => filter["operator"],
+           "valueType" => value_type,
+           "value" => filter["comparison_value"],
+           "isJsonb" => is_jsonb,
+           "jsonbPath" => filter["field_path"]
+         })}
+    end
   end
 
   defp parse_transform_id(_account_id, nil), do: {:ok, nil}
@@ -1109,24 +1149,6 @@ defmodule Sequin.Transforms do
       {:ok, function} -> {:ok, function.id}
       {:error, %NotFoundError{}} -> {:error, Error.validation(summary: "Function '#{function_name}' not found.")}
     end
-  end
-
-  def parse_column_filter(%{"column_name" => column_name} = filter, table) do
-    # Find the column by name
-    column = Enum.find(table.columns, &(&1.name == column_name))
-    unless column, do: raise("Column '#{column_name}' not found in table '#{table.name}'")
-
-    is_jsonb = filter["field_path"] != nil
-    value_type = determine_value_type(filter, column)
-
-    Sequin.Consumers.SequenceFilter.ColumnFilter.from_external(%{
-      "columnAttnum" => column.attnum,
-      "operator" => filter["operator"],
-      "valueType" => value_type,
-      "value" => filter["comparison_value"],
-      "isJsonb" => is_jsonb,
-      "jsonbPath" => filter["field_path"]
-    })
   end
 
   defp determine_value_type(%{"field_type" => explicit_type}, _column) when not is_nil(explicit_type) do
@@ -1203,13 +1225,39 @@ defmodule Sequin.Transforms do
   end
 
   defp group_column_attnums(nil, %PostgresDatabaseTable{} = table) do
-    PostgresDatabaseTable.default_group_column_attnums(table)
+    case PostgresDatabaseTable.default_group_column_attnums(table) do
+      [] ->
+        {:error,
+         Error.validation(
+           summary:
+             "[group_column_names] No defaults found for table '#{table.schema}.#{table.name}'. If this table does not have primary keys, you must specify the group_column_names."
+         )}
+
+      attnums ->
+        {:ok, attnums}
+    end
   end
 
   defp group_column_attnums(column_names, table) when is_list(column_names) do
-    table.columns
-    |> Enum.filter(&(&1.name in column_names))
-    |> Enum.map(& &1.attnum)
+    column_names
+    |> Enum.reduce_while({:ok, []}, fn column_name, {:ok, attnums} ->
+      case Enum.find(table.columns, &(&1.name == column_name)) do
+        nil ->
+          {:halt,
+           {:error,
+            Error.validation(
+              summary:
+                "[group_column_names] Column '#{column_name}' does not exist for table '#{table.schema}.#{table.name}'"
+            )}}
+
+        column ->
+          {:cont, {:ok, [column.attnum | attnums]}}
+      end
+    end)
+    |> case do
+      {:ok, attnums} -> {:ok, attnums |> Enum.sort() |> Enum.uniq()}
+      {:error, error} -> {:error, error}
+    end
   end
 
   def parse_status(nil), do: :active
@@ -1225,7 +1273,8 @@ defmodule Sequin.Transforms do
     do:
       {:error,
        Error.validation(
-         summary: "Invalid SASL mechanism '#{invalid}'. Must be one of: plain, scram_sha_256, scram_sha_512"
+         summary:
+           "[sasl_mechanism] Invalid SASL mechanism '#{invalid}'. Must be one of: plain, scram_sha_256, scram_sha_512"
        )}
 
   defp env do

@@ -108,7 +108,7 @@
       case "completed":
         return "bg-green-200 text-green-800";
       case "cancelled":
-        return "bg-red-200 text-red-800";
+        return "bg-gray-200 text-gray-800";
       default:
         return "bg-gray-200 text-gray-800";
     }

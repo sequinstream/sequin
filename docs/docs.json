@@ -147,6 +147,7 @@
             "pages": [
               "guides/temporal",
               "guides/user-webhooks",
+              "guides/cloudflare-pipeline",
               "guides/cloudflare",
               "guides/inngest",
               "guides/lambda",

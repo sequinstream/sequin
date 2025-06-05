@@ -1,0 +1,247 @@
+---
+title: "Sink to Cloudflare Pipeline and R2 Bucket"
+sidebarTitle: "Cloudflare Pipelines & R2"
+description: "Learn how to sink every change in your database to a Cloudflare R2 bucket using a Cloudflare Pipeline."
+icon: "cloudflare"
+iconType: "solid"
+---
+
+Sequin already integrates with Cloudflare's growing data platform. Using a [Webhook Sink](/reference/sinks/webhooks), you can stream every change in your database to a Cloudflare [Pipelines](https://developers.cloudflare.com/r2/pipelines/) and ultimately into an R2 bucket. This approach comes with two key benefits:
+
+- **High-throughput ingestion:** Cloudflare Pipelines can handle massive scale, processing tens of thousands of requests per second via Cloudflare's global network.
+- **Zero egress fees:** With Cloudflare R2, you never pay to access your data regardless of how much you query or where you analyze it from.
+
+With every change in your database in R2, you are set up for analytics, long-term archival, or for audit and compliance use cases.
+
+This guide will show you how to setup and connect a Cloudflare pipeline, R2 bucket, and Sequin Webhook Sink to reliably capture every database change.
+
+## Prerequisites
+
+You'll create a Webhook Sink that'll deliver a database change to a Cloudflare Pipeline. You'll need the following to get started:
+
+- A [Cloudflare account](https://dash.cloudflare.com/sign-up?utm_source=sequin.com)
+- The Cloudflare [CLI installed](https://developers.cloudflare.com/workers/get-started/guide/)
+- Sequin running [locally](/running-sequin)
+- A [database connected to Sequin](/connect-postgres) with at least one table
+
+<Accordion title="Sample database schema used in this guide" >
+```sql
+-- Create a users table
+create table users (
+  id uuid primary key default gen_random_uuid (),
+  first_name text not null,
+  last_name text not null,
+  email text not null unique,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Insert some mock data
+insert into
+  users (first_name, last_name, email)
+values
+  ('John', 'Doe', 'john.doe@example.com'),
+  ('Jane', 'Smith', 'jane.smith@example.com'),
+  ('Alice', 'Johnson', 'alice.johnson@example.com'),
+  ('Bob', 'Brown', 'bob.brown@example.com'),
+  ('Charlie', 'Davis', 'charlie.davis@example.com'),
+  ('Emily', 'Wilson', 'emily.wilson@example.com'),
+  ('Frank', 'Miller', 'frank.miller@example.com'),
+  ('Grace', 'Moore', 'grace.moore@example.com'),
+  ('Hannah', 'Taylor', 'hannah.taylor@example.com'),
+  ('Isaac', 'Anderson', 'isaac.anderson@example.com');
+```
+</Accordion>
+
+## Setup a Cloudflare Pipeline and R2 Bucket
+
+Create a Cloudflare pipeline with an HTTP source and an R2 bucket destination.
+
+<Steps titleSize="h3">
+    <Step title="Create a new R2 bucket">
+        Run the following command to create a new R2 bucket called `sequin-r2-bucket`:
+
+        ```bash
+        npx wrangler r2 bucket create sequin-r2-bucket
+        ```
+    </Step>
+    <Step title="Create a new pipeline">
+        Create a pipeline connected to the R2 bucket you just created:
+
+        ```bash
+        npx wrangler pipelines create sequin-pg-sink --r2-bucket sequin-r2-bucket --batch-max-seconds 5 --compression none
+        ```
+
+        This will create a new pipeline called `sequin-pg-sink` with a simple configuration to get you started. You'll see the following output:
+
+        ```bash
+        Id:    {{unique-id}}
+        Name:  sequin-pg-sink
+        Sources:
+        HTTP:
+            Endpoint:        https://{{unique-id}}.pipelines.cloudflare.com
+            Authentication:  off
+            Format:          JSON
+        Worker:
+            Format:  JSON
+        Destination:
+        Type:         R2
+        Bucket:       sequin-r2-bucket
+        Format:       newline-delimited JSON
+        Compression:  NONE
+        Batch hints:
+            Max bytes:     100 MB
+            Max duration:  5 seconds
+            Max records:   10,000,000
+
+        🎉 You can now send data to your pipeline!
+        ```
+
+        Copy down the `Endpoint` URL, you'll need this to setup the Sequin Webhook Sink.
+    </Step>
+</Steps>
+
+<Check>
+You've created a Cloudflare pipeline and R2 bucket ready to process JSON data over HTTP.
+</Check>
+
+## Setup a Sequin Webhook Sink
+
+Now that you've setup a Cloudflare pipeline and R2 bucket, you can setup a Sequin Webhook Sink to deliver changes to the pipeline.
+<Steps titleSize="h3">
+    <Step title="Create a new webhook sink">
+        In the Sequin console, navigate to the [**Sink**](https://localhost:7376/sinks) page and click "Create Sink".
+
+        Then, select "Webhook" as the sink type.
+    </Step>
+    <Step title="Select the table(s) to sink">
+      Select the the table(s) you want to sink (i.e. `public.users`).
+    </Step>
+    <Step title="Transform the payload for the Cloudflare pipeline">
+       The Cloudflare pipeline expects JSON objects wrapped in a single array. To achieve this, you'll need to add a transform to the sink.
+
+       Skip down to the "Transform" section and click the **+ Create new transform** button.
+
+       In the "New Function" page that opens, name your function `cloudflare-pipeline-transform` with the type set to **Transform function**. Then, add the following code to the function:
+
+       ```elixir
+       def transform(action, record, changes, metadata) do
+        [%{
+            action: action,
+            record: record,
+            changes: changes,
+            metadata: metadata
+        }]
+       end
+       ```
+
+       This function will wrap each JSON object in a single array as required by the Cloudflare pipeline.
+
+       Click "Create Function" to save the function.
+
+       Navigate back to the Webhook Sink form, click the refresh button in the "Transform" section and select the `cloudflare-pipeline-transform` function you just created.
+    </Step>
+    <Step title="Turn off batching (for now)">
+        In the "Webhook Sink configuration" section, turn off batching.
+
+        <Note>
+        We're working on features to support batching for Cloudflare pipelines. For now, you'll need to turn off batching to deliver each change to the pipeline individually.
+        </Note>
+    </Step>
+    <Step title="Create an HTTP endpoint for the Cloudflare pipeline">
+        Skip down to the "HTTP Endpoint" section, click **New HTTP Endpoint** and in the new window, name the endpoint (e.g. `cloudflare-pipeline-endpoint`) and enter the url for your pipeline:
+
+        ```
+        https://{{unique-id}}.pipelines.cloudflare.com
+        ```
+
+        No need to add any headers or authentication right now.
+
+        Then, go back to your Webhook Sink form, refresh the list of endpoints, and select the endpoint you just created.
+    </Step>
+    <Step title="Save the webhook sink">
+        Give your webhook sink a name (e.g. `cloudflare-pipeline-sink`) and click "Save" to save the webhook sink.
+    </Step>
+</Steps>
+
+<Check>
+You've setup a Sequin Webhook Sink that'll deliver changes to a Cloudflare pipeline.
+</Check>
+
+## Test a single change
+
+Now that you've setup a Sequin Webhook Sink that'll deliver changes to a Cloudflare pipeline, you can test it by creating a new user in the database.
+
+<Steps titleSize="h3">
+    <Step title="Create a new user in the database">
+        Create a new record in the table. For example, you can run the following SQL command to create a new user in the database:
+
+        ```sql
+        insert into users (first_name, last_name, email) values ('Eric', 'Goldman', 'eric@sequinstream.com');
+        ```
+    </Step>
+    <Step title="Check the Cloudflare pipeline">
+        Using the Cloudflare dashboard, you can check the R2 bucket for the new user:
+
+        <Frame>
+            <img src="/images/guides/cloudflare-pipeline/bucket-object-single-change.png" alt="Cloudflare pipeline showing a new user" />
+        </Frame>
+
+        And if you download the object, you'll see the change as a single JSON object:
+
+        ```json
+        {
+        "record": {
+            "created_at": "2025-06-05T02:04:58.577494Z",
+            "email": "eric@sequinstream.com",
+            "first_name": "Eric",
+            "id": "666a0182-cde7-4fcf-8fc2-2561536a35bf",
+            "last_name": "Goldman",
+            "updated_at": "2025-06-05T02:04:58.577494Z"
+        },
+        "metadata": {
+            "database_name": "withered_feather_4",
+            "commit_idx": 0,
+            "commit_lsn": 35003912,
+            "commit_timestamp": "2025-06-05T02:04:58.584143Z",
+            "table_name": "users",
+            "table_schema": "public",
+            "transaction_annotations": null,
+            "idempotency_key": "MzUwMDM5MTI6MA==",
+            "consumer": {
+            "id": "c1905648-968c-4d73-8a1e-6cb2eb59a6a3",
+            "name": "cloudflare-pipeline-sink",
+            "annotations": {}
+            }
+        },
+        "action": "insert",
+        "changes": null
+        }
+        ```
+    </Step>
+</Steps>
+
+<Check>
+You've successfully seen a change from your database delivered to a Cloudflare pipeline and landed in an R2 bucket.
+</Check>
+
+## Next steps
+
+You are up and running with a Cloudflare pipeline and R2 bucket that's capturing every change in your database. You can use this sink to power a data lake or analytics (Iceberg, Delta Lake, etc.), long-term archival, or for audit and compliance use cases.
+
+To build on this example, dig into the following resources:
+
+<CardGroup>
+  <Card title="Connect your production database" icon="database" href="/connect-postgres">
+    Learn how to connect your production database to Sequin.
+  </Card>
+  <Card title="Deploy Sequin in production" icon="code" href="/how-to/deploy-to-production">
+    Learn how to deploy Sequin in production.
+  </Card>
+  <Card title="Webhook sinks" icon="rotate" href="/reference/sinks/webhooks">
+    Learn more about how to configure your webhook sinks to deliver messages to your users.
+  </Card>
+  <Card title="Monitor your workflows" icon="chart-line" href="/reference/metrics">
+    Learn how to monitor your system with Sequin's built-in metrics.
+  </Card>
+</CardGroup>

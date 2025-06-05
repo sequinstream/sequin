@@ -12,9 +12,11 @@ RESET='\033[0m'
 
 # Parse command line arguments
 DIRTY=false
+EXCLUDE=""
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --dirty) DIRTY=true ;;
+        --exclude) EXCLUDE="$2"; shift ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
     shift
@@ -78,6 +80,9 @@ run_step "MIX_ENV=prod mix compile --warnings-as-errors"
 MIX_TEST_CMD="mix test --max-failures 1"
 if [ -n "${MIX_MAX_CASES+x}" ]; then
    MIX_TEST_CMD="$MIX_TEST_CMD --max-cases $MIX_MAX_CASES"
+fi
+if [ -n "$EXCLUDE" ]; then
+   MIX_TEST_CMD="$MIX_TEST_CMD --exclude $EXCLUDE"
 fi
 run_step "$MIX_TEST_CMD"
 

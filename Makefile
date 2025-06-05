@@ -30,11 +30,19 @@ watch: ## Watch files and auto-recompile on changes using entr
 deviex2: ## Open a second IEx session on the running local app
 	iex --name console-$$(openssl rand -hex 4)@127.0.0.1 --remsh sequin-stream-dev2@127.0.0.1 --cookie sequin-stream-dev
 
-signoff: ## Run the signoff script
-	@./scripts/signoff.sh
+signoff: ## Run the signoff script [exclude=<tag>]
+	@if [ -n "$(exclude)" ]; then \
+		./scripts/signoff.sh --exclude $(exclude); \
+	else \
+		./scripts/signoff.sh; \
+	fi
 
-signoff-dirty: ## Run the signoff script with --dirty flag
-	@./scripts/signoff.sh --dirty
+signoff-dirty: ## Run the signoff script with --dirty flag [exclude=<tag>]
+	@if [ -n "$(exclude)" ]; then \
+		./scripts/signoff.sh --dirty --exclude $(exclude); \
+	else \
+		./scripts/signoff.sh --dirty; \
+	fi
 
 signoff-pr: ## Run signoff on a PR by providing PR number: make signoff-pr pr=1234
 	@if [ -z "$(pr)" ]; then \

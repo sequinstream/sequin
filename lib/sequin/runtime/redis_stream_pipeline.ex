@@ -6,6 +6,7 @@ defmodule Sequin.Runtime.RedisStreamPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Redis
+  alias Sequin.Transforms.Message
 
   require Logger
 
@@ -19,7 +20,11 @@ defmodule Sequin.Runtime.RedisStreamPipeline do
     %{consumer: %SinkConsumer{sink: %RedisStreamSink{}} = consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    redis_messages = Enum.map(messages, fn %{data: data} -> data end)
+    redis_messages =
+      Enum.map(messages, fn %{data: message} ->
+        transformed_data = Message.to_external(consumer, message)
+        %{message | data: transformed_data}
+      end)
 
     case Redis.send_messages(consumer, redis_messages) do
       :ok ->

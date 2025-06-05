@@ -366,7 +366,7 @@
   let backfillSectionEnabled = false;
   let backfillSectionExpanded = false;
   $: {
-    transformSectionEnabled = selectedTable && consumer.type !== "redis_stream";
+    transformSectionEnabled = selectedTable;
     transformSectionExpanded = transformSectionEnabled && !isEditMode;
 
     backfillSectionEnabled = selectedTable && !isEditMode;
@@ -554,16 +554,7 @@
       </svelte:fragment>
 
       <svelte:fragment slot="summary">
-        {#if consumer.type === "redis_stream"}
-          <p class="text-sm text-muted-foreground">
-            Transforms are coming soon for Redis Stream sinks. <a
-              href="https://github.com/sequinstream/sequin/issues/1186"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-primary underline">Let us know</a
-            > if you want this.
-          </p>
-        {:else if !selectedTable}
+        {#if !selectedTable}
           <p class="text-sm text-muted-foreground">
             Please select a table first.
           </p>

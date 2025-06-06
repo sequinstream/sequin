@@ -462,7 +462,19 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%Health{} = health, _show_sensitive) do
-    Health.to_external(health)
+    %{
+      name: Health.entity_name(health.entity_kind),
+      status: health.status,
+      checks: Enum.map(health.checks, &to_external/1)
+    }
+  end
+
+  def to_external(%Health.Check{} = check, _show_sensitive) do
+    Sequin.Map.put_if_present(
+      %{name: Health.Check.check_name(check), status: check.status},
+      :error,
+      if(check.error, do: Exception.message(check.error))
+    )
   end
 
   def group_column_names(%SinkConsumer{}, nil), do: nil

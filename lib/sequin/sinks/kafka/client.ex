@@ -57,11 +57,37 @@ defmodule Sequin.Sinks.Kafka.Client do
   end
 
   @impl Kafka
-  def test_connection(%KafkaSink{} = sink) do
+  @doc """
+  Test the connection to the Kafka cluster.
+
+  If we receive :leader_not_available, it indicates that the topic does not exist in the cluster.
+
+  This metadata call will cause Kafka to auto-create the topic if Kafka is configured to do so. But
+  this is asynchronous, so we need to retry if the topic is not found.
+  """
+  def test_connection(%KafkaSink{} = sink, opts \\ [retry_count: 0, max_retries: 3]) do
     with :ok <- test_hosts_reachability(sink),
          {:ok, metadata} <- get_metadata(sink) do
       validate_topic_exists(metadata, sink.topic)
     else
+      {:error, :leader_not_available} ->
+        if opts[:retry_count] < opts[:max_retries] do
+          # Backoff
+          100
+          |> Sequin.Time.exponential_backoff(opts[:retry_count])
+          |> Process.sleep()
+
+          # Retry
+          opts = Keyword.update!(opts, :retry_count, &(&1 + 1))
+          test_connection(sink, opts)
+        else
+          {:error,
+           Sequin.Error.service(
+             service: :kafka,
+             message: "Leader not available. Does the topic #{sink.topic} exist in the cluster?"
+           )}
+        end
+
       {:error, reason} ->
         {:error, to_sequin_error(reason)}
     end

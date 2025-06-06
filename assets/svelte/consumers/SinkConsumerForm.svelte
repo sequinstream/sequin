@@ -489,7 +489,6 @@
           {refreshFunctions}
           {functionRefreshState}
           showTitle={false}
-          isEdit={isEditMode}
         />
       </CardContent>
     </Card>
@@ -529,7 +528,13 @@
           </p>
         {:else if form.transform === "none"}
           <p class="text-sm text-muted-foreground">
-            No transform. Messages will be sent as-is to the sink destination.
+            No transform in use. Messages will be sent to the sink destination
+            in Sequin's <a
+              href="https://sequinstream.com/docs/reference/messages"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-primary underline">message format</a
+            >.
           </p>
         {:else}
           <p class="font-medium">
@@ -554,7 +559,13 @@
           bind:refreshState={functionRefreshState}
         >
           <svelte:fragment slot="none-option">
-            No transform. Messages will be sent as-is to the sink destination.
+            No transform in use. Messages will be sent to the sink destination
+            in Sequin's <a
+              href="https://sequinstream.com/docs/reference/messages"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-primary underline">message format</a
+            >.
           </svelte:fragment>
         </FunctionPicker>
       </svelte:fragment>

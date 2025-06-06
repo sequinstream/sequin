@@ -425,8 +425,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  def handle_event("fetch_message_data", %{"message_id" => message_id}, socket) do
-    message = Enum.find(socket.assigns.messages, &(&1.id == message_id))
+  def handle_event("fetch_message_data", %{"message_ack_id" => message_ack_id}, socket) do
+    message = Enum.find(socket.assigns.messages, &(&1.ack_id == message_ack_id))
 
     case fetch_message_data(message, socket.assigns.consumer) do
       {:ok, data} ->

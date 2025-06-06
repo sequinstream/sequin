@@ -12,19 +12,19 @@ This log is updated every Friday to track our feature releases and updates week 
 
 ### Changed
 
-* Implemented hibernation for slot message store when all messages have been processed to reduce resource consumption.
-* Enhanced system resilience by adding retry attempts when the system reaches memory limits and improved SlotProcessorServer disconnect handling.
-* Extended minielixir functionality to support `Base` operations.
+* Improvements to memory utilization.
+* Improved how the system behaves when it hits memory limits and needs to disconnect from the replication slot.
+* Added support for modules like `Base` to functions.
 * Improved sink creation user experience by hiding Sequin internal tables from the sink creation form.
-* Renamed Redis sink to Redis Stream for clearer terminology and functionality distinction.
+* Renamed current Redis sink to Redis Stream to make way for the new Redis String sink.
 
 ### Fixed
 
 * Corrected the sidebar navigation title display for 'Management API' section.
-* Enhanced PostgreSQL array parsing to handle complex data types more accurately.
-* Resolved auto-completion issues for function transforms to improve developer experience.
-* Fixed YAML parsing errors in sequin.yaml configuration files and improved CONFIG_FILE_YAML handling after disk operations.
-* Resolved TLS configuration issues in CLI, with proper default TLS=false setting for localhost connections.
+* Fixed Postgres array parsing to handle complex data types more accurately.
+* Improved in-console experience around editing function transforms.
+* Fixed some YAML parsing errors in `sequin.yaml` configuration files around anchors and interpolation.
+* Resolved some TLS configuration issues in CLI when working with `localhost`.
 
 ## April 18, 2025
 
@@ -51,16 +51,13 @@ This log is updated every Friday to track our feature releases and updates week 
 
 * Self-hosted deployments can now be configured with [GitHub logins](https://sequinstream.com/docs/reference/configuration#oauth-configuration).
 * The [management API](https://sequinstream.com/docs/management-api/introduction) now supports CRUD on HTTP endpoints, sinks, and backfills.
-* sequin.yml supports [environment variable substitutions](https://sequinstream.com/docs/reference/sequin-yaml#environment-variable-substitution).
-* Transform functions now support timestamp transformation to unix (numeric)
-* You can now [provision an API Token](https://sequinstream.com/docs/reference/sequin-yaml#api-token-configuration) in the sequin.yml
+* `sequin.yml` supports [environment variable substitutions](https://sequinstream.com/docs/reference/sequin-yaml#environment-variable-substitution). This makes it easier to keep secrets out of your `sequin.yml`. And makes it easier to re-use your `sequin.yml` in multiple environments.
+* You can now [provision an API Token](https://sequinstream.com/docs/reference/sequin-yaml#api-token-configuration) in the `sequin.yml`. This can be useful for dev and CI workflows. You can provision a Sequin account with an API token then make subsequent API calls to your Sequin instance.
 
 ### Changed
 
-* Console improvement: make it easier to notice which table is selected
 * Improved logging configuration: The log level can now be set via the LOG_LEVEL environment variable across all environments, with sensible defaults
 * Validate http endpoint names are unique
-* sequin.yaml: remove `sort_column_name` from YAML import/export
 
 ### Fixed
 

@@ -1105,8 +1105,13 @@
             </div>
           {:else}
             <p class="text-sm text-muted-foreground">
-              No transform in use. Messages will be sent as-is to the sink
-              destination.
+              No transform in use. Messages will be sent to the sink destination
+              in Sequin's <a
+                href="https://sequinstream.com/docs/reference/messages"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-primary underline">message format</a
+              >.
             </p>
           {/if}
         </CardContent>

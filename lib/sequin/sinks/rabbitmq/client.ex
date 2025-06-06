@@ -49,6 +49,7 @@ defmodule Sequin.Sinks.RabbitMq.Client do
 
   defp publish_message(%SinkConsumer{sink: %RabbitMqSink{} = sink} = consumer, message, %AMQP.Channel{} = channel) do
     # https://hexdocs.pm/amqp/AMQP.Basic.html#publish/5-options
+    # FIXME: message.id should not be relied on?
     opts = [message_id: to_string(message.id), content_type: "application/json"]
     payload = to_payload(consumer, message)
     routing_key = routing_key(message)

@@ -199,7 +199,7 @@
 
     live.pushEvent(
       "fetch_message_data",
-      { message_id: message.id },
+      { message_ack_id: message.ack_id },
       (reply) => {
         isLoadingMessageData = false;
         if (reply.error) {

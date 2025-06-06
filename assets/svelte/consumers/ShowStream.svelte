@@ -130,7 +130,9 @@
                   <TableCell
                     class="whitespace-normal break-words max-w-[300px] align-top"
                   >
-                    <code>{filter.value}</code>
+                    {#if filter.operator !== "IS NULL" && filter.operator !== "IS NOT NULL"}
+                      <code>{filter.value}</code>
+                    {/if}
                   </TableCell>
                 </TableRow>
               {/each}

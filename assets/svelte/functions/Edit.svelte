@@ -11,7 +11,13 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import * as Command from "$lib/components/ui/command";
-  import { Check, ChevronsUpDown, Info, BookText, Trash2 } from "lucide-svelte";
+  import {
+    Check,
+    ChevronsUpDown,
+    Info,
+    BookText,
+    RotateCcw,
+  } from "lucide-svelte";
   import { cn } from "$lib/utils";
   import { tick } from "svelte";
   import { Label } from "$lib/components/ui/label";
@@ -931,7 +937,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                             on:click={resetOriginalCode}
                             disabled={!isCodeModified}
                           >
-                            <Trash2 class="w-4 h-4" />
+                            <RotateCcw class="w-4 h-4" />
                           </button>
                         </TooltipTrigger>
                         <TooltipContent>Reset to original code</TooltipContent>

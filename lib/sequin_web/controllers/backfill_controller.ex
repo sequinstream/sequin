@@ -2,6 +2,11 @@ defmodule SequinWeb.BackfillController do
   use SequinWeb, :controller
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.SchemaFilter
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.Sequence
+  alias Sequin.Error
   alias Sequin.Repo
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Transforms
@@ -29,12 +34,13 @@ defmodule SequinWeb.BackfillController do
 
   def create(conn, %{"sink_id_or_name" => sink_id_or_name} = params) do
     params = Map.delete(params, "sink_id_or_name")
+    {table_reference, params} = Map.pop(params, "table")
     account_id = conn.assigns.account_id
 
     with {:ok, sink_consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: sink_id_or_name),
          sink_consumer = Repo.preload(sink_consumer, [:postgres_database, :sequence]),
+         {:ok, table} <- find_table(sink_consumer, table_reference),
          {:ok, backfill_params} <- Transforms.from_external_backfill(params),
-         table = Sequin.Enum.find!(sink_consumer.postgres_database.tables, &(&1.oid == sink_consumer.sequence.table_oid)),
          backfill_params =
            Map.merge(backfill_params, %{
              account_id: account_id,
@@ -57,6 +63,42 @@ defmodule SequinWeb.BackfillController do
          {:ok, backfill_params} <- Transforms.from_external_backfill(params),
          {:ok, updated_backfill} <- Consumers.update_backfill(backfill, backfill_params) do
       render(conn, "show.json", backfill: updated_backfill)
+    end
+  end
+
+  defp find_table(
+         %SinkConsumer{postgres_database: %PostgresDatabase{tables: tables}, sequence: %Sequence{table_oid: table_oid}},
+         _table_name
+       ) do
+    case Enum.find(tables, &(&1.oid == table_oid)) do
+      nil -> {:error, Error.validation(summary: "Table not found")}
+      table -> {:ok, table}
+    end
+  end
+
+  defp find_table(%SinkConsumer{sequence: nil}, nil) do
+    {:error, Error.validation(summary: "Must specify a table to backfill.")}
+  end
+
+  defp find_table(
+         %SinkConsumer{
+           postgres_database: %PostgresDatabase{tables: tables},
+           schema_filter: %SchemaFilter{} = schema_filter
+         },
+         table_reference
+       ) do
+    {schema, table_name} = Transforms.parse_table_reference(table_reference)
+    table = Enum.find(tables, &(&1.name == table_name and &1.schema == schema))
+
+    cond do
+      schema_filter.schema != schema ->
+        {:error, Error.validation(summary: "Table #{table_reference} not in sink's schema #{schema_filter.schema}")}
+
+      is_nil(table) ->
+        {:error, Error.validation(summary: "Table #{table_reference} not found")}
+
+      true ->
+        {:ok, table}
     end
   end
 end

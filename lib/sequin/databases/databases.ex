@@ -19,6 +19,7 @@ defmodule Sequin.Databases do
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Runtime.DatabaseLifecycleEventWorker
+  alias Sequin.Runtime.Supervisor
 
   require Logger
 
@@ -187,6 +188,8 @@ defmodule Sequin.Databases do
         with :ok <- check_related_entities(db),
              {:ok, _} <- Replication.delete_pg_replication(db.replication_slot),
              {:ok, _} <- delete_sequences(db),
+             :ok <- Supervisor.stop_replication(db.replication_slot.id),
+             :ok <- close_postgrex_connection(db),
              {:ok, _} <- Repo.delete(db),
              {:ok, _} <- Oban.cancel_all_jobs(health_checker_query) do
           DatabaseLifecycleEventWorker.enqueue(:delete, :postgres_database, db.id, %{
@@ -626,4 +629,12 @@ defmodule Sequin.Databases do
   end
 
   def list_tables(conn, schema), do: Postgres.list_tables(conn, schema)
+
+  @spec close_postgrex_connection(PostgresDatabase.t()) :: :ok
+  def close_postgrex_connection(%PostgresDatabase{} = db) do
+    case ConnectionCache.connection(db) do
+      {:ok, conn} when is_pid(conn) -> GenServer.stop(conn, :normal, 5_000)
+      _ -> :ok
+    end
+  end
 end

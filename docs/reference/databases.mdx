@@ -164,13 +164,13 @@ drop publication sequin_publication;
 ### Creating a Replication Slot
 
 ```sql
-create replication slot sequin_slot;
+select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
 ```
 
 ### Deleting a Replication Slot
 
 ```sql
-drop replication slot sequin_slot;
+select pg_drop_replication_slot('sequin_slot');
 ```
 
 ### Best practices

@@ -15,7 +15,6 @@
   import * as Tooltip from "$lib/components/ui/tooltip";
   import FunctionPicker from "$lib/consumers/FunctionPicker.svelte";
 
-  export let isEdit: boolean = false;
   export let messageKind: string;
   export let selectedTable: any;
   export let form: any;
@@ -71,7 +70,6 @@
   ];
 
   function addFilter() {
-    if (isEdit) return;
     const newFilter: Filter = {
       columnAttnum: null,
       isJsonb: null,
@@ -85,7 +83,6 @@
   }
 
   function removeFilter(index: number) {
-    if (isEdit) return;
     form.sourceTableFilters = form.sourceTableFilters.filter(
       (_, i) => i !== index,
     );
@@ -93,7 +90,6 @@
   }
 
   function updateFilter(index: number, key: keyof Filter, value: any) {
-    if (isEdit) return;
     form.sourceTableFilters = form.sourceTableFilters.map((filter, i) => {
       if (i === index) {
         const updatedFilter = { ...filter, [key]: value };
@@ -203,8 +199,7 @@
         class="whitespace-nowrap"
         on:click={addFilter}
         disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-          !selectedTable ||
-          isEdit}
+          !selectedTable}
       >
         <Plus class="h-4 w-4 mr-2" />
         Add column filter
@@ -254,8 +249,7 @@
                 }}
                 onSelectedChange={(e) =>
                   updateFilter(index, "columnAttnum", e.value)}
-                disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-                  isEdit}
+                disabled={!form.postgresDatabaseId && !form.tableOid}
               >
                 <SelectTrigger class="border-carbon-100 bg-surface-base">
                   <SelectValue placeholder="Column" />
@@ -294,8 +288,7 @@
                   value={filter.jsonbPath}
                   on:input={(e) =>
                     updateFilter(index, "jsonbPath", e.currentTarget.value)}
-                  disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-                    isEdit}
+                  disabled={!form.postgresDatabaseId && !form.tableOid}
                   class="bg-surface-base border-carbon-100"
                 />
               </div>
@@ -324,8 +317,7 @@
                   }}
                   onSelectedChange={(e) =>
                     updateFilter(index, "valueType", e.value)}
-                  disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-                    isEdit}
+                  disabled={!form.postgresDatabaseId && !form.tableOid}
                 >
                   <SelectTrigger class="border-carbon-100 bg-surface-base">
                     <SelectValue placeholder="Field type" />
@@ -359,8 +351,7 @@
                 }}
                 onSelectedChange={(e) =>
                   updateFilter(index, "operator", e.value)}
-                disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-                  isEdit}
+                disabled={!form.postgresDatabaseId && !form.tableOid}
               >
                 <SelectTrigger class="border-carbon-100 bg-surface-base">
                   <SelectValue placeholder="Operator" />
@@ -392,10 +383,17 @@
                   type="text"
                   placeholder="Value"
                   value={filter.value}
-                  on:input={(e) =>
-                    updateFilter(index, "value", e.currentTarget.value)}
-                  disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-                    isEdit}
+                  on:input={(e) => {
+                    e.stopPropagation();
+                    updateFilter(index, "value", e.currentTarget.value);
+                  }}
+                  on:keydown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
+                  disabled={!form.postgresDatabaseId && !form.tableOid}
                   class="bg-surface-base border-carbon-100"
                 />
               </div>
@@ -403,11 +401,16 @@
 
             <!-- Column 4: Remove button -->
             <button
-              on:click={() => removeFilter(index)}
+              type="button"
+              on:click={(e) => {
+                e.stopPropagation();
+                removeFilter(index);
+              }}
               class="text-carbon-400 hover:text-carbon-600 justify-self-end p-2 transition-colors hover:scale-110 self-start mt-6 {filter.isJsonb
                 ? 'row-start-2 col-start-4'
                 : ''}"
-              disabled={(!form.postgresDatabaseId && !form.tableOid) || isEdit}
+              disabled={!form.postgresDatabaseId && !form.tableOid}
+              aria-label="Remove filter"
             >
               <icon class="hero-x-mark w-4 h-4" />
             </button>

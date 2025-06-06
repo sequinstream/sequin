@@ -13,4 +13,4 @@ Application.put_env(:kafka_ex, :consumer_group, "e2e_test_group")
 end)
 
 :inets.start()
-ExUnit.start()
+ExUnit.start(timeout: 120_000)

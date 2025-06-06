@@ -163,7 +163,11 @@
       selectedDatabase = databases.find((db) => db.id === selectedDatabaseId);
     }
     if (selectedDatabase && selectedDatabase.tables.length === 1) {
-      handleTableSelect(selectedDatabase.tables[0]);
+      onSelect({
+        databaseId: selectedDatabaseId,
+        tableOid: selectedDatabase.tables[0].oid,
+        schema: null,
+      });
     }
   });
 

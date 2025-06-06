@@ -1227,10 +1227,11 @@ defmodule SequinWeb.Components.ConsumerForm do
       "sink_consumer_id" => consumer.id,
       "initial_min_cursor" => initial_min_cursor,
       "sort_column_attnum" => backfill_params["sort_column_attnum"],
-      "state" => :active
+      "state" => :active,
+      "table_oid" => table.oid
     }
 
-    Consumers.create_backfill(backfill_attrs)
+    with {:ok, _} <- Consumers.create_backfill(backfill_attrs), do: :ok
   end
 
   defp maybe_put_sequence_id(_account_id, %{"table_oid" => nil} = params) do

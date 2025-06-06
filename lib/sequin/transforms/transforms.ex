@@ -439,19 +439,18 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%Backfill{} = backfill, _show_sensitive) do
-    backfill = Repo.preload(backfill, sink_consumer: [sequence: [:postgres_database]])
+    backfill = Repo.preload(backfill, sink_consumer: [:sequence, :postgres_database])
+    database = backfill.sink_consumer.postgres_database
 
-    sort_column =
-      Sequin.Enum.find!(
-        backfill.sink_consumer.sequence.postgres_database.tables,
-        &(&1.oid == backfill.sink_consumer.sequence.table_oid)
-      )
+    table = Enum.find(database.tables, &(&1.oid == backfill.table_oid))
+    sort_column = if table, do: Enum.find(table.columns, &(&1.attnum == backfill.sort_column_attnum))
 
     %{
       id: backfill.id,
       sink_consumer: backfill.sink_consumer.name,
       state: backfill.state,
-      sort_column: sort_column.name,
+      table: if(table, do: "#{table.schema}.#{table.name}"),
+      sort_column: if(sort_column, do: sort_column.name),
       rows_initial_count: backfill.rows_initial_count,
       rows_processed_count: backfill.rows_processed_count,
       rows_ingested_count: backfill.rows_ingested_count,
@@ -1084,7 +1083,7 @@ defmodule Sequin.Transforms do
   end
 
   # Helper to parse table reference into schema and name
-  defp parse_table_reference(table_ref) do
+  def parse_table_reference(table_ref) do
     case String.split(table_ref, ".", parts: 2) do
       [table_name] -> {"public", table_name}
       [schema, table_name] -> {schema, table_name}

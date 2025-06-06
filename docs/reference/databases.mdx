@@ -137,12 +137,10 @@ SELECT pubviaroot FROM pg_publication where pubname = 'sequin_pub';
 To add or remove tables from a publication, use the `ALTER PUBLICATION` statement:
 
 ```sql
--- Drop all tables
-alter publication sequin_publication drop all tables;
+-- To remove specific tables
+alter publication sequin_publication drop table table1, table2, table3;
 -- Add tables
 alter publication sequin_publication add table table1, table2, table3;
--- Drop tables
-alter publication sequin_publication drop table table1, table2, table3;
 -- Add all tables in a schema
 alter publication sequin_publication add tables in schema my_schema;
 -- Drop all tables in a schema
@@ -164,13 +162,14 @@ drop publication sequin_publication;
 ### Creating a Replication Slot
 
 ```sql
-create replication slot sequin_slot;
+-- Create a logical replication slot that uses the built-in `pgoutput` plugin
+SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
 ```
 
 ### Deleting a Replication Slot
 
 ```sql
-drop replication slot sequin_slot;
+SELECT pg_drop_replication_slot('sequin_slot');
 ```
 
 ### Best practices

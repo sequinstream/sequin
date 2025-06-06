@@ -13,6 +13,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.NumberValue
   alias Sequin.Consumers.SequenceFilter.StringValue
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.Sequence
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -305,6 +306,102 @@ defmodule Sequin.ConsumersTest do
       }
 
       assert {:error, %Ecto.Changeset{}} = Consumers.update_http_endpoint(http_endpoint, invalid_attrs)
+    end
+  end
+
+  describe "update_sink_consumer/2" do
+    test "updates the sink_consumer with valid attributes" do
+      sink_consumer = ConsumersFactory.insert_sink_consumer!()
+
+      update_attrs = %{
+        name: "update-consumer",
+        batch_size: 10,
+        ack_wait_ms: 1000
+      }
+
+      assert {:ok, %SinkConsumer{} = updated_consumer} = Consumers.update_sink_consumer(sink_consumer, update_attrs)
+      assert updated_consumer.name == "update-consumer"
+      assert updated_consumer.batch_size == 10
+      assert updated_consumer.ack_wait_ms == 1000
+    end
+
+    test "modifies column_filters" do
+      sequence_filter =
+        ConsumersFactory.sequence_filter(
+          column_filters: [
+            ConsumersFactory.column_filter_attrs(
+              column_attnum: 1,
+              operator: :==,
+              value: %{__type__: :string, value: "test_value"}
+            )
+          ]
+        )
+
+      assert sink_consumer = ConsumersFactory.insert_sink_consumer!(sequence_filter: sequence_filter)
+
+      assert [
+               %SequenceFilter.ColumnFilter{
+                 column_attnum: 1,
+                 operator: :==,
+                 value: %SequenceFilter.StringValue{value: "test_value"}
+               }
+             ] = sink_consumer.sequence_filter.column_filters
+
+      update_attrs = %{
+        sequence_filter:
+          ConsumersFactory.sequence_filter_attrs(
+            column_filters: [
+              ConsumersFactory.column_filter_attrs(
+                column_attnum: 1,
+                operator: :==,
+                value: %{__type__: :string, value: "updated_value"}
+              )
+            ]
+          )
+      }
+
+      assert {:ok, %SinkConsumer{} = updated_consumer} = Consumers.update_sink_consumer(sink_consumer, update_attrs)
+
+      assert [
+               %SequenceFilter.ColumnFilter{
+                 column_attnum: 1,
+                 operator: :==,
+                 value: %SequenceFilter.StringValue{value: "updated_value"}
+               }
+             ] = updated_consumer.sequence_filter.column_filters
+
+      update_attrs = %{
+        sequence_filter:
+          ConsumersFactory.sequence_filter_attrs(
+            column_filters: [
+              ConsumersFactory.column_filter_attrs(
+                column_attnum: 1,
+                operator: :==,
+                value: %{__type__: :string, value: "updated_value"}
+              ),
+              ConsumersFactory.column_filter_attrs(
+                column_attnum: 2,
+                operator: :>,
+                value: %{__type__: :number, value: 10.0}
+              )
+            ]
+          )
+      }
+
+      assert {:ok, %SinkConsumer{} = updated_consumer} = Consumers.update_sink_consumer(sink_consumer, update_attrs)
+
+      assert [
+               %SequenceFilter.ColumnFilter{
+                 column_attnum: 1,
+                 operator: :==,
+                 value: %SequenceFilter.StringValue{value: "updated_value"}
+               },
+               %SequenceFilter.ColumnFilter{
+                 column_attnum: 2,
+                 operator: :>,
+                 value: %SequenceFilter.NumberValue{value: 10.0}
+               }
+             ] = updated_consumer.sequence_filter.column_filters
     end
   end
 

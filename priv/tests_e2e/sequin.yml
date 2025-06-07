@@ -1,0 +1,45 @@
+# Sequin E2E Configuration
+# This configuration sets up Sequin to stream PostgreSQL changes to Kafka
+# For use with the e2e Docker Compose environment
+
+# Account configuration (required for self-hosted)
+account:
+  name: "${SEQUIN_ACCOUNT_NAME:-sequin-e2e}"
+
+# Database configuration - connects to the PostgreSQL container
+databases:
+  - name: "e2e-database"
+    hostname: "${DATABASE_HOST:-postgres}"
+    port: 5432
+    database: "${DATABASE_NAME:-sequin_test}"
+    username: "${DATABASE_USER:-postgres}"
+    password: "${DATABASE_PASSWORD:-postgres}"
+    pool_size: 5
+    slot:
+      name: "sequin_e2e_slot"
+      create_if_not_exists: true
+    publication:
+      name: "sequin_e2e_pub"
+      create_if_not_exists: true
+      init_sql: |-
+        create publication sequin_e2e_pub for all tables with (publish_via_partition_root = true)
+    await_database:
+      timeout_ms: 60000  # 60 seconds for e2e startup
+      interval_ms: 5000  # Check every 5 seconds
+
+# Demo table sink configuration
+sinks:
+  - name: "demo-to-kafka"
+    database: "e2e-database"
+    table: "public.demo_table"
+    batch_size: 10
+    status: "active"
+    actions:
+      - insert
+      - update
+      - delete
+    destination:
+      type: "kafka"
+      hosts: "${KAFKA_BROKERS:-kafka:29092}"
+      topic: "demo-topic"
+      tls: false

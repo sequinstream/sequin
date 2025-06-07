@@ -31,6 +31,8 @@ defmodule Sequin.SystemMetricsServer do
   defp log_metrics do
     memory_info = :erlang.memory()
     cpu_load = cpu_load()
+    scheduler_util = scheduler_util()
+
     run_queue = :erlang.statistics(:run_queue)
 
     if run_queue > @run_queue_threshold do
@@ -40,16 +42,18 @@ defmodule Sequin.SystemMetricsServer do
     Logger.info(
       """
       [SystemMetricsServer]
-      CPU Load:      #{format_cpu_load(cpu_load)}
-      Run Queue:     #{run_queue}
-      Memory Total:  #{format_bytes(memory_info[:total])}
-        Processes:   #{format_bytes(memory_info[:processes])}
-        Atoms:       #{format_bytes(memory_info[:atom])}
-        Binary:      #{format_bytes(memory_info[:binary])}
-        Code:        #{format_bytes(memory_info[:code])}
-        ETS:         #{format_bytes(memory_info[:ets])}
+      CPU Load:         #{format_percentage(cpu_load)}
+      Scheduler Util:   #{format_percentage(scheduler_util)}
+      Run Queue:        #{run_queue}
+      Memory Total:     #{format_bytes(memory_info[:total])}
+        Processes:      #{format_bytes(memory_info[:processes])}
+        Atoms:          #{format_bytes(memory_info[:atom])}
+        Binary:         #{format_bytes(memory_info[:binary])}
+        Code:           #{format_bytes(memory_info[:code])}
+        ETS:            #{format_bytes(memory_info[:ets])}
       """,
       cpu_load: cpu_load,
+      scheduler_util: scheduler_util,
       run_queue: run_queue,
       memory_total_bytes: memory_info[:total],
       memory_processes_bytes: memory_info[:processes],
@@ -76,6 +80,18 @@ defmodule Sequin.SystemMetricsServer do
     end
   end
 
-  defp format_cpu_load(nil), do: "Not available"
-  defp format_cpu_load(util), do: "#{Float.round(util, 2)}%"
+  # Get a 3 second snapshot of the scheduler utilization
+  # Weighted: Total utilization of all normal and dirty-cpu schedulers, weighted against maximum amount of available CPU time.
+  defp scheduler_util do
+    [
+      {:total, _, _},
+      {:weighted, scheduler_util, _} | _rest
+    ] = :scheduler.utilization(3)
+
+    # Convert to percentage
+    scheduler_util * 100
+  end
+
+  defp format_percentage(nil), do: "Not available"
+  defp format_percentage(util), do: "#{Float.round(util, 1)}%"
 end

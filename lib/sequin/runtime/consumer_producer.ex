@@ -81,7 +81,14 @@ defmodule Sequin.Runtime.ConsumerProducer do
       |> Consumers.get_consumer!()
       |> Repo.preload(postgres_database: [:replication_slot])
 
-    Logger.metadata(replication_slot_id: consumer.replication_slot.id)
+    # postgres_database.tables can get very big, remove for efficiency
+    consumer = %{
+      consumer
+      | postgres_database: %{consumer.postgres_database | tables: []},
+        replication_slot: %{consumer.replication_slot | postgres_database: nil}
+    }
+
+    Logger.metadata(replication_slot_id: consumer.replication_slot_id)
 
     state =
       state

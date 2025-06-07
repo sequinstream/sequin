@@ -158,6 +158,7 @@ defmodule Sequin.Consumers.KafkaSink do
     |> maybe_add_sasl(sink)
     |> maybe_add_ssl(sink)
     |> Keyword.put(:query_api_versions, true)
+    |> Keyword.put(:auto_start_producers, true)
   end
 
   # Add SASL authentication if username/password are configured

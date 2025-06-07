@@ -83,6 +83,10 @@ defmodule Sequin.Runtime.ConsumerProducer do
     # postgres_database.tables can get very big, remove for efficiency
     consumer = %{consumer | postgres_database: %{db | tables: []}}
 
+    # We need to trigger an immediate gc after removing tables from the consumer struct
+    # Ideally, we would not load tables in the first place. We'll be moving tables into their own table soon
+    :erlang.garbage_collect()
+
     Logger.metadata(replication_slot_id: consumer.replication_slot_id)
 
     state =

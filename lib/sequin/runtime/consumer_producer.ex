@@ -14,6 +14,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Databases
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
@@ -76,17 +77,11 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   @impl GenStage
   def handle_info(:init, state) do
-    consumer =
-      state.consumer_id
-      |> Consumers.get_consumer!()
-      |> Repo.preload(postgres_database: [:replication_slot])
+    consumer = state.consumer_id |> Consumers.get_consumer!() |> Repo.preload([:replication_slot])
+    db = Databases.get_db!(consumer.replication_slot.postgres_database_id)
 
     # postgres_database.tables can get very big, remove for efficiency
-    consumer = %{
-      consumer
-      | postgres_database: %{consumer.postgres_database | tables: []},
-        replication_slot: %{consumer.replication_slot | postgres_database: nil}
-    }
+    consumer = %{consumer | postgres_database: %{db | tables: []}}
 
     Logger.metadata(replication_slot_id: consumer.replication_slot_id)
 
@@ -119,7 +114,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
   def handle_info(:trim_idempotency, state) do
     %SinkConsumer{} = consumer = state.consumer
 
-    case Postgres.confirmed_flush_lsn(consumer.postgres_database) do
+    case Postgres.confirmed_flush_lsn(consumer.postgres_database, consumer.replication_slot.slot_name) do
       {:ok, nil} ->
         :ok
 

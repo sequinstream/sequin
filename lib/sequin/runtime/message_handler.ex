@@ -104,7 +104,7 @@ defmodule Sequin.Runtime.MessageHandler do
         [
           :wal_pipelines,
           [postgres_database: :sequences],
-          [not_disabled_sink_consumers: [:sequence, :postgres_database]]
+          [not_disabled_sink_consumers: [:sequence]]
         ],
         force: true
       )
@@ -212,8 +212,8 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
-  defp consumer_event(consumer, message) do
-    data = event_data_from_message(message, consumer)
+  defp consumer_event(consumer, database, message) do
+    data = event_data_from_message(message, consumer, database)
     payload_size = :erlang.external_size(data)
 
     %ConsumerEvent{
@@ -231,8 +231,8 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp consumer_record(consumer, message) do
-    data = record_data_from_message(message, consumer)
+  defp consumer_record(consumer, database, message) do
+    data = record_data_from_message(message, consumer, database)
     payload_size = :erlang.external_size(data)
 
     %ConsumerRecord{
@@ -251,8 +251,8 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp event_data_from_message(%Message{action: :insert} = message, consumer) do
-    metadata = metadata(message, consumer)
+  defp event_data_from_message(%Message{action: :insert} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
@@ -264,7 +264,7 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp event_data_from_message(%Message{action: :update} = message, consumer) do
+  defp event_data_from_message(%Message{action: :update} = message, consumer, database) do
     new_fields = fields_to_map(message.fields)
 
     changes =
@@ -274,7 +274,7 @@ defmodule Sequin.Runtime.MessageHandler do
         %{}
       end
 
-    metadata = metadata(message, consumer)
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
@@ -286,8 +286,8 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp event_data_from_message(%Message{action: :delete} = message, consumer) do
-    metadata = metadata(message, consumer)
+  defp event_data_from_message(%Message{action: :delete} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
@@ -299,8 +299,9 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp record_data_from_message(%Message{action: action} = message, consumer) when action in [:insert, :update] do
-    metadata = metadata(message, consumer)
+  defp record_data_from_message(%Message{action: action} = message, consumer, database)
+       when action in [:insert, :update] do
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(Sink, &1))
     metadata = struct(ConsumerRecordData.Metadata, metadata)
 
@@ -311,8 +312,8 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp record_data_from_message(%Message{action: :delete} = message, consumer) do
-    metadata = metadata(message, consumer)
+  defp record_data_from_message(%Message{action: :delete} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(Sink, &1))
     metadata = struct(ConsumerRecordData.Metadata, metadata)
 
@@ -323,9 +324,9 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp metadata(%Message{} = message, consumer) do
+  defp metadata(%Message{} = message, consumer, %PostgresDatabase{} = database) do
     metadata = %{
-      database_name: consumer.postgres_database.name,
+      database_name: database.name,
       table_name: message.table_name,
       table_schema: message.table_schema,
       commit_timestamp: message.commit_timestamp,
@@ -452,7 +453,7 @@ defmodule Sequin.Runtime.MessageHandler do
 
         # Just for type clarity
         consumer_message =
-          case consumer_message(consumer, message) do
+          case consumer_message(consumer, ctx.postgres_database, message) do
             %ConsumerEvent{} = consumer_message -> consumer_message
             %ConsumerRecord{} = consumer_message -> consumer_message
           end
@@ -484,10 +485,10 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   @decorate track_metrics("map_to_consumer_message")
-  defp consumer_message(%SinkConsumer{} = consumer, %SlotProcessor.Message{} = message) do
+  defp consumer_message(%SinkConsumer{} = consumer, %PostgresDatabase{} = database, %SlotProcessor.Message{} = message) do
     case consumer.message_kind do
-      :event -> consumer_event(consumer, message)
-      :record -> consumer_record(consumer, message)
+      :event -> consumer_event(consumer, database, message)
+      :record -> consumer_record(consumer, database, message)
     end
   end
 
@@ -658,7 +659,7 @@ defmodule Sequin.Runtime.MessageHandler do
           annotations: %{"test_message" => true, "info" => "Test messages are not associated with any sink"}
         }
 
-        message = consumer_event(test_consumer, message)
+        message = consumer_event(test_consumer, ctx.postgres_database, message)
         TestMessages.add_test_message(ctx.postgres_database.id, message.table_oid, message)
       end)
     end

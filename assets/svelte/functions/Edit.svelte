@@ -365,19 +365,31 @@
     if (
       oldSelectedMessage &&
       formErrors.modified_test_messages &&
-      oldSelectedMessage.id === selectedMessage.id &&
-      formErrors.modified_test_messages[selectedMessage.id]
+      oldSelectedMessage.idempotency_key === selectedMessage.idempotency_key &&
+      formErrors.modified_test_messages[selectedMessage.idempotency_key]
     ) {
-      if (formErrors.modified_test_messages[selectedMessage.id].record) {
+      if (
+        formErrors.modified_test_messages[selectedMessage.idempotency_key]
+          .record
+      ) {
         selectedMessage.record = oldSelectedMessage.record;
       }
-      if (formErrors.modified_test_messages[selectedMessage.id].metadata) {
+      if (
+        formErrors.modified_test_messages[selectedMessage.idempotency_key]
+          .metadata
+      ) {
         selectedMessage.metadata = oldSelectedMessage.metadata;
       }
-      if (formErrors.modified_test_messages[selectedMessage.id].action) {
+      if (
+        formErrors.modified_test_messages[selectedMessage.idempotency_key]
+          .action
+      ) {
         selectedMessage.action = oldSelectedMessage.action;
       }
-      if (formErrors.modified_test_messages[selectedMessage.id].changes) {
+      if (
+        formErrors.modified_test_messages[selectedMessage.idempotency_key]
+          .changes
+      ) {
         selectedMessage.changes = oldSelectedMessage.changes;
       }
     }

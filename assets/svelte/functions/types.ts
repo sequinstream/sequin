@@ -61,7 +61,8 @@ export interface FormErrors {
 }
 
 export interface TestMessage {
-  id: string;
+  // Use idempotency_key as unique identifier of a message
+  idempotency_key: string;
   record: string;
   changes: string;
   action: string;
@@ -82,4 +83,5 @@ export interface TestMessageError {
   record: string;
   changes: string;
   metadata: string;
+  action: string;
 }

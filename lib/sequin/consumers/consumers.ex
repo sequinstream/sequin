@@ -1583,7 +1583,6 @@ defmodule Sequin.Consumers do
 
   def synthetic_message do
     %ConsumerEvent{
-      id: Ecto.UUID.generate(),
       data: %ConsumerEventData{
         record: %{
           "id" => 1,

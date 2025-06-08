@@ -1,0 +1,155 @@
+---
+title: "Sequin's consistency model"
+sidebarTitle: "Consistency model"
+description: "Learn how Sequin ensures loss-free, strictly ordered change data capture from Postgres using backfills and real-time logical replication."
+---
+
+## Why consistency matters
+
+When you replicate or event off operational data, missing a single change can be costly. It can introduce bugs, break user experiences, and distort analytics. Worse, consistency issues often drain hours of engineering time and degrade trust in your data.
+
+Postgres' logical replication stream provides strong guarantees. However, processing that stream in a performant, consistent manner has its challenges.
+
+Home-grown change data capture (CDC) solutions often lack performance or strong guarantees. And power features like incremental backfills are hard to do correctly.
+
+Debezium and similar frameworks produce a lot of duplicate messages, have quirks around their backfill processes, and don't offer as much parallelism.
+
+Sequin offers better safety and higher throughput with fewer operational requirements. This document explains how.
+
+## Sequin's guarantees
+
+| Guarantee | What it means | Why it matters |
+|---------------------|----------------|----------------|
+| **Consistency**     | Every row‑level event (insert, update, delete) that happens in Postgres is delivered downstream at least once. | No data loss. |
+| **Strict ordering** | Events arrive in the exact order Postgres committed them. | Avoids stale state & race conditions in the destination. |
+| **High throughput** | Sequin parallelises work whenever order guarantees allow it. | Keeps up with high‑volume workloads without lag. |
+| **Resilience**      | A single "poison pill" message cannot halt the pipeline; it is isolated and retried or parked. | Keeps good data flowing even when individual records are bad. |
+
+### Backfills and replication
+
+Sequin achieves complete coverage by blending two complementary mechanisms:
+
+1. **Backfill (snapshot)** – A fast, batched `SELECT` crawl that copies rows *that already exist* in the table.
+2. **Real‑time replication (change stream)** – A continuous read from a Postgres **logical replication slot** that captures every insert, update, and delete.
+
+## Consistency
+
+### Backfill consistency
+
+In a [backfill](/reference/backfills), a dedicated worker snapshots the source table with a normal table select strategy (e.g. `select ... order by ...`). This allows you to run backfills at any time safely, and without pausing real-time replication.
+
+The backfill worker uses [keyset cursors](https://blog.sequinstream.com/keyset-cursors-not-offsets-for-postgres-pagination/) to paginate the table, ensuring no row is ever skipped, even if the table is being written to during the backfill.
+
+Sequin dynamically sizes backfill batches to the fastest sustained pages/second the primary can handle.
+
+{/* TODO: Have a specific "read message" shape */}
+
+Sequin eliminates race conditions that can occur if you're running backfills and real-time replication at the same time. If Sequin reads a row from the table while the replication stream has a concurrent change event for the same row, [Sequin drops the stale read](https://blog.sequinstream.com/using-watermarks-to-coordinate-change-data-capture-in-postgres/) and relies on the change event. That's because there's no safe way to order a message that's been read from the table and a message that's been read from the replication stream.
+
+Therefore, Sequin may not produce a _read_ message for every row during a backfill. However, every row _will_ be represented by some event (read **or** change).  Nothing is missed.
+
+### Real‑time replication consistency
+
+When you create a **logical replication slot**, Postgres begins buffering every `INSERT`, `UPDATE`, and `DELETE` that occurs in the database. These changes remain in the slot until a connected client both reads and acknowledges them. This gives the client time to safely process each message–such as delivering it to another system–before confirming receipt. However, it's crucial that the client processes and acknowledges messages promptly: until it does, Postgres keeps the changes in the slot, and the replication slot's storage can grow without bound.
+
+Sequin buffers messages from the slot into memory and sends them to your sinks. When a batch of messages have been delivered to the sink, it's safe for Sequin to acknowledge the batch to Postgres, and for Postgres to evict them from the slot.
+
+If a message can't be delivered to the sink right away (e.g. the sink is rejecting the message for some reason), Sequin will store the message in its internal persistent buffer (Postgres) and retry delivery. This gives Sequin some fault tolerance to "poison pill" messages, and allows the flow to continue: because the failed message is written to Sequin's internal persistent buffer, Sequin can still acknowledge the batch to Postgres.
+
+In this way, Sequin is able to continuously progress through the replication slot and acknowledge messages to Postgres, even if some messages fail to deliver to the sink right away. And because Sequin does not acknowledge messages to Postgres until they've been delivered or stored internally, Sequin ensures that every message is captured.
+
+<Note>
+  Sequin will only store so many failed messages in its internal persistent buffer before it pauses replication. This is to prevent Sequin from exhausting internal resources. See [Configuration](/reference/configuration) for more details.
+</Note>
+
+#### Exactly-once processing
+
+There's [no such thing as exactly-once delivery](https://blog.sequinstream.com/at-most-once-at-least-once-and-exactly-once-delivery/). However, we like to say that Sequin offers at-least-once delivery, _approaching_ exactly-once delivery (barring e.g. network partitions). Or, _exactly-once processing_.
+
+After a message is delivered to a sink, Sequin tracks the delivery to an internal Redis ledger right away. This means if Sequin is restarted before it acknowledges a batch to Postgres, it still won't replay messages to the sink, as it knows on reboot which messages were already delivered.
+
+<Note>
+  The Redis ledger is trimmed whenever acknowledgments are sent to Postgres, meaning it won't grow that large.
+</Note>
+
+## Ordering
+
+Postgres writes each transaction to the WAL with a monotonically increasing *Log Sequence Number (LSN)*. A logical replication slot emits messages in that LSN order, so Sequin receives a naturally ordered stream.
+
+However, while Sequin reads from the replication slot in serial, it delivers to sinks in parallel. This concurrency allows Sequin to achieve high throughput.
+
+To achieve high throughput with strict ordering, Sequin partitions messages into **message groups**. Messages that belong to the same group are delivered to the sink in order. By default, the primary key value(s) of the source row are used to group messages. So, a create, update, and delete affecting the same row will be grouped together. And, therefore, delivered in order to the sink.
+
+You can specify how to group messages when setting up a sink. You can, for example, decide to group messages by a single column (e.g. "deliver all messages pertaining to this `account_id` in order").
+
+<Note>
+  Choosing too course-grained of a group can slow throughput, as Sequin will be able to deliver fewer messages in parallel.
+</Note>
+
+<Note>
+  If your sink supports batching, Sequin may deliver multiple messages belonging to the same group in a single batch. Of course, the messages are properly ordered within that batch.
+</Note>
+
+### Failing messages
+
+If a message fails to deliver, it will "block" subsequent messages in its group. So, if Sequin fails to deliver the "create" message for a given row, it will not deliver the "update" message for that row until the "create" message is successfully delivered.
+
+### Ordering with backfills
+
+As stated above, Sequin guarantees that backfills will not deliver stale messages for a given row. If while Sequin is backfilling a row from a table, that row is also updated or deleted at the same time, Sequin will drop the stale read message and rely on the change event instead to deliver the most recent version of the row.
+
+## High throughput
+
+Sequin achieves high throughput by parallelizing much of the data pipeline. As mentioned under "Ordering", messages are slotted into partitions shortly after entering the system. Sequin runs multiple workers per sink to utilize all available cores.
+
+## Resilience
+
+Sequin's data pipeline has several fault tolerance features built in:
+
+### Poison pill messages
+
+In a data pipeline, a "poison pill message" is one that cannot be processed successfully. For example, a sink might reject a message because it's too big or has an unexpected character. Or, a transform function in your pipeline might throw an error.
+
+After a message fails to deliver, Sequin will persist it in its internal persistent buffer (Postgres) and retry delivery. Sequin retries delivery with an exponential backoff strategy, up to a backoff of about 3 minutes.
+
+Importantly, failing messages do not stall the pipeline–they only affect other messages in the same group.
+
+### Restarts
+
+Sequin is built to handle restarts gracefully. When Sequin reconnects to the replication slot, the slot will send messages from the last acknowledged LSN. This means Sequin will receive many messages that have already been delivered. However, Sequin's internal Redis ledger will prevent Sequin from sending those messages to the sink again, bringing the system very close to exactly-once delivery.
+
+## Contrast to Debezium
+
+Debezium is another CDC framework. Its approach differs from Sequin's in a few key ways:
+
+### At-least-once vs. near-exactly-once
+
+Debezium delivers events *at-least once*. When a connector worker is redeployed, loses its Kafka offset, or briefly disconnects, the same WAL positions are replayed and every downstream consumer must deduplicate them.
+
+This means with Debezium, teams need to guard against duplicates everywhere.
+
+Sequin, by contrast, de-duplicates right before delivery. This brings the system very close to exactly-once delivery.
+
+Furthermore, Sequin attaches a stable **idempotency key** to *every* change message and backfill message. Where supported, Sequin will use this idempotency key to ensure exactly-once delivery (such as setting a dedupe key in SQS or NATS). What's more, the idempotency key makes it easy to build exactly-once processes on top of Sequin. For example, you can implement an upsert into your database with the idempotency key as the unique key.
+
+### Snapshot pitfalls
+
+When Debezium's Postgres connector dies during an initial snapshot, it doesn't remember partial progress; the next start **runs the whole snapshot again**. This is not only tedious, but it results in many duplicates.
+
+The maintainers call this out plainly: any snapshot that fails is repeated in full, and [duplicates are expected](https://debezium.io/blog/2023/06/22/towards-exactly-once-delivery/).
+
+Furthermore, during initial snapshots, Debezium can miss messages that ocurred during the snapshotting process. (For example, a row was created and then deleted.)
+
+Sequin's backfill worker avoids those traps:
+
+* Backfill messages are subject to the same idempotency system as change messages. Sequin tracks delivery, and adds an idempotency key to every message.
+* Sequin saves its cursor position in Redis, so it resumes right where it left off on restart.
+* Sequin runs the real-time replication stream in parallel, ensuring you don't miss any changes that occur during the backfill.
+
+### Poison pill messages halt the pipeline
+
+If a message fails to process or deliver to the sink, Debezium will halt the entire pipeline until the issue is cleared.
+
+By contrast, Sequin uses a dead letter queue concept to persist the message to an internal buffer and retry delivery. 
+
+This means Sequin is more resilient to outlier and temporary issues, giving your team more time to respond to issues.

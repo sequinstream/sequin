@@ -14,6 +14,10 @@ Mox.defmock(Sequin.Sinks.RabbitMqMock,
   for: Sequin.Sinks.RabbitMq
 )
 
+Mox.defmock(Sequin.Sinks.KafkaMock,
+  for: Sequin.Sinks.Kafka
+)
+
 Mox.defmock(Sequin.Runtime.TableReaderServerMock,
   for: Sequin.Runtime.TableReaderServer
 )

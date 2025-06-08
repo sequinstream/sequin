@@ -45,8 +45,8 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "NATS Sink".
 ### Configure the source
 
 <Steps>
-  <Step title="Select source table">
-    Under "Source", select the table you want to stream data from.
+  <Step title="Select source table or schema">
+    Under "Source", select the table or schema you want to stream data from.
   </Step>
 
   <Step title="Choose message type">
@@ -115,7 +115,7 @@ Common issues to check:
 - **Setup a processor**
 
    Now that your Postgres data is flowing into NATS, you can setup a subscriber to read from the subjects and process the data. See the [NATS documentation](https://docs.nats.io/nats-concepts/subjects) for details on consuming messages.
-   
+
    Refer to the [NATS sink reference](/reference/sinks/nats) for the shape of messages that Sequin will publish.
 
 - **Deploy your implementation**

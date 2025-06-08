@@ -11,22 +11,27 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     ]
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases
+  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
-  alias Sequin.Repo
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"sink_consumer_id" => sink_consumer_id}}) do
-    case Consumers.get_sink_consumer(sink_consumer_id) do
-      {:ok, consumer} ->
-        consumer = Repo.preload(consumer, [:postgres_database, :sequence, :replication_slot])
+    event = %Event{slug: :sink_config_checked, status: :success}
 
-        with {:ok, relation_kind} <- Postgres.get_relation_kind(consumer.postgres_database, consumer.sequence.table_oid),
-             {:ok, event} <- check_replica_identity(consumer, relation_kind),
+    case Consumers.get_sink_consumer(sink_consumer_id, [:postgres_database, :sequence, :replication_slot]) do
+      {:ok, %SinkConsumer{schema_filter: %SchemaFilter{}} = consumer} ->
+        event = %Event{event | data: %{using_schema_filter: true}}
+        Health.put_event(consumer, event)
+
+      {:ok, %SinkConsumer{sequence: %Sequence{} = sequence} = consumer} ->
+        with {:ok, relation_kind} <- Postgres.get_relation_kind(consumer.postgres_database, sequence.table_oid),
+             {:ok, event} <- check_replica_identity(consumer, event, relation_kind),
              {:ok, event} <- check_publication(consumer, event, relation_kind) do
           Health.put_event(consumer, event)
 
@@ -72,20 +77,12 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     |> Oban.insert()
   end
 
-  defp check_replica_identity(%SinkConsumer{} = consumer, relation_kind) do
+  defp check_replica_identity(%SinkConsumer{} = consumer, %Event{} = event, relation_kind) do
     source_table = Consumers.source_table(consumer)
 
     with {:ok, replica_identity} <-
            get_replica_identity_by_kind(relation_kind, consumer.postgres_database, source_table.oid) do
-      {:ok,
-       %Event{
-         slug: :sink_config_checked,
-         status: :success,
-         data: %{
-           replica_identity: replica_identity,
-           relation_kind: relation_kind
-         }
-       }}
+      {:ok, %Event{event | data: %{replica_identity: replica_identity, relation_kind: relation_kind}}}
     end
   end
 

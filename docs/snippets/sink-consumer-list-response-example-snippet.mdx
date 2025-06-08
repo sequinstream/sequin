@@ -7,7 +7,6 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-kafka-sink",
       "status": "active",
-      "table": "public.records",
       "filters": [],
       "destination": {
         "type": "kafka",
@@ -20,13 +19,15 @@
       },
       "database": "dune",
       "transform": "id-transform",
-      "active_backfill": null,
-      "batch_size": 50,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"],
+      "schema": "public",
       "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
-      "timestamp_format": "iso8601"
+      "timestamp_format": "iso8601",
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"]
     }
   ]
 }
@@ -39,7 +40,6 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-sqs-sink",
       "status": "active",
-      "table": "public.records",
       "filters": [],
       "destination": {
         "type": "sqs",
@@ -50,13 +50,15 @@
       },
       "database": "dune",
       "transform": "id-transform",
-      "active_backfill": null,
-      "batch_size": 50,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"],
+      "schema": "public",
       "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
-      "timestamp_format": "iso8601"
+      "timestamp_format": "iso8601",
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"]
     }
   ]
 }
@@ -69,7 +71,6 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-rabbitmq-sink",
       "status": "active",
-      "table": "public.records",
       "filters": [],
       "destination": {
         "type": "rabbitmq",
@@ -83,13 +84,15 @@
       },
       "database": "dune",
       "transform": "id-transform",
-      "active_backfill": null,
-      "batch_size": 50,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"],
+      "schema": "public",
       "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
-      "timestamp_format": "iso8601"
+      "timestamp_format": "iso8601",
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"]
     }
   ]
 }
@@ -102,7 +105,6 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-redis-sink",
       "status": "active",
-      "table": "public.records",
       "filters": [],
       "destination": {
         "type": "redis_stream",
@@ -116,13 +118,15 @@
       },
       "database": "dune",
       "transform": "id-transform",
-      "active_backfill": null,
-      "batch_size": 50,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"],
+      "schema": "public",
       "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
-      "timestamp_format": "iso8601"
+      "timestamp_format": "iso8601",
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"]
     }
   ]
 }
@@ -135,7 +139,6 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-azure-event-hub-sink",
       "status": "active",
-      "table": "public.records",
       "filters": [],
       "destination": {
         "type": "azure_event_hub",
@@ -146,13 +149,15 @@
       },
       "database": "dune",
       "transform": "id-transform",
-      "active_backfill": null,
-      "batch_size": 50,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"],
+      "schema": "public",
       "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
-      "timestamp_format": "iso8601"
+      "timestamp_format": "iso8601",
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"]
     }
   ]
 }
@@ -165,7 +170,6 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-nats-sink",
       "status": "active",
-      "table": "public.records",
       "filters": [],
       "destination": {
         "type": "nats",
@@ -179,13 +183,15 @@
       },
       "database": "dune",
       "transform": "id-transform",
-      "active_backfill": null,
-      "batch_size": 50,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"],
+      "schema": "public",
       "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
-      "timestamp_format": "iso8601"
+      "timestamp_format": "iso8601",
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"]
     }
   ]
 }
@@ -198,7 +204,6 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-gcp-pubsub-sink",
       "status": "active",
-      "table": "public.records",
       "filters": [],
       "destination": {
         "type": "gcp_pubsub",
@@ -210,13 +215,15 @@
       },
       "database": "dune",
       "transform": "id-transform",
-      "active_backfill": null,
-      "batch_size": 50,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"],
+      "schema": "public",
       "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
-      "timestamp_format": "iso8601"
+      "timestamp_format": "iso8601",
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"]
     }
   ]
 }
@@ -229,20 +236,21 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-sequin-stream-sink",
       "status": "active",
-      "table": "public.records",
       "filters": [],
       "destination": {
         "type": "sequin_stream"
       },
       "database": "dune",
       "transform": "id-transform",
-      "active_backfill": null,
-      "batch_size": 50,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"],
+      "schema": "public",
       "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
-      "timestamp_format": "iso8601"
+      "timestamp_format": "iso8601",
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"]
     }
   ]
 }
@@ -255,7 +263,6 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-webhook-sink",
       "status": "active",
-      "table": "public.records",
       "filters": [],
       "destination": {
         "type": "webhook",
@@ -265,13 +272,15 @@
       },
       "database": "dune",
       "transform": "id-transform",
-      "active_backfill": null,
-      "batch_size": 50,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"],
+      "schema": "public",
       "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
-      "timestamp_format": "iso8601"
+      "timestamp_format": "iso8601",
+      "actions": ["insert", "update", "delete"],
+      "group_column_names": ["id"]
     }
   ]
 }

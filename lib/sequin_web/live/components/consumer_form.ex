@@ -581,6 +581,22 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp decode_params(form, socket) do
     sink = decode_sink(socket.assigns.consumer.type, form["sink"])
 
+    schema_filter =
+      if form["schema"] do
+        %{
+          "schema" => form["schema"]
+        }
+      end
+
+    sequence_filter =
+      if form["tableOid"] do
+        %{
+          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
+          "actions" => form["sourceTableActions"],
+          "group_column_attnums" => form["groupColumnAttnums"]
+        }
+      end
+
     params =
       %{
         "consumer_kind" => form["consumerKind"],
@@ -594,11 +610,8 @@ defmodule SequinWeb.Components.ConsumerForm do
         "name" => form["name"],
         "postgres_database_id" => form["postgresDatabaseId"],
         "table_oid" => form["tableOid"],
-        "sequence_filter" => %{
-          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
-          "actions" => form["sourceTableActions"],
-          "group_column_attnums" => form["groupColumnAttnums"]
-        },
+        "schema_filter" => schema_filter,
+        "sequence_filter" => sequence_filter,
         "batch_size" => form["batchSize"],
         "batch_timeout_ms" => form["batchTimeoutMs"],
         "initial_backfill" => decode_initial_backfill(form),
@@ -620,6 +633,10 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp update_params_for_sink(_, params, _), do: params
+
+  defp decode_initial_backfill(%{"backfill" => %{"selectedTableOids" => tableOids}}) when tableOids != [] do
+    %{"selected_table_oids" => tableOids}
+  end
 
   defp decode_initial_backfill(%{"backfill" => %{"startPosition" => "none"}}), do: nil
 
@@ -846,6 +863,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
       "status" => consumer.status,
       "table_oid" => source_table && source_table.oid,
+      "schema" => consumer.schema_filter && consumer.schema_filter.schema,
       "type" => consumer.type,
       "transform_id" => consumer.transform_id,
       "timestamp_format" => consumer.timestamp_format,
@@ -1041,14 +1059,16 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp encode_database(database) do
+    eligible_tables = Databases.reject_sequin_internal_tables(database.tables)
+
+    encoded_tables = eligible_tables |> Enum.map(&encode_table/1) |> Enum.sort_by(&{&1["schema"], &1["name"]}, :asc)
+    schemas = eligible_tables |> Enum.map(& &1.schema) |> Enum.uniq()
+
     %{
       "id" => database.id,
       "name" => database.name,
-      "tables" =>
-        database.tables
-        |> Databases.reject_sequin_internal_tables()
-        |> Enum.map(&encode_table/1)
-        |> Enum.sort_by(&{&1["schema"], &1["name"]}, :asc)
+      "tables" => encoded_tables,
+      "schemas" => schemas
     }
   end
 
@@ -1117,24 +1137,16 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     result =
       Repo.transact(fn ->
-        with {:ok, sequence} <- find_or_create_sequence(account_id, params),
-             params = Map.put(params, "sequence_id", sequence.id),
-             {:ok, consumer} <- Consumers.create_sink_consumer(account_id, params) do
-          case maybe_create_backfill(socket, consumer, params, initial_backfill) do
-            :ok -> {:ok, Repo.preload(consumer, :active_backfill)}
-            {:ok, %Backfill{}} -> {:ok, Repo.preload(consumer, :active_backfill)}
-            {:error, changeset} -> {:error, changeset}
-          end
+        with {:ok, params} <- maybe_put_sequence_id(account_id, params),
+             {:ok, consumer} <- Consumers.create_sink_consumer(account_id, params),
+             :ok <- maybe_create_backfills(socket, consumer, params, initial_backfill) do
+          {:ok, Repo.preload(consumer, :active_backfills)}
         end
       end)
 
     case result do
       {:ok, consumer} ->
-        case consumer.active_backfill do
-          nil -> :ok
-          %Backfill{state: :active} -> Runtime.Supervisor.start_table_reader(consumer)
-          %Backfill{state: _} -> :ok
-        end
+        Runtime.Supervisor.maybe_start_table_readers(consumer)
 
         Posthog.capture("Consumer Created", %{
           distinct_id: socket.assigns.current_user.id,
@@ -1170,9 +1182,28 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp maybe_create_backfill(_socket, _consumer, _params, nil), do: :ok
+  defp maybe_create_backfills(_socket, _consumer, _params, nil), do: :ok
 
-  defp maybe_create_backfill(socket, consumer, params, backfill_params) do
+  defp maybe_create_backfills(socket, consumer, params, %{"selected_table_oids" => table_oids}) do
+    postgres_database_id = params["postgres_database_id"]
+
+    Enum.each(table_oids, fn table_oid ->
+      table = table(socket.assigns.databases, postgres_database_id, table_oid, nil)
+
+      Consumers.create_backfill(%{
+        "account_id" => consumer.account_id,
+        "sink_consumer_id" => consumer.id,
+        "table_oid" => table_oid,
+        "initial_min_cursor" => KeysetCursor.min_cursor(table),
+        "sort_column_attnum" => nil,
+        "state" => :active
+      })
+    end)
+
+    :ok
+  end
+
+  defp maybe_create_backfills(socket, consumer, params, backfill_params) do
     table =
       table(
         socket.assigns.databases,
@@ -1196,16 +1227,24 @@ defmodule SequinWeb.Components.ConsumerForm do
       "sink_consumer_id" => consumer.id,
       "initial_min_cursor" => initial_min_cursor,
       "sort_column_attnum" => backfill_params["sort_column_attnum"],
-      "state" => :active
+      "state" => :active,
+      "table_oid" => table.oid
     }
 
-    Consumers.create_backfill(backfill_attrs)
+    with {:ok, _} <- Consumers.create_backfill(backfill_attrs), do: :ok
   end
 
-  defp find_or_create_sequence(account_id, %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id}) do
+  defp maybe_put_sequence_id(_account_id, %{"table_oid" => nil} = params) do
+    {:ok, params}
+  end
+
+  defp maybe_put_sequence_id(
+         account_id,
+         %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id} = params
+       ) do
     case Databases.find_sequence_for_account(account_id, postgres_database_id: postgres_database_id, table_oid: table_oid) do
       {:ok, sequence} ->
-        {:ok, sequence}
+        {:ok, Map.put(params, "sequence_id", sequence.id)}
 
       {:error, %NotFoundError{}} ->
         Logger.info("Creating sequence for table #{table_oid}")
@@ -1215,7 +1254,7 @@ defmodule SequinWeb.Components.ConsumerForm do
                table_oid: table_oid,
                postgres_database_id: postgres_database_id
              }) do
-          {:ok, sequence} -> {:ok, sequence}
+          {:ok, sequence} -> {:ok, Map.put(params, "sequence_id", sequence.id)}
           {:error, changeset} -> {:error, changeset}
         end
     end

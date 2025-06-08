@@ -40,6 +40,10 @@ defmodule Sequin.Runtime.MessageHandler do
     @moduledoc false
     use TypedStruct
 
+    alias Sequin.Consumers.SchemaFilter
+    alias Sequin.Databases.Sequence
+    alias Sequin.Runtime.MessageHandler.Context.Indices
+
     typedstruct do
       field :consumers, [Sequin.Consumers.consumer()], default: []
       field :wal_pipelines, [WalPipeline.t()], default: []
@@ -47,6 +51,47 @@ defmodule Sequin.Runtime.MessageHandler do
       field :postgres_database, PostgresDatabase.t()
       field :table_reader_mod, module(), default: TableReaderServer
       field :partition_count, non_neg_integer()
+      field :indices, Indices.t()
+    end
+
+    defmodule Indices do
+      @moduledoc false
+      use TypedStruct
+
+      typedstruct do
+        field :consumers_by_id, %{optional(SinkConsumer.id()) => SinkConsumer.t()}
+        field :consumer_ids_by_table_oid, %{optional(integer() | :all) => [SinkConsumer.id()]}
+      end
+    end
+
+    def set_indices(%Context{} = ctx) do
+      consumers_by_id = Map.new(ctx.consumers, fn consumer -> {consumer.id, consumer} end)
+
+      consumer_ids_by_table_oid =
+        Enum.reduce(ctx.consumers, %{}, fn
+          %SinkConsumer{sequence: %Sequence{table_oid: table_oid}} = consumer, acc ->
+            Map.update(acc, table_oid, [consumer.id], &[consumer.id | &1])
+
+          %SinkConsumer{sequence: nil, schema_filter: %SchemaFilter{}} = consumer, acc ->
+            Map.update(acc, :all, [consumer.id], &[consumer.id | &1])
+
+          %SinkConsumer{source_tables: source_tables} = consumer, acc when source_tables != [] ->
+            table_oids = Enum.map(source_tables, & &1.oid)
+
+            Enum.reduce(table_oids, acc, fn table_oid, acc ->
+              Map.update(acc, table_oid, [consumer.id], &[consumer.id | &1])
+            end)
+        end)
+
+      indices = %Indices{consumers_by_id: consumers_by_id, consumer_ids_by_table_oid: consumer_ids_by_table_oid}
+      %Context{ctx | indices: indices}
+    end
+
+    def consumers_by_table_oid(%Context{} = ctx, table_oid) do
+      consumer_ids_for_table_oid = Map.get(ctx.indices.consumer_ids_by_table_oid, table_oid, [])
+      consumer_ids_for_all = Map.get(ctx.indices.consumer_ids_by_table_oid, :all, [])
+      consumer_ids = consumer_ids_for_table_oid ++ consumer_ids_for_all
+      Enum.map(consumer_ids, &Map.fetch!(ctx.indices.consumers_by_id, &1))
     end
   end
 
@@ -59,35 +104,32 @@ defmodule Sequin.Runtime.MessageHandler do
         [
           :wal_pipelines,
           [postgres_database: :sequences],
-          [not_disabled_sink_consumers: [:sequence, :postgres_database]]
+          [not_disabled_sink_consumers: [:sequence]]
         ],
         force: true
       )
 
-    %Context{
+    Context.set_indices(%Context{
       consumers: pr.not_disabled_sink_consumers,
       wal_pipelines: pr.wal_pipelines,
       postgres_database: pr.postgres_database,
       replication_slot_id: pr.id,
       partition_count: pr.partition_count
-    }
+    })
   end
 
   def before_handle_messages(%Context{} = ctx, messages) do
-    # First, filter to only consumers with running TableReaderServers
-    backfilling_consumers =
-      Enum.filter(ctx.consumers, fn consumer ->
-        ctx.table_reader_mod.running_for_consumer?(consumer.id)
-      end)
+    # Key ideas:
+    # 1. get the list of table oids for which there are active backfills
+    # 2. call pks_seen for each table_oid with the associated message pks
 
-    case backfilling_consumers do
+    case ctx.table_reader_mod.active_table_oids() do
       [] ->
         :ok
 
-      _ ->
-        # Get set of table_oids that have running TRSs for efficient lookup
-        backfilling_table_oids =
-          MapSet.new(backfilling_consumers, & &1.sequence.table_oid)
+      # Get set of table_oids that have running TRSs for efficient lookup
+      backfilling_table_oids ->
+        backfilling_table_oids = MapSet.new(backfilling_table_oids)
 
         # Create filtered map of messages, only including those for tables with running TRSs
         messages_by_table_oid =
@@ -96,14 +138,13 @@ defmodule Sequin.Runtime.MessageHandler do
           |> Enum.group_by(& &1.table_oid, & &1.ids)
           |> Map.new()
 
-        # Process each active consumer
-        Enum.each(backfilling_consumers, fn consumer ->
-          if table_oid = consumer.sequence.table_oid do
-            if pks = Map.get(messages_by_table_oid, table_oid) do
-              ctx.table_reader_mod.pks_seen(consumer.id, pks)
-            end
+        Enum.each(backfilling_table_oids, fn table_oid ->
+          if pks = Map.get(messages_by_table_oid, table_oid) do
+            ctx.table_reader_mod.pks_seen(table_oid, pks)
           end
         end)
+
+        :ok
     end
   end
 
@@ -171,8 +212,8 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
-  defp consumer_event(consumer, message) do
-    data = event_data_from_message(message, consumer)
+  defp consumer_event(consumer, database, message) do
+    data = event_data_from_message(message, consumer, database)
     payload_size = :erlang.external_size(data)
 
     %ConsumerEvent{
@@ -190,8 +231,8 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp consumer_record(consumer, message) do
-    data = record_data_from_message(message, consumer)
+  defp consumer_record(consumer, database, message) do
+    data = record_data_from_message(message, consumer, database)
     payload_size = :erlang.external_size(data)
 
     %ConsumerRecord{
@@ -210,8 +251,8 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp event_data_from_message(%Message{action: :insert} = message, consumer) do
-    metadata = metadata(message, consumer)
+  defp event_data_from_message(%Message{action: :insert} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
@@ -223,7 +264,7 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp event_data_from_message(%Message{action: :update} = message, consumer) do
+  defp event_data_from_message(%Message{action: :update} = message, consumer, database) do
     new_fields = fields_to_map(message.fields)
 
     changes =
@@ -233,7 +274,7 @@ defmodule Sequin.Runtime.MessageHandler do
         %{}
       end
 
-    metadata = metadata(message, consumer)
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
@@ -245,8 +286,8 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp event_data_from_message(%Message{action: :delete} = message, consumer) do
-    metadata = metadata(message, consumer)
+  defp event_data_from_message(%Message{action: :delete} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
@@ -258,8 +299,9 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp record_data_from_message(%Message{action: action} = message, consumer) when action in [:insert, :update] do
-    metadata = metadata(message, consumer)
+  defp record_data_from_message(%Message{action: action} = message, consumer, database)
+       when action in [:insert, :update] do
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(Sink, &1))
     metadata = struct(ConsumerRecordData.Metadata, metadata)
 
@@ -270,8 +312,8 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp record_data_from_message(%Message{action: :delete} = message, consumer) do
-    metadata = metadata(message, consumer)
+  defp record_data_from_message(%Message{action: :delete} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
     metadata = Map.update!(metadata, :consumer, &struct(Sink, &1))
     metadata = struct(ConsumerRecordData.Metadata, metadata)
 
@@ -282,9 +324,9 @@ defmodule Sequin.Runtime.MessageHandler do
     }
   end
 
-  defp metadata(%Message{} = message, consumer) do
+  defp metadata(%Message{} = message, consumer, %PostgresDatabase{} = database) do
     metadata = %{
-      database_name: consumer.postgres_database.name,
+      database_name: database.name,
       table_name: message.table_name,
       table_schema: message.table_schema,
       commit_timestamp: message.commit_timestamp,
@@ -389,14 +431,11 @@ defmodule Sequin.Runtime.MessageHandler do
     # So we need to do fast lookups by consumer_id
     consumers_by_id = Map.new(ctx.consumers, fn consumer -> {consumer.id, consumer} end)
 
-    # We lookup consumers that match the SlotProcessor.Message table oid for fast fan out to many consumers
-    consumers_by_table_oid = Enum.group_by(ctx.consumers, fn consumer -> consumer.sequence.table_oid end)
-
     messages
     # First we get a list of consumer_ids that match the SlotProcessor.Message
     |> Stream.map(fn %SlotProcessor.Message{} = message ->
       # First we filter on the SlotProcessor.Message table oid
-      consumers = Map.get(consumers_by_table_oid, message.table_oid, [])
+      consumers = Context.consumers_by_table_oid(ctx, message.table_oid)
 
       matching_consumer_ids =
         consumers
@@ -414,7 +453,7 @@ defmodule Sequin.Runtime.MessageHandler do
 
         # Just for type clarity
         consumer_message =
-          case consumer_message(consumer, message) do
+          case consumer_message(consumer, ctx.postgres_database, message) do
             %ConsumerEvent{} = consumer_message -> consumer_message
             %ConsumerRecord{} = consumer_message -> consumer_message
           end
@@ -446,10 +485,10 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   @decorate track_metrics("map_to_consumer_message")
-  defp consumer_message(%SinkConsumer{} = consumer, %SlotProcessor.Message{} = message) do
+  defp consumer_message(%SinkConsumer{} = consumer, %PostgresDatabase{} = database, %SlotProcessor.Message{} = message) do
     case consumer.message_kind do
-      :event -> consumer_event(consumer, message)
-      :record -> consumer_record(consumer, message)
+      :event -> consumer_event(consumer, database, message)
+      :record -> consumer_record(consumer, database, message)
     end
   end
 
@@ -534,14 +573,17 @@ defmodule Sequin.Runtime.MessageHandler do
   defp generate_group_id(consumer, message) do
     # This should be way more assertive - we should error if we don't find the source table
     # We have a lot of tests that do not line up consumer source_tables with the message table oid
-    if consumer.sequence_filter.group_column_attnums do
-      Enum.map_join(consumer.sequence_filter.group_column_attnums, ":", fn attnum ->
-        fields = if message.action == :delete, do: message.old_fields, else: message.fields
-        field = Sequin.Enum.find!(fields, &(&1.column_attnum == attnum))
-        to_string(field.value)
-      end)
-    else
-      Enum.map_join(message.ids, ":", &to_string/1)
+    case consumer do
+      %SinkConsumer{sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums}}
+      when not is_nil(group_column_attnums) ->
+        Enum.map_join(consumer.sequence_filter.group_column_attnums, ":", fn attnum ->
+          fields = if message.action == :delete, do: message.old_fields, else: message.fields
+          field = Sequin.Enum.find!(fields, &(&1.column_attnum == attnum))
+          to_string(field.value)
+        end)
+
+      _ ->
+        Enum.map_join(message.ids, ":", &to_string/1)
     end
   end
 
@@ -617,7 +659,7 @@ defmodule Sequin.Runtime.MessageHandler do
           annotations: %{"test_message" => true, "info" => "Test messages are not associated with any sink"}
         }
 
-        message = consumer_event(test_consumer, message)
+        message = consumer_event(test_consumer, ctx.postgres_database, message)
         TestMessages.add_test_message(ctx.postgres_database.id, message.table_oid, message)
       end)
     end

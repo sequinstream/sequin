@@ -28,7 +28,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   @impl SinkPipeline
   def init(context, opts) do
     consumer = Map.fetch!(context, :consumer)
-    consumer = SinkConsumer.preload_http_endpoint(consumer)
+    consumer = SinkConsumer.preload_http_endpoint!(consumer)
     req_opts = Keyword.get(opts, :req_opts, [])
     features = Keyword.get(opts, :features, [])
 

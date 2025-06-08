@@ -16,7 +16,7 @@
         <span class="text-sm text-gray-500">Hosts</span>
         <div class="mt-2">
           <div
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md break-all w-fit"
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md break-all w-fit"
           >
             <span>{consumer.sink.hosts}</span>
           </div>
@@ -27,7 +27,7 @@
         <span class="text-sm text-gray-500">Topic</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.topic}</span
           >
         </div>
@@ -37,7 +37,7 @@
         <span class="text-sm text-gray-500">TLS Enabled</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.tls ? "Yes" : "No"}</span
           >
         </div>

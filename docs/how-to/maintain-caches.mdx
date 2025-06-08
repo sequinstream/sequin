@@ -40,7 +40,7 @@ If you're using Sequin Cloud, you'll need:
 
 Your cache maintenance pipeline will have these components:
 
-1. **Source table(s)**: The table(s) in Postgres that contain the data you want to cache
+1. **Source tables**: The table or schema in Postgres that contain the data you want to cache
 2. **Destination sink**: The message queue or webhook endpoint that delivers changes to your processing system (e.g. SQS, Kafka, or HTTP endpoint)
 3. **Cache update processor**: An application or service you write that receives changes and updates your cache
 
@@ -50,9 +50,9 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
 <Steps>
   <Step title="Select the source">
-    Select the table containing the data you want to cache.
+    Select the table or schema containing the data you want to cache.
 
-    Optionally add SQL filters to sync a subset of your source table to the destination.
+    Optionally add SQL filters to sync a subset of your source table(s) to the destination.
   </Step>
 
   <Step title="Select the message type">
@@ -61,7 +61,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
   <Step title="Leave message grouping default">
     If your sink supports message grouping, leave the default option selected for "Message grouping".
-    
+
     This will ensure that messages are grouped by primary key, helping eliminate race conditions as you write rows to your cache.
   </Step>
 
@@ -84,11 +84,11 @@ Here's an example of how you might process changes to update a cache:
 def process_change(change):
     # Extract key information
     cache_key = f"{change.metadata.table_name}:{change.record['id']}"
-    
+
     if change.action in ['insert', 'update', 'read']:
         # Optional: Add version/timestamp
         change.record['last_updated'] = change.metadata.commit_timestamp
-        
+
         # Update cache
         cache.set(
             cache_key,

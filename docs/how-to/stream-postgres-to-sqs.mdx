@@ -81,8 +81,8 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "SQS Sink".
 ### Configure the source
 
 <Steps>
-  <Step title="Select source table">
-    Under "Source", select the table you want to stream data from.
+  <Step title="Select source table or schema">
+    Under "Source", select the table or schema you want to stream data from.
   </Step>
 
   <Step title="Choose message type">
@@ -150,7 +150,7 @@ If messages don't seem to be flowing:
 - **Setup a processor**
 
    Now that your Postgres data is flowing into SQS, you can setup a processor to read from the queue and process the data. See the AWS docs on [receiving and processing messages](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-getting-started.html#step-receive-delete-message).
-   
+
    Refer to the [SQS sink reference](/reference/sinks/sqs) for the shape of messages that Sequin will publish to SQS.
 
 - **Deploy your implementation**

@@ -349,8 +349,8 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
       :<= -> "<="
       :in -> "in"
       :not_in -> "not in"
-      :is_null -> "is null"
-      :not_null -> "not null"
+      :is_null -> "IS NULL"
+      :not_null -> "IS NOT NULL"
     end
   end
 

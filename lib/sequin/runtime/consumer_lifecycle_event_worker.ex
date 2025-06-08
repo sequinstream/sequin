@@ -65,7 +65,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
           CheckSinkConfigurationWorker.enqueue(consumer.id)
           RuntimeSupervisor.start_for_sink_consumer(consumer)
           :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-          RuntimeSupervisor.maybe_start_table_reader(consumer)
+          RuntimeSupervisor.maybe_start_table_readers(consumer)
           :ok
         end
 
@@ -136,7 +136,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
 
           case backfill.state do
             :active ->
-              RuntimeSupervisor.restart_table_reader(consumer)
+              RuntimeSupervisor.restart_table_reader(backfill)
 
             s when s in [:cancelled, :completed] ->
               # Clear out the backfill_fetch_batch event - if backfill was erroring, we want to
@@ -144,6 +144,11 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
               Health.delete_event(consumer.id, "backfill_fetch_batch")
               Logger.info("Stopping TableReaderServer for backfill #{backfill.id}", backfill_status: s)
               RuntimeSupervisor.stop_table_reader(backfill.id)
+
+              Sequin.Runtime.TableReaderServer.remove_backfill_id_from_table_oid_to_backfill_id_ets_table(
+                backfill.table_oid,
+                backfill.id
+              )
           end
 
           :ok

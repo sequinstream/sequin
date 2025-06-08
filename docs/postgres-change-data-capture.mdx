@@ -31,7 +31,7 @@ If you're using Sequin Cloud, you'll need:
 
 Your change data capture pipeline will have three components:
 
-1. **Source table(s)**: The table(s) in Postgres that you want to capture changes from.
+1. **Source tables**: The table or schema in Postgres that you want to capture changes from.
 2. **Filters and transformations**: Optional filters and transformations to apply to changes before they're delivered to your sink.
 3. **Destination sink**: The message queue, stream, or webhook endpoint that Sequin delivers changes to (e.g. SQS, Kafka, or HTTP endpoint)
 
@@ -41,7 +41,7 @@ With your Postgres [database connected](/connect-postgres) to Sequin, create a s
 
 <Steps>
   <Step title="Select the source">
-    Select the table you want to capture changes from.
+    Select the table or schema you want to capture changes from.
   </Step>
 
   <Step title="Select the message type">
@@ -51,15 +51,15 @@ With your Postgres [database connected](/connect-postgres) to Sequin, create a s
   </Step>
 
   <Step title="Add filters and transformations">
-    You can add [SQL filters](/reference/filters) to capture a subset of the source table.
+    You can add [SQL filters](/reference/filters) or [filter functions](/reference/filters#filter-functions) to capture a subset of the source table.
 
     You can also add [transformations](/reference/transforms) to modify the data before it's delivered to your sink.
   </Step>
 
   <Step title="Specify backfill">
-    To stream existing roes in your source table, specify a `backfill`.
+    To stream existing rows in your source table, specify a [backfill](/reference/backfills).
 
-    You can backfill all the data in your source table or specify a custom subset of the table using a SQL filter.
+    You can backfill all the data in your source table(s) or specify a custom subset of the table(s) using a SQL filter.
   </Step>
 
   <Step title="Set message grouping">
@@ -71,14 +71,19 @@ With your Postgres [database connected](/connect-postgres) to Sequin, create a s
   <Step title="Configure sink-specific settings">
     Configure sink-specific settings:
 
+    * [AWS Kinesis](/reference/sinks/kinesis) sinks: Specify your AWS Kinesis credentials and stream to deliver messages to.
+    * [AWS SNS](/reference/sinks/sns) sinks: Specify your AWS SNS credentials and topic to deliver messages to.
+    * [AWS SQS](/reference/sinks/sqs) sinks: Specify your SQS queue to deliver messages to.
     * [Azure EventHubs](/reference/sinks/azure-event-hubs) sinks: Specify your Azure EventHubs credentials and topic to deliver messages to.
+    * [Elasticsearch](/reference/sinks/elasticsearch) sinks: Specify your Elasticsearch credentials and index to deliver messages to.
     * [Google Cloud Pub/Sub](/reference/sinks/gcp-pubsub) sinks: Specify your GCP Pub/Sub credentials and the topic to deliver messages to.
     * [Kafka](/reference/sinks/kafka) sinks: Specify your Kafka credentials and topic to deliver messages to.
     * [NATS](/reference/sinks/nats) sinks: Specify your NATS credentials and subject to deliver messages to.
     * [RabbitMQ](/reference/sinks/rabbitmq) sinks: Specify your RabbitMQ credentials and queue to deliver messages to.
     * [Redis Stream](/reference/sinks/redis-stream) sinks: Specify your Redis credentials and key to deliver messages to.
+    * [Redis String](/reference/sinks/redis-string) sinks: Specify your Redis credentials and key to deliver messages to.
     * [Sequin Stream](/reference/sinks/sequin-stream) sinks: Specify your Sequin Stream to deliver messages to.
-    * [SQS](/reference/sinks/sqs) sinks: Specify your SQS queue to deliver messages to.
+    * [Typesense](/reference/sinks/typesense) sinks: Specify your Typesense credentials and collection to deliver messages to.
     * [Webhook](/reference/sinks/webhooks) sinks: Specify the HTTP endpoint to deliver messages to.
   </Step>
 

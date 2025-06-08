@@ -322,6 +322,10 @@ defmodule Sequin.Postgres do
     end
   end
 
+  def fetch_tables_with_columns(_conn, []) do
+    {:error, Error.service(service: :postgres, message: "Fetch tables with columns: No schemas provided")}
+  end
+
   def fetch_tables_with_columns(conn, schemas) do
     schemas_list = Enum.map_join(schemas, ",", &"'#{&1}'")
 
@@ -510,15 +514,16 @@ defmodule Sequin.Postgres do
     end
   end
 
-  @spec confirmed_flush_lsn(PostgresDatabase.t()) :: {:ok, integer()} | {:ok, nil} | {:error, Error.t()}
-  def confirmed_flush_lsn(%PostgresDatabase{} = db) do
+  @spec confirmed_flush_lsn(PostgresDatabase.t(), slot_name :: String.t()) ::
+          {:ok, integer()} | {:ok, nil} | {:error, Error.t()}
+  def confirmed_flush_lsn(%PostgresDatabase{} = db, slot_name) do
     query = """
     SELECT confirmed_flush_lsn
     FROM pg_replication_slots
     WHERE slot_name = $1
     """
 
-    case query(db, query, [db.replication_slot.slot_name]) do
+    case query(db, query, [slot_name]) do
       {:ok, %{rows: [[lsn]]}} when not is_nil(lsn) ->
         {:ok, lsn_to_int(lsn)}
 
@@ -529,7 +534,7 @@ defmodule Sequin.Postgres do
         {:error,
          Error.not_found(
            entity: :replication_slot,
-           params: %{name: db.replication_slot.slot_name, id: db.replication_slot.id}
+           params: %{name: slot_name}
          )}
 
       {:error, _} = error ->

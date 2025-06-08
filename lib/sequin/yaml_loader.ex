@@ -178,7 +178,7 @@ defmodule Sequin.YamlLoader do
     sink_consumers =
       account_id
       |> Consumers.list_sink_consumers_for_account(sequence: [:postgres_database])
-      |> Enum.map(&SinkConsumer.preload_http_endpoint/1)
+      |> Enum.map(&SinkConsumer.preload_http_endpoint!/1)
 
     [account | users] ++ databases ++ wal_pipelines ++ http_endpoints ++ functions ++ sink_consumers
   end
@@ -754,7 +754,10 @@ defmodule Sequin.YamlLoader do
       filters
       |> Enum.reduce_while({:ok, []}, fn filter, {:ok, acc} ->
         try do
-          {:cont, {:ok, [Transforms.parse_column_filter(filter, table) | acc]}}
+          case Transforms.parse_column_filter(filter, table) do
+            {:ok, column_filter} -> {:cont, {:ok, [column_filter | acc]}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
         rescue
           error -> {:halt, {:error, Error.bad_request(message: Exception.message(error))}}
         end

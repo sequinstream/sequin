@@ -225,9 +225,13 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
             end
         end
 
-      {:error, %NotFoundError{}} ->
+      {:error, %NotFoundError{entity: :sink_consumer}} ->
         Logger.info("[HttpPushSqsPipeline] Consumer not found, skipping")
         message
+
+      {:error, %NotFoundError{entity: :http_endpoint}} ->
+        Logger.warning("[HttpPushSqsPipeline] HTTP endpoint not found, marking message as failed")
+        Message.failed(message, "HTTP endpoint not found")
 
       {:error, :disabled} ->
         Logger.info("[HttpPushSqsPipeline] Consumer is disabled, skipping")
@@ -242,8 +246,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
         {:error, :disabled}
 
       {:ok, %SinkConsumer{} = consumer} ->
-        consumer = SinkConsumer.preload_cached_http_endpoint(consumer)
-        {:ok, consumer}
+        SinkConsumer.preload_cached_http_endpoint(consumer)
 
       {:error, %NotFoundError{}} = error ->
         error

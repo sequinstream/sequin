@@ -13,6 +13,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.NumberValue
   alias Sequin.Consumers.SequenceFilter.StringValue
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.Sequence
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -305,6 +306,102 @@ defmodule Sequin.ConsumersTest do
       }
 
       assert {:error, %Ecto.Changeset{}} = Consumers.update_http_endpoint(http_endpoint, invalid_attrs)
+    end
+  end
+
+  describe "update_sink_consumer/2" do
+    test "updates the sink_consumer with valid attributes" do
+      sink_consumer = ConsumersFactory.insert_sink_consumer!()
+
+      update_attrs = %{
+        name: "update-consumer",
+        batch_size: 10,
+        ack_wait_ms: 1000
+      }
+
+      assert {:ok, %SinkConsumer{} = updated_consumer} = Consumers.update_sink_consumer(sink_consumer, update_attrs)
+      assert updated_consumer.name == "update-consumer"
+      assert updated_consumer.batch_size == 10
+      assert updated_consumer.ack_wait_ms == 1000
+    end
+
+    test "modifies column_filters" do
+      sequence_filter =
+        ConsumersFactory.sequence_filter(
+          column_filters: [
+            ConsumersFactory.column_filter_attrs(
+              column_attnum: 1,
+              operator: :==,
+              value: %{__type__: :string, value: "test_value"}
+            )
+          ]
+        )
+
+      assert sink_consumer = ConsumersFactory.insert_sink_consumer!(sequence_filter: sequence_filter)
+
+      assert [
+               %SequenceFilter.ColumnFilter{
+                 column_attnum: 1,
+                 operator: :==,
+                 value: %SequenceFilter.StringValue{value: "test_value"}
+               }
+             ] = sink_consumer.sequence_filter.column_filters
+
+      update_attrs = %{
+        sequence_filter:
+          ConsumersFactory.sequence_filter_attrs(
+            column_filters: [
+              ConsumersFactory.column_filter_attrs(
+                column_attnum: 1,
+                operator: :==,
+                value: %{__type__: :string, value: "updated_value"}
+              )
+            ]
+          )
+      }
+
+      assert {:ok, %SinkConsumer{} = updated_consumer} = Consumers.update_sink_consumer(sink_consumer, update_attrs)
+
+      assert [
+               %SequenceFilter.ColumnFilter{
+                 column_attnum: 1,
+                 operator: :==,
+                 value: %SequenceFilter.StringValue{value: "updated_value"}
+               }
+             ] = updated_consumer.sequence_filter.column_filters
+
+      update_attrs = %{
+        sequence_filter:
+          ConsumersFactory.sequence_filter_attrs(
+            column_filters: [
+              ConsumersFactory.column_filter_attrs(
+                column_attnum: 1,
+                operator: :==,
+                value: %{__type__: :string, value: "updated_value"}
+              ),
+              ConsumersFactory.column_filter_attrs(
+                column_attnum: 2,
+                operator: :>,
+                value: %{__type__: :number, value: 10.0}
+              )
+            ]
+          )
+      }
+
+      assert {:ok, %SinkConsumer{} = updated_consumer} = Consumers.update_sink_consumer(sink_consumer, update_attrs)
+
+      assert [
+               %SequenceFilter.ColumnFilter{
+                 column_attnum: 1,
+                 operator: :==,
+                 value: %SequenceFilter.StringValue{value: "updated_value"}
+               },
+               %SequenceFilter.ColumnFilter{
+                 column_attnum: 2,
+                 operator: :>,
+                 value: %SequenceFilter.NumberValue{value: 10.0}
+               }
+             ] = updated_consumer.sequence_filter.column_filters
     end
   end
 
@@ -2364,8 +2461,9 @@ defmodule Sequin.ConsumersTest do
       consumer = ConsumersFactory.insert_sink_consumer!()
       msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      assert {:ok, [inserted_msg]} = Consumers.upsert_consumer_messages(consumer, [msg])
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
 
+      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       assert inserted_msg.ack_id == msg.ack_id
     end
 
@@ -2374,8 +2472,9 @@ defmodule Sequin.ConsumersTest do
       msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
       msg = put_in(msg.data.record["date_field"], Date.utc_today())
 
-      assert {:ok, [inserted_msg]} = Consumers.upsert_consumer_messages(consumer, [msg])
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
 
+      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       assert %Date{} = inserted_msg.data.record["date_field"]
     end
 
@@ -2390,8 +2489,9 @@ defmodule Sequin.ConsumersTest do
         | not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
       }
 
-      assert {:ok, [updated_msg]} = Consumers.upsert_consumer_messages(consumer, [updated_attrs])
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [updated_attrs])
 
+      assert [updated_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       refute updated_msg.not_visible_until == existing_msg.not_visible_until
     end
   end

@@ -64,11 +64,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer], postgres_database: database)
 
       now = DateTime.utc_now()
       TestSupport.expect_utc_now(4, fn -> now end)
@@ -138,11 +134,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer], postgres_database: database)
 
       now = DateTime.utc_now()
       TestSupport.expect_utc_now(4, fn -> now end)
@@ -174,8 +166,17 @@ defmodule Sequin.MessageHandlerTest do
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
 
       field = ReplicationFactory.field()
-      message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field])
-      message2 = ReplicationFactory.postgres_message(table_oid: 456, action: :update, fields: [field])
+      table_schema1 = Factory.postgres_object()
+      table_schema2 = Factory.postgres_object()
+
+      message1 =
+        ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field], table_schema: table_schema1)
+
+      message2 =
+        ReplicationFactory.postgres_message(table_oid: 456, action: :update, fields: [field], table_schema: table_schema2)
+
+      message3 =
+        ReplicationFactory.postgres_message(table_oid: 789, action: :insert, fields: [field], table_schema: table_schema1)
 
       sequence1 =
         DatabasesFactory.insert_sequence!(
@@ -221,6 +222,18 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
+      schema_filter = ConsumersFactory.schema_filter_attrs(schema: table_schema1)
+
+      consumer3 =
+        ConsumersFactory.insert_sink_consumer!(
+          message_kind: :event,
+          account_id: account.id,
+          sequence_id: nil,
+          sequence_filter: nil,
+          source_tables: [],
+          schema_filter: schema_filter
+        )
+
       start_supervised!(
         {SlotMessageStoreSupervisor, [consumer_id: consumer1.id, test_pid: self(), persisted_mode?: false]}
       )
@@ -229,8 +242,13 @@ defmodule Sequin.MessageHandlerTest do
         {SlotMessageStoreSupervisor, [consumer_id: consumer2.id, test_pid: self(), persisted_mode?: false]}
       )
 
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer3.id, test_pid: self(), persisted_mode?: false]}
+      )
+
       consumer1 = Repo.preload(consumer1, [:postgres_database, :sequence, :filter])
       consumer2 = Repo.preload(consumer2, [:postgres_database, :sequence, :filter])
+      consumer3 = Repo.preload(consumer3, [:postgres_database, :sequence, :filter])
 
       database = Repo.preload(database, :sequences)
 
@@ -243,17 +261,14 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: [source_table1, source_table2]
         )
 
-      context = %MessageHandler.Context{
-        consumers: [consumer1, consumer2],
-        wal_pipelines: [wal_pipeline],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context =
+        context(consumers: [consumer1, consumer2, consumer3], wal_pipelines: [wal_pipeline], postgres_database: database)
 
-      {:ok, 4} = MessageHandler.handle_messages(context, [message1, message2])
+      {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2, message3])
 
       consumer1_messages = list_messages(consumer1)
       consumer2_messages = list_messages(consumer2)
+      consumer3_messages = list_messages(consumer3)
       wal_events = Replication.list_wal_events(wal_pipeline.id)
 
       assert length(consumer1_messages) == 1
@@ -261,6 +276,9 @@ defmodule Sequin.MessageHandlerTest do
 
       assert length(consumer2_messages) == 1
       assert hd(consumer2_messages).table_oid == 456
+
+      assert length(consumer3_messages) == 2
+      assert Enum.all?(consumer3_messages, &(&1.data.metadata.table_schema == table_schema1))
 
       assert length(wal_events) == 2
     end
@@ -311,12 +329,7 @@ defmodule Sequin.MessageHandlerTest do
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(account_id: account.id, source_tables: [source_table])
 
-      context = %MessageHandler.Context{
-        consumers: [consumer1, consumer2],
-        wal_pipelines: [wal_pipeline],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer1, consumer2], wal_pipelines: [wal_pipeline], postgres_database: database)
 
       {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2])
 
@@ -374,11 +387,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer], postgres_database: database)
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -392,7 +401,6 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 456)
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-      consumer = Repo.preload(consumer, :sequence)
 
       start_supervised!(
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
@@ -400,11 +408,7 @@ defmodule Sequin.MessageHandlerTest do
 
       database = Repo.preload(consumer, postgres_database: :sequences).postgres_database
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer], postgres_database: database)
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
@@ -457,11 +461,7 @@ defmodule Sequin.MessageHandlerTest do
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
       message = %{message | fields: [test_field | message.fields]}
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer], postgres_database: database)
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -483,7 +483,6 @@ defmodule Sequin.MessageHandlerTest do
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-      consumer = Repo.preload(consumer, :sequence)
 
       start_supervised!(
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
@@ -495,11 +494,7 @@ defmodule Sequin.MessageHandlerTest do
 
       database = Repo.preload(consumer, postgres_database: :sequences).postgres_database
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer], postgres_database: database)
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
@@ -520,11 +515,7 @@ defmodule Sequin.MessageHandlerTest do
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
 
-      context = %MessageHandler.Context{
-        wal_pipelines: [wal_pipeline],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: %PostgresDatabase{sequences: []}
-      }
+      context = context(wal_pipelines: [wal_pipeline], postgres_database: %PostgresDatabase{sequences: []})
 
       {:ok, 2} = MessageHandler.handle_messages(context, [insert_message, update_message])
 
@@ -551,11 +542,7 @@ defmodule Sequin.MessageHandlerTest do
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
 
-      context = %MessageHandler.Context{
-        wal_pipelines: [wal_pipeline],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: %PostgresDatabase{sequences: []}
-      }
+      context = context(wal_pipelines: [wal_pipeline], postgres_database: %PostgresDatabase{sequences: []})
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -569,11 +556,7 @@ defmodule Sequin.MessageHandlerTest do
       source_table = ConsumersFactory.source_table(oid: 456)
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
 
-      context = %MessageHandler.Context{
-        wal_pipelines: [wal_pipeline],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: %PostgresDatabase{sequences: []}
-      }
+      context = context(wal_pipelines: [wal_pipeline], postgres_database: %PostgresDatabase{sequences: []})
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
@@ -597,11 +580,7 @@ defmodule Sequin.MessageHandlerTest do
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
       message = %{message | fields: [test_field | message.fields]}
 
-      context = %MessageHandler.Context{
-        wal_pipelines: [wal_pipeline],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: %PostgresDatabase{sequences: []}
-      }
+      context = context(wal_pipelines: [wal_pipeline], postgres_database: %PostgresDatabase{sequences: []})
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -627,11 +606,7 @@ defmodule Sequin.MessageHandlerTest do
       field = ReplicationFactory.field(column_attnum: 1, value: "not_test")
       message = %{message | fields: [field | message.fields]}
 
-      context = %MessageHandler.Context{
-        wal_pipelines: [wal_pipeline],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: %PostgresDatabase{sequences: []}
-      }
+      context = context(wal_pipelines: [wal_pipeline], postgres_database: %PostgresDatabase{sequences: []})
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
@@ -686,11 +661,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
       database = Repo.preload(database, :sequences)
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer], postgres_database: database)
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -776,11 +747,7 @@ defmodule Sequin.MessageHandlerTest do
           ids: [2]
         )
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer], postgres_database: database)
 
       # Process both messages
       {:ok, processed_count} = MessageHandler.handle_messages(context, [matching_message, non_matching_message])
@@ -805,10 +772,7 @@ defmodule Sequin.MessageHandlerTest do
       batch_info = %{batch_id: "matching-batch", commit_lsn: 42}
       slot_id = Factory.uuid()
 
-      context = %MessageHandler.Context{
-        replication_slot_id: slot_id,
-        table_reader_mod: TableReaderServerMock
-      }
+      context = context(replication_slot_id: slot_id, table_reader_mod: TableReaderServerMock)
 
       # Create a high watermark message matching the existing batch
       message =
@@ -880,21 +844,21 @@ defmodule Sequin.MessageHandlerTest do
         ReplicationFactory.postgres_message(table_oid: 456, ids: [3, 4])
       ]
 
-      context = %MessageHandler.Context{
-        consumers: consumers,
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: %PostgresDatabase{sequences: []},
-        table_reader_mod: TableReaderServerMock
-      }
+      context =
+        context(
+          consumers: consumers,
+          postgres_database: %PostgresDatabase{sequences: []},
+          table_reader_mod: TableReaderServerMock
+        )
 
       # Mock that only consumer1 has a running TableReaderServer
-      expect(TableReaderServerMock, :running_for_consumer?, 2, fn consumer_id ->
-        consumer_id == consumer1.id
+      expect(TableReaderServerMock, :active_table_oids, 1, fn ->
+        [123]
       end)
 
       # Expect pks_seen to be called only for consumer1's messages
-      expect(TableReaderServerMock, :pks_seen, 1, fn consumer_id, pks ->
-        assert consumer_id == consumer1.id
+      expect(TableReaderServerMock, :pks_seen, 1, fn table_oid, pks ->
+        assert table_oid == 123
         # Single composite pk
         assert pks == [[1, 2]]
         :ok
@@ -931,21 +895,21 @@ defmodule Sequin.MessageHandlerTest do
         ReplicationFactory.postgres_message(table_oid: 123, ids: [3, 4, 5])
       ]
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        table_reader_mod: TableReaderServerMock,
-        postgres_database: %PostgresDatabase{sequences: []}
-      }
+      context =
+        context(
+          consumers: [consumer],
+          postgres_database: %PostgresDatabase{sequences: []},
+          table_reader_mod: TableReaderServerMock
+        )
 
       # Mock that the consumer has a running TableReaderServer
-      expect(TableReaderServerMock, :running_for_consumer?, 1, fn consumer_id ->
-        consumer_id == consumer.id
+      expect(TableReaderServerMock, :active_table_oids, 1, fn ->
+        [123]
       end)
 
       # Expect pks_seen to be called with composite pks from both messages
-      expect(TableReaderServerMock, :pks_seen, 1, fn consumer_id, pks ->
-        assert consumer_id == consumer.id
+      expect(TableReaderServerMock, :pks_seen, 1, fn table_oid, pks ->
+        assert table_oid == 123
         # Two different composite pks
         assert pks == [[1, 2], [3, 4, 5]]
         :ok
@@ -990,11 +954,7 @@ defmodule Sequin.MessageHandlerTest do
 
       database = Repo.preload(database, :sequences)
 
-      context = %MessageHandler.Context{
-        consumers: [consumer],
-        replication_slot_id: UUID.uuid4(),
-        postgres_database: database
-      }
+      context = context(consumers: [consumer], postgres_database: database)
 
       %{context: context, consumer: consumer}
     end
@@ -1083,5 +1043,13 @@ defmodule Sequin.MessageHandlerTest do
 
   defp fields_to_map(fields) do
     Map.new(fields, fn %{column_name: name, value: value} -> {name, value} end)
+  end
+
+  defp context(attrs) do
+    attrs = Keyword.put_new(attrs, :replication_slot_id, UUID.uuid4())
+
+    MessageHandler.Context
+    |> struct!(attrs)
+    |> MessageHandler.Context.set_indices()
   end
 end

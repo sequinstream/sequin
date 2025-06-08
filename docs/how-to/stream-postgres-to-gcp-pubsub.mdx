@@ -28,7 +28,7 @@ If you're using Sequin Cloud, you'll need:
 
 ### Enable Pub/Sub
 
-In the Google Cloud console, navigate to [Pub/Sub](https://console.cloud.google.com/cloudpubsub) and ensure it's enabled for your project. 
+In the Google Cloud console, navigate to [Pub/Sub](https://console.cloud.google.com/cloudpubsub) and ensure it's enabled for your project.
 
 ### Create a Pub/Sub topic
 
@@ -69,8 +69,8 @@ In Sequin, navigate to the "Sinks" tab, click "Create Sink", and select "Pub/Sub
 ### Configure the source
 
 <Steps>
-  <Step title="Select source table">
-    Under "Source", select the table you want to stream data from.
+  <Step title="Select source table or schema">
+    Under "Source", select the table or schema you want to stream data from.
   </Step>
 
   <Step title="Choose message type">
@@ -148,7 +148,7 @@ Common issues to check:
 - **Setup a processor**
 
    Now that your Postgres data is flowing into Pub/Sub, you can setup a subscriber to read from the topic and process the data. See the [Pub/Sub documentation](https://cloud.google.com/pubsub/docs/pull) for details on consuming messages.
-   
+
    Refer to the [Pub/Sub sink reference](/reference/sinks/gcp-pubsub) for the shape of messages that Sequin will publish.
 
 - **Deploy your implementation**

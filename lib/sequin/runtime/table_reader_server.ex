@@ -9,7 +9,6 @@ defmodule Sequin.Runtime.TableReaderServer do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Error.ServiceError
@@ -32,20 +31,37 @@ defmodule Sequin.Runtime.TableReaderServer do
 
   @callback flush_batch(String.t() | pid(), map()) :: :ok
 
-  @callback pks_seen(String.t(), [any()]) :: :ok
-
-  @callback running_for_consumer?(String.t()) :: boolean()
+  # these could be scoped to a replication slot as well
+  @callback active_table_oids() :: [integer()]
+  @callback pks_seen(table_oid :: integer(), pks :: [any()]) :: :ok
 
   @max_backoff_ms :timer.seconds(1)
   @max_backoff_time :timer.minutes(1)
 
   @max_batches 3
 
+  @table_oid_to_backfill_ids_ets_table :table_oid_backfill_ids_multiset
+
   # Client API
 
   def start_link(opts \\ []) do
     backfill_id = Keyword.fetch!(opts, :backfill_id)
     GenStateMachine.start_link(__MODULE__, opts, name: via_tuple(backfill_id))
+  end
+
+  def setup_table_oid_to_backfill_id_ets_table do
+    EtsMultiset.new_named(@table_oid_to_backfill_ids_ets_table, access: :public)
+    :ok
+  end
+
+  defp add_backfill_id_to_table_oid_to_backfill_id_ets_table(table_oid, backfill_id) do
+    EtsMultiset.put(@table_oid_to_backfill_ids_ets_table, table_oid, backfill_id)
+    :ok
+  end
+
+  def remove_backfill_id_from_table_oid_to_backfill_id_ets_table(table_oid, backfill_id) do
+    EtsMultiset.delete(@table_oid_to_backfill_ids_ets_table, table_oid, backfill_id)
+    :ok
   end
 
   def flush_batch(backfill_id, batch_info) when is_binary(backfill_id) do
@@ -82,21 +98,10 @@ defmodule Sequin.Runtime.TableReaderServer do
   end
 
   @doc """
-  Checks if a table reader server is running for a given consumer ID.
-
-  ## Parameters
-    * `consumer_id` - The ID of the consumer to check
-
-  ## Returns
-    * `true` - If the table reader server is running
-    * `false` - If the table reader server is not running
+  Returns a list of table oids for which there are active backfills.
   """
-  @spec running_for_consumer?(String.t()) :: boolean()
-  def running_for_consumer?(consumer_id) when is_binary(consumer_id) do
-    case :ets.whereis(multiset_name(consumer_id)) do
-      :undefined -> false
-      _table -> true
-    end
+  def active_table_oids do
+    EtsMultiset.keys(@table_oid_to_backfill_ids_ets_table)
   end
 
   @doc """
@@ -106,51 +111,44 @@ defmodule Sequin.Runtime.TableReaderServer do
   making it more efficient for high-frequency operations.
 
   ## Parameters
-    * `backfill_id` - The ID of the backfill
+    * `table_oid` - The table oid
     * `pks` - A list of primary key lists to remove from all batches
 
   ## Returns
     * `:ok` - Always returns :ok, even if the table doesn't exist (to avoid race conditions)
   """
-  @spec pks_seen(String.t(), [any()]) :: :ok
-  def pks_seen(consumer_id, pks) do
-    table_name = multiset_name(consumer_id)
-
-    # Get the ETS table reference
-    case :ets.whereis(table_name) do
-      :undefined ->
-        # TableReaderServer not running, so we don't need to worry about dropping PKs
+  @spec pks_seen(integer(), [any()]) :: :ok
+  def pks_seen(table_oid, pks) do
+    # Get backfills running for this table
+    case EtsMultiset.get(@table_oid_to_backfill_ids_ets_table, table_oid) do
+      [] ->
         :ok
 
-      table ->
-        # Get all batch_ids (keys) from the multiset
-        batch_ids = EtsMultiset.keys(table)
-
-        # Create a MapSet of the primary keys for efficient lookups
+      backfill_ids ->
+        # Create a set of primary keys for efficient multiset diffs
         pks_set = MapSet.new(pks)
 
-        # Remove the primary keys from each batch
-        Enum.each(batch_ids, fn batch_id ->
-          EtsMultiset.difference(table, batch_id, pks_set)
+        Enum.each(backfill_ids, fn backfill_id ->
+          case :ets.whereis(multiset_name(backfill_id)) do
+            # TableReaderServer not running, so we don't need to worry about dropping PKs
+            :undefined ->
+              :ok
+
+            _ ->
+              # Get all batch_ids (keys) from the multiset
+              batch_ids = EtsMultiset.keys(multiset_name(backfill_id))
+
+              # Remove the primary keys from each batch
+              Enum.each(batch_ids, fn batch_id ->
+                EtsMultiset.difference(multiset_name(backfill_id), batch_id, pks_set)
+              end)
+          end
         end)
     end
   end
 
-  # Convenience function
-  def via_tuple(%SinkConsumer{} = consumer) do
-    consumer = Repo.preload(consumer, :active_backfill)
-    via_tuple(consumer.active_backfill.id)
-  end
-
   def via_tuple(backfill_id) when is_binary(backfill_id) do
     {:via, :syn, {:replication, {__MODULE__, backfill_id}}}
-  end
-
-  # Convenience function
-  def via_tuple_for_consumer(consumer_id) do
-    consumer_id
-    |> Consumers.get_consumer!()
-    |> via_tuple()
   end
 
   def child_spec(opts) do
@@ -272,7 +270,7 @@ defmodule Sequin.Runtime.TableReaderServer do
       setting_check_sms_timeout: Keyword.get(opts, :check_sms_timeout, :timer.seconds(5)),
       fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2),
       fetch_batch_pks: Keyword.get(opts, :fetch_batch_pks, &TableReader.fetch_batch_pks/4),
-      fetch_batch: Keyword.get(opts, :fetch_batch, &TableReader.fetch_batch/5),
+      fetch_batch: Keyword.get(opts, :fetch_batch, &TableReader.fetch_batch/6),
       task_supervisor: Keyword.get(opts, :task_supervisor, Sequin.TaskSupervisor)
     }
 
@@ -294,8 +292,9 @@ defmodule Sequin.Runtime.TableReaderServer do
 
     Logger.info("[TableReaderServer] Started")
 
-    # Create a named ETS multiset with public access
-    pk_multiset = EtsMultiset.new_named(multiset_name(consumer.id), access: :public)
+    # Create ETS tables
+    pk_multiset = EtsMultiset.new_named(multiset_name(backfill.id), access: :public)
+    add_backfill_id_to_table_oid_to_backfill_id_ets_table(backfill.table_oid, backfill.id)
 
     slot_message_store_ref =
       consumer.id
@@ -354,7 +353,7 @@ defmodule Sequin.Runtime.TableReaderServer do
         %State{current_id_fetch_task: nil, current_batch_fetch_task: nil} = state
       ) do
     execute_timed(:fetch_batch, fn ->
-      include_min = state.cursor == initial_min_cursor(state.consumer)
+      include_min = state.cursor == initial_min_cursor(state.backfill)
       batch_id = UUID.uuid4()
       Logger.metadata(current_batch_id: batch_id)
 
@@ -409,7 +408,7 @@ defmodule Sequin.Runtime.TableReaderServer do
         :running,
         %State{current_id_fetch_task: %{ref: ref, batch_id: batch_id, page_size: page_size}} = state
       ) do
-    include_min = state.cursor == initial_min_cursor(state.consumer)
+    include_min = state.cursor == initial_min_cursor(state.backfill)
     Process.demonitor(ref, [:flush])
     now = Sequin.utc_now()
     time_ms = DateTime.diff(now, state.current_id_fetch_task.started_at, :millisecond)
@@ -420,8 +419,8 @@ defmodule Sequin.Runtime.TableReaderServer do
         state = %{state | current_id_fetch_task: nil}
 
         if state.unflushed_batches == [] and state.flushed_batches == [] do
-          Consumers.table_reader_finished(state.consumer.id)
-          TableReader.delete_cursor(state.consumer.active_backfill.id)
+          Consumers.table_reader_finished(state.backfill)
+          TableReader.delete_cursor(state.backfill.id)
 
           Logger.info("[TableReaderServer] ID fetch returned no records. No batches to flush. Table pagination complete.",
             cursor: state.cursor
@@ -452,8 +451,9 @@ defmodule Sequin.Runtime.TableReaderServer do
         test_pid = state.test_pid
         database = database(state)
         table = table(state)
-        table_oid = table_oid(state.consumer)
+        table_oid = state.backfill.table_oid
         consumer = state.consumer
+        backfill = state.backfill
         id = state.id
         slot_id = state.consumer.replication_slot.id
         cursor = state.cursor
@@ -473,6 +473,7 @@ defmodule Sequin.Runtime.TableReaderServer do
                   state.fetch_batch.(
                     t_conn,
                     consumer,
+                    backfill,
                     table,
                     cursor,
                     include_min: include_min,
@@ -678,6 +679,8 @@ defmodule Sequin.Runtime.TableReaderServer do
   end
 
   def handle_event({:timeout, :check_state}, _, _state_name, %State{} = state) do
+    state = reload_backfill(state)
+
     case preload_consumer(state.consumer) do
       nil ->
         Logger.info("[TableReaderServer] Consumer #{state.consumer.id} not found, shutting down")
@@ -691,8 +694,12 @@ defmodule Sequin.Runtime.TableReaderServer do
         stale_batch = Enum.find(state.unflushed_batches, fn batch -> current_slot_lsn > batch.appx_lsn end)
 
         cond do
-          is_nil(consumer.active_backfill) ->
-            Logger.info("[TableReaderServer] No active backfill found, shutting down")
+          state.backfill.state != :active ->
+            Logger.info("[TableReaderServer] Backfill #{state.backfill.id} is not active, shutting down",
+              backfill_id: state.backfill.id,
+              state: state.backfill.state
+            )
+
             {:stop, :normal}
 
           stale_batch ->
@@ -784,7 +791,7 @@ defmodule Sequin.Runtime.TableReaderServer do
           if batch_size == 0 do
             # Complete the batch immediately
             Logger.info("[TableReaderServer] Batch #{batch.id} is committed")
-            :ok = TableReader.update_cursor(state.consumer.active_backfill.id, batch.cursor)
+            :ok = TableReader.update_cursor(state.backfill.id, batch.cursor)
 
             {:keep_state, %{state | unflushed_batches: batches}, [maybe_fetch_timeout(), {:reply, from, :ok}]}
           else
@@ -872,7 +879,7 @@ defmodule Sequin.Runtime.TableReaderServer do
           # Complete each batch in order
           Enum.each(completed_batches, fn batch ->
             Logger.info("[TableReaderServer] Batch #{batch.id} is committed")
-            :ok = TableReader.update_cursor(state.consumer.active_backfill.id, batch.cursor)
+            :ok = TableReader.update_cursor(state.backfill.id, batch.cursor)
           end)
 
           state = maybe_update_backfill(state, completed_batches_size)
@@ -883,8 +890,8 @@ defmodule Sequin.Runtime.TableReaderServer do
           ]
 
           if state.unflushed_batches == [] and remaining_batches == [] and state.done_fetching do
-            Consumers.table_reader_finished(state.consumer.id)
-            TableReader.delete_cursor(state.consumer.active_backfill.id)
+            Consumers.table_reader_finished(state.backfill)
+            TableReader.delete_cursor(state.backfill.id)
             {:stop, :normal}
           else
             {:keep_state, %{state | flushed_batches: remaining_batches}, actions}
@@ -982,9 +989,6 @@ defmodule Sequin.Runtime.TableReaderServer do
     consumer.replication_slot.postgres_database
   end
 
-  defp table_oid(%{sequence: %Sequence{table_oid: table_oid}}), do: table_oid
-  defp table_oid(%{source_tables: [source_table | _]}), do: source_table.table_oid
-
   defp table(%State{} = state) do
     database = database(state)
     %{backfill: %Backfill{} = backfill} = state
@@ -1023,8 +1027,8 @@ defmodule Sequin.Runtime.TableReaderServer do
     end
   end
 
-  defp initial_min_cursor(consumer) do
-    consumer.active_backfill.initial_min_cursor
+  defp initial_min_cursor(%Backfill{} = backfill) do
+    backfill.initial_min_cursor
   end
 
   defp maybe_setup_allowances(nil), do: :ok
@@ -1036,7 +1040,11 @@ defmodule Sequin.Runtime.TableReaderServer do
   end
 
   defp preload_consumer(consumer) do
-    Repo.preload(consumer, [:sequence, :active_backfill, :filter, replication_slot: :postgres_database], force: true)
+    Repo.preload(consumer, [:sequence, :filter, replication_slot: :postgres_database], force: true)
+  end
+
+  defp reload_backfill(%State{} = state) do
+    %{state | backfill: Repo.reload(state.backfill)}
   end
 
   defp fetch_slot_lsn(%State{} = state) do
@@ -1062,15 +1070,15 @@ defmodule Sequin.Runtime.TableReaderServer do
   defp maybe_update_backfill(%State{} = state, message_count) do
     {:ok, backfill} =
       Consumers.update_backfill(
-        state.consumer.active_backfill,
+        state.backfill,
         %{
-          rows_processed_count: state.consumer.active_backfill.rows_processed_count + message_count,
-          rows_ingested_count: state.consumer.active_backfill.rows_ingested_count + message_count
+          rows_processed_count: state.backfill.rows_processed_count + message_count,
+          rows_ingested_count: state.backfill.rows_ingested_count + message_count
         },
         skip_lifecycle: true
       )
 
-    %{state | consumer: %{state.consumer | active_backfill: backfill}}
+    %{state | backfill: backfill}
   end
 
   # Private helper functions for timing metrics
@@ -1092,7 +1100,7 @@ defmodule Sequin.Runtime.TableReaderServer do
 
   # Returns the name of the ETS multiset for a given backfill ID
   @doc false
-  defp multiset_name(consumer_id) do
-    Module.concat(__MODULE__, consumer_id)
+  defp multiset_name(backfill_id) do
+    Module.concat(__MODULE__, backfill_id)
   end
 end

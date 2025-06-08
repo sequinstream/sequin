@@ -649,6 +649,7 @@ defmodule Sequin.Runtime.WalPipelineServer do
     end)
   end
 
+  defp cast_column_value(nil, _), do: nil
   defp cast_column_value(value, "uuid"), do: Sequin.String.binary_to_string!(value)
   defp cast_column_value(value, _), do: value
 

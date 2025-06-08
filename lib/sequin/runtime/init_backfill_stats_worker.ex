@@ -17,13 +17,13 @@ defmodule Sequin.Runtime.InitBackfillStatsWorker do
   def perform(%Oban.Job{args: %{"backfill_id" => backfill_id}}) do
     with {:ok, backfill} <- Consumers.get_backfill(backfill_id),
          true <- is_nil(backfill.rows_initial_count) do
-      backfill = Repo.preload(backfill, sink_consumer: [:sequence, replication_slot: :postgres_database])
+      backfill = Repo.preload(backfill, sink_consumer: [replication_slot: :postgres_database])
       database = backfill.sink_consumer.replication_slot.postgres_database
 
       # Find table and set its sort_column_attnum from the sequence
       table =
         database.tables
-        |> Sequin.Enum.find!(&(&1.oid == backfill.sink_consumer.sequence.table_oid))
+        |> Sequin.Enum.find!(&(&1.oid == backfill.table_oid))
         |> Map.put(:sort_column_attnum, backfill.sort_column_attnum)
 
       case TableReader.fast_count_estimate(database, table, backfill.initial_min_cursor, timeout: :infinity) do

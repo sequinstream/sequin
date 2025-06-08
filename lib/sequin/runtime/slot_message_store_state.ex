@@ -116,7 +116,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   def put_persisted_messages(%State{} = state, messages) do
     persisted_message_groups =
       Enum.reduce(messages, state.persisted_message_groups, fn msg, acc ->
-        Multiset.put(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
+        Multiset.put(acc, group_id(msg), {msg.commit_lsn, msg.commit_idx})
       end)
 
     # This cannot fail because we `skip_limit_check?`
@@ -163,12 +163,12 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
 
     persisted_message_groups =
       Enum.reduce(popped_messages, state.persisted_message_groups, fn msg, acc ->
-        Multiset.delete(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
+        Multiset.delete(acc, group_id(msg), {msg.commit_lsn, msg.commit_idx})
       end)
 
     produced_message_groups =
       Enum.reduce(popped_messages, state.produced_message_groups, fn msg, acc ->
-        Multiset.delete(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
+        Multiset.delete(acc, group_id(msg), {msg.commit_lsn, msg.commit_idx})
       end)
 
     cursor_tuples_set = MapSet.new(cursor_tuples)
@@ -212,19 +212,23 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     pop_messages(state, Map.keys(state.messages))
   end
 
-  @spec message_group_persisted?(State.t(), String.t()) :: boolean()
+  @spec message_group_persisted?(State.t(), non_neg_integer(), String.t()) :: boolean()
   # Messages without group_ids do not belong to any group
-  def message_group_persisted?(%State{}, nil) do
+  def message_group_persisted?(%State{}, _table_oid, nil) do
     false
   end
 
-  def message_group_persisted?(%State{} = state, group_id) do
-    Multiset.member?(state.persisted_message_groups, group_id)
+  def message_group_persisted?(%State{} = state, table_oid, group_id) do
+    Multiset.member?(state.persisted_message_groups, {table_oid, group_id})
   end
 
   @spec message_persisted?(State.t(), message()) :: boolean()
   def message_persisted?(%State{} = state, msg) do
-    Multiset.value_member?(state.persisted_message_groups, msg.group_id, {msg.commit_lsn, msg.commit_idx})
+    Multiset.value_member?(
+      state.persisted_message_groups,
+      group_id(msg),
+      {msg.commit_lsn, msg.commit_idx}
+    )
   end
 
   @doc """
@@ -249,16 +253,16 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     stale_cursor_tuples =
       state.messages
       |> Stream.filter(fn {cursor_tuple, msg} ->
-        Multiset.value_member?(state.produced_message_groups, msg.group_id, cursor_tuple) and
+        Multiset.value_member?(state.produced_message_groups, group_id(msg), cursor_tuple) and
           not is_nil(msg.last_delivered_at) and
           DateTime.before?(msg.last_delivered_at, ack_wait_ms_ago)
       end)
-      |> Stream.map(fn {cursor_tuple, msg} -> {msg.group_id, cursor_tuple} end)
+      |> Stream.map(fn {cursor_tuple, msg} -> {msg.table_oid, msg.group_id, cursor_tuple} end)
       |> Enum.to_list()
 
     produced_message_groups =
-      Enum.reduce(stale_cursor_tuples, state.produced_message_groups, fn {group_id, cursor_tuple}, acc ->
-        Multiset.delete(acc, group_id, cursor_tuple)
+      Enum.reduce(stale_cursor_tuples, state.produced_message_groups, fn {table_oid, group_id, cursor_tuple}, acc ->
+        Multiset.delete(acc, {table_oid, group_id}, cursor_tuple)
       end)
 
     %{state | produced_message_groups: produced_message_groups}
@@ -312,7 +316,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       %{
         state
         | messages: Map.put(state.messages, cursor_tuple, msg),
-          produced_message_groups: Multiset.delete(state.produced_message_groups, msg.group_id, cursor_tuple)
+          produced_message_groups: Multiset.delete(state.produced_message_groups, group_id(msg), cursor_tuple)
       }
 
     {state, msg}
@@ -360,7 +364,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
 
     produced_message_groups =
       Enum.reduce(messages, state.produced_message_groups, fn msg, acc ->
-        Multiset.put(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
+        Multiset.put(acc, group_id(msg), {msg.commit_lsn, msg.commit_idx})
       end)
 
     {messages,
@@ -391,14 +395,18 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
           deliverable? =
             cond do
               # Messages without group_id are delivered independently
-              not is_nil(msg.group_id) and Multiset.member?(state.produced_message_groups, msg.group_id) ->
+              not is_nil(msg.group_id) and Multiset.member?(state.produced_message_groups, group_id(msg)) ->
                 false
 
               is_nil(msg.group_id) and
-                  Multiset.value_member?(state.produced_message_groups, msg.group_id, {msg.commit_lsn, msg.commit_idx}) ->
+                  Multiset.value_member?(
+                    state.produced_message_groups,
+                    group_id(msg),
+                    {msg.commit_lsn, msg.commit_idx}
+                  ) ->
                 false
 
-              not is_nil(msg.group_id) and MapSet.member?(delivered_message_group_ids, msg.group_id) ->
+              not is_nil(msg.group_id) and MapSet.member?(delivered_message_group_ids, group_id(msg)) ->
                 false
 
               is_nil(msg.not_visible_until) ->
@@ -412,7 +420,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
             end
 
           if deliverable? do
-            {:cont, {acc_count + 1, MapSet.put(delivered_message_group_ids, msg.group_id), [msg | deliverable_messages]}}
+            {:cont, {acc_count + 1, MapSet.put(delivered_message_group_ids, group_id(msg)), [msg | deliverable_messages]}}
           else
             {:cont, {acc_count, delivered_message_group_ids, deliverable_messages}}
           end
@@ -492,8 +500,8 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   This helps prevent slot advancement from being blocked by slow message processing (often
   due to slow group processing or sequin stream syncs.)
   """
-  @spec cursor_tuples_to_flush(State.t(), non_neg_integer()) :: list(message())
-  def cursor_tuples_to_flush(%State{} = state, limit \\ 2000) do
+  @spec messages_to_flush(State.t(), non_neg_integer()) :: list(message())
+  def messages_to_flush(%State{} = state, limit \\ 2000) do
     now = Sequin.utc_now()
     age_threshold = DateTime.add(now, -state.message_age_before_flush_ms, :millisecond)
 
@@ -502,7 +510,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     |> sorted_message_stream()
     |> Stream.reject(&message_persisted?(state, &1))
     |> Stream.filter(&DateTime.before?(&1.ingested_at, age_threshold))
-    |> Stream.map(fn msg -> {msg.commit_lsn, msg.commit_idx} end)
     |> Enum.take(limit)
   end
 
@@ -524,4 +531,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     end)
     |> Enum.to_list()
   end
+
+  defp group_id(msg), do: {msg.table_oid, msg.group_id}
 end

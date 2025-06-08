@@ -57,8 +57,8 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Typesense Sink".
 ### Configure the source
 
 <Steps>
-  <Step title="Select source table">
-    Under "Source", select the table you want to stream data from.
+  <Step title="Select source table or schema">
+    Under "Source", select the table or schema you want to stream data from.
   </Step>
 
   <Step title="Specify filters">
@@ -82,7 +82,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Typesense Sink".
     You can map your Postgres table columns to Typesense fields using a [functional transform](/reference/transforms#function-transform).
 
     We recommend mapping your table to a map literal, such as:
-  
+
     ```elixir
     def transform(record) do
       %{
@@ -112,7 +112,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Typesense Sink".
       Map.put(record, "id", record["product_id"])
     end
     ```
-    
+
   </Step>
 
   <Step title="Specify message grouping">

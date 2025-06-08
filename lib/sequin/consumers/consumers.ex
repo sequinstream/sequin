@@ -13,6 +13,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -320,15 +321,14 @@ defmodule Sequin.Consumers do
     Repo.all(SinkConsumer.where_active_backfill())
   end
 
-  def table_reader_finished(consumer_id) do
-    consumer = get_consumer!(consumer_id)
+  def table_reader_finished(%Backfill{} = backfill) do
+    with {:ok, backfill} <- update_backfill(backfill, %{state: :completed}) do
+      Sequin.Runtime.TableReaderServer.remove_backfill_id_from_table_oid_to_backfill_id_ets_table(
+        backfill.table_oid,
+        backfill.id
+      )
 
-    case Repo.preload(consumer, :active_backfill) do
-      %{active_backfill: %Backfill{} = backfill} ->
-        update_backfill(backfill, %{state: :completed})
-
-      _ ->
-        :ok
+      {:ok, backfill}
     end
   end
 
@@ -419,15 +419,15 @@ defmodule Sequin.Consumers do
 
   # SinkConsumer
 
-  def get_sink_consumer(consumer_id) do
+  def get_sink_consumer(consumer_id, preloads \\ []) do
     case Repo.get(SinkConsumer, consumer_id) do
       nil -> {:error, Error.not_found(entity: :sink_consumer, params: %{id: consumer_id})}
-      consumer -> {:ok, consumer}
+      consumer -> {:ok, Repo.preload(consumer, preloads)}
     end
   end
 
-  def get_sink_consumer!(consumer_id) do
-    case get_sink_consumer(consumer_id) do
+  def get_sink_consumer!(consumer_id, preloads \\ []) do
+    case get_sink_consumer(consumer_id, preloads) do
       {:ok, consumer} -> consumer
       {:error, error} -> raise error
     end
@@ -589,8 +589,8 @@ defmodule Sequin.Consumers do
   end
 
   @spec upsert_consumer_messages(SinkConsumer.t(), list(ConsumerEvent.t()) | list(ConsumerRecord.t())) ::
-          {:ok, list(ConsumerEvent.t()) | list(ConsumerRecord.t())}
-  def(upsert_consumer_messages(%SinkConsumer{} = consumer, messages)) do
+          {:ok, non_neg_integer()}
+  def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
     case consumer.message_kind do
       :event -> upsert_consumer_events(messages)
       :record -> upsert_consumer_records(messages)
@@ -614,16 +614,15 @@ defmodule Sequin.Consumers do
       end)
 
     # insert_all expects a plain outer-map, but struct embeds
-    {_count, events} =
+    {count, _events} =
       Repo.insert_all(
         ConsumerEvent,
         events,
         on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: [:consumer_id, :ack_id],
-        returning: true
+        conflict_target: [:consumer_id, :ack_id]
       )
 
-    {:ok, Enum.map(events, &ConsumerEvent.deserialize/1)}
+    {:ok, count}
   end
 
   @exponential_backoff_max :timer.minutes(10)
@@ -741,16 +740,15 @@ defmodule Sequin.Consumers do
         |> drop_virtual_fields()
       end)
 
-    {_count, records} =
+    {count, _records} =
       Repo.insert_all(
         ConsumerRecord,
         records,
         on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: [:consumer_id, :ack_id],
-        returning: true
+        conflict_target: [:consumer_id, :ack_id]
       )
 
-    {:ok, Enum.map(records, &ConsumerRecord.deserialize/1)}
+    {:ok, count}
   end
 
   # Consumer Lifecycle
@@ -1165,11 +1163,24 @@ defmodule Sequin.Consumers do
   # Source Table Matching
   def matches_message?(%SinkConsumer{message_kind: :record}, %SlotProcessor.Message{action: :delete}), do: false
 
+  # Schema Matching
+  def matches_message?(
+        %SinkConsumer{schema_filter: %SchemaFilter{} = schema_filter} = consumer,
+        %SlotProcessor.Message{} = message
+      ) do
+    matches? = message_matches_schema?(schema_filter, message)
+
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+
+    matches?
+  end
+
+  # Sequence Matching
   def matches_message?(
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         %SlotProcessor.Message{} = message
       ) do
-    matches? = matches_message?(sequence, sequence_filter, message)
+    matches? = message_matches_sequence?(sequence, sequence_filter, message)
 
     Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
@@ -1189,26 +1200,13 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
+  # Source Table Matching
   def matches_message?(consumer_or_wal_pipeline, %SlotProcessor.Message{} = message) do
     matches? =
       Enum.any?(consumer_or_wal_pipeline.source_tables, fn %SourceTable{} = source_table ->
         table_matches = source_table.oid == message.table_oid
         action_matches = action_matches?(source_table.actions, message.action)
         column_filters_match = column_filters_match_message?(source_table.column_filters, message)
-
-        # Logger.debug("""
-        # [Consumers]
-        #   matches?: #{table_matches && action_matches && column_filters_match}
-        #     table_matches: #{table_matches}
-        #     action_matches: #{action_matches}
-        #     column_filters_match: #{column_filters_match}
-
-        #   consumer_or_wal_pipeline:
-        #     #{inspect(consumer_or_wal_pipeline, pretty: true)}
-
-        #   message:
-        #     #{inspect(message, pretty: true)}
-        # """)
 
         table_matches && action_matches && column_filters_match
       end)
@@ -1234,7 +1232,15 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
-  def matches_message?(%Sequence{} = sequence, %SequenceFilter{} = sequence_filter, %SlotProcessor.Message{} = message) do
+  defp message_matches_schema?(%SchemaFilter{} = schema_filter, %SlotProcessor.Message{} = message) do
+    message.table_schema == schema_filter.schema
+  end
+
+  defp message_matches_sequence?(
+         %Sequence{} = sequence,
+         %SequenceFilter{} = sequence_filter,
+         %SlotProcessor.Message{} = message
+       ) do
     table_matches? = sequence.table_oid == message.table_oid
     actions_match? = action_matches?(sequence_filter.actions, message.action)
     column_filters_match? = column_filters_match_message?(sequence_filter.column_filters, message)
@@ -1253,6 +1259,12 @@ defmodule Sequin.Consumers do
     Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
     table_matches? and column_filters_match?
+  end
+
+  def matches_record?(%SinkConsumer{schema_filter: %SchemaFilter{}} = consumer, _table_oid, _record_attnums_to_values) do
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+
+    true
   end
 
   def matches_record?(consumer, table_oid, record_attnums_to_values) do
@@ -1445,6 +1457,7 @@ defmodule Sequin.Consumers do
     sink_consumer_id
     |> Backfill.where_sink_consumer_id()
     |> order_by(desc: :inserted_at)
+    |> order_by(desc: :id)
     |> Repo.all()
   end
 

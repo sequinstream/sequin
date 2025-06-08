@@ -58,21 +58,21 @@ defmodule Sequin.Health.Check do
   def check_name(%Check{name: nil} = check) do
     case check.slug do
       # Postgres replication slot checks
-      :reachable -> "Database reachable"
-      :replication_configuration -> "Valid slot"
-      :replication_connected -> "Replication connected"
-      :replication_messages -> "Replication messages"
+      :reachable -> "Database reachability"
+      :replication_configuration -> "Replication slot configuration"
+      :replication_connected -> "Replication slot connection"
+      :replication_messages -> "Replication slot messages"
       # Sink consumer checks
-      :sink_configuration -> "Configuration"
-      :messages_filtered -> "Messages filtered"
-      :messages_ingested -> "Messages ingested"
+      :sink_configuration -> "Sink configuration"
+      :messages_filtered -> "Message filtering"
+      :messages_ingested -> "Message ingestion"
       :messages_pending_delivery -> "Messages pending delivery"
-      :messages_delivered -> "Messages delivered"
+      :messages_delivered -> "Message delivery"
       # HTTP endpoint checks
-      :endpoint_reachable -> "Endpoint reachable"
+      :endpoint_reachable -> "Endpoint reachability"
       # WAL pipeline checks
       :destination_insert -> "Destination insert"
-      :slot_health -> "Database"
+      :slot_health -> "Replication slot health"
     end
   end
 

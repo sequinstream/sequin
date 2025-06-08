@@ -38,9 +38,11 @@ Metrics are designed to answer:
 
   Size of the Postgres replication slot in megabytes, calculated via:
 
-      select pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) as replication_lag_bytes
-      from pg_replication_slots
-      where slot_name = $1;
+```sql
+select pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) as replication_lag_bytes
+from pg_replication_slots
+where slot_name = $1;
+```
 
   Indicates how much WAL has accumulated for the slot, helping determine if Sequin is keeping up with the database.
 

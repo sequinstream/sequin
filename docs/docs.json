@@ -56,32 +56,32 @@
           {
             "group": "Sink setup guides",
             "pages": [
-              "how-to/stream-postgres-to-a-webhook-endpoint",
-              "how-to/stream-postgres-to-kafka",
-              "how-to/stream-postgres-to-typesense",
-              "how-to/stream-postgres-to-elasticsearch",
-              "how-to/stream-postgres-to-sqs",
               "how-to/stream-postgres-to-kinesis",
               "how-to/stream-postgres-to-sns",
+              "how-to/stream-postgres-to-sqs",
+              "how-to/stream-postgres-to-azure-event-hubs",
+              "how-to/stream-postgres-to-elasticsearch",
+              "how-to/stream-postgres-to-gcp-pubsub",
+              "how-to/stream-postgres-to-kafka",
+              "how-to/stream-postgres-to-nats",
+              "how-to/stream-postgres-to-typesense",
+              "how-to/stream-postgres-to-a-webhook-endpoint",
+              "how-to/stream-postgres-to-rabbitmq",
               "how-to/stream-postgres-to-redis-string",
               "how-to/stream-postgres-to-redis-stream",
-              "how-to/stream-postgres-to-sequin-stream",
-              "how-to/stream-postgres-to-gcp-pubsub",
-              "how-to/stream-postgres-to-nats",
-              "how-to/stream-postgres-to-rabbitmq",
-              "how-to/stream-postgres-to-azure-event-hubs"
+              "how-to/stream-postgres-to-sequin-stream"
             ]
           },
           {
             "group": "How-to guides",
             "pages": [
-              "how-to/setup-change-retention",
-              "how-to/trigger-automated-workflows",
+              "how-to/deploy-to-production",
               "how-to/create-audit-logs",
+              "how-to/annotate-changes",
               "how-to/replicate-tables",
               "how-to/maintain-caches",
-              "how-to/deploy-to-production",
-              "how-to/annotate-changes",
+              "how-to/setup-change-retention",
+              "how-to/trigger-automated-workflows",
               "how-to/stream-postgres-to-aws-lambda"
             ]
           },
@@ -90,6 +90,34 @@
             "pages": [
               "reference/configuration",
               "reference/databases",
+              {
+                "group": "Sinks",
+                "pages": [
+                  "reference/sinks/overview",
+                  "reference/sinks/kinesis",
+                  "reference/sinks/sns",
+                  "reference/sinks/sqs",
+                  "reference/sinks/azure-event-hubs",
+                  "reference/sinks/elasticsearch",
+                  "reference/sinks/gcp-pubsub",
+                  "reference/sinks/kafka",
+                  "reference/sinks/nats",
+                  "reference/sinks/rabbitmq",
+                  "reference/sinks/redis-string",
+                  "reference/sinks/redis-stream",
+                  {
+                    "group": "Sequin Stream sink",
+                    "pages": [
+                      "reference/sinks/sequin-stream",
+                      "reference/sequin-stream-api/receive",
+                      "reference/sequin-stream-api/ack",
+                      "reference/sequin-stream-api/nack"
+                    ]
+                  },
+                  "reference/sinks/typesense",
+                  "reference/sinks/webhooks"
+                ]
+              },
               "reference/messages",
               "reference/filters",
               "reference/transforms",
@@ -99,38 +127,10 @@
               "reference/annotations",
               "reference/sequin-yaml",
               "reference/cli/overview",
-              "reference/metrics",
-              "reference/management-api"
+              "reference/metrics"
             ]
           },
-          {
-            "group": "Sink reference",
-            "pages": [
-              "reference/sinks/overview",
-              "reference/sinks/webhooks",
-              "reference/sinks/typesense",
-              "reference/sinks/elasticsearch",
-              "reference/sinks/sqs",
-              "reference/sinks/kinesis",
-              "reference/sinks/sns",
-              "reference/sinks/kafka",
-              "reference/sinks/redis-string",
-              "reference/sinks/redis-stream",
-              "reference/sinks/gcp-pubsub",
-              "reference/sinks/nats",
-              "reference/sinks/rabbitmq",
-              "reference/sinks/azure-event-hubs",
-              {
-                "group": "Sequin Stream sink",
-                "pages": [
-                  "reference/sinks/sequin-stream",
-                  "reference/sequin-stream-api/receive",
-                  "reference/sequin-stream-api/ack",
-                  "reference/sequin-stream-api/nack"
-                ]
-              }
-            ]
-          },
+
           {
             "group": "Database setup guides",
             "pages": [
@@ -145,16 +145,12 @@
           {
             "group": "Tutorials",
             "pages": [
-              "guides/temporal",
-              "guides/user-webhooks",
-              "guides/cloudflare",
-              "guides/inngest",
               "guides/lambda",
+              "guides/cloudflare-pipeline",
+              "guides/cloudflare",
+              "guides/temporal",
               "guides/tinybird",
-              "guides/trigger-dev",
-              "guides/supabase-function",
-              "guides/supabase-webhooks",
-              "guides/vercel"
+              "guides/user-webhooks"
             ]
           }
         ]

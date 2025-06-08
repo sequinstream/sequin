@@ -322,11 +322,11 @@ defmodule Sequin.Health do
     Application.get_env(:sequin, :env)
   end
 
-  defp entity_name(:postgres_database), do: "Database health"
-  defp entity_name(:postgres_replication_slot), do: "Database health"
-  defp entity_name(:http_endpoint), do: "Endpoint health"
-  defp entity_name(:sink_consumer), do: "Consumer health"
-  defp entity_name(:wal_pipeline), do: "WAL Pipeline health"
+  def entity_name(:postgres_database), do: "Database health"
+  def entity_name(:postgres_replication_slot), do: "Database health"
+  def entity_name(:http_endpoint), do: "Endpoint health"
+  def entity_name(:sink_consumer), do: "Consumer health"
+  def entity_name(:wal_pipeline), do: "WAL Pipeline health"
 
   defp entity_kind(%PostgresReplicationSlot{}), do: :postgres_replication_slot
   defp entity_kind(%SinkConsumer{}), do: :sink_consumer
@@ -663,6 +663,9 @@ defmodule Sequin.Health do
         put_check_timestamps(%{base_check | status: :error, error: config_checked_event.error}, [
           config_checked_event
         ])
+
+      config_checked_event.data["using_schema_filter"] == true ->
+        put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
 
       config_checked_event.data["replica_identity"] == "full" ->
         put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])

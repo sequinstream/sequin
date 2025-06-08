@@ -37,7 +37,9 @@ defmodule SequinWeb.BackfillControllerTest do
       backfill: backfill,
       other_sink_consumer: other_sink_consumer,
       other_backfill: other_backfill,
-      other_account: other_account
+      other_account: other_account,
+      table: table,
+      postgres_database: database
     }
   end
 
@@ -112,6 +114,52 @@ defmodule SequinWeb.BackfillControllerTest do
     } do
       conn = post(conn, ~p"/api/sinks/#{other_sink_consumer.id}/backfills")
       assert json_response(conn, 404)
+    end
+  end
+
+  describe "create with schema filter" do
+    setup %{account: account} do
+      column_attrs = DatabasesFactory.column_attrs(type: "text", is_pk?: true)
+      table_attrs = DatabasesFactory.table_attrs(columns: [column_attrs])
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id, tables: [table_attrs])
+      [table] = database.tables
+
+      schema_filter = ConsumersFactory.schema_filter_attrs(schema: table.schema)
+
+      sink_consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          schema_filter: schema_filter,
+          sequence_id: nil,
+          postgres_database_id: database.id
+        )
+
+      %{
+        sink_consumer: sink_consumer,
+        table: table
+      }
+    end
+
+    test "creates a backfill for a sink consumer with schema filter (schema.table)", %{
+      conn: conn,
+      table: table,
+      sink_consumer: sink_consumer
+    } do
+      sink_identifier = Enum.random([sink_consumer.id, sink_consumer.name])
+
+      conn = post(conn, ~p"/api/sinks/#{sink_identifier}/backfills", %{table: "#{table.schema}.#{table.name}"})
+      assert backfill_json = json_response(conn, 200)
+      assert backfill_json["sink_consumer"] == sink_consumer.name
+    end
+
+    test "returns error when table is not found", %{
+      conn: conn,
+      table: table,
+      sink_consumer: sink_consumer
+    } do
+      sink_identifier = Enum.random([sink_consumer.id, sink_consumer.name])
+      conn = post(conn, ~p"/api/sinks/#{sink_identifier}/backfills", %{table: "public.#{table.name}"})
+      assert json_response(conn, 422)
     end
   end
 

@@ -11,7 +11,7 @@ defmodule Sequin.Sinks.Gcp.Credentials do
 
   alias Sequin.Encrypted
 
-  @derive {Inspect, except: [:private_key]}
+  @derive {Inspect, except: [:private_key, :client_secret, :api_key, :private_key_id, :client_email]}
   @primary_key false
   typed_embedded_schema do
     field :type, :string

@@ -1,6 +1,20 @@
 import type { Table } from "../databases/types";
 import type { Function } from "../functions/types";
 
+export type Backfill = {
+  id: string;
+  state: "active" | "completed" | "failed" | "canceled";
+  table_name: string;
+  rows_initial_count: number | null;
+  rows_processed_count: number;
+  rows_ingested_count: number;
+  completed_at: string | null;
+  canceled_at: string | null;
+  inserted_at: string;
+  updated_at: string;
+  progress: number | null;
+};
+
 // Base consumer type with shared properties
 export type BaseConsumer = {
   id: string;
@@ -49,6 +63,7 @@ export type BaseConsumer = {
     name: string;
     pg_major_version: number;
   };
+  active_backfills: Backfill[];
   health: any;
   href: string;
   group_column_names: string[];

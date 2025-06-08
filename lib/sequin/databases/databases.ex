@@ -598,9 +598,20 @@ defmodule Sequin.Databases do
   end
 
   def list_tables(conn) do
-    with {:ok, schemas} <- list_schemas(conn),
+    with {:ok, schemas} when schemas != [] <- list_schemas(conn),
          {:ok, tables} <- Postgres.fetch_tables_with_columns(conn, schemas) do
       {:ok, Postgres.tables_to_map(tables)}
+    else
+      {:ok, []} ->
+        {:error,
+         Error.service(
+           service: :postgres,
+           message:
+             "List tables: Unable to list schemas in database. Does Sequin have permissions (`usage`) for any schemas?"
+         )}
+
+      error ->
+        error
     end
   end
 

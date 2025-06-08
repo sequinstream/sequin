@@ -3,10 +3,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Switch } from "$lib/components/ui/switch";
   import {
-    ChevronLeft,
-    ChevronRight,
     Loader2,
-    X,
     Play,
     Pause,
     RotateCw,
@@ -14,7 +11,6 @@
     ChevronDown,
     Info,
   } from "lucide-svelte";
-  import { slide, fade } from "svelte/transition";
   import * as Popover from "$lib/components/ui/popover";
   import { toast } from "svelte-sonner";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
@@ -203,7 +199,7 @@
 
     live.pushEvent(
       "fetch_message_data",
-      { message_id: message.id },
+      { message_ack_id: message.ack_id },
       (reply) => {
         isLoadingMessageData = false;
         if (reply.error) {

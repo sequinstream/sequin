@@ -1,9 +1,7 @@
 ---
 title: "Trigger Cloudflare Workers from database changes"
-sidebarTitle: "Cloudflare Workers"
+sidebarTitle: "Send to Cloudflare Workers"
 description: "Deploy global, edge-based applications that respond to Postgres changes. Connect Sequin to Cloudflare Workers for real-time database event processing."
-icon: "cloudflare"
-iconType: "solid"
 ---
 
 [Cloudflare Workers](https://workers.cloudflare.com/) are serverless functions that run on Cloudflare's global network.
@@ -106,8 +104,8 @@ Create a webhook sink that captures changes to your database and sends a HTTP PO
         Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
     </Step>
 
-    <Step title="Select source table">
-        Select the table you want to capture changes from (i.e `public.users`).
+    <Step title="Select source table(s)">
+        Select the table or schema you want to capture changes from (i.e `public.users` or `public`).
     </Step>
 
     <Step title="Choose message type">

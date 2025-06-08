@@ -54,25 +54,17 @@ defmodule Sequin.Runtime.Supervisor do
     SlotSupervisor.stop_stores_and_pipeline(replication_slot_id, id)
   end
 
-  def maybe_start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
-    consumer = Repo.preload(consumer, [:active_backfill, :sequence])
+  def maybe_start_table_readers(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
+    consumer = Repo.preload(consumer, :active_backfills)
 
-    if is_nil(consumer.active_backfill) do
-      :ok
-    else
-      start_table_reader(supervisor, consumer, opts)
-    end
+    Enum.each(consumer.active_backfills, fn backfill -> start_table_reader(supervisor, backfill, opts) end)
   end
 
-  def start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
-    consumer = Repo.preload(consumer, [:active_backfill, :sequence])
-
-    if is_nil(consumer.active_backfill) do
-      Logger.warning("Consumer #{consumer.id} has no active backfill, skipping start")
-    else
+  def start_table_reader(supervisor \\ table_reader_supervisor(), %Backfill{} = backfill, opts \\ []) do
+    if backfill.state == :active do
       default_opts = [
-        backfill_id: consumer.active_backfill.id,
-        table_oid: consumer.sequence.table_oid
+        backfill_id: backfill.id,
+        table_oid: backfill.table_oid
       ]
 
       opts = Keyword.merge(default_opts, opts)
@@ -81,21 +73,11 @@ defmodule Sequin.Runtime.Supervisor do
     end
   end
 
-  def stop_table_reader(supervisor \\ table_reader_supervisor(), consumer)
+  def stop_table_reader(supervisor \\ table_reader_supervisor(), backfill_or_id)
 
-  def stop_table_reader(_supervisor, %SinkConsumer{active_backfill: nil}) do
-    :ok
-  end
-
-  def stop_table_reader(supervisor, %SinkConsumer{active_backfill: %Backfill{id: backfill_id}}) do
+  def stop_table_reader(supervisor, %Backfill{id: backfill_id}) do
     Sequin.DynamicSupervisor.stop_child(supervisor, TableReaderServer.via_tuple(backfill_id))
     :ok
-  end
-
-  def stop_table_reader(supervisor, %SinkConsumer{} = consumer) do
-    consumer
-    |> Repo.preload(:active_backfill)
-    |> stop_table_reader(supervisor)
   end
 
   def stop_table_reader(supervisor, backfill_id) when is_binary(backfill_id) do
@@ -103,9 +85,9 @@ defmodule Sequin.Runtime.Supervisor do
     :ok
   end
 
-  def restart_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
-    stop_table_reader(supervisor, consumer)
-    start_table_reader(supervisor, consumer, opts)
+  def restart_table_reader(supervisor \\ table_reader_supervisor(), backfill_or_id, opts \\ []) do
+    stop_table_reader(supervisor, backfill_or_id)
+    start_table_reader(supervisor, backfill_or_id, opts)
   end
 
   def start_replication(supervisor \\ slot_supervisor(), pg_replication, opts \\ [])

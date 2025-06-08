@@ -141,7 +141,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   defp load_consumers(account_id, page, page_size) do
     consumers =
       Consumers.list_sink_consumers_for_account_paginated(account_id, page, page_size,
-        preload: [:replication_slot, :active_backfill]
+        preload: [:replication_slot, :active_backfills]
       )
 
     {consumers, load_database_names(consumers), load_consumer_health(consumers), load_consumer_metrics(consumers)}
@@ -189,7 +189,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       database_name: database_names[consumer.id],
       health: Health.to_external(consumer_health[consumer.id]),
       href: RouteHelpers.consumer_path(consumer),
-      active_backfill: not is_nil(consumer.active_backfill),
+      active_backfill: consumer.active_backfills != [],
       metrics: consumer_metrics[consumer.id]
     }
   end

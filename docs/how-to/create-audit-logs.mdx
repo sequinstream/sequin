@@ -35,7 +35,7 @@ If you're using Sequin Cloud, you'll need:
 
 Your audit logging pipeline will have these components:
 
-1. **Source table(s)**: The table(s) in Postgres that you want to audit
+1. **Source tables**: The table or schema in Postgres that you want to audit
 2. **Destination sink**: The message queue or webhook endpoint that delivers changes to your processing system (e.g. SQS, Kafka, or HTTP endpoint)
 3. **Processor**: An application or service you write that receives changes and writes to your audit tables
 4. **Transaction annotations**: Metadata added to your transactions to provide context (who, why, where)
@@ -46,9 +46,9 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
 <Steps>
   <Step title="Select the source">
-    Select the table(s) you want to audit.
+    Select the table or schema you want to audit.
 
-    Optionally add SQL filters to audit a subset of your source table.
+    Optionally add SQL filters to audit a subset of your source table(s).
   </Step>
 
   <Step title="Select the message type">

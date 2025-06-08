@@ -25,6 +25,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingFunction
+  alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -52,6 +53,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   @messages_page_size 25
   @trace_page_size 25
   @trace_event_limit 25
+  @backfills_page_size 25
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id} = params, _session, socket) do
@@ -64,18 +66,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           send(self(), :update_health)
           send(self(), :update_metrics)
           send(self(), :update_messages)
-          send(self(), :update_backfill)
+          send(self(), :update_backfills)
         end
-
-        last_completed_backfill =
-          Consumers.find_backfill(consumer.id, state: :completed, limit: 1, order_by: [desc: :completed_at])
 
         # Initialize message-related assigns
         socket =
           socket
           |> assign(:consumer, consumer)
           |> assign(:show_ack_id, show_ack_id)
-          |> assign(:last_completed_backfill, last_completed_backfill)
           |> assign(:api_tokens, ApiTokens.list_tokens_for_account(current_account.id))
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
           |> assign(:functions, Consumers.list_functions_for_account(current_account.id))
@@ -88,8 +86,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:cursor_position, nil)
           |> assign(:cursor_task_ref, nil)
           |> assign(:trace, initial_trace())
+          # Backfills tab assigns
+          |> assign(:backfills_page, 0)
+          |> assign(:backfills_page_size, @backfills_page_size)
+          |> assign(:backfills_total_count, 0)
+          |> assign(:backfills, [])
           |> load_consumer_messages()
           |> load_consumer_message_by_ack_id()
+          |> load_consumer_backfills()
 
         :syn.join(:consumers, {:sink_config_checked, consumer.id}, self())
 
@@ -108,10 +112,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       consumer =
         consumer
         |> Repo.preload(
-          [:postgres_database, :sequence, :active_backfill, :replication_slot, :transform, :routing, :filter],
+          [:postgres_database, :sequence, :active_backfills, :replication_slot, :transform, :routing, :filter],
           force: true
         )
-        |> SinkConsumer.preload_http_endpoint()
+        |> SinkConsumer.preload_http_endpoint!()
         |> put_health()
 
       {:ok, consumer}
@@ -148,6 +152,11 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp apply_action(socket, :trace) do
     %{consumer: consumer} = socket.assigns
     assign(socket, :page_title, "#{consumer.name} | Trace | Sequin")
+  end
+
+  defp apply_action(socket, :backfills) do
+    %{consumer: consumer} = socket.assigns
+    assign(socket, :page_title, "#{consumer.name} | Backfills | Sequin")
   end
 
   defp apply_action(socket, _) do
@@ -188,7 +197,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   parent: "consumer-show",
                   metrics: @metrics,
                   metrics_loading: @metrics_loading,
-                  cursor_position: encode_backfill(@consumer, @last_completed_backfill),
                   apiBaseUrl: @api_base_url,
                   apiTokens: encode_api_tokens(@api_tokens),
                   transform: encode_function(@consumer.transform)
@@ -224,6 +232,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   consumer: encode_consumer(@consumer),
                   trace: encode_trace(@trace),
                   parent: "consumer-show"
+                }
+              }
+            />
+          <% {:backfills, _consumer} -> %>
+            <!-- ShowBackfills component -->
+            <.svelte
+              name="consumers/ShowBackfills"
+              props={
+                %{
+                  consumer: encode_consumer(@consumer),
+                  backfills: encode_backfills(@backfills),
+                  totalCount: @backfills_total_count,
+                  pageSize: @backfills_page_size,
+                  page: @backfills_page
                 }
               }
             />
@@ -283,6 +305,36 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("change_backfills_page", %{"page" => page}, socket) do
+    {:noreply,
+     socket
+     |> assign(backfills_page: page)
+     |> load_consumer_backfills()}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("run-backfill", %{"selectedTableOids" => selected_table_ids}, socket) do
+    consumer = socket.assigns.consumer
+
+    Enum.map(selected_table_ids, fn table_oid ->
+      table = Enum.find(consumer.postgres_database.tables, &(&1.oid == table_oid))
+      initial_min_cursor = KeysetCursor.min_cursor(table)
+
+      Consumers.create_backfill(%{
+        account_id: current_account_id(socket),
+        sink_consumer_id: consumer.id,
+        state: :active,
+        table_oid: table_oid,
+        initial_min_cursor: initial_min_cursor
+      })
+    end)
+
+    consumer = Repo.preload(consumer, :active_backfills, force: true)
+    Sequin.Runtime.Supervisor.maybe_start_table_readers(consumer)
+
+    {:reply, %{ok: true}, load_consumer_backfills(socket)}
+  end
+
   def handle_event(
         "run-backfill",
         %{
@@ -293,7 +345,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         socket
       ) do
     consumer = socket.assigns.consumer
-    table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
+    table = find_table_for_sequence(consumer.sequence, consumer.postgres_database.tables)
     table = %PostgresDatabaseTable{table | sort_column_attnum: sort_column_attnum}
 
     initial_min_cursor =
@@ -308,12 +360,18 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       sink_consumer_id: consumer.id,
       initial_min_cursor: initial_min_cursor,
       sort_column_attnum: sort_column_attnum,
-      state: :active
+      state: :active,
+      table_oid: table.oid
     }
 
     case Consumers.create_backfill(backfill_attrs) do
-      {:ok, _backfill} ->
-        {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill started successfully"})}
+      {:ok, backfill} ->
+        Sequin.Runtime.Supervisor.start_table_reader(backfill)
+
+        {:reply, %{ok: true},
+         socket
+         |> put_flash(:toast, %{kind: :success, title: "Backfill started successfully"})
+         |> load_consumer_backfills()}
 
       {:error, error} ->
         Logger.error("Failed to start backfill: #{inspect(error)}", error: error)
@@ -328,10 +386,11 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("cancel-backfill", _params, socket) do
-    case socket.assigns.consumer.active_backfill do
-      nil ->
+    case socket.assigns.consumer.active_backfills do
+      [] ->
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "No active backfill to cancel"})}
 
+      # FIXME
       backfill ->
         case Consumers.update_backfill(backfill, %{state: :cancelled}) do
           {:ok, _updated_backfill} ->
@@ -343,8 +402,31 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  def handle_event("fetch_message_data", %{"message_id" => message_id}, socket) do
-    message = Enum.find(socket.assigns.messages, &(&1.id == message_id))
+  def handle_event("cancel_backfill", %{"backfill_id" => backfill_id}, socket) do
+    case Consumers.get_backfill(backfill_id) do
+      {:ok, backfill} ->
+        if backfill.sink_consumer_id == socket.assigns.consumer.id do
+          case Consumers.update_backfill(backfill, %{state: :cancelled}) do
+            {:ok, _updated_backfill} ->
+              {:reply, %{ok: true},
+               socket
+               |> put_flash(:toast, %{kind: :success, title: "Backfill cancelled successfully"})
+               |> load_consumer_backfills()}
+
+            {:error, _error} ->
+              {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to cancel backfill"})}
+          end
+        else
+          {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Backfill not found"})}
+        end
+
+      {:error, _error} ->
+        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Backfill not found"})}
+    end
+  end
+
+  def handle_event("fetch_message_data", %{"message_ack_id" => message_ack_id}, socket) do
+    message = Enum.find(socket.assigns.messages, &(&1.ack_id == message_ack_id))
 
     case fetch_message_data(message, socket.assigns.consumer) do
       {:ok, data} ->
@@ -545,22 +627,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
      |> push_patch(to: RouteHelpers.consumer_path(updated_consumer))}
   end
 
-  def handle_info(:update_backfill, socket) do
-    consumer = Repo.preload(socket.assigns.consumer, :active_backfill, force: true)
-
-    last_completed_backfill =
-      Consumers.find_backfill(consumer.id, state: :completed, limit: 1, order_by: [desc: :completed_at])
+  def handle_info(:update_backfills, socket) do
+    socket = load_consumer_backfills(socket)
 
     # Update backfill every 200ms if there is an active backfill, otherwise every second
-    case consumer.active_backfill do
-      nil -> Process.send_after(self(), :update_backfill, 1000)
-      %Backfill{} -> Process.send_after(self(), :update_backfill, 200)
+    case socket.assigns.consumer.active_backfills do
+      [] -> Process.send_after(self(), :update_backfills, 1000)
+      [_ | _] -> Process.send_after(self(), :update_backfills, 200)
     end
 
-    {:noreply,
-     socket
-     |> assign(:consumer, consumer)
-     |> assign(:last_completed_backfill, last_completed_backfill)}
+    {:noreply, socket}
   end
 
   @impl Phoenix.LiveView
@@ -709,7 +785,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp encode_consumer(%SinkConsumer{type: _} = consumer) do
-    table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
+    table = find_table_for_sequence(consumer.sequence, consumer.postgres_database.tables)
+    tables_in_schema = tables_in_schema(consumer)
 
     %{
       id: consumer.id,
@@ -735,11 +812,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       group_column_names: encode_group_column_names(consumer),
       batch_size: consumer.batch_size,
       table: encode_table(table),
+      tablesInSchema: encode_tables_in_schema(tables_in_schema),
       transform_id: consumer.transform_id,
       routing_id: consumer.routing_id,
       routing: encode_function(consumer.routing),
       filter_id: consumer.filter_id,
-      filter: encode_function(consumer.filter)
+      filter: encode_function(consumer.filter),
+      schemaFilter: encode_schema_filter(consumer.schema_filter),
+      active_backfills: Enum.map(consumer.active_backfills, &encode_backfill/1)
     }
   end
 
@@ -916,12 +996,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sequence(nil, nil, %PostgresDatabase{}) do
+    %{
+      table_name: nil,
+      table_schema: nil,
+      column_filters: []
+    }
+  end
+
   defp encode_sequence(
          %Sequence{} = sequence,
          %SequenceFilter{} = sequence_filter,
          %PostgresDatabase{} = postgres_database
        ) do
-    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+    case find_table_for_sequence(sequence, postgres_database.tables) do
       nil ->
         %{
           table_name: nil,
@@ -938,8 +1026,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  defp find_table_by_oid(oid, tables) do
-    Enum.find(tables, &(&1.oid == oid))
+  defp find_table_for_sequence(nil, _tables), do: nil
+
+  defp find_table_for_sequence(%Sequence{table_oid: table_oid}, tables) do
+    Enum.find(tables, &(&1.oid == table_oid))
+  end
+
+  defp tables_in_schema(%SinkConsumer{schema_filter: nil}), do: nil
+
+  defp tables_in_schema(%SinkConsumer{
+         schema_filter: %SchemaFilter{} = schema_filter,
+         postgres_database: %PostgresDatabase{} = postgres_database
+       }) do
+    Enum.filter(postgres_database.tables, &(&1.schema == schema_filter.schema))
   end
 
   defp encode_column_filter(column_filter, table) do
@@ -981,14 +1080,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_table(nil) do
+  defp encode_schema_filter(nil), do: nil
+
+  defp encode_schema_filter(%SchemaFilter{} = schema_filter) do
     %{
-      oid: nil,
-      schema: nil,
-      name: nil,
-      columns: []
+      schema: schema_filter.schema
     }
   end
+
+  defp encode_table(nil), do: nil
 
   defp encode_table(%PostgresDatabaseTable{} = table) do
     %{
@@ -997,6 +1097,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       name: table.name,
       columns: Enum.map(table.columns, &encode_column/1)
     }
+  end
+
+  defp encode_tables_in_schema(nil), do: nil
+  defp encode_tables_in_schema([]), do: nil
+
+  defp encode_tables_in_schema(tables) do
+    Enum.map(tables, &encode_table/1)
   end
 
   defp encode_column(%PostgresDatabaseTable.Column{} = column) do
@@ -1019,12 +1126,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end)
   end
 
+  defp encode_group_column_names(%{sequence: nil, sequence_filter: nil, postgres_database: %PostgresDatabase{}}) do
+    []
+  end
+
   defp encode_group_column_names(%{
          sequence: %Sequence{} = sequence,
          sequence_filter: %SequenceFilter{group_column_attnums: nil},
          postgres_database: %PostgresDatabase{} = postgres_database
        }) do
-    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+    case find_table_for_sequence(sequence, postgres_database.tables) do
       %PostgresDatabaseTable{} = table ->
         table.columns
         |> Enum.filter(& &1.is_pk?)
@@ -1041,7 +1152,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
          sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums},
          postgres_database: %PostgresDatabase{} = postgres_database
        }) do
-    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+    case find_table_for_sequence(sequence, postgres_database.tables) do
       %PostgresDatabaseTable{} = table ->
         table.columns
         |> Enum.filter(&(&1.attnum in group_column_attnums))
@@ -1239,59 +1350,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   rescue
     error ->
       "Error functioning message: #{Exception.message(error)}"
-  end
-
-  defp encode_backfill(consumer, last_completed_backfill) do
-    table = Enum.find(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-
-    case consumer.active_backfill do
-      %Backfill{state: :active} = backfill ->
-        column = if table, do: Enum.find(table.columns, &(&1.attnum == backfill.sort_column_attnum))
-        column_type = if column, do: column.type
-
-        %{
-          is_backfilling: true,
-          cursor_type: column_type,
-          backfill: %{
-            id: backfill.id,
-            state: backfill.state,
-            rows_initial_count: backfill.rows_initial_count,
-            rows_processed_count: backfill.rows_processed_count,
-            rows_ingested_count: backfill.rows_ingested_count,
-            completed_at: backfill.completed_at,
-            canceled_at: backfill.canceled_at,
-            inserted_at: backfill.inserted_at
-          },
-          last_completed_backfill:
-            last_completed_backfill &&
-              %{
-                rows_processed_count: last_completed_backfill.rows_processed_count,
-                rows_ingested_count: last_completed_backfill.rows_ingested_count,
-                completed_at: last_completed_backfill.completed_at,
-                inserted_at: last_completed_backfill.inserted_at
-              }
-        }
-
-      _ ->
-        column_type =
-          if table && last_completed_backfill do
-            column = Enum.find(table.columns, &(&1.attnum == last_completed_backfill.sort_column_attnum))
-            if column, do: column.type
-          end
-
-        %{
-          is_backfilling: false,
-          cursor_type: column_type,
-          last_completed_backfill:
-            last_completed_backfill &&
-              %{
-                rows_processed_count: last_completed_backfill.rows_processed_count,
-                rows_ingested_count: last_completed_backfill.rows_ingested_count,
-                completed_at: last_completed_backfill.completed_at,
-                inserted_at: last_completed_backfill.inserted_at
-              }
-        }
-    end
   end
 
   defp get_message_state(%{type: :sequin_stream}, %AcknowledgedMessage{}), do: "acknowledged"
@@ -1554,5 +1612,63 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp env do
     Application.get_env(:sequin, :env)
+  end
+
+  # Function to load backfills for the consumer
+  defp load_consumer_backfills(%{assigns: %{live_action: action}} = socket) when action != :backfills do
+    consumer = Repo.preload(socket.assigns.consumer, :active_backfills, force: true)
+    assign(socket, consumer: consumer, backfills: [], backfills_total_count: 0)
+  end
+
+  defp load_consumer_backfills(
+         %{assigns: %{consumer: consumer, backfills_page: page, backfills_page_size: page_size}} = socket
+       ) do
+    offset = page * page_size
+    all_backfills = Consumers.list_backfills_for_sink_consumer(consumer.id)
+
+    backfills =
+      all_backfills
+      |> Enum.drop(offset)
+      |> Enum.take(page_size)
+
+    consumer = Repo.preload(socket.assigns.consumer, :active_backfills, force: true)
+
+    socket
+    |> assign(:consumer, consumer)
+    |> assign(:backfills, backfills)
+    |> assign(:backfills_total_count, length(all_backfills))
+  end
+
+  # Function to encode backfills for the Svelte component
+  defp encode_backfills(backfills) do
+    Enum.map(backfills, &encode_backfill/1)
+  end
+
+  defp encode_backfill(%Backfill{} = backfill) do
+    backfill = Repo.preload(backfill, sink_consumer: [:postgres_database])
+
+    table = Enum.find(backfill.sink_consumer.postgres_database.tables, &(&1.oid == backfill.table_oid))
+    table_name = if table, do: "#{table.schema}.#{table.name}", else: "Unknown table"
+
+    %{
+      id: backfill.id,
+      state: backfill.state,
+      table_name: table_name,
+      rows_initial_count: backfill.rows_initial_count,
+      rows_processed_count: backfill.rows_processed_count,
+      rows_ingested_count: backfill.rows_ingested_count,
+      completed_at: backfill.completed_at,
+      canceled_at: backfill.canceled_at,
+      inserted_at: backfill.inserted_at,
+      updated_at: backfill.updated_at,
+      progress: calculate_backfill_progress(backfill)
+    }
+  end
+
+  defp calculate_backfill_progress(%Backfill{rows_initial_count: nil}), do: nil
+  defp calculate_backfill_progress(%Backfill{rows_initial_count: 0}), do: 100.0
+
+  defp calculate_backfill_progress(%Backfill{rows_initial_count: initial, rows_processed_count: processed}) do
+    processed / initial * 100.0
   end
 end

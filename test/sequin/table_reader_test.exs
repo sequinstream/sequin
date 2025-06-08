@@ -88,14 +88,14 @@ defmodule Sequin.TableReaderTest do
         [:sequence, :postgres_database, :filter]
       )
 
-    ConsumersFactory.insert_active_backfill!(
-      account_id: db.account_id,
-      sink_consumer_id: character_consumer.id,
-      initial_min_cursor: %{characters_table.sort_column_attnum => NaiveDateTime.utc_now()},
-      sort_column_attnum: characters_table.sort_column_attnum
-    )
-
-    character_consumer = Repo.preload(character_consumer, :active_backfill)
+    backfill =
+      ConsumersFactory.insert_active_backfill!(
+        account_id: db.account_id,
+        sink_consumer_id: character_consumer.id,
+        initial_min_cursor: %{characters_table.sort_column_attnum => NaiveDateTime.utc_now()},
+        sort_column_attnum: characters_table.sort_column_attnum,
+        table_oid: characters_table.oid
+      )
 
     character_multi_pk_consumer =
       Repo.preload(
@@ -123,13 +123,13 @@ defmodule Sequin.TableReaderTest do
       account_id: db.account_id,
       sink_consumer_id: character_detailed_consumer.id,
       initial_min_cursor: %{characters_table.sort_column_attnum => NaiveDateTime.utc_now()},
-      sort_column_attnum: characters_table.sort_column_attnum
+      sort_column_attnum: characters_table.sort_column_attnum,
+      table_oid: characters_table.oid
     )
-
-    character_detailed_consumer = Repo.preload(character_detailed_consumer, :active_backfill)
 
     %{
       db: db,
+      backfill: backfill,
       character_consumer: character_consumer,
       character_multi_pk_consumer: character_multi_pk_consumer,
       character_detailed_consumer: character_detailed_consumer,
@@ -200,6 +200,7 @@ defmodule Sequin.TableReaderTest do
   describe "fetch_batch/4" do
     test "fetches a batch of records with default limit", %{
       db: db,
+      backfill: backfill,
       characters_table: table,
       character_consumer: consumer
     } do
@@ -211,7 +212,7 @@ defmodule Sequin.TableReaderTest do
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
       {:ok, %{messages: messages, next_cursor: next_cursor}} =
-        TableReader.fetch_batch(db, consumer, table, initial_cursor, include_min: true)
+        TableReader.fetch_batch(db, consumer, backfill, table, initial_cursor, include_min: true)
 
       assert length(messages) == 3
 
@@ -224,7 +225,7 @@ defmodule Sequin.TableReaderTest do
       assert next_cursor[table.sort_column_attnum] == char3.updated_at
 
       {:ok, %{messages: messages, next_cursor: next_cursor}} =
-        TableReader.fetch_batch(db, consumer, table, initial_cursor, include_min: false)
+        TableReader.fetch_batch(db, consumer, backfill, table, initial_cursor, include_min: false)
 
       assert length(messages) == 2
       assert Enum.at(messages, 0).data.record["id"] == char2.id
@@ -236,6 +237,7 @@ defmodule Sequin.TableReaderTest do
 
     test "works with nil sort column", %{
       db: db,
+      backfill: backfill,
       characters_table: table,
       character_consumer: consumer
     } do
@@ -250,7 +252,7 @@ defmodule Sequin.TableReaderTest do
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table_with_nil_sort)
 
       {:ok, %{messages: messages, next_cursor: next_cursor}} =
-        TableReader.fetch_batch(db, consumer, table_with_nil_sort, initial_cursor, include_min: true)
+        TableReader.fetch_batch(db, consumer, backfill, table_with_nil_sort, initial_cursor, include_min: true)
 
       assert length(messages) == 3
 
@@ -260,6 +262,7 @@ defmodule Sequin.TableReaderTest do
 
     test "correctly handles nil and populated UUID, UUID[] and bytea fields", %{
       db: db,
+      backfill: backfill,
       characters_detailed_table: table,
       character_detailed_consumer: consumer
     } do
@@ -286,6 +289,7 @@ defmodule Sequin.TableReaderTest do
         TableReader.fetch_batch(
           db,
           consumer,
+          backfill,
           table,
           initial_min_cursor,
           limit: 10,
@@ -320,6 +324,7 @@ defmodule Sequin.TableReaderTest do
 
     test "respects the limit parameter", %{
       db: db,
+      backfill: backfill,
       characters_table: table,
       character_consumer: consumer
     } do
@@ -331,7 +336,7 @@ defmodule Sequin.TableReaderTest do
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
       {:ok, %{messages: messages, next_cursor: next_cursor}} =
-        TableReader.fetch_batch(db, consumer, table, initial_cursor, limit: 2, include_min: true)
+        TableReader.fetch_batch(db, consumer, backfill, table, initial_cursor, limit: 2, include_min: true)
 
       assert length(messages) == 2
       assert messages |> Enum.at(0) |> Map.get(:data) |> Map.get(:record) |> Map.get("id") == char1.id
@@ -343,12 +348,14 @@ defmodule Sequin.TableReaderTest do
 
     test "handles empty result set", %{
       db: db,
+      backfill: backfill,
       characters_table: table,
       character_consumer: consumer
     } do
       cursor = KeysetCursor.min_cursor(table, NaiveDateTime.utc_now())
 
-      {:ok, %{messages: messages, next_cursor: next_cursor}} = TableReader.fetch_batch(db, consumer, table, cursor)
+      {:ok, %{messages: messages, next_cursor: next_cursor}} =
+        TableReader.fetch_batch(db, consumer, backfill, table, cursor)
 
       assert messages == []
       assert next_cursor == nil
@@ -487,6 +494,7 @@ defmodule Sequin.TableReaderTest do
   describe "fetch_batch with filter function" do
     test "backfill only processes records that match the filter", %{
       db: db,
+      backfill: backfill,
       characters_table: table,
       character_consumer: consumer
     } do
@@ -533,7 +541,7 @@ defmodule Sequin.TableReaderTest do
 
       # Fetch a batch of records
       {:ok, %{messages: messages, next_cursor: next_cursor}} =
-        TableReader.fetch_batch(db, consumer, table, initial_cursor, include_min: true)
+        TableReader.fetch_batch(db, consumer, backfill, table, initial_cursor, include_min: true)
 
       # Verify that only the matching characters are included in the results
       assert length(messages) == 2

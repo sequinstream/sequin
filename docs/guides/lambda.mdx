@@ -2,8 +2,6 @@
 title: "Trigger AWS Lambdas from database changes"
 sidebarTitle: "AWS Lambda (via webhook)"
 description: "Build serverless event-driven applications by streaming Postgres changes to AWS Lambda."
-icon: "lambda"
-iconType: "solid"
 ---
 
 [AWS Lambda](https://aws.amazon.com/lambda/) is a serverless compute service that lets you run code without provisioning or managing servers. It automatically scales your applications in response to incoming requests.
@@ -13,6 +11,7 @@ Often, you want to trigger an AWS Lambda function when a database row changes. F
 <Frame>
   <img src="/images/guides/lambda/send-with-sequin.svg" alt="AWS Lambda Function" />
 </Frame>
+
 
 In this guide, you will learn how to setup a Sequin webhook sink to trigger an AWS Lambda function when a database row changes.
 
@@ -120,8 +119,8 @@ Create a webhook sink that captures changes to your database and sends a HTTP PO
         Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
     </Step>
 
-    <Step title="Select source table">
-        Select the table you want to capture changes from (i.e `public.users`).
+    <Step title="Select source table(s)">
+        Select the table or schema you want to capture changes from (i.e `public.users` or `public`).
     </Step>
 
     <Step title="Choose message type">

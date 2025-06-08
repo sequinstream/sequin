@@ -30,7 +30,7 @@ If you're using Sequin Cloud, you'll need:
 
 Your event-driven workflow will have these components:
 
-1. **Source table(s)**: The tables in Postgres that trigger your workflows
+1. **Source tables**: The table or schema in Postgres that trigger your workflows
 2. **Destination sink**: The message queue or webhook endpoint that delivers changes (e.g. SQS, Kafka, or HTTP endpoint)
 3. **Workflow processor**: Your service that receives changes and triggers appropriate actions
 
@@ -39,8 +39,16 @@ Your event-driven workflow will have these components:
 First, create a sink to receive database changes. In the Sequin console, navigate to the "Sinks" tab and click "Create Sink":
 
 <Steps>
-  <Step title="Select the source table">
-    Under "Source", select the table that should trigger your workflows.
+  <Step title="Select the sink type">
+    Select the type of sink you want to use.
+
+    For instance you can choose "Webhook" to send changes to a webhook endpoint in your application or a Lambda function.
+
+    Alternatively, you can choose a stream or queue destination to send changes to a Kafka topic, Redis stream, or SQS queue. You can then consume from these streams/queues in your workflow processor.
+  </Step>
+
+  <Step title="Select the source table or schema">
+    Under "Source", select the table or schema that should trigger your workflows.
 
     For "Message type", leave the default "Changes" selected.
   </Step>
@@ -61,7 +69,7 @@ First, create a sink to receive database changes. In the Sequin console, navigat
 
   <Step title="Configure sink-specific settings">
     Configure any sink-specific settings, such as the connection and authentication details for your sink.
-    
+
     Then, click "Create Sink".
   </Step>
 </Steps>
@@ -102,7 +110,7 @@ def process_change(change):
         record=change.record,
         old_values=change.changes if hasattr(change, 'changes') else {}
     )
-    
+
     # Route to appropriate workflow
     if context.table == 'orders':
         handle_order_workflows(context)
@@ -113,7 +121,7 @@ def handle_order_workflows(ctx: WorkflowContext):
     if ctx.action == 'update':
         old_status = ctx.old_values.get('status')
         new_status = ctx.record['status']
-        
+
         if old_status != new_status:
             if new_status == 'paid':
                 trigger_fulfillment(ctx.record)

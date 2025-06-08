@@ -11,6 +11,7 @@ defmodule Sequin.Consumers.NatsSink do
   alias Sequin.Encrypted.Field, as: EncryptedField
 
   @derive {Jason.Encoder, only: [:host, :port]}
+  @derive {Inspect, except: [:password, :jwt, :nkey_seed]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:nats], default: :nats

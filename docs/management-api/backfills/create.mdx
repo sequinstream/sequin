@@ -13,6 +13,12 @@ Creates a new backfill for a specific sink. The backfill will be created in the 
   The name or ID of the sink
 </ParamField>
 
+<ParamField body="table" type="string" >
+  The source table for the backfill in the format `schema.table` or `table` (schema defaults to `public`)
+
+  Must specify this parameter if the sink is configured to stream changes from all tables in a schema.
+</ParamField>
+
 ## Response fields
 
 <ResponseSnippet />

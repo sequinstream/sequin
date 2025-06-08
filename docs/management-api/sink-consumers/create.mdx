@@ -18,8 +18,16 @@ Creates a new sink consumer.
   The initial status of the sink consumer (active, disabled, paused)
 </ParamField>
 
-<ParamField body="table" type="string" required>
-  The source table for the sink consumer
+<ParamField body="table" type="string" >
+  The source table for the sink consumer in the format `schema.table` or `table` (schema defaults to `public`)
+
+  Must specify either this parameter or `schema`.
+</ParamField>
+
+<ParamField body="schema" type="string" >
+  The source schema for the sink consumer. If this is specified, the sink consumer will stream changes from all tables in this schema.
+
+  Must specify either this parameter or `table`.
 </ParamField>
 
 <ParamField body="filters" type="array">

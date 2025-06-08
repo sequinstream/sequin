@@ -37,7 +37,7 @@
   import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
   import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
-  import TableSelector from "../components/TableSelector.svelte";
+  import TableOrSchemaSelector from "../components/TableOrSchemaSelector.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -50,12 +50,12 @@
   } from "$lib/components/ui/accordion";
   import type { Table as DatabaseTable } from "$lib/databases/types";
   import BackfillForm from "$lib/components/BackfillForm.svelte";
-  import Beta from "../components/Beta.svelte";
 
   type Database = {
     id: string;
     name: string;
     tables: DatabaseTable[];
+    schemas: string[];
   };
 
   export let live;
@@ -84,6 +84,7 @@
     messageKind: MessageKind;
     maxMemoryMb: number;
     postgresDatabaseId: string | null;
+    schema: string | null;
     tableOid: number | null;
     sourceTableFilters: any[];
     sourceTableActions: string[];
@@ -98,6 +99,7 @@
       startPosition: "beginning" | "specific" | "none";
       sortColumnAttnum: number | null;
       initialSortColumnValue: string | null;
+      selectedTableOids: number[];
     };
     groupColumnAttnums: number[];
     batchSize: number;
@@ -113,6 +115,7 @@
     messageKind: (consumer.message_kind || "event") as MessageKind,
     maxMemoryMb: Number(consumer.max_memory_mb),
     postgresDatabaseId: consumer.postgres_database_id,
+    schema: consumer.schema,
     tableOid: consumer.table_oid,
     sourceTableFilters: consumer.source_table_filters || [],
     sourceTableActions: consumer.source_table_actions || [],
@@ -127,6 +130,7 @@
       startPosition: "none",
       sortColumnAttnum: null,
       initialSortColumnValue: null,
+      selectedTableOids: [],
     },
     groupColumnAttnums: consumer.group_column_attnums || [],
     batchSize: Number(consumer.batch_size) || 1,
@@ -164,65 +168,15 @@
     }
   }
 
-  let selectedDatabase: any;
-  let selectedTable: any;
+  let selectedDatabase: Database | null = null;
+  let selectedSchema: string | null = form.schema;
+  let selectedTable: DatabaseTable | null = null;
+  let tablesInSchema: DatabaseTable[] | null = null;
   let isCreateConsumerDisabled: boolean = true;
 
   const pushEvent = (event, payload = {}, cb = (reply: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
-
-  const defaultSortColumnNames = [
-    // Updated/Modified columns
-    "updated_at",
-    "UpdatedAt",
-    "updatedAt",
-    "last_modified",
-    "LastModified",
-    "lastModified",
-    "last_modified_at",
-    "LastModifiedAt",
-    "lastModifiedAt",
-    "last_updated",
-    "lastUpdated",
-    "last_updated_at",
-    "lastUpdatedAt",
-    "modified_at",
-    "ModifiedAt",
-    "modifiedAt",
-    "modified_date",
-    "modifiedDate",
-    "modified_on",
-    "modifiedOn",
-    "update_time",
-    "updateTime",
-    "modification_date",
-    "modificationDate",
-    "dateModified",
-    "dateUpdated",
-
-    // Created/Inserted columns
-    "created_at",
-    "CreatedAt",
-    "createdAt",
-    "inserted_at",
-    "InsertedAt",
-    "insertedAt",
-    "creation_date",
-    "CreationDate",
-    "creationDate",
-    "creation_time",
-    "create_time",
-    "createTime",
-    "created_date",
-    "created_on",
-    "DateCreated",
-    "dateCreated",
-    "insert_date",
-    "insert_time",
-    "insertTime",
-    "timestamp",
-  ];
 
   $: {
     if (form.postgresDatabaseId) {
@@ -231,7 +185,8 @@
       );
     }
 
-    if (form.tableOid && selectedDatabase) {
+    if (selectedDatabase) {
+      selectedSchema = form.schema;
       selectedTable = selectedDatabase.tables.find(
         (table) => table.oid === form.tableOid,
       );
@@ -239,13 +194,22 @@
 
     if (selectedTable) {
       // Force message kind to "record" for event tables
-      if (selectedTable.is_event_table) {
+      if (selectedTable.isEventTable) {
         form.messageKind = "record";
       }
     }
 
-    isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
+    if (selectedSchema) {
+      tablesInSchema = selectedDatabase.tables.filter(
+        (table) => table.schema === selectedSchema,
+      );
+    }
+
+    isCreateConsumerDisabled =
+      !form.postgresDatabaseId || (!form.tableOid && !form.schema);
   }
+
+  $: console.log("form.backfill", form.backfill);
 
   const isEditMode = !!consumer.id;
 
@@ -258,7 +222,11 @@
     });
   }
 
-  function handleTableSelect(event: { databaseId: string; tableOid: number }) {
+  function handleTableSelect(event: {
+    databaseId: string;
+    tableOid: number;
+    schema: string;
+  }) {
     if (form.tableOid !== event.tableOid) {
       form.groupColumnAttnums = [];
       form.messageKind = "event";
@@ -266,21 +234,22 @@
 
     form.postgresDatabaseId = event.databaseId;
     form.tableOid = event.tableOid;
+    form.schema = event.schema;
 
     // Set the form name based on the selected table
-    if (form.tableOid) {
-      const selectedDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId,
+    const selectedDatabase = databases.find(
+      (db) => db.id === form.postgresDatabaseId,
+    );
+    if (selectedDatabase) {
+      const selectedSchema = event.schema;
+      const selectedTable = selectedDatabase.tables.find(
+        (table) => table.oid === form.tableOid,
       );
-      if (selectedDatabase) {
-        const selectedTable = selectedDatabase.tables.find(
-          (table) => table.oid === form.tableOid,
-        );
-        if (selectedTable) {
-          const tableName = selectedTable.name;
-          const newName = `${tableName}_sink`;
-          form.name = newName;
-        }
+      const prefix = selectedSchema ? selectedSchema : selectedTable?.name;
+      console.log("prefix", prefix);
+      if (prefix) {
+        const newName = `${prefix}-sink`;
+        form.name = newName;
       }
     }
   }
@@ -356,10 +325,11 @@
   let backfillSectionEnabled = false;
   let backfillSectionExpanded = false;
   $: {
-    transformSectionEnabled = selectedTable && consumer.type !== "redis_stream";
+    transformSectionEnabled =
+      (selectedTable || selectedSchema) && consumer.type !== "redis_stream";
     transformSectionExpanded = transformSectionEnabled && !isEditMode;
 
-    backfillSectionEnabled = selectedTable && !isEditMode;
+    backfillSectionEnabled = (selectedTable || selectedSchema) && !isEditMode;
     backfillSectionExpanded = backfillSectionEnabled && !isEditMode;
   }
 
@@ -397,45 +367,44 @@
       <CardContent class="space-y-4">
         <div class="space-y-2">
           {#if isEditMode}
-            <Select
-              disabled
-              selected={{
-                value: form.postgresDatabaseId,
-                label: selectedDatabase?.name || "Selected database",
-              }}
-            >
-              <SelectTrigger
-                class={cn(
-                  "w-full",
-                  "bg-muted text-muted-foreground opacity-100",
-                )}
-              >
-                <SelectValue placeholder="Selected database" />
-              </SelectTrigger>
-            </Select>
-            <Select
-              disabled
-              selected={{
-                value: form.tableOid,
-                label: selectedTable?.name || "Selected table",
-              }}
-            >
-              <SelectTrigger
-                class={cn(
-                  "w-full",
-                  "bg-muted text-muted-foreground opacity-100",
-                )}
-              >
-                <SelectValue placeholder="Selected table" />
-              </SelectTrigger>
-            </Select>
+            <!-- Edit consumer -->
+            <div class="flex flex-col gap-4">
+              <div>
+                <Label>Database</Label>
+                <p class="text-sm text-muted-foreground mt-1">
+                  {selectedDatabase?.name || "Selected database"}
+                </p>
+              </div>
+
+              <div>
+                <Label>Source</Label>
+                {#if selectedSchema}
+                  <p class="text-sm text-muted-foreground mt-1">
+                    All tables in the <b>{selectedSchema}</b> schema.
+                  </p>
+                {:else if selectedTable}
+                  <p class="text-sm text-muted-foreground mt-1">
+                    The <b>{selectedTable.name}</b> table.
+                  </p>
+                {/if}
+              </div>
+
+              <div>
+                <Label>Message type</Label>
+                <p class="text-sm text-muted-foreground mt-1">
+                  {form.messageKind === "record" ? "Records" : "Changes"}
+                </p>
+              </div>
+            </div>
           {:else}
-            <TableSelector
+            <!-- New consumer -->
+            <TableOrSchemaSelector
               {databases}
               onSelect={handleTableSelect}
               {pushEvent}
               selectedDatabaseId={form.postgresDatabaseId}
               selectedTableOid={form.tableOid}
+              selectedSchema={form.schema}
             />
 
             {#if errors.consumer.postgres_database_id}
@@ -449,50 +418,51 @@
                 {errors.consumer.table_oid}
               </p>
             {/if}
-          {/if}
-          {#if selectedTable}
-            <div class="space-y-2">
-              <Label for="message_kind">Message type</Label>
-              <p class="text-sm text-muted-foreground mt-1 mb-2">
-                Select the kind of messages you want to process.
-                <button
-                  type="button"
-                  class="text-muted-foreground underline decoration-dotted"
-                  on:click={() => (showMessageTypeExampleModal = true)}
+            {#if selectedTable || selectedSchema}
+              <div class="space-y-2">
+                <Label for="message_kind">Message type</Label>
+                <p class="text-sm text-muted-foreground mt-1 mb-2">
+                  Select the kind of messages you want to process.
+                  <button
+                    type="button"
+                    class="text-muted-foreground underline decoration-dotted"
+                    on:click={() => (showMessageTypeExampleModal = true)}
+                  >
+                    See examples
+                  </button>
+                </p>
+                <Select
+                  selected={{
+                    value: form.messageKind,
+                    label:
+                      form.messageKind === "record" ? "Records" : "Changes",
+                  }}
+                  onSelectedChange={(event) => {
+                    form.messageKind = event.value;
+                  }}
+                  disabled={selectedTable?.isEventTable || isEditMode}
                 >
-                  See examples
-                </button>
-              </p>
-              <Select
-                selected={{
-                  value: form.messageKind,
-                  label: form.messageKind === "record" ? "Records" : "Changes",
-                }}
-                onSelectedChange={(event) => {
-                  form.messageKind = event.value;
-                }}
-                disabled={selectedTable.is_event_table || isEditMode}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a message type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="event">Changes</SelectItem>
-                  <SelectItem value="record">Records</SelectItem>
-                </SelectContent>
-              </Select>
-              {#if selectedTable.is_event_table}
-                <p class="text-muted-foreground text-xs">
-                  Sequin automatically sets the message type to "Records" for
-                  event tables.
-                </p>
-              {/if}
-              {#if errors.consumer.message_kind}
-                <p class="text-destructive text-sm">
-                  {errors.consumer.message_kind}
-                </p>
-              {/if}
-            </div>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a message type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="event">Changes</SelectItem>
+                    <SelectItem value="record">Records</SelectItem>
+                  </SelectContent>
+                </Select>
+                {#if selectedTable?.isEventTable}
+                  <p class="text-muted-foreground text-xs">
+                    Sequin automatically sets the message type to "Records" for
+                    event tables.
+                  </p>
+                {/if}
+                {#if errors.consumer.message_kind}
+                  <p class="text-destructive text-sm">
+                    {errors.consumer.message_kind}
+                  </p>
+                {/if}
+              </div>
+            {/if}
           {/if}
           {#if errors.consumer.postgres_database_id || errors.consumer.table_oid}
             <p class="text-destructive text-sm">
@@ -519,7 +489,6 @@
           {refreshFunctions}
           {functionRefreshState}
           showTitle={false}
-          isEdit={isEditMode}
         />
       </CardContent>
     </Card>
@@ -553,13 +522,19 @@
               class="text-primary underline">Let us know</a
             > if you want this.
           </p>
-        {:else if !selectedTable}
+        {:else if !selectedTable && !selectedSchema}
           <p class="text-sm text-muted-foreground">
-            Please select a table first.
+            Please select a table or schema.
           </p>
         {:else if form.transform === "none"}
           <p class="text-sm text-muted-foreground">
-            No transform. Messages will be sent as-is to the sink destination.
+            No transform in use. Messages will be sent to the sink destination
+            in Sequin's <a
+              href="https://sequinstream.com/docs/reference/messages"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-primary underline">message format</a
+            >.
           </p>
         {:else}
           <p class="font-medium">
@@ -584,7 +559,13 @@
           bind:refreshState={functionRefreshState}
         >
           <svelte:fragment slot="none-option">
-            No transform. Messages will be sent as-is to the sink destination.
+            No transform in use. Messages will be sent to the sink destination
+            in Sequin's <a
+              href="https://sequinstream.com/docs/reference/messages"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-primary underline">message format</a
+            >.
           </svelte:fragment>
         </FunctionPicker>
       </svelte:fragment>
@@ -619,9 +600,26 @@
 
         <svelte:fragment slot="summary">
           <p class="text-sm text-muted-foreground">
-            {#if !selectedTable}
+            {#if !selectedTable && !selectedSchema}
               <p class="text-sm text-muted-foreground">
-                Please select a table first.
+                Please select a table or schema.
+              </p>
+            {:else if selectedSchema && form.backfill.selectedTableOids.length == tablesInSchema.length}
+              <p class="text-sm text-muted-foreground">
+                Backfilling all tables in the <b>{selectedSchema}</b> schema.
+              </p>
+            {:else if selectedSchema && form.backfill.selectedTableOids.length == 1}
+              <p class="text-sm text-muted-foreground">
+                Backfilling the <b
+                  >{tablesInSchema.find(
+                    (t) => t.oid === form.backfill.selectedTableOids[0],
+                  )?.name}</b
+                > table.
+              </p>
+            {:else if selectedSchema && form.backfill.selectedTableOids.length < tablesInSchema.length}
+              <p class="text-sm text-muted-foreground">
+                Backfilling {form.backfill.selectedTableOids.length} tables in the
+                <b>{selectedSchema}</b> schema.
               </p>
             {:else if form.backfill.startPosition === "none"}
               No initial backfill. You can run backfills at any time in the
@@ -640,6 +638,7 @@
         <svelte:fragment slot="content">
           <BackfillForm
             table={selectedTable}
+            {tablesInSchema}
             form={form.backfill}
             formErrors={errors.backfill}
           />
@@ -651,6 +650,7 @@
       errors={errors.consumer}
       {isEditMode}
       {selectedTable}
+      {selectedSchema}
       bind:groupColumnAttnums={form.groupColumnAttnums}
       infoText={consumer.type === "kafka"
         ? "For Kafka sinks, the group column values are joined with ':' delimiters to generate the message key. Messages are published using hash partitioning on the message key."

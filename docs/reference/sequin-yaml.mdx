@@ -149,17 +149,18 @@ By default, Sequin will wait up to 30 seconds for the database to be ready and w
 
 ### Sink configuration
 
-A sink streams data from a table to a destination (sink). All sinks share these configuration options:
+A sink streams data from one or more tables to a destination (sink). All sinks share these configuration options:
 
 ```yaml
 sinks:
   - name: "my-sink"                # Required, unique name for this sink
     database: "my-database"        # Required, references database name
-    table: "public.users"          # Required, [schema.]table to consume
+    table: "public.users"          # Optional, [schema.]table to stream
+    schema: "public"               # Optional, schema to stream
     batch_size: 1                  # Optional, messages per batch, default: 1
     status: "active"               # Optional: active or disabled, default: active
     group_column_names: ["id"]     # Optional, columns to group messages by
-    transform: "my-transform"       # Optional, reference to a transform function name or "none"
+    transform: "my-transform"      # Optional, reference to a transform function name or "none"
     filter: "my-filter"            # Optional, reference to a filter function name or "none"
     routing: "my-routing"          # Optional, reference to a routing function name or "none"
     annotations:                   # Optional, JSON object containing additional metadata that you've added
@@ -168,19 +169,27 @@ sinks:
       - insert
       - update
       - delete
-    filters:                       # Optional, filter which rows to consume with `where` clause
-      - column_name: "status"      
+    filters:                       # Optional, filter rows in the stream
+      - column_name: "status"
         operator: "="
         comparison_value: "active"
-      - column_name: "metadata"    # JSONB example
-        field_path: "type.name"
-        operator: "="
-        comparison_value: "premium"
-        field_type: "string"
     destination:                   # Required, sink-specific configuration
       type: "..."                  # Required, sink type
       ...                          # Additional sink-specific options
 ```
+
+#### Sink source
+
+A sink must specify either a `table` or a `schema`.
+
+* If you specify a `table`, Sequin will stream all changes to that table.
+* If you specify a `schema`, Sequin will stream all changes to all tables in that schema.
+
+<Info>
+  For Sequin to stream changes from a table, your [publication](/reference/databases#publications) must include that table.
+</Info>
+
+#### Sink functions
 
 The `transform`, `filter`, and `routing` fields allow you to attach functions to your sink. Each field can be set to either:
 - The name of a function defined in the `functions` section
@@ -208,7 +217,7 @@ sinks:
 
 See [Function configuration](#function-configuration) for more details on how to define functions.
 
-#### Destination configuration
+#### Sink destinations
 
 The `destination` configuration varies by sink type. Below are the configurations for each sink type:
 
@@ -350,10 +359,10 @@ All sink types support filtering messages based on columns in your source table.
 ```yaml
 filters:
   # Comparison filter
-  - column_name: "status"           
+  - column_name: "status"
     operator: "="                   # =, !=, >, >=, <, <=
     comparison_value: "active"
-  
+
   # List filter
   - column_name: "status"
     operator: "in"                  # in, not in
@@ -364,9 +373,9 @@ filters:
   # Is null filter
   - column_name: "status"
     operator: "is null"              # is null, is not null
-  
+
   # JSONB field filter
-  - column_name: "metadata"         
+  - column_name: "metadata"
     field_path: "preferences.theme" # Dot notation for nested fields
     operator: "="                   # =, !=, >, >=, <, <=
     comparison_value: "dark"
@@ -471,7 +480,7 @@ http_endpoints:
       - key: "Content-Type"
         value: "application/json"
     encrypted_headers:                # Optional, for sensitive headers
-      - key: "Authorization" 
+      - key: "Authorization"
         value: "Bearer token123"
 ```
 
@@ -507,14 +516,14 @@ change_retentions:
     source_table_schema: "public"         # Required
     source_table_name: "users"            # Required
     destination_database: "dest-db"       # Required
-    destination_table_schema: "public"    # Required  
+    destination_table_schema: "public"    # Required
     destination_table_name: "user_events" # Required
     actions:                             # Optional, defaults to all
       - insert
-      - update 
+      - update
       - delete
     filters:                             # Optional
-      - column_name: "status"           
+      - column_name: "status"
         operator: "="
         comparison_value: "active"
       - column_name: "metadata"          # JSONB column example
@@ -607,7 +616,7 @@ users:
 
 databases:
   - name: "production-db"
-    hostname: "prod.db.example.com"  
+    hostname: "prod.db.example.com"
     database: "app_production"
     slot:
       name: "sequin_slot"
@@ -627,14 +636,14 @@ http_endpoints:
 sinks:
   - name: "user-changes"
     database: "production-db"
-    table: "users"
+    schema: "public"
     destination:
       type: "webhook"
       http_endpoint: "webhook-endpoint"
 
 change_retentions:
   - name: "user-audit"
-    source_database: "production-db" 
+    source_database: "production-db"
     source_table_schema: "public"
     source_table_name: "users"
     destination_database: "production-db"
@@ -644,37 +653,45 @@ change_retentions:
 
 ## YAML Anchors
 
-YAML anchors allow you to reuse YAML configuration across multiple resources. For instance, you may want to create a sink for each table in a database. You can use anchors to avoid duplicating the sink configuration for each table.
-
+YAML anchors allow you to reuse YAML configuration across multiple resources. A common pattern is to send the same data stream to multiple destinations for different purposes - for example, audit logging and microservice communication.
 
 ```yaml
-# This database has three tables we want to sink from
 databases:
   - name: "production-db"
+    hostname: "prod.db.example.com"
+    database: "app_production"
+    slot:
+      name: "sequin_slot"
+    publication:
+      name: "sequin_pub"
 
-# Create a re-usable sink template- in this case a GCP PubSub topic
-gcp_pubsub_sink_template: &gcp_pubsub_sink_template
-  destination:
-    type: gcp_pubsub
-    project_id: my-project-id
-    topic_id: my-topic
-    credentials:
-      type: service_account
-      private_key_id: "key123"
-      ...
+# Create a reusable base sink configuration
+base_sink_config: &base_sink_config
   database: "production-db"
+  schema: "public"  # Stream all tables in the public schema
+  transform: "sanitize-pii" # Sanitize PII data for all sinks
 
-# Use the sink template to create a sink for each table
 sinks:
-  - <<: *gcp_pubsub_sink_template
-    name: "user-changes"
-    table: "users"
-  - <<: *gcp_pubsub_sink_template
-    name: "account-changes"
-    table: "accounts"
-  - <<: *gcp_pubsub_sink_template
-    name: "document-changes"
-    table: "documents"
+  # Kafka sink for audit logging and compliance
+  - <<: *base_sink_config
+    name: "audit-logging"
+    destination:
+      type: "kafka"
+      hosts: "kafka-cluster.company.com:9092"
+      topic: "audit-events"
+      tls: true
+      username: "audit-service"
+      password: "audit-password"
+      sasl_mechanism: "scram_sha_256"
+
+  # SQS sink for microservice communication
+  - <<: *base_sink_config
+    name: "microservice-events"
+    destination:
+      type: "sqs"
+      queue_url: "https://sqs.us-west-2.amazonaws.com/123456789012/service-events.fifo"
+      access_key_id: "${AWS_ACCESS_KEY_ID}"
+      secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
 ```
 
-This setup will fan-in changes from all three tables into a single sink destination, all using the same YAML block for each table.
+This setup streams changes from all tables in your `public` schema to both Kafka (for audit logging) and SQS (for microservice communication), using YAML anchors to avoid duplicating the common sink configuration.

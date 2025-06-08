@@ -12,6 +12,7 @@
     AlertTriangle,
     StopCircle,
     BookText,
+    ArrowDownSquare,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -30,6 +31,7 @@
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
   import ElasticsearchIcon from "../sinks/elasticsearch/ElasticsearchIcon.svelte";
   import StopSinkModal from "./StopSinkModal.svelte";
+  import { Badge } from "$lib/components/ui/badge";
 
   export let consumer;
   export let consumerTitle;
@@ -102,6 +104,8 @@
 
   let activeTab: string;
 
+  $: backfillUrl = `${consumer.href}/backfills`;
+
   $: messageUrl = messages_failing
     ? `${consumer.href}/messages?showAcked=false`
     : `${consumer.href}/messages`;
@@ -110,6 +114,9 @@
 
   onMount(() => {
     switch (live_action) {
+      case "backfills":
+        activeTab = "backfills";
+        break;
       case "messages":
         activeTab = "messages";
         break;
@@ -263,6 +270,24 @@
         data-phx-link-state="push"
       >
         Overview
+      </a>
+      <a
+        href={backfillUrl}
+        class={`py-2 px-4 flex items-center font-medium border-b-2 ${
+          activeTab === "backfills"
+            ? "text-black border-black"
+            : "text-gray-500 hover:text-gray-700 border-transparent"
+        }`}
+        data-phx-link="redirect"
+        data-phx-link-state="push"
+      >
+        Backfills
+        {#if consumer.active_backfills.length > 0}
+          <Badge variant="secondary" class="ml-1">
+            {consumer.active_backfills.length} active
+            <ArrowDownSquare class="h-4 w-4 ml-1" />
+          </Badge>
+        {/if}
       </a>
       <a
         href={messageUrl}

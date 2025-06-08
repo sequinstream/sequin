@@ -14,6 +14,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Databases
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
@@ -76,12 +77,17 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   @impl GenStage
   def handle_info(:init, state) do
-    consumer =
-      state.consumer_id
-      |> Consumers.get_consumer!()
-      |> Repo.preload(postgres_database: [:replication_slot])
+    consumer = state.consumer_id |> Consumers.get_consumer!() |> Repo.preload([:replication_slot])
+    db = Databases.get_db!(consumer.replication_slot.postgres_database_id)
 
-    Logger.metadata(replication_slot_id: consumer.replication_slot.id)
+    # postgres_database.tables can get very big, remove for efficiency
+    consumer = %{consumer | postgres_database: %{db | tables: []}}
+
+    # We need to trigger an immediate gc after removing tables from the consumer struct
+    # Ideally, we would not load tables in the first place. We'll be moving tables into their own table soon
+    :erlang.garbage_collect()
+
+    Logger.metadata(replication_slot_id: consumer.replication_slot_id)
 
     state =
       state
@@ -112,7 +118,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
   def handle_info(:trim_idempotency, state) do
     %SinkConsumer{} = consumer = state.consumer
 
-    case Postgres.confirmed_flush_lsn(consumer.postgres_database) do
+    case Postgres.confirmed_flush_lsn(consumer.postgres_database, consumer.replication_slot.slot_name) do
       {:ok, nil} ->
         :ok
 
@@ -149,14 +155,15 @@ defmodule Sequin.Runtime.ConsumerProducer do
     # Processes already have the consumer in context, but this is for the acknowledger. When we
     # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
     bare_consumer =
-      Map.merge(state.consumer, %{
-        source_tables: [],
-        active_backfill: nil,
-        sequence: nil,
-        postgres_database: nil,
-        replication_slot: nil,
-        account: nil
-      })
+      %SinkConsumer{
+        state.consumer
+        | source_tables: [],
+          active_backfills: [],
+          sequence: nil,
+          postgres_database: nil,
+          replication_slot: nil,
+          account: nil
+      }
 
     broadway_messages =
       Enum.map(messages, fn message ->

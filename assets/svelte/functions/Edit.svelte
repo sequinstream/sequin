@@ -11,7 +11,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import * as Command from "$lib/components/ui/command";
-  import { Check, ChevronsUpDown, Trash2 } from "lucide-svelte";
+  import { Check, ChevronsUpDown, Loader2, Trash2 } from "lucide-svelte";
   import { cn } from "$lib/utils";
   import { tick } from "svelte";
   import { Label } from "$lib/components/ui/label";
@@ -50,11 +50,9 @@
   export let showErrors: boolean = false;
   export let testMessages: TestMessage[] = [];
   export let syntheticTestMessages: TestMessage[] = [];
-  export let validating: boolean = false;
   export let parent: string;
   export let live;
   export let usedByConsumers: Consumer[] = [];
-  export let saving: boolean = false;
   export let initialCodeMap: Record<string, string>;
   export let functionTransformsEnabled: boolean;
   export let functionCompletions: Array<{
@@ -63,6 +61,8 @@
     info: string;
   }>;
 
+  let saving: boolean = false;
+  let validating: boolean = false;
   let functionInternalToExternal = {
     path: "Path transform",
     transform: "Transform function",
@@ -233,17 +233,20 @@
       return;
     }
 
-    pushEvent("delete_test_message", {
-      idempotency_key: message.idempotency_key,
-    });
-
     deletedIdempotencyKeys.add(message.idempotency_key);
+
+    testMessages = testMessages.filter(
+      (m) => !deletedIdempotencyKeys.has(m.idempotency_key),
+    );
 
     if (selectedMessageIndex >= index) {
       const updatedIndex = Math.max(selectedMessageIndex - 1, 0);
-      console.log("updatedIndex", updatedIndex);
       selectMessage(updatedIndex);
     }
+
+    pushEvent("delete_test_message", {
+      idempotency_key: message.idempotency_key,
+    });
   }
 
   let showUpdateDialog = false;
@@ -361,10 +364,12 @@
   let selectedMessage: TestMessage | undefined;
 
   $: {
+    testMessages = testMessages.filter(
+      (m) => !deletedIdempotencyKeys.has(m.idempotency_key),
+    );
+
     if (testMessages.length > 0) {
-      messagesToShow = testMessages.filter(
-        (m) => !deletedIdempotencyKeys.has(m.idempotency_key),
-      );
+      messagesToShow = testMessages;
       showSyntheticMessages = false;
     } else {
       messagesToShow = syntheticTestMessages;
@@ -470,7 +475,12 @@
     };
   });
 
-  $: pushEvent("validate", { function: form });
+  $: {
+    validating = true;
+    pushEvent("validate", { function: form }, () => {
+      validating = false;
+    });
+  }
 
   function handleCopyForChatGPT() {
     const codeErrors = formErrors.function?.code || [];
@@ -859,16 +869,12 @@ Please help me create or modify the Elixir function transform to achieve the des
 
           <div class="flex gap-2 pt-2">
             <AlertDialog bind:open={showUpdateDialog}>
-              <Button
-                type="submit"
-                loading={validating || saving}
-                disabled={validating || saving}
-              >
+              <Button type="submit" loading={saving} disabled={saving}>
                 <span slot="loading">
-                  {#if saving}
-                    {isEditing ? "Updating..." : "Creating..."}
+                  {#if isEditing}
+                    Updating...
                   {:else}
-                    Validating...
+                    Creating...
                   {/if}
                 </span>
                 {#if isEditing}
@@ -1204,10 +1210,17 @@ Please help me create or modify the Elixir function transform to achieve the des
                 <span
                   class="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium cursor-help"
                 >
-                  Executed in
-                  {selectedMessage.time >= 1000
-                    ? `${(selectedMessage.time / 1000).toFixed(2)}ms`
-                    : `${selectedMessage.time}μs`}
+                  {#if validating}
+                    <div class="flex items-center gap-1">
+                      Executing...
+                      <Loader2 class="w-4 h-4 animate-spin" />
+                    </div>
+                  {:else}
+                    Executed in
+                    {selectedMessage.time >= 1000
+                      ? `${(selectedMessage.time / 1000).toFixed(2)}ms`
+                      : `${selectedMessage.time}μs`}
+                  {/if}
                 </span>
                 <Popover>
                   <PopoverTrigger>

@@ -70,7 +70,7 @@ defmodule Sequin.Posthog do
     %{
       event: to_string(event),
       properties: merged_properties,
-      timestamp: DateTime.from_unix!(timestamp, :millisecond) |> DateTime.to_iso8601()
+      timestamp: timestamp |> DateTime.from_unix!(:millisecond) |> DateTime.to_iso8601()
     }
   end
 
@@ -92,26 +92,10 @@ defmodule Sequin.Posthog do
 
   defp async_post(body, opts) do
     unless disabled?(opts) do
-      Logger.info("[PostHog] Sending #{length(body.batch)} events to PostHog")
-
       Task.Supervisor.start_child(Sequin.TaskSupervisor, fn ->
-        result =
-          body
-          |> base_req(opts)
-          |> Req.run()
-
-        case result do
-          {_request, %{status: 200}} ->
-            Logger.info("[PostHog] Successfully sent events to PostHog")
-
-          {_request, %{status: status}} ->
-            Logger.warning("[PostHog] PostHog responded with status #{status}")
-
-          {:error, error} ->
-            Logger.error("[PostHog] Failed to send events: #{inspect(error)}")
-        end
-
-        result
+        body
+        |> base_req(opts)
+        |> Req.run()
       end)
     end
   end

@@ -77,6 +77,30 @@ defmodule Sequin.Functions.TestMessages do
     end
   end
 
+  @spec delete_test_message(database_id(), table_oid(), String.t()) :: true | false
+  def delete_test_message(database_id, table_oid, idempotency_key) do
+    case :ets.lookup(:test_messages, {database_id, table_oid}) do
+      [{{^database_id, ^table_oid}, messages}] ->
+        message_to_delete =
+          Enum.find(messages, fn message -> message.data.metadata.idempotency_key == idempotency_key end)
+
+        if message_to_delete do
+          :ets.insert(
+            :test_messages,
+            {{database_id, table_oid},
+             Enum.reject(messages, fn message -> message.data.metadata.idempotency_key == idempotency_key end)}
+          )
+
+          true
+        else
+          false
+        end
+
+      [] ->
+        false
+    end
+  end
+
   @doc """
   Returns the list of test messages for a sequence.
   Returns an empty list if no messages exist for the sequence.

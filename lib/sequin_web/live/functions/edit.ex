@@ -352,6 +352,18 @@ defmodule SequinWeb.FunctionsLive.Edit do
     end
   end
 
+  def handle_event("delete_test_message", %{"idempotency_key" => idempotency_key}, socket) do
+    database_id = socket.assigns.selected_database_id
+    table_oid = socket.assigns.selected_table_oid
+
+    if TestMessages.delete_test_message(database_id, table_oid, idempotency_key) do
+      TestMessages.register_needs_messages(database_id)
+      {:reply, %{deleted: true}, assign_encoded_messages(socket)}
+    else
+      {:reply, %{deleted: false}, socket}
+    end
+  end
+
   def handle_event("form_closed", _params, socket) do
     {:noreply, push_navigate(socket, to: ~p"/functions")}
   end

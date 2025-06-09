@@ -3,6 +3,8 @@ defmodule Sequin.Posthog do
   A client for interacting with Posthog analytics.
   """
 
+  require Logger
+
   @doc """
   Captures a single event.
   """
@@ -32,16 +34,17 @@ defmodule Sequin.Posthog do
   """
   def batch(events, opts \\ []) do
     body = %{
+      historical_migration: false,
       batch:
         Enum.map(events, fn {event, properties, timestamp} ->
-          build_event(event, properties, timestamp)
+          build_batch_event(event, properties, timestamp)
         end)
     }
 
     opts =
       opts
       |> with_defaults()
-      |> Keyword.update!(:req_opts, &Keyword.put(&1, :url, "/capture"))
+      |> Keyword.update!(:req_opts, &Keyword.put(&1, :url, "/batch"))
 
     if Keyword.get(opts, :async, true) do
       async_post(body, opts)
@@ -58,6 +61,16 @@ defmodule Sequin.Posthog do
       distinct_id: distinct_id,
       properties: other_properties.properties,
       timestamp: timestamp
+    }
+  end
+
+  defp build_batch_event(event, properties, timestamp) do
+    merged_properties = Map.put(properties.properties, :distinct_id, properties.distinct_id)
+
+    %{
+      event: to_string(event),
+      properties: merged_properties,
+      timestamp: DateTime.from_unix!(timestamp, :millisecond) |> DateTime.to_iso8601()
     }
   end
 
@@ -79,10 +92,26 @@ defmodule Sequin.Posthog do
 
   defp async_post(body, opts) do
     unless disabled?(opts) do
+      Logger.info("[PostHog] Sending #{length(body.batch)} events to PostHog")
+
       Task.Supervisor.start_child(Sequin.TaskSupervisor, fn ->
-        body
-        |> base_req(opts)
-        |> Req.run()
+        result =
+          body
+          |> base_req(opts)
+          |> Req.run()
+
+        case result do
+          {_request, %{status: 200}} ->
+            Logger.info("[PostHog] Successfully sent events to PostHog")
+
+          {_request, %{status: status}} ->
+            Logger.warning("[PostHog] PostHog responded with status #{status}")
+
+          {:error, error} ->
+            Logger.error("[PostHog] Failed to send events: #{inspect(error)}")
+        end
+
+        result
       end)
     end
   end

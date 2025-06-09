@@ -101,7 +101,7 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
 
     [event] = events
     assert event["event"] == "final_event"
-    assert event["distinct_id"] == "user_final"
+    assert event["properties"]["distinct_id"] == "user_final"
     assert event["properties"]["key"] == "value_final"
   end
 

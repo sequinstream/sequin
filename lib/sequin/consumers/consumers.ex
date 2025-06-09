@@ -211,8 +211,11 @@ defmodule Sequin.Consumers do
     |> Function.where_id(id)
     |> Repo.one()
     |> case do
-      nil -> {:error, Error.not_found(entity: :function, params: %{id: id, account_id: account_id})}
-      function -> {:ok, function}
+      nil ->
+        {:error, Error.not_found(entity: :function, params: %{id: id, account_id: account_id})}
+
+      function ->
+        {:ok, function}
     end
   end
 
@@ -603,7 +606,10 @@ defmodule Sequin.Consumers do
     |> Stream.map(&module.deserialize/1)
   end
 
-  @spec upsert_consumer_messages(SinkConsumer.t(), list(ConsumerEvent.t()) | list(ConsumerRecord.t())) ::
+  @spec upsert_consumer_messages(
+          SinkConsumer.t(),
+          list(ConsumerEvent.t()) | list(ConsumerRecord.t())
+        ) ::
           {:ok, non_neg_integer()}
   def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
     case consumer.message_kind do
@@ -633,7 +639,9 @@ defmodule Sequin.Consumers do
       Repo.insert_all(
         ConsumerEvent,
         events,
-        on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
+        on_conflict:
+          {:replace,
+           [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
         conflict_target: [:consumer_id, :ack_id]
       )
 
@@ -643,7 +651,10 @@ defmodule Sequin.Consumers do
   @exponential_backoff_max :timer.minutes(10)
   def advance_delivery_state_for_failure(%{data: message}) do
     deliver_count = message.deliver_count + 1
-    backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
+
+    backoff_time =
+      Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
+
     not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
 
     %{message | deliver_count: deliver_count, not_visible_until: not_visible_until}
@@ -759,7 +770,9 @@ defmodule Sequin.Consumers do
       Repo.insert_all(
         ConsumerRecord,
         records,
-        on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
+        on_conflict:
+          {:replace,
+           [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
         conflict_target: [:consumer_id, :ack_id]
       )
 
@@ -772,7 +785,8 @@ defmodule Sequin.Consumers do
   # Completely arbitrary number, but must be consistent
   @partition_lock_key "partition_lock_key" |> :erlang.crc32() |> rem(32_768)
 
-  def create_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
+  def create_consumer_partition(%{message_kind: kind} = consumer)
+      when kind in [:event, :record] do
     table_name = if kind == :event, do: "consumer_events", else: "consumer_records"
 
     with {:ok, _} <- Repo.query("SELECT pg_advisory_xact_lock($1)", [@partition_lock_key]),
@@ -786,7 +800,8 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def delete_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
+  def delete_consumer_partition(%{message_kind: kind} = consumer)
+      when kind in [:event, :record] do
     with {:ok, _} <- Repo.query("SELECT pg_advisory_xact_lock($1)", [@partition_lock_key]),
          {:ok, %Postgrex.Result{command: :drop_table}} <-
            Repo.query("""
@@ -797,7 +812,9 @@ defmodule Sequin.Consumers do
   end
 
   def consumer_partition_size_bytes(%SinkConsumer{} = consumer) do
-    case Repo.query("SELECT pg_total_relation_size('#{stream_schema()}.#{partition_name(consumer)}')") do
+    case Repo.query(
+           "SELECT pg_total_relation_size('#{stream_schema()}.#{partition_name(consumer)}')"
+         ) do
       {:ok, %Postgrex.Result{rows: [[size]]}} when is_integer(size) ->
         {:ok, size}
 
@@ -838,11 +855,17 @@ defmodule Sequin.Consumers do
   This is easy to do in Postgres with a single entry. When we want to perform an update
   for multiple messages, cleanest thing to do is to craft an upsert query.
   """
-  def nack_messages_with_backoff(%{message_kind: :event} = consumer, ack_ids_with_not_visible_until) do
+  def nack_messages_with_backoff(
+        %{message_kind: :event} = consumer,
+        ack_ids_with_not_visible_until
+      ) do
     nack_messages_with_backoff(ConsumerEvent, consumer, ack_ids_with_not_visible_until)
   end
 
-  def nack_messages_with_backoff(%{message_kind: :record} = consumer, ack_ids_with_not_visible_until) do
+  def nack_messages_with_backoff(
+        %{message_kind: :record} = consumer,
+        ack_ids_with_not_visible_until
+      ) do
     nack_messages_with_backoff(ConsumerRecord, consumer, ack_ids_with_not_visible_until)
   end
 
@@ -874,7 +897,12 @@ defmodule Sequin.Consumers do
 
       # Perform the upsert
       Repo.insert_all(model, updates,
-        on_conflict: [set: [not_visible_until: dynamic([cr], fragment("EXCLUDED.not_visible_until")), state: :available]],
+        on_conflict: [
+          set: [
+            not_visible_until: dynamic([cr], fragment("EXCLUDED.not_visible_until")),
+            state: :available
+          ]
+        ],
         conflict_target: [:consumer_id, :ack_id]
       )
     end)
@@ -986,7 +1014,8 @@ defmodule Sequin.Consumers do
           message_count: count,
           bytes_processed: bytes_processed,
           message_kind: consumer.message_kind,
-          "$groups": %{account: consumer.account_id}
+          "$groups": %{account: consumer.account_id},
+          "$process_person_profile": false
         }
       }
     )
@@ -1176,7 +1205,10 @@ defmodule Sequin.Consumers do
   end
 
   # Source Table Matching
-  def matches_message?(%SinkConsumer{message_kind: :record}, %SlotProcessor.Message{action: :delete}), do: false
+  def matches_message?(%SinkConsumer{message_kind: :record}, %SlotProcessor.Message{
+        action: :delete
+      }),
+      do: false
 
   # Schema Matching
   def matches_message?(
@@ -1192,7 +1224,8 @@ defmodule Sequin.Consumers do
 
   # Sequence Matching
   def matches_message?(
-        %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
+        %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} =
+          consumer,
         %SlotProcessor.Message{} = message
       ) do
     matches? = message_matches_sequence?(sequence, sequence_filter, message)
@@ -1247,7 +1280,10 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
-  defp message_matches_schema?(%SchemaFilter{} = schema_filter, %SlotProcessor.Message{} = message) do
+  defp message_matches_schema?(
+         %SchemaFilter{} = schema_filter,
+         %SlotProcessor.Message{} = message
+       ) do
     message.table_schema == schema_filter.schema
   end
 
@@ -1264,19 +1300,26 @@ defmodule Sequin.Consumers do
   end
 
   def matches_record?(
-        %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
+        %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} =
+          consumer,
         table_oid,
         record_attnums_to_values
       ) do
     table_matches? = sequence.table_oid == table_oid
-    column_filters_match? = column_filters_match_record?(sequence_filter.column_filters, record_attnums_to_values)
+
+    column_filters_match? =
+      column_filters_match_record?(sequence_filter.column_filters, record_attnums_to_values)
 
     Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
     table_matches? and column_filters_match?
   end
 
-  def matches_record?(%SinkConsumer{schema_filter: %SchemaFilter{}} = consumer, _table_oid, _record_attnums_to_values) do
+  def matches_record?(
+        %SinkConsumer{schema_filter: %SchemaFilter{}} = consumer,
+        _table_oid,
+        _record_attnums_to_values
+      ) do
     Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
     true
@@ -1306,7 +1349,13 @@ defmodule Sequin.Consumers do
   defp check_filter_return(e, consumer) do
     val = e |> inspect() |> String.slice(0, 128)
     msg = "Filter functions must return true or false, got: #{val}"
-    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :fail, error: Error.invariant(message: msg)})
+
+    Health.put_event(consumer, %Event{
+      slug: :messages_filtered,
+      status: :fail,
+      error: Error.invariant(message: msg)
+    })
+
     raise "filter function failed to return boolean"
   end
 
@@ -1320,7 +1369,9 @@ defmodule Sequin.Consumers do
     Enum.all?(column_filters, fn filter ->
       fields = if message.action == :delete, do: message.old_fields, else: message.fields
       field = Enum.find(fields, &(&1.column_attnum == filter.column_attnum))
-      field && apply_filter(filter.operator, coerce_field_value(field.value, filter), filter.value)
+
+      field &&
+        apply_filter(filter.operator, coerce_field_value(field.value, filter), filter.value)
     end)
   end
 
@@ -1341,7 +1392,9 @@ defmodule Sequin.Consumers do
     String.downcase(value)
   end
 
-  defp coerce_field_value(value, %ColumnFilter{jsonb_path: jsonb_path}) when jsonb_path in [nil, ""], do: value
+  defp coerce_field_value(value, %ColumnFilter{jsonb_path: jsonb_path})
+       when jsonb_path in [nil, ""],
+       do: value
 
   defp coerce_field_value(value, %ColumnFilter{jsonb_path: jsonb_path}) when is_map(value) do
     path = String.split(jsonb_path, ".")
@@ -1399,8 +1452,9 @@ defmodule Sequin.Consumers do
     not is_nil(field_value)
   end
 
-  defp apply_filter(op, field_value, %{value: filter_value}) when op in [:==, :!=, :>, :<, :>=, :<=],
-    do: apply(Kernel, op, [field_value, filter_value])
+  defp apply_filter(op, field_value, %{value: filter_value})
+       when op in [:==, :!=, :>, :<, :>=, :<=],
+       do: apply(Kernel, op, [field_value, filter_value])
 
   defp apply_filter(:is_null, field_value, _), do: is_nil(field_value)
   defp apply_filter(:not_null, field_value, _), do: not is_nil(field_value)
@@ -1589,7 +1643,11 @@ defmodule Sequin.Consumers do
   end
 
   def safe_evaluate_code(code) do
-    MiniElixir.run_interpreted(%Function{function: %TransformFunction{code: code}}, synthetic_message().data)
+    MiniElixir.run_interpreted(
+      %Function{function: %TransformFunction{code: code}},
+      synthetic_message().data
+    )
+
     :ok
   rescue
     error ->

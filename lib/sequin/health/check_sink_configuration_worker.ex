@@ -24,15 +24,16 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
   def perform(%Oban.Job{args: %{"sink_consumer_id" => sink_consumer_id}}) do
     event = %Event{slug: :sink_config_checked, status: :success}
 
-    case Consumers.get_sink_consumer(sink_consumer_id, [:postgres_database, :sequence, :replication_slot]) do
+    case Consumers.get_sink_consumer(sink_consumer_id, [:sequence, :replication_slot]) do
       {:ok, %SinkConsumer{schema_filter: %SchemaFilter{}} = consumer} ->
         event = %Event{event | data: %{using_schema_filter: true}}
         Health.put_event(consumer, event)
 
       {:ok, %SinkConsumer{sequence: %Sequence{} = sequence} = consumer} ->
-        with {:ok, relation_kind} <- Postgres.get_relation_kind(consumer.postgres_database, sequence.table_oid),
-             {:ok, event} <- check_replica_identity(consumer, event, relation_kind),
-             {:ok, event} <- check_publication(consumer, event, relation_kind) do
+        with {:ok, postgres_database} <- Databases.get_cached_db(consumer.replication_slot.postgres_database_id),
+             {:ok, relation_kind} <- Postgres.get_relation_kind(postgres_database, sequence.table_oid),
+             {:ok, event} <- check_replica_identity(consumer, postgres_database, event, relation_kind),
+             {:ok, event} <- check_publication(consumer, postgres_database, event, relation_kind) do
           Health.put_event(consumer, event)
 
           :syn.publish(:consumers, {:sink_config_checked, consumer.id}, :sink_config_checked)
@@ -77,11 +78,11 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     |> Oban.insert()
   end
 
-  defp check_replica_identity(%SinkConsumer{} = consumer, %Event{} = event, relation_kind) do
-    source_table = Consumers.source_table(consumer)
+  defp check_replica_identity(%SinkConsumer{} = consumer, postgres_database, %Event{} = event, relation_kind) do
+    source_table = Consumers.source_table(consumer, postgres_database)
 
     with {:ok, replica_identity} <-
-           get_replica_identity_by_kind(relation_kind, consumer.postgres_database, source_table.oid) do
+           get_replica_identity_by_kind(relation_kind, postgres_database, source_table.oid) do
       {:ok, %Event{event | data: %{replica_identity: replica_identity, relation_kind: relation_kind}}}
     end
   end
@@ -96,8 +97,7 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     Databases.check_replica_identity(postgres_database, table_oid)
   end
 
-  defp check_publication(%SinkConsumer{} = consumer, %Event{} = event, relation_kind) do
-    postgres_database = consumer.postgres_database
+  defp check_publication(%SinkConsumer{} = consumer, postgres_database, %Event{} = event, relation_kind) do
     slot = consumer.replication_slot
 
     with {:ok, publication} <- Postgres.get_publication(postgres_database, slot.publication_name),

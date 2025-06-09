@@ -244,9 +244,16 @@
       selectMessage(updatedIndex);
     }
 
-    pushEvent("delete_test_message", {
-      idempotency_key: message.idempotency_key,
-    });
+    validating = true;
+    pushEvent(
+      "delete_test_message",
+      {
+        idempotency_key: message.idempotency_key,
+      },
+      () => {
+        validating = false;
+      },
+    );
   }
 
   let showUpdateDialog = false;
@@ -444,7 +451,7 @@
     }
 
     if (selectedDatabase && selectedDatabase.tables.length === 1) {
-      handleTableSelectCombobox(selectedDatabase.tables[0]);
+      handleTableSelectCombobox(selectedDatabase.tables[0].oid);
     }
 
     maybeSetInitialCode();
@@ -787,9 +794,9 @@ Please help me create or modify the Elixir function transform to achieve the des
 
           <div
             hidden={!(
-              form.function.type !== "transform" ||
-              form.function.type !== "routing" ||
-              form.function.type !== "filter"
+              form.function.type === "transform" ||
+              form.function.type === "routing" ||
+              form.function.type === "filter"
             )}
           >
             <div class="space-y-2">
@@ -999,36 +1006,22 @@ Please help me create or modify the Elixir function transform to achieve the des
             </li>
             <li>
               <div class="flex items-center gap-2">
-                Make up to 10 inserts, updates, and deletes on the table
-                {#if testMessages.length > 0}
-                  <svg
-                    class="w-4 h-4 text-green-500"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      d="M20 6L9 17l-5-5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                {:else if selectedDatabaseId && selectedTableOid}
-                  <svg
-                    class="w-4 h-4 text-gray-300 animate-spin"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2Z"
-                      stroke-dasharray="45"
-                      stroke-dashoffset="45"
-                      stroke-linecap="round"
-                    />
-                  </svg>
+                <div class="flex items-center gap-2">
+                  Make up to 10 inserts, updates, and deletes on the table
+                </div>
+                {#if selectedDatabaseId && selectedTableOid}
+                  <div class="flex items-center gap-3">
+                    <div class="flex gap-0.5">
+                      {#each Array(10) as _, i}
+                        <div
+                          class="w-1 h-3 rounded-sm transition-colors duration-200 {i <
+                          testMessages.length
+                            ? 'bg-green-500'
+                            : 'bg-slate-300 animate-pulse'}"
+                        ></div>
+                      {/each}
+                    </div>
+                  </div>
                 {/if}
               </div>
             </li>

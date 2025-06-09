@@ -114,7 +114,7 @@ defmodule Sequin.MixProject do
       {:ymlr, "~> 5.0"},
       {:broadway, "~> 1.0"},
       {:broadway_dashboard, "~> 0.4.0"},
-      {:broadway_sqs, "~> 0.7.1"},
+      {:broadway_sqs, github: "dashbitco/broadway_sqs", ref: "94ccc7e"},
 
       # Background Jobs
       {:oban, "~> 2.19"},

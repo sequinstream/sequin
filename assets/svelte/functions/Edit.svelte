@@ -1159,7 +1159,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                     <h3
                       class="text-sm font-medium mb-2 text-slate-500 dark:text-slate-400"
                     >
-                      Transform function arguments
+                      Function arguments
                     </h3>
                     <EditableArgument
                       field="record"

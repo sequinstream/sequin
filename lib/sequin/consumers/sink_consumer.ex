@@ -25,7 +25,6 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SnsSink
-  alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases.Sequence
@@ -97,7 +96,6 @@ defmodule Sequin.Consumers.SinkConsumer do
 
     field :health, :map, virtual: true
 
-    embeds_many :source_tables, SourceTable, on_replace: :delete
     has_many :active_backfills, Backfill, where: [state: :active]
 
     # Sequences
@@ -203,7 +201,6 @@ defmodule Sequin.Consumers.SinkConsumer do
       :load_shedding_policy
     ])
     |> cast_polymorphic_embed(:sink, required: true)
-    |> Sequin.Changeset.cast_embed(:source_tables)
     |> put_defaults()
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)

@@ -32,6 +32,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health.Event
   alias Sequin.Metrics
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Runtime.SlotProcessor
@@ -54,10 +55,7 @@ defmodule Sequin.Consumers do
 
   def kind(%SinkConsumer{type: type}), do: type
 
-  def source_table(
-        %{source_tables: [], sequence: %Sequence{} = sequence} = consumer,
-        %PostgresDatabase{} = postgres_database
-      ) do
+  def source_table(%SinkConsumer{sequence: %Sequence{} = sequence} = consumer, %PostgresDatabase{} = postgres_database) do
     %SequenceFilter{} = filter = consumer.sequence_filter
     table = Sequin.Enum.find!(postgres_database.tables, &(&1.oid == sequence.table_oid))
     primary_key_attnums = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.map(& &1.attnum)
@@ -82,11 +80,8 @@ defmodule Sequin.Consumers do
     }
   end
 
-  def source_table(%{source_tables: [source_table]}, _postgres_database) do
-    source_table
-  end
-
-  def source_table(_consumer, _postgres_database), do: nil
+  def source_table(%SinkConsumer{}, %PostgresDatabase{}), do: nil
+  def source_table(%SinkConsumer{}, nil), do: nil
 
   def get_consumer(consumer_id) do
     get_sink_consumer(consumer_id)
@@ -1217,9 +1212,9 @@ defmodule Sequin.Consumers do
   end
 
   # Source Table Matching
-  def matches_message?(consumer_or_wal_pipeline, %SlotProcessor.Message{} = message) do
+  def matches_message?(%WalPipeline{} = wal_pipeline, %SlotProcessor.Message{} = message) do
     matches? =
-      Enum.any?(consumer_or_wal_pipeline.source_tables, fn %SourceTable{} = source_table ->
+      Enum.any?(wal_pipeline.source_tables, fn %SourceTable{} = source_table ->
         table_matches = source_table.oid == message.table_oid
         action_matches = action_matches?(source_table.actions, message.action)
         column_filters_match = column_filters_match_message?(source_table.column_filters, message)
@@ -1227,13 +1222,13 @@ defmodule Sequin.Consumers do
         table_matches && action_matches && column_filters_match
       end)
 
-    Health.put_event(consumer_or_wal_pipeline, %Event{slug: :messages_filtered, status: :success})
+    Health.put_event(wal_pipeline, %Event{slug: :messages_filtered, status: :success})
 
     matches?
   rescue
     error in [ArgumentError] ->
       Health.put_event(
-        consumer_or_wal_pipeline,
+        wal_pipeline,
         %Event{
           slug: :messages_filtered,
           status: :fail,
@@ -1433,15 +1428,6 @@ defmodule Sequin.Consumers do
       column = Sequin.Enum.find!(columns, &(&1.attnum == column_filter.column_attnum))
       %{column_filter | column_name: column.name}
     end)
-  end
-
-  @doc """
-  Checks if there are any consumers that haven't been migrated to use Sequences.
-
-  Returns `true` if there are any unmigrated consumers, `false` otherwise.
-  """
-  def any_unmigrated_consumers? do
-    Enum.any?(all_consumers(), fn consumer -> is_nil(consumer.sequence_id) end)
   end
 
   def get_backfill(id) do

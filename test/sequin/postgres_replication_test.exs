@@ -114,7 +114,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: character_sequence.id,
           sequence_filter:
             ConsumersFactory.sequence_filter_attrs(
@@ -164,7 +163,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: character_ident_full_sequence.id,
           sequence_filter:
             ConsumersFactory.sequence_filter_attrs(
@@ -181,7 +179,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: character_multi_pk_sequence.id,
           sequence_filter:
             ConsumersFactory.sequence_filter_attrs(
@@ -203,7 +200,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: character_sequence.id,
           sequence_filter:
             ConsumersFactory.sequence_filter_attrs(
@@ -220,7 +216,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: character_ident_full_sequence.id,
           sequence_filter:
             ConsumersFactory.sequence_filter_attrs(
@@ -237,7 +232,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: character_multi_pk_sequence.id,
           sequence_filter:
             ConsumersFactory.sequence_filter_attrs(
@@ -258,7 +252,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: test_event_log_partitioned_sequence.id,
           sequence_filter:
             ConsumersFactory.sequence_filter_attrs(
@@ -924,7 +917,6 @@ defmodule Sequin.PostgresReplicationTest do
           partition_count: 1,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: character_sequence.id,
           sequence_filter:
             ConsumersFactory.sequence_filter_attrs(
@@ -1409,7 +1401,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: sequence.id,
           sequence_filter: ConsumersFactory.sequence_filter_attrs(column_filters: [])
         )
@@ -1421,7 +1412,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: sequence.id,
           sequence_filter:
             ConsumersFactory.sequence_filter_attrs(
@@ -1873,7 +1863,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [],
           sequence_id: sequence.id,
           sequence_filter: ConsumersFactory.sequence_filter_attrs(column_filters: [])
         )

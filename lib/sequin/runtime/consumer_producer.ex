@@ -157,8 +157,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
     bare_consumer =
       %SinkConsumer{
         state.consumer
-        | source_tables: [],
-          active_backfills: [],
+        | active_backfills: [],
           sequence: nil,
           postgres_database: nil,
           replication_slot: nil,

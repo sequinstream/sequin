@@ -145,9 +145,9 @@ redis-console-consumer: ## Read from redis stream <stream-key> [from-beginning]
 e2e-gh-run: ## Trigger GitHub workflow run [BRANCH=<branch-name>] (defaults to current branch)
 	@BRANCH=$${BRANCH:-$$(git branch --show-current)}; \
 	echo "Running workflow on branch: $$BRANCH"; \
-	gh workflow run docker-cloud-build.yml --ref $$BRANCH; \
+	gh workflow run e2e-tests.yml --ref $$BRANCH; \
 	sleep 3; \
-	gh run watch $$(gh run list --workflow=docker-cloud-build.yml --limit 1 --json databaseId --jq '.[0].databaseId')	
+	gh run watch $$(gh run list --workflow=e2e-tests.yml --limit 1 --json databaseId --jq '.[0].databaseId')	
 
 e2e-up: ## Start e2e test environment containers
 	cd priv/tests_e2e && docker compose up -d

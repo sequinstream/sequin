@@ -85,3 +85,8 @@ export interface TestMessageError {
   metadata: string;
   action: string;
 }
+
+export const ActionValues = ["insert", "update", "delete", "read"];
+export type ActionType = (typeof ActionValues)[number];
+export const FieldValues = ["record", "metadata", "changes", "action"];
+export type FieldType = (typeof FieldValues)[number];

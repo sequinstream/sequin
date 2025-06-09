@@ -274,10 +274,10 @@ defmodule SequinWeb.FunctionsLive.Edit do
       Map.put(
         form_errors,
         :modified_test_messages,
-        Enum.reduce(modified_test_messages, %{}, fn {id, result}, acc ->
+        Enum.reduce(modified_test_messages, %{}, fn {replication_message_trace_id, result}, acc ->
           case result do
             {:ok, _} -> acc
-            %{error: errors} -> Map.put(acc, id, errors)
+            %{error: errors} -> Map.put(acc, replication_message_trace_id, errors)
           end
         end)
       )

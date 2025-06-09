@@ -13,14 +13,24 @@
     SelectTrigger,
     SelectValue,
   } from "$lib/components/ui/select";
-  import type { FormData, FormErrors, TestMessage } from "./types";
-
-  type ActionType = "insert" | "update" | "delete" | "read";
-  type FieldType = "record" | "metadata" | "changes" | "action";
+  import type {
+    FormData,
+    FormErrors,
+    TestMessage,
+    ActionType,
+    FieldType,
+  } from "./types";
+  import { ActionValues } from "./types";
+  import {
+    getStorageKey,
+    saveToStorage,
+    loadFromStorage,
+  } from "./messageLocalStorage";
 
   export let form: FormData;
   export let formErrors: FormErrors;
   export let selectedMessage: TestMessage;
+  export let field: FieldType;
 
   let editorElement: HTMLElement;
   let editorView: EditorView | undefined;
@@ -28,12 +38,8 @@
   let isEditingField: boolean = false;
   let actionToSet: string;
 
-  export let field: FieldType;
-
-  const actionOptions: ActionType[] = ["insert", "update", "delete", "read"];
-
   function handleActionSelect(value: string) {
-    if (field === "action" && actionOptions.includes(value as ActionType)) {
+    if (field === "action" && ActionValues.includes(value as ActionType)) {
       actionToSet = `"${value}"` as ActionType;
     }
   }
@@ -58,6 +64,7 @@
     } else {
       selectedMessage[field] = editorView.state.doc.toString();
     }
+    saveToStorage(selectedMessage, field);
     form.modified_test_messages[selectedMessage.idempotency_key] =
       selectedMessage;
     isEditingField = false;
@@ -106,7 +113,17 @@
     });
   }
 
-  $: updateMessageEditor(selectedMessage);
+  $: {
+    storedContent = loadFromStorage(selectedMessage, field);
+    if (storedContent) {
+      selectedMessage[field] = storedContent;
+      form.modified_test_messages[
+        selectedMessage.replication_message_trace_id
+      ] = selectedMessage;
+    }
+
+    updateMessageEditor(selectedMessage);
+  }
 </script>
 
 <div
@@ -129,19 +146,7 @@
       </div>
     {:else}
       <div>
-        <button
-          type="button"
-          on:click={() => {
-            if (field === "action") {
-              selectedMessage["action"] = actionToSet;
-            } else {
-              selectedMessage[field] = editorView.state.doc.toString();
-            }
-            form.modified_test_messages[selectedMessage.idempotency_key] =
-              selectedMessage;
-            isEditingField = false;
-          }}
-        >
+        <button type="button" on:click={saveEdit}>
           <Save
             class="h-4 w-4 ml-2 text-slate-500 hover:text-slate-700 cursor-pointer"
           />
@@ -173,8 +178,8 @@
           <SelectValue placeholder="Select an action" />
         </SelectTrigger>
         <SelectContent>
-          {#each actionOptions as option}
-            <SelectItem value={option}>{option}</SelectItem>
+          {#each ActionValues as action}
+            <SelectItem value={action}>{action}</SelectItem>
           {/each}
         </SelectContent>
       </Select>

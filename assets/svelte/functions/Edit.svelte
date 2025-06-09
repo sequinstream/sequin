@@ -11,12 +11,19 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import * as Command from "$lib/components/ui/command";
-  import { Check, ChevronsUpDown, Loader2, Trash2 } from "lucide-svelte";
+  import {
+    Check,
+    ChevronsUpDown,
+    Loader2,
+    Trash2,
+    Info,
+    BookText,
+    RotateCcw,
+  } from "lucide-svelte";
   import { cn } from "$lib/utils";
   import { tick } from "svelte";
   import { Label } from "$lib/components/ui/label";
   import { onMount, onDestroy } from "svelte";
-  import { Info, BookText } from "lucide-svelte";
   import FunctionTransformSnippet from "$lib/mdx/function-transform-snippet.mdx";
   import {
     Popover,
@@ -35,6 +42,28 @@
   } from "$lib/components/ui/alert-dialog";
   import CopyToClipboard from "$lib/components/ui/CopyToClipboard.svelte";
   import DeleteFunctionDialog from "$lib/components/DeleteFunctionDialog.svelte";
+  import { clearStorage } from "./messageLocalStorage";
+  import {
+    saveFunctionCodeToStorage,
+    loadFunctionCodeFromStorage,
+    clearFunctionCodeStorage,
+  } from "./functionLocalStorage";
+  import {
+    saveFunctionTypeToStorage,
+    saveSinkTypeToStorage,
+    loadFunctionTypeFromStorage,
+    loadSinkTypeFromStorage,
+    clearFunctionTypeStorage,
+  } from "./functionTypeStorage";
+  import type {
+    FormData,
+    FormErrors,
+    TestMessage,
+    Consumer,
+    FieldType,
+    ActionType,
+  } from "./types";
+  import { FieldValues } from "./types";
 
   // CodeMirror imports
   import { EditorView, basicSetup } from "codemirror";
@@ -43,7 +72,12 @@
   import { keymap } from "@codemirror/view";
   import { indentWithTab } from "@codemirror/commands";
   import { autocompletion } from "@codemirror/autocomplete";
-  import type { FormData, FormErrors, TestMessage, Consumer } from "./types";
+
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+  } from "$lib/components/ui/tooltip";
 
   export let formData: FormData;
   export let formErrors: FormErrors = {};
@@ -82,6 +116,8 @@
     function: { ...formData.function },
     modified_test_messages: { ...formData.modified_test_messages },
   };
+  let persistedCode = form.function.code;
+  let isCodeModified = false;
 
   let isEditing = form.id !== null;
   let initialFormState = JSON.stringify(form);
@@ -183,6 +219,9 @@
     if (usedByConsumers.length > 0) {
       showUpdateDialog = true;
     } else {
+      clearMessageFieldsLocalStorage();
+      clearFunctionCodeStorage(form.id);
+      clearFunctionTypeStorage();
       saving = true;
       pushEvent("save", { function: form }, () => {
         saving = false;
@@ -190,42 +229,60 @@
     }
   }
 
-  function handleTypeSelect(event: any, oldType: string) {
-    const oldInitialCode = initialCodeFor(oldType, form.function.sink_type);
-    const newInitialCode = initialCodeFor(event.value, form.function.sink_type);
-
-    if (form.function.code === oldInitialCode || !form.function.code) {
-      form.function.code = newInitialCode;
-      functionEditorView.dispatch({
-        changes: {
-          from: 0,
-          to: functionEditorView.state.doc.length,
-          insert: newInitialCode,
-        },
-      });
-      console.log("Replaced untouched initial code");
-    } else {
-      console.log("Did not replace initial code");
-    }
-
+  function handleTypeSelect(event: any) {
     form.function.type = event.value;
+    if (!isEditing) {
+      saveFunctionTypeToStorage(event.value);
+    }
+    loadStoredOrInitialCode();
   }
 
-  function handleRoutingSinkTypeSelect(event: any, oldSinkType: string) {
-    const oldInitialCode = initialCodeFor(form.function.type, oldSinkType);
-    const newInitialCode = initialCodeFor(form.function.type, event.value);
-
-    if (form.function.code === oldInitialCode || !form.function.code) {
-      form.function.code = newInitialCode;
-      functionEditorView.dispatch({
-        changes: {
-          from: 0,
-          to: functionEditorView.state.doc.length,
-          insert: newInitialCode,
-        },
-      });
-    }
+  function handleRoutingSinkTypeSelect(event: any) {
     form.function.sink_type = event.value;
+    if (!isEditing) {
+      saveSinkTypeToStorage(event.value);
+    }
+    loadStoredOrInitialCode();
+  }
+
+  function checkIfCodeModified(code: string) {
+    if (isEditing) {
+      isCodeModified = persistedCode !== code;
+    } else {
+      const initialCode = initialCodeFor(
+        form.function.type,
+        form.function.sink_type,
+      );
+      isCodeModified = initialCode !== code;
+    }
+  }
+
+  function loadStoredOrInitialCode() {
+    const storedCode = loadFunctionCodeFromStorage(
+      form.function.type,
+      form.function.sink_type,
+      form.id,
+    );
+    if (storedCode) {
+      // Load stored code
+      form.function.code = storedCode;
+      checkIfCodeModified(storedCode);
+    } else if (form.id == null && form.function.type) {
+      // Load initial code
+      const newInitialCode = initialCodeFor(
+        form.function.type,
+        form.function.sink_type,
+      );
+      form.function.code = newInitialCode;
+    }
+
+    functionEditorView.dispatch({
+      changes: {
+        from: 0,
+        to: functionEditorView.state.doc.length,
+        insert: form.function.code,
+      },
+    });
   }
 
   function deleteMessage(message: TestMessage, index: number) {
@@ -321,18 +378,8 @@
   // let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
   // let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
 
-  function maybeSetInitialCode() {
-    if (form.id == null && form.function.type) {
-      form.function.code = initialCodeFor(
-        form.function.type,
-        form.function.sink_type,
-      );
-    }
-  }
-
   function initialCodeFor(type: string, sinkType: string | null) {
     const key = type + (type === "routing" ? "_" + sinkType : "");
-    console.log("key", key);
     return initialCodeMap[key];
   }
 
@@ -434,6 +481,12 @@
       const typeParam = urlParams.get("type");
       if (typeParam && functionInternalToExternal[typeParam]) {
         form.function.type = typeParam;
+      } else {
+        // Try to load from storage if not in URL params
+        const storedType = loadFunctionTypeFromStorage();
+        if (storedType && functionInternalToExternal[storedType]) {
+          form.function.type = storedType;
+        }
       }
 
       const sinkTypeParam = urlParams.get("sink_type");
@@ -443,6 +496,12 @@
         sinkTypeInternalToExternal[sinkTypeParam]
       ) {
         form.function.sink_type = sinkTypeParam;
+      } else if (form.function.type === "routing") {
+        // Try to load from storage if not in URL params
+        const storedSinkType = loadSinkTypeFromStorage();
+        if (storedSinkType && sinkTypeInternalToExternal[storedSinkType]) {
+          form.function.sink_type = storedSinkType;
+        }
       }
     }
 
@@ -454,9 +513,7 @@
       handleTableSelectCombobox(selectedDatabase.tables[0].oid);
     }
 
-    maybeSetInitialCode();
-
-    // Initialize CodeMirror for function function if it exists
+    // Initialize CodeMirror for function if it exists
     const startState = EditorState.create({
       doc: form.function.code || "",
       extensions: [
@@ -466,7 +523,10 @@
         keymap.of([indentWithTab]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            form.function.code = update.state.doc.toString();
+            const code = update.state.doc.toString();
+            form.function.code = code;
+            saveFunctionCodeToStorage(form);
+            checkIfCodeModified(code);
           }
         }),
       ],
@@ -476,6 +536,8 @@
       state: startState,
       parent: functionEditorElement,
     });
+
+    loadStoredOrInitialCode();
 
     return () => {
       functionEditorView.destroy();
@@ -530,6 +592,40 @@ Please help me create or modify the Elixir function transform to achieve the des
     return prompt;
   }
 
+  function clearMessageFieldsLocalStorage() {
+    syntheticTestMessages.concat(testMessages).forEach((message) => {
+      FieldValues.forEach((field) => {
+        clearStorage(message, field);
+      });
+    });
+  }
+
+  function handleClose() {
+    clearMessageFieldsLocalStorage();
+    clearFunctionCodeStorage(form.id);
+    clearFunctionTypeStorage();
+    pushEvent("form_closed");
+  }
+
+  function resetOriginalCode() {
+    if (isEditing) {
+      form.function.code = persistedCode;
+    } else {
+      form.function.code = initialCodeFor(
+        form.function.type,
+        form.function.sink_type,
+      );
+    }
+    functionEditorView.dispatch({
+      changes: {
+        from: 0,
+        to: functionEditorView.state.doc.length,
+        insert: form.function.code,
+      },
+    });
+    isCodeModified = false;
+  }
+
   // Clean up timeout on component destroy
   onDestroy(() => {
     if (copyTimeout) {
@@ -541,7 +637,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 <FullPageForm
   title={isEditing ? "Edit Function" : "New Function"}
   showConfirmOnExit={isDirty}
-  on:close={() => pushEvent("form_closed")}
+  on:close={handleClose}
 >
   <form on:submit={handleSubmit} class="space-y-4">
     <div
@@ -638,10 +734,7 @@ Please help me create or modify the Elixir function transform to achieve the des
             </div>
 
             <Select
-              onSelectedChange={(event) => {
-                const old = form.function.type;
-                handleTypeSelect(event, old);
-              }}
+              onSelectedChange={handleTypeSelect}
               selected={{
                 value: form.function.type,
                 label: functionInternalToExternal[form.function.type],
@@ -678,10 +771,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 
             {#if form.function.type === "routing"}
               <Select
-                onSelectedChange={(event) => {
-                  const oldSinkType = form.function.sink_type;
-                  handleRoutingSinkTypeSelect(event, oldSinkType);
-                }}
+                onSelectedChange={handleRoutingSinkTypeSelect}
                 selected={{
                   value: form.function.sink_type,
                   label: sinkTypeInternalToExternal[form.function.sink_type],
@@ -859,8 +949,32 @@ Please help me create or modify the Elixir function transform to achieve the des
                   </div>
                   <div
                     bind:this={functionEditorElement}
-                    class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden"
-                  ></div>
+                    class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden relative"
+                  >
+                    <div
+                      class="absolute bottom-2 right-2 flex items-center gap-2 z-10"
+                    >
+                      {#if isCodeModified}
+                        <span
+                          class="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded-full font-medium select-none"
+                          >modified</span
+                        >
+                      {/if}
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <button
+                            type="button"
+                            class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            on:click={resetOriginalCode}
+                            disabled={!isCodeModified}
+                          >
+                            <RotateCcw class="w-4 h-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Reset to original code</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
 
                   <p
                     class="-mb-2 min-h-10 text-sm text-red-500 dark:text-red-400"

@@ -54,8 +54,10 @@ defmodule Sequin.Consumers do
 
   def kind(%SinkConsumer{type: type}), do: type
 
-  def source_table(%{source_tables: [], sequence: %Sequence{} = sequence} = consumer) do
-    %PostgresDatabase{} = postgres_database = consumer.postgres_database
+  def source_table(
+        %{source_tables: [], sequence: %Sequence{} = sequence} = consumer,
+        %PostgresDatabase{} = postgres_database
+      ) do
     %SequenceFilter{} = filter = consumer.sequence_filter
     table = Sequin.Enum.find!(postgres_database.tables, &(&1.oid == sequence.table_oid))
     primary_key_attnums = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.map(& &1.attnum)
@@ -80,11 +82,11 @@ defmodule Sequin.Consumers do
     }
   end
 
-  def source_table(%{source_tables: [source_table]}) do
+  def source_table(%{source_tables: [source_table]}, _postgres_database) do
     source_table
   end
 
-  def source_table(_), do: nil
+  def source_table(_consumer, _postgres_database), do: nil
 
   def get_consumer(consumer_id) do
     get_sink_consumer(consumer_id)

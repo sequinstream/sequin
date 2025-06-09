@@ -2,6 +2,7 @@ defmodule Sequin.Databases do
   @moduledoc false
   import Ecto.Query, only: [preload: 2]
 
+  alias Sequin.Cache
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
@@ -82,6 +83,30 @@ defmodule Sequin.Databases do
       nil -> {:error, Error.not_found(entity: :postgres_database)}
       db -> {:ok, db}
     end
+  end
+
+  @spec get_cached_db(database_id :: PostgresDatabase.id()) ::
+          {:ok, database :: PostgresDatabase.t()} | {:error, Error.t()}
+  def get_cached_db(database_id) do
+    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+
+    Cache.get_or_store(
+      database_id,
+      fn ->
+        case get_db(database_id) do
+          {:ok, database} ->
+            {:ok, database}
+
+          {:error, _} = error ->
+            error
+        end
+      end,
+      ttl
+    )
+  end
+
+  def invalidate_cached_db(database_id) do
+    Cache.delete(database_id)
   end
 
   def create_db(account_id, attrs) do

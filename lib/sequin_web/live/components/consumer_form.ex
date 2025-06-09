@@ -838,7 +838,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     postgres_database_id =
       if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database.id
 
-    source_table = Consumers.source_table(consumer)
+    source_table = Consumers.source_table(consumer, consumer.postgres_database)
 
     %{
       "id" => consumer.id,

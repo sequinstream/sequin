@@ -14,9 +14,6 @@ defmodule SequinWeb.DatabasesLive.Show do
   alias Sequin.Repo
   alias Sequin.Tracer.Server
   alias Sequin.Tracer.State, as: TracerState
-  alias SequinWeb.RouteHelpers
-
-  # Add this alias
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id} = params, _session, socket) do
@@ -326,26 +323,10 @@ defmodule SequinWeb.DatabasesLive.Show do
       tables_refreshed_at: database.tables_refreshed_at,
       inserted_at: database.inserted_at,
       updated_at: database.updated_at,
-      consumers: encode_consumers(database.replication_slot.sink_consumers, database),
       health: encode_health(database),
       publication_name: database.replication_slot.publication_name,
       slot_name: database.replication_slot.slot_name
     }
-  end
-
-  defp encode_consumers(consumers, database) do
-    Enum.map(consumers, fn consumer ->
-      kind = Consumers.kind(consumer)
-
-      %{
-        id: consumer.id,
-        consumer_kind: kind,
-        name: consumer.name,
-        message_kind: consumer.message_kind,
-        source_tables: Consumers.enrich_source_tables(consumer.source_tables, database),
-        href: RouteHelpers.consumer_path(consumer)
-      }
-    end)
   end
 
   defp encode_tables(tables) do

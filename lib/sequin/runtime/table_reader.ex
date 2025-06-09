@@ -490,6 +490,4 @@ defmodule Sequin.Runtime.TableReader do
   defp group_column_attnums(%{sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums}}) do
     group_column_attnums
   end
-
-  defp group_column_attnums(%{source_tables: [source_table | _]}), do: source_table.group_column_attnums
 end

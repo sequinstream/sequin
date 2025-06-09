@@ -74,13 +74,6 @@ defmodule Sequin.Runtime.MessageHandler do
 
           %SinkConsumer{sequence: nil, schema_filter: %SchemaFilter{}} = consumer, acc ->
             Map.update(acc, :all, [consumer.id], &[consumer.id | &1])
-
-          %SinkConsumer{source_tables: source_tables} = consumer, acc when source_tables != [] ->
-            table_oids = Enum.map(source_tables, & &1.oid)
-
-            Enum.reduce(table_oids, acc, fn table_oid, acc ->
-              Map.update(acc, table_oid, [consumer.id], &[consumer.id | &1])
-            end)
         end)
 
       indices = %Indices{consumers_by_id: consumers_by_id, consumer_ids_by_table_oid: consumer_ids_by_table_oid}

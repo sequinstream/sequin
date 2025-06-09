@@ -87,9 +87,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         ).id
       end)
 
-    {source_tables, attrs} =
-      Map.pop_lazy(attrs, :source_tables, fn -> [source_table()] end)
-
     {sequence_id, attrs} =
       Map.pop_lazy(attrs, :sequence_id, fn ->
         if postgres_database do
@@ -121,7 +118,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,
         partition_count: Enum.random(1..10),
-        source_tables: source_tables,
         status: :active,
         sequence_id: sequence_id,
         sequence_filter: sequence_filter,
@@ -143,15 +139,6 @@ defmodule Sequin.Factory.ConsumersFactory do
 
       sink ->
         Sequin.Map.from_ecto(sink)
-    end)
-    |> Map.update!(:source_tables, fn source_tables ->
-      Enum.map(source_tables, fn source_table ->
-        source_table
-        |> Sequin.Map.from_ecto()
-        |> Map.update!(:column_filters, fn column_filters ->
-          Enum.map(column_filters, &Sequin.Map.from_ecto/1)
-        end)
-      end)
     end)
     |> Map.update!(:sequence_filter, fn sequence_filter ->
       if sequence_filter do

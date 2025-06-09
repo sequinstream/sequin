@@ -412,13 +412,10 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update],
-              column_filters: []
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update]
+          }
         )
 
       insert_message = ReplicationFactory.postgres_message(action: :insert, table_oid: table_oid)
@@ -437,13 +434,11 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: matching_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: []
-            )
-          ]
+          sequence: %Sequence{table_oid: matching_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: []
+          }
         )
 
       matching_message = ReplicationFactory.postgres_message(action: :insert, table_oid: matching_oid)
@@ -459,13 +454,11 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update],
-              column_filters: []
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update],
+            column_filters: []
+          }
         )
 
       delete_message = ReplicationFactory.postgres_message(action: :delete, table_oid: table_oid)
@@ -482,13 +475,11 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: []
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: []
+          }
         )
 
       insert_message = ReplicationFactory.postgres_message(action: :insert, table_oid: table_oid)
@@ -511,24 +502,22 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %StringValue{value: "test_value"}
-                ),
-                ConsumersFactory.column_filter(
-                  column_attnum: 2,
-                  operator: :>,
-                  value: %NumberValue{value: 10}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: "test_value"}
+              ),
+              ConsumersFactory.column_filter(
+                column_attnum: 2,
+                operator: :>,
+                value: %NumberValue{value: 10}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -561,29 +550,27 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %StringValue{value: "test_value"}
-                ),
-                ConsumersFactory.column_filter(
-                  column_attnum: 2,
-                  operator: :>,
-                  value: %NumberValue{value: 10}
-                ),
-                ConsumersFactory.column_filter(
-                  column_attnum: 3,
-                  operator: :!=,
-                  value: %StringValue{value: "excluded_value"}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: "test_value"}
+              ),
+              ConsumersFactory.column_filter(
+                column_attnum: 2,
+                operator: :>,
+                value: %NumberValue{value: 10}
+              ),
+              ConsumersFactory.column_filter(
+                column_attnum: 3,
+                operator: :!=,
+                value: %StringValue{value: "excluded_value"}
+              )
+            ]
+          }
         )
 
       non_matching_message1 =
@@ -630,19 +617,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %StringValue{value: "test_value"}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: "test_value"}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -673,19 +658,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %NumberValue{value: 123}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %NumberValue{value: 123}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -716,19 +699,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %BooleanValue{value: true}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %BooleanValue{value: true}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -759,19 +740,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -802,19 +781,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :!=,
-                  value: %StringValue{value: "test_value"}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :!=,
+                value: %StringValue{value: "test_value"}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -845,19 +822,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :!=,
-                  value: %NumberValue{value: 123}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :!=,
+                value: %NumberValue{value: 123}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -888,19 +863,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :!=,
-                  value: %BooleanValue{value: true}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :!=,
+                value: %BooleanValue{value: true}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -931,19 +904,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :!=,
-                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :!=,
+                value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -974,19 +945,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :>,
-                  value: %NumberValue{value: 10}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :>,
+                value: %NumberValue{value: 10}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1017,19 +986,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :>,
-                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :>,
+                value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1060,19 +1027,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :<,
-                  value: %NumberValue{value: 10}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :<,
+                value: %NumberValue{value: 10}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1103,19 +1068,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :<,
-                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :<,
+                value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1146,19 +1109,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :>=,
-                  value: %NumberValue{value: 10}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :>=,
+                value: %NumberValue{value: 10}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1189,19 +1150,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :>=,
-                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :>=,
+                value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1232,19 +1191,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :<=,
-                  value: %NumberValue{value: 10}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :<=,
+                value: %NumberValue{value: 10}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1275,19 +1232,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :<=,
-                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :<=,
+                value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1318,19 +1273,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :in,
-                  value: %ListValue{value: ["value1", "value2"]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :in,
+                value: %ListValue{value: ["value1", "value2"]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1361,19 +1314,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :in,
-                  value: %ListValue{value: [1, 2, 3]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :in,
+                value: %ListValue{value: [1, 2, 3]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1404,19 +1355,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :not_in,
-                  value: %ListValue{value: ["value1", "value2"]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :not_in,
+                value: %ListValue{value: ["value1", "value2"]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1447,19 +1396,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :not_in,
-                  value: %ListValue{value: [1, 2, 3]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :not_in,
+                value: %ListValue{value: [1, 2, 3]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1490,19 +1437,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :is_null,
-                  value: %NullValue{value: nil}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :is_null,
+                value: %NullValue{value: nil}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1533,19 +1478,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :is_null,
-                  value: %NullValue{value: nil}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :is_null,
+                value: %NullValue{value: nil}
+              )
+            ]
+          }
         )
 
       non_matching_message =
@@ -1566,19 +1509,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :not_null,
-                  value: %NullValue{value: nil}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :not_null,
+                value: %NullValue{value: nil}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1609,19 +1550,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :not_null,
-                  value: %NullValue{value: nil}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :not_null,
+                value: %NullValue{value: nil}
+              )
+            ]
+          }
         )
 
       non_matching_message =
@@ -1642,24 +1581,22 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :>,
-                  value: %DateTimeValue{value: ~U[2022-03-31 12:00:00Z]}
-                ),
-                ConsumersFactory.column_filter(
-                  column_attnum: 2,
-                  operator: :<,
-                  value: %DateTimeValue{value: ~U[2022-04-02 12:00:00Z]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :>,
+                value: %DateTimeValue{value: ~U[2022-03-31 12:00:00Z]}
+              ),
+              ConsumersFactory.column_filter(
+                column_attnum: 2,
+                operator: :<,
+                value: %DateTimeValue{value: ~U[2022-04-02 12:00:00Z]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1697,74 +1634,28 @@ defmodule Sequin.ConsumersTest do
       refute Consumers.matches_message?(consumer, non_matching_message2)
     end
 
-    test "matches with multiple source tables" do
-      table_oid1 = Sequin.Factory.unique_integer()
-      table_oid2 = Sequin.Factory.unique_integer()
-
-      consumer =
-        ConsumersFactory.sink_consumer(
-          id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid1,
-              actions: [:insert, :update, :delete],
-              column_filters: []
-            ),
-            ConsumersFactory.source_table(
-              oid: table_oid2,
-              actions: [:insert, :update, :delete],
-              column_filters: []
-            )
-          ]
-        )
-
-      matching_message1 =
-        ReplicationFactory.postgres_message(
-          action: :insert,
-          table_oid: table_oid1
-        )
-
-      matching_message2 =
-        ReplicationFactory.postgres_message(
-          action: :update,
-          table_oid: table_oid2
-        )
-
-      non_matching_message =
-        ReplicationFactory.postgres_message(
-          action: :delete,
-          table_oid: Sequin.Factory.unique_integer()
-        )
-
-      assert Consumers.matches_message?(consumer, matching_message1)
-      assert Consumers.matches_message?(consumer, matching_message2)
-      refute Consumers.matches_message?(consumer, non_matching_message)
-    end
-
     test "matches with multiple column filters" do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %StringValue{value: "test_value"}
-                ),
-                ConsumersFactory.column_filter(
-                  column_attnum: 2,
-                  operator: :>,
-                  value: %NumberValue{value: 10}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: "test_value"}
+              ),
+              ConsumersFactory.column_filter(
+                column_attnum: 2,
+                operator: :>,
+                value: %NumberValue{value: 10}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1797,19 +1688,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %StringValue{value: "test_value"}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: "test_value"}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1838,19 +1727,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %StringValue{value: "TestValue"}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: "TestValue"}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1881,19 +1768,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %StringValue{value: " test value "}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: " test value "}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1924,19 +1809,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -1967,19 +1850,17 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %BooleanValue{value: true}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %BooleanValue{value: true}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -2010,24 +1891,22 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :in,
-                  value: %ListValue{value: [:in_value]}
-                ),
-                ConsumersFactory.column_filter(
-                  column_attnum: 2,
-                  operator: :not_in,
-                  value: %ListValue{value: [:not_in_value]}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :in,
+                value: %ListValue{value: [:in_value]}
+              ),
+              ConsumersFactory.column_filter(
+                column_attnum: 2,
+                operator: :not_in,
+                value: %ListValue{value: [:not_in_value]}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -2060,34 +1939,32 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :>,
-                  value: %NumberValue{value: 10}
-                ),
-                ConsumersFactory.column_filter(
-                  column_attnum: 2,
-                  operator: :<,
-                  value: %NumberValue{value: 20}
-                ),
-                ConsumersFactory.column_filter(
-                  column_attnum: 3,
-                  operator: :>=,
-                  value: %NumberValue{value: 30}
-                ),
-                ConsumersFactory.column_filter(
-                  column_attnum: 4,
-                  operator: :<=,
-                  value: %NumberValue{value: 40}
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :>,
+                value: %NumberValue{value: 10}
+              ),
+              ConsumersFactory.column_filter(
+                column_attnum: 2,
+                operator: :<,
+                value: %NumberValue{value: 20}
+              ),
+              ConsumersFactory.column_filter(
+                column_attnum: 3,
+                operator: :>=,
+                value: %NumberValue{value: 30}
+              ),
+              ConsumersFactory.column_filter(
+                column_attnum: 4,
+                operator: :<=,
+                value: %NumberValue{value: 40}
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -2124,20 +2001,18 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %StringValue{value: "test_value"},
-                  jsonb_path: "top_level_key"
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: "test_value"},
+                jsonb_path: "top_level_key"
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -2168,20 +2043,18 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :>,
-                  value: %NumberValue{value: 10},
-                  jsonb_path: "nested.field"
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :>,
+                value: %NumberValue{value: 10},
+                jsonb_path: "nested.field"
+              )
+            ]
+          }
         )
 
       matching_message =
@@ -2212,20 +2085,18 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :==,
-                  value: %StringValue{value: "test_value"},
-                  jsonb_path: "nested.non_existent"
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: "test_value"},
+                jsonb_path: "nested.non_existent"
+              )
+            ]
+          }
         )
 
       non_matching_message =
@@ -2246,20 +2117,18 @@ defmodule Sequin.ConsumersTest do
       consumer =
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: table_oid,
-              actions: [:insert, :update, :delete],
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_attnum: 1,
-                  operator: :in,
-                  value: %ListValue{value: ["value1", "value2"]},
-                  jsonb_path: "array.0"
-                )
-              ]
-            )
-          ]
+          sequence: %Sequence{table_oid: table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.column_filter(
+                column_attnum: 1,
+                operator: :in,
+                value: %ListValue{value: ["value1", "value2"]},
+                jsonb_path: "array.0"
+              )
+            ]
+          }
         )
 
       non_matching_message =

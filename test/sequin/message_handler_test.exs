@@ -53,8 +53,7 @@ defmodule Sequin.MessageHandlerTest do
           account_id: account.id,
           sequence_id: sequence.id,
           sequence_filter: sequence_filter,
-          postgres_database_id: database.id,
-          source_tables: []
+          postgres_database_id: database.id
         )
 
       start_supervised!(
@@ -123,8 +122,7 @@ defmodule Sequin.MessageHandlerTest do
           message_kind: :record,
           account_id: account.id,
           sequence_id: sequence.id,
-          sequence_filter: sequence_filter,
-          source_tables: []
+          sequence_filter: sequence_filter
         )
 
       start_supervised!(
@@ -209,8 +207,7 @@ defmodule Sequin.MessageHandlerTest do
           message_kind: :event,
           account_id: account.id,
           sequence_id: sequence1.id,
-          sequence_filter: sequence_filter1,
-          source_tables: []
+          sequence_filter: sequence_filter1
         )
 
       consumer2 =
@@ -218,8 +215,7 @@ defmodule Sequin.MessageHandlerTest do
           message_kind: :record,
           account_id: account.id,
           sequence_id: sequence2.id,
-          sequence_filter: sequence_filter2,
-          source_tables: []
+          sequence_filter: sequence_filter2
         )
 
       schema_filter = ConsumersFactory.schema_filter_attrs(schema: table_schema1)
@@ -230,7 +226,6 @@ defmodule Sequin.MessageHandlerTest do
           account_id: account.id,
           sequence_id: nil,
           sequence_filter: nil,
-          source_tables: [],
           schema_filter: schema_filter
         )
 
@@ -301,16 +296,14 @@ defmodule Sequin.MessageHandlerTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           sequence_id: sequence.id,
-          sequence_filter: sequence_filter,
-          source_tables: []
+          sequence_filter: sequence_filter
         )
 
       consumer2 =
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           sequence_id: sequence.id,
-          sequence_filter: sequence_filter,
-          source_tables: []
+          sequence_filter: sequence_filter
         )
 
       start_supervised!(
@@ -376,8 +369,7 @@ defmodule Sequin.MessageHandlerTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           sequence_id: sequence.id,
-          sequence_filter: sequence_filter,
-          source_tables: []
+          sequence_filter: sequence_filter
         )
 
       start_supervised!(
@@ -395,25 +387,6 @@ defmodule Sequin.MessageHandlerTest do
       assert length(messages) == 1
       assert hd(messages).table_oid == 123
       assert hd(messages).consumer_id == consumer.id
-    end
-
-    test "does not insert message for consumer with non-matching source table" do
-      message = ReplicationFactory.postgres_message(table_oid: 123)
-      source_table = ConsumersFactory.source_table(oid: 456)
-      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-
-      start_supervised!(
-        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
-      )
-
-      database = Repo.preload(consumer, postgres_database: :sequences).postgres_database
-
-      context = context(consumers: [consumer], postgres_database: database)
-
-      {:ok, 0} = MessageHandler.handle_messages(context, [message])
-
-      messages = list_messages(consumer)
-      assert Enum.empty?(messages)
     end
 
     test "inserts message for consumer with matching sequence and passing filters" do
@@ -447,8 +420,7 @@ defmodule Sequin.MessageHandlerTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           sequence_id: sequence.id,
-          sequence_filter: sequence_filter,
-          source_tables: []
+          sequence_filter: sequence_filter
         )
 
       start_supervised!(
@@ -469,37 +441,6 @@ defmodule Sequin.MessageHandlerTest do
       assert length(messages) == 1
       assert hd(messages).table_oid == 123
       assert hd(messages).consumer_id == consumer.id
-    end
-
-    test "does not insert message for consumer with matching source table but failing filters" do
-      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
-
-      column_filter =
-        ConsumersFactory.column_filter(
-          column_attnum: 1,
-          operator: :==,
-          value: %{__type__: :string, value: "test"}
-        )
-
-      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
-      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-
-      start_supervised!(
-        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
-      )
-
-      # Ensure the message has a non-matching field for the filter
-      field = ReplicationFactory.field(column_attnum: 1, value: "not_test")
-      message = %{message | fields: [field | message.fields]}
-
-      database = Repo.preload(consumer, postgres_database: :sequences).postgres_database
-
-      context = context(consumers: [consumer], postgres_database: database)
-
-      {:ok, 0} = MessageHandler.handle_messages(context, [message])
-
-      messages = list_messages(consumer)
-      assert Enum.empty?(messages)
     end
 
     test "handles wal_pipelines correctly" do
@@ -650,8 +591,7 @@ defmodule Sequin.MessageHandlerTest do
           message_kind: :record,
           account_id: account.id,
           sequence_id: sequence.id,
-          sequence_filter: sequence_filter,
-          source_tables: []
+          sequence_filter: sequence_filter
         )
 
       start_supervised!(
@@ -709,8 +649,7 @@ defmodule Sequin.MessageHandlerTest do
           sequence_id: sequence.id,
           sequence_filter: sequence_filter,
           filter_id: filter_function.id,
-          postgres_database_id: database.id,
-          source_tables: []
+          postgres_database_id: database.id
         )
 
       start_supervised!(
@@ -942,8 +881,7 @@ defmodule Sequin.MessageHandlerTest do
           account_id: account.id,
           sequence_id: sequence.id,
           sequence_filter: sequence_filter,
-          postgres_database_id: database.id,
-          source_tables: []
+          postgres_database_id: database.id
         )
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])

@@ -142,3 +142,35 @@ docs: ## Run mintlify dev server for documentation
 redis-console-consumer: ## Read from redis stream <stream-key> [from-beginning]
 	@./scripts/redis-console-consumer.sh $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 
+e2e-gh-run: ## Trigger GitHub workflow run [BRANCH=<branch-name>] (defaults to current branch)
+	@BRANCH=$${BRANCH:-$$(git branch --show-current)}; \
+	echo "Running workflow on branch: $$BRANCH"; \
+	gh workflow run docker-cloud-build.yml --ref $$BRANCH; \
+	sleep 3; \
+	gh run watch $$(gh run list --workflow=docker-cloud-build.yml --limit 1 --json databaseId --jq '.[0].databaseId')	
+
+e2e-up: ## Start e2e test environment containers
+	cd priv/tests_e2e && docker compose up -d
+
+e2e-down: ## Stop and remove e2e test environment containers and volumes
+	cd priv/tests_e2e && docker compose down -v --remove-orphans
+	docker rm -f sequin-e2e-kafka tests_e2e-postgres-1 tests_e2e-redis-1 2>/dev/null || true
+
+e2e-rebuild: ## Rebuild e2e test environment from scratch (no cache)
+	cd priv/tests_e2e && docker compose down -v --remove-orphans
+	docker rm -f sequin-e2e-kafka tests_e2e-postgres-1 tests_e2e-redis-1 2>/dev/null || true
+	cd priv/tests_e2e && docker compose build --no-cache
+	make e2e-up
+
+e2e-restart: e2e-down e2e-up ## Restart e2e test environment (shortcut for down+up)
+
+e2e-tests: ## Run the e2e test suite
+	cd priv/tests_e2e && elixir tests.exs
+
+e2e-clean: ## Remove e2e kafka container
+	docker stop sequin-e2e-kafka || true
+	docker rm sequin-e2e-kafka || true
+
+e2e-logs: ## Show logs from e2e test environment containers
+	cd priv/tests_e2e && docker compose logs -f
+

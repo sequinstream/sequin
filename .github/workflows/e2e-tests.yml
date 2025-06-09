@@ -1,0 +1,29 @@
+name: E2E Tests
+
+on:
+  schedule:
+    - cron: '0 17 * * *'  # 10:00 PDT (UTC-7)
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.18.x'
+        otp-version: '27.x'
+
+    - name: Start E2E environment
+      run: |
+        make e2e-rebuild
+        # Wait for containers to be healthy
+        timeout 60s bash -c 'until docker ps | grep -q "(healthy)"; do sleep 1; done'
+
+    - name: Run E2E tests
+      run: make e2e-tests

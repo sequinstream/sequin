@@ -182,7 +182,7 @@ defmodule Sequin.Functions.TestMessagesTest do
       assert TestMessages.get_test_messages(database_id, table_oid) == messages
     end
 
-    test "delete message by idempotency key" do
+    test "delete message by replication_message_trace_id" do
       database_id = Factory.uuid()
       table_oid = Factory.integer()
 
@@ -213,13 +213,13 @@ defmodule Sequin.Functions.TestMessagesTest do
 
       assert TestMessages.get_test_messages(database_id, table_oid) == messages
 
-      assert TestMessages.delete_test_message(database_id, table_oid, to_string(1))
+      assert TestMessages.delete_test_message(database_id, table_oid, Enum.at(messages, 0).replication_message_trace_id)
       assert TestMessages.get_test_messages(database_id, table_oid) == Enum.drop(messages, 1)
 
       # Deleting again returns false
-      refute TestMessages.delete_test_message(database_id, table_oid, to_string(1))
+      refute TestMessages.delete_test_message(database_id, table_oid, Enum.at(messages, 0).replication_message_trace_id)
 
-      assert TestMessages.delete_test_message(database_id, table_oid, to_string(2))
+      assert TestMessages.delete_test_message(database_id, table_oid, Enum.at(messages, 1).replication_message_trace_id)
       assert TestMessages.get_test_messages(database_id, table_oid) == Enum.drop(messages, 2)
     end
   end

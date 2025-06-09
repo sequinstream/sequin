@@ -25,7 +25,7 @@
     getStorageKey,
     saveToStorage,
     loadFromStorage,
-  } from "./messageLocalStorage";
+  } from "./messageStorage";
 
   export let form: FormData;
   export let formErrors: FormErrors;
@@ -65,7 +65,7 @@
       selectedMessage[field] = editorView.state.doc.toString();
     }
     saveToStorage(selectedMessage, field);
-    form.modified_test_messages[selectedMessage.idempotency_key] =
+    form.modified_test_messages[selectedMessage.replication_message_trace_id] =
       selectedMessage;
     isEditingField = false;
   }
@@ -190,11 +190,12 @@
     <div hidden={!isEditingField} bind:this={editorElement} />
     <pre hidden={isEditingField}>{selectedMessage[field]}</pre>
   {/if}
-  {#if formErrors?.modified_test_messages?.[selectedMessage.idempotency_key]?.[field]}
+  {#if formErrors?.modified_test_messages?.[selectedMessage.replication_message_trace_id]?.[field]}
     <p class="text-sm text-red-500 dark:text-red-400">
-      {formErrors.modified_test_messages[selectedMessage.idempotency_key][field]
-        .type}: {formErrors.modified_test_messages[
-        selectedMessage.idempotency_key
+      {formErrors.modified_test_messages[
+        selectedMessage.replication_message_trace_id
+      ][field].type}: {formErrors.modified_test_messages[
+        selectedMessage.replication_message_trace_id
       ][field].info.description}
     </p>
   {/if}

@@ -42,12 +42,12 @@
   } from "$lib/components/ui/alert-dialog";
   import CopyToClipboard from "$lib/components/ui/CopyToClipboard.svelte";
   import DeleteFunctionDialog from "$lib/components/DeleteFunctionDialog.svelte";
-  import { clearStorage } from "./messageLocalStorage";
+  import { clearStorage } from "./messageStorage";
   import {
     saveFunctionCodeToStorage,
     loadFunctionCodeFromStorage,
     clearFunctionCodeStorage,
-  } from "./functionLocalStorage";
+  } from "./functionCodeStorage";
   import {
     saveFunctionTypeToStorage,
     saveSinkTypeToStorage,
@@ -286,14 +286,23 @@
   }
 
   function deleteMessage(message: TestMessage, index: number) {
-    if (deletedIdempotencyKeys.has(message.idempotency_key)) {
+    if (
+      deletedReplicationMessageTraceIdKeys.has(
+        message.replication_message_trace_id,
+      )
+    ) {
       return;
     }
 
-    deletedIdempotencyKeys.add(message.idempotency_key);
+    deletedReplicationMessageTraceIdKeys.add(
+      message.replication_message_trace_id,
+    );
 
     testMessages = testMessages.filter(
-      (m) => !deletedIdempotencyKeys.has(m.idempotency_key),
+      (m) =>
+        !deletedReplicationMessageTraceIdKeys.has(
+          m.replication_message_trace_id,
+        ),
     );
 
     if (selectedMessageIndex >= index) {
@@ -305,7 +314,7 @@
     pushEvent(
       "delete_test_message",
       {
-        idempotency_key: message.idempotency_key,
+        replication_message_trace_id: message.replication_message_trace_id,
       },
       () => {
         validating = false;
@@ -411,7 +420,7 @@
   //   }
   // }
 
-  let deletedIdempotencyKeys: Set<string> = new Set();
+  let deletedReplicationMessageTraceIdKeys: Set<string> = new Set();
   let messagesToShow: TestMessage[] = [];
   let showSyntheticMessages = false;
   let selectedMessageIndex: number = 0;
@@ -419,7 +428,10 @@
 
   $: {
     testMessages = testMessages.filter(
-      (m) => !deletedIdempotencyKeys.has(m.idempotency_key),
+      (m) =>
+        !deletedReplicationMessageTraceIdKeys.has(
+          m.replication_message_trace_id,
+        ),
     );
 
     if (testMessages.length > 0) {
@@ -443,30 +455,37 @@
     if (
       oldSelectedMessage &&
       formErrors.modified_test_messages &&
-      oldSelectedMessage.idempotency_key === selectedMessage.idempotency_key &&
-      formErrors.modified_test_messages[selectedMessage.idempotency_key]
+      oldSelectedMessage.replication_message_trace_id ===
+        selectedMessage.replication_message_trace_id &&
+      formErrors.modified_test_messages[
+        selectedMessage.replication_message_trace_id
+      ]
     ) {
       if (
-        formErrors.modified_test_messages[selectedMessage.idempotency_key]
-          .record
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].record
       ) {
         selectedMessage.record = oldSelectedMessage.record;
       }
       if (
-        formErrors.modified_test_messages[selectedMessage.idempotency_key]
-          .metadata
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].metadata
       ) {
         selectedMessage.metadata = oldSelectedMessage.metadata;
       }
       if (
-        formErrors.modified_test_messages[selectedMessage.idempotency_key]
-          .action
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].action
       ) {
         selectedMessage.action = oldSelectedMessage.action;
       }
       if (
-        formErrors.modified_test_messages[selectedMessage.idempotency_key]
-          .changes
+        formErrors.modified_test_messages[
+          selectedMessage.replication_message_trace_id
+        ].changes
       ) {
         selectedMessage.changes = oldSelectedMessage.changes;
       }

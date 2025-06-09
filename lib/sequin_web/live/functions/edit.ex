@@ -243,15 +243,15 @@ defmodule SequinWeb.FunctionsLive.Edit do
           %{}
 
         messages when is_map(messages) ->
-          Map.new(messages, fn {idempotency_key, message} ->
-            {idempotency_key, validate_test_message(message)}
+          Map.new(messages, fn {replication_message_trace_id, message} ->
+            {replication_message_trace_id, validate_test_message(message)}
           end)
       end
 
     synthetic_test_message = socket.assigns.synthetic_test_message
 
     synthetic_test_message =
-      case modified_test_messages[synthetic_test_message.data.metadata.idempotency_key] do
+      case modified_test_messages[synthetic_test_message.replication_message_trace_id] do
         {:ok, result} ->
           %{synthetic_test_message | data: Map.merge(synthetic_test_message.data, result)}
 
@@ -261,7 +261,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
     test_messages =
       Enum.map(socket.assigns.test_messages, fn message ->
-        case modified_test_messages[message.data.metadata.idempotency_key] do
+        case modified_test_messages[message.replication_message_trace_id] do
           {:ok, result} ->
             %{message | data: Map.merge(message.data, result)}
 
@@ -350,11 +350,11 @@ defmodule SequinWeb.FunctionsLive.Edit do
     end
   end
 
-  def handle_event("delete_test_message", %{"idempotency_key" => idempotency_key}, socket) do
+  def handle_event("delete_test_message", %{"replication_message_trace_id" => replication_message_trace_id}, socket) do
     database_id = socket.assigns.selected_database_id
     table_oid = socket.assigns.selected_table_oid
 
-    if TestMessages.delete_test_message(database_id, table_oid, idempotency_key) do
+    if TestMessages.delete_test_message(database_id, table_oid, replication_message_trace_id) do
       TestMessages.register_needs_messages(database_id)
       {:reply, %{deleted: true}, assign_encoded_messages(socket)}
     else
@@ -491,7 +491,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   defp format_test_message(m) do
     %{
-      idempotency_key: m.data.metadata.idempotency_key,
+      replication_message_trace_id: m.replication_message_trace_id,
       record: inspect(m.data.record, pretty: true),
       changes: inspect(m.data.changes, pretty: true),
       action: inspect(to_string(m.data.action), pretty: true),

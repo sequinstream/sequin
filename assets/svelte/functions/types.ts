@@ -61,8 +61,8 @@ export interface FormErrors {
 }
 
 export interface TestMessage {
-  // Use idempotency_key as unique identifier of a message
-  idempotency_key: string;
+  // Use replication_message_trace_id as unique identifier of a message
+  replication_message_trace_id: string;
   record: string;
   changes: string;
   action: string;

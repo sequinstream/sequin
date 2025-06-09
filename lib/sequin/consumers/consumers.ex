@@ -1583,6 +1583,7 @@ defmodule Sequin.Consumers do
 
   def synthetic_message do
     %ConsumerEvent{
+      replication_message_trace_id: Ecto.UUID.cast!("00000000-0000-0000-0000-000000000000"),
       data: %ConsumerEventData{
         record: %{
           "id" => 1,

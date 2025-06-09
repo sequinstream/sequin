@@ -245,15 +245,15 @@ defmodule SequinWeb.FunctionsLive.Edit do
           %{}
 
         messages when is_map(messages) ->
-          Map.new(messages, fn {id, message} ->
-            {id, validate_test_message(message)}
+          Map.new(messages, fn {idempotency_key, message} ->
+            {idempotency_key, validate_test_message(message)}
           end)
       end
 
     synthetic_test_message = socket.assigns.synthetic_test_message
 
     synthetic_test_message =
-      case modified_test_messages[synthetic_test_message.id] do
+      case modified_test_messages[synthetic_test_message.data.metadata.idempotency_key] do
         {:ok, result} ->
           %{synthetic_test_message | data: Map.merge(synthetic_test_message.data, result)}
 
@@ -263,7 +263,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
     test_messages =
       Enum.map(socket.assigns.test_messages, fn message ->
-        case modified_test_messages[message.id] do
+        case modified_test_messages[message.data.metadata.idempotency_key] do
           {:ok, result} ->
             %{message | data: Map.merge(message.data, result)}
 
@@ -349,6 +349,18 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
       messages ->
         {:noreply, socket |> assign(test_messages: messages) |> assign_encoded_messages()}
+    end
+  end
+
+  def handle_event("delete_test_message", %{"idempotency_key" => idempotency_key}, socket) do
+    database_id = socket.assigns.selected_database_id
+    table_oid = socket.assigns.selected_table_oid
+
+    if TestMessages.delete_test_message(database_id, table_oid, idempotency_key) do
+      TestMessages.register_needs_messages(database_id)
+      {:reply, %{deleted: true}, assign_encoded_messages(socket)}
+    else
+      {:reply, %{deleted: false}, socket}
     end
   end
 
@@ -481,7 +493,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   defp format_test_message(m) do
     %{
-      id: m.id,
+      idempotency_key: m.data.metadata.idempotency_key,
       record: inspect(m.data.record, pretty: true),
       changes: inspect(m.data.changes, pretty: true),
       action: inspect(to_string(m.data.action), pretty: true),

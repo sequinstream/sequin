@@ -181,6 +181,47 @@ defmodule Sequin.Functions.TestMessagesTest do
 
       assert TestMessages.get_test_messages(database_id, table_oid) == messages
     end
+
+    test "delete message by idempotency key" do
+      database_id = Factory.uuid()
+      table_oid = Factory.integer()
+
+      messages =
+        Enum.map(1..3, fn i ->
+          %ConsumerRecord{
+            consumer_id: Ecto.UUID.generate(),
+            commit_lsn: i,
+            commit_idx: i,
+            record_pks: ["#{i}"],
+            group_id: "group1",
+            table_oid: 1,
+            deliver_count: 0,
+            replication_message_trace_id: Ecto.UUID.generate(),
+            data: %ConsumerRecordData{
+              metadata: %Metadata{
+                table_name: "test_table",
+                table_schema: "public",
+                idempotency_key: to_string(i)
+              }
+            }
+          }
+        end)
+
+      Enum.each(messages, fn message ->
+        TestMessages.add_test_message(database_id, table_oid, message)
+      end)
+
+      assert TestMessages.get_test_messages(database_id, table_oid) == messages
+
+      assert TestMessages.delete_test_message(database_id, table_oid, to_string(1))
+      assert TestMessages.get_test_messages(database_id, table_oid) == Enum.drop(messages, 1)
+
+      # Deleting again returns false
+      refute TestMessages.delete_test_message(database_id, table_oid, to_string(1))
+
+      assert TestMessages.delete_test_message(database_id, table_oid, to_string(2))
+      assert TestMessages.get_test_messages(database_id, table_oid) == Enum.drop(messages, 2)
+    end
   end
 
   describe "cleanup" do

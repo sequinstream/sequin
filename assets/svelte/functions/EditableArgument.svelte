@@ -58,7 +58,8 @@
     } else {
       selectedMessage[field] = editorView.state.doc.toString();
     }
-    form.modified_test_messages[selectedMessage.id] = selectedMessage;
+    form.modified_test_messages[selectedMessage.idempotency_key] =
+      selectedMessage;
     isEditingField = false;
   }
 
@@ -136,7 +137,8 @@
             } else {
               selectedMessage[field] = editorView.state.doc.toString();
             }
-            form.modified_test_messages[selectedMessage.id] = selectedMessage;
+            form.modified_test_messages[selectedMessage.idempotency_key] =
+              selectedMessage;
             isEditingField = false;
           }}
         >
@@ -183,10 +185,12 @@
     <div hidden={!isEditingField} bind:this={editorElement} />
     <pre hidden={isEditingField}>{selectedMessage[field]}</pre>
   {/if}
-  {#if formErrors?.modified_test_messages?.[selectedMessage.id]?.[field]}
+  {#if formErrors?.modified_test_messages?.[selectedMessage.idempotency_key]?.[field]}
     <p class="text-sm text-red-500 dark:text-red-400">
-      {formErrors.modified_test_messages[selectedMessage.id][field].type}: {formErrors
-        .modified_test_messages[selectedMessage.id][field].info.description}
+      {formErrors.modified_test_messages[selectedMessage.idempotency_key][field]
+        .type}: {formErrors.modified_test_messages[
+        selectedMessage.idempotency_key
+      ][field].info.description}
     </p>
   {/if}
 </div>

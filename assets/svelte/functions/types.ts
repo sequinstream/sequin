@@ -61,8 +61,8 @@ export interface FormErrors {
 }
 
 export interface TestMessage {
-  // Use idempotency_key as unique identifier of a message
-  idempotency_key: string;
+  // Use replication_message_trace_id as unique identifier of a message
+  replication_message_trace_id: string;
   record: string;
   changes: string;
   action: string;
@@ -85,3 +85,8 @@ export interface TestMessageError {
   metadata: string;
   action: string;
 }
+
+export const ActionValues = ["insert", "update", "delete", "read"];
+export type ActionType = (typeof ActionValues)[number];
+export const FieldValues = ["record", "metadata", "changes", "action"];
+export type FieldType = (typeof FieldValues)[number];

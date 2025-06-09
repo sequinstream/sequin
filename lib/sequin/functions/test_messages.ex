@@ -78,17 +78,17 @@ defmodule Sequin.Functions.TestMessages do
   end
 
   @spec delete_test_message(database_id(), table_oid(), String.t()) :: true | false
-  def delete_test_message(database_id, table_oid, idempotency_key) do
+  def delete_test_message(database_id, table_oid, replication_message_trace_id) do
     case :ets.lookup(:test_messages, {database_id, table_oid}) do
       [{{^database_id, ^table_oid}, messages}] ->
         message_to_delete =
-          Enum.find(messages, fn message -> message.data.metadata.idempotency_key == idempotency_key end)
+          Enum.find(messages, fn message -> message.replication_message_trace_id == replication_message_trace_id end)
 
         if message_to_delete do
           :ets.insert(
             :test_messages,
             {{database_id, table_oid},
-             Enum.reject(messages, fn message -> message.data.metadata.idempotency_key == idempotency_key end)}
+             Enum.reject(messages, fn message -> message.replication_message_trace_id == replication_message_trace_id end)}
           )
 
           true

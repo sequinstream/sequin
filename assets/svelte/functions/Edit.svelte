@@ -295,7 +295,13 @@
   }
 
   function handleTableSelectCombobox(tableOid: number) {
+    if (selectedTableOid === tableOid) {
+      return;
+    }
+
     selectedTableOid = tableOid;
+    selectedMessageIndex = 0;
+
     pushEvent("table_selected", {
       database_id: selectedDatabaseId,
       table_oid: selectedTableOid,
@@ -1065,7 +1071,10 @@ Please help me create or modify the Elixir function transform to achieve the des
               </PopoverTrigger>
               <PopoverContent class="p-0" align="start">
                 <Command.Root>
-                  <Command.Input placeholder="Search tables..." />
+                  <Command.Input
+                    placeholder="Search tables..."
+                    class="focus:ring-0 focus:ring-offset-0"
+                  />
                   <Command.Empty>No table found.</Command.Empty>
                   <Command.Group>
                     <div class="max-h-[300px] overflow-y-auto">

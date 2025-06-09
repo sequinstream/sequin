@@ -9,7 +9,7 @@ defmodule SequinWeb.FunctionsLive.Index do
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
-    functions = Consumers.list_functions_for_account(account_id)
+    functions = list_sorted_functions(account_id)
 
     {:ok, assign(socket, :functions, functions)}
   end
@@ -69,11 +69,17 @@ defmodule SequinWeb.FunctionsLive.Index do
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :info, title: "Function deleted"})
-         |> assign(:functions, Consumers.list_functions_for_account(current_account_id(socket)))}
+         |> assign(:functions, list_sorted_functions(current_account_id(socket)))}
 
       {:error, error} ->
         Logger.error("[Function.Index] Failed to delete function", error: error)
         {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Failed to delete function"})}
     end
+  end
+
+  defp list_sorted_functions(account_id) do
+    account_id
+    |> Consumers.list_functions_for_account()
+    |> Enum.sort_by(&{&1.function.type, DateTime.to_unix(&1.inserted_at)})
   end
 end

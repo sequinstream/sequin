@@ -5,6 +5,8 @@ description: '`SET` and `DEL` Postgres changes to Redis key/values in minutes. B
 ---
 
 import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+import QuickstartSourceStep from '/snippets/quickstart-source-step.mdx';
+import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
 
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Redis database. You'll:
 
@@ -49,21 +51,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       Select "Redis String" as the sink type and click "Continue".
     </Step>
 
-    <Step title='Note "Source" configuration'>
-      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
-
-      <Frame>
-        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
-      </Frame>
-    </Step>
-
-    <Step title="Setup a backfill">
-      Toggle open the "Initial backfill" card and select "Backfill all rows":
-
-      <Frame>
-        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
-      </Frame>
-    </Step>
+    <QuickstartSourceStep />
 
     <Step title="Add a transform function">
       Open the **Transform** card, click **+ Create new transform** and use the following Elixir function in a [Transform function](/reference/transforms#function-transform):
@@ -84,6 +72,8 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
         If you don't see the transform function you just created, click the refresh button.
       </Info>
     </Step>
+
+    <QuickstartBackfillStep />
 
     <Step title='Configure "Redis Configuration"'>
       In the "Redis Configuration" card, enter your Redis connection details.

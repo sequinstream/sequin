@@ -1079,8 +1079,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "oid" => table.oid,
       "schema" => table.schema,
       "name" => table.name,
-      "default_group_columns" => default_group_columns,
-      "is_event_table" => Postgres.event_table?(table),
+      "defaultGroupColumns" => default_group_columns,
+      "isEventTable" => Postgres.event_table?(table),
       "columns" => Enum.map(table.columns, &encode_column/1)
     }
   end

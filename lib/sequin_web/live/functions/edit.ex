@@ -117,7 +117,6 @@ defmodule SequinWeb.FunctionsLive.Edit do
         used_by_consumers: used_by_consumers,
         form_errors: %{},
         test_messages: [],
-        validating: false,
         show_errors?: false,
         selected_database_id: nil,
         selected_table_oid: nil,
@@ -147,7 +146,6 @@ defmodule SequinWeb.FunctionsLive.Edit do
             syntheticTestMessages: @encoded_synthetic_test_message,
             usedByConsumers: Enum.map(@used_by_consumers, &encode_consumer/1),
             databases: Enum.map(@databases, &encode_database/1),
-            validating: @validating,
             parent: "function_new",
             initialCodeMap: @initial_code,
             initialCode: "glugma",
@@ -293,7 +291,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
       |> assign(:test_messages, test_messages)
       |> assign_encoded_messages()
 
-    {:noreply, socket}
+    {:reply, %{ok: true}, socket}
   end
 
   def handle_event("save", %{"function" => params}, socket) do

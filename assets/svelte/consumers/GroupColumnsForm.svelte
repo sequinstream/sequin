@@ -5,16 +5,16 @@
   export let errors: any;
   export let isEditMode: boolean;
   export let selectedTable: Table;
-  export let selectedSchema: { name: string } | null;
+  export let selectedSchema: string | null;
   export let groupColumnAttnums: number[] = [];
   export let infoText: string | null = null;
 
-  let defaultGroupColumns = selectedTable?.default_group_columns || [];
+  let defaultGroupColumns = selectedTable?.defaultGroupColumns || [];
   let groupColumnError: string | null = null;
   let useCustomGrouping = false;
 
   $: groupColumnError = errors.sequence_filter?.group_column_attnums?.[0];
-  $: defaultGroupColumns = selectedTable?.default_group_columns || [];
+  $: defaultGroupColumns = selectedTable?.defaultGroupColumns || [];
 
   $: {
     if (
@@ -52,7 +52,7 @@
             selectedTable?.columns.find((col) => col.attnum === attnum)?.name,
         )
         .join(", ")}`
-    : selectedTable?.is_event_table
+    : selectedTable?.isEventTable
       ? "Using source_database_id, source_table_oid, and record_pk for grouping, which is the default"
       : defaultGroupColumns.length === 0
         ? "No primary keys available. Custom grouping is required."
@@ -70,7 +70,7 @@
     </svelte:fragment>
 
     <svelte:fragment slot="summary">
-      {#if !useCustomGrouping && !selectedTable?.is_event_table}
+      {#if !useCustomGrouping && !selectedTable?.isEventTable}
         <p class="text-sm text-muted-foreground">
           Using primary keys for grouping.
         </p>
@@ -145,7 +145,7 @@
 
     <svelte:fragment slot="content">
       <p class="text-sm text-muted-foreground">
-        {selectedTable.is_event_table
+        {selectedTable.isEventTable
           ? "By default, Sequin uses these columns to group event table messages: source_database_id, source_table_oid, and record_pk. This ensures that records are processed serially."
           : "By default, Sequin uses primary keys to group messages. This ensures that records are processed serially for each individual record."}
       </p>

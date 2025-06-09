@@ -332,7 +332,6 @@
 
   function initialCodeFor(type: string, sinkType: string | null) {
     const key = type + (type === "routing" ? "_" + sinkType : "");
-    console.log("key", key);
     return initialCodeMap[key];
   }
 

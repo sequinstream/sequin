@@ -5,6 +5,8 @@ description: 'Learn how to create real-time search indexes from Postgres changes
 ---
 
 import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+import QuickstartSourceStep from '/snippets/quickstart-source-step.mdx';
+import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
 
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Typesense collection. You'll:
 
@@ -90,13 +92,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       Select "Typesense" as the sink type and click "Continue".
     </Step>
 
-    <Step title='Note "Source" configuration'>
-      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
-
-      <Frame>
-        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
-      </Frame>
-    </Step>
+    <QuickstartSourceStep />
 
     <Step title="Setup a transform">
       In the [Transform](/reference/transforms) card, click the toggle to view existing transforms. None exist, so click "+ Create new transform" which will open a window for creating a new transform.
@@ -124,13 +120,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
        Now, select the `products-typesense` transform in the "Transform" list. (If you don't see it, click the refresh icon.)
     </Step>
 
-    <Step title="Setup a backfill">
-      Toggle open the "Initial backfill" card and select "Backfill all rows":
-
-      <Frame>
-        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
-      </Frame>
-    </Step>
+    <QuickstartBackfillStep />
 
     <Step title='Configure Typesense'>
       In the Typesense card, enter your Typesense configuration:

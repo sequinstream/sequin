@@ -79,20 +79,24 @@
       selectedDatabase = databases.find((db) => db.id === selectedDatabaseId);
     }
     filteredTables =
-      selectedDatabase?.tables.filter((table) =>
+      selectedDatabase?.tables.filter((table: Table) =>
         `${table.schema}.${table.name}`
           .toLowerCase()
           .includes((searchQuery || "").toLowerCase()),
       ) || [];
 
     if (onlyEventTables) {
-      filteredTables = filteredTables.filter((table) => table.isEventTable);
+      filteredTables = filteredTables.filter(
+        (table: Table) => table.isEventTable,
+      );
     } else if (excludeEventTables) {
-      filteredTables = filteredTables.filter((table) => !table.isEventTable);
+      filteredTables = filteredTables.filter(
+        (table: Table) => !table.isEventTable,
+      );
     }
 
     filteredSchemas =
-      selectedDatabase?.schemas.filter((schema) =>
+      selectedDatabase?.schemas.filter((schema: string) =>
         schema.toLowerCase().includes((searchQuery || "").toLowerCase()),
       ) || [];
   }
@@ -162,12 +166,8 @@
     if (selectedDatabaseId) {
       selectedDatabase = databases.find((db) => db.id === selectedDatabaseId);
     }
-    if (selectedDatabase && selectedDatabase.tables.length === 1) {
-      onSelect({
-        databaseId: selectedDatabaseId,
-        tableOid: selectedDatabase.tables[0].oid,
-        schema: null,
-      });
+    if (selectedDatabase && selectedDatabase.schemas.length === 1) {
+      lastSelectedSchema = selectedDatabase.schemas[0];
     }
   });
 

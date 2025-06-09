@@ -209,8 +209,6 @@
       !form.postgresDatabaseId || (!form.tableOid && !form.schema);
   }
 
-  $: console.log("form.backfill", form.backfill);
-
   const isEditMode = !!consumer.id;
 
   function handleConsumerSubmit() {
@@ -246,7 +244,6 @@
         (table) => table.oid === form.tableOid,
       );
       const prefix = selectedSchema ? selectedSchema : selectedTable?.name;
-      console.log("prefix", prefix);
       if (prefix) {
         const newName = `${prefix}-sink`;
         form.name = newName;

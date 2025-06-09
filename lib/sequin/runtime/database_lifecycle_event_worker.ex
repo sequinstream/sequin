@@ -38,6 +38,7 @@ defmodule Sequin.Runtime.DatabaseLifecycleEventWorker do
   end
 
   defp handle_database_event(event, id, data) do
+    Databases.invalidate_cached_db(id)
     Logger.info("[LifecycleEventWorker] Handling event `#{event}` for database", database_id: id)
 
     case event do

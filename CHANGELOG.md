@@ -4,6 +4,95 @@ Sequin provides fast, real-time Postgres change data capture into streams and qu
 
 This log is updated every Friday to track our feature releases and updates week by week. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
+## May 16, 2025
+
+### Added
+
+* Sequin can now connect to Postgres Replicas
+* Add deep linking from the a message delivery error to the messages tab.
+
+### Changed
+
+* Improve TypeSense sink endpoint url validation and error handling
+
+
+* Changed show flash if show-ack-id message not found.
+
+
+
+
+* Added use `@derive` to filter sensitive sink fields out from logs.
+* Added handle un-fifo-ifying a sink's queue.
+* Added clock drift metrics.
+* Added busy_percent to ProcessMetrics.
+* Changed only consider physical replicas as replicas.
+
+* Changed check replication lag properly for replicas.
+* Changed handle empty cond & other errors.
+* Changed show 'Edit database' in title when editing.
+* Changed don't log every single keepalive we receive.
+* Changed oban queues.
+* Changed make kickoff and system jobs unique.
+* Changed format errors for sequin config export/plan/apply.
+* Allow transform functions to be removed from a sink
+
+### Fixed
+
+* Changed in filters, do not show comparison value when user selects IS NULL or IS NOT NULL.
+* Fix transforms YAML flat format.
+* Fixed put back execution redis command in fun.
+* Fixed improve full page forms to avoid using a modal.
+* Fixed improve yaml load for `sinks.max_retry_count`, `sinks.active_backfill` and `http_endpoints.encrypted_headers`.
+* Fixed message Grouping card form improvements.
+* Fix pagination on sink/messages.
+* Fix flaky test by increasing timeout.
+* Fix consumer message serialization of struct types.
+* Fixed show missing Transform Function form validation errors.
+* Fix database replica primary form population.
+* Fixed only display message not_visible_until date if its defined.
+* Fixed handle nil confirmed_flush / restart lsns.
+
+## May 09, 2025
+
+### Added
+
+* Added a Redis String sink destination
+* Multiple improvements for HTTP Webhook sings including the ability `batch` messages, and configure the `max_retry_count` to limit Webhook delivery attempts.
+* You can optimize Sequin performance by changing the memory limit for sinks.
+* Added [`SEQUIN_LOG_FORMAT`](https://sequinstream.com/docs/reference/configuration#general-configuration) to the config so you can integrate with tools like DataDog.
+* Added idempotency_key to message payloads to simplify exactly-once processing.
+
+### Changed
+
+* Set a default port to REDIS_URL if it's missing.
+* Improved how Sequin handles database reconnects to improve performance.
+* Added basic authentication to Prometheus
+* Improvements to error messaging when creating replication slots, connecting databases, and checking database health.
+* Function now accept `_` variables
+
+### Fixed
+
+* Fix 'Copy for ChatGPT' button when creating functions.
+* Fix reporting of replication slot size.
+
+## May 02, 2025
+
+### Added
+
+* Added CRUD support for databases in the [management API](https://sequinstream.com/docs/management-api/postgres_databases/list).
+* Added support Postgres 13+.
+* Added backfill lag metrics to help with monitoring backfills.
+
+### Changed
+
+* Changed timestamp precision to microseconds for Postgres `timestamp` and `timestamptz`.
+* Improved CLI diffs display and error handling on `config plan/apply`.
+
+### Fixed
+
+* Ensure transform and routing functions startup properly.
+* Fixed database string parsing in the console.
+
 ## April 25, 2025
 
 ### Added
@@ -15,12 +104,10 @@ This log is updated every Friday to track our feature releases and updates week 
 * Improvements to memory utilization.
 * Improved how the system behaves when it hits memory limits and needs to disconnect from the replication slot.
 * Added support for modules like `Base` to functions.
-* Improved sink creation user experience by hiding Sequin internal tables from the sink creation form.
 * Renamed current Redis sink to Redis Stream to make way for the new Redis String sink.
 
 ### Fixed
 
-* Corrected the sidebar navigation title display for 'Management API' section.
 * Fixed Postgres array parsing to handle complex data types more accurately.
 * Improved in-console experience around editing function transforms.
 * Fixed some YAML parsing errors in `sequin.yaml` configuration files around anchors and interpolation.
@@ -28,17 +115,17 @@ This log is updated every Friday to track our feature releases and updates week 
 
 ## April 18, 2025
 
+We're introducing [routing functions](https://sequinstream.com/docs/reference/routing) which allow you to write custom logic on the message content to direct the message to different destinations. For instance, you can send `inserts` to a `POST` endpoint and `updates` to a `PUT`. We're starting with HTTP Webhook and Redis String sinks, with more coming soon!
+
 ### Added
 
-* Added [routing functions](https://sequinstream.com/docs/reference/routing) to route messages based on custom logic.
+* Added routing function support for HTTP Webhook and Redis String sinks.
 * Added the [`sequin config interpolate`](https://sequinstream.com/docs/reference/cli/overview#commands) command to the CLI to output a YAML file with all environment variables interpolated.
 
 ### Changed
 
-* AWS Fargate deployments are now fully supported for improved scalability.
 * Database connection failures during startup now provide detailed error messages to help diagnose connectivity issues.
 * Improved replica identity validation for partitioned tables to ensure proper change data capture.
-* Removed legacy sequences from YAML configuration and management API to simplify deployment management.
 
 ### Fixed
 
@@ -57,12 +144,11 @@ This log is updated every Friday to track our feature releases and updates week 
 ### Changed
 
 * Improved logging configuration: The log level can now be set via the LOG_LEVEL environment variable across all environments, with sensible defaults
-* Validate http endpoint names are unique
 
 ### Fixed
 
 * Fix config file interpolation
-* CLI: increase timeout in plan/apply
+* Various CLI improvements around config plan/apply
 
 ## Week of March 31, 2025
 

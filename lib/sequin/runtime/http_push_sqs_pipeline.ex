@@ -30,6 +30,9 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
 
   require Logger
 
+  @backoff_base :timer.minutes(1)
+  @backoff_max :timer.minutes(10)
+
   @spec main_queue_child_spec(keyword()) :: Supervisor.child_spec() | nil
   def main_queue_child_spec(opts \\ []) do
     queue_url = Map.fetch!(fetch_sqs_config!(), :main_queue_url)
@@ -221,7 +224,30 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
 
               message
             else
-              Message.failed(message, "Failed to deliver message: #{inspect(error)}")
+              # Calculate exponential backoff timeout based on receive count
+              # Start at 1 minute, max at 10 minutes
+              %{metadata: %{attributes: %{"approximate_receive_count" => receive_count}}} = message
+              retry_count = receive_count - 1
+              backoff_ms = Sequin.Time.exponential_backoff(@backoff_base, retry_count, @backoff_max)
+              backoff_seconds = div(backoff_ms, 1000)
+
+              Logger.info(
+                "[HttpPushSqsPipeline] Nacking message with #{backoff_seconds} seconds visibility timeout (retry #{retry_count})"
+              )
+
+              Trace.info(consumer_id, %Trace.Event{
+                message: "Nacking message with exponential backoff",
+                extra: %{
+                  retry_count: retry_count,
+                  backoff_seconds: backoff_seconds,
+                  error: error
+                }
+              })
+
+              # Nack the message with the calculated backoff time
+              message
+              |> Message.configure_ack(on_failure: {:nack, backoff_seconds})
+              |> Message.failed("Failed to deliver message: #{inspect(error)}")
             end
         end
 

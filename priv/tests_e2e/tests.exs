@@ -7,7 +7,7 @@ defmodule Sequin.E2E.KafkaTest do
 
   @db_config [
     hostname: "localhost",
-    port: 5432,
+    port: 5412,
     username: "postgres",
     password: "postgres",
     database: "sequin_test"
@@ -33,7 +33,6 @@ defmodule Sequin.E2E.KafkaTest do
   end
 
   setup %{conn: _conn, tid: tid} do
-    # clear_test_data(conn)
     :ets.delete_all_objects(tid)
     clear_kafka_topics()
     :ok
@@ -94,7 +93,7 @@ defmodule Sequin.E2E.KafkaTest do
   end
 
   defp wait_for_sequin(retries \\ 0) do
-    case :httpc.request(:get, {~c"http://localhost:7376/health", []}, [], []) do
+    case :httpc.request(:get, {~c"http://localhost:7316/health", []}, [], []) do
       {:ok, {{_, 200, _}, _, _}} ->
         :ok
 
@@ -125,8 +124,6 @@ defmodule Sequin.E2E.KafkaTest do
 
   # Internal functions
 
-  defp clear_test_data(conn), do: Postgrex.query(conn, "DELETE FROM demo_table", [])
-
   defp clear_kafka_topics do
     for topic <- @test_topics do
       System.cmd(
@@ -136,7 +133,7 @@ defmodule Sequin.E2E.KafkaTest do
           "sequin-e2e-kafka",
           "kafka-topics",
           "--bootstrap-server",
-          "localhost:9092",
+          "kafka:29092",
           "--delete",
           "--topic",
           topic
@@ -151,7 +148,7 @@ defmodule Sequin.E2E.KafkaTest do
           "sequin-e2e-kafka",
           "kafka-topics",
           "--bootstrap-server",
-          "localhost:9092",
+          "kafka:29092",
           "--create",
           "--topic",
           topic,

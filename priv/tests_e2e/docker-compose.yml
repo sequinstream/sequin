@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile.postgres
     command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c max_connections=200 -c pg_stat_statements.max=10000 -c track_activity_query_size=2048 -c wal_level=logical
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5412:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -28,7 +28,7 @@ services:
   redis:
     image: redis:7
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6319:6379"
     networks:
       - sequin-e2e
     healthcheck:
@@ -43,11 +43,11 @@ services:
     hostname: kafka
     container_name: sequin-e2e-kafka
     ports:
-      - "127.0.0.1:9092:9092"
+      - "127.0.0.1:9012:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9012'
       KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9092'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
@@ -80,7 +80,7 @@ services:
         SELF_HOSTED: 1
         SENTRY_DSN: "https://dummy@dummy.ingest.sentry.io/123456"
     ports:
-      - "127.0.0.1:7376:7376"
+      - "127.0.0.1:7316:7376"
     environment:
       MIX_ENV: prod
       SERVER_PORT: "7376"

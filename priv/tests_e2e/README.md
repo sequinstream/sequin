@@ -5,10 +5,10 @@ This directory contains the end-to-end tests for Sequin, testing the integration
 ## Test Setup
 
 The test environment consists of:
-- PostgreSQL database with a simple `demo_table`
-- Kafka broker for message streaming
-- Redis for caching
-- Sequin service configured to stream changes
+- PostgreSQL database with a simple `demo_table` (port 5412)
+- Kafka broker for message streaming (port 9012)
+- Redis for caching (port 6319)
+- Sequin service configured to stream changes (port 7316)
 
 ## Configuration
 

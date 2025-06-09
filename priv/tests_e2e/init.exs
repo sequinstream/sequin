@@ -4,7 +4,7 @@ Mix.install([
   {:kafka_ex, "~> 0.13.0"}
 ])
 
-Application.put_env(:kafka_ex, :brokers, [{"localhost", 9092}])
+Application.put_env(:kafka_ex, :brokers, [{"localhost", 9012}])
 Application.put_env(:kafka_ex, :consumer_group, "e2e_test_group")
 
 [:postgrex, :kafka_ex]

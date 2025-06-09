@@ -23,7 +23,7 @@ defmodule Sequin.E2E.KafkaTest do
     wait_for_kafka()
 
     {:ok, conn} = Postgrex.start_link(@db_config)
-    tid = :ets.new(:test_messages, [:set, :public])
+    tid = :ets.new(:test_messages, [:duplicate_bag, :public])
 
     on_exit(fn ->
       GenServer.stop(conn)

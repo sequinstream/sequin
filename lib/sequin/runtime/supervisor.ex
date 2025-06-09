@@ -98,7 +98,6 @@ defmodule Sequin.Runtime.Supervisor do
   end
 
   def start_replication(supervisor, %PostgresReplicationSlot{} = pg_replication, opts) do
-    pg_replication = Repo.preload(pg_replication, [:postgres_database, sink_consumers: [:sequence]])
     opts = Keyword.put(opts, :pg_replication_id, pg_replication.id)
     test_pid = Keyword.get(opts, :test_pid)
 

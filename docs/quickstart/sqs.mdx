@@ -5,6 +5,8 @@ description: 'Stream Postgres changes to an SQS queue in minutes. Build real-tim
 ---
 
 import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+import QuickstartSourceStep from '/snippets/quickstart-source-step.mdx';
+import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
 
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to an Amazon SQS queue. You'll:
 
@@ -61,21 +63,8 @@ Replace `<your-queue-arn>` with your queue's ARN (e.g., `arn:aws:sqs:us-east-1:1
       Select "Amazon SQS" as the sink type and click "Continue".
     </Step>
 
-    <Step title='Note "Source" configuration'>
-      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
-
-      <Frame>
-        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
-      </Frame>
-    </Step>
-
-    <Step title="Setup a backfill">
-      Toggle open the "Initial backfill" card and select "Backfill all rows":
-
-      <Frame>
-        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
-      </Frame>
-    </Step>
+    <QuickstartSourceStep />
+    <QuickstartBackfillStep />
 
     <Step title='Configure "SQS Queue"'>
       In the "SQS Configuration" card, enter your queue details:

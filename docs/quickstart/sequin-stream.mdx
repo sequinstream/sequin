@@ -5,6 +5,8 @@ description: "Build exactly-once processing pipelines for Postgres changes witho
 ---
 
 import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+import QuickstartSourceStep from '/snippets/quickstart-source-step.mdx';
+import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
 
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a [Sequin Stream](/reference/sinks/sequin-stream). Sequin Stream is a Postgres-based message stream, native to Sequin.
 
@@ -31,21 +33,8 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       Select "Sequin Stream" as the sink type and click "Continue".
     </Step>
 
-    <Step title='Note "Source" configuration'>
-      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
-
-      <Frame>
-        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
-      </Frame>
-    </Step>
-
-    <Step title="Setup a backfill">
-      Toggle open the "Initial backfill" card and select "Backfill all rows":
-
-      <Frame>
-        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
-      </Frame>
-    </Step>
+    <QuickstartSourceStep />
+    <QuickstartBackfillStep />
 
     <Step title="Create the sink">
       You can leave the rest of the defaults. As configured, the Sequin Stream will first receive a backfill of all rows currently in the `products` table. Then, it will receive all changes to the `products` table in real-time.

@@ -11,7 +11,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import * as Command from "$lib/components/ui/command";
-  import { Check, ChevronsUpDown } from "lucide-svelte";
+  import { Check, ChevronsUpDown, Trash2 } from "lucide-svelte";
   import { cn } from "$lib/utils";
   import { tick } from "svelte";
   import { Label } from "$lib/components/ui/label";
@@ -228,11 +228,21 @@
     form.function.sink_type = event.value;
   }
 
-  function handleDelete() {
-    if (usedByConsumers.length > 0) {
-      showDeleteDialog = true;
-    } else {
-      pushEvent("delete");
+  function deleteMessage(message: TestMessage, index: number) {
+    if (deletedIdempotencyKeys.has(message.idempotency_key)) {
+      return;
+    }
+
+    pushEvent("delete_test_message", {
+      idempotency_key: message.idempotency_key,
+    });
+
+    deletedIdempotencyKeys.add(message.idempotency_key);
+
+    if (selectedMessageIndex >= index) {
+      const updatedIndex = Math.max(selectedMessageIndex - 1, 0);
+      console.log("updatedIndex", updatedIndex);
+      selectMessage(updatedIndex);
     }
   }
 
@@ -338,6 +348,7 @@
   //   }
   // }
 
+  let deletedIdempotencyKeys: Set<string> = new Set();
   let messagesToShow: TestMessage[] = [];
   let showSyntheticMessages = false;
   let selectedMessageIndex: number = 0;
@@ -345,7 +356,9 @@
 
   $: {
     if (testMessages.length > 0) {
-      messagesToShow = testMessages;
+      messagesToShow = testMessages.filter(
+        (m) => !deletedIdempotencyKeys.has(m.idempotency_key),
+      );
       showSyntheticMessages = false;
     } else {
       messagesToShow = syntheticTestMessages;
@@ -974,7 +987,7 @@ Please help me create or modify the Elixir function transform to achieve the des
             </li>
             <li>
               <div class="flex items-center gap-2">
-                Make an insert, update, or delete on the table
+                Make up to 10 inserts, updates, and deletes on the table
                 {#if testMessages.length > 0}
                   <svg
                     class="w-4 h-4 text-green-500"
@@ -1118,6 +1131,17 @@ Please help me create or modify the Elixir function transform to achieve the des
                         ? "Example"
                         : `Message ${i + 1}`}</span
                     >
+                    {#if !showSyntheticMessages && selectedMessageIndex === i}
+                      <button
+                        class="text-xs text-slate-500"
+                        on:click={(e) => {
+                          e.preventDefault();
+                          deleteMessage(message, i);
+                        }}
+                      >
+                        <Trash2 class="w-4 h-4" />
+                      </button>
+                    {/if}
                   </div>
                 </button>
                 {#if selectedMessageIndex === i}
@@ -1217,7 +1241,11 @@ Please help me create or modify the Elixir function transform to achieve the des
                       class="text-center p-6 border border-dashed border-slate-300 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/50 max-w-md"
                     >
                       <p class="text-slate-600 dark:text-slate-400">
-                        Output not available - fix your transform!
+                        {#if form.function?.type}
+                          Output not available - fix your transform!
+                        {:else}
+                          Select a function type to view output
+                        {/if}
                       </p>
                     </div>
                   {/if}

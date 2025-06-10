@@ -37,7 +37,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Time
-  alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
 
@@ -993,9 +992,6 @@ defmodule Sequin.Consumers do
         }
       }
     )
-
-    ack_ids = Enum.map(acked_messages, & &1.ack_id)
-    TracerServer.messages_acked(consumer, ack_ids)
 
     {:ok, count}
   end

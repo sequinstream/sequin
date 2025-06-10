@@ -53,6 +53,33 @@ Sequin sends messages to Redis streams using the `XADD` command. Each message co
 
 For the shape of the fields `metadata` and `changes` as well as information about `action`, see the reference for [messages](/reference/payloads).
 
+## Transforms
+
+You can use transforms to customize the fields sent to Redis Streams. The transform function should return a map where:
+
+- Each key becomes a field name in the Redis Stream entry
+- String values are stored as-is
+- Non-string values are JSON-encoded
+
+Example transform:
+
+```elixir
+def transform(_action, record, changes, metadata) do
+  %{
+    id: record["id"],
+    name: record["name"],
+    changes: changes,
+    table: metadata.table_name
+  }
+end
+```
+
+This would result in a Redis Stream entry like:
+
+```
+XADD mystream * id 123 name "John" changes "{\"email\":\"newemail@domain.com\"}" table "users"
+```
+
 ## Retry behavior
 
 If Sequin is unable to deliver a message to Redis, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.

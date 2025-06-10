@@ -950,8 +950,15 @@ defmodule Sequin.Consumers do
     :syn.publish(:consumers, {:messages_changed, consumer_id}, :messages_changed)
   end
 
+  @doc """
+  Updates the consumer's stats and creates ack messages.
+
+  This should be called for messages that were successfully delivered to a sink destination.
+  """
   @spec after_messages_acked(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t())) ::
           {:ok, non_neg_integer()}
+  def after_messages_acked(%SinkConsumer{}, []), do: {:ok, 0}
+
   def after_messages_acked(%SinkConsumer{} = consumer, acked_messages) do
     count = length(acked_messages)
     Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
@@ -1175,15 +1182,8 @@ defmodule Sequin.Consumers do
   def matches_message?(%SinkConsumer{message_kind: :record}, %SlotProcessor.Message{action: :delete}), do: false
 
   # Schema Matching
-  def matches_message?(
-        %SinkConsumer{schema_filter: %SchemaFilter{} = schema_filter} = consumer,
-        %SlotProcessor.Message{} = message
-      ) do
-    matches? = message_matches_schema?(schema_filter, message)
-
-    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
-
-    matches?
+  def matches_message?(%SinkConsumer{schema_filter: %SchemaFilter{} = schema_filter}, %SlotProcessor.Message{} = message) do
+    message_matches_schema?(schema_filter, message)
   end
 
   # Sequence Matching
@@ -1191,11 +1191,7 @@ defmodule Sequin.Consumers do
         %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         %SlotProcessor.Message{} = message
       ) do
-    matches? = message_matches_sequence?(sequence, sequence_filter, message)
-
-    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
-
-    matches?
+    message_matches_sequence?(sequence, sequence_filter, message)
   rescue
     error in [ArgumentError] ->
       Health.put_event(consumer, %Event{
@@ -1287,23 +1283,35 @@ defmodule Sequin.Consumers do
     matches?
   end
 
-  def matches_filter?(%SinkConsumer{filter: nil}, _), do: true
+  def matches_filter?(%SinkConsumer{filter: nil} = consumer, _) do
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+    true
+  end
 
   def matches_filter?(%SinkConsumer{filter: filter} = consumer, %cm{data: data})
       when cm in [ConsumerRecord, ConsumerEvent] do
     filter
     |> MiniElixir.run_compiled(data)
-    |> check_filter_return(consumer)
+    |> check_filter_return()
+    |> case do
+      {:ok, result} ->
+        Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+
+        result
+
+      {:error, error} ->
+        Health.put_event(consumer, %Event{slug: :messages_filtered, status: :fail, error: error})
+        raise error
+    end
   end
 
-  defp check_filter_return(true, _), do: true
-  defp check_filter_return(false, _), do: false
+  defp check_filter_return(true), do: {:ok, true}
+  defp check_filter_return(false), do: {:ok, false}
 
-  defp check_filter_return(e, consumer) do
+  defp check_filter_return(e) do
     val = e |> inspect() |> String.slice(0, 128)
     msg = "Filter functions must return true or false, got: #{val}"
-    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :fail, error: Error.invariant(message: msg)})
-    raise "filter function failed to return boolean"
+    {:error, Error.invariant(message: msg)}
   end
 
   defp action_matches?(source_table_actions, message_action) do

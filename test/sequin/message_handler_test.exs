@@ -7,9 +7,7 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Factory.FunctionsFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.TestMessages
   alias Sequin.Health
   alias Sequin.Replication
@@ -66,7 +64,7 @@ defmodule Sequin.MessageHandlerTest do
       context = context(consumers: [consumer], postgres_database: database)
 
       now = DateTime.utc_now()
-      TestSupport.expect_utc_now(4, fn -> now end)
+      TestSupport.expect_utc_now(3, fn -> now end)
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -135,7 +133,7 @@ defmodule Sequin.MessageHandlerTest do
       context = context(consumers: [consumer], postgres_database: database)
 
       now = DateTime.utc_now()
-      TestSupport.expect_utc_now(4, fn -> now end)
+      TestSupport.expect_utc_now(3, fn -> now end)
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -607,102 +605,6 @@ defmodule Sequin.MessageHandlerTest do
 
       [record] = list_messages(consumer)
       assert record.group_id == "A"
-    end
-
-    test "only processes messages that match the filter function condition" do
-      account = AccountsFactory.insert_account!()
-      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
-
-      # Create a filter function that only accepts records with name starting with "A"
-      filter_function =
-        FunctionsFactory.insert_filter_function!(
-          function_attrs: [
-            body: """
-            String.starts_with?(record["name"], "A")
-            """
-          ]
-        )
-
-      # Compile the function
-      MiniElixir.create(filter_function.id, filter_function.function.code)
-
-      # Create a sequence for our test table
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          table_oid: 123,
-          account_id: account.id,
-          postgres_database_id: database.id
-        )
-
-      # Create sequence filter
-      sequence_filter =
-        ConsumersFactory.sequence_filter_attrs(
-          group_column_attnums: [1],
-          column_filters: []
-        )
-
-      # Create consumer with our filter function
-      consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          message_kind: :event,
-          account_id: account.id,
-          sequence_id: sequence.id,
-          sequence_filter: sequence_filter,
-          filter_id: filter_function.id,
-          postgres_database_id: database.id
-        )
-
-      start_supervised!(
-        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
-      )
-
-      consumer = Repo.preload(consumer, [:postgres_database, :sequence, :filter])
-      database = Repo.preload(database, :sequences)
-
-      # Create test messages - some that should match the filter, some that shouldn't
-      matching_fields = [
-        ReplicationFactory.field(column_attnum: 1, column_name: "id", value: 1),
-        ReplicationFactory.field(column_attnum: 2, column_name: "name", value: "Aragorn")
-      ]
-
-      non_matching_fields = [
-        ReplicationFactory.field(column_attnum: 1, column_name: "id", value: 2),
-        ReplicationFactory.field(column_attnum: 2, column_name: "name", value: "Boromir")
-      ]
-
-      matching_message =
-        ReplicationFactory.postgres_message(
-          table_oid: 123,
-          action: :insert,
-          fields: matching_fields,
-          ids: [1]
-        )
-
-      non_matching_message =
-        ReplicationFactory.postgres_message(
-          table_oid: 123,
-          action: :insert,
-          fields: non_matching_fields,
-          ids: [2]
-        )
-
-      context = context(consumers: [consumer], postgres_database: database)
-
-      # Process both messages
-      {:ok, processed_count} = MessageHandler.handle_messages(context, [matching_message, non_matching_message])
-
-      # We expect only the matching message to be processed
-      assert processed_count == 1
-
-      # Verify only the message matching our filter condition was stored
-      messages = list_messages(consumer)
-      assert length(messages) == 1
-
-      stored_message = hd(messages)
-      assert stored_message.consumer_id == consumer.id
-      assert stored_message.table_oid == 123
-      assert stored_message.record_pks == ["1"]
-      assert stored_message.data.record["name"] == "Aragorn"
     end
   end
 

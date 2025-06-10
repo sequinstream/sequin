@@ -19,6 +19,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Prometheus
   alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
@@ -165,18 +166,36 @@ defmodule Sequin.Runtime.SinkPipeline do
     # Have to ensure module is loaded to trust function_exported?
     Code.ensure_loaded?(pipeline_mod)
 
-    if function_exported?(pipeline_mod, :handle_message, 2) do
-      case pipeline_mod.handle_message(message, context) do
-        {:ok, message, next_context} ->
-          update_context(context, next_context)
-          message
+    case filter_message(message, context.consumer) do
+      {:ok, true} ->
+        if function_exported?(pipeline_mod, :handle_message, 2) do
+          case pipeline_mod.handle_message(message, context) do
+            {:ok, message, next_context} ->
+              update_context(context, next_context)
+              message
 
-        {:error, error} ->
-          Message.failed(message, error)
-      end
-    else
-      message
+            {:error, error} ->
+              Message.failed(message, error)
+          end
+        else
+          message
+        end
+
+      {:ok, false} ->
+        Message.put_batcher(message, :filtered_messages)
+
+      {:error, error} ->
+        Message.failed(message, error)
     end
+  end
+
+  @impl Broadway
+  def handle_batch(:filtered_messages, messages, _batch_info, context) do
+    if test_pid = context[:test_pid] do
+      send(test_pid, {__MODULE__, :filtered_messages, messages})
+    end
+
+    messages
   end
 
   @impl Broadway
@@ -196,11 +215,21 @@ defmodule Sequin.Runtime.SinkPipeline do
 
       {to_deliver, already_delivered} ->
         Prometheus.increment_message_deliver_attempt(context.consumer.id, context.consumer.name, length(to_deliver))
-        deliver_messages(pipeline_mod, batch_name, to_deliver, already_delivered, batch_info, context)
+        delivered = deliver_messages(pipeline_mod, batch_name, to_deliver, batch_info, context)
+
+        delivered ++ already_delivered
     end
   end
 
-  defp deliver_messages(pipeline_mod, batch_name, to_deliver, already_delivered, batch_info, context) do
+  defp filter_message(message, %SinkConsumer{} = consumer) do
+    {:ok, Consumers.matches_filter?(consumer, message.data)}
+  rescue
+    error ->
+      Health.put_event(consumer, %Event{slug: :messages_filtered, status: :fail, error: error})
+      {:error, error}
+  end
+
+  defp deliver_messages(pipeline_mod, batch_name, to_deliver, batch_info, context) do
     now = Sequin.utc_now()
 
     to_deliver
@@ -218,18 +247,15 @@ defmodule Sequin.Runtime.SinkPipeline do
         Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :ok, t)
 
         update_context(context, next_context)
-        delivered ++ already_delivered
+        delivered
 
       {t, {:error, error}} ->
         Prometheus.increment_message_deliver_failure(context.consumer.id, context.consumer.name, length(to_deliver))
         Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :error, t)
 
-        failed =
-          Enum.map(to_deliver, fn message ->
-            Message.failed(message, error)
-          end)
-
-        failed ++ already_delivered
+        Enum.map(to_deliver, fn message ->
+          Message.failed(message, error)
+        end)
     end
   rescue
     error ->
@@ -250,6 +276,8 @@ defmodule Sequin.Runtime.SinkPipeline do
   end
 
   defp init_runtime_context(context) do
+    setup_allowances(context[:test_pid])
+
     # Add jitter for thundering herd
     unless Application.get_env(:sequin, :env) == :test do
       :timer.sleep(:rand.uniform(50))
@@ -310,6 +338,10 @@ defmodule Sequin.Runtime.SinkPipeline do
         concurrency: concurrency,
         batch_size: consumer.batch_size,
         batch_timeout: batch_timeout
+      ],
+      filtered_messages: [
+        concurrency: 1,
+        batch_size: 1
       ]
     ]
 
@@ -380,24 +412,26 @@ defmodule Sequin.Runtime.SinkPipeline do
   defp ack_successful(_consumer, _sms, []), do: :ok
 
   defp ack_successful(consumer, slot_message_store_mod, successful) do
-    successful_messages = Enum.map(successful, & &1.data)
+    {filtered, delivered} = Enum.split_with(successful, &(&1.batcher == :filtered_messages))
+
+    delivered_messages = Enum.map(delivered, & &1.data)
+    filtered_messages = Enum.map(filtered, & &1.data)
+    all_messages = delivered_messages ++ filtered_messages
 
     # Mark wal_cursors as delivered
     wal_cursors =
-      Enum.map(successful_messages, fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
+      Enum.map(all_messages, fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
 
     :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
     :ok = MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "consumer_producer.ack", wal_cursors)
 
-    case slot_message_store_mod.messages_succeeded(consumer, successful_messages) do
+    case slot_message_store_mod.messages_succeeded(consumer, all_messages) do
       {:ok, _count} -> :ok
       {:error, error} -> raise error
     end
 
     # Update consumer stats + create ack messages
-    {:ok, _count} = Consumers.after_messages_acked(consumer, successful_messages)
-
-    Health.put_event(consumer, %Health.Event{slug: :messages_delivered, status: :success})
+    {:ok, _count} = Consumers.after_messages_acked(consumer, delivered_messages)
 
     :ok
   end
@@ -502,13 +536,14 @@ defmodule Sequin.Runtime.SinkPipeline do
   defp setup_allowances(nil), do: :ok
 
   defp setup_allowances(test_pid) do
+    Mox.allow(Sequin.Runtime.SinkPipelineMock, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
     Mox.allow(Sequin.TestSupport.ApplicationMock, test_pid, self())
     Sandbox.allow(Sequin.Repo, test_pid, self())
   end
 
   defp preload_consumer(consumer) do
-    Repo.lazy_preload(consumer, [:sequence, :transform, :routing])
+    Repo.lazy_preload(consumer, [:sequence, :transform, :routing, :filter])
   end
 
   # Formats timestamps according to the consumer's timestamp_format setting

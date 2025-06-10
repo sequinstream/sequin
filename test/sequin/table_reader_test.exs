@@ -1,15 +1,12 @@
 defmodule Sequin.TableReaderTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Factory.FunctionsFactory
-  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.TableReader
   alias Sequin.TestSupport.Models.Character
@@ -488,70 +485,6 @@ defmodule Sequin.TableReaderTest do
 
       assert primary_keys == []
       assert next_cursor == nil
-    end
-  end
-
-  describe "fetch_batch with filter function" do
-    test "backfill only processes records that match the filter", %{
-      db: db,
-      backfill: backfill,
-      characters_table: table,
-      character_consumer: consumer
-    } do
-      # Create a filter function that only accepts characters with names starting with "A"
-      filter_function =
-        FunctionsFactory.insert_filter_function!(
-          function_attrs: [
-            body: """
-            String.starts_with?(record["name"], "A")
-            """
-          ]
-        )
-
-      # Compile the function
-      MiniElixir.create(filter_function.id, filter_function.function.code)
-
-      {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{filter_id: filter_function.id})
-      consumer = Repo.preload(consumer, :filter, force: true)
-
-      # Insert characters - some that match the filter, some that don't
-      now = NaiveDateTime.utc_now()
-      # Should match the filter (name starts with "A")
-      matching_char1 =
-        CharacterFactory.insert_character!(
-          name: "Aragorn",
-          updated_at: NaiveDateTime.add(now, -3, :second)
-        )
-
-      matching_char2 =
-        CharacterFactory.insert_character!(
-          name: "Arwen",
-          updated_at: NaiveDateTime.add(now, -2, :second)
-        )
-
-      # Shouldn't match the filter (name doesn't start with "A")
-      non_matching_char =
-        CharacterFactory.insert_character!(
-          name: "Boromir",
-          updated_at: NaiveDateTime.add(now, -1, :second)
-        )
-
-      # Fetch initial cursor
-      {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
-
-      # Fetch a batch of records
-      {:ok, %{messages: messages, next_cursor: next_cursor}} =
-        TableReader.fetch_batch(db, consumer, backfill, table, initial_cursor, include_min: true)
-
-      # Verify that only the matching characters are included in the results
-      assert length(messages) == 2
-      message_ids = Enum.map(messages, & &1.data.record["id"])
-      assert matching_char1.id in message_ids
-      assert matching_char2.id in message_ids
-      refute non_matching_char.id in message_ids
-
-      # Verify next cursor matches last ingested record
-      assert next_cursor[table.sort_column_attnum] == non_matching_char.updated_at
     end
   end
 

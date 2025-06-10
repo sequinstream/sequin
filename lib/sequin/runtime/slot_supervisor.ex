@@ -51,7 +51,6 @@ defmodule Sequin.Runtime.SlotSupervisor do
   def start_children(%PostgresReplicationSlot{} = pg_replication, opts) do
     pg_replication =
       Repo.preload(pg_replication,
-        postgres_database: :sequences,
         sink_consumers: [:sequence],
         not_disabled_sink_consumers: [:sequence]
       )
@@ -146,14 +145,13 @@ defmodule Sequin.Runtime.SlotSupervisor do
   end
 
   defp maybe_start_consumer_pipeline(%SinkConsumer{} = sink_consumer, opts) do
-    consumer = Repo.preload(sink_consumer, [:sequence, :postgres_database])
     supervisor = via_tuple(sink_consumer.replication_slot_id)
 
-    if consumer.type == :sequin_stream do
+    if sink_consumer.type == :sequin_stream do
       :ok
     else
-      default_opts = [consumer_id: consumer.id]
-      consumer_features = Consumers.consumer_features(consumer)
+      default_opts = [consumer_id: sink_consumer.id]
+      consumer_features = Consumers.consumer_features(sink_consumer)
 
       {features, opts} = Keyword.pop(opts, :features, [])
       features = Keyword.merge(consumer_features, features)

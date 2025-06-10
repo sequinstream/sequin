@@ -6,14 +6,13 @@
   export let title: string = "";
   let showConfirmDialog = false;
   export let showConfirmOnExit = true;
-  export let enableEscapeClose = true;
 
   const dispatch = createEventDispatcher();
 
   let listening = false;
 
   function handleEscapeKey(event: KeyboardEvent) {
-    if (event.key === "Escape" && !showConfirmDialog && enableEscapeClose) {
+    if (event.key === "Escape" && !showConfirmDialog) {
       event.preventDefault();
       if (showConfirmOnExit) {
         showConfirmDialog = true;

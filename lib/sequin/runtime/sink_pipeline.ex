@@ -23,6 +23,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Prometheus
   alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
+  alias Sequin.Runtime.Trace
 
   require Logger
 
@@ -168,6 +169,14 @@ defmodule Sequin.Runtime.SinkPipeline do
 
     case filter_message(message, context.consumer) do
       {:ok, true} ->
+        Trace.info(context.consumer.id, %Trace.Event{
+          message: "Message included by filter",
+          extra: %{
+            data: message.data.data,
+            filter: context.consumer.filter
+          }
+        })
+
         if function_exported?(pipeline_mod, :handle_message, 2) do
           case pipeline_mod.handle_message(message, context) do
             {:ok, message, next_context} ->
@@ -182,6 +191,14 @@ defmodule Sequin.Runtime.SinkPipeline do
         end
 
       {:ok, false} ->
+        Trace.info(context.consumer.id, %Trace.Event{
+          message: "Message rejected by filter",
+          extra: %{
+            data: message.data.data,
+            filter: context.consumer.filter
+          }
+        })
+
         Message.put_batcher(message, :filtered_messages)
 
       {:error, error} ->

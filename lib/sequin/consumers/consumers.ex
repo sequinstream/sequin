@@ -986,7 +986,8 @@ defmodule Sequin.Consumers do
           message_count: count,
           bytes_processed: bytes_processed,
           message_kind: consumer.message_kind,
-          "$groups": %{account: consumer.account_id}
+          "$groups": %{account: consumer.account_id},
+          "$process_person_profile": false
         }
       }
     )

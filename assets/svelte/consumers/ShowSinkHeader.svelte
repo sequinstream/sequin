@@ -304,20 +304,18 @@
           <AlertCircle class="h-4 w-4 text-red-600 ml-1" />
         {/if}
       </a>
-      {#if consumer.sink.type == "http_push" || consumer.sink.type == "typesense"}
-        <a
-          href={traceUrl}
-          class={`py-2 px-4 flex items-center font-medium border-b-2 ${
-            activeTab === "trace"
-              ? "text-black border-black"
-              : "text-gray-500 hover:text-gray-700 border-transparent"
-          }`}
-          data-phx-link="redirect"
-          data-phx-link-state="push"
-        >
-          Trace
-        </a>
-      {/if}
+      <a
+        href={traceUrl}
+        class={`py-2 px-4 flex items-center font-medium border-b-2 ${
+          activeTab === "trace"
+            ? "text-black border-black"
+            : "text-gray-500 hover:text-gray-700 border-transparent"
+        }`}
+        data-phx-link="redirect"
+        data-phx-link-state="push"
+      >
+        Trace
+      </a>
     </div>
   </div>
 </div>

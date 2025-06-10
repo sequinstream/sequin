@@ -36,6 +36,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Repo
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Runtime.SlotProcessor
+  alias Sequin.Runtime.Trace
   alias Sequin.Time
 
   require Logger
@@ -1284,13 +1285,21 @@ defmodule Sequin.Consumers do
     true
   end
 
-  def matches_filter?(%SinkConsumer{filter: filter} = consumer, %cm{data: data})
+  def matches_filter?(%SinkConsumer{id: consumer_id, filter: filter} = consumer, %cm{data: data})
       when cm in [ConsumerRecord, ConsumerEvent] do
     filter
     |> MiniElixir.run_compiled(data)
     |> check_filter_return()
     |> case do
       {:ok, result} ->
+        Trace.info(consumer_id, %Trace.Event{
+          message: "Executed filter function #{filter.name}",
+          extra: %{
+            input: data,
+            output: result
+          }
+        })
+
         Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
         result

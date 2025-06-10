@@ -4,8 +4,6 @@ defmodule Sequin.Sinks.Redis.Client do
 
   import Sequin.Consumers.Guards, only: [is_redis_sink: 1]
 
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SinkConsumer
@@ -105,46 +103,24 @@ defmodule Sequin.Sinks.Redis.Client do
       {:error, handle_error(error)}
   end
 
-  defp xadd_commands(%SinkConsumer{legacy_transform: :none, sink: %RedisStreamSink{} = sink}, messages) do
-    Enum.map(messages, fn
-      %ConsumerRecord{} = message ->
-        [
-          "XADD",
-          sink.stream_key,
-          "*",
-          "record",
-          Jason.encode!(message.data.record),
-          "metadata",
-          Jason.encode!(message.data.metadata)
-        ]
+  defp xadd_commands(%SinkConsumer{sink: %RedisStreamSink{} = sink}, messages) do
+    Enum.map(messages, fn message ->
+      unless is_map(message.data) do
+        raise Error.validation(
+                summary: "Message data must be a map for Redis Stream sinks",
+                details: "Got #{inspect(message.data)}"
+              )
+      end
 
-      %ConsumerEvent{} = message ->
-        [
-          "XADD",
-          sink.stream_key,
-          "*",
-          "record",
-          Jason.encode!(message.data.record),
-          "changes",
-          Jason.encode!(message.data.changes),
-          "action",
-          message.data.action,
-          "metadata",
-          Jason.encode!(message.data.metadata)
-        ]
-    end)
-  end
+      fields =
+        message.data
+        |> Map.to_list()
+        |> Enum.flat_map(fn {key, value} ->
+          value = if is_binary(value), do: value, else: Jason.encode!(value)
+          [key, value]
+        end)
 
-  defp xadd_commands(%SinkConsumer{legacy_transform: :record_only, sink: %RedisStreamSink{} = sink} = consumer, messages) do
-    Enum.map(messages, fn
-      message ->
-        [
-          "XADD",
-          sink.stream_key,
-          "*",
-          "record",
-          Jason.encode!(Sequin.Transforms.Message.to_external(consumer, message))
-        ]
+      ["XADD", sink.stream_key, "*" | fields]
     end)
   end
 

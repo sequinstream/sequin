@@ -24,6 +24,7 @@
     UserCog,
     Code,
     Terminal,
+    Slack,
   } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import Beta from "./Beta.svelte";
@@ -239,6 +240,25 @@
           />
           {#if !$isNavCollapsed}
             <span class="text-sm leading-tight truncate">CLI</span>
+          {/if}
+        </div>
+      </a>
+      <a
+        href="https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="group"
+      >
+        <div
+          class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
+            'https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA',
+          )}"
+        >
+          <Slack
+            class="h-4 w-4 flex-shrink-0 {$isNavCollapsed ? '' : 'mr-2'}"
+          />
+          {#if !$isNavCollapsed}
+            <span class="text-sm leading-tight truncate">Slack</span>
           {/if}
         </div>
       </a>

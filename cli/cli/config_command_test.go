@@ -14,12 +14,18 @@ import (
 )
 
 func TestInterpolateAction(t *testing.T) {
-	// Create a temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "config-command-test")
+	// Create a nested temporary directory structure for test files
+	parentDir, err := os.MkdirTemp("", "config-command-test-parent")
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatalf("Failed to create parent temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(parentDir)
+
+	// We create also a child directory to test the `..` relative path without messing with files outside of the test directory
+	tmpDir, err := os.MkdirTemp(parentDir, "config-command-test-child")
+	if err != nil {
+		t.Fatalf("Failed to create child temp dir: %v", err)
+	}
 
 	// Create test YAML file
 	yamlContent := `
@@ -221,12 +227,12 @@ functions:
 			{
 				name:     "from sibling directory with relative path",
 				filePath: filepath.Join("..", "sibling-functions", "transform.ex"),
-				codePath: filepath.Join(filepath.Dir(tmpDir), "sibling-functions", "transform.ex"),
+				codePath: filepath.Join(parentDir, "sibling-functions", "transform.ex"),
 			},
 			{
 				name:     "from any directory using absolute path",
-				filePath: filepath.Join(filepath.Dir(tmpDir), "sibling-functions", "transform.ex"),
-				codePath: filepath.Join(filepath.Dir(tmpDir), "sibling-functions", "transform.ex"),
+				filePath: filepath.Join(parentDir, "sibling-functions", "transform.ex"),
+				codePath: filepath.Join(parentDir, "sibling-functions", "transform.ex"),
 			},
 		}
 

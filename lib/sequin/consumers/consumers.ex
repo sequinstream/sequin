@@ -446,6 +446,19 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def cached_sink_consumer_for_sequin_stream(account_id, id_or_name) do
+    cache_key = "sink_consumer:sequin_stream:#{account_id}:#{id_or_name}"
+    ttl = Sequin.Time.with_jitter(:timer.seconds(10))
+
+    Cache.get_or_store(
+      cache_key,
+      fn ->
+        find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream, preload: [:transform])
+      end,
+      ttl
+    )
+  end
+
   def find_sink_consumer(account_id, params \\ []) do
     params
     |> Enum.reduce(SinkConsumer.where_account_id(account_id), fn

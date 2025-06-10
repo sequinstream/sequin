@@ -4,7 +4,7 @@ defmodule Sequin.Telemetry.PosthogReporter do
 
   require Logger
 
-  @default_publish_interval :timer.seconds(10)
+  @default_publish_interval :timer.minutes(1)
 
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name, __MODULE__)
@@ -135,7 +135,8 @@ defmodule Sequin.Telemetry.PosthogReporter do
           message_count: total_count,
           bytes_processed: total_bytes,
           message_kind: base_metadata.properties.message_kind,
-          "$groups": base_metadata.properties[:"$groups"]
+          "$groups": base_metadata.properties[:"$groups"],
+          "$process_person_profile": base_metadata.properties[:"$process_person_profile"]
         }
       },
       timestamp

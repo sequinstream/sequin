@@ -58,7 +58,7 @@ When you submit a pull request, GitHub Actions will automatically run a series o
 
 After your PR passes, we will review your changes and hopefully merge!
 
-If you need to reach us sooner, the fastest way is through our [Discord server](https://discord.gg/BV8wFXvNtY).
+If you need to reach us sooner, the fastest way is through our [Discord server](https://discord.gg/BV8wFXvNtY) or [Slack community](https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA).
 
 #### For core contributors
 
@@ -91,7 +91,7 @@ This script:
 
 ## Getting help
 
-- Join our [Discord server](https://discord.gg/BV8wFXvNtY) for questions and discussions
+- Join our [Discord server](https://discord.gg/BV8wFXvNtY) or [Slack community](https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA) for questions and discussions
 - Open an issue for bugs or feature requests
 - Tag maintainers in your PR if you need help
 

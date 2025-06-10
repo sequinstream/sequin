@@ -191,6 +191,7 @@ functions:
 			filePath    string // Path to use in YAML
 			codePath    string // Actual path where code should be written
 			cleanup     func()
+			useStdin    bool   // Whether to use STDIN for YAML input
 		}{
 			{
 				name:     "from current directory with direct relative path",
@@ -217,6 +218,12 @@ functions:
 				filePath: filepath.Join(parentDir, "sibling-functions", "transform.ex"),
 				codePath: filepath.Join(parentDir, "sibling-functions", "transform.ex"),
 			},
+			{
+				name:     "from stdin with relative path",
+				filePath: "transform.ex",
+				codePath: filepath.Join(tmpDir, "transform.ex"),
+				useStdin: true,
+			},
 		}
 
 		for _, tc := range testCases {
@@ -230,13 +237,48 @@ functions:
 				yamlContent := fmt.Sprintf(yamlTemplate, tc.filePath)
 				yamlPath := filepath.Join(tmpDir, "test.yaml")
 				outputPath := filepath.Join(tmpDir, "output.yaml")
-				if err := os.WriteFile(yamlPath, []byte(yamlContent), 0644); err != nil {
-					t.Fatalf("Failed to write test YAML: %v", err)
-				}
 
-				cmd := &ConfigCommands{
-					yamlPath:   yamlPath,
-					outputPath: outputPath,
+				var cmd *ConfigCommands
+				if tc.useStdin {
+					// Save current directory and change to temp directory
+					originalDir, err := os.Getwd()
+					if err != nil {
+						t.Fatalf("Failed to get current directory: %v", err)
+					}
+					defer os.Chdir(originalDir)
+
+					if err := os.Chdir(tmpDir); err != nil {
+						t.Fatalf("Failed to change to temp directory: %v", err)
+					}
+
+					// Create a pipe to simulate stdin
+					oldStdin := os.Stdin
+					r, w, _ := os.Pipe()
+					os.Stdin = r
+					defer func() {
+						os.Stdin = oldStdin
+						r.Close()
+					}()
+
+					// Write YAML content to the pipe
+					go func() {
+						w.Write([]byte(yamlContent))
+						w.Close()
+					}()
+
+					cmd = &ConfigCommands{
+						yamlPath:   "-",
+						outputPath: outputPath,
+					}
+				} else {
+					if err := os.WriteFile(yamlPath, []byte(yamlContent), 0644); err != nil {
+						t.Fatalf("Failed to write test YAML: %v", err)
+					}
+
+					cmd = &ConfigCommands{
+						yamlPath:   yamlPath,
+						outputPath: outputPath,
+					}
 				}
 
 				output, err := captureOutput(func() error {

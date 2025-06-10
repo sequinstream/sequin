@@ -169,14 +169,6 @@ defmodule Sequin.Runtime.SinkPipeline do
 
     case filter_message(message, context.consumer) do
       {:ok, true} ->
-        Trace.info(context.consumer.id, %Trace.Event{
-          message: "Message included by filter",
-          extra: %{
-            data: message.data.data,
-            filter: context.consumer.filter
-          }
-        })
-
         if function_exported?(pipeline_mod, :handle_message, 2) do
           case pipeline_mod.handle_message(message, context) do
             {:ok, message, next_context} ->
@@ -191,14 +183,6 @@ defmodule Sequin.Runtime.SinkPipeline do
         end
 
       {:ok, false} ->
-        Trace.info(context.consumer.id, %Trace.Event{
-          message: "Message rejected by filter",
-          extra: %{
-            data: message.data.data,
-            filter: context.consumer.filter
-          }
-        })
-
         Message.put_batcher(message, :filtered_messages)
 
       {:error, error} ->
@@ -233,6 +217,13 @@ defmodule Sequin.Runtime.SinkPipeline do
       {to_deliver, already_delivered} ->
         Prometheus.increment_message_deliver_attempt(context.consumer.id, context.consumer.name, length(to_deliver))
         delivered = deliver_messages(pipeline_mod, batch_name, to_deliver, batch_info, context)
+
+        Trace.info(context.consumer.id, %Trace.Event{
+          message: "Delivered messages",
+          extra: %{
+            messages: Enum.map(delivered, & &1.data.data)
+          }
+        })
 
         delivered ++ already_delivered
     end
@@ -434,7 +425,6 @@ defmodule Sequin.Runtime.SinkPipeline do
     delivered_messages = Enum.map(delivered, & &1.data)
     filtered_messages = Enum.map(filtered, & &1.data)
     all_messages = delivered_messages ++ filtered_messages
-
     # Mark wal_cursors as delivered
     wal_cursors =
       Enum.map(all_messages, fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)

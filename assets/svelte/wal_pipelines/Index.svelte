@@ -106,8 +106,12 @@
               <HealthPill status={pipeline.health.status} />
             </Table.Cell>
             <Table.Cell>
-              {pipeline.source_table.schema_name}.{pipeline.source_table
-                .table_name}
+              {#if pipeline.source_table}
+                {pipeline.source_table.schema_name}.{pipeline.source_table
+                  .table_name}
+              {:else}
+                <span class="text-gray-500">Table not found</span>
+              {/if}
             </Table.Cell>
             <Table.Cell>
               {pipeline.destination_table.schema_name}.{pipeline

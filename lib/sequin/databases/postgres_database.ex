@@ -88,7 +88,7 @@ defmodule Sequin.Databases.PostgresDatabase do
       :annotations,
       :pg_major_version
     ])
-    |> validate_required([:database, :username, :password, :name])
+    |> validate_required([:hostname, :database, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> validate_not_supabase_pooled()
     |> cast_embed(:tables, with: &PostgresDatabaseTable.changeset/2, required: false)

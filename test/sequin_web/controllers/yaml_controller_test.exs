@@ -107,7 +107,8 @@ defmodule SequinWeb.YamlControllerTest do
       conn = post(conn, ~p"/api/config/plan", %{yaml: yaml})
 
       assert json_response(conn, 400) == %{
-               "summary" => "Error creating database 'test-db': \n- port: is invalid\n- database: can't be blank"
+               "summary" =>
+                 "Error creating database 'test-db': \n- port: is invalid\n- hostname: can't be blank\n- database: can't be blank"
              }
     end
 
@@ -315,7 +316,7 @@ defmodule SequinWeb.YamlControllerTest do
       conn = post(conn, ~p"/api/config/apply", %{yaml: yaml})
 
       assert json_response(conn, 400) == %{
-               "summary" => "Error creating database 'test-db': \n- database: can't be blank"
+               "summary" => "Error creating database 'test-db': \n- hostname: can't be blank\n- database: can't be blank"
              }
     end
   end

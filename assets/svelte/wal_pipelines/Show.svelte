@@ -180,7 +180,7 @@
       </Card>
     </div>
 
-    {#if showReplicaWarning}
+    {#if showReplicaWarning && walPipeline.source_table}
       <Alert.Root variant="warning">
         <Alert.Title class="flex items-center justify-between">
           <span>Warning: Replica identity not set to full</span>

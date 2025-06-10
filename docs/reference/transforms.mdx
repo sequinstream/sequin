@@ -22,7 +22,7 @@ Path transforms are the simplest kind of transform. Path transforms allow you to
 
 ### Path syntax
 
-The first part of the path is always one of the four [keys of the message object](/reference/messages): `record`, `changes`, `action`, or `metadata`.
+The first part of the path is always one of the four [keys of the message object](/reference/payloads): `record`, `changes`, `action`, or `metadata`.
 
 You can optionally add additional keys to traverse the message structure. For example, `record.id` will extract the `id` field from the `record` object.
 
@@ -81,8 +81,8 @@ This ensures your messages match the expected format without additional metadata
 ## Related
 
 <CardGroup>
-  <Card title="Messages reference" icon="message-dots" href="/reference/messages">
-    Learn about message shapes and how annotations appear in change messages.
+  <Card title="Payloads reference" icon="message-dots" href="/reference/payloads">
+    Review the parts of a message payload.
   </Card>
   <Card title="sequin.yaml transforms" icon="pencil" href="/reference/sequin-yaml#sink-transforms">
     Learn about the sequin.yaml file and how to use it to configure your Sequin instance.

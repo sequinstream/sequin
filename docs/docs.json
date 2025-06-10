@@ -124,7 +124,7 @@
                   "reference/sinks/webhooks"
                 ]
               },
-              "reference/messages",
+              "reference/payloads",
               "reference/filters",
               "reference/transforms",
               "reference/routing",

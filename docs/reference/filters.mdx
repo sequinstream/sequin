@@ -14,7 +14,7 @@ Only changes and rows that match the filters will be sent to the sink.
 
 ## Operations to capture
 
-When using [change messages](/reference/messages#change-messages), you can specify which Postgres operations to capture:
+When using [change messages](/reference/payloads#change-messages), you can specify which Postgres operations to capture:
 
 - `insert`
 - `update`
@@ -24,7 +24,6 @@ When using [change messages](/reference/messages#change-messages), you can speci
   If you backfill a table to a sink, Sequin will send `read` messages for each row in the table, regardless of which operations you specify.
 </Note>
 
-You do not specify Postgres operations for [row messages](/reference/messages#row-messages). Instead, Sequin will always capture the latest version of each row.
 
 ## Column filters
 
@@ -150,7 +149,7 @@ When creating or editing a filter function, Sequin will automatically capture re
 ## Related
 
 <CardGroup>
-  <Card title="Messages reference" icon="message-dots" href="/reference/messages">
+  <Card title="Messages reference" icon="message-dots" href="/reference/payloads">
     Learn about message shapes and how annotations appear in change messages.
   </Card>
   <Card title="Transforms" icon="wand-magic-sparkles" href="/reference/transforms">

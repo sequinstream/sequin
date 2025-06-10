@@ -58,7 +58,7 @@ openssl rand -base64 32
 
 ### (Optional) Enable retention for changes
 
-You can send either [changes or rows](/reference/messages) to your webhook endpoint.
+You can send either [changes](/reference/payloads) to your webhook endpoint.
 
 If you're sending changes, note that changes are ephemeral. Sequin stores `insert`, `update`, and `delete` changes in a buffer table until they're delivered to your webhook endpoint.
 
@@ -87,7 +87,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Webhook Sink".
   </Step>
 
   <Step title="Choose message type">
-    Specify whether you want to receive [changes or rows](/reference/messages) from the table.
+    Specify whether you want to receive [changes](/reference/payloads) from the table.
 
     If you're not sure which to choose, leave the default setting of "Changes". Changes are a better fit for event-driven use cases, like triggering workflows, which is usually what you want to do with webhooks.
   </Step>

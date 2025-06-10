@@ -21,15 +21,12 @@ After a sink is created, you can manually trigger a backfill on the sink's backf
 
 ### Change messages
 
-If you're sending [change messages](/reference/messages#change-messages) to a sink, Sequin will send a `read` message for each row in the table.
+If you're sending [change messages](/reference/payloads#change-messages) to a sink, Sequin will send a `read` message for each row in the table.
 
 Note that change messages are ephemeral. Once they're sent to a sink, they can't be replayed/backfilled.
 
 To enable backfilling of change messages, you can set up [change retention](/how-to/setup-change-retention).
 
-### Row messages
-
-If you're sending [rows](/reference/messages#row-messages) to a sink, the messages shape is the same for inserts, updates, and backfill messages.
 
 ## Backfill configuration
 

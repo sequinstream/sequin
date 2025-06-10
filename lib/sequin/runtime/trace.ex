@@ -151,7 +151,9 @@ defmodule Sequin.Runtime.Trace do
     publish(consumer_id, %Event{event | status: :error})
   end
 
-  @spec publish(String.t(), Event.t()) :: :ok | {:error, term()}
+  @spec publish(String.t() | nil, Event.t()) :: :ok | {:error, term()}
+  defp publish(nil, _event), do: :ok
+
   defp publish(consumer_id, event) when is_binary(consumer_id) do
     Phoenix.PubSub.broadcast(
       Sequin.PubSub,

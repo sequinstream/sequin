@@ -3,8 +3,6 @@
     CheckCircle2,
     HelpCircle,
     XCircle,
-    Loader2,
-    ArrowDownSquare,
     ExternalLink,
   } from "lucide-svelte";
   import { Card, CardContent } from "$lib/components/ui/card";
@@ -44,7 +42,6 @@
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
-  import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
   import CollapsibleCode from "../components/CollapsibleCode.svelte";
 

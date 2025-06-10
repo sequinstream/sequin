@@ -5,8 +5,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/goccy/go-yaml"
 )
 
 func TestInterpolateAction(t *testing.T) {
@@ -21,9 +24,13 @@ func TestInterpolateAction(t *testing.T) {
 	yamlContent := `
 # Test YAML file
 app:
-  name: ${APP_NAME:-test-app}
-  port: ${PORT:-8080}
   env: ${ENV:-development}
+  map:
+    name: ${APP_NAME:-test-app}
+    port: ${PORT:-8080}
+  list:
+  - ${RATIO:-3.1416}
+  - ${API_KEY:0}
 `
 	yamlPath := filepath.Join(tmpDir, "test.yaml")
 	outputPath := filepath.Join(tmpDir, "output.yaml")
@@ -34,8 +41,10 @@ app:
 	// Set environment variables for tests
 	os.Setenv("APP_NAME", "my-custom-app")
 	os.Setenv("ENV", "testing")
+	os.Setenv("API_KEY", "00000000123456789123456789")
 	defer os.Unsetenv("APP_NAME")
 	defer os.Unsetenv("ENV")
+	defer os.Unsetenv("API_KEY")
 
 	// Helper function to capture stdout
 	captureOutput := func(f func() error) (string, error) {
@@ -53,6 +62,22 @@ app:
 		return buf.String(), err
 	}
 
+	// Helper function to parse YAML and compare objects
+	compareYAML := func(t *testing.T, got, want string) {
+		var gotObj, wantObj interface{}
+		if err := yaml.Unmarshal([]byte(got), &gotObj); err != nil {
+			t.Errorf("Failed to parse got YAML: %v", err)
+			return
+		}
+		if err := yaml.Unmarshal([]byte(want), &wantObj); err != nil {
+			t.Errorf("Failed to parse want YAML: %v", err)
+			return
+		}
+		if !reflect.DeepEqual(gotObj, wantObj) {
+			t.Errorf("YAML objects do not match.\nGot:\n%s\nWant:\n%s", got, want)
+		}
+	}
+
 	t.Run("interpolate to stdout", func(t *testing.T) {
 		cmd := &ConfigCommands{yamlPath: yamlPath}
 
@@ -65,18 +90,18 @@ app:
 			return
 		}
 
-		// Expected full output
 		expectedOutput := `
 # Test YAML file
 app:
-  name: my-custom-app
-  port: 8080
   env: testing
+  map:
+    name: my-custom-app
+    port: "8080"
+  list:
+  - "3.1416"
+  - "00000000123456789123456789"
 `
-		// Compare full output
-		if output != expectedOutput {
-			t.Errorf("Output does not match expected.\nGot:\n%s\nWant:\n%s", output, expectedOutput)
-		}
+		compareYAML(t, output, expectedOutput)
 	})
 
 	t.Run("interpolate to file", func(t *testing.T) {
@@ -99,24 +124,23 @@ app:
 			t.Errorf("Expected success message for file output, got: %s", output)
 		}
 
-		// Check the file content
 		content, err := os.ReadFile(outputPath)
 		if err != nil {
 			t.Fatalf("Failed to read output file: %v", err)
 		}
 
-		// Expected file content
 		expectedFileContent := `
 # Test YAML file
 app:
-  name: my-custom-app
-  port: 8080
   env: testing
+  map:
+    name: my-custom-app
+    port: "8080"
+  list:
+  - "3.1416"
+  - "00000000123456789123456789"
 `
-		// Compare full file content
-		if string(content) != expectedFileContent {
-			t.Errorf("File content does not match expected.\nGot:\n%s\nWant:\n%s", string(content), expectedFileContent)
-		}
+		compareYAML(t, string(content), expectedFileContent)
 	})
 
 	t.Run("file not found", func(t *testing.T) {

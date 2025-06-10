@@ -20,8 +20,104 @@
   export let isDrawerOpen: boolean = false;
   export let onCloseDrawer: () => void;
 
+  // New state for keyboard navigation
+  let keyboardNavigatingPageDir: "previous" | "next" | null = null;
+  let selectedItemIndex: number = -1;
+  let selectedItem: any = null;
+
   let rowHeight = 0;
   let totalAvailableHeight = 0;
+
+  // Handle keyboard navigation
+  function handleKeyDown(event: KeyboardEvent) {
+    if (!isDrawerOpen) {
+      // When drawer is closed, arrow keys select first/last message
+      switch (event.key) {
+        case "ArrowUp":
+          event.preventDefault();
+          if (items.length > 0) {
+            handleRowClick(items[items.length - 1], items.length - 1);
+          }
+          break;
+        case "ArrowDown":
+          event.preventDefault();
+          if (items.length > 0) {
+            handleRowClick(items[0], 0);
+          }
+          break;
+      }
+      return;
+    }
+
+    // When drawer is open, use existing navigation logic
+    switch (event.key) {
+      case "ArrowUp":
+        event.preventDefault();
+        navigateToPrevious();
+        break;
+      case "ArrowDown":
+        event.preventDefault();
+        navigateToNext();
+        break;
+      case "Escape":
+        event.preventDefault();
+        onCloseDrawer();
+        break;
+    }
+  }
+
+  function navigateToPrevious() {
+    if (selectedItemIndex > 0) {
+      selectedItemIndex--;
+      selectedItem = items[selectedItemIndex];
+      onRowClick(selectedItem);
+    } else if (selectedItemIndex === 0 && page > 0) {
+      // Go to previous page and select last item
+      onPageChange(page - 1);
+      keyboardNavigatingPageDir = "previous";
+      // selectedItemIndex will be set when new items load
+    }
+  }
+
+  function navigateToNext() {
+    if (selectedItemIndex < items.length - 1) {
+      selectedItemIndex++;
+      selectedItem = items[selectedItemIndex];
+      onRowClick(selectedItem);
+    } else if (selectedItemIndex === items.length - 1 && page < pageCount - 1) {
+      // Go to next page and select first item
+      onPageChange(page + 1);
+      keyboardNavigatingPageDir = "next";
+      // selectedItemIndex will be set when new items load
+    }
+  }
+
+  // Handle row click and update selected index
+  function handleRowClick(item: any, index: number) {
+    selectedItemIndex = index;
+    selectedItem = item;
+    onRowClick(item);
+  }
+
+  // Reset selected index when items change (e.g., page change)
+  $: if (items && isDrawerOpen) {
+    // Try to find the index of the currently selected item
+    const matchingIndex = items.findIndex(
+      (item) => JSON.stringify(item) === JSON.stringify(selectedItem),
+    );
+    console.log("matchingIndex", matchingIndex);
+    if (matchingIndex >= 0) {
+      selectedItemIndex = matchingIndex;
+    } else if (keyboardNavigatingPageDir === "previous") {
+      keyboardNavigatingPageDir = null;
+      selectedItemIndex = items.length - 1;
+    } else if (keyboardNavigatingPageDir === "next") {
+      keyboardNavigatingPageDir = null;
+      selectedItemIndex = 0;
+    } else {
+      selectedItemIndex = -1;
+    }
+  }
 
   onMount(() => {
     // Calculate row height after the component is mounted
@@ -76,8 +172,12 @@
     // Add event listener for window resize
     window.addEventListener("resize", updatePageSize);
 
+    // Add keyboard event listener
+    window.addEventListener("keydown", handleKeyDown);
+
     return () => {
       window.removeEventListener("resize", updatePageSize);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   });
 </script>
@@ -122,10 +222,13 @@
             >
               <slot name="sampleRow" />
             </tr>
-            {#each items as item}
+            {#each items as item, index}
               <tr
-                class="relative hover:bg-gray-50 cursor-pointer"
-                on:click={() => onRowClick(item)}
+                class="relative hover:bg-gray-50 cursor-pointer {isDrawerOpen &&
+                selectedItemIndex === index
+                  ? 'bg-blue-50 border-l-4 border-blue-500'
+                  : ''}"
+                on:click={() => handleRowClick(item, index)}
               >
                 <slot name="row" {item} />
               </tr>
@@ -204,6 +307,31 @@
             </div>
             <div class="mt-6 relative flex-1 px-4 sm:px-6">
               <slot name="drawerContent" />
+            </div>
+            <!-- Keyboard shortcuts hint -->
+            <div class="px-4 sm:px-6 py-3 border-t border-gray-100">
+              <div
+                class="text-xs text-gray-400 flex items-center justify-center space-x-4"
+              >
+                <span class="flex items-center space-x-1">
+                  <kbd
+                    class="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-mono"
+                    >↑</kbd
+                  >
+                  <kbd
+                    class="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-mono"
+                    >↓</kbd
+                  >
+                  <span>navigate</span>
+                </span>
+                <span class="flex items-center space-x-1">
+                  <kbd
+                    class="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-mono"
+                    >Esc</kbd
+                  >
+                  <span>close</span>
+                </span>
+              </div>
             </div>
           </div>
         </div>

@@ -6,7 +6,7 @@ description: "Implement reliable data archiving and event replay capabilities. L
 
 ## About
 
-In Sequin, [change messages](/reference/messages#change-messages) are ephemeral. Once they're sent to a sink, they're deleted.
+In Sequin, [change messages](/reference/payloads#change-messages) are ephemeral. Once they're sent to a sink, they're deleted.
 
 For some sinks and use cases, it can be desirable to retain change messages for some period of time. Then, you can take advantage of Sequin's [backfill](/reference/backfills) feature to replay the changes to the sink.
 

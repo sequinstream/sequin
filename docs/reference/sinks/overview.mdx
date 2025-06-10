@@ -20,7 +20,7 @@ Sequin will only stream changes for tables that are exposed by the [publication]
 
 ## Delivery Guarantees
 
-Sequin provides exactly-once delivery under most circumstances, but [exactly-once delivery is not always possible](https://blog.sequinstream.com/at-most-once-at-least-once-and-exactly-once-delivery/). Therefore, Sequin implements at-least-once delivery with [idempotency keys](/reference/messages#idempotency).
+Sequin provides exactly-once delivery under most circumstances, but [exactly-once delivery is not always possible](https://blog.sequinstream.com/at-most-once-at-least-once-and-exactly-once-delivery/). Therefore, Sequin implements at-least-once delivery with [idempotency keys](/reference/payloads#idempotency).
 
 If a message is not delivered successfully, Sequin will automatically retry with exponential backoff, increasing the retry interval up to a maximum of 3 minutes between attempts.
 
@@ -66,5 +66,5 @@ If a sink's in-memory buffer fills up, the `load_shedding_policy` will be trigge
 `discard_on_full` — Sequin will continue reading messages from the replication slot. However, messages intended for the overloaded sink(s) will be dropped. Other sinks will not be impacted. This limits possibility that your database will run out of disk space but will cause sinks to be inconsistent with the state of the database.
 
 <Warning>
-There is no way to recover dropped messages. You can run a [backfill](/reference/backfills) to replay rows that may have been missed, but those backfill messages will not contain the discrete [change data](/reference/messages#change-messages) that was lost.
+There is no way to recover dropped messages. You can run a [backfill](/reference/backfills) to replay rows that may have been missed, but those backfill messages will not contain the discrete [change data](/reference/payloads#change-messages) that was lost.
 </Warning>

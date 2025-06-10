@@ -85,7 +85,7 @@ def filter(action, record, changes, metadata) do
   # Filter based on both record content and metadata
   is_high_priority = record["priority"] == "high"
   is_users_table = metadata.table_name == "users"
-  
+
   # Only process high priority records from the users table
   is_high_priority and is_users_table
 end
@@ -96,8 +96,8 @@ end
 ```elixir
 def filter(action, record, changes, metadata) do
   # Only process updates where the status changed from "pending" to "approved"
-  action == "update" and 
-    changes["status"] == "pending" and 
+  action == "update" and
+    changes["status"] == "pending" and
     record["status"] == "approved"
 end
 ```
@@ -109,7 +109,7 @@ When creating or editing a filter function, Sequin will automatically capture re
 ## Related
 
 <CardGroup>
-  <Card title="Messages reference" icon="message-dots" href="/reference/messages">
+  <Card title="Messages reference" icon="message-dots" href="/reference/payloads">
     Learn about message shapes and how annotations appear in change messages.
   </Card>
   <Card title="Transforms" icon="wand-magic-sparkles" href="/reference/transforms">

@@ -37,7 +37,7 @@ The response is an object with a `data` property that contains a list of message
       You'll use the `ack_id` in follow-up requests to either [ack](/reference/sequin-stream-api/ack) or [nack](/reference/sequin-stream-api/nack) this specific message.
     </ResponseField>
     <ResponseField name="record" type="object" required>
-      A [message](/reference/messages) containing the message data with a key for each column in the associated table.
+      A [message](/reference/payloads) containing the message data with a key for each column in the associated table.
     </ResponseField>
     <ResponseField name="changes" type="object">
       Only present if the message is a change message. Contains the previous values for changed fields.

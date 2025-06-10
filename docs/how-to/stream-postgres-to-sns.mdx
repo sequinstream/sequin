@@ -67,7 +67,7 @@ Create an IAM user with permission to publish to the topic:
 
 ### (Optional) Enable retention for changes
 
-You can stream either [changes or rows](/reference/messages) to SNS. Changes are transient; if you need to replay them later consider [change retention](/reference/change-retention) or streaming a retention table instead.
+You can stream either [changes](/reference/payloads) to SNS. Changes are transient; if you need to replay them later consider [change retention](/reference/change-retention) or streaming a retention table instead.
 
 ## Create SNS sink
 
@@ -81,7 +81,7 @@ In Sequin, navigate to the "Sinks" tab, click "Create Sink", and select "SNS Sin
   </Step>
 
   <Step title="Choose message type">
-    Decide whether to receive [changes or rows](/reference/messages). If unsure, start with **Changes**.
+    Decide whether to receive [changes](/reference/payloads). If unsure, start with **Changes**.
   </Step>
 
   <Step title="Specify filters">

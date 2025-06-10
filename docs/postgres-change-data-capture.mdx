@@ -45,13 +45,10 @@ With your Postgres [database connected](/connect-postgres) to Sequin, create a s
   </Step>
 
   <Step title="Select the message type">
-    To capture inserts, updates, and deletes with more detail about the changes, leave the default [Changes](/reference/messages#change-messages) message type selected.
-
-    If you only need the latest version of each row and don't need to track deletes, select [Records](/reference/messages#insert-messages).
+  <Step title="Select the message type">
+    Leave the default option selected to receive the full payload for each change.
+    You can add a [transform](/reference/transforms) later if you only need specific fields.
   </Step>
-
-  <Step title="Add filters and transformations">
-    You can add [SQL filters](/reference/filters) or [filter functions](/reference/filters#filter-functions) to capture a subset of the source table.
 
     You can also add [transformations](/reference/transforms) to modify the data before it's delivered to your sink.
   </Step>
@@ -105,8 +102,8 @@ You now have a complete change data capture pipeline that streams Postgres chang
 If you are using Sequin Cloud, you are ready to scale. If you are self-hosting Sequin, see "[Deploy to production](/how-to/deploy-to-production)" for guidance on copying your local sink configuration to your production environment.
 
 <CardGroup>
-  <Card title="Messages reference" icon="message-dots" href="/reference/messages">
-    Learn about the difference between change and record messages.
+  <Card title="Payloads reference" icon="message-dots" href="/reference/payloads">
+    Learn about the components of each message.
   </Card>
   <Card title="Backfills" icon="rotate" href="/reference/backfills">
     Learn how to backfill existing data from your source tables.

@@ -4,63 +4,113 @@ Sequin provides fast, real-time Postgres change data capture into streams and qu
 
 This log is updated every Friday to track our feature releases and updates week by week. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
+## June 6, 2025
+
+### Multiple tables per sink
+
+Sequin now supports [multiple source tables](https://sequinstream.com/docs/reference/sinks/overview#source-tables) in one sink. You can now specify an entire schema to include in your sink, and Sequin will sink every table in the schema that is also in the publication.
+
+![Add multiple tables to one sink](https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-06/multiple-tables.png)
+
+Sinking a schema is supported in our [API](https://sequinstream.com/docs/management-api/sink-consumers/create#param-table) and in [sequin.yml](https://sequinstream.com/docs/reference/sequin-yaml#sink-source). You'll also see that we've moved backfills into a new tab to support multi-table backfills with improved monitoring:
+
+![New backfill tab to manage and observe multiple table backfills](https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-06/backfill-tab.png)
+
+### Trace for TypeSense
+
+The Trace tab is now available for TypeSense sinks. Trace shows the recent logs for a sync for improved observability and debugging.
+
+<details>
+
+<summary>Fixes and improvements</summary>
+
+### Improved
+
+* Allow column filters to be edited on active sinks
+* Allow `Kafka.test_connection` to auto-create topics if the cluster allows it.
+* Add error handling when attempting to group by a column that no longer exists.
+* Improve how sensitive keys are removed from logger metadata
+* Major performance improvements
+
+### Fixed
+
+* Fixed how we handle TOAST values that are nil
+* Fixed error messaging if Sequin doesn't have `usage` permissions on a schema
+
+</details>
+
+## May 30, 2025
+
+### Added
+
+* Added support for [AWS Kinesis](https://sequinstream.com/docs/reference/sinks/kinesis) sinks.
+* The **Trace Tab** allows you to observe all the logs for a given sink. It's rolling out for HTTP Webhook sinks now - with support for other sinks coming soon!
+* The [management API](https://sequinstream.com/docs/management-api/sink-consumers/get) now shows the `health` of sinks.
+* You can now edit test message payloads to quickly test your functions.
+
+### Changed
+
+* Multiple improvements to the Sequin console including new components for adding and showing functions, ability to easily open sinks in new tabs, and persistent pagination.
+* Major performance improvements
+
+### Fixed
+
+* Fixed an error in loading the `CONFIG_FILE_PATH`
+* Fixed an issue where `PATCH` would drop functions from a sink.
+* Fixed a bug that showed some messages as available when they are not.
+* Fix edit flow for path transforms
+
+## May 23, 2025
+
+### Added
+
+* [Filter functions](https://sequinstream.com/docs/reference/filters#filter-functions) provide advanced logic (using mini Elixir) for filtering which changes in your database are delivered to your sink.
+* First release of [routing functions](https://sequinstream.com/docs/reference/routing) for HTTP Webhook and Redis String sinks. Routing functions dynamically direct messages to different destinations based on the contents of the message.
+
+### Changed
+
+* Show publication and replication slot name for databases in the console.
+* For NATs sinks, use `idempotency_key` as `Nats-Msg-Id` for deduplication.
+* Transforms are now a sub-type of functions to make room for filter and routing functions.
+* Improved how we display secret errors when loading `sequin.yml`
+
+### Fixed
+
+* Fixed how we handle database.ssl=false.
+* Fixed invited on self-hosted when self-signup is disabled.
+
 ## May 16, 2025
 
 ### Added
 
-* Sequin can now connect to Postgres Replicas
-* Add deep linking from the a message delivery error to the messages tab.
+* Sequin can now connect to [Postgres Replicas](https://sequinstream.com/docs/reference/databases#using-sequin-with-a-replica).
+* Transform functions can now be removed from a sink.
+* Added a CLI page to the console
 
 ### Changed
 
-* Improve TypeSense sink endpoint url validation and error handling
-
-
-* Changed show flash if show-ack-id message not found.
-
-
-
-
-* Added use `@derive` to filter sensitive sink fields out from logs.
-* Added handle un-fifo-ifying a sink's queue.
-* Added clock drift metrics.
-* Added busy_percent to ProcessMetrics.
-* Changed only consider physical replicas as replicas.
-
-* Changed check replication lag properly for replicas.
-* Changed handle empty cond & other errors.
-* Changed show 'Edit database' in title when editing.
-* Changed don't log every single keepalive we receive.
-* Changed oban queues.
-* Changed make kickoff and system jobs unique.
-* Changed format errors for sequin config export/plan/apply.
-* Allow transform functions to be removed from a sink
+* Improve TypeSense sink endpoint validation and error handling
+* Improved error formatting and messages when running `sequin config export/plan/apply` in the Sequin CLI.
+* Improved error handling and messages when writing functions with mini elixir
+* Improved how sensitive fields are filtered out of logs.
+* Improved how transform functions, `sinks.max_retry_count`, `sinks.active_backfill` and `http_endpoints.encrypted_headers` are processed in `sequin.yml`
+* Sink filters now show the correct comparison values when working with `IS NULL` or `IS NOT NULL` expressions.
 
 ### Fixed
 
-* Changed in filters, do not show comparison value when user selects IS NULL or IS NOT NULL.
-* Fix transforms YAML flat format.
-* Fixed put back execution redis command in fun.
-* Fixed improve full page forms to avoid using a modal.
-* Fixed improve yaml load for `sinks.max_retry_count`, `sinks.active_backfill` and `http_endpoints.encrypted_headers`.
-* Fixed message Grouping card form improvements.
-* Fix pagination on sink/messages.
-* Fix flaky test by increasing timeout.
-* Fix consumer message serialization of struct types.
-* Fixed show missing Transform Function form validation errors.
-* Fix database replica primary form population.
 * Fixed only display message not_visible_until date if its defined.
-* Fixed handle nil confirmed_flush / restart lsns.
+* Fixed pagination on list sink page and in the messages tab
+* Fixed `null` value handling when processing the WAL.
 
 ## May 09, 2025
 
 ### Added
 
-* Added a Redis String sink destination
-* Multiple improvements for HTTP Webhook sings including the ability `batch` messages, and configure the `max_retry_count` to limit Webhook delivery attempts.
-* You can optimize Sequin performance by changing the memory limit for sinks.
-* Added [`SEQUIN_LOG_FORMAT`](https://sequinstream.com/docs/reference/configuration#general-configuration) to the config so you can integrate with tools like DataDog.
-* Added idempotency_key to message payloads to simplify exactly-once processing.
+* Added support for [Redis String](https://sequinstream.com/docs/reference/sinks/redis-string) sinks
+* HTTP Webhook sinks improvements including the ability `batch` messages and configure the `max_retry_count` to limit Webhook delivery attempts.
+* You can now optimize Sequin performance by changing the memory limit for sinks.
+* Added the [`SEQUIN_LOG_FORMAT`](https://sequinstream.com/docs/reference/configuration#general-configuration) setting to the config to easily connect Sequin to tools like DataDog.
+* Added idempotency_key to message payloads to improve exactly-once processing mechanics.
 
 ### Changed
 
@@ -90,19 +140,18 @@ This log is updated every Friday to track our feature releases and updates week 
 
 ### Fixed
 
-* Ensure transform and routing functions startup properly.
+* Ensure transform functions startup properly.
 * Fixed database string parsing in the console.
 
 ## April 25, 2025
 
 ### Added
 
-* Added support for three new sink destinations: [AWS SNS](https://sequinstream.com/docs/reference/sinks/sns), [Typesense](https://sequinstream.com/docs/reference/sinks/typesense), and [Elasticsearch](https://sequinstream.com/docs/reference/sinks/elasticsearch) integration.
+* Added support for three new sink destinations: [AWS SNS](https://sequinstream.com/docs/reference/sinks/sns), [Typesense](https://sequinstream.com/docs/reference/sinks/typesense), and [Elasticsearch](https://sequinstream.com/docs/reference/sinks/elasticsearch).
 
 ### Changed
 
-* Improvements to memory utilization.
-* Improved how the system behaves when it hits memory limits and needs to disconnect from the replication slot.
+* Improved memory utilization, especially when hitting memory limits that require a disconnect from the replication slot.
 * Added support for modules like `Base` to functions.
 * Renamed current Redis sink to Redis Stream to make way for the new Redis String sink.
 

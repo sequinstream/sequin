@@ -445,28 +445,13 @@ defmodule Sequin.Runtime.MessageHandler do
         consumer = Map.fetch!(consumers_by_id, consumer_id)
 
         # Just for type clarity
-        consumer_message =
-          case consumer_message(consumer, ctx.postgres_database, message) do
-            %ConsumerEvent{} = consumer_message -> consumer_message
-            %ConsumerRecord{} = consumer_message -> consumer_message
-          end
-
-        cond do
-          # We filter out messages that are too large for the replication slot
-          violates_payload_size?(ctx.replication_slot_id, consumer_message) ->
-            nil
-
-          # Then we filter on the consumer message
-          Consumers.matches_filter?(consumer, consumer_message) ->
-            {consumer_id, consumer_message}
-
-          true ->
-            nil
+        case consumer_message(consumer, ctx.postgres_database, message) do
+          %ConsumerEvent{} = consumer_message -> {consumer_id, consumer_message}
+          %ConsumerRecord{} = consumer_message -> {consumer_id, consumer_message}
         end
       end)
     end)
-    # We filter out nil values
-    |> Stream.filter(& &1)
+    |> Stream.reject(fn {_, consumer_message} -> violates_payload_size?(ctx.replication_slot_id, consumer_message) end)
     # Finally we return a list of tuples of {consumer, consumer_messages}
     |> Enum.group_by(
       fn {consumer_id, _consumer_message} -> consumer_id end,

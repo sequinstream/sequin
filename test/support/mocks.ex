@@ -53,3 +53,7 @@ Mox.defmock(Sequin.Runtime.TableReaderMock,
 Mox.defmock(Sequin.TestSupport.ApplicationMock,
   for: Sequin.ApplicationBehaviour
 )
+
+Mox.defmock(Sequin.Runtime.SinkPipelineMock,
+  for: Sequin.Runtime.SinkPipeline
+)

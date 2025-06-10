@@ -100,7 +100,7 @@ defmodule Sequin.Functions.MiniElixir do
 
       error =
         Sequin.Error.service(
-          service: "transform",
+          service: "function",
           message: format_error(id, error, __STACKTRACE__)
         )
 

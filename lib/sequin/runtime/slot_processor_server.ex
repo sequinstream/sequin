@@ -1204,8 +1204,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         transaction_annotations: state.transaction_annotations
     }
 
-    # TracerServer.message_replicated(state.postgres_database, msg)
-
     {%State{state | current_commit_idx: state.current_commit_idx + 1}, msg}
   end
 

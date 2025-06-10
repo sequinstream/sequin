@@ -13,6 +13,8 @@
   ·
   <a href="https://discord.gg/BV8wFXvNtY">Discord</a>
   ·
+  <a href="https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA">Slack</a>
+  ·
   <a href="https://console.sequinstream.com">Sequin Cloud</a>
 </p>
 
@@ -26,7 +28,7 @@ Sequin uses a logical replication slot to ensure it never misses a change, and c
 
 Sequin is a standalone Docker container that you can deploy next to your Postgres database. Alternatively, you can use [our hosted offering](https://console.sequinstream.com) or we'll [manage Sequin](https://sequinstream.com/docs/sequin-managed/overview) for you in your cloud.
 
-Sequin is open source/[MIT](./LICENSE). To help us make this project great, tell us what you're building in our [Discord Server](https://discord.gg/BV8wFXvNtY).
+Sequin is open source/[MIT](./LICENSE). To help us make this project great, tell us what you're building in our [Discord server](https://discord.gg/BV8wFXvNtY) or [Slack community](https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA).
 
 ## Getting started
 

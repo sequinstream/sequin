@@ -13,8 +13,7 @@ defmodule Sequin.SystemMetricsServer do
 
   def init(state) do
     # Print metrics immediately on start
-    schedule_log()
-    log_metrics()
+    schedule_log(0)
     {:ok, state}
   end
 
@@ -24,8 +23,8 @@ defmodule Sequin.SystemMetricsServer do
     {:noreply, state}
   end
 
-  defp schedule_log do
-    Process.send_after(self(), :log_metrics, @interval)
+  defp schedule_log(interval \\ @interval) do
+    Process.send_after(self(), :log_metrics, interval)
   end
 
   defp log_metrics do

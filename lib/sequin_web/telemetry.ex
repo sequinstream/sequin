@@ -88,7 +88,8 @@ defmodule SequinWeb.Telemetry do
       # A module, function and arguments to be invoked periodically.
       # This function must call :telemetry.execute/3 and a metric must be added above.
       # {SequinWeb, :count_users, []}
-      {Sequin.Metrics.SinkConsumerMetrics, :report_sink_consumer_throughput, []}
+      {Sequin.Metrics.SinkConsumerMetrics, :report_sink_consumer_throughput, []},
+      {Sequin.Metrics.EntityHealthMetrics, :report_entity_health, []}
     ]
   end
 end

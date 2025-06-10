@@ -89,6 +89,34 @@ Sequin is implemented with Elixir. Elixir's VM (the BEAM) exposes many metrics. 
 
   Memory usage of the entire VM.
 
+### Entity health
+
+- `sequin_entity_health` (Gauge)
+
+  Tracks the health status of various Sequin entities (sinks, databases, and replication slots).
+
+  Labels:
+  - `entity_type` - Type of entity (`sink`, `database`, `replication_slot`)
+  - `entity_id` - UUID or name of the entity
+  - `status` - Current status label (`ok`, `warn`, `error`)
+
+  Example scrape:
+  ```
+  sequin_entity_health{entity_type="sink",entity_id="acme_kafka",status="ok"} 1
+  sequin_entity_health{entity_type="sink",entity_id="acme_kafka",status="warn"} 0
+  sequin_entity_health{entity_type="sink",entity_id="acme_kafka",status="error"} 0
+  ```
+
+  Example PromQL for alerting on error:
+  ```
+  sequin_entity_health{status="error"} == 1
+  ```
+
+  Example Grafana panel query to count entities in error state:
+  ```
+  sum(sequin_entity_health{status="error"} == 1)
+  ```
+
 ## Grafana dashboard
 
 Sequin provides a [Grafana dashboard template](https://github.com/sequinstream/sequin/blob/main/docker/dashboard.json) for monitoring Sequin. This can be imported directly into your Grafana instance for use, or referenced as a guide for building your own.

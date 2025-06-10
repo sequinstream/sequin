@@ -6,6 +6,8 @@ defmodule Sequin.Factory.HealthFactory do
   alias Sequin.Factory.ErrorFactory
   alias Sequin.Health
   alias Sequin.Health.Check
+  alias Sequin.Health.HealthSnapshot
+  alias Sequin.Repo
 
   def status, do: Factory.one_of([:healthy, :warn, :error])
 
@@ -51,4 +53,50 @@ defmodule Sequin.Factory.HealthFactory do
 
   defp maybe_erroring_since(:error), do: Factory.utc_datetime_usec()
   defp maybe_erroring_since(_), do: nil
+
+  def health_snapshot(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {entity_kind, attrs} =
+      Map.pop_lazy(attrs, :entity_kind, fn ->
+        Enum.random([:http_endpoint, :sink_consumer, :postgres_replication_slot, :wal_pipeline])
+      end)
+
+    {status, attrs} =
+      Map.pop_lazy(attrs, :status, fn ->
+        Enum.random([:healthy, :warning, :error, :initializing, :waiting, :paused])
+      end)
+
+    {health_json, attrs} =
+      Map.pop_lazy(attrs, :health_json, fn ->
+        %{
+          "checks" => [
+            %{
+              "slug" => "#{Factory.word()}_check",
+              "status" => to_string(status),
+              "error" => if(status == :error, do: ErrorFactory.random_error())
+            }
+          ],
+          "status" => to_string(status)
+        }
+      end)
+
+    merge_attributes(
+      %HealthSnapshot{
+        id: Factory.uuid(),
+        entity_id: Factory.uuid(),
+        entity_kind: entity_kind,
+        status: status,
+        health_json: health_json,
+        sampled_at: Factory.utc_datetime_usec()
+      },
+      attrs
+    )
+  end
+
+  def insert_health_snapshot!(attrs \\ []) do
+    attrs
+    |> health_snapshot()
+    |> Repo.insert!()
+  end
 end

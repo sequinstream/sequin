@@ -53,3 +53,7 @@ Mox.defmock(Sequin.Runtime.TableReaderMock,
 Mox.defmock(Sequin.TestSupport.ApplicationMock,
   for: Sequin.ApplicationBehaviour
 )
+
+Mox.defmock(Sequin.PrometheusMock,
+  for: Sequin.Prometheus
+)

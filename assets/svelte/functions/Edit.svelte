@@ -492,6 +492,12 @@
     }
   }
 
+  function ignoreEscKeypress(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+    }
+  }
+
   onMount(() => {
     // Handle URL parameters for new functions
     if (!isEditing) {
@@ -656,7 +662,6 @@ Please help me create or modify the Elixir function transform to achieve the des
 <FullPageForm
   title={isEditing ? "Edit Function" : "New Function"}
   showConfirmOnExit={isDirty}
-  enableEscapeClose={false}
   on:close={handleClose}
 >
   <form on:submit={handleSubmit} class="space-y-4">
@@ -970,6 +975,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                   <div
                     bind:this={functionEditorElement}
                     class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden relative"
+                    on:keydown={ignoreEscKeypress}
                   >
                     <div
                       class="absolute bottom-2 right-2 flex items-center gap-2 z-10"

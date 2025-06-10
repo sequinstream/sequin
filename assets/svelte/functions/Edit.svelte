@@ -656,6 +656,7 @@ Please help me create or modify the Elixir function transform to achieve the des
 <FullPageForm
   title={isEditing ? "Edit Function" : "New Function"}
   showConfirmOnExit={isDirty}
+  enableEscapeClose={false}
   on:close={handleClose}
 >
   <form on:submit={handleSubmit} class="space-y-4">

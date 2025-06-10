@@ -6,6 +6,8 @@ defmodule Sequin.SystemMetricsServer do
 
   @interval :timer.seconds(30)
   @run_queue_threshold 50
+  @cpu_load_threshold 80
+  @scheduler_util_threshold 80
 
   def start_link(_opts) do
     GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
@@ -31,14 +33,9 @@ defmodule Sequin.SystemMetricsServer do
     memory_info = :erlang.memory()
     cpu_load = cpu_load()
     scheduler_util = scheduler_util()
-
     run_queue = :erlang.statistics(:run_queue)
 
-    if run_queue > @run_queue_threshold do
-      Logger.warning("[SystemMetricsServer] Run queue is high (#{run_queue}), system may be resource constrained")
-    end
-
-    Logger.info(
+    message =
       """
       [SystemMetricsServer]
       CPU Load:         #{format_percentage(cpu_load)}
@@ -50,7 +47,9 @@ defmodule Sequin.SystemMetricsServer do
         Binary:         #{format_bytes(memory_info[:binary])}
         Code:           #{format_bytes(memory_info[:code])}
         ETS:            #{format_bytes(memory_info[:ets])}
-      """,
+      """
+
+    metrics = [
       cpu_load: cpu_load,
       scheduler_util: scheduler_util,
       run_queue: run_queue,
@@ -60,7 +59,13 @@ defmodule Sequin.SystemMetricsServer do
       memory_binary_bytes: memory_info[:binary],
       memory_code_bytes: memory_info[:code],
       memory_ets_bytes: memory_info[:ets]
-    )
+    ]
+
+    if cpu_load > @cpu_load_threshold or scheduler_util > @scheduler_util_threshold or run_queue > @run_queue_threshold do
+      Logger.warning(message, metrics)
+    else
+      Logger.info(message, metrics)
+    end
   end
 
   defp format_bytes(bytes) when is_integer(bytes) do

@@ -76,27 +76,16 @@ func NewProcessingContext(yamlPath string) (*ProcessingContext, error) {
 	// Clean the path
 	yamlPath = filepath.Clean(yamlPath)
 
-	var searchPaths []string
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current directory: %w", err)
-	}
-	searchPaths = append(searchPaths, cwd)
-
+	// For non-stdin input, only use the directory of the YAML file as the search path
 	yamlDir := filepath.Dir(yamlPath)
 	absYamlDir, err := filepath.Abs(yamlDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve yaml directory: %w", err)
 	}
 
-	if absYamlDir != cwd {
-		searchPaths = append(searchPaths, absYamlDir)
-	}
-
 	return &ProcessingContext{
 		YamlPath:    yamlPath,
-		SearchPaths: searchPaths,
+		SearchPaths: []string{absYamlDir},
 	}, nil
 }
 

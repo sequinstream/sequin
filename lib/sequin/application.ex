@@ -60,7 +60,6 @@ defmodule Sequin.Application do
               Sequin.Runtime.Supervisor
             ]
           ),
-          # Sequin.Tracer.Starter,
           Sequin.Telemetry.PosthogReporter
         ]
 
@@ -93,7 +92,6 @@ defmodule Sequin.Application do
       Sequin.Sinks.RabbitMq.ConnectionCache,
       SequinWeb.Presence,
       Sequin.SystemMetricsServer,
-      # Sequin.Tracer.DynamicSupervisor,
       {Cluster.Supervisor, [topologies]},
       {Task, fn -> enqueue_workers() end},
       # Start to serve requests, typically the last entry

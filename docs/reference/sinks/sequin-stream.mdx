@@ -78,9 +78,9 @@ curl -X GET https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER
   -H "Authorization: Bearer {your-token}"
 ```
 
-This will return a batch of messages. Each message will contain an `ack_id` and either a row or changes object:
+This will return a batch of messages. Each message will contain an `ack_id` and the default payload:
 
-#### Change Messages
+#### Payload
 
 ```typescript
 {
@@ -130,51 +130,6 @@ Example:
   ]
 }
 ```
-
-#### Row Messages
-
-```typescript
-{
-  data: Array<{
-    ack_id: string;
-    record: Record<string, any>;  // The row data
-    metadata: {
-      table_schema: string;
-      table_name: string;
-      consumer: {
-        id: string;
-        name: string;
-      };
-    };
-  }>;
-}
-```
-
-Example:
-```json
-{
-  "data": [
-    {
-      "ack_id": "MTYyeJ7abUjl1pO",
-      "record": {
-        "id": 1234,
-        "customer_id": 789,
-        "status": "shipped"
-      },
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "orders",
-        "consumer": {
-          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "orders_webhook"
-        }
-      }
-    }
-  ]
-}
-```
-
-While your consumer is processing this batch of messages, the messages will not be visible to other consumers. The amount of time these messages are not visible (i.e. the visibility timeout) defaults to `30` seconds and is configurable in your sink's settings.
 
 ### Acknowledge messages
 

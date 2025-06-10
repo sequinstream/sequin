@@ -25,7 +25,7 @@ select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
 }');
 ```
 
-The annotations will be included in the `metadata.transaction_annotations` field of all [change messages](/reference/messages#change-messages) in that transaction:
+The annotations will be included in the `metadata.transaction_annotations` field of all [change messages](/reference/payloads#change-messages) in that transaction:
 
 ```json
 {

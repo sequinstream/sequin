@@ -1,18 +1,10 @@
 ---
-title: "Messages"
-sidebarTitle: "Messages"
-description: "Reference for Sequin's CDC message formats."
+title: "Payloads"
+sidebarTitle: "Payloads"
+description: "Reference for Sequin's CDC payloads."
 ---
 
-## Message shapes
-
-Sequin converts Postgres changes and rows into JSON messages that are delivered to your sinks.
-
-When you setup a sink, you can choose whether the sink should receive [change messages](#change-messages) or [row messages](#row-messages).
-
-### Change messages
-
-A change message has this shape:
+Sequin converts Postgres changes into JSON payloads that are delivered to your sinks. Each payload contains the current record, any previous values, the action that occurred, and metadata about the event. Unless you apply a [transform](/reference/transforms), this is the shape most sinks receive.
 
 ```js
 {
@@ -41,8 +33,6 @@ A change message has this shape:
 }
 ```
 
-### Change message fields
-
 <ResponseField name="record" type="object">
   The current state of the row. Contains all column values.
 </ResponseField>
@@ -56,7 +46,7 @@ A change message has this shape:
   - `insert`: A new row was created
   - `update`: An existing row was modified
   - `delete`: A row was deleted
-  - `read`: A row was read during a [backfill](#backfills)
+  - `read`: A row was read during a [backfill](/reference/backfills)
 </ResponseField>
 
 <ResponseField name="metadata" type="object">
@@ -223,84 +213,6 @@ A change message has this shape:
 
 For update operations, `record` contains the new values and `changes` contains the previous values of only the fields that changed. For all other operations, `changes` is null.
 
-### Row messages
-
-A row message has this shape:
-
-```js
-{
-  record: {
-    [key: string]: any;
-  };
-  metadata: {
-    table_schema: string;
-    table_name: string;
-    idempotency_key: string;
-    sink: {
-      id: string;
-      name: string;
-    };
-  };
-}
-```
-
-### Row message fields
-
-<ResponseField name="record" type="object">
-  The current state of the row. Contains all column values.
-</ResponseField>
-
-<ResponseField name="metadata" type="object">
-  Additional context about the row.
-</ResponseField>
-
-<ResponseField name="metadata.table_schema" type="string">
-  The Postgres schema containing the table (e.g., "public").
-</ResponseField>
-
-<ResponseField name="metadata.table_name" type="string">
-  The name of the table.
-</ResponseField>
-
-<ResponseField name="metadata.sink" type="object">
-  Information about the sink receiving this message.
-</ResponseField>
-
-<ResponseField name="metadata.sink.id" type="string">
-  Unique identifier for the sink.
-</ResponseField>
-
-<ResponseField name="metadata.sink.name" type="string">
-  Name of the sink.
-</ResponseField>
-
-For example:
-
-```json
-{
-  "record": {
-    "id": 1,
-    "name": "Paul Atreides",
-    "title": "Duke of Arrakis",
-    "spice_allocation": 1000,
-    "is_kwisatz_haderach": true
-  },
-  "metadata": {
-    "table_schema": "public", 
-    "table_name": "house_atreides_members",
-    "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
-    "sink": {
-      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      "name": "dune_characters_kafka"
-    }
-  }
-}
-```
-
-<Info>
-  At the moment, row messages only support `insert` and `update` operations. Soon, we'll support `delete` operations by adding a `deleted` boolean column to the message.
-</Info>
-
 ### Idempotency
 
 The `metadata` of each message includes an `idempotency_key` which your application can use to reject any [possible duplicate messages](/reference/sinks/overview#guaranteed-delivery).
@@ -309,8 +221,10 @@ For regular changes (non-backfill), the idempotency key is based on the transact
 
 For backfill messages, the key is based on the backfill's unique identifier and the primary key values of the record being processed.
 
-### Which message shape should you use?
+## Related
 
-Change messages are the best fit for most use cases. They contain more information about discrete changes to a row and include `delete` operations.
-
-If you only need the latest version of a row, and either don't need deletes or soft-delete rows, consider using row messages. The nice part about row messages is that every message is the same shape, whether it's an insert, update, or backfill ("read") message.
+<CardGroup>
+  <Card title="Transforms" icon="pencil" href="/reference/transforms">
+    Learn how to transform payloads before they are sent to your destination.
+  </Card>
+</CardGroup>

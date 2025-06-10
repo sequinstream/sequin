@@ -4,7 +4,7 @@ sidebarTitle: 'Annotations'
 description: 'Reference for Sequin transaction annotations. Attach rich contextual metadata to your Postgres change data capture (CDC) events.'
 ---
 
-Transaction annotations allow you to attach metadata to database changes. When you set annotations, all change messages following the annotation will include the annotations [in their metadata](/reference/messages#change-messages).
+Transaction annotations allow you to attach metadata to database changes. When you set annotations, all change messages following the annotation will include the annotations [in their metadata](/reference/payloads#change-messages).
 
 ## Protocol
 
@@ -33,11 +33,10 @@ select pg_logical_emit_message(true, prefix, content);
 
 - Must be valid JSON
 - Cannot be set outside a transaction
-- Annotations are only supported for [change messages](/reference/messages#change-messages). They are not supported for [row messages](/reference/messages#row-messages).
 
 ## Message format
 
-Annotations appear in the `metadata.transaction_annotations` field of [change messages](/reference/messages#change-messages):
+Annotations appear in the `metadata.transaction_annotations` field of [change messages](/reference/payloads#change-messages):
 
 ```json
 {
@@ -88,7 +87,7 @@ commit;
 ## Related
 
 <CardGroup>
-  <Card title="Messages reference" icon="message-dots" href="/reference/messages">
+  <Card title="Messages reference" icon="message-dots" href="/reference/payloads">
     Learn about message shapes and how annotations appear in change messages.
   </Card>
   <Card title="How to annotate changes" icon="pencil" href="/how-to/annotate-changes">

@@ -234,7 +234,11 @@
           </div>
           <div>
             <p class="text-sm text-gray-500">Source Table</p>
-            <p class="font-medium">{walPipeline.source_table.name}</p>
+            {#if walPipeline.source_table}
+              <p class="font-medium">{walPipeline.source_table.name}</p>
+            {:else}
+              <p class="font-medium text-gray-500">Table not found</p>
+            {/if}
           </div>
           <div>
             <p class="text-sm text-gray-500">Destination Database</p>
@@ -268,12 +272,16 @@
           <pre class="font-medium">{walPipeline.source_database.name}</pre>
         </div>
         <div class="mb-4 flex items-center space-x-2">
-          <icon
-            class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-              walPipeline.source_table.name,
-            )}"
-          ></icon>
-          <pre class="font-medium">{walPipeline.source_table.name}</pre>
+          {#if walPipeline.source_table}
+            <icon
+              class="hero-table-cells w-6 h-6 rounded {getColorFromName(
+                walPipeline.source_table.name,
+              )}"
+            ></icon>
+            <pre class="font-medium">{walPipeline.source_table.name}</pre>
+          {:else}
+            <span class="text-gray-500">Table not found</span>
+          {/if}
         </div>
         <div class="mb-4">
           <h3 class="text-md font-semibold mb-2">Filters</h3>

@@ -167,6 +167,10 @@ defmodule SequinWeb.WalPipelinesLive.Show do
     }
   end
 
+  defp encode_source_table(%SourceTable{}, nil) do
+    nil
+  end
+
   defp encode_source_table(%SourceTable{} = table, %PostgresDatabaseTable{} = source_table_info) do
     %{
       oid: table.oid,

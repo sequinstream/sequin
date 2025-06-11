@@ -70,7 +70,8 @@ defmodule Sequin.Runtime.S2PipelineTest do
         assert %{"records" => [record]} = body_json
 
         # Verify record contains a "body" key
-        assert %{"body" => _} = record
+        assert %{"body" => body} = record
+        assert is_binary(body), "Expected body to be a string, got: #{inspect(body)}"
 
         send(test_pid, {:s2_request, conn})
         Req.Test.json(conn, %{})

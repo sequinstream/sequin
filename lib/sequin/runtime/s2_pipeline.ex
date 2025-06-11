@@ -36,7 +36,8 @@ defmodule Sequin.Runtime.S2Pipeline do
 
     records =
       Enum.map(messages, fn %{data: data} ->
-        %{"body" => Message.to_external(consumer, data)}
+        # Body has to be serialized as a string
+        %{"body" => Jason.encode!(Message.to_external(consumer, data))}
       end)
 
     case Client.append_records(sink, records) do

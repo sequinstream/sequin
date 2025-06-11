@@ -245,7 +245,6 @@ defmodule Sequin.Runtime.TableReader do
         messages =
           table
           |> records_by_column_attnum(rows)
-          |> Stream.filter(&Consumers.matches_record?(consumer, table.oid, &1))
           |> Enum.map(&message_from_row(consumer, backfill, table, &1))
 
         {:ok, %{messages: messages, next_cursor: next_cursor}}
@@ -472,21 +471,14 @@ defmodule Sequin.Runtime.TableReader do
   end
 
   defp generate_group_id(consumer, table, record_attnums_to_values) do
-    group_column_attnums = group_column_attnums(consumer)
+    case Enum.find(consumer.source_tables, &(&1.table_oid == table.oid)) do
+      nil ->
+        table |> record_pks(record_attnums_to_values) |> Enum.join(",")
 
-    if group_column_attnums do
-      Enum.map_join(group_column_attnums, ",", fn attnum ->
-        to_string(Map.get(record_attnums_to_values, attnum))
-      end)
-    else
-      table |> record_pks(record_attnums_to_values) |> Enum.join(",")
+      source_table ->
+        Enum.map_join(source_table.group_column_attnums, ",", fn attnum ->
+          to_string(Map.get(record_attnums_to_values, attnum))
+        end)
     end
-  end
-
-  # For schema filters, we group by defaults (pks)
-  defp group_column_attnums(%SinkConsumer{schema_filter: %SchemaFilter{}}), do: nil
-
-  defp group_column_attnums(%{sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums}}) do
-    group_column_attnums
   end
 end

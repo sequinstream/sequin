@@ -22,6 +22,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
+  alias Sequin.Consumers.Source
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases
@@ -854,9 +855,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "max_retry_count" => consumer.max_retry_count,
       "message_kind" => consumer.message_kind,
       "postgres_database_id" => postgres_database_id,
-      "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter),
-      "sequence_id" => consumer.sequence_id,
       "sink" => encode_sink(consumer.sink),
+      "source" => encode_source(consumer.source),
       "routing_mode" => if(consumer.routing_id, do: "dynamic", else: "static"),
       "routing_id" => consumer.routing_id,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete],
@@ -871,10 +871,12 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
-  defp encode_sequence_filter(%SequenceFilter{} = sequence_filter) do
+  defp encode_source(%Source{} = source) do
     %{
-      "column_filters" => Enum.map(sequence_filter.column_filters, &ColumnFilter.to_external/1),
-      "actions" => sequence_filter.actions
+      "include_schemas" => source.include_schemas,
+      "exclude_schemas" => source.exclude_schemas,
+      "include_table_oids" => source.include_table_oids,
+      "exclude_table_oids" => source.exclude_table_oids
     }
   end
 
@@ -1137,8 +1139,7 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     result =
       Repo.transact(fn ->
-        with {:ok, params} <- maybe_put_sequence_id(account_id, params),
-             {:ok, consumer} <- Consumers.create_sink_consumer(account_id, params),
+        with {:ok, consumer} <- Consumers.create_sink_consumer(account_id, params),
              :ok <- maybe_create_backfills(socket, consumer, params, initial_backfill) do
           {:ok, Repo.preload(consumer, :active_backfills)}
         end
@@ -1164,10 +1165,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       {:error, %Ecto.Changeset{data: %Backfill{}} = changeset} ->
         Logger.info("Create backfill failed validation: #{inspect(Error.errors_on(changeset), pretty: true)}")
         {:error, assign(socket, :backfill_changeset, changeset)}
-
-      {:error, %Ecto.Changeset{data: %Sequence{}} = changeset} ->
-        Logger.info("Create sequence failed validation: #{inspect(Error.errors_on(changeset), pretty: true)}")
-        {:error, assign(socket, :sequence_changeset, changeset)}
 
       {:error, %Ecto.Changeset{data: %SinkConsumer{}} = changeset} ->
         Logger.info("Create consumer failed validation: #{inspect(Error.errors_on(changeset), pretty: true)}")
@@ -1232,32 +1229,6 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
 
     with {:ok, _} <- Consumers.create_backfill(backfill_attrs), do: :ok
-  end
-
-  defp maybe_put_sequence_id(_account_id, %{"table_oid" => nil} = params) do
-    {:ok, params}
-  end
-
-  defp maybe_put_sequence_id(
-         account_id,
-         %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id} = params
-       ) do
-    case Databases.find_sequence_for_account(account_id, postgres_database_id: postgres_database_id, table_oid: table_oid) do
-      {:ok, sequence} ->
-        {:ok, Map.put(params, "sequence_id", sequence.id)}
-
-      {:error, %NotFoundError{}} ->
-        Logger.info("Creating sequence for table #{table_oid}")
-
-        case Databases.create_sequence(account_id, %{
-               name: Ecto.UUID.generate(),
-               table_oid: table_oid,
-               postgres_database_id: postgres_database_id
-             }) do
-          {:ok, sequence} -> {:ok, Map.put(params, "sequence_id", sequence.id)}
-          {:error, changeset} -> {:error, changeset}
-        end
-    end
   end
 
   defp reset_changeset(socket) do

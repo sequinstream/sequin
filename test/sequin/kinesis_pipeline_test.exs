@@ -10,7 +10,6 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.SinkPipeline
-  alias Sequin.TestSupport.Models.Character
 
   describe "events are sent to Kinesis" do
     setup do
@@ -27,21 +26,12 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
           postgres_database_id: postgres_database.id
         )
 
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          postgres_database_id: postgres_database.id,
-          account_id: account.id,
-          table_oid: Character.table_oid()
-        )
-
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :kinesis,
           message_kind: :record,
           batch_size: 10,
-          sequence_filter: ConsumersFactory.sequence_filter_attrs(group_column_attnums: [1]),
-          sequence_id: sequence.id,
           replication_slot_id: replication.id
         )
 

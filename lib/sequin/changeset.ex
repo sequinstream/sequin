@@ -2,8 +2,8 @@ defmodule Sequin.Changeset do
   @moduledoc false
   import Ecto.Changeset
 
-  alias Sequin.Consumers.SourceTable
   alias Sequin.Replication.WalPipeline
+  alias Sequin.WalPipeline.SourceTable
 
   require Logger
 

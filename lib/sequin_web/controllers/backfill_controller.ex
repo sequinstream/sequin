@@ -4,6 +4,7 @@ defmodule SequinWeb.BackfillController do
   alias Sequin.Consumers
   alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.Source
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Error
@@ -38,7 +39,7 @@ defmodule SequinWeb.BackfillController do
     account_id = conn.assigns.account_id
 
     with {:ok, sink_consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: sink_id_or_name),
-         sink_consumer = Repo.preload(sink_consumer, [:postgres_database, :sequence]),
+         sink_consumer = Repo.preload(sink_consumer, [:postgres_database]),
          {:ok, table} <- find_table(sink_consumer, table_reference),
          {:ok, backfill_params} <- Transforms.from_external_backfill(params),
          backfill_params =
@@ -67,38 +68,41 @@ defmodule SequinWeb.BackfillController do
   end
 
   defp find_table(
-         %SinkConsumer{postgres_database: %PostgresDatabase{tables: tables}, sequence: %Sequence{table_oid: table_oid}},
-         _table_name
+         %SinkConsumer{
+           postgres_database: %PostgresDatabase{tables: tables},
+           source: %Source{include_table_oids: [table_oid]}
+         },
+         nil
        ) do
-    case Enum.find(tables, &(&1.oid == table_oid)) do
-      nil -> {:error, Error.validation(summary: "Table not found")}
-      table -> {:ok, table}
+    table = Enum.find(tables, &(&1.oid == table_oid))
+
+    if is_nil(table) do
+      {:error, Error.validation(summary: "Table #{table_oid} not found")}
+    else
+      {:ok, table}
     end
   end
 
-  defp find_table(%SinkConsumer{sequence: nil}, nil) do
-    {:error, Error.validation(summary: "Must specify a table to backfill.")}
+  defp find_table(%SinkConsumer{postgres_database: %PostgresDatabase{}}, nil) do
+    {:error, Error.validation(summary: "Table reference is required")}
   end
 
-  defp find_table(
-         %SinkConsumer{
-           postgres_database: %PostgresDatabase{tables: tables},
-           schema_filter: %SchemaFilter{} = schema_filter
-         },
-         table_reference
-       ) do
+  defp find_table(%SinkConsumer{postgres_database: %PostgresDatabase{tables: tables}, source: source}, table_reference) do
     {schema, table_name} = Transforms.parse_table_reference(table_reference)
     table = Enum.find(tables, &(&1.name == table_name and &1.schema == schema))
 
     cond do
-      schema_filter.schema != schema ->
-        {:error, Error.validation(summary: "Table #{table_reference} not in sink's schema #{schema_filter.schema}")}
-
       is_nil(table) ->
         {:error, Error.validation(summary: "Table #{table_reference} not found")}
 
-      true ->
+      is_nil(source) ->
         {:ok, table}
+
+      Source.table_in_source?(source, table) ->
+        {:ok, table}
+
+      true ->
+        {:error, Error.validation(summary: "Table #{table_reference} not in sink's source configuration")}
     end
   end
 end

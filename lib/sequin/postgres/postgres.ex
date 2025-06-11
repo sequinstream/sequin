@@ -6,7 +6,6 @@ defmodule Sequin.Postgres do
 
   alias Ecto.Type
   alias Sequin.Constants
-  alias Sequin.Consumers.SourceTable
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Databases.PostgresDatabase
@@ -14,6 +13,7 @@ defmodule Sequin.Postgres do
   alias Sequin.Error
   alias Sequin.Error.ValidationError
   alias Sequin.Repo
+  alias Sequin.WalPipeline.SourceTable
 
   require Logger
 

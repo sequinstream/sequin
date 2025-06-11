@@ -14,8 +14,6 @@ defmodule Sequin.Runtime.RedisPipelineTest do
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.Sinks.RedisMock
-  alias Sequin.TestSupport.Models.Character
-  alias Sequin.TestSupport.Models.CharacterDetailed
 
   describe "events are sent to Redis" do
     setup do
@@ -32,21 +30,12 @@ defmodule Sequin.Runtime.RedisPipelineTest do
           postgres_database_id: postgres_database.id
         )
 
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          postgres_database_id: postgres_database.id,
-          account_id: account.id,
-          table_oid: Character.table_oid()
-        )
-
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :redis_stream,
           message_kind: :record,
           batch_size: 10,
-          sequence_filter: ConsumersFactory.sequence_filter_attrs(group_column_attnums: [1]),
-          sequence_id: sequence.id,
           replication_slot_id: replication.id
         )
 
@@ -127,14 +116,6 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
       ConnectionCache.cache_connection(database, Sequin.Repo)
 
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          postgres_database_id: database.id,
-          postgres_database: database,
-          table_oid: CharacterDetailed.table_oid(),
-          account_id: account.id
-        )
-
       replication =
         ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: database.id)
 
@@ -144,8 +125,6 @@ defmodule Sequin.Runtime.RedisPipelineTest do
           account_id: account.id,
           type: :redis_stream,
           replication_slot_id: replication.id,
-          sequence_id: sequence.id,
-          sequence: sequence,
           message_kind: :record,
           postgres_database: database
         )

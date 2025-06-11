@@ -25,21 +25,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingFunction
-  alias Sequin.Consumers.SchemaFilter
-  alias Sequin.Consumers.SequenceFilter
-  alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
+  alias Sequin.Consumers.Source
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
-  alias Sequin.Databases.Sequence
   alias Sequin.Health
   alias Sequin.Health.CheckSinkConfigurationWorker
   alias Sequin.Metrics
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.SlotMessageStore
@@ -112,7 +110,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       consumer =
         consumer
         |> Repo.preload(
-          [:postgres_database, :sequence, :active_backfills, :replication_slot, :transform, :routing, :filter],
+          [:postgres_database, :active_backfills, :replication_slot, :transform, :routing, :filter],
           force: true
         )
         |> SinkConsumer.preload_http_endpoint!()
@@ -333,50 +331,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     Sequin.Runtime.Supervisor.maybe_start_table_readers(consumer)
 
     {:reply, %{ok: true}, load_consumer_backfills(socket)}
-  end
-
-  def handle_event(
-        "run-backfill",
-        %{
-          "startPosition" => start_position,
-          "sortColumnAttnum" => sort_column_attnum,
-          "initialSortColumnValue" => initial_sort_column_value
-        },
-        socket
-      ) do
-    consumer = socket.assigns.consumer
-    table = find_table_for_sequence(consumer.sequence, consumer.postgres_database.tables)
-    table = %PostgresDatabaseTable{table | sort_column_attnum: sort_column_attnum}
-
-    initial_min_cursor =
-      if start_position == "specific" do
-        KeysetCursor.min_cursor(table, initial_sort_column_value)
-      else
-        KeysetCursor.min_cursor(table)
-      end
-
-    backfill_attrs = %{
-      account_id: current_account_id(socket),
-      sink_consumer_id: consumer.id,
-      initial_min_cursor: initial_min_cursor,
-      sort_column_attnum: sort_column_attnum,
-      state: :active,
-      table_oid: table.oid
-    }
-
-    case Consumers.create_backfill(backfill_attrs) do
-      {:ok, backfill} ->
-        Sequin.Runtime.Supervisor.start_table_reader(backfill)
-
-        {:reply, %{ok: true},
-         socket
-         |> put_flash(:toast, %{kind: :success, title: "Backfill started successfully"})
-         |> load_consumer_backfills()}
-
-      {:error, error} ->
-        Logger.error("Failed to start backfill: #{inspect(error)}", error: error)
-        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to start backfill"})}
-    end
   end
 
   # Add a catch-all clause for invalid parameters
@@ -785,9 +739,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp encode_consumer(%SinkConsumer{type: _} = consumer) do
-    table = find_table_for_sequence(consumer.sequence, consumer.postgres_database.tables)
-    tables_in_schema = tables_in_schema(consumer)
-
     %{
       id: consumer.id,
       name: consumer.name,
@@ -805,20 +756,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       updated_at: consumer.updated_at,
       database: encode_database(consumer.postgres_database),
       sink: encode_sink(consumer),
-      sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
+      source: encode_source(consumer.source, consumer.replication_slot, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: encode_health(consumer),
       href: RouteHelpers.consumer_path(consumer),
-      group_column_names: encode_group_column_names(consumer),
       batch_size: consumer.batch_size,
-      table: encode_table(table),
-      tablesInSchema: encode_tables_in_schema(tables_in_schema),
       transform_id: consumer.transform_id,
       routing_id: consumer.routing_id,
       routing: encode_function(consumer.routing),
       filter_id: consumer.filter_id,
       filter: encode_function(consumer.filter),
-      schemaFilter: encode_schema_filter(consumer.schema_filter),
       active_backfills: Enum.map(consumer.active_backfills, &encode_backfill/1)
     }
   end
@@ -924,14 +871,12 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_sink(%SinkConsumer{sink: %RabbitMqSink{} = sink} = consumer) do
     database_name = consumer.postgres_database.name
-    schema_name = consumer.sequence.table_schema
-    table_name = consumer.sequence.table_name
 
     topic =
       if consumer.message_kind == :event do
-        "sequin.changes.#{database_name}.#{schema_name}.#{table_name}.{action}"
+        "sequin.changes.#{database_name}.{table-schema}.{table-name}.{action}"
       else
-        "sequin.rows.#{database_name}.#{schema_name}.#{table_name}"
+        "sequin.rows.#{database_name}.{table-schema}.{table-name}"
       end
 
     %{
@@ -996,60 +941,43 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_sequence(nil, nil, %PostgresDatabase{}) do
+  defp encode_source(nil, %PostgresReplicationSlot{} = slot, %PostgresDatabase{}) do
     %{
-      table_name: nil,
-      table_schema: nil,
-      column_filters: []
+      publication_name: slot.publication_name,
+      include_schemas: nil,
+      exclude_schemas: nil,
+      include_table_oids: nil,
+      exclude_table_oids: nil
     }
   end
 
-  defp encode_sequence(
-         %Sequence{} = sequence,
-         %SequenceFilter{} = sequence_filter,
-         %PostgresDatabase{} = postgres_database
-       ) do
-    case find_table_for_sequence(sequence, postgres_database.tables) do
-      nil ->
-        %{
-          table_name: nil,
-          table_schema: nil,
-          column_filters: []
-        }
+  defp encode_source(%Source{} = source, %PostgresReplicationSlot{} = slot, %PostgresDatabase{} = database) do
+    include_table_names =
+      if source.include_table_oids do
+        source.include_table_oids
+        |> Enum.map(fn table_oid ->
+          Enum.find(database.tables, &(&1.oid == table_oid))
+        end)
+        |> Enum.filter(& &1)
+        |> Enum.map(& &1.name)
+      end
 
-      %PostgresDatabaseTable{} = table ->
-        %{
-          table_name: table.name,
-          table_schema: table.schema,
-          column_filters: Enum.map(sequence_filter.column_filters, &encode_column_filter(&1, table))
-        }
-    end
-  end
-
-  defp find_table_for_sequence(nil, _tables), do: nil
-
-  defp find_table_for_sequence(%Sequence{table_oid: table_oid}, tables) do
-    Enum.find(tables, &(&1.oid == table_oid))
-  end
-
-  defp tables_in_schema(%SinkConsumer{schema_filter: nil}), do: nil
-
-  defp tables_in_schema(%SinkConsumer{
-         schema_filter: %SchemaFilter{} = schema_filter,
-         postgres_database: %PostgresDatabase{} = postgres_database
-       }) do
-    Enum.filter(postgres_database.tables, &(&1.schema == schema_filter.schema))
-  end
-
-  defp encode_column_filter(column_filter, table) do
-    column = Enum.find(table.columns, &(&1.attnum == column_filter.column_attnum))
+    exclude_table_names =
+      if source.exclude_table_oids do
+        source.exclude_table_oids
+        |> Enum.map(fn table_oid ->
+          Enum.find(database.tables, &(&1.oid == table_oid))
+        end)
+        |> Enum.filter(& &1)
+        |> Enum.map(& &1.name)
+      end
 
     %{
-      column: column.name,
-      operator: ColumnFilter.to_external_operator(column_filter.operator),
-      value: column_filter.value.value,
-      is_jsonb: column_filter.is_jsonb,
-      jsonb_path: column_filter.jsonb_path
+      publication_name: slot.publication_name,
+      include_schemas: source.include_schemas,
+      exclude_schemas: source.exclude_schemas,
+      include_table_names: include_table_names,
+      exclude_table_names: exclude_table_names
     }
   end
 
@@ -1080,40 +1008,25 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_schema_filter(nil), do: nil
+  # defp encode_table(nil), do: nil
 
-  defp encode_schema_filter(%SchemaFilter{} = schema_filter) do
-    %{
-      schema: schema_filter.schema
-    }
-  end
+  # defp encode_table(%PostgresDatabaseTable{} = table) do
+  #   %{
+  #     oid: table.oid,
+  #     schema: table.schema,
+  #     name: table.name,
+  #     columns: Enum.map(table.columns, &encode_column/1)
+  #   }
+  # end
 
-  defp encode_table(nil), do: nil
-
-  defp encode_table(%PostgresDatabaseTable{} = table) do
-    %{
-      oid: table.oid,
-      schema: table.schema,
-      name: table.name,
-      columns: Enum.map(table.columns, &encode_column/1)
-    }
-  end
-
-  defp encode_tables_in_schema(nil), do: nil
-  defp encode_tables_in_schema([]), do: nil
-
-  defp encode_tables_in_schema(tables) do
-    Enum.map(tables, &encode_table/1)
-  end
-
-  defp encode_column(%PostgresDatabaseTable.Column{} = column) do
-    %{
-      attnum: column.attnum,
-      isPk?: column.is_pk?,
-      name: column.name,
-      type: column.type
-    }
-  end
+  # defp encode_column(%PostgresDatabaseTable.Column{} = column) do
+  #   %{
+  #     attnum: column.attnum,
+  #     isPk?: column.is_pk?,
+  #     name: column.name,
+  #     type: column.type
+  #   }
+  # end
 
   defp encode_api_tokens(api_tokens) when is_list(api_tokens) do
     Enum.map(api_tokens, fn api_token ->
@@ -1124,44 +1037,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         token: api_token.token
       }
     end)
-  end
-
-  defp encode_group_column_names(%{sequence: nil, sequence_filter: nil, postgres_database: %PostgresDatabase{}}) do
-    []
-  end
-
-  defp encode_group_column_names(%{
-         sequence: %Sequence{} = sequence,
-         sequence_filter: %SequenceFilter{group_column_attnums: nil},
-         postgres_database: %PostgresDatabase{} = postgres_database
-       }) do
-    case find_table_for_sequence(sequence, postgres_database.tables) do
-      %PostgresDatabaseTable{} = table ->
-        table.columns
-        |> Enum.filter(& &1.is_pk?)
-        |> Enum.sort_by(& &1.attnum)
-        |> Enum.map(& &1.name)
-
-      nil ->
-        []
-    end
-  end
-
-  defp encode_group_column_names(%{
-         sequence: %Sequence{} = sequence,
-         sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums},
-         postgres_database: %PostgresDatabase{} = postgres_database
-       }) do
-    case find_table_for_sequence(sequence, postgres_database.tables) do
-      %PostgresDatabaseTable{} = table ->
-        table.columns
-        |> Enum.filter(&(&1.attnum in group_column_attnums))
-        |> Enum.sort_by(& &1.attnum)
-        |> Enum.map(& &1.name)
-
-      nil ->
-        []
-    end
   end
 
   # Function to load messages for the consumer

@@ -2,7 +2,7 @@ defmodule Sequin.ErrorTest do
   use Sequin.Case, async: true
 
   alias Sequin.Accounts.Account
-  alias Sequin.Consumers.SequenceFilter
+  alias Sequin.Consumers.Source
   alias Sequin.Error
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
@@ -19,13 +19,13 @@ defmodule Sequin.ErrorTest do
     end
 
     test "returns errors when a list fails validation" do
-      sequence_filter_attrs = ConsumersFactory.sequence_filter_attrs()
-      changeset = SequenceFilter.create_changeset(%SequenceFilter{}, sequence_filter_attrs)
+      source_attrs = ConsumersFactory.source_attrs(include_schemas: ["public"])
+      changeset = Source.changeset(%Source{}, source_attrs)
       assert Error.errors_on(changeset) == %{}
 
-      sequence_filter_attrs = %{sequence_filter_attrs | group_column_attnums: []}
-      changeset = SequenceFilter.create_changeset(%SequenceFilter{}, sequence_filter_attrs)
-      assert Error.errors_on(changeset) == %{group_column_attnums: ["should have at least 1 item(s)"]}
+      source_attrs = %{source_attrs | include_schemas: []}
+      changeset = Source.changeset(%Source{}, source_attrs)
+      assert Error.errors_on(changeset) == %{include_schemas: ["should have at least 1 item(s)"]}
     end
   end
 end

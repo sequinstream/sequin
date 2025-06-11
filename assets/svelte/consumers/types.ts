@@ -1,6 +1,14 @@
 import type { Table } from "../databases/types";
 import type { Function } from "../functions/types";
 
+export type Source = {
+  publication_name: string;
+  include_schemas: string[] | null;
+  exclude_schemas: string[] | null;
+  include_table_names: string[] | null;
+  exclude_table_names: string[] | null;
+};
+
 export type Backfill = {
   id: string;
   state: "active" | "completed" | "failed" | "canceled";
@@ -42,17 +50,7 @@ export type BaseConsumer = {
   max_waiting: number;
   inserted_at: string;
   updated_at: string;
-  sequence: {
-    table_name: string;
-    table_schema: string;
-    column_filters: Array<{
-      column: string;
-      operator: string;
-      value: any;
-      is_jsonb: boolean;
-      jsonb_path: string;
-    }>;
-  };
+  source: Source;
   routing_id: string | null;
   routing: Function | null;
   filter_id: string | null;

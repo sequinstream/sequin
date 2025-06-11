@@ -5,7 +5,7 @@ defmodule Sequin.Replication.WalPipeline do
   import Ecto.Changeset
   import Ecto.Query
 
-  alias Sequin.Consumers.SourceTable
+  alias Sequin.WalPipeline.SourceTable
 
   @derive {Jason.Encoder, only: [:id, :name, :status, :seq, :destination_oid, :destination_database_id, :source_tables]}
   typed_schema "wal_pipelines" do

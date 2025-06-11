@@ -2,7 +2,6 @@ defmodule SequinWeb.YamlControllerTest do
   use SequinWeb.ConnCase, async: true
 
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.Sequence
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.ReplicationSlots
@@ -147,8 +146,6 @@ defmodule SequinWeb.YamlControllerTest do
       sinks:
         - name: accounts_sink
           status: active
-          table: public.#{Character.table_name()}
-          filters: []
           destination:
             port: 4222
             type: nats
@@ -165,8 +162,6 @@ defmodule SequinWeb.YamlControllerTest do
             - insert
             - update
             - delete
-          group_column_names:
-            - id
       transforms:
         - name: record-transform
           type: path
@@ -294,7 +289,8 @@ defmodule SequinWeb.YamlControllerTest do
       sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
-          table: "DOES NOT EXIST LMAO"
+          source:
+            include_tables: ["does not exist"]
           destination:
             type: "webhook"
             http_endpoint: "sequin-playground-webhook"
@@ -302,9 +298,8 @@ defmodule SequinWeb.YamlControllerTest do
 
       conn = post(conn, ~p"/api/config/apply", %{yaml: yaml})
 
-      %{"summary" => summary} = json_response(conn, 404)
-      assert summary =~ "table"
-      refute summary =~ "sequence"
+      %{"summary" => summary} = json_response(conn, 422)
+      assert summary =~ "Table 'does not exist' not found in database 'test-db'"
     end
 
     test "returns error for invalid yaml", %{conn: conn} do
@@ -339,9 +334,6 @@ defmodule SequinWeb.YamlControllerTest do
           slot_name: "#{replication_slot()}"
           publication_name: "#{@publication}"
           pool_size: 10
-          tables:
-            - table_name: "Characters"
-              table_schema: "public"
 
       http_endpoints:
         - name: "sequin-playground-webhook"
@@ -350,7 +342,6 @@ defmodule SequinWeb.YamlControllerTest do
       sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
-          table: "Characters"
           destination:
             type: "webhook"
             http_endpoint: "sequin-playground-webhook"
@@ -365,8 +356,6 @@ defmodule SequinWeb.YamlControllerTest do
       assert %{"yaml" => exported_yaml} = json_response(conn, 200)
 
       [_database] = Repo.all(PostgresDatabase)
-      [sequence] = Repo.all(Sequence)
-      assert sequence.name == "test-db.public.Characters"
 
       # Parse the exported YAML to verify its structure
       parsed_yaml = YamlElixir.read_from_string!(exported_yaml)
@@ -394,7 +383,6 @@ defmodule SequinWeb.YamlControllerTest do
       assert %{
                "name" => "sequin-playground-webhook",
                "database" => "test-db",
-               "table" => "public.Characters",
                "destination" => %{
                  "type" => "webhook",
                  "http_endpoint" => "sequin-playground-webhook"

@@ -15,8 +15,6 @@ defmodule Sequin.PostgresReplicationTest do
   import ExUnit.CaptureLog
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.SchemaFilter
-  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Factory.AccountsFactory
@@ -78,34 +76,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :active
         )
 
-      character_sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account_id,
-          postgres_database_id: source_db.id,
-          table_oid: Character.table_oid()
-        )
-
-      character_ident_full_sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account_id,
-          postgres_database_id: source_db.id,
-          table_oid: CharacterIdentFull.table_oid()
-        )
-
-      character_multi_pk_sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account_id,
-          postgres_database_id: source_db.id,
-          table_oid: CharacterMultiPK.table_oid()
-        )
-
-      test_event_log_partitioned_sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account_id,
-          postgres_database_id: source_db.id,
-          table_oid: TestEventLogPartitioned.table_oid()
-        )
-
       # Create consumers for each table type (event)
       event_character_consumer =
         ConsumersFactory.insert_sink_consumer!(
@@ -114,46 +84,12 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          sequence_id: character_sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              actions: [:insert, :update, :delete],
-              column_filters: [],
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: Character.table_oid(),
               group_column_attnums: [Character.column_attnum("id")]
             )
-        )
-
-      http_endpoint =
-        ConsumersFactory.insert_http_endpoint!(
-          account_id: account_id,
-          scheme: :http,
-          host: Application.get_env(:sequin, :jepsen_http_host),
-          port: Application.get_env(:sequin, :jepsen_http_port),
-          path: "/",
-          headers: %{"Content-Type" => "application/json"}
-        )
-
-      test_event_log_partitioned_consumer_http =
-        ConsumersFactory.insert_sink_consumer!(
-          account_id: account_id,
-          type: :http_push,
-          legacy_transform: :none,
-          sink: %{
-            type: :http_push,
-            http_endpoint_id: http_endpoint.id,
-            http_endpoint: http_endpoint,
-            batch: true
-          },
-          replication_slot_id: pg_replication.id,
-          message_kind: :event,
-          status: :active,
-          sequence_id: test_event_log_partitioned_sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              actions: [:insert, :update, :delete],
-              column_filters: [],
-              group_column_attnums: [1]
-            )
+          ]
         )
 
       event_character_ident_consumer =
@@ -163,13 +99,12 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          sequence_id: character_ident_full_sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              actions: [:insert, :update, :delete],
-              column_filters: [],
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: CharacterIdentFull.table_oid(),
               group_column_attnums: [CharacterIdentFull.column_attnum("id")]
             )
+          ]
         )
 
       event_character_multi_pk_consumer =
@@ -179,17 +114,16 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          sequence_id: character_multi_pk_sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              actions: [:insert, :update, :delete],
-              column_filters: [],
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: CharacterMultiPK.table_oid(),
               group_column_attnums: [
                 CharacterMultiPK.column_attnum("id_integer"),
                 CharacterMultiPK.column_attnum("id_string"),
                 CharacterMultiPK.column_attnum("id_uuid")
               ]
             )
+          ]
         )
 
       # Create consumers for each table type (record)
@@ -199,14 +133,7 @@ defmodule Sequin.PostgresReplicationTest do
           message_kind: :record,
           status: :paused,
           replication_slot_id: pg_replication.id,
-          account_id: account_id,
-          sequence_id: character_sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              actions: [:insert, :update, :delete],
-              column_filters: [],
-              group_column_attnums: [Character.column_attnum("id")]
-            )
+          account_id: account_id
         )
 
       record_character_ident_consumer =
@@ -215,14 +142,7 @@ defmodule Sequin.PostgresReplicationTest do
           message_kind: :record,
           status: :paused,
           replication_slot_id: pg_replication.id,
-          account_id: account_id,
-          sequence_id: character_ident_full_sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              actions: [:insert, :update, :delete],
-              column_filters: [],
-              group_column_attnums: [CharacterIdentFull.column_attnum("id")]
-            )
+          account_id: account_id
         )
 
       record_character_multi_pk_consumer =
@@ -232,17 +152,16 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          sequence_id: character_multi_pk_sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              actions: [:insert, :update, :delete],
-              column_filters: [],
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: CharacterMultiPK.table_oid(),
               group_column_attnums: [
                 CharacterMultiPK.column_attnum("id_integer"),
                 CharacterMultiPK.column_attnum("id_string"),
                 CharacterMultiPK.column_attnum("id_uuid")
               ]
             )
+          ]
         )
 
       test_event_log_partitioned_consumer =
@@ -252,13 +171,12 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          sequence_id: test_event_log_partitioned_sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              actions: [:insert, :update, :delete],
-              column_filters: [],
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: TestEventLogPartitioned.table_oid(),
               group_column_attnums: [TestEventLogPartitioned.column_attnum("id")]
             )
+          ]
         )
 
       event_character_consumer = Repo.preload(event_character_consumer, :postgres_database)
@@ -283,8 +201,7 @@ defmodule Sequin.PostgresReplicationTest do
         record_character_consumer: record_character_consumer,
         record_character_ident_consumer: record_character_ident_consumer,
         record_character_multi_pk_consumer: record_character_multi_pk_consumer,
-        test_event_log_partitioned_consumer: test_event_log_partitioned_consumer,
-        test_event_log_partitioned_consumer_http: test_event_log_partitioned_consumer_http
+        test_event_log_partitioned_consumer: test_event_log_partitioned_consumer
       }
     end
 
@@ -580,24 +497,13 @@ defmodule Sequin.PostgresReplicationTest do
       # Randomly select a consumer
       consumer = Enum.random([event_consumer, record_consumer])
 
-      sequence_filter =
-        ConsumersFactory.sequence_filter_attrs(
-          actions: [:insert, :update],
-          column_filters: [
-            ConsumersFactory.sequence_filter_column_filter_attrs(
-              column_attnum: Character.column_attnum("is_active"),
-              operator: :==,
-              value_type: :boolean,
-              value: %{__type__: :boolean, value: true}
-            )
-          ]
-        )
+      source = ConsumersFactory.source_attrs(include_table_oids: [Character.table_oid()])
+      {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{actions: [:insert, :update], source: source})
 
-      {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: sequence_filter})
       Runtime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
 
       # Insert a character that doesn't match the filter
-      CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
+      CharacterFactory.insert_character_detailed!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
       assert_receive {SlotProcessorServer, :flush_messages}, 500
@@ -606,25 +512,26 @@ defmodule Sequin.PostgresReplicationTest do
       assert list_messages(consumer) == []
 
       # Insert a character that matches the filter
-      matching_character = CharacterFactory.insert_character!([is_active: true], repo: UnboxedRepo)
+      matching_character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
       assert_receive {SlotProcessorServer, :flush_messages}, 500
 
       # Fetch consumer messages
-      [consumer_message] = list_messages(consumer)
+      assert [consumer_message] = list_messages(consumer)
 
       # Assert the consumer message details
       assert consumer_message.consumer_id == consumer.id
+      assert consumer_message.table_oid == Character.table_oid()
+      assert consumer_message.record_pks == [to_string(matching_character.id)]
 
-      # Update the matching character (should not trigger a message)
-      UnboxedRepo.update!(Ecto.Changeset.change(matching_character, is_active: false))
+      UnboxedRepo.delete!(matching_character)
 
       # Wait for the message to be handled
       assert_receive {SlotProcessorServer, :flush_messages}, 500
 
-      # Verify no new consumer message was created
-      assert length(list_messages(consumer)) == 1
+      # Fetch consumer messages, no new message should be created
+      assert [^consumer_message] = list_messages(consumer)
     end
 
     test "inserts are fanned out to both events and records", %{
@@ -902,13 +809,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :active
         )
 
-      character_sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account_id,
-          postgres_database_id: source_db.id,
-          table_oid: Character.table_oid()
-        )
-
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           name: "consumer",
@@ -917,13 +817,12 @@ defmodule Sequin.PostgresReplicationTest do
           partition_count: 1,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          sequence_id: character_sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              actions: [:insert, :update, :delete],
-              column_filters: [],
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: Character.table_oid(),
               group_column_attnums: [Character.column_attnum("id")]
             )
+          ]
         )
 
       consumer = Repo.preload(consumer, :postgres_database)
@@ -1387,13 +1286,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :active
         )
 
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account_id,
-          postgres_database_id: source_db.id,
-          table_oid: Character.table_oid()
-        )
-
       # Create a consumer for this replication slot (event)
       event_consumer =
         ConsumersFactory.insert_sink_consumer!(
@@ -1401,8 +1293,12 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          sequence_id: sequence.id,
-          sequence_filter: ConsumersFactory.sequence_filter_attrs(column_filters: [])
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: Character.table_oid(),
+              group_column_attnums: [Character.column_attnum("id")]
+            )
+          ]
         )
 
       # Create a consumer for this replication slot (record)
@@ -1412,12 +1308,12 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          sequence_id: sequence.id,
-          sequence_filter:
-            ConsumersFactory.sequence_filter_attrs(
-              group_column_attnums: [Character.column_attnum("id")],
-              column_filters: []
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: Character.table_oid(),
+              group_column_attnums: [Character.column_attnum("id")]
             )
+          ]
         )
 
       # Start replication
@@ -1594,68 +1490,6 @@ defmodule Sequin.PostgresReplicationTest do
       refute Enum.any?(records, & &1.deleted)
     end
 
-    test "consumer with column filter only receives relevant messages", %{
-      event_consumer: event_consumer,
-      record_consumer: record_consumer
-    } do
-      # Randomly select a consumer
-      consumer = Enum.random([event_consumer, record_consumer])
-
-      # Create a consumer with a column filter
-      sequence_filter =
-        ConsumersFactory.sequence_filter_attrs(
-          actions: [:insert, :update],
-          column_filters: [
-            ConsumersFactory.sequence_filter_column_filter_attrs(
-              column_attnum: Character.column_attnum("is_active"),
-              column_name: "is_active",
-              operator: :==,
-              value_type: :boolean,
-              value: %{__type__: :boolean, value: true}
-            )
-          ]
-        )
-
-      consumer
-      |> Ecto.Changeset.cast(%{sequence_filter: sequence_filter}, [])
-      |> Ecto.Changeset.cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
-      |> Repo.update!()
-
-      # Restart the consumer to apply the changes
-      Consumers.update_sink_consumer(consumer, %{})
-      Runtime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-
-      # Insert a character that doesn't match the filter
-      CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
-
-      # Wait for the message to be handled
-      assert_receive {SlotProcessorServer, :flush_messages}, 500
-
-      # Verify no consumer message was created
-      assert list_messages(consumer) == []
-
-      # Insert a character that matches the filter
-      matching_character = CharacterFactory.insert_character!([is_active: true], repo: UnboxedRepo)
-
-      # Wait for the message to be handled
-      assert_receive {SlotProcessorServer, :flush_messages}, 500
-
-      # Fetch consumer messages
-      [consumer_message] = list_messages(consumer)
-
-      # Assert the consumer message details
-      assert consumer_message.consumer_id == consumer.id
-
-      # Update the matching character (should not trigger a message)
-      UnboxedRepo.update!(Ecto.Changeset.change(matching_character, is_active: false))
-
-      # Wait for the message to be handled
-      assert_receive {SlotProcessorServer, :flush_messages}, 500
-
-      # Verify no new consumer message was created
-      assert length(list_messages(consumer)) == 1
-    end
-
     test "consumer fans in events/records from multiple tables", %{
       event_consumer: event_consumer,
       record_consumer: record_consumer
@@ -1664,12 +1498,7 @@ defmodule Sequin.PostgresReplicationTest do
       consumer = Enum.random([event_consumer, record_consumer])
 
       # Attach a schema filter to the consumer
-      consumer
-      |> Ecto.Changeset.cast(%{schema_filter: ConsumersFactory.schema_filter_attrs(schema: "public")}, [])
-      |> Ecto.Changeset.cast_embed(:schema_filter, with: &SchemaFilter.create_changeset/2)
-      |> Ecto.Changeset.put_change(:sequence_id, nil)
-      |> Ecto.Changeset.put_change(:sequence_filter, nil)
-      |> Repo.update!()
+      Consumers.update_sink_consumer(consumer, %{source: nil}, skip_lifecycle: true)
 
       # Restart the consumer to apply the changes
       Consumers.update_sink_consumer(consumer, %{})
@@ -1849,13 +1678,6 @@ defmodule Sequin.PostgresReplicationTest do
           status: :active
         )
 
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account_id,
-          postgres_database_id: source_db.id,
-          table_oid: CharacterDetailed.table_oid()
-        )
-
       # Create a consumer for this replication slot (record)
       consumer =
         ConsumersFactory.insert_sink_consumer!(
@@ -1863,8 +1685,12 @@ defmodule Sequin.PostgresReplicationTest do
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          sequence_id: sequence.id,
-          sequence_filter: ConsumersFactory.sequence_filter_attrs(column_filters: [])
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: CharacterDetailed.table_oid(),
+              group_column_attnums: [CharacterDetailed.column_attnum("id")]
+            )
+          ]
         )
 
       # Start replication
@@ -1907,125 +1733,6 @@ defmodule Sequin.PostgresReplicationTest do
       assert message.data.record["active_period"] == "[2010-01-01,2020-12-31)"
       assert message.data.record["power_level"] == 9001
       assert message.data.record["embedding"] == [1.0, 2.0, 3.0]
-    end
-
-    test "consumer with JSONB column filter only receives relevant messages", %{
-      consumer: consumer
-    } do
-      # Create a consumer with a JSONB column filter
-      sequence_filter =
-        ConsumersFactory.sequence_filter_attrs(
-          actions: [:insert, :update],
-          column_filters: [
-            ConsumersFactory.sequence_filter_column_filter_attrs(
-              column_attnum: CharacterDetailed.column_attnum("metadata"),
-              column_name: "metadata",
-              operator: :==,
-              value_type: :string,
-              value: %{__type__: :string, value: "good"},
-              is_jsonb: true,
-              jsonb_path: "alignment"
-            )
-          ]
-        )
-
-      # Update the consumer with the new sequence filter
-      # we can't do this via the lifecycle because the sequence filter is not updated via the changeset
-      Repo.update!(
-        consumer
-        |> Ecto.Changeset.cast(%{sequence_filter: sequence_filter}, [])
-        |> Ecto.Changeset.cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
-      )
-
-      # Restart the consumer to apply the changes
-      {:ok, _} = Consumers.update_sink_consumer(consumer, %{})
-      Runtime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-
-      {:ok, matching_character} =
-        UnboxedRepo.transaction(fn ->
-          # Insert a character that doesn't match the filter
-          CharacterFactory.insert_character_detailed!(
-            [metadata: %{"alignment" => "evil"}],
-            repo: UnboxedRepo
-          )
-
-          # Insert a character with null metadata
-          CharacterFactory.insert_character_detailed!(
-            [metadata: nil],
-            repo: UnboxedRepo
-          )
-
-          # Insert a character that matches the filter
-          CharacterFactory.insert_character_detailed!(
-            [metadata: %{"alignment" => "good"}],
-            repo: UnboxedRepo
-          )
-        end)
-
-      # Wait for the messages to be handled
-      assert_receive {SlotProcessorServer, :flush_messages}, 500
-
-      # Wait for SlotMessageHandler to deliver_messages
-      Process.sleep(100)
-
-      # Fetch consumer messages
-      messages = list_messages(consumer)
-
-      # Verify only one message was created (the matching one)
-      assert length(messages) == 1
-      [consumer_message] = messages
-
-      # Assert the consumer message details
-      assert consumer_message.consumer_id == consumer.id
-      assert consumer_message.table_oid == CharacterDetailed.table_oid()
-      assert consumer_message.record_pks == [to_string(matching_character.id)]
-    end
-
-    test "consumer with citext column filter matches case-insensitively", %{
-      consumer: consumer
-    } do
-      # Create a consumer with a citext column filter
-      sequence_filter =
-        ConsumersFactory.sequence_filter_attrs(
-          actions: [:insert],
-          column_filters: [
-            ConsumersFactory.sequence_filter_column_filter_attrs(
-              column_attnum: CharacterDetailed.column_attnum("email"),
-              column_name: "email",
-              operator: :==,
-              value_type: :cistring,
-              value: %{__type__: :cistring, value: "TEST@EXAMPLE.COM"}
-            )
-          ]
-        )
-
-      # Update consumer with new filter
-      Repo.update!(
-        consumer
-        |> Ecto.Changeset.cast(%{sequence_filter: sequence_filter}, [])
-        |> Ecto.Changeset.cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
-      )
-
-      # Restart the consumer to apply changes
-      {:ok, _} = Consumers.update_sink_consumer(consumer, %{})
-
-      {:ok, matching_character} =
-        UnboxedRepo.transaction(fn ->
-          # Insert character with different case email
-          CharacterFactory.insert_character_detailed!(
-            [email: "test@example.com"],
-            repo: UnboxedRepo
-          )
-        end)
-
-      # Wait for message handling
-      assert_receive {SlotProcessorServer, :flush_messages}, 500
-
-      # Verify message was created and matched case-insensitively
-      [consumer_message] = list_messages(consumer)
-      assert consumer_message.consumer_id == consumer.id
-      assert consumer_message.table_oid == CharacterDetailed.table_oid()
-      assert consumer_message.record_pks == [to_string(matching_character.id)]
     end
   end
 

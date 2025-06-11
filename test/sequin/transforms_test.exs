@@ -28,19 +28,12 @@ defmodule Sequin.TransformsTest do
 
     test "returns a map of the postgres database" do
       database = DatabasesFactory.insert_postgres_database!(table_count: 1)
-      [table] = database.tables
 
       _replication_slot =
         ReplicationFactory.insert_postgres_replication!(
           postgres_database_id: database.id,
           account_id: database.account_id
         )
-
-      DatabasesFactory.insert_sequence!(
-        account_id: database.account_id,
-        postgres_database_id: database.id,
-        table_oid: table.oid
-      )
 
       json = Transforms.to_external(database)
 
@@ -75,21 +68,6 @@ defmodule Sequin.TransformsTest do
       assert is_binary(publication_name)
     end
 
-    test "returns a map of the column filter" do
-      column_filter = ConsumersFactory.column_filter()
-      json = Transforms.to_external(column_filter)
-
-      assert %{
-               column_name: column_name,
-               operator: operator,
-               comparison_value: value
-             } = json
-
-      assert column_name == column_filter.column_name
-      assert operator == column_filter.operator
-      assert value == column_filter.value.value
-    end
-
     test "returns a map of the wal pipeline" do
       account = AccountsFactory.insert_account!()
 
@@ -104,8 +82,8 @@ defmodule Sequin.TransformsTest do
       dest_db = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
       [dest_table] = dest_db.tables
 
-      column_filter = ConsumersFactory.column_filter(column_attnum: column.attnum)
-      source_table = ConsumersFactory.source_table(oid: source_table.oid, column_filters: [column_filter])
+      column_filter = ReplicationFactory.column_filter(column_attnum: column.attnum)
+      source_table = ReplicationFactory.source_table(oid: source_table.oid, column_filters: [column_filter])
 
       wal_pipeline =
         ReplicationFactory.wal_pipeline(
@@ -204,14 +182,11 @@ defmodule Sequin.TransformsTest do
              } = json
     end
 
-    test "returns a map of a sink consumer with a schema filter" do
-      schema_filter = ConsumersFactory.schema_filter(schema: "public")
-      consumer = ConsumersFactory.sink_consumer(schema_filter: schema_filter)
+    test "returns a map of a sink consumer with a source" do
+      consumer = ConsumersFactory.sink_consumer(source: ConsumersFactory.source())
       json = Transforms.to_external(consumer)
 
-      assert json.schema == "public"
-      refute Map.has_key?(json, :table)
-      refute Map.has_key?(json, :group_column_names)
+      assert %{included_schemas: _, excluded_schemas: _, included_tables: _, excluded_tables: _} = json.source
     end
 
     test "returns a map of the gcp pubsub consumer" do
@@ -219,13 +194,6 @@ defmodule Sequin.TransformsTest do
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
       [table] = database.tables
       [column | _] = table.columns
-
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account.id,
-          postgres_database_id: database.id,
-          table_oid: table.oid
-        )
 
       credentials = %{
         "type" => "service_account",
@@ -245,6 +213,7 @@ defmodule Sequin.TransformsTest do
         ConsumersFactory.insert_sink_consumer!(
           name: "pubsub-consumer",
           account_id: account.id,
+          postgres_database_id: database.id,
           status: :active,
           sink: %{
             type: :gcp_pubsub,
@@ -252,18 +221,9 @@ defmodule Sequin.TransformsTest do
             topic_id: "my-topic",
             credentials: credentials
           },
-          sequence_id: sequence.id,
-          sequence_filter: %{
-            group_column_attnums: [column.attnum],
-            actions: [:insert, :update],
-            column_filters: [
-              ConsumersFactory.sequence_filter_column_filter_attrs(
-                column_attnum: column.attnum,
-                operator: :==,
-                value: %{__type__: :string, value: "test"}
-              )
-            ]
-          }
+          source_tables: [
+            ConsumersFactory.source_table_attrs(table_oid: table.oid, group_column_attnums: [column.attnum])
+          ]
         )
 
       json = Transforms.to_external(consumer)
@@ -272,7 +232,7 @@ defmodule Sequin.TransformsTest do
                name: name,
                status: status,
                database: database_name,
-               table: schema_and_table,
+               tables: source_tables,
                destination: %{
                  type: "gcp_pubsub",
                  project_id: project_id,
@@ -293,47 +253,30 @@ defmodule Sequin.TransformsTest do
                    token_uri: "https://oauth2.googleapis.com/token",
                    universe_domain: nil
                  }
-               },
-               group_column_names: group_column_names,
-               filters: filters
+               }
              } = json
 
       assert name == "pubsub-consumer"
       assert project_id == "my-project"
       assert topic_id == "my-topic"
       assert database_name == database.name
-      assert schema_and_table == "#{table.schema}.#{table.name}"
       assert status == :active
+
+      assert [%{table: table_ref, group_column_names: group_column_names}] = source_tables
+      assert table_ref == "#{table.schema}.#{table.name}"
       assert group_column_names == [column.name]
-      assert length(filters) == 1
-
-      [filter] = filters
-
-      assert %{
-               column_name: _,
-               operator: "==",
-               comparison_value: "test"
-             } = filter
     end
 
     test "returns a map of the elasticsearch consumer" do
       account = AccountsFactory.insert_account!()
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
-      [table] = database.tables
-      [column | _] = table.columns
-
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account.id,
-          postgres_database_id: database.id,
-          table_oid: table.oid
-        )
 
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           name: "elasticsearch-consumer",
           account_id: account.id,
           status: :active,
+          postgres_database_id: database.id,
           sink: %{
             type: :elasticsearch,
             endpoint_url: "https://elasticsearch.example.com",
@@ -341,18 +284,6 @@ defmodule Sequin.TransformsTest do
             auth_type: :api_key,
             auth_value: "sensitive-api-key",
             batch_size: 100
-          },
-          sequence_id: sequence.id,
-          sequence_filter: %{
-            group_column_attnums: [column.attnum],
-            actions: [:insert, :update],
-            column_filters: [
-              ConsumersFactory.sequence_filter_column_filter_attrs(
-                column_attnum: column.attnum,
-                operator: :==,
-                value: %{__type__: :string, value: "test"}
-              )
-            ]
           }
         )
 
@@ -362,7 +293,6 @@ defmodule Sequin.TransformsTest do
                name: name,
                status: status,
                database: database_name,
-               table: schema_and_table,
                destination: %{
                  type: "elasticsearch",
                  endpoint_url: endpoint_url,
@@ -370,9 +300,7 @@ defmodule Sequin.TransformsTest do
                  auth_type: auth_type,
                  auth_value: "sen*************y",
                  batch_size: batch_size
-               },
-               group_column_names: group_column_names,
-               filters: filters
+               }
              } = json
 
       assert name == "elasticsearch-consumer"
@@ -381,56 +309,25 @@ defmodule Sequin.TransformsTest do
       assert auth_type == :api_key
       assert batch_size == 100
       assert database_name == database.name
-      assert schema_and_table == "#{table.schema}.#{table.name}"
       assert status == :active
-      assert group_column_names == [column.name]
-      assert length(filters) == 1
-
-      [filter] = filters
-
-      assert %{
-               column_name: _,
-               operator: "==",
-               comparison_value: "test"
-             } = filter
     end
 
     test "returns a map of the redis_string consumer" do
       account = AccountsFactory.insert_account!()
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
-      [table] = database.tables
-      [column | _] = table.columns
-
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account.id,
-          postgres_database_id: database.id,
-          table_oid: table.oid
-        )
 
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           name: "redis-string-consumer",
           account_id: account.id,
           status: :active,
+          postgres_database_id: database.id,
           sink: %{
             type: :redis_string,
             host: "redis-string.example.com",
             port: 6379,
             database: 0,
             tls: false
-          },
-          sequence_id: sequence.id,
-          sequence_filter: %{
-            group_column_attnums: [column.attnum],
-            actions: [:insert, :update],
-            column_filters: [
-              ConsumersFactory.sequence_filter_column_filter_attrs(
-                column_attnum: column.attnum,
-                operator: :==,
-                value: %{__type__: :string, value: "test"}
-              )
-            ]
           }
         )
 
@@ -440,16 +337,13 @@ defmodule Sequin.TransformsTest do
                name: name,
                status: status,
                database: database_name,
-               table: schema_and_table,
                destination: %{
                  database: database_number,
                  host: host,
                  port: port,
                  tls: tls,
                  type: "redis_string"
-               },
-               group_column_names: group_column_names,
-               filters: filters
+               }
              } = json
 
       assert name == "redis-string-consumer"
@@ -458,33 +352,13 @@ defmodule Sequin.TransformsTest do
       assert database_number == 0
       assert database_name == database.name
       assert tls == false
-      assert schema_and_table == "#{table.schema}.#{table.name}"
       assert status == :active
-      assert group_column_names == [column.name]
-      assert length(filters) == 1
-
-      [filter] = filters
-
-      assert %{
-               column_name: _,
-               operator: "==",
-               comparison_value: "test"
-             } = filter
     end
   end
 
   test "returns a map of the http push consumer" do
     account = AccountsFactory.insert_account!()
     database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
-    [table] = database.tables
-    [column | _] = table.columns
-
-    sequence =
-      DatabasesFactory.insert_sequence!(
-        account_id: account.id,
-        postgres_database_id: database.id,
-        table_oid: table.oid
-      )
 
     endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id, name: "test-endpoint")
 
@@ -492,21 +366,10 @@ defmodule Sequin.TransformsTest do
       ConsumersFactory.insert_sink_consumer!(
         name: "test-consumer",
         account_id: account.id,
+        postgres_database_id: database.id,
         status: :active,
         max_ack_pending: 1000,
-        sink: %{type: :http_push, http_endpoint_id: endpoint.id},
-        sequence_id: sequence.id,
-        sequence_filter: %{
-          group_column_attnums: [column.attnum],
-          actions: [:insert, :update],
-          column_filters: [
-            ConsumersFactory.sequence_filter_column_filter_attrs(
-              column_attnum: column.attnum,
-              operator: :==,
-              value: %{__type__: :string, value: "test"}
-            )
-          ]
-        }
+        sink: %{type: :http_push, http_endpoint_id: endpoint.id}
       )
 
     consumer = %{consumer | sink: %{consumer.sink | http_endpoint: endpoint}}
@@ -516,29 +379,16 @@ defmodule Sequin.TransformsTest do
              name: name,
              status: status,
              database: database_name,
-             table: schema_and_table,
              destination: %{
                type: "webhook",
                http_endpoint: endpoint_name
-             },
-             group_column_names: group_column_names,
-             filters: filters
+             }
            } = json
 
     assert name == "test-consumer"
     assert endpoint_name == "test-endpoint"
     assert database_name == database.name
-    assert schema_and_table == "#{table.schema}.#{table.name}"
     assert status == :active
-    assert group_column_names == [column.name]
-    assert length(filters) == 1
-    [filter] = filters
-
-    assert %{
-             column_name: _,
-             operator: "==",
-             comparison_value: "test"
-           } = filter
   end
 
   describe "path_transform/1" do

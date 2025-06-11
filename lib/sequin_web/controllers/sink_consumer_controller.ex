@@ -34,7 +34,7 @@ defmodule SequinWeb.SinkConsumerController do
 
   def create(conn, params) do
     account_id = conn.assigns.account_id
-    databases = Databases.list_dbs_for_account(account_id)
+    databases = Databases.list_dbs_for_account(account_id, [:replication_slot])
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
 
     with {:ok, cleaned_params} <- Transforms.from_external_sink_consumer(account_id, params, databases, http_endpoints),
@@ -59,7 +59,7 @@ defmodule SequinWeb.SinkConsumerController do
   def update(conn, %{"id_or_name" => id_or_name} = params) do
     params = Map.delete(params, "id_or_name")
     account_id = conn.assigns.account_id
-    databases = Databases.list_dbs_for_account(account_id)
+    databases = Databases.list_dbs_for_account(account_id, [:replication_slot])
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
 
     with {:ok, existing_consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name),

@@ -9,7 +9,6 @@ defmodule Sequin.Databases do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabasePrimary
   alias Sequin.Databases.PostgresDatabaseTable
-  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Health.CheckPostgresReplicationSlotWorker
@@ -201,7 +200,7 @@ defmodule Sequin.Databases do
   def delete_db_with_replication_slot(%PostgresDatabase{} = db) do
     res =
       Repo.transact(fn ->
-        db = Repo.preload(db, [:replication_slot, :sequences])
+        db = Repo.preload(db, [:replication_slot])
 
         health_checker_query =
           Oban.Job
@@ -211,7 +210,6 @@ defmodule Sequin.Databases do
         # Check for related entities that need to be removed first
         with :ok <- check_related_entities(db),
              {:ok, _} <- Replication.delete_pg_replication(db.replication_slot),
-             {:ok, _} <- delete_sequences(db),
              {:ok, _} <- Repo.delete(db),
              {:ok, _} <- Oban.cancel_all_jobs(health_checker_query) do
           DatabaseLifecycleEventWorker.enqueue(:delete, :postgres_database, db.id, %{
@@ -264,120 +262,6 @@ defmodule Sequin.Databases do
       IO.puts("'#{url}'")
     end
   end
-
-  # Sequences
-
-  def find_sequence_for_account(account_id, params \\ []) do
-    params
-    |> Enum.reduce(Sequence.where_account(account_id), fn
-      {:id, id}, query ->
-        Sequence.where_id(query, id)
-
-      {:table_schema, table_schema}, query ->
-        Sequence.where_table_schema(query, table_schema)
-
-      {:table_name, table_name}, query ->
-        Sequence.where_table_name(query, table_name)
-
-      {:name, name}, query ->
-        Sequence.where_name(query, name)
-
-      {:table_oid, table_oid}, query ->
-        Sequence.where_table_oid(query, table_oid)
-
-      {:postgres_database_id, postgres_database_id}, query ->
-        Sequence.where_postgres_database_id(query, postgres_database_id)
-    end)
-    |> Repo.one()
-    |> case do
-      nil -> {:error, Error.not_found(entity: :sequence)}
-      sequence -> {:ok, sequence}
-    end
-  end
-
-  def list_sequences_for_account(account_id, preload \\ []) do
-    account_id
-    |> Sequence.where_account()
-    |> preload(^preload)
-    |> Repo.all()
-  end
-
-  def create_sequence(account_id, attrs) do
-    %Sequence{account_id: account_id}
-    |> Sequence.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  def delete_sequence(%Sequence{} = sequence) do
-    case Consumers.list_consumers_for_sequence(sequence.id) do
-      [] ->
-        Repo.delete(sequence)
-
-      _ ->
-        {:error, Error.invariant(message: "Cannot delete stream that's used by consumers")}
-    end
-  end
-
-  def upsert_sequence(account_id, attrs) do
-    %Sequence{account_id: account_id}
-    |> Sequence.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: {:replace, [:name, :table_schema, :table_name, :sort_column_attnum, :sort_column_name, :updated_at]},
-      conflict_target: [:postgres_database_id, :table_oid]
-    )
-  end
-
-  def delete_sequences(%PostgresDatabase{} = db) do
-    Repo.transact(fn ->
-      db.id
-      |> Sequence.where_postgres_database_id()
-      |> Repo.all()
-      |> Enum.reduce_while({:ok, 0}, fn sequence, {:ok, count} ->
-        case delete_sequence(sequence) do
-          {:ok, _} -> {:cont, {:ok, count + 1}}
-          error -> {:halt, error}
-        end
-      end)
-    end)
-  end
-
-  def update_sequences_from_db(%PostgresDatabase{} = db) do
-    Enum.reduce(Repo.preload(db, :sequences).sequences, {0, 0}, fn %Sequence{} = sequence, {ok_count, error_count} ->
-      case update_sequence_from_db(sequence, db) do
-        {:ok, _} ->
-          {ok_count + 1, error_count}
-
-        {:error, error} ->
-          Logger.error("Failed to update stream #{sequence.id} from database: #{inspect(error)}", error: error)
-          {ok_count, error_count + 1}
-      end
-    end)
-  end
-
-  @doc """
-  Updates a sequence given a database's table schema. Adds names for table_schema, table_name, and sort_column_name.
-  These can drift if the customer migrates the database.
-  """
-  def update_sequence_from_db(%Sequence{} = sequence, %PostgresDatabase{} = db) do
-    with {:ok, tables} <- tables(db) do
-      table = Enum.find(tables, fn t -> t.oid == sequence.table_oid end)
-
-      case table do
-        nil ->
-          {:error, Error.not_found(entity: :table, params: %{oid: sequence.table_oid})}
-
-        table ->
-          sequence
-          |> Sequence.changeset(%{
-            table_schema: table.schema,
-            table_name: table.name
-          })
-          |> Repo.update()
-      end
-    end
-  end
-
-  # PostgresDatabase runtime
 
   @spec start_link(%PostgresDatabase{}) :: {:ok, pid()} | {:error, Postgrex.Error.t()}
   def start_link(db, overrides \\ %{})
@@ -581,20 +465,9 @@ defmodule Sequin.Databases do
 
   defp update_tables(conn, %PostgresDatabase{} = db) do
     with {:ok, tables} <- list_tables(conn) do
-      res =
-        db
-        |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})
-        |> Repo.update()
-
-      case res do
-        {:ok, db} ->
-          update_sequences_from_db(db)
-
-          {:ok, db}
-
-        error ->
-          error
-      end
+      db
+      |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})
+      |> Repo.update()
     end
   end
 

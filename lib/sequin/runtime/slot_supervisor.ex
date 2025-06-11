@@ -68,7 +68,8 @@ defmodule Sequin.Runtime.SlotSupervisor do
         if test_pid = opts[:test_pid], do: Sandbox.allow(Sequin.Repo, test_pid, self())
         start_stores_and_pipeline!(consumer, opts)
       end,
-      max_concurrency: 10
+      max_concurrency: 10,
+      timeout: :timer.seconds(20)
     )
     |> Stream.map(fn
       {:ok, :ok} -> :ok

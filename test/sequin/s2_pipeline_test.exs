@@ -1,0 +1,79 @@
+defmodule Sequin.Runtime.S2PipelineTest do
+  use Sequin.DataCase, async: true
+
+  alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Databases.ConnectionCache
+  alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.CharacterFactory
+  alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Runtime.SinkPipeline
+  alias Sequin.TestSupport.Models.Character
+  alias Sequin.Sinks.S2.Client
+
+  describe "events are sent to S2" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      postgres_database =
+        DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: :character_tables)
+
+      ConnectionCache.cache_connection(postgres_database, Sequin.Repo)
+
+      replication = ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: postgres_database.id)
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          postgres_database_id: postgres_database.id,
+          account_id: account.id,
+          table_oid: Character.table_oid()
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          type: :s2,
+          message_kind: :record,
+          batch_size: 10,
+          sequence_filter: ConsumersFactory.sequence_filter_attrs(group_column_attnums: [1]),
+          sequence_id: sequence.id,
+          replication_slot_id: replication.id
+        )
+
+      {:ok, %{consumer: consumer}}
+    end
+
+    test "events are sent", %{consumer: consumer} do
+      test_pid = self()
+      record = CharacterFactory.character_attrs()
+
+      event =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+
+      Req.Test.stub(Client, fn conn ->
+        send(test_pid, {:s2_request, conn})
+        Req.Test.json(conn, %{}, status: 200)
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:s2_request, _}, 1_000
+    end
+  end
+
+  defp start_pipeline!(consumer) do
+    start_supervised!({SinkPipeline, [consumer_id: consumer.id, producer: Broadway.DummyProducer, test_pid: self()]})
+  end
+
+  defp send_test_event(consumer, event) do
+    Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test", headers: []})
+  end
+
+  defp broadway(consumer) do
+    SinkPipeline.via_tuple(consumer.id)
+  end
+end

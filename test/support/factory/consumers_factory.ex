@@ -15,6 +15,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -58,6 +59,7 @@ defmodule Sequin.Factory.ConsumersFactory do
           :redis_string,
           :sqs,
           :kinesis,
+          :s2,
           :sns,
           :kafka,
           :sequin_stream,
@@ -221,6 +223,18 @@ defmodule Sequin.Factory.ConsumersFactory do
           ]),
         access_key_id: Factory.word(),
         secret_access_key: Factory.word()
+      },
+      attrs
+    )
+  end
+
+  defp sink(:s2, _account_id, attrs) do
+    merge_attributes(
+      %S2Sink{
+        type: :s2,
+        endpoint_url: "https://s2.dev",
+        stream: Factory.word(),
+        access_token: Factory.word()
       },
       attrs
     )

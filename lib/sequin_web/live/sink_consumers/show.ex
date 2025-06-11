@@ -1415,6 +1415,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"
   defp consumer_title(%{sink: %{type: :sns}}), do: "SNS Sink"
   defp consumer_title(%{sink: %{type: :kinesis}}), do: "Kinesis Sink"
+  defp consumer_title(%{sink: %{type: :s2}}), do: "S2 Sink"
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"
   defp consumer_title(%{sink: %{type: :typesense}}), do: "Typesense Sink"
 

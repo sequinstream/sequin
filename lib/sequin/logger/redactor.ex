@@ -26,6 +26,7 @@ defmodule Sequin.Logger.Redactor do
     "private_key",
     "private_key_id",
     "secret_access_key",
+    "access_token",
     "shared_access_key",
     "shared_access_key_name",
     "token"

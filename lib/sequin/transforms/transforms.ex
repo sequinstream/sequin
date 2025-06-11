@@ -13,6 +13,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
@@ -299,6 +300,15 @@ defmodule Sequin.Transforms do
       stream_arn: sink.stream_arn,
       access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
       secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive)
+    })
+  end
+
+  def to_external(%S2Sink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "s2",
+      endpoint_url: sink.endpoint_url,
+      stream: sink.stream,
+      access_token: maybe_obfuscate(sink.access_token, show_sensitive)
     })
   end
 
@@ -981,6 +991,16 @@ defmodule Sequin.Transforms do
        stream_arn: attrs["stream_arn"],
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "s2"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :s2,
+       endpoint_url: attrs["endpoint_url"],
+       stream: attrs["stream"],
+       access_token: attrs["access_token"]
      }}
   end
 

@@ -17,6 +17,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -80,6 +81,7 @@ defmodule Sequin.Consumers.SinkConsumer do
         :http_push,
         :sqs,
         :kinesis,
+        :s2,
         :redis_stream,
         :redis_string,
         :kafka,
@@ -117,6 +119,7 @@ defmodule Sequin.Consumers.SinkConsumer do
         http_push: HttpPushSink,
         sqs: SqsSink,
         kinesis: KinesisSink,
+        s2: Sequin.Consumers.S2Sink,
         sns: SnsSink,
         redis_stream: RedisStreamSink,
         redis_string: RedisStringSink,

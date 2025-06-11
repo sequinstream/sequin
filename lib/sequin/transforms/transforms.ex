@@ -39,6 +39,40 @@ defmodule Sequin.Transforms do
   alias Sequin.Repo
   alias Sequin.Sinks.Gcp
 
+  defmodule SensitiveValue do
+    @moduledoc """
+    A struct that wraps a sensitive value, allowing comparison while keeping the value hidden.
+    """
+    defstruct [:value, :show_value]
+
+    @type t :: %__MODULE__{
+            value: any(),
+            show_value: boolean()
+          }
+
+    def new(value, show_value \\ false) do
+      %__MODULE__{value: value, show_value: show_value}
+    end
+
+    defimpl String.Chars do
+      def to_string(%{value: nil}), do: ""
+      def to_string(%{value: value, show_value: true}), do: Kernel.to_string(value)
+      def to_string(%{value: value, show_value: false}), do: Sequin.String.obfuscate(value)
+    end
+
+    defimpl Jason.Encoder do
+      def encode(%{value: nil}, opts), do: Jason.Encoder.encode(nil, opts)
+      def encode(%{value: value, show_value: true}, opts), do: Jason.Encoder.encode(value, opts)
+      def encode(sensitive, opts), do: Jason.Encoder.encode(to_string(sensitive), opts)
+    end
+
+    defimpl Ymlr.Encoder do
+      def encode(%{value: nil}, indent, opts), do: Ymlr.Encoder.encode(nil, indent, opts)
+      def encode(%{value: value, show_value: true}, indent, opts), do: Ymlr.Encoder.encode(value, indent, opts)
+      def encode(sensitive, indent, opts), do: Ymlr.Encoder.encode(to_string(sensitive), indent, opts)
+    end
+  end
+
   def to_external(resource, show_sensitive \\ false)
 
   def to_external(%Account{} = account, _show_sensitive) do
@@ -52,7 +86,7 @@ defmodule Sequin.Transforms do
     %{
       id: user.id,
       email: user.email,
-      password: maybe_obfuscate(user.password, show_sensitive)
+      password: SensitiveValue.new(user.password, show_sensitive)
     }
   end
 
@@ -63,7 +97,7 @@ defmodule Sequin.Transforms do
       id: database.id,
       name: database.name,
       username: database.username,
-      password: maybe_obfuscate(database.password, show_sensitive),
+      password: SensitiveValue.new(database.password, show_sensitive),
       hostname: database.hostname,
       database: database.database,
       slot: %{
@@ -84,7 +118,7 @@ defmodule Sequin.Transforms do
     else
       Map.put(result, :primary, %{
         username: database.primary.username,
-        password: maybe_obfuscate(database.primary.password, show_sensitive),
+        password: SensitiveValue.new(database.primary.password, show_sensitive),
         hostname: database.primary.hostname,
         port: database.primary.port,
         database: database.primary.database
@@ -98,8 +132,7 @@ defmodule Sequin.Transforms do
       name: http_endpoint.name,
       "webhook.site": true,
       headers: format_headers(http_endpoint.headers),
-      encrypted_headers:
-        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
+      encrypted_headers: encrypted_headers(http_endpoint, show_sensitive)
     }
   end
 
@@ -110,8 +143,7 @@ defmodule Sequin.Transforms do
       local: true,
       path: http_endpoint.path,
       headers: format_headers(http_endpoint.headers),
-      encrypted_headers:
-        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
+      encrypted_headers: encrypted_headers(http_endpoint, show_sensitive)
     }
   end
 
@@ -130,8 +162,7 @@ defmodule Sequin.Transforms do
           fragment: http_endpoint.fragment
         }),
       headers: format_headers(http_endpoint.headers),
-      encrypted_headers:
-        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
+      encrypted_headers: encrypted_headers(http_endpoint, show_sensitive)
     }
   end
 
@@ -226,7 +257,7 @@ defmodule Sequin.Transforms do
       topic: sink.topic,
       tls: sink.tls,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive),
+      password: SensitiveValue.new(sink.password, show_sensitive),
       sasl_mechanism: sink.sasl_mechanism
     })
   end
@@ -237,7 +268,7 @@ defmodule Sequin.Transforms do
       host: sink.host,
       port: sink.port,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive),
+      password: SensitiveValue.new(sink.password, show_sensitive),
       virtual_host: sink.virtual_host,
       tls: sink.tls,
       exchange: sink.exchange,
@@ -254,7 +285,7 @@ defmodule Sequin.Transforms do
       database: sink.database,
       tls: sink.tls,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive)
+      password: SensitiveValue.new(sink.password, show_sensitive)
     })
   end
 
@@ -266,7 +297,7 @@ defmodule Sequin.Transforms do
       database: sink.database,
       tls: sink.tls,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive),
+      password: SensitiveValue.new(sink.password, show_sensitive),
       expire_ms: sink.expire_ms
     })
   end
@@ -276,8 +307,8 @@ defmodule Sequin.Transforms do
       type: "sqs",
       queue_url: sink.queue_url,
       region: sink.region,
-      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
-      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
+      access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
+      secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive),
       is_fifo: sink.is_fifo
     })
   end
@@ -287,8 +318,8 @@ defmodule Sequin.Transforms do
       type: "sns",
       topic_arn: sink.topic_arn,
       region: sink.region,
-      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
-      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
+      access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
+      secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive),
       is_fifo: sink.is_fifo
     })
   end
@@ -297,8 +328,8 @@ defmodule Sequin.Transforms do
     Sequin.Map.reject_nil_values(%{
       type: "kinesis",
       stream_arn: sink.stream_arn,
-      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
-      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive)
+      access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
+      secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive)
     })
   end
 
@@ -312,17 +343,17 @@ defmodule Sequin.Transforms do
       credentials: %{
         type: credentials.type,
         project_id: credentials.project_id,
-        private_key_id: maybe_obfuscate(credentials.private_key_id, show_sensitive),
-        private_key: maybe_obfuscate(credentials.private_key, show_sensitive),
-        client_email: maybe_obfuscate(credentials.client_email, show_sensitive),
-        client_id: maybe_obfuscate(credentials.client_id, show_sensitive),
+        private_key_id: SensitiveValue.new(credentials.private_key_id, show_sensitive),
+        private_key: SensitiveValue.new(credentials.private_key, show_sensitive),
+        client_email: SensitiveValue.new(credentials.client_email, show_sensitive),
+        client_id: SensitiveValue.new(credentials.client_id, show_sensitive),
         auth_uri: credentials.auth_uri,
         token_uri: credentials.token_uri,
         auth_provider_x509_cert_url: credentials.auth_provider_x509_cert_url,
         client_x509_cert_url: credentials.client_x509_cert_url,
-        universe_domain: maybe_obfuscate(credentials.universe_domain, show_sensitive),
-        client_secret: maybe_obfuscate(credentials.client_secret, show_sensitive),
-        api_key: maybe_obfuscate(credentials.api_key, show_sensitive)
+        universe_domain: SensitiveValue.new(credentials.universe_domain, show_sensitive),
+        client_secret: SensitiveValue.new(credentials.client_secret, show_sensitive),
+        api_key: SensitiveValue.new(credentials.api_key, show_sensitive)
       }
     })
   end
@@ -333,9 +364,9 @@ defmodule Sequin.Transforms do
       host: sink.host,
       port: sink.port,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive),
-      jwt: maybe_obfuscate(sink.jwt, show_sensitive),
-      nkey_seed: maybe_obfuscate(sink.nkey_seed, show_sensitive),
+      password: SensitiveValue.new(sink.password, show_sensitive),
+      jwt: SensitiveValue.new(sink.jwt, show_sensitive),
+      nkey_seed: SensitiveValue.new(sink.nkey_seed, show_sensitive),
       tls: sink.tls
     })
   end
@@ -346,7 +377,7 @@ defmodule Sequin.Transforms do
       namespace: sink.namespace,
       event_hub_name: sink.event_hub_name,
       shared_access_key_name: sink.shared_access_key_name,
-      shared_access_key: maybe_obfuscate(sink.shared_access_key, show_sensitive)
+      shared_access_key: SensitiveValue.new(sink.shared_access_key, show_sensitive)
     })
   end
 
@@ -355,7 +386,7 @@ defmodule Sequin.Transforms do
       type: "typesense",
       endpoint_url: sink.endpoint_url,
       collection_name: sink.collection_name,
-      api_key: maybe_obfuscate(sink.api_key, show_sensitive),
+      api_key: SensitiveValue.new(sink.api_key, show_sensitive),
       batch_size: sink.batch_size,
       timeout_seconds: sink.timeout_seconds
     })
@@ -367,7 +398,7 @@ defmodule Sequin.Transforms do
       endpoint_url: sink.endpoint_url,
       index_name: sink.index_name,
       auth_type: sink.auth_type,
-      auth_value: maybe_obfuscate(sink.auth_value, show_sensitive),
+      auth_value: SensitiveValue.new(sink.auth_value, show_sensitive),
       batch_size: sink.batch_size
     })
   end
@@ -526,15 +557,9 @@ defmodule Sequin.Transforms do
   defp format_operator(:not_null), do: "is not null"
   defp format_operator(op), do: to_string(op)
 
-  defp encrypted_headers(%HttpEndpoint{encrypted_headers: nil}), do: %{}
-
-  defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}) do
-    Map.new(encrypted_headers, fn {key, value} -> {key, maybe_obfuscate(value, false)} end)
+  defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}, show_sensitive) do
+    Map.new(encrypted_headers, fn {key, value} -> {key, SensitiveValue.new(value, show_sensitive)} end)
   end
-
-  defp maybe_obfuscate(nil, _), do: nil
-  defp maybe_obfuscate(value, true), do: value
-  defp maybe_obfuscate(value, false), do: Sequin.String.obfuscate(value)
 
   def from_external_postgres_database(params, account_id) do
     with {:ok, db_params} <- parse_db_params(params) do

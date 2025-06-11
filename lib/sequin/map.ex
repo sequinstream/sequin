@@ -42,7 +42,13 @@ defmodule Sequin.Map do
 
   def reject_nil_values(map) do
     map
-    |> Enum.reject(fn {_, v} -> is_nil(v) end)
+    |> Enum.reject(fn {_, v} ->
+      case v do
+        %Sequin.Transforms.SensitiveValue{value: nil} -> true
+        nil -> true
+        _ -> false
+      end
+    end)
     |> Map.new()
   end
 

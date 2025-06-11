@@ -118,6 +118,9 @@ defmodule SequinWeb.YamlController do
   end
 
   defp diff_resources(planned_resources, current_resources) do
+    # Currently we only support showing a diff without revealing sensitive values
+    show_sensitive = false
+
     creates =
       planned_resources
       |> Enum.reject(fn planned_resource ->
@@ -129,7 +132,7 @@ defmodule SequinWeb.YamlController do
         %{
           resource_type: get_resource_type(resource),
           action: "create",
-          new: Transforms.to_external(resource),
+          new: Transforms.to_external(resource, show_sensitive),
           old: nil
         }
       end)
@@ -144,7 +147,7 @@ defmodule SequinWeb.YamlController do
           resource_type: get_resource_type(resource),
           action: "delete",
           new: nil,
-          old: Transforms.to_external(resource)
+          old: Transforms.to_external(resource, show_sensitive)
         }
       end)
 
@@ -160,12 +163,12 @@ defmodule SequinWeb.YamlController do
         %{
           resource_type: get_resource_type(current_resource),
           action: "update",
-          new: Transforms.to_external(planned_resource),
-          old: Transforms.to_external(current_resource)
+          new: Transforms.to_external(planned_resource, show_sensitive),
+          old: Transforms.to_external(current_resource, show_sensitive)
         }
       end)
 
-    creates ++ updates ++ deletes
+    creates ++ deletes ++ updates
   end
 
   defp get_resource_type(%Account{}), do: "account"

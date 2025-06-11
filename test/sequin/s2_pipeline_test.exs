@@ -64,7 +64,8 @@ defmodule Sequin.Runtime.S2PipelineTest do
 
         # Verify request body
         {:ok, body, _} = Plug.Conn.read_body(conn)
-        body_json = Jason.decode!(body)
+        decompressed_body = :zlib.gunzip(body)
+        body_json = Jason.decode!(decompressed_body)
 
         # Verify records array exists and has one record
         assert %{"records" => [record]} = body_json

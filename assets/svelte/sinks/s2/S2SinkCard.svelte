@@ -6,7 +6,7 @@
 
   export let consumer: S2Consumer;
 
-  let s2Url = `https://${consumer.sink.basin}.b.aws.s2.dev/v1/streams/${consumer.sink.stream}/records`;
+  let s2Url = `https://s2.dev/dashboard/basins/${consumer.sink.basin}`;
 </script>
 
 <Card>
@@ -17,7 +17,7 @@
         <a href={s2Url} target="_blank" rel="noopener noreferrer">
           <Button variant="outline" size="sm">
             <ExternalLink class="h-4 w-4 mr-2" />
-            Open Endpoint
+            View Basin in S2
           </Button>
         </a>
       </div>

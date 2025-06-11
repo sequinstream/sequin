@@ -2,12 +2,12 @@
   import { Button } from "$lib/components/ui/button";
   import { Progress } from "$lib/components/ui/progress";
   import { Badge } from "$lib/components/ui/badge";
-  import { Loader2, ArrowDownSquare, ExternalLink, X } from "lucide-svelte";
+  import { Loader2, ArrowDownSquare, X } from "lucide-svelte";
   import { formatNumberWithCommas, formatRelativeTimestamp } from "../utils";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
   import BackfillForm from "../components/BackfillForm.svelte";
-  import type { Table } from "$lib/databases/types";
+  import type { Consumer } from "./types";
 
   // Receive necessary props
   export let backfills: any[];
@@ -15,17 +15,7 @@
   export let pageSize: number;
   export let page: number;
   export let live;
-  export let consumer: {
-    type: string;
-    table: Table | null;
-    tablesInSchema: Table[] | null;
-    schemaFilter: {
-      schema: string;
-    } | null;
-    database: {
-      pg_major_version: number;
-    };
-  };
+  export let consumer: Consumer;
 
   let loading = false;
   let selectedBackfill = null;
@@ -35,9 +25,7 @@
   // Backfill form state
   let showBackfillDialog = false;
   let backfillForm = {
-    startPosition: "beginning" as "beginning" | "specific",
-    sortColumnAttnum: null,
-    initialSortColumnValue: null,
+    selectedTableOids: [],
   };
   let backfillFormErrors: Record<string, string> = {};
   let isSubmittingBackfill = false;
@@ -159,9 +147,7 @@
 
   function openBackfillDialog() {
     backfillForm = {
-      startPosition: "beginning",
-      sortColumnAttnum: null,
-      initialSortColumnValue: null,
+      selectedTableOids: [],
     };
     backfillFormErrors = {};
     showBackfillDialog = true;
@@ -405,20 +391,13 @@
   <Dialog.Content class="md:max-w-4xl overflow-visible">
     <Dialog.Header>
       <Dialog.Title>
-        {#if consumer.table}
-          Start backfill for {consumer.table.name} table
-        {:else if consumer.tablesInSchema}
-          Start backfill for {consumer.schemaFilter.schema} schema
-        {/if}
+        Start backfill for {consumer.database.name} database
       </Dialog.Title>
     </Dialog.Header>
     <div class="grid gap-4 py-4">
       <BackfillForm
-        table={consumer.table}
-        tablesInSchema={consumer.tablesInSchema}
+        tables_included_in_source={consumer.tables_included_in_source}
         form={backfillForm}
-        formErrors={backfillFormErrors}
-        showNoBackfill={false}
       />
     </div>
     <Dialog.Footer>

@@ -9,7 +9,6 @@ defmodule Sequin.Databases.PostgresDatabase do
   alias Ecto.Queryable
   alias Sequin.Databases.PostgresDatabasePrimary
   alias Sequin.Databases.PostgresDatabaseTable
-  alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
   require Logger
@@ -63,7 +62,6 @@ defmodule Sequin.Databases.PostgresDatabase do
     belongs_to(:account, Sequin.Accounts.Account)
     has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
     has_many(:wal_pipelines, through: [:replication_slot, :wal_pipelines])
-    has_many(:sequences, Sequence)
     has_many(:sink_consumers, through: [:replication_slot, :sink_consumers])
 
     timestamps()

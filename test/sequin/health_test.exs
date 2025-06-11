@@ -39,7 +39,20 @@ defmodule Sequin.HealthTest do
       assert {:ok, %Health{} = health} = Health.health(entity)
       assert health.status == :initializing
 
-      assert :ok = Health.put_event(entity, %Event{slug: :sink_config_checked, data: %{replica_identity: "full"}})
+      assert :ok =
+               Health.put_event(entity, %Event{
+                 slug: :sink_config_checked,
+                 data: %{
+                   "tables_with_replica_identities" => [
+                     %{
+                       "table_oid" => 123,
+                       "relation_kind" => "r",
+                       "replica_identity" => "f"
+                     }
+                   ]
+                 }
+               })
+
       assert :ok = Health.put_event(entity, %Event{slug: :messages_filtered, status: :success})
       assert {:ok, %Health{} = health} = Health.health(entity)
       assert health.status == :waiting
@@ -478,7 +491,15 @@ defmodule Sequin.HealthTest do
         Health.put_event(entity, %Event{
           slug: :sink_config_checked,
           status: :success,
-          data: %{"replica_identity" => "default"}
+          data: %{
+            "tables_with_replica_identities" => [
+              %{
+                "table_oid" => 123,
+                "relation_kind" => "r",
+                "replica_identity" => "d"
+              }
+            ]
+          }
         })
 
       # Initial state - should show replica identity warning
@@ -529,7 +550,15 @@ defmodule Sequin.HealthTest do
         Health.put_event(entity, %Event{
           slug: :sink_config_checked,
           status: :success,
-          data: %{"replica_identity" => "full"}
+          data: %{
+            "tables_with_replica_identities" => [
+              %{
+                "table_oid" => 123,
+                "relation_kind" => "r",
+                "replica_identity" => "f"
+              }
+            ]
+          }
         })
 
       # Add TOAST columns detection

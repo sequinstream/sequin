@@ -316,8 +316,8 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     %{postgres_database: db, not_disabled_sink_consumers: consumers, wal_pipelines: pipelines} =
       Repo.preload(slot, [
         :wal_pipelines,
-        [postgres_database: :sequences],
-        not_disabled_sink_consumers: [:sequence, :postgres_database, :filter]
+        :postgres_database,
+        not_disabled_sink_consumers: [:postgres_database, :filter]
       ])
 
     %{
@@ -331,12 +331,12 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   end
 
   defp context(%State{} = state) do
-    MessageHandler.Context.set_indices(%MessageHandler.Context{
+    %MessageHandler.Context{
       consumers: state.consumers,
       wal_pipelines: state.wal_pipelines,
       postgres_database: state.postgres_database,
       replication_slot_id: state.id,
       table_reader_mod: state.table_reader
-    })
+    }
   end
 end

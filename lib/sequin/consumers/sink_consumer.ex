@@ -21,13 +21,12 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
-  alias Sequin.Consumers.SchemaFilter
-  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SnsSink
+  alias Sequin.Consumers.Source
+  alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TypesenseSink
-  alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
   @type id :: String.t()
@@ -98,11 +97,9 @@ defmodule Sequin.Consumers.SinkConsumer do
 
     has_many :active_backfills, Backfill, where: [state: :active]
 
-    # Sequences
-    # FIXME: Refactor / remove both of these?
-    belongs_to :sequence, Sequence
-    embeds_one :sequence_filter, SequenceFilter, on_replace: :delete
-    embeds_one :schema_filter, SchemaFilter, on_replace: :delete
+    field :actions, {:array, Ecto.Enum}, values: [:insert, :update, :delete]
+    embeds_one :source, Source, on_replace: :delete
+    embeds_many :source_tables, SourceTable, on_replace: :delete
 
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
@@ -141,7 +138,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> cast(attrs, [
       :replication_slot_id,
       :status,
-      :sequence_id,
       :message_kind,
       :max_memory_mb,
       :transform_id,
@@ -149,38 +145,31 @@ defmodule Sequin.Consumers.SinkConsumer do
       :filter_id
     ])
     |> changeset(attrs)
-    |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
-    |> cast_embed(:schema_filter, with: &SchemaFilter.create_changeset/2)
-    |> foreign_key_constraint(:sequence_id)
     |> foreign_key_constraint(:transform_id)
     |> foreign_key_constraint(:routing_id)
     |> foreign_key_constraint(:filter_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
-    |> check_constraint(:sequence_filter, name: "sequence_filter_check")
     |> check_constraint(:batch_size,
       name: "ensure_batch_size_one",
       message: "batch_size must be 1 when batch is false for webhook sinks"
     )
-    |> validate_filter_constraints()
     |> Sequin.Changeset.validate_name()
   end
 
   def update_changeset(consumer, attrs) do
     consumer
     |> changeset(attrs)
-    |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
-    |> cast_embed(:schema_filter, with: &SchemaFilter.create_changeset/2)
     |> check_constraint(:batch_size,
       name: "ensure_batch_size_one",
       message: "batch_size must be 1 when batch is false for webhook sinks"
     )
-    |> validate_filter_constraints()
   end
 
   def changeset(consumer, attrs) do
     consumer
     |> cast(attrs, [
       :name,
+      :actions,
       :batch_size,
       :ack_wait_ms,
       :max_waiting,
@@ -201,6 +190,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :load_shedding_policy
     ])
     |> cast_polymorphic_embed(:sink, required: true)
+    |> cast_embed(:source)
+    |> cast_embed(:source_tables)
     |> put_defaults()
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
@@ -235,22 +226,6 @@ defmodule Sequin.Consumers.SinkConsumer do
 
       zz ->
         add_error(cs, :routing_id, "unknown routing mode! #{inspect(zz)}")
-    end
-  end
-
-  defp validate_filter_constraints(changeset) do
-    sequence_filter = get_field(changeset, :sequence_filter)
-    schema_filter = get_field(changeset, :schema_filter)
-
-    cond do
-      is_nil(sequence_filter) and is_nil(schema_filter) ->
-        add_error(changeset, :base, "either sequence_filter or schema_filter must be set")
-
-      not is_nil(sequence_filter) and not is_nil(schema_filter) ->
-        add_error(changeset, :base, "cannot set both sequence_filter and schema_filter")
-
-      true ->
-        changeset
     end
   end
 

@@ -29,7 +29,7 @@ defmodule Sequin.Sinks.S2.HttpClient do
       ],
       receive_timeout: :timer.seconds(60),
       retry: false,
-      compressed: true
+      compress_body: true
     )
   end
 

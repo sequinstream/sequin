@@ -976,6 +976,9 @@ Please help me create or modify the Elixir function transform to achieve the des
                     bind:this={functionEditorElement}
                     class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden relative"
                     on:keydown={ignoreEscKeypress}
+                    role="textbox"
+                    aria-label="Function code editor"
+                    tabindex="0"
                   >
                     <div
                       class="absolute bottom-2 right-2 flex items-center gap-2 z-10"

@@ -56,4 +56,15 @@ defmodule Sequin.Factory.SinkFactory do
       attrs
     )
   end
+
+  def s2_record(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %{
+        body: %{"event" => Factory.word(), "payload" => %{Factory.word() => Factory.word()}}
+      },
+      attrs
+    )
+  end
 end

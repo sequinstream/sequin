@@ -4,56 +4,50 @@ sidebarTitle: "Maintain caches"
 description: "Learn how to keep Redis compatible caches in sync with your Postgres database. Eliminate stale cache issues with real-time change data capture."
 ---
 
-This guide shows you how to use Sequin to keep your Redis compatible caches in sync with your Postgres database, in real-time.
+This guide shows you how to keep your Redis-compatible caches in sync with your Postgres database in real-time using Sequin.
 
-By the end, you'll have a sink that will create, update, and delete cache entries in your cache system as they change in your database.
+By the end of this guide, you'll have a working sink that automatically creates, updates, and deletes cache entries as your database changes, eliminating stale cache issues.
 
 ## When to use this approach
 
-This approach works well when you need to:
-- Keep a cache in sync with your database, in real-time
-- It's even better if you need you need to keep multiple caches (perhaps in different regions) in sync with your database
+This approach works well when:
+- You need real-time cache synchronization
+- You're maintaining multiple caches across different regions
+- You can tolerate 100ms of latency (changes appear in cache shortly after database)
 
-This approach is not a good fit for:
-- Caches that are not Redis compatible. Instead, you should sink to a stream or queue destination and process the messages in your own system.
-- When you need read-after-write consistency. In this case, you may want to write to the cache directly from your application.
+
+This approach is not a good fit if:
+- Your cache isn't Redis-compatible. Instead, you should sink to a stream or queue destination and process the messages in your own system.
+- You need read-after-write consistency. In this case, you may want to write to the cache directly from your application.
 
 ## Prerequisites
 
 If you're self-hosting Sequin, you'll need:
 
 1. [Sequin installed](/running-sequin) or a [Sequin Cloud account](https://console.sequinstream.com)
-2. [A database connected](/connect-postgres)
-3. A Redis compatible caching system (Redis, [KeyDB](https://docs.keydb.dev/), [Dragonfly](https://dragonflydb.io/), [Valkey](https://valkey.io/) etc.)
-
-## Architecture overview
-
-Your cache maintenance pipeline will have these components:
-
-1. **Source tables**: The table or schema in Postgres that contain the data you want to cache
-2. **Destination sink**: The cache system that you want to keep in sync with your database
+2. [A database connected](/connect-postgres) to Sequin
+3. A Redis compatible cache (Redis, [KeyDB](https://docs.keydb.dev/), [Dragonfly](https://dragonflydb.io/), [Valkey](https://valkey.io/) etc.)
 
 ## Create a Redis String sink
 
-Navigate to the "Sinks" page in the Sequin UI and click "Create Sink". Select "Redis String" as the sink type. Configure the sink as follows:
+To get started, navigate to the "Sinks" page in the Sequin UI and click "Create Sink". Select "Redis String" as the sink type. Configure the sink as follows:
 
 <Steps titleSize="h3">
   <Step title="Select the source">
-    Select the database you want to keep in sync with your cache. Then select the table or schema containing the data you want to cache.
+    1. Select your database from the connected databases list.
+    2. Choose your table or schema containing the data you want to cache.
   </Step>
 
   <Step title="Apply filters">
-    To maintain a cache, be sure to capture all insert, update, and delete operations.
+    Keep all operations enabled (insert, update, delete) to maintain cache consistency.
 
-    In most cases, you won't need to apply a filter - as you'll want to capture all changes to your source table.
-
-    However, if there are rows in the source table you don't need to cache (for instance, rows that are only used for reporting or testing), you can apply a [filter](/reference/filters) to exclude them.
+    <Tip>
+      If there are rows in the source table you don't need to cache (for instance, rows that are only used for reporting or testing), you can apply a [filter](/reference/filters) to exclude them.
+    </Tip>
   </Step>
 
   <Step title="Transform the data">
-    Sequin will deliver a [message payload](/reference/messages#change-messages) to your cache system containing metadata you can typically ignore. To cache just the information you need, you can use a [transform function](/reference/transforms):
-
-    For instance, this transform will store the entire record in your cache and excludes the metadata:
+    Configure a [transform function](/reference/transforms) to store only the data you need in your cache:
 
     ```elixir
     def transform(_action, record, _changes, _metadata) do
@@ -80,15 +74,15 @@ Navigate to the "Sinks" page in the Sequin UI and click "Create Sink". Select "R
   </Step>
 
   <Step title="Group by primary key">
-    By default, Sequin will group messages by primary key. This is a good default for most use cases as this will ensure every change to a specific row is processed in order.
+    by default, Sequin will group messages by primary key. This is a good default for most use cases as this will ensure every change to a specific row is processed in order.
 
     If you need to more specific message grouping, you can configure the sink to group messages by a different field.
   </Step>
 
   <Step title="Configure routing">
-    The `key` for each message will be set using the pattern: `sequin:<table-name>:<primary-key>`. For instance, if you're caching the `users` table and the primary key is `id`, the key for each message will be `sequin:users:id`.
+    By default, keys follow the pattern `sequin:<table-name>:<primary-key>`
 
-    If you want to use a different key pattern, you can enable "Dynamic routing" and configure a [routing function](/reference/routing#redis-string-sink). For instance, you can remove the `sequin:` prefix:
+    To customize keys, enable "Dynamic routing" and add a [routing function](/reference/routing#redis-string-sink):
 
     ```elixir
     def route(action, record, changes, metadata) do
@@ -96,7 +90,7 @@ Navigate to the "Sinks" page in the Sequin UI and click "Create Sink". Select "R
     end
     ```
 
-    This will set the `key` for each message to `users:<id>`.
+    This creates keys like users:123 instead of sequin:users:123.
   </Step>
 
   <Step title="Enter the connection details for your cache">
@@ -132,6 +126,8 @@ You may need to re-warm your cache in these scenarios:
 To do so, run a [backfill](/reference/backfills). You can trigger a backfill manually in the Sequin Console or using the [Sequin management API](/management-api/backfills/create).
 
 ## Next steps
+
+You now have a cache that automatically stays in sync with your database. Changes to your Postgres data will appear in your cache within milliseconds, without any manual intervention or risk of stale data.
 
 Here are some helpful resources to bring this approach to production:
 

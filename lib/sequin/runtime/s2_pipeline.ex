@@ -36,7 +36,7 @@ defmodule Sequin.Runtime.S2Pipeline do
 
     records =
       Enum.map(messages, fn %{data: data} ->
-        %{"body" => Jason.encode!(Message.to_external(consumer, data))}
+        %{"body" => Message.to_external(consumer, data)}
       end)
 
     case Client.append_records(sink, records) do
@@ -48,7 +48,7 @@ defmodule Sequin.Runtime.S2Pipeline do
   defp setup_allowances(nil), do: :ok
 
   defp setup_allowances(test_pid) do
-    Req.Test.allow(Sequin.Sinks.S2.Client, test_pid, self())
+    Req.Test.allow(Sequin.Sinks.S2.HttpClient, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 end

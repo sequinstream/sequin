@@ -9,7 +9,6 @@ defmodule Sequin.TableReaderTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.TableReader
-  alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterMultiPK
 
   setup do
@@ -41,48 +40,14 @@ defmodule Sequin.TableReaderTest do
 
     ConnectionCache.cache_connection(db, Repo)
 
-    character_sequence =
-      DatabasesFactory.insert_sequence!(
-        account_id: db.account_id,
-        postgres_database_id: db.id,
-        table_oid: characters_table.oid,
-        sort_column_attnum: character_col_attnums["updated_at"]
-      )
-
-    character_multi_pk_sequence =
-      DatabasesFactory.insert_sequence!(
-        account_id: db.account_id,
-        postgres_database_id: db.id,
-        table_oid: characters_multi_pk_table.oid,
-        sort_column_attnum: character_multi_pk_attnums["updated_at"]
-      )
-
-    character_detailed_sequence =
-      DatabasesFactory.insert_sequence!(
-        account_id: db.account_id,
-        postgres_database_id: db.id,
-        table_oid: characters_detailed_table.oid,
-        sort_column_attnum: character_detailed_attnums["updated_at"]
-      )
-
-    character_sequence_filter =
-      ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: Character.pk_attnums())
-
-    character_multi_pk_sequence_filter =
-      ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: CharacterMultiPK.pk_attnums())
-
-    character_detailed_sequence_filter =
-      ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: Character.pk_attnums())
-
     character_consumer =
       Repo.preload(
         ConsumersFactory.insert_sink_consumer!(
-          sequence_id: character_sequence.id,
-          sequence_filter: Map.from_struct(character_sequence_filter),
           account_id: db.account_id,
-          postgres_database_id: db.id
+          postgres_database_id: db.id,
+          source: ConsumersFactory.source_attrs(include_table_oids: [characters_table.oid])
         ),
-        [:sequence, :postgres_database, :filter]
+        [:postgres_database, :filter]
       )
 
     backfill =
@@ -97,23 +62,20 @@ defmodule Sequin.TableReaderTest do
     character_multi_pk_consumer =
       Repo.preload(
         ConsumersFactory.insert_sink_consumer!(
-          sequence_id: character_multi_pk_sequence.id,
-          sequence_filter: Map.from_struct(character_multi_pk_sequence_filter),
           account_id: db.account_id,
-          postgres_database_id: db.id
+          postgres_database_id: db.id,
+          source: ConsumersFactory.source_attrs(include_table_oids: [characters_multi_pk_table.oid])
         ),
-        [:sequence, :postgres_database, :filter]
+        [:postgres_database, :filter]
       )
 
     character_detailed_consumer =
       Repo.preload(
         ConsumersFactory.insert_sink_consumer!(
-          sequence_id: character_detailed_sequence.id,
-          sequence_filter: Map.from_struct(character_detailed_sequence_filter),
           account_id: db.account_id,
           postgres_database_id: db.id
         ),
-        [:sequence, :postgres_database, :filter]
+        [:postgres_database, :filter]
       )
 
     ConsumersFactory.insert_active_backfill!(

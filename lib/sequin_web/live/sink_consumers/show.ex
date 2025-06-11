@@ -25,6 +25,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingFunction
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -880,6 +881,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       database: sink.database,
       tls: sink.tls,
       url: RedisStreamSink.redis_url(sink)
+    }
+  end
+
+  defp encode_sink(%SinkConsumer{sink: %S2Sink{} = sink}) do
+    %{
+      type: :s2,
+      endpoint_url: sink.endpoint_url,
+      stream: sink.stream,
+      access_token: sink.access_token
     }
   end
 

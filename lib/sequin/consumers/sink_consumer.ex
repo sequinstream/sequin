@@ -119,7 +119,7 @@ defmodule Sequin.Consumers.SinkConsumer do
         http_push: HttpPushSink,
         sqs: SqsSink,
         kinesis: KinesisSink,
-        s2: Sequin.Consumers.S2Sink,
+        s2: S2Sink,
         sns: SnsSink,
         redis_stream: RedisStreamSink,
         redis_string: RedisStringSink,

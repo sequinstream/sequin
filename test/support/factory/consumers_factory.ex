@@ -15,11 +15,11 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
-  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -232,7 +232,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %S2Sink{
         type: :s2,
-        endpoint_url: "https://s2.dev",
+        basin: "test",
         stream: Factory.word(),
         access_token: Factory.word()
       },

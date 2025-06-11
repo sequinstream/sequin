@@ -12,12 +12,12 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
-  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingFunction
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -720,7 +720,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp decode_sink(:s2, sink) do
     %{
       "type" => "s2",
-      "endpoint_url" => sink["endpoint_url"],
+      "basin" => sink["basin"],
       "stream" => sink["stream"],
       "access_token" => sink["access_token"]
     }
@@ -813,9 +813,9 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "gcp_pubsub",
       "project_id" => sink["project_id"],
       "topic_id" => sink["topic_id"],
-      "credentials" => creds,
       "use_emulator" => sink["use_emulator"],
-      "emulator_base_url" => sink["emulator_base_url"]
+      "emulator_base_url" => sink["emulator_base_url"],
+      "credentials" => Jason.encode!(Sequin.Map.reject_nil_values(creds), pretty: true)
     }
   end
 
@@ -957,7 +957,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp encode_sink(%S2Sink{} = sink) do
     %{
       "type" => "s2",
-      "endpoint_url" => sink.endpoint_url,
+      "basin" => sink.basin,
       "stream" => sink.stream,
       "access_token" => sink.access_token
     }
@@ -1058,11 +1058,11 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     %{
       "type" => "gcp_pubsub",
-      "project_id" => sink.project_id,
-      "topic_id" => sink.topic_id,
-      "use_emulator" => sink.use_emulator,
-      "emulator_base_url" => sink.emulator_base_url,
-      "credentials" => Jason.encode!(Sequin.Map.reject_nil_values(creds), pretty: true)
+      "project_id" => sink["project_id"],
+      "topic_id" => sink["topic_id"],
+      "credentials" => creds,
+      "use_emulator" => sink["use_emulator"],
+      "emulator_base_url" => sink["emulator_base_url"]
     }
   end
 

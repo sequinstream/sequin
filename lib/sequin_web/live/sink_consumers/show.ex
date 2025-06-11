@@ -887,7 +887,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_sink(%SinkConsumer{sink: %S2Sink{} = sink}) do
     %{
       type: :s2,
-      endpoint_url: sink.endpoint_url,
+      basin: sink.basin,
       stream: sink.stream,
       access_token: sink.access_token
     }

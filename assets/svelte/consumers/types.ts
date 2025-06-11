@@ -106,7 +106,7 @@ export type KinesisConsumer = BaseConsumer & {
 export type S2Consumer = BaseConsumer & {
   sink: {
     type: "s2";
-    endpoint_url: string;
+    basin: string;
     stream: string;
     access_token: string;
   };

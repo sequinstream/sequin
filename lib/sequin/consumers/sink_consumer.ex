@@ -17,11 +17,11 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
-  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink

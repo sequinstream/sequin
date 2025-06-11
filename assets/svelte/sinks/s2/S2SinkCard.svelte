@@ -6,7 +6,7 @@
 
   export let consumer: S2Consumer;
 
-  let s2Url = consumer.sink.endpoint_url;
+  let s2Url = `https://${consumer.sink.basin}.b.aws.s2.dev/v1/streams/${consumer.sink.stream}/records`;
 </script>
 
 <Card>
@@ -25,6 +25,16 @@
 
     <div class="space-y-4">
       <div class="grid grid-cols-2 gap-4">
+        <div>
+          <span class="text-sm text-gray-500">Basin</span>
+          <div class="mt-2">
+            <span
+              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            >
+              {consumer.sink.basin}
+            </span>
+          </div>
+        </div>
         <div>
           <span class="text-sm text-gray-500">Stream</span>
           <div class="mt-2">

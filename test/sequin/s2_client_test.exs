@@ -1,11 +1,11 @@
 defmodule Sequin.Sinks.S2.ClientTest do
   use Sequin.Case, async: true
 
-  alias Sequin.Sinks.S2.Client
-  alias Sequin.Factory.SinkFactory
   alias Sequin.Consumers.S2Sink
+  alias Sequin.Factory.SinkFactory
+  alias Sequin.Sinks.S2.Client
 
-  @sink %S2Sink{type: :s2, endpoint_url: "https://s2.dev", stream: "test-stream", access_token: "token"}
+  @sink %S2Sink{type: :s2, basin: "test", stream: "test-stream", access_token: "token"}
 
   describe "append_records/2" do
     test "successfully sends batch" do

@@ -105,7 +105,7 @@
     },
     {
       id: "s2",
-      name: "S2.dev",
+      name: "S2",
       icon: S2Icon,
     },
     {

@@ -9,18 +9,23 @@ defmodule Sequin.Runtime.S2PipelineTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.SinkPipeline
-  alias Sequin.TestSupport.Models.Character
   alias Sequin.Sinks.S2.Client
+  alias Sequin.TestSupport.Models.Character
 
   describe "events are sent to S2" do
     setup do
       account = AccountsFactory.insert_account!()
+
       postgres_database =
         DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: :character_tables)
 
       ConnectionCache.cache_connection(postgres_database, Sequin.Repo)
 
-      replication = ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: postgres_database.id)
+      replication =
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account.id,
+          postgres_database_id: postgres_database.id
+        )
 
       sequence =
         DatabasesFactory.insert_sequence!(

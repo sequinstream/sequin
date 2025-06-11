@@ -18,20 +18,20 @@
   </CardHeader>
   <CardContent class="flex flex-col gap-4">
     <div class="flex flex-col gap-2">
-      <Label for="endpoint-url">Endpoint URL</Label>
-      <Input
-        id="endpoint-url"
-        bind:value={form.sink.endpoint_url}
-        placeholder="https://example.s2.dev/v1"
-      />
-      {#if errors.sink?.endpoint_url}
-        <p class="text-destructive text-sm">{errors.sink.endpoint_url}</p>
+      <Label for="basin">Basin</Label>
+      <Input id="basin" bind:value={form.sink.basin} placeholder="your-basin" />
+      {#if errors.sink?.basin}
+        <p class="text-destructive text-sm">{errors.sink.basin}</p>
       {/if}
     </div>
 
     <div class="flex flex-col gap-2">
       <Label for="stream">Stream</Label>
-      <Input id="stream" bind:value={form.sink.stream} placeholder="my-stream" />
+      <Input
+        id="stream"
+        bind:value={form.sink.stream}
+        placeholder="my-stream"
+      />
       {#if errors.sink?.stream}
         <p class="text-destructive text-sm">{errors.sink.stream}</p>
       {/if}

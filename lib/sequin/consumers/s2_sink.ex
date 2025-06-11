@@ -7,31 +7,35 @@ defmodule Sequin.Consumers.S2Sink do
 
   alias Sequin.Encrypted
 
-  @derive {Jason.Encoder, only: [:endpoint_url, :stream]}
+  @derive {Jason.Encoder, only: [:basin, :stream]}
   @derive {Inspect, except: [:access_token]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:s2], default: :s2
-    field :endpoint_url, :string
+    field :basin, :string
     field :stream, :string
     field :access_token, Encrypted.Field
   end
 
-  def changeset(struct, params) do
-    struct
-    |> cast(params, [:endpoint_url, :stream, :access_token])
-    |> validate_required([:endpoint_url, :stream, :access_token])
-    |> validate_endpoint_url()
+  def endpoint_url(%__MODULE__{basin: basin}) do
+    "https://#{basin}.b.aws.s2.dev/v1/"
   end
 
-  defp validate_endpoint_url(changeset) do
+  def changeset(struct, params) do
+    struct
+    |> cast(params, [:basin, :stream, :access_token])
+    |> validate_required([:basin, :stream, :access_token])
+    |> validate_basin()
+  end
+
+  defp validate_basin(changeset) do
     changeset
-    |> validate_change(:endpoint_url, fn :endpoint_url, url ->
-      case URI.parse(url) do
-        %URI{scheme: scheme, host: host} when not is_nil(scheme) and not is_nil(host) -> []
-        _ -> [endpoint_url: "must be a valid URL"]
+    |> validate_change(:basin, fn :basin, basin ->
+      case basin do
+        basin when is_binary(basin) and basin != "" -> []
+        _ -> [basin: "must be a non-empty string"]
       end
     end)
-    |> validate_length(:endpoint_url, max: 4096)
+    |> validate_length(:basin, max: 255)
   end
 end

@@ -11,9 +11,9 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
-  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.StringValue
@@ -1401,8 +1401,8 @@ defmodule Sequin.YamlLoaderTest do
                type: :kinesis,
                stream_arn: "arn:aws:kinesis:us-west-2:1:stream/test",
                access_key_id: "AKIAXXXXXXXXXXXXXXXX",
-              secret_access_key: "secret123"
-            } = consumer.sink
+               secret_access_key: "secret123"
+             } = consumer.sink
     end
 
     test "creates s2 sink consumer" do
@@ -1416,7 +1416,7 @@ defmodule Sequin.YamlLoaderTest do
                    table: "Characters"
                    destination:
                      type: "s2"
-                     endpoint_url: "https://s2.dev"
+                     basin: "test"
                      stream: "my-stream"
                      access_token: "tok"
                """)
@@ -1427,7 +1427,7 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.name == "s2-consumer"
       assert consumer.sequence.name == "test-db.public.Characters"
 
-      assert %S2Sink{type: :s2, endpoint_url: "https://s2.dev", stream: "my-stream", access_token: "tok"} = consumer.sink
+      assert %S2Sink{type: :s2, basin: "test", stream: "my-stream", access_token: "tok"} = consumer.sink
     end
 
     test "creates redis sink consumer" do

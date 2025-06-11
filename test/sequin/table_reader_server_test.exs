@@ -6,11 +6,9 @@ defmodule Sequin.Runtime.TableReaderServerTest do
   import ExUnit.CaptureLog
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Error
-  alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -24,7 +22,6 @@ defmodule Sequin.Runtime.TableReaderServerTest do
   alias Sequin.Runtime.TableReaderServer
   alias Sequin.TestSupport.Models.CharacterDetailed
 
-  @filter_name "Stilgar"
   @task_sup_name Module.concat(__MODULE__, TaskSupervisor)
 
   setup do
@@ -47,30 +44,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
     table = Sequin.Enum.find!(database.tables, &(&1.oid == table_oid))
     table = %{table | sort_column_attnum: CharacterDetailed.column_attnum("updated_at")}
 
-    sequence =
-      DatabasesFactory.insert_sequence!(
-        account_id: database.account_id,
-        postgres_database_id: database.id,
-        table_oid: table_oid,
-        sort_column_attnum: CharacterDetailed.column_attnum("updated_at")
-      )
-
-    sequence_filter =
-      ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: CharacterDetailed.pk_attnums())
-
-    filtered_sequence_filter =
-      ConsumersFactory.sequence_filter(
-        group_column_attnums: CharacterDetailed.pk_attnums(),
-        column_filters: [
-          Map.from_struct(
-            ConsumersFactory.sequence_filter_column_filter(
-              column_attnum: CharacterDetailed.column_attnum("name"),
-              operator: :==,
-              value: %{__type__: :string, value: @filter_name}
-            )
-          )
-        ]
-      )
+    source = ConsumersFactory.source_attrs(include_table_oids: [table_oid])
 
     # Insert initial 8 records
     characters =
@@ -90,8 +64,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
         replication_slot_id: replication.id,
         message_kind: :record,
         account_id: database.account_id,
-        sequence_id: sequence.id,
-        sequence_filter: Map.from_struct(sequence_filter)
+        source: source
       )
 
     backfill =
@@ -107,8 +80,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
         replication_slot_id: replication.id,
         message_kind: :record,
         account_id: database.account_id,
-        sequence_id: sequence.id,
-        sequence_filter: Map.from_struct(filtered_sequence_filter)
+        source: source
       )
 
     filtered_consumer_backfill =
@@ -124,8 +96,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
         replication_slot_id: replication.id,
         message_kind: :event,
         account_id: database.account_id,
-        sequence_id: sequence.id,
-        sequence_filter: Map.from_struct(sequence_filter)
+        source: source
       )
 
     event_consumer_backfill =
@@ -159,8 +130,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
      table: table,
      table_oid: table_oid,
      database: database,
-     characters: characters,
-     sequence_filter: sequence_filter}
+     characters: characters}
   end
 
   describe "TableReaderServer" do
@@ -243,13 +213,19 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       backfill: backfill,
       consumer: consumer,
       table_oid: table_oid,
-      characters: characters,
-      sequence_filter: sequence_filter
+      characters: characters
     } do
       page_size = 3
 
-      sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [CharacterDetailed.column_attnum("name")]}
-      {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
+      {:ok, _} =
+        Consumers.update_sink_consumer(consumer, %{
+          source_tables: [
+            %{
+              table_oid: table_oid,
+              group_column_attnums: [CharacterDetailed.column_attnum("name")]
+            }
+          ]
+        })
 
       start_supervised({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
@@ -259,56 +235,6 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       assert_lists_equal(messages, characters, fn message, character ->
         [to_string(character.id)] == message.record_pks and character.name == message.group_id
       end)
-    end
-
-    @tag capture_log: true
-    test "processes only characters matching the filter", %{
-      filtered_consumer_backfill: filtered_consumer_backfill,
-      filtered_consumer: filtered_consumer,
-      table_oid: table_oid
-    } do
-      # Insert characters that match and don't match the filter
-      matching_characters = [
-        CharacterFactory.insert_character_detailed!(name: @filter_name),
-        CharacterFactory.insert_character_detailed!(name: @filter_name)
-      ]
-
-      non_matching_characters = [
-        CharacterFactory.insert_character_detailed!(name: "Not Stilgar"),
-        CharacterFactory.insert_character_detailed!(name: "Not Stilgar")
-      ]
-
-      page_size = 10
-
-      start_supervised({SlotMessageStoreSupervisor, consumer_id: filtered_consumer.id, test_pid: self()})
-      pid = start_table_reader_server(filtered_consumer_backfill, table_oid, initial_page_size: page_size)
-
-      {:ok, messages} = flush_batches(filtered_consumer, pid)
-      record_pks = Enum.map(messages, & &1.record_pks)
-      assert_lists_equal(record_pks, Enum.uniq(record_pks))
-
-      assert length(messages) == 2
-
-      # Verify that the records match only the characters with status "active"
-      messages = Enum.sort_by(messages, & &1.record_pks)
-
-      for {message, character} <- Enum.zip(messages, matching_characters) do
-        assert message.table_oid == table_oid
-        assert message.record_pks == [to_string(character.id)]
-      end
-
-      # Verify that non-matching characters were not processed
-      non_matching_ids = Enum.map(non_matching_characters, & &1.id)
-      processed_ids = Enum.flat_map(messages, & &1.record_pks)
-      assert Enum.all?(non_matching_ids, &(to_string(&1) not in processed_ids))
-
-      cursor = TableReader.fetch_cursors(filtered_consumer.id)
-      # Cursor should be nil after completion
-      assert cursor == :error
-
-      # Verify that the consumer's backfill has been updated
-      backfill = Repo.reload(filtered_consumer_backfill)
-      assert backfill.state == :completed
     end
 
     test "processes events for event consumers", %{
@@ -532,53 +458,6 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       assert_receive {:fetch_batch, 1}, 1000
       assert_receive {:fetch_batch, 2}, 1000
 
-      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
-    end
-
-    test "continues to next page when fetch_batch returns no results after filtering", %{
-      filtered_consumer_backfill: backfill,
-      filtered_consumer: consumer,
-      table_oid: table_oid
-    } do
-      # Set a small page size to ensure we need multiple pages
-      page_size = 2
-
-      # Insert characters with older timestamps that don't match the filter
-      non_matching_characters =
-        Enum.map(1..3, fn _i ->
-          updated_at = Factory.timestamp_past()
-          CharacterFactory.insert_character_detailed!(name: "Not Stilgar", updated_at: updated_at)
-        end)
-
-      # Create with older timestamps to ensure they come first in pagination
-
-      # Insert a character that matches the filter with a newer timestamp
-      matching_character =
-        CharacterFactory.insert_character_detailed!(
-          name: @filter_name,
-          updated_at: DateTime.utc_now()
-        )
-
-      start_supervised({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
-      pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
-
-      # Monitor the process to track when it completes
-      Process.monitor(pid)
-
-      # We should get exactly one batch with our matching character
-      {:ok, messages} = flush_batches(consumer, pid)
-
-      # We should only get the one matching character
-      assert length(messages) == 1
-      message = List.first(messages)
-      assert message.record_pks == [to_string(matching_character.id)]
-
-      # Verify that non-matching characters were not processed
-      non_matching_ids = Enum.map(non_matching_characters, & &1.id)
-      processed_ids = Enum.flat_map(messages, & &1.record_pks)
-      assert Enum.all?(non_matching_ids, &(to_string(&1) not in processed_ids))
-
-      # Verify the process completed successfully
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
     end
 

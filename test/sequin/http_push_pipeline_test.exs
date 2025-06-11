@@ -315,7 +315,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
 
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
-      sequence = DatabasesFactory.insert_sequence!(postgres_database_id: database.id, account_id: account.id)
 
       replication =
         ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: database.id)
@@ -327,7 +326,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           replication_slot_id: replication.id,
-          sequence_id: sequence.id,
           message_kind: :event,
           legacy_transform: ctx[:legacy_transform] || :none
         )
@@ -569,7 +567,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
       ConnectionCache.cache_connection(database, Repo)
-      sequence = DatabasesFactory.insert_sequence!(postgres_database_id: database.id, account_id: account.id)
 
       replication =
         ReplicationFactory.insert_postgres_replication!(account_id: account.id, postgres_database_id: database.id)
@@ -582,7 +579,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           replication_slot_id: replication.id,
           postgres_database: database,
-          sequence_id: sequence.id,
           message_kind: :record,
           legacy_transform: ctx[:legacy_transform] || :none
         )
@@ -901,7 +897,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       assert consumer.sink.via_sqs == true
 
-      consumer = Repo.preload(consumer, [:sequence, :transform, :routing])
+      consumer = Repo.preload(consumer, [:transform, :routing])
 
       {:ok, %{consumer: consumer, http_endpoint: http_endpoint, account: account, via_config: via_config}}
     end

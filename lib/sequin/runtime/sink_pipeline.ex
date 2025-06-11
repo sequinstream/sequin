@@ -550,7 +550,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   end
 
   defp preload_consumer(consumer) do
-    Repo.lazy_preload(consumer, [:sequence, :transform, :routing, :filter])
+    Repo.lazy_preload(consumer, [:transform, :routing, :filter])
   end
 
   # Formats timestamps according to the consumer's timestamp_format setting

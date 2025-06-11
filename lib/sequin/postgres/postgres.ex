@@ -6,7 +6,6 @@ defmodule Sequin.Postgres do
 
   alias Ecto.Type
   alias Sequin.Constants
-  alias Sequin.Consumers.SourceTable
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Databases.PostgresDatabase
@@ -14,6 +13,7 @@ defmodule Sequin.Postgres do
   alias Sequin.Error
   alias Sequin.Error.ValidationError
   alias Sequin.Repo
+  alias Sequin.WalPipeline.SourceTable
 
   require Logger
 
@@ -1089,6 +1089,84 @@ defmodule Sequin.Postgres do
            details: error
          )}
     end
+  end
+
+  @type table_with_replica_identity :: %{
+          table_schema: String.t(),
+          table_name: String.t(),
+          table_oid: integer(),
+          relation_kind: String.t(),
+          replica_identity: String.t() | nil,
+          partition_replica_identities: list(%{replica_identity: String.t(), count: integer()}) | nil
+        }
+  @spec all_tables_with_replica_identities_in_publication(db_conn(), String.t()) ::
+          {:ok, list(table_with_replica_identity())} | {:error, Error.t()}
+  def all_tables_with_replica_identities_in_publication(conn, publication_name) do
+    query = """
+    SELECT
+        pt.schemaname as table_schema,
+        pt.tablename as table_name,
+        c.oid AS table_oid,
+        c.relkind AS relation_kind,
+        CASE
+            WHEN c.relkind = 'p' THEN NULL  -- Will be handled by partition rollup
+            ELSE c.relreplident
+        END AS replica_identity,
+        CASE
+            WHEN c.relkind = 'p' THEN partition_identities.identity_counts
+            ELSE NULL
+        END AS partition_replica_identities
+    FROM pg_publication p
+    JOIN pg_publication_tables pt ON p.pubname = pt.pubname
+    JOIN pg_class c ON c.relname = pt.tablename
+    JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = pt.schemaname
+    LEFT JOIN LATERAL (
+        WITH partitions AS (
+            SELECT child.oid, child.relreplident
+            FROM pg_inherits i
+            JOIN pg_class child ON child.oid = i.inhrelid
+            WHERE i.inhparent = c.oid
+            UNION ALL
+            SELECT c.oid, c.relreplident
+        )
+        SELECT json_agg(
+            json_build_object(
+                'replica_identity', replica_identity,
+                'count', count
+            )
+        ) AS identity_counts
+        FROM (
+            SELECT relreplident as replica_identity, count(*)
+            FROM partitions
+            GROUP BY relreplident
+        ) counts
+    ) partition_identities ON c.relkind = 'p'
+    WHERE p.pubname = $1
+    ORDER BY pt.schemaname, pt.tablename;
+    """
+
+    case query(conn, query, [publication_name]) do
+      {:ok, %Postgrex.Result{} = result} -> {:ok, result_to_maps(result)}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  def any_partitioned_tables?(tables_with_replica_identities) do
+    Enum.any?(tables_with_replica_identities, fn table ->
+      table["relation_kind"] == "p"
+    end)
+  end
+
+  def any_tables_without_full_replica_identity?(tables_with_replica_identities) do
+    Enum.any?(tables_with_replica_identities, fn table ->
+      table["relation_kind"] == "r" and table["replica_identity"] != "f"
+    end)
+  end
+
+  def any_partitioned_tables_without_full_replica_identity?(tables_with_replica_identities) do
+    Enum.any?(tables_with_replica_identities, fn table ->
+      table["relation_kind"] == "p" and Enum.any?(table["partition_replica_identities"], &(&1["replica_identity"] != "f"))
+    end)
   end
 
   @doc """

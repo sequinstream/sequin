@@ -475,16 +475,8 @@ defmodule Sequin.SlotMessageStoreTest do
     end
 
     test "produces messages with same group_id from different tables simultaneously", %{} do
-      # Create a consumer with schema_filter instead of sequence_filter
-      schema_filter = ConsumersFactory.schema_filter_attrs(schema: "public")
-
       consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          message_kind: :event,
-          sequence_id: nil,
-          sequence_filter: nil,
-          schema_filter: schema_filter
-        )
+        ConsumersFactory.insert_sink_consumer!(message_kind: :event)
 
       start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 

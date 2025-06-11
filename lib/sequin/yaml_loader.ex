@@ -146,8 +146,16 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  # Hack to give a better error message when table is missing
-  defp map_error(%NotFoundError{entity: :sequence} = error), do: %{error | entity: :postgres_table}
+  defp map_error(%Ecto.Changeset{} = changeset) do
+    case Error.errors_on(changeset) do
+      %{source_tables: [%{group_column_attnums: [error | _]} | _]} ->
+        Error.validation(summary: "Invalid table.group_column_names: #{error}")
+
+      _ ->
+        Error.validation(changeset: changeset)
+    end
+  end
+
   defp map_error(error), do: error
 
   defp apply_config(account_id, config, opts) do
@@ -155,7 +163,7 @@ defmodule Sequin.YamlLoader do
          {:ok, _users} <- find_or_create_users(account, config),
          {:ok, _tokens} <- find_or_create_tokens(account, config),
          {:ok, _databases, actions} <- upsert_databases(account.id, config, opts),
-         databases = Databases.list_dbs_for_account(account.id, [:sequences, :replication_slot]),
+         databases = Databases.list_dbs_for_account(account.id, [:replication_slot]),
          {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
          http_endpoints = Consumers.list_http_endpoints_for_account(account.id),
@@ -170,14 +178,14 @@ defmodule Sequin.YamlLoader do
   def all_resources(account_id) do
     account = Accounts.get_account!(account_id)
     users = Accounts.list_users_for_account(account_id)
-    databases = Databases.list_dbs_for_account(account_id, [:sequences, :replication_slot])
+    databases = Databases.list_dbs_for_account(account_id, [:replication_slot])
     wal_pipelines = Replication.list_wal_pipelines_for_account(account_id, [:source_database, :destination_database])
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
     functions = Consumers.list_functions_for_account(account_id)
 
     sink_consumers =
       account_id
-      |> Consumers.list_sink_consumers_for_account(sequence: [:postgres_database])
+      |> Consumers.list_sink_consumers_for_account(:postgres_database)
       |> Enum.map(&SinkConsumer.preload_http_endpoint!/1)
 
     [account | users] ++ databases ++ wal_pipelines ++ http_endpoints ++ functions ++ sink_consumers
@@ -910,10 +918,6 @@ defmodule Sequin.YamlLoader do
 
   defp upsert_sink_consumers(account_id, %{"sinks" => consumers}, databases, http_endpoints) do
     Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
-      # This is a hack while sequences might be created while we create sinks
-      # TODO: Excise this once sequences are removed
-      databases = Repo.preload(databases, [:sequences], force: true)
-
       case upsert_sink_consumer(account_id, consumer, databases, http_endpoints) do
         {:ok, consumer} ->
           Logger.info("Upserted sink consumer", consumer_id: consumer.id)

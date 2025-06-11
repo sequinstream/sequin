@@ -1,5 +1,12 @@
-import type { Table } from "../databases/types";
+import type { Database, Table } from "../databases/types";
 import type { Function } from "../functions/types";
+
+export type Source = {
+  include_schemas: string[] | null;
+  exclude_schemas: string[] | null;
+  include_table_oids: number[] | null;
+  exclude_table_oids: number[] | null;
+};
 
 export type Backfill = {
   id: string;
@@ -42,27 +49,13 @@ export type BaseConsumer = {
   max_waiting: number;
   inserted_at: string;
   updated_at: string;
-  sequence: {
-    table_name: string;
-    table_schema: string;
-    column_filters: Array<{
-      column: string;
-      operator: string;
-      value: any;
-      is_jsonb: boolean;
-      jsonb_path: string;
-    }>;
-  };
+  source: Source;
+  tables_included_in_source: Table[];
   routing_id: string | null;
   routing: Function | null;
   filter_id: string | null;
   filter: Function | null;
-  table: Table;
-  postgres_database: {
-    id: string;
-    name: string;
-    pg_major_version: number;
-  };
+  database: Database;
   active_backfills: Backfill[];
   health: any;
   href: string;

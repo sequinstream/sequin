@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.SequenceFilter.StringValue do
+defmodule Sequin.WalPipeline.SourceTable.StringValue do
   @moduledoc false
   use Ecto.Schema
 
@@ -16,7 +16,7 @@ defmodule Sequin.Consumers.SequenceFilter.StringValue do
   end
 end
 
-defmodule Sequin.Consumers.SequenceFilter.NumberValue do
+defmodule Sequin.WalPipeline.SourceTable.NumberValue do
   @moduledoc false
   use Ecto.Schema
 
@@ -34,7 +34,7 @@ defmodule Sequin.Consumers.SequenceFilter.NumberValue do
   end
 end
 
-defmodule Sequin.Consumers.SequenceFilter.BooleanValue do
+defmodule Sequin.WalPipeline.SourceTable.BooleanValue do
   @moduledoc false
   use Ecto.Schema
 
@@ -83,7 +83,7 @@ defmodule Sequin.Consumers.SequenceFilter.BooleanValue do
   end
 end
 
-defmodule Sequin.Consumers.SequenceFilter.DateTimeValue do
+defmodule Sequin.WalPipeline.SourceTable.DateTimeValue do
   @moduledoc false
   use Ecto.Schema
 
@@ -125,7 +125,7 @@ defmodule Sequin.Consumers.SequenceFilter.DateTimeValue do
   defp validate_datetime_format(_), do: :ok
 end
 
-defmodule Sequin.Consumers.SequenceFilter.ListValue do
+defmodule Sequin.WalPipeline.SourceTable.ListValue do
   @moduledoc false
   use Ecto.Schema
 
@@ -143,7 +143,7 @@ defmodule Sequin.Consumers.SequenceFilter.ListValue do
   end
 end
 
-defmodule Sequin.Consumers.SequenceFilter.NullValue do
+defmodule Sequin.WalPipeline.SourceTable.NullValue do
   @moduledoc false
   use Ecto.Schema
 
@@ -159,7 +159,7 @@ defmodule Sequin.Consumers.SequenceFilter.NullValue do
   end
 end
 
-defmodule Sequin.Consumers.SequenceFilter.CiStringValue do
+defmodule Sequin.WalPipeline.SourceTable.CiStringValue do
   @moduledoc false
   use Ecto.Schema
 
@@ -178,20 +178,20 @@ defmodule Sequin.Consumers.SequenceFilter.CiStringValue do
   end
 end
 
-defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
+defmodule Sequin.WalPipeline.SourceTable.ColumnFilter do
   @moduledoc false
   use Ecto.Schema
 
   import Ecto.Changeset
   import PolymorphicEmbed
 
-  alias Sequin.Consumers.SequenceFilter.BooleanValue
-  alias Sequin.Consumers.SequenceFilter.CiStringValue
-  alias Sequin.Consumers.SequenceFilter.DateTimeValue
-  alias Sequin.Consumers.SequenceFilter.ListValue
-  alias Sequin.Consumers.SequenceFilter.NullValue
-  alias Sequin.Consumers.SequenceFilter.NumberValue
-  alias Sequin.Consumers.SequenceFilter.StringValue
+  alias Sequin.WalPipeline.SourceTable.BooleanValue
+  alias Sequin.WalPipeline.SourceTable.CiStringValue
+  alias Sequin.WalPipeline.SourceTable.DateTimeValue
+  alias Sequin.WalPipeline.SourceTable.ListValue
+  alias Sequin.WalPipeline.SourceTable.NullValue
+  alias Sequin.WalPipeline.SourceTable.NumberValue
+  alias Sequin.WalPipeline.SourceTable.StringValue
 
   @operators [:==, :!=, :>, :<, :>=, :<=, :in, :not_in, :is_null, :not_null]
   def operator_values, do: @operators

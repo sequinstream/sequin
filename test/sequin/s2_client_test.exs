@@ -4,7 +4,6 @@ defmodule Sequin.Sinks.S2.ClientTest do
   alias Sequin.Consumers.S2Sink
   alias Sequin.Factory.SinkFactory
   alias Sequin.Sinks.S2.Client
-  alias Sequin.Sinks.S2.HttpClient
 
   @sink %S2Sink{type: :s2, basin: "test", stream: "test-stream", access_token: "token"}
 
@@ -12,7 +11,7 @@ defmodule Sequin.Sinks.S2.ClientTest do
     test "successfully sends batch" do
       records = [SinkFactory.s2_record(), SinkFactory.s2_record()]
 
-      Req.Test.stub(HttpClient, fn conn ->
+      Req.Test.expect(Client, fn conn ->
         assert conn.method == "POST"
         assert conn.request_path == "/v1/streams/test-stream/records"
         Req.Test.json(conn, %{"ok" => true})
@@ -24,7 +23,7 @@ defmodule Sequin.Sinks.S2.ClientTest do
 
   describe "test_connection/1" do
     test "returns ok on 200" do
-      Req.Test.stub(HttpClient, fn conn ->
+      Req.Test.expect(Client, fn conn ->
         assert conn.method == "GET"
         assert conn.request_path == "/v1/streams/test-stream"
         Req.Test.json(conn, %{})

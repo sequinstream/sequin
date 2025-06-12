@@ -9,7 +9,7 @@ defmodule Sequin.Runtime.S2PipelineTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.SinkPipeline
-  alias Sequin.Sinks.S2.HttpClient
+  alias Sequin.Sinks.S2.Client
   alias Sequin.TestSupport.Models.Character
 
   describe "events are sent to S2" do
@@ -57,7 +57,7 @@ defmodule Sequin.Runtime.S2PipelineTest do
         |> ConsumersFactory.insert_deliverable_consumer_record!()
         |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
 
-      Req.Test.stub(HttpClient, fn conn ->
+      Req.Test.expect(Client, fn conn ->
         assert conn.method == "POST"
         assert conn.host == "test.b.aws.s2.dev"
         assert conn.request_path == "/v1/streams/#{consumer.sink.stream}/records"

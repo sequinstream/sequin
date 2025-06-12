@@ -5,8 +5,6 @@
   import type { S2Consumer } from "../../consumers/types";
 
   export let consumer: S2Consumer;
-
-  let s2Url = `https://s2.dev/dashboard/basins/${consumer.sink.basin}`;
 </script>
 
 <Card>
@@ -14,7 +12,11 @@
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-lg font-semibold">S2 Configuration</h2>
       <div class="flex space-x-2">
-        <a href={s2Url} target="_blank" rel="noopener noreferrer">
+        <a
+          href={consumer.sink.dashboard_url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           <Button variant="outline" size="sm">
             <ExternalLink class="h-4 w-4 mr-2" />
             View Basin in S2

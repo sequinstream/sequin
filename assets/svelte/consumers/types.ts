@@ -109,6 +109,7 @@ export type S2Consumer = BaseConsumer & {
     basin: string;
     stream: string;
     access_token: string;
+    dashboard_url: string;
   };
 };
 

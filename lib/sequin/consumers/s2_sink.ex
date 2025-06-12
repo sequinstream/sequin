@@ -21,6 +21,10 @@ defmodule Sequin.Consumers.S2Sink do
     "https://#{basin}.b.aws.s2.dev/v1/"
   end
 
+  def dashboard_url(%__MODULE__{basin: basin}) do
+    "https://s2.dev/dashboard/basins/#{basin}"
+  end
+
   def changeset(struct, params) do
     struct
     |> cast(params, [:basin, :stream, :access_token])

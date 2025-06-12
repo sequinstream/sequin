@@ -889,7 +889,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       type: :s2,
       basin: sink.basin,
       stream: sink.stream,
-      access_token: sink.access_token
+      access_token: sink.access_token,
+      dashboard_url: S2Sink.dashboard_url(sink)
     }
   end
 

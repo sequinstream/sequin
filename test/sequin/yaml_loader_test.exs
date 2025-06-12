@@ -1416,7 +1416,7 @@ defmodule Sequin.YamlLoaderTest do
                    table: "Characters"
                    destination:
                      type: "s2"
-                     basin: "test"
+                     basin: "test-basin"
                      stream: "my-stream"
                      access_token: "tok"
                """)
@@ -1427,7 +1427,7 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.name == "s2-consumer"
       assert consumer.sequence.name == "test-db.public.Characters"
 
-      assert %S2Sink{type: :s2, basin: "test", stream: "my-stream", access_token: "tok"} = consumer.sink
+      assert %S2Sink{type: :s2, basin: "test-basin", stream: "my-stream", access_token: "tok"} = consumer.sink
     end
 
     test "creates redis sink consumer" do

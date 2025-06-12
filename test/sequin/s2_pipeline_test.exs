@@ -59,7 +59,7 @@ defmodule Sequin.Runtime.S2PipelineTest do
 
       Req.Test.expect(Client, fn conn ->
         assert conn.method == "POST"
-        assert conn.host == "test.b.aws.s2.dev"
+        assert conn.host == "test-basin.b.aws.s2.dev"
         assert conn.request_path == "/v1/streams/#{consumer.sink.stream}/records"
 
         # Verify request body

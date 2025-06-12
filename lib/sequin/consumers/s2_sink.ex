@@ -40,6 +40,9 @@ defmodule Sequin.Consumers.S2Sink do
         _ -> [basin: "must be a non-empty string"]
       end
     end)
-    |> validate_length(:basin, max: 255)
+    |> validate_length(:basin, min: 8, max: 48)
+    |> validate_format(:basin, ~r/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/,
+      message: "can only include lowercase letters, numbers, and hyphens. It cannot begin or end with a hyphen."
+    )
   end
 end

@@ -232,7 +232,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %S2Sink{
         type: :s2,
-        basin: "test",
+        basin: "test-basin",
         stream: Factory.word(),
         access_token: Factory.word()
       },

@@ -723,29 +723,6 @@ defmodule Sequin.Factory.ConsumersFactory do
     end
   end
 
-  # def sequence_filter_column_filter(attrs \\ []) do
-  #   attrs = Map.new(attrs)
-
-  #   value_type = Map.get(attrs, :value_type, Enum.random([:string, :number, :boolean, :null, :list]))
-
-  #   merge_attributes(
-  #     %ColumnFilter{
-  #       column_attnum: Factory.unique_integer(),
-  #       operator: generate_operator(value_type),
-  #       value: %{__type__: value_type, value: generate_value(value_type)},
-  #       is_jsonb: false,
-  #       jsonb_path: nil
-  #     },
-  #     Map.delete(attrs, :value_type)
-  #   )
-  # end
-
-  # def sequence_filter_column_filter_attrs(attrs \\ []) do
-  #   attrs
-  #   |> sequence_filter_column_filter()
-  #   |> Sequin.Map.from_ecto()
-  # end
-
   def backfill(attrs \\ []) do
     attrs = Map.new(attrs)
 

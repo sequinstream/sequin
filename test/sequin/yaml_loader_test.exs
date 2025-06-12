@@ -779,7 +779,7 @@ defmodule Sequin.YamlLoaderTest do
   end
 
   describe "sinks" do
-    def account_db_and_sequence_yml do
+    def account_and_db_yml do
       """
       account:
         name: "Configured by Sequin"
@@ -796,7 +796,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "record_only"
@@ -831,7 +831,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with batch=false" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                http_endpoints:
                  - name: "sequin-playground-http"
@@ -853,7 +853,7 @@ defmodule Sequin.YamlLoaderTest do
 
     test "applying yml twice creates no duplicates" do
       yaml = """
-      #{account_db_and_sequence_yml()}
+      #{account_and_db_yml()}
 
       http_endpoints:
         - name: "sequin-playground-http"
@@ -887,7 +887,7 @@ defmodule Sequin.YamlLoaderTest do
 
     test "updates webhook subscription" do
       create_yaml = """
-      #{account_db_and_sequence_yml()}
+      #{account_and_db_yml()}
 
       http_endpoints:
         - name: "sequin-playground-http"
@@ -910,7 +910,7 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.sink.http_endpoint.name == "sequin-playground-http"
 
       update_yaml = """
-      #{account_db_and_sequence_yml()}
+      #{account_and_db_yml()}
 
       http_endpoints:
         - name: "new-http-endpoint"
@@ -937,7 +937,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sequin stream consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "sequin-playground-consumer"
@@ -957,7 +957,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sink consumer with schema filter" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "schema-consumer"
@@ -978,7 +978,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription excluding schemas" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                http_endpoints:
                  - name: "sequin-playground-http"
@@ -1005,7 +1005,7 @@ defmodule Sequin.YamlLoaderTest do
       # First create consumer with table
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "update-consumer"
@@ -1023,7 +1023,7 @@ defmodule Sequin.YamlLoaderTest do
       # Now update to use schema filter
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "update-consumer"
@@ -1043,7 +1043,7 @@ defmodule Sequin.YamlLoaderTest do
       # First create consumer with schema
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "reverse-update-consumer"
@@ -1061,7 +1061,7 @@ defmodule Sequin.YamlLoaderTest do
       # Now update to use table filter
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "reverse-update-consumer"
@@ -1081,7 +1081,7 @@ defmodule Sequin.YamlLoaderTest do
     test "fails when both include and exclude are specified" do
       assert_raise RuntimeError, ~r/cannot be set when include_schemas is set/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         sinks:
           - name: "invalid-consumer"
@@ -1097,7 +1097,7 @@ defmodule Sequin.YamlLoaderTest do
 
     test "sets group_column_attnums on a table" do
       YamlLoader.apply_from_yml!("""
-      #{account_db_and_sequence_yml()}
+      #{account_and_db_yml()}
 
       sinks:
         - name: "group-column-attnums-consumer"
@@ -1116,7 +1116,7 @@ defmodule Sequin.YamlLoaderTest do
     test "fails when group_column_names contains non-existent column" do
       assert_raise RuntimeError, ~r/Failed to parse tables.*No `postgres column` found.*non_existent_column/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         sinks:
           - name: "invalid-consumer"
@@ -1133,7 +1133,7 @@ defmodule Sequin.YamlLoaderTest do
     test "fails when group_column_names is empty" do
       assert_raise RuntimeError, ~r/Invalid table.group_column_names: should have at least 1 item\(s\)/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         sinks:
           - name: "invalid-consumer"
@@ -1149,7 +1149,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates kafka sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "kafka-consumer"
@@ -1182,7 +1182,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sqs sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "sqs-consumer"
@@ -1211,7 +1211,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sns sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "sns-consumer"
@@ -1239,7 +1239,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates kinesis sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "kinesis-consumer"
@@ -1266,7 +1266,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates redis sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "redis-consumer"
@@ -1301,7 +1301,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates gcp pubsub sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "pubsub-consumer"
@@ -1350,7 +1350,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates elasticsearch sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "elasticsearch-consumer"
@@ -1381,7 +1381,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates redis string sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "redis-string-consumer"
@@ -1414,7 +1414,7 @@ defmodule Sequin.YamlLoaderTest do
     test "handles removing and re-adding a sink after the table is renamed" do
       # First apply config with sink
       initial_yaml = """
-      #{account_db_and_sequence_yml()}
+      #{account_and_db_yml()}
 
       http_endpoints:
         - name: "sequin-playground-http"
@@ -1481,7 +1481,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates multiple sinks using YAML anchors" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sink_template: &sink_template
                  status: active
@@ -1517,7 +1517,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sink with custom actions and timestamp format" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                http_endpoints:
                 - name: "sequin-playground-http"
@@ -1544,7 +1544,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sink with source includes and excludes" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                http_endpoints:
                 - name: "sequin-playground-http"
@@ -1574,7 +1574,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates multiple sinks with different names using YAML anchors" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sink_template: &sink_template
                  status: active
@@ -1618,7 +1618,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with transform reference" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "my-transform"
@@ -1653,7 +1653,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with transform function" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "id-action-transform"
@@ -1705,7 +1705,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sink with no transform" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                http_endpoints:
                  - name: "sequin-playground-http"
@@ -1729,7 +1729,7 @@ defmodule Sequin.YamlLoaderTest do
     test "raises error when referenced transform not found" do
       assert_raise RuntimeError, ~r/Function 'missing-function' not found/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         http_endpoints:
           - name: "sequin-playground-http"
@@ -1749,7 +1749,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with routing and filter functions" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "my-routing"
@@ -1809,7 +1809,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with new yaml names" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "my-routing"
@@ -1846,7 +1846,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with FLAT YAML" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "my-routing"
@@ -1884,7 +1884,7 @@ defmodule Sequin.YamlLoaderTest do
     test "errors when routing function doesn't exist" do
       assert_raise RuntimeError, ~r/[Ff]unction 'non-existent-routing' not found/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         http_endpoints:
           - name: "sequin-playground-http"
@@ -1904,7 +1904,7 @@ defmodule Sequin.YamlLoaderTest do
     test "errors when function referenced for routing is not a routing function" do
       assert_raise RuntimeError, "`routing` must reference a function with type `routing`", fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         functions:
           - name: "regular-transform"

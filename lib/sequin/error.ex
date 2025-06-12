@@ -192,7 +192,11 @@ defmodule Sequin.Error do
       """)
     end
 
-    def from_json(json), do: JSON.struct(json, __MODULE__)
+    def from_json(json) do
+      json
+      |> JSON.decode_atom("code")
+      |> JSON.struct(__MODULE__)
+    end
 
     def from_postgrex(summary_prefix \\ "Postgres error: ", %Postgrex.Error{} = error) do
       pg_code = error.postgres && error.postgres.code

@@ -35,6 +35,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Health
+  alias Sequin.Health.Check
   alias Sequin.Health.CheckSinkConfigurationWorker
   alias Sequin.Metrics
   alias Sequin.Replication.PostgresReplicationSlot
@@ -1329,10 +1330,24 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp maybe_augment_alert(
-         %{slug: :sink_configuration, error_slug: :replica_identity_not_full_partitioned} = check,
-         consumer
+         %{slug: :sink_configuration, error_slug: :replica_identity_not_full_partitioned, extra: extra} = check,
+         _consumer
        ) do
-    table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
+    %{
+      "tables_with_replica_identities" => tables_with_replica_identities
+    } = extra
+
+    root_table_names_without_full_replica_identity =
+      tables_with_replica_identities
+      |> Enum.filter(fn
+        %{"relkind" => "p", "partition_replica_identities" => partition_replica_identities} ->
+          Enum.any?(partition_replica_identities, &(&1["relreplident"] != "f"))
+
+        _ ->
+          false
+      end)
+      |> Enum.map(fn %{"table_name" => table_name} -> table_name end)
+      |> Enum.sort()
 
     Map.merge(
       check,
@@ -1347,23 +1362,37 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         dismissable: true,
         code: %{
           language: "sql",
-          code: """
-          alter table #{table_name} replica identity full;
-          """
+          code:
+            Enum.map_join(root_table_names_without_full_replica_identity, "\n", fn table_name ->
+              "alter table #{table_name} replica identity full;"
+            end)
         }
       }
     )
   end
 
-  defp maybe_augment_alert(%{slug: :sink_configuration, error_slug: :replica_identity_not_full} = check, consumer) do
-    table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
+  defp maybe_augment_alert(
+         %{slug: :sink_configuration, error_slug: :replica_identity_not_full, extra: extra} = check,
+         _consumer
+       ) do
+    %{
+      "tables_with_replica_identities" => tables_with_replica_identities
+    } = extra
+
+    table_names_without_full_replica_identity =
+      tables_with_replica_identities
+      |> Enum.filter(fn %{"relkind" => relkind, "relreplident" => relreplident} ->
+        relkind == "r" and relreplident != "f"
+      end)
+      |> Enum.map(fn %{"table_name" => table_name} -> table_name end)
+      |> Enum.sort()
 
     Map.merge(
       check,
       %{
         alertTitle: "Notice: Replica identity not set to full",
         alertMessage: """
-        The replica identity for your table is not set to `full`. This means the `changes` field in message payloads will be empty.
+        The replica identity for one or more of your tables is not set to `full`. This means the `changes` field in message payloads will be empty for those tables.
 
         If you want the `changes` field to appear in message payloads, run the following SQL command:
         """,
@@ -1371,17 +1400,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         dismissable: true,
         code: %{
           language: "sql",
-          code: """
-          alter table #{table_name} replica identity full;
-          """
+          code:
+            Enum.map_join(table_names_without_full_replica_identity, "\n", fn table_name ->
+              "alter table #{table_name} replica identity full;"
+            end)
         }
       }
     )
   end
 
   defp maybe_augment_alert(%{slug: :sink_configuration, error_slug: :toast_columns_detected} = check, consumer) do
-    table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
-
     Map.merge(check, %{
       alertTitle: "Notice: TOAST columns detected",
       alertMessage: """
@@ -1390,7 +1418,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       To have Sequin always propagate the values of these columns, set replica identity of your table to `full` with the following SQL command:
 
       ```sql
-      alter table #{table_name} replica identity full;
+      alter table {table_name} replica identity full;
       ```
       """,
       refreshable: true,
@@ -1399,12 +1427,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp maybe_augment_alert(%{slug: :sink_configuration, error_slug: :table_not_in_publication} = check, consumer) do
-    table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
-
     Map.merge(check, %{
       alertTitle: "Error: Table not in publication",
       alertMessage: """
-      The table #{table_name} is not in the publication #{consumer.replication_slot.publication_name}. That means changes to this table will not be propagated to Sequin.
+      The table {table_name} is not in the publication #{consumer.replication_slot.publication_name}. That means changes to this table will not be propagated to Sequin.
 
       To fix this, you can add the table to the publication with the following SQL command:
 
@@ -1415,7 +1441,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       code: %{
         language: "sql",
         code: """
-        alter publication #{consumer.replication_slot.publication_name} add table #{table_name};
+        alter publication {publication_name} add table {table_name};
         """
       }
     })

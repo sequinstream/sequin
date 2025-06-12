@@ -409,6 +409,12 @@ defmodule Sequin.Databases do
     end)
   end
 
+  def get_publication(%PostgresDatabase{} = database, publication_name) do
+    with_connection(database, fn conn ->
+      Postgres.get_publication(conn, publication_name)
+    end)
+  end
+
   def verify_table_in_publication(%PostgresDatabase{} = database, table_oid) do
     database = Repo.preload(database, :replication_slot)
     pub_name = database.replication_slot.publication_name
@@ -421,6 +427,12 @@ defmodule Sequin.Databases do
   def check_replica_identity(%PostgresDatabase{} = db, oid) do
     with_connection(db, fn conn ->
       Postgres.check_replica_identity(conn, oid)
+    end)
+  end
+
+  def all_tables_with_replica_identities_in_publication(%PostgresDatabase{} = db, publication_name) do
+    with_connection(db, fn conn ->
+      Postgres.all_tables_with_replica_identities_in_publication(conn, publication_name)
     end)
   end
 

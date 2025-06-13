@@ -1,8 +1,7 @@
-import type { Table } from "../databases/types";
+import type { Database } from "../databases/types";
 import type { Function } from "../functions/types";
 
 export type Source = {
-  publication_name: string;
   include_schemas: string[] | null;
   exclude_schemas: string[] | null;
   include_table_oids: number[] | null;
@@ -51,16 +50,12 @@ export type BaseConsumer = {
   inserted_at: string;
   updated_at: string;
   source: Source;
+  tables_included_in_source: Table[];
   routing_id: string | null;
   routing: Function | null;
   filter_id: string | null;
   filter: Function | null;
-  table: Table;
-  postgres_database: {
-    id: string;
-    name: string;
-    pg_major_version: number;
-  };
+  database: Database;
   active_backfills: Backfill[];
   health: any;
   href: string;

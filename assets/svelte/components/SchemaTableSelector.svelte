@@ -74,7 +74,6 @@
   let selectedTableOids: Set<number> = new Set(); // Store as "schema.table"
 
   if (isEditMode) {
-    console.log("source", source);
     if (source.include_schemas) {
       schemaMode = "include";
       selectedSchemas = new Set(source.include_schemas);

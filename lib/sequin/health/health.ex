@@ -668,7 +668,15 @@ defmodule Sequin.Health do
         ])
 
       is_nil(config_checked_event.data["tables_with_replica_identities"]) ->
-        put_check_timestamps(%{base_check | status: :stale}, [config_checked_event])
+        error =
+          Error.invariant(
+            message:
+              "Expected tables_with_replica_identities in sink configuration but none was found. Try re-running the health check."
+          )
+
+        put_check_timestamps(%{base_check | status: :notice, error: error}, [
+          config_checked_event
+        ])
 
       Postgres.any_tables_without_full_replica_identity?(config_checked_event.data["tables_with_replica_identities"]) and
           is_nil(alert_replica_identity_not_full_dismissed) ->

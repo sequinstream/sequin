@@ -569,6 +569,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "consumer_kind" => form["consumerKind"],
         "ack_wait_ms" => form["ackWaitMs"],
         "sink" => sink,
+        "actions" => form["actions"],
         "max_ack_pending" => form["maxAckPending"],
         "max_waiting" => form["maxWaiting"],
         "max_memory_mb" => form["maxMemoryMb"],

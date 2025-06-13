@@ -92,7 +92,6 @@ defmodule Sequin.Consumers do
     account_id
     |> SinkConsumer.where_account_id()
     |> SinkConsumer.where_id_or_name(consumer_id)
-    |> preload(:sequence)
     |> Repo.one()
   end
 
@@ -263,12 +262,6 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
-  def list_consumers_for_sequence(sequence_id) do
-    sequence_id
-    |> SinkConsumer.where_sequence_id()
-    |> Repo.all()
-  end
-
   def list_consumers_for_function(account_id, function_id, preload \\ []) do
     account_id
     |> SinkConsumer.where_account_id()
@@ -429,7 +422,6 @@ defmodule Sequin.Consumers do
       {:name, name}, query -> SinkConsumer.where_name(query, name)
       {:id_or_name, id_or_name}, query -> SinkConsumer.where_id_or_name(query, id_or_name)
       {:type, type}, query -> SinkConsumer.where_type(query, type)
-      {:sequence_id, sequence_id}, query -> SinkConsumer.where_sequence_id(query, sequence_id)
       {:preload, preload}, query -> preload(query, ^preload)
     end)
     |> Repo.one()

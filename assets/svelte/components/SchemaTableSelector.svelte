@@ -281,39 +281,42 @@
       <div class="space-y-2">
         <div class="flex items-center justify-between">
           <h3 class="font-medium">Schemas</h3>
-          <div class="flex items-center gap-4">
+          <div class="inline-flex rounded-md shadow-sm" role="group">
             <button
-              class="text-sm transition-all {schemaMode === 'all'
-                ? 'font-semibold'
-                : 'text-muted-foreground hover:text-foreground'}"
+              class="text-sm px-4 py-2 transition-all border {schemaMode ===
+              'all'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-l-md border-r-0"
               on:click={(e) => {
                 e.preventDefault();
                 handleSchemaMode("all");
               }}
             >
-              Include all
+              All
             </button>
             <button
-              class="text-sm transition-all {schemaMode === 'include'
-                ? 'font-semibold'
-                : 'text-muted-foreground hover:text-foreground'}"
+              class="text-sm px-4 py-2 transition-all border {schemaMode ===
+              'include'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} border-r-0"
               on:click={(e) => {
                 e.preventDefault();
                 handleSchemaMode("include");
               }}
             >
-              Include selected
+              Include
             </button>
             <button
-              class="text-sm transition-all {schemaMode === 'exclude'
-                ? 'font-semibold'
-                : 'text-muted-foreground hover:text-foreground'}"
+              class="text-sm px-4 py-2 transition-all border {schemaMode ===
+              'exclude'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-r-md"
               on:click={(e) => {
                 e.preventDefault();
                 handleSchemaMode("exclude");
               }}
             >
-              Exclude selected
+              Exclude
             </button>
           </div>
         </div>
@@ -400,39 +403,42 @@
       <div class="space-y-2">
         <div class="flex items-center justify-between">
           <h3 class="font-medium">Tables</h3>
-          <div class="flex items-center gap-4">
+          <div class="inline-flex rounded-md shadow-sm" role="group">
             <button
-              class="text-sm transition-all {tableMode === 'all'
-                ? 'font-semibold'
-                : 'text-muted-foreground hover:text-foreground'}"
+              class="text-sm px-4 py-2 transition-all border {tableMode ===
+              'all'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-l-md border-r-0"
               on:click={(e) => {
                 e.preventDefault();
                 handleTableMode("all");
               }}
             >
-              Include all
+              All
             </button>
             <button
-              class="text-sm transition-all {tableMode === 'include'
-                ? 'font-semibold'
-                : 'text-muted-foreground hover:text-foreground'}"
+              class="text-sm px-4 py-2 transition-all border {tableMode ===
+              'include'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} border-r-0"
               on:click={(e) => {
                 e.preventDefault();
                 handleTableMode("include");
               }}
             >
-              Include selected
+              Include
             </button>
             <button
-              class="text-sm transition-all {tableMode === 'exclude'
-                ? 'font-semibold'
-                : 'text-muted-foreground hover:text-foreground'}"
+              class="text-sm px-4 py-2 transition-all border {tableMode ===
+              'exclude'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-r-md"
               on:click={(e) => {
                 e.preventDefault();
                 handleTableMode("exclude");
               }}
             >
-              Exclude selected
+              Exclude
             </button>
           </div>
         </div>

@@ -17,7 +17,6 @@
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import FullPageForm from "../components/FullPageForm.svelte";
-  import { cn } from "$lib/utils";
   import FilterForm from "../components/FilterForm.svelte";
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
   import FunctionPicker from "$lib/consumers/FunctionPicker.svelte";
@@ -37,7 +36,7 @@
   import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
   import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
-  import TableOrSchemaSelector from "../components/TableOrSchemaSelector.svelte";
+  import SchemaTableSelector from "../components/SchemaTableSelector.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -71,8 +70,7 @@
     description: string;
   }>;
   export let errors: {
-    consumer: Record<string, string>;
-    sequence: Record<string, string>;
+    consumer: Record<string, string | Record<string, string>>;
     backfill: Record<string, string>;
   };
   export let isSelfHosted: boolean;
@@ -84,10 +82,7 @@
     messageKind: MessageKind;
     maxMemoryMb: number;
     postgresDatabaseId: string | null;
-    schema: string | null;
-    tableOid: number | null;
-    sourceTableFilters: any[];
-    sourceTableActions: string[];
+    source: Source;
     name: string;
     ackWaitMs: number;
     maxAckPending: number;
@@ -115,10 +110,7 @@
     messageKind: (consumer.message_kind || "event") as MessageKind,
     maxMemoryMb: Number(consumer.max_memory_mb),
     postgresDatabaseId: consumer.postgres_database_id,
-    schema: consumer.schema,
-    tableOid: consumer.table_oid,
-    sourceTableFilters: consumer.source_table_filters || [],
-    sourceTableActions: consumer.source_table_actions || [],
+    source: consumer.source,
     name: consumer.name || "",
     ackWaitMs: Number(consumer.ack_wait_ms) || 30000,
     maxAckPending: Number(consumer.max_ack_pending) || 10000,
@@ -186,27 +178,10 @@
     }
 
     if (selectedDatabase) {
-      selectedSchema = form.schema;
-      selectedTable = selectedDatabase.tables.find(
-        (table) => table.oid === form.tableOid,
-      );
+      form.name = `${selectedDatabase.name}-sink`;
     }
 
-    if (selectedTable) {
-      // Force message kind to "record" for event tables
-      if (selectedTable.isEventTable) {
-        form.messageKind = "record";
-      }
-    }
-
-    if (selectedSchema) {
-      tablesInSchema = selectedDatabase.tables.filter(
-        (table) => table.schema === selectedSchema,
-      );
-    }
-
-    isCreateConsumerDisabled =
-      !form.postgresDatabaseId || (!form.tableOid && !form.schema);
+    isCreateConsumerDisabled = !form.postgresDatabaseId;
   }
 
   const isEditMode = !!consumer.id;
@@ -218,41 +193,6 @@
         isSubmitting = false;
       }
     });
-  }
-
-  function handleTableSelect(event: {
-    databaseId: string;
-    tableOid: number;
-    schema: string;
-  }) {
-    if (form.tableOid !== event.tableOid) {
-      form.groupColumnAttnums = [];
-      form.messageKind = "event";
-    }
-
-    form.postgresDatabaseId = event.databaseId;
-    form.tableOid = event.tableOid;
-    form.schema = event.schema;
-
-    // Set the form name based on the selected table
-    const selectedDatabase = databases.find(
-      (db) => db.id === form.postgresDatabaseId,
-    );
-    if (selectedDatabase) {
-      const selectedSchema = event.schema;
-      const selectedTable = selectedDatabase.tables.find(
-        (table) => table.oid === form.tableOid,
-      );
-      const prefix = selectedSchema ? selectedSchema : selectedTable?.name;
-      if (prefix) {
-        const newName = `${prefix}-sink`;
-        form.name = newName;
-      }
-    }
-  }
-
-  function handleFilterChange(newFilters) {
-    form.sourceTableFilters = newFilters;
   }
 
   function handleClose() {
@@ -362,103 +302,69 @@
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
-          {#if isEditMode}
-            <!-- Edit consumer -->
-            <div class="flex flex-col gap-4">
-              <div>
-                <Label>Database</Label>
-                <p class="text-sm text-muted-foreground mt-1">
-                  {selectedDatabase?.name || "Selected database"}
-                </p>
-              </div>
+          <SchemaTableSelector
+            {isEditMode}
+            {databases}
+            bind:source={form.source}
+            bind:selectedDatabaseId={form.postgresDatabaseId}
+            {pushEvent}
+            errors={errors.consumer?.source || {}}
+          />
 
-              <div>
-                <Label>Source</Label>
-                {#if selectedSchema}
-                  <p class="text-sm text-muted-foreground mt-1">
-                    All tables in the <b>{selectedSchema}</b> schema.
-                  </p>
-                {:else if selectedTable}
-                  <p class="text-sm text-muted-foreground mt-1">
-                    The <b>{selectedTable.name}</b> table.
-                  </p>
-                {/if}
-              </div>
+          {#if errors.consumer.postgres_database_id}
+            <p class="text-destructive text-sm">
+              {errors.consumer.postgres_database_id}
+            </p>
+          {/if}
 
-              <div>
-                <Label>Message type</Label>
-                <p class="text-sm text-muted-foreground mt-1">
-                  {form.messageKind === "record" ? "Records" : "Changes"}
-                </p>
-              </div>
-            </div>
-          {:else}
-            <!-- New consumer -->
-            <TableOrSchemaSelector
-              {databases}
-              onSelect={handleTableSelect}
-              {pushEvent}
-              selectedDatabaseId={form.postgresDatabaseId}
-              selectedTableOid={form.tableOid}
-              selectedSchema={form.schema}
-            />
-
-            {#if errors.consumer.postgres_database_id}
-              <p class="text-destructive text-sm">
-                {errors.consumer.postgres_database_id}
-              </p>
-            {/if}
-
-            {#if errors.consumer.table_oid}
-              <p class="text-destructive text-sm">
-                {errors.consumer.table_oid}
-              </p>
-            {/if}
-            {#if selectedTable || selectedSchema}
-              <div class="space-y-2">
-                <Label for="message_kind">Message type</Label>
-                <p class="text-sm text-muted-foreground mt-1 mb-2">
-                  Select the kind of messages you want to process.
-                  <button
-                    type="button"
-                    class="text-muted-foreground underline decoration-dotted"
-                    on:click={() => (showMessageTypeExampleModal = true)}
-                  >
-                    See examples
-                  </button>
-                </p>
-                <Select
-                  selected={{
-                    value: form.messageKind,
-                    label:
-                      form.messageKind === "record" ? "Records" : "Changes",
-                  }}
-                  onSelectedChange={(event) => {
-                    form.messageKind = event.value;
-                  }}
-                  disabled={selectedTable?.isEventTable || isEditMode}
+          {#if errors.consumer.table_oid}
+            <p class="text-destructive text-sm">
+              {errors.consumer.table_oid}
+            </p>
+          {/if}
+          {#if selectedTable || selectedSchema}
+            <div class="space-y-2">
+              <Label for="message_kind">Message type</Label>
+              <p class="text-sm text-muted-foreground mt-1 mb-2">
+                Select the kind of messages you want to process.
+                <button
+                  type="button"
+                  class="text-muted-foreground underline decoration-dotted"
+                  on:click={() => (showMessageTypeExampleModal = true)}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a message type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="event">Changes</SelectItem>
-                    <SelectItem value="record">Records</SelectItem>
-                  </SelectContent>
-                </Select>
-                {#if selectedTable?.isEventTable}
-                  <p class="text-muted-foreground text-xs">
-                    Sequin automatically sets the message type to "Records" for
-                    event tables.
-                  </p>
-                {/if}
-                {#if errors.consumer.message_kind}
-                  <p class="text-destructive text-sm">
-                    {errors.consumer.message_kind}
-                  </p>
-                {/if}
-              </div>
-            {/if}
+                  See examples
+                </button>
+              </p>
+              <Select
+                selected={{
+                  value: form.messageKind,
+                  label: form.messageKind === "record" ? "Records" : "Changes",
+                }}
+                onSelectedChange={(event) => {
+                  form.messageKind = event.value;
+                }}
+                disabled={selectedTable?.isEventTable || isEditMode}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a message type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="event">Changes</SelectItem>
+                  <SelectItem value="record">Records</SelectItem>
+                </SelectContent>
+              </Select>
+              {#if selectedTable?.isEventTable}
+                <p class="text-muted-foreground text-xs">
+                  Sequin automatically sets the message type to "Records" for
+                  event tables.
+                </p>
+              {/if}
+              {#if errors.consumer.message_kind}
+                <p class="text-destructive text-sm">
+                  {errors.consumer.message_kind}
+                </p>
+              {/if}
+            </div>
           {/if}
           {#if errors.consumer.postgres_database_id || errors.consumer.table_oid}
             <p class="text-destructive text-sm">
@@ -481,7 +387,6 @@
           {selectedTable}
           bind:form
           {errors}
-          onFilterChange={handleFilterChange}
           {refreshFunctions}
           {functionRefreshState}
           showTitle={false}

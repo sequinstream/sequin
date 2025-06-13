@@ -1136,9 +1136,9 @@ defmodule Sequin.Postgres do
             )
         ) AS identity_counts
         FROM (
-            SELECT replica_identity, count(*)
+            SELECT relreplident as replica_identity, count(*)
             FROM partitions
-            GROUP BY replica_identity
+            GROUP BY relreplident
         ) counts
     ) partition_identities ON c.relkind = 'p'
     WHERE p.pubname = $1

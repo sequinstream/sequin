@@ -352,44 +352,6 @@
               {errors.consumer.table_oid}
             </p>
           {/if}
-          {#if selectedDatabase}
-            <div class="space-y-2">
-              <Label for="message_kind">Message type</Label>
-              <p class="text-sm text-muted-foreground mt-1 mb-2">
-                Select the kind of messages you want to process.
-                <button
-                  type="button"
-                  class="text-muted-foreground underline decoration-dotted"
-                  on:click={() => (showMessageTypeExampleModal = true)}
-                >
-                  See examples
-                </button>
-              </p>
-              <Select
-                selected={{
-                  value: form.messageKind,
-                  label: form.messageKind === "record" ? "Records" : "Changes",
-                }}
-                onSelectedChange={(event) => {
-                  form.messageKind = event.value;
-                }}
-                disabled={isEditMode}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a message type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="event">Changes</SelectItem>
-                  <SelectItem value="record">Records</SelectItem>
-                </SelectContent>
-              </Select>
-              {#if errors.consumer.message_kind}
-                <p class="text-destructive text-sm">
-                  {errors.consumer.message_kind}
-                </p>
-              {/if}
-            </div>
-          {/if}
           {#if errors.consumer.postgres_database_id || errors.consumer.table_oid}
             <p class="text-destructive text-sm">
               {errors.consumer.postgres_database_id ||

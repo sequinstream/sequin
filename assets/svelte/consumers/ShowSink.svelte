@@ -48,6 +48,7 @@
   export let live;
   export let parent;
   export let consumer: Consumer;
+  export let tables: Table[];
   export let transform: {
     id: string;
     name: string;
@@ -1158,7 +1159,7 @@
         <RedisStringSinkCard {consumer} />
       {/if}
 
-      <ShowSource {consumer} />
+      <ShowSource {consumer} {tables} />
     </div>
   </div>
 </div>

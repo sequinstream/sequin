@@ -15,7 +15,6 @@ defmodule SequinWeb.FunctionsLive.Edit do
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.TestMessages
-  alias Sequin.Repo
   alias Sequin.Runtime.SinkPipeline
   alias SequinWeb.FunctionLive.AutoComplete
 
@@ -524,11 +523,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   defp assign_databases(socket) do
     account_id = current_account_id(socket)
-
-    databases =
-      account_id
-      |> Databases.list_dbs_for_account()
-      |> Repo.preload(:sequences)
+    databases = Databases.list_dbs_for_account(account_id)
 
     assign(socket, :databases, databases)
   end

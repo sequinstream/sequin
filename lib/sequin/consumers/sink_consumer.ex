@@ -277,10 +277,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: c.id in ^ids)
   end
 
-  def where_sequence_id(query \\ base_query(), sequence_id) do
-    from([consumer: c] in query, where: c.sequence_id == ^sequence_id)
-  end
-
   def where_active_backfill(query \\ base_query()) do
     from([consumer: c] in query,
       inner_join: b in Backfill,

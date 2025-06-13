@@ -192,6 +192,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
               props={
                 %{
                   consumer: encode_consumer(@consumer),
+                  tables: encode_tables(@consumer.postgres_database.tables),
                   parent: "consumer-show",
                   metrics: @metrics,
                   metrics_loading: @metrics_loading,
@@ -932,7 +933,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       name: database.name,
       pg_major_version: database.pg_major_version,
       publication_name: slot.publication_name,
-      tables: Enum.map(database.tables, &encode_table/1)
+      tables: encode_tables(database.tables)
     }
   end
 
@@ -962,13 +963,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp encode_tables_included_in_source(nil, %PostgresDatabase{} = database) do
-    Enum.map(database.tables, &encode_table/1)
+    encode_tables(database.tables)
   end
 
   defp encode_tables_included_in_source(%Source{} = source, %PostgresDatabase{} = database) do
     database.tables
     |> Enum.filter(&Source.table_in_source?(source, &1))
-    |> Enum.map(&encode_table/1)
+    |> encode_tables()
   end
 
   defp encode_function(nil), do: nil
@@ -988,6 +989,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_function_inner(%RoutingFunction{sink_type: sink_type, code: code}) do
     %{sink_type: sink_type, code: code}
+  end
+
+  defp encode_tables(tables) do
+    Enum.map(tables, &encode_table/1)
   end
 
   defp encode_table(%PostgresDatabaseTable{} = table) do
@@ -1315,7 +1320,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         _ ->
           false
       end)
-      |> Enum.map(fn %{"table_name" => table_name} -> table_name end)
+      |> Enum.map(fn %{"table_schema" => table_schema, "table_name" => table_name} ->
+        "#{table_schema}.#{table_name}"
+      end)
       |> Enum.sort()
 
     Map.merge(
@@ -1353,7 +1360,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       |> Enum.filter(fn %{"relation_kind" => relation_kind, "replica_identity" => replica_identity} ->
         relation_kind == "r" and replica_identity != "f"
       end)
-      |> Enum.map(fn %{"table_name" => table_name} -> table_name end)
+      |> Enum.map(fn %{"table_schema" => table_schema, "table_name" => table_name} ->
+        "#{table_schema}.#{table_name}"
+      end)
       |> Enum.sort()
 
     Map.merge(

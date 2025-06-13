@@ -4,16 +4,15 @@ sidebarTitle: "Test with Sequin"
 description: "Learn how to test Sequin locally and in CI to verify configuration, transforms, filters, and end-to-end connectivity"
 ---
 
-
 ## What to test
 
-It is valuable to test Sequin configuration that developers are responsible for writing and maintaining, especially source configuration, [filters](/reference/filters), [transforms](/reference/transforms), and [routing](/reference/routing).
+It is valuable to test the Sequin configurations that developers are responsible for writing and maintaining, especially source configuration, [filters](/reference/filters), [transforms](/reference/transforms), and [routing](/reference/routing).
 
 It is also valuable to test end-to-end connectivity between your source databases and sink destinations, often in a cloud CI environment.
 
 ## Prerequisites
 
-Before testing, you should familiarize yourself with Sequin and develop a set of sinks that you want to test. You'll also need a test or CI environment for your application infrastructure.
+Before testing, you should familiarize yourself with Sequin and implement the sinks that you want to test. You'll also need a test or CI environment for your application infrastructure.
 
 - A `sequin.yaml` file for your sinks that you want to test. This is used to programmatically configure Sequin in test environments
 - Tooling to run Sequin in your test environment (e.g. Docker, Helm, etc.)
@@ -21,10 +20,10 @@ Before testing, you should familiarize yourself with Sequin and develop a set of
 
 ## Local testing
 
-The primary benefit of testing Sequin locally is to proactively catch when schema migrations will break your sink configuration. This is especially useful when you have many tables in a sink or have relatively complex filters, transforms, and routing. This is particularly valuable when your using Sequin as apart of a microservice architecture or for replication.
+The primary benefit of testing Sequin locally is to proactively catch when schema migrations will break your sink configuration. This is especially useful when you have many tables in a sink or have relatively complex filters, transforms, and routing.
 
 <Tip>
-  If your sink configuration only includes a single table and  transforms that simply remove metadata (e.g. an audit use case), it's often sufficient to stub out the payload you expect from Sequin.
+  If your sink configuration only includes a single table and transforms that simply removes metadata, it's often sufficient to stub out the payload you expect from Sequin.
 </Tip>
 
 <Steps titleSize="h3" >
@@ -79,7 +78,7 @@ The primary benefit of testing Sequin locally is to proactively catch when schem
 
     <Note>
       Be sure that transactions are **fully committed** to your test database if you expect them to be replicated through Sequin.
-      
+
       Some ORMs use transaction isolation to allow concurrent testing which must be disabled to allow messages to replicate to Sequin. This, however, requires that tests are run sequentially instead of in parallel.
     </Note>
   </Step>

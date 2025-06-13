@@ -47,7 +47,7 @@ The primary benefit of testing Sequin locally is to proactively catch when schem
     - The sinks you need to test with appropriate [filters](/reference/filters), [transforms](/reference/transforms), and [routing](/reference/routing).
 
     <Tip>
-      Use [YAML anchors](/reference/yaml-anchors) to easily reuse elements of your sink configurations.
+      Use [YAML anchors](/reference/sequin-yaml#yaml-anchors) to easily reuse elements of your sink configurations.
     </Tip>
     <Tip>
       Use the [`sequin config interpolate`](/reference/sequin-yaml#previewing-interpolated-yaml) command to preview your `sequin.yml` file after environment variables are interpolated. This will help you catch any issues with your environment variables.
@@ -107,7 +107,7 @@ In CI, you should test that Sequin can properly integrate with your infrastructu
     - Ensure your sinks use similar filters, transforms, and routing as you'll use in production to properly test your sink configuration.
 
     <Tip>
-      Use [YAML anchors](/reference/yaml-anchors) to easily reuse elements of your sink configurations.
+      Use [YAML anchors](/reference/sequin-yaml#yaml-anchors) to easily reuse elements of your sink configurations.
     </Tip>
     <Tip>
       Use the [`sequin config interpolate`](/reference/sequin-yaml#previewing-interpolated-yaml) command to preview your `sequin.yml` file after environment variables are interpolated. This will help you catch any issues with your environment variables.

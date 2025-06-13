@@ -11,6 +11,7 @@ defmodule Sequin.TransformsTest do
   alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.ConsumerLifecycleEventWorker, as: CLEW
   alias Sequin.Transforms
+  alias Sequin.Transforms.SensitiveValue
 
   describe "to_external/1" do
     test "returns a map of the account" do
@@ -23,7 +24,11 @@ defmodule Sequin.TransformsTest do
       user = AccountsFactory.user()
       assert %{email: email, password: password} = Transforms.to_external(user)
       assert email == user.email
-      assert password == Sequin.String.obfuscate(user.password)
+
+      assert password == %SensitiveValue{
+               value: user.password,
+               show_value: false
+             }
     end
 
     test "returns a map of the postgres database" do
@@ -63,7 +68,7 @@ defmodule Sequin.TransformsTest do
       assert id == database.id
       assert name == database.name
       assert username == database.username
-      assert password == Sequin.String.obfuscate(database.password)
+      assert password == %Sequin.Transforms.SensitiveValue{value: database.password, show_value: false}
       assert hostname == database.hostname
       assert database_name == database.database
       assert port == database.port
@@ -178,7 +183,12 @@ defmodule Sequin.TransformsTest do
                local: true,
                path: "/webhook",
                headers: %{"Content-Type" => "application/json"},
-               encrypted_headers: %{"Authorization" => "s****t"}
+               encrypted_headers: %{
+                 "Authorization" => %Sequin.Transforms.SensitiveValue{
+                   value: "secret",
+                   show_value: false
+                 }
+               }
              } = json
     end
 
@@ -200,7 +210,12 @@ defmodule Sequin.TransformsTest do
                name: "standard_endpoint",
                url: "https://api.example.com/webhook",
                headers: %{"Content-Type" => "application/json"},
-               encrypted_headers: %{"Authorization" => "s****t"}
+               encrypted_headers: %{
+                 "Authorization" => %Sequin.Transforms.SensitiveValue{
+                   value: "secret",
+                   show_value: false
+                 }
+               }
              } = json
     end
 
@@ -278,20 +293,32 @@ defmodule Sequin.TransformsTest do
                  project_id: project_id,
                  topic_id: topic_id,
                  credentials: %{
-                   type: "service_account",
-                   private_key: "---**********************************************************\n",
-                   api_key: nil,
-                   client_id: "1*******9",
-                   client_secret: nil,
-                   project_id: "my-project",
+                   api_key: %SensitiveValue{value: nil, show_value: false},
                    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
                    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-                   client_email: "my-*************************************************m",
+                   client_email: %SensitiveValue{
+                     value: "my-service-account@my-project.iam.gserviceaccount.com",
+                     show_value: false
+                   },
+                   client_id: %SensitiveValue{
+                     value: "123456789",
+                     show_value: false
+                   },
+                   client_secret: %SensitiveValue{value: nil, show_value: false},
                    client_x509_cert_url:
                      "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com",
-                   private_key_id: "k****3",
+                   private_key: %SensitiveValue{
+                     value: "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n",
+                     show_value: false
+                   },
+                   private_key_id: %SensitiveValue{
+                     value: "key123",
+                     show_value: false
+                   },
+                   project_id: "my-project",
                    token_uri: "https://oauth2.googleapis.com/token",
-                   universe_domain: nil
+                   type: "service_account",
+                   universe_domain: %SensitiveValue{value: nil, show_value: false}
                  }
                },
                group_column_names: group_column_names,
@@ -368,7 +395,10 @@ defmodule Sequin.TransformsTest do
                  endpoint_url: endpoint_url,
                  index_name: index_name,
                  auth_type: auth_type,
-                 auth_value: "sen*************y",
+                 auth_value: %SensitiveValue{
+                   value: "sensitive-api-key",
+                   show_value: false
+                 },
                  batch_size: batch_size
                },
                group_column_names: group_column_names,

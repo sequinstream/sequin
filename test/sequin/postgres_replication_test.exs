@@ -1183,7 +1183,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Insert another character to trigger the disconnect
       character2 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
-      assert_receive {SlotProcessorServer, :disconnected}, 1000
+      assert_receive {SlotProcessorServer, :inactivate_socket}, 1000
 
       # Should reconnect, then process ONLY the second message
       assert_receive {:changes, [change]}, :timer.seconds(1)

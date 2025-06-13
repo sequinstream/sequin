@@ -9,7 +9,6 @@
     BookOpen,
     Table2,
   } from "lucide-svelte";
-  import { getColorFromName } from "../utils";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import type { Consumer, Source } from "./types";
 

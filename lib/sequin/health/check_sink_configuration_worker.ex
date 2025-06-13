@@ -76,22 +76,6 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     |> Oban.insert()
   end
 
-  defp replica_identity_full?(%{"relkind" => "r", "relreplident" => "f"}), do: true
-
-  defp replica_identity_full?(%{"relkind" => "p"} = table_with_replica_identity) do
-    case Map.get(table_with_replica_identity, "partition_replica_identities") do
-      # if all partitions have replica identity full, then the table has replica identity full
-      [%{"relreplident" => "f"}] -> true
-      # we could be more specific about these clauses, some scenarios:
-      # - some partitions have replica identity full, some don't
-      # - no partitions have replica identity full
-      # - this key doesn't exist, which is a sequin bug
-      _ -> false
-    end
-  end
-
-  defp replica_identity_full?(_), do: false
-
   defp pubviaroot?(%PostgresDatabase{} = postgres_database, publication_name) do
     case Databases.get_publication(postgres_database, publication_name) do
       {:ok, %{"pubviaroot" => pubviaroot}} -> {:ok, pubviaroot}

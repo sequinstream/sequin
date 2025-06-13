@@ -5,8 +5,8 @@ export type Source = {
   publication_name: string;
   include_schemas: string[] | null;
   exclude_schemas: string[] | null;
-  include_table_names: string[] | null;
-  exclude_table_names: string[] | null;
+  include_table_oids: number[] | null;
+  exclude_table_oids: number[] | null;
 };
 
 export type Backfill = {

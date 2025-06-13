@@ -651,8 +651,6 @@ defmodule Sequin.Health do
     alert_replica_identity_not_full_dismissed = find_event(events, :alert_replica_identity_not_full_dismissed)
     alert_toast_columns_detected_dismissed = find_event(events, :alert_toast_columns_detected_dismissed)
 
-    dbg(config_checked_event)
-
     cond do
       is_nil(config_checked_event) and Time.before_min_ago?(consumer.inserted_at, 5) ->
         error = expected_event_error(consumer.id, :sink_config_checked)

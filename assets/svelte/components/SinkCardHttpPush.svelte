@@ -117,5 +117,17 @@
         </div>
       {/if}
     </div>
+
+    {#if consumer.routing}
+      <div class="mt-4">
+        <span class="text-sm text-gray-500">Router</span>
+        <div class="mt-2">
+          <pre
+            class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
+              >{consumer.routing.function.code}</code
+            ></pre>
+        </div>
+      </div>
+    {/if}
   </CardContent>
 </Card>

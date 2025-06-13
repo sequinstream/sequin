@@ -4,6 +4,28 @@ Sequin provides fast, real-time Postgres change data capture into streams and qu
 
 This log is updated every Friday to track our feature releases and updates week by week. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
+## June 27, 2025
+
+### Enhanced Routing Sink Types
+
+Routing is a key feature of Sequin. It allows you to route messages to different destinations based on the contents of the message.
+
+We've added mechanisms to increase the power of existing routing functions and pave the way for more routing functions in the future.
+
+<details>
+
+<summary>Fixes and improvements</summary>
+
+### Improved
+
+Improved capabilities via Routing functions:
+
+* HTTP Push: Now support providing custom **dynamic headers** and **HTTP method**.
+* Redis String: You can now customize the Redis action, and key expire time.
+* NATS: Allow customizing the **full subject** and headers
+
+</details>
+
 ## June 20, 2025
 
 ### S2 Sink

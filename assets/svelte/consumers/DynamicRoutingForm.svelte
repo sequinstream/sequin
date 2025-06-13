@@ -1,0 +1,99 @@
+<script lang="ts">
+  import { Switch } from "$lib/components/ui/switch";
+  import { Label } from "$lib/components/ui/label";
+  import FunctionPicker from "$lib/consumers/FunctionPicker.svelte";
+  import { routedSinkDocs } from "$lib/consumers/dynamicRoutingDocs";
+  import type { RoutedSinkType } from "$lib/consumers/types";
+
+  export let form: any;
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
+  export let routedSinkType: RoutedSinkType;
+  export let errors: any = {};
+  export let selectedDynamic = form.routingMode === "dynamic";
+  let routingConfig = routedSinkDocs[routedSinkType];
+  $: {
+    if (selectedDynamic) {
+      form.routingMode = "dynamic";
+    } else {
+      form.routingMode = "static";
+      form.routingId = "none";
+    }
+  }
+</script>
+
+<div class="space-y-4">
+  <div class="flex items-center space-x-2">
+    <Switch id="dynamic-routing" bind:checked={selectedDynamic} />
+    <Label for="dynamic-routing">Dynamic routing</Label>
+  </div>
+
+  {#if selectedDynamic}
+    <div class="p-4 bg-muted/50 rounded-md">
+      <FunctionPicker
+        {functions}
+        selectedFunctionId={form.routingId || "none"}
+        title="Router"
+        onFunctionChange={(functionId) =>
+          (form.routingId = functionId === "none" ? null : functionId)}
+        {refreshFunctions}
+        allowedFunctionTypes={["routing"]}
+        typeLabelKey="sink_type"
+        bind:refreshState={functionRefreshState}
+        {routedSinkType}
+      >
+        <p class="text-sm text-muted-foreground">
+          Select a routing transform to dynamically set routing parameters:
+        </p>
+      </FunctionPicker>
+
+      {#if errors.routing_id}
+        <p class="text-destructive text-sm">{errors.routing_id}</p>
+      {/if}
+
+      <div class="p-4 bg-muted/50 rounded-md mt-4">
+        <p class="text-sm text-muted-foreground">
+          Using dynamic routing allows you to customize the routing
+          configuration for more flexibility.
+        </p>
+
+        <p class="text-sm text-muted-foreground mt-3">
+          You can dynamically set these fields:
+        </p>
+        <ul class="list-disc pl-5 mt-2 space-y-1 text-sm text-muted-foreground">
+          {#each Object.entries(routingConfig.fields) as [param, field]}
+            <li>
+              <span class="font-mono text-xs bg-stone-100 px-1 rounded"
+                >{param}</span
+              >
+              - {field.description}
+            </li>
+          {/each}
+        </ul>
+      </div>
+    </div>
+  {:else}
+    <div class="p-4 bg-muted/50 rounded-md">
+      <p class="text-sm text-muted-foreground">
+        Using the default routing configuration:
+      </p>
+      <ul class="list-disc pl-5 mt-2 space-y-1 text-sm text-muted-foreground">
+        {#each Object.entries(routingConfig.fields) as [param, field]}
+          <li>
+            <span class="font-mono text-xs bg-stone-100 px-1 rounded"
+              >{param}</span
+            >
+            -
+            <span class="font-mono text-xs bg-stone-100 px-1 rounded"
+              >{field.default}</span
+            >
+          </li>
+        {/each}
+      </ul>
+      <p class="text-sm text-muted-foreground mt-2">
+        You can use dynamic routing to customize your routing behavior.
+      </p>
+    </div>
+  {/if}
+</div>

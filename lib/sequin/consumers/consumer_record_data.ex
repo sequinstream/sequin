@@ -48,7 +48,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
 
   def metadata_changeset(metadata, attrs) do
     metadata
-    |> cast(attrs, [:table_schema, :table_name, :commit_timestamp, :commit_lsn, :database_name])
+    |> cast(attrs, [:table_schema, :table_name, :commit_timestamp, :commit_lsn, :database_name, :idempotency_key])
     |> validate_required([:table_schema, :table_name, :commit_timestamp, :commit_lsn])
     |> cast_embed(:consumer, required: true, with: &consumer_changeset/2)
   end

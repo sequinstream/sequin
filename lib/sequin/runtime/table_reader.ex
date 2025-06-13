@@ -459,7 +459,8 @@ defmodule Sequin.Runtime.TableReader do
           hostname: db.hostname
         },
         commit_timestamp: DateTime.utc_now(),
-        idempotency_key: Base.encode64("#{backfill.id}:#{record_pks}")
+        idempotency_key: Base.encode64("#{backfill.id}:#{record_pks}"),
+        record_pks: record_pks
       }
     }
   end

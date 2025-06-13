@@ -1,12 +1,11 @@
 defmodule Sequin.Sinks.Nats do
   @moduledoc false
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Runtime.Routing.RoutedMessage
 
-  @callback send_messages(SinkConsumer.t(), [ConsumerRecord.t() | ConsumerEvent.t()]) ::
+  @callback send_messages(SinkConsumer.t(), [RoutedMessage.t()]) ::
               :ok | {:error, Error.t()}
   @callback test_connection(NatsSink.t()) :: :ok | {:error, Error.t()}
 

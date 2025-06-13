@@ -34,6 +34,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
       field :database_name, :string
       field :transaction_annotations, :map
       field :idempotency_key, :string
+      field :record_pks, {:array, :string}
 
       embeds_one :consumer, Sink, primary_key: false, on_replace: :update do
         @derive Jason.Encoder
@@ -73,9 +74,19 @@ defmodule Sequin.Consumers.ConsumerEventData do
       :commit_lsn,
       :commit_idx,
       :database_name,
-      :transaction_annotations
+      :transaction_annotations,
+      :idempotency_key,
+      :record_pks
     ])
-    |> validate_required([:table_schema, :table_name, :commit_timestamp, :commit_lsn, :commit_idx])
+    |> validate_required([
+      :table_schema,
+      :table_name,
+      :commit_timestamp,
+      :commit_lsn,
+      :commit_idx,
+      :database_name,
+      :idempotency_key
+    ])
     |> cast_embed(:consumer, required: true, with: &consumer_changeset/2)
     |> cast_embed(:database, required: true, with: &database_changeset/2)
   end

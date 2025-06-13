@@ -9,6 +9,7 @@ defmodule Sequin.Sinks.Redis.Client do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.NetworkUtils
+  alias Sequin.Runtime.Routing.RoutedMessage
   alias Sequin.Sinks.Redis
   alias Sequin.Sinks.Redis.ConnectionCache
 
@@ -34,14 +35,26 @@ defmodule Sequin.Sinks.Redis.Client do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       commands =
         Enum.map(messages, fn
-          %{action: :del, key: key} ->
+          %RoutedMessage{routing_info: %{action: "del", key: key}} ->
             ["DEL", key]
 
-          %{key: key, value: value, expire_ms: nil} ->
-            ["SET", key, value]
+          %RoutedMessage{
+            routing_info: %{action: "set", key: key, expire_ms: expire_ms},
+            transformed_message: transformed_message
+          } ->
+            payload =
+              case transformed_message do
+                message when is_binary(message) or is_number(message) -> message
+                message -> Jason.encode!(message)
+              end
 
-          %{key: key, value: value, expire_ms: expire_ms} ->
-            ["SET", key, value, "PX", expire_ms]
+            case expire_ms do
+              nil ->
+                ["SET", key, payload]
+
+              expire_ms ->
+                ["SET", key, payload, "PX", expire_ms]
+            end
         end)
 
       qp(connection, commands)

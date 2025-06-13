@@ -395,7 +395,10 @@
       </Dialog.Title>
     </Dialog.Header>
     <div class="grid gap-4 py-4">
-      <BackfillForm {consumer} form={backfillForm} />
+      <BackfillForm
+        tables_included_in_source={consumer.tables_included_in_source}
+        form={backfillForm}
+      />
     </div>
     <Dialog.Footer>
       <Button

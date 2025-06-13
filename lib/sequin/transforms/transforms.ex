@@ -28,15 +28,12 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Consumers.WebhookSiteGenerator
-  alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
-  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Error.ValidationError
   alias Sequin.Health
-  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
   alias Sequin.Sinks.Gcp
@@ -499,25 +496,6 @@ defmodule Sequin.Transforms do
     Map.new(headers, fn {key, value} -> {key, value} end)
   end
 
-  defp format_filter(filter, table) do
-    column = Sequin.Enum.find!(table.columns, &(&1.attnum == filter.column_attnum))
-
-    base = %{
-      column_name: column.name,
-      operator: format_operator(filter.operator)
-    }
-
-    if filter.operator == :not_null do
-      base
-    else
-      Map.put(base, :comparison_value, filter.value.value)
-    end
-  end
-
-  defp format_operator(:is_null), do: "is null"
-  defp format_operator(:not_null), do: "is not null"
-  defp format_operator(op), do: to_string(op)
-
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: nil}), do: %{}
 
   defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}) do
@@ -536,7 +514,6 @@ defmodule Sequin.Transforms do
         |> Sequin.Map.atomize_keys()
 
       {:ok, struct(PostgresDatabase, sparams)}
-      # {:ok, struct(PostgresDatabase, Map.put(db_params, "account_id", account_id))}
     end
   end
 
@@ -1157,22 +1134,6 @@ defmodule Sequin.Transforms do
     end
   end
 
-  defp column_filters(nil, _table), do: {:ok, []}
-
-  defp column_filters(filters, table) when is_list(filters) do
-    filters
-    |> Enum.reduce_while({:ok, []}, fn filter, {:ok, acc} ->
-      case parse_column_filter(filter, table) do
-        {:ok, column_filter} -> {:cont, {:ok, [column_filter | acc]}}
-        {:error, error} -> {:halt, {:error, error}}
-      end
-    end)
-    |> case do
-      {:ok, filters} -> {:ok, Enum.reverse(filters)}
-      {:error, error} -> {:error, error}
-    end
-  end
-
   def parse_column_filter(%{"column_name" => column_name} = filter, table) do
     case Enum.find(table.columns, &(&1.name == column_name)) do
       nil ->
@@ -1242,42 +1203,6 @@ defmodule Sequin.Transforms do
       "uuid" -> :string
       atom when is_atom(atom) -> determine_value_type(nil, to_string(atom))
       type -> raise "Unsupported column type: #{type}"
-    end
-  end
-
-  defp group_column_attnums(nil, %PostgresDatabaseTable{} = table) do
-    case PostgresDatabaseTable.default_group_column_attnums(table) do
-      [] ->
-        {:error,
-         Error.validation(
-           summary:
-             "[group_column_names] No defaults found for table '#{table.schema}.#{table.name}'. If this table does not have primary keys, you must specify the group_column_names."
-         )}
-
-      attnums ->
-        {:ok, attnums}
-    end
-  end
-
-  defp group_column_attnums(column_names, table) when is_list(column_names) do
-    column_names
-    |> Enum.reduce_while({:ok, []}, fn column_name, {:ok, attnums} ->
-      case Enum.find(table.columns, &(&1.name == column_name)) do
-        nil ->
-          {:halt,
-           {:error,
-            Error.validation(
-              summary:
-                "[group_column_names] Column '#{column_name}' does not exist for table '#{table.schema}.#{table.name}'"
-            )}}
-
-        column ->
-          {:cont, {:ok, [column.attnum | attnums]}}
-      end
-    end)
-    |> case do
-      {:ok, attnums} -> {:ok, attnums |> Enum.sort() |> Enum.uniq()}
-      {:error, error} -> {:error, error}
     end
   end
 

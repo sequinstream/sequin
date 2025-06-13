@@ -2,11 +2,9 @@ defmodule SequinWeb.BackfillController do
   use SequinWeb, :controller
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.SchemaFilter
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Source
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Repo
   alias Sequin.Runtime.KeysetCursor

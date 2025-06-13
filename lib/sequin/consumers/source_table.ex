@@ -4,8 +4,8 @@ defmodule Sequin.Consumers.SourceTable do
 
   import Ecto.Changeset
 
+  @primary_key {:table_oid, :integer, []}
   typed_embedded_schema do
-    field :table_oid, :integer
     field :schema_name, :string, virtual: true
     field :table_name, :string, virtual: true
     field :group_column_attnums, {:array, :integer}

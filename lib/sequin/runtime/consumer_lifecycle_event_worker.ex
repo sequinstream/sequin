@@ -9,7 +9,6 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.Function
-  alias Sequin.Databases
   alias Sequin.Functions.MiniElixir
   alias Sequin.Health
   alias Sequin.Health.CheckHttpEndpointHealthWorker
@@ -59,9 +58,6 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
     case event do
       "create" ->
         with {:ok, consumer} <- Consumers.get_consumer(id) do
-          consumer = Repo.preload(consumer, :postgres_database)
-          # Lazy, just do this on every sink create. Eventually, we'll retire Sequence
-          Databases.update_sequences_from_db(consumer.postgres_database)
           CheckSinkConfigurationWorker.enqueue(consumer.id)
           RuntimeSupervisor.start_for_sink_consumer(consumer)
           :ok = RuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)

@@ -27,7 +27,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Error
-  alias Sequin.Error.NotFoundError
   alias Sequin.Name
   alias Sequin.Postgres
   alias Sequin.Posthog
@@ -600,18 +599,8 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   defp update_params_for_sink(_, params, _), do: params
 
-  defp decode_initial_backfill(%{"backfill" => %{"selectedTableOids" => tableOids}}) when tableOids != [] do
+  defp decode_initial_backfill(%{"backfill" => %{"selectedTableOids" => tableOids}}) do
     %{"selected_table_oids" => tableOids}
-  end
-
-  defp decode_initial_backfill(%{"backfill" => %{"startPosition" => "none"}}), do: nil
-
-  defp decode_initial_backfill(%{"backfill" => backfill}) do
-    %{
-      "start_position" => backfill["startPosition"],
-      "initial_min_sort_col" => backfill["initialSortColumnValue"],
-      "sort_column_attnum" => backfill["sortColumnAttnum"]
-    }
   end
 
   defp decode_source(source) do
@@ -809,7 +798,7 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   defp encode_consumer(nil), do: nil
 
-  defp encode_consumer(%_{} = consumer) do
+  defp encode_consumer(%SinkConsumer{} = consumer) do
     postgres_database_id =
       if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database.id
 
@@ -827,14 +816,15 @@ defmodule SequinWeb.Components.ConsumerForm do
       "message_kind" => consumer.message_kind,
       "postgres_database_id" => postgres_database_id,
       "sink" => encode_sink(consumer.sink),
-      "source" => consumer.source |> encode_source() |> dbg(),
+      "source" => encode_source(consumer.source),
       "routing_mode" => if(consumer.routing_id, do: "dynamic", else: "static"),
       "routing_id" => consumer.routing_id,
       "status" => consumer.status,
       "type" => consumer.type,
       "transform_id" => consumer.transform_id,
       "timestamp_format" => consumer.timestamp_format,
-      "filter_id" => consumer.filter_id
+      "filter_id" => consumer.filter_id,
+      "actions" => consumer.actions
     }
   end
 
@@ -1155,8 +1145,6 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp maybe_create_backfills(_socket, _consumer, _params, nil), do: :ok
-
   defp maybe_create_backfills(socket, consumer, params, %{"selected_table_oids" => table_oids}) do
     postgres_database_id = params["postgres_database_id"]
 
@@ -1174,37 +1162,6 @@ defmodule SequinWeb.Components.ConsumerForm do
     end)
 
     :ok
-  end
-
-  defp maybe_create_backfills(socket, consumer, params, backfill_params) do
-    table =
-      table(
-        socket.assigns.databases,
-        params["postgres_database_id"],
-        params["table_oid"],
-        backfill_params["sort_column_attnum"]
-      )
-
-    initial_min_cursor =
-      case backfill_params["start_position"] do
-        "beginning" ->
-          KeysetCursor.min_cursor(table)
-
-        "specific" ->
-          sort_col = backfill_params["initial_min_sort_col"]
-          if sort_col, do: KeysetCursor.min_cursor(table, sort_col)
-      end
-
-    backfill_attrs = %{
-      "account_id" => consumer.account_id,
-      "sink_consumer_id" => consumer.id,
-      "initial_min_cursor" => initial_min_cursor,
-      "sort_column_attnum" => backfill_params["sort_column_attnum"],
-      "state" => :active,
-      "table_oid" => table.oid
-    }
-
-    with {:ok, _} <- Consumers.create_backfill(backfill_attrs), do: :ok
   end
 
   defp reset_changeset(socket) do

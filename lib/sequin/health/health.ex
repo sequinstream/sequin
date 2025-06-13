@@ -667,6 +667,9 @@ defmodule Sequin.Health do
           config_checked_event
         ])
 
+      is_nil(config_checked_event.data["tables_with_replica_identities"]) ->
+        put_check_timestamps(%{base_check | status: :stale}, [config_checked_event])
+
       Postgres.any_tables_without_full_replica_identity?(config_checked_event.data["tables_with_replica_identities"]) and
           is_nil(alert_replica_identity_not_full_dismissed) ->
         put_check_timestamps(%{base_check | status: :notice, error_slug: :replica_identity_not_full}, [
@@ -687,7 +690,8 @@ defmodule Sequin.Health do
           config_checked_event
         ])
 
-      not is_nil(toast_columns_detected) and is_nil(alert_toast_columns_detected_dismissed) ->
+      not is_nil(toast_columns_detected) and is_nil(alert_toast_columns_detected_dismissed) and
+          Postgres.any_tables_without_full_replica_identity?(config_checked_event.data["tables_with_replica_identities"]) ->
         put_check_timestamps(%{base_check | status: :notice, error_slug: :toast_columns_detected}, [
           config_checked_event
         ])

@@ -755,10 +755,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       max_retry_count: consumer.max_retry_count,
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
-      database: encode_database(consumer.postgres_database),
+      database: encode_database(consumer.postgres_database, consumer.replication_slot),
+      tables_included_in_source: encode_tables_included_in_source(consumer.source, consumer.postgres_database),
       sink: encode_sink(consumer),
-      source: encode_source(consumer.source, consumer.replication_slot, consumer.postgres_database),
-      postgres_database: encode_postgres_database(consumer.postgres_database),
+      source: encode_source(consumer.source),
       health: encode_health(consumer),
       href: RouteHelpers.consumer_path(consumer),
       batch_size: consumer.batch_size,
@@ -927,11 +927,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     %{type: :sequin_stream}
   end
 
-  defp encode_database(%PostgresDatabase{} = database) do
+  defp encode_database(%PostgresDatabase{} = database, %PostgresReplicationSlot{} = slot) do
     %{
       id: database.id,
       name: database.name,
-      pg_major_version: database.pg_major_version
+      pg_major_version: database.pg_major_version,
+      publication_name: slot.publication_name,
+      tables: Enum.map(database.tables, &encode_table/1)
     }
   end
 
@@ -942,9 +944,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_source(nil, %PostgresReplicationSlot{} = slot, %PostgresDatabase{}) do
+  defp encode_source(nil) do
     %{
-      publication_name: slot.publication_name,
       include_schemas: nil,
       exclude_schemas: nil,
       include_table_oids: nil,
@@ -952,34 +953,23 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_source(%Source{} = source, %PostgresReplicationSlot{} = slot, %PostgresDatabase{} = database) do
-    include_table_names =
-      if source.include_table_oids do
-        source.include_table_oids
-        |> Enum.map(fn table_oid ->
-          Enum.find(database.tables, &(&1.oid == table_oid))
-        end)
-        |> Enum.filter(& &1)
-        |> Enum.map(& &1.name)
-      end
-
-    exclude_table_names =
-      if source.exclude_table_oids do
-        source.exclude_table_oids
-        |> Enum.map(fn table_oid ->
-          Enum.find(database.tables, &(&1.oid == table_oid))
-        end)
-        |> Enum.filter(& &1)
-        |> Enum.map(& &1.name)
-      end
-
+  defp encode_source(%Source{} = source) do
     %{
-      publication_name: slot.publication_name,
       include_schemas: source.include_schemas,
       exclude_schemas: source.exclude_schemas,
-      include_table_names: include_table_names,
-      exclude_table_names: exclude_table_names
+      include_table_oids: source.include_table_oids,
+      exclude_table_oids: source.exclude_table_oids
     }
+  end
+
+  defp encode_tables_included_in_source(nil, %PostgresDatabase{} = database) do
+    Enum.map(database.tables, &encode_table/1)
+  end
+
+  defp encode_tables_included_in_source(%Source{} = source, %PostgresDatabase{} = database) do
+    database.tables
+    |> Enum.filter(&Source.table_in_source?(source, &1))
+    |> Enum.map(&encode_table/1)
   end
 
   defp encode_function(nil), do: nil
@@ -1009,25 +999,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  # defp encode_table(nil), do: nil
-
-  # defp encode_table(%PostgresDatabaseTable{} = table) do
-  #   %{
-  #     oid: table.oid,
-  #     schema: table.schema,
-  #     name: table.name,
-  #     columns: Enum.map(table.columns, &encode_column/1)
-  #   }
-  # end
-
-  # defp encode_column(%PostgresDatabaseTable.Column{} = column) do
-  #   %{
-  #     attnum: column.attnum,
-  #     isPk?: column.is_pk?,
-  #     name: column.name,
-  #     type: column.type
-  #   }
-  # end
+  defp encode_table(%PostgresDatabaseTable{} = table) do
+    %{
+      oid: table.oid,
+      schema: table.schema,
+      name: table.name
+    }
+  end
 
   defp encode_api_tokens(api_tokens) when is_list(api_tokens) do
     Enum.map(api_tokens, fn api_token ->

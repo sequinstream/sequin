@@ -127,7 +127,7 @@
   <CardContent class="p-6 space-y-6">
     <div class="flex justify-between items-center">
       <h2 class="text-lg font-semibold">Source</h2>
-      <LinkPushNavigate href="/databases/{consumer.postgres_database.id}">
+      <LinkPushNavigate href="/databases/{consumer.database.id}">
         <Button variant="outline" size="sm">
           <ExternalLink class="h-4 w-4 mr-2" />
           View Database
@@ -140,10 +140,10 @@
       <div class="font-medium">
         <p>
           Publication <span class="font-mono"
-            >{consumer.source.publication_name}</span
+            >{consumer.database.publication_name}</span
           >
           in database
-          <span class="font-mono">{consumer.postgres_database.name}</span>
+          <span class="font-mono">{consumer.database.name}</span>
         </p>
       </div>
     </div>

@@ -105,7 +105,6 @@
     const matchingIndex = items.findIndex(
       (item) => JSON.stringify(item) === JSON.stringify(selectedItem),
     );
-    console.log("matchingIndex", matchingIndex);
     if (matchingIndex >= 0) {
       selectedItemIndex = matchingIndex;
     } else if (keyboardNavigatingPageDir === "previous") {

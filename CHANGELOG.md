@@ -8,7 +8,11 @@ This log is updated every Friday to track our feature releases and updates week 
 
 ### Advanced table and schema inclusion / exclusion
 
-Building on our recent support for sinks with multiple source tables, we now give you fine-grained control over which schemas and tables flow into each sink
+Building on our recent support for sinks with multiple source tables, we now give you fine-grained control over which schemas and tables flow into each sink:
+
+<div align="center">
+<img src="https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-013/advanced-source-controle.png" alt="Advanced tools for adding multiple tables to a sink" width="600" />
+</div>
 
 * **All tables in the publication:** Capture changes from every table exposed by the publication. When new schemas or tables are added, they are automatically included.
 * **Include *only* selected schemas or tables:** Choose the schemas and tables you care about; changes from only those schemas and tables will be processed in your sink.
@@ -48,11 +52,15 @@ As we make each sink more powerful with support for many tables and custom code 
 
 Sequin now supports [multiple source tables](https://sequinstream.com/docs/reference/sinks/overview#source-tables) in one sink. You can now specify an entire schema to include in your sink, and Sequin will sink every table in the schema that is also in the publication.
 
-![Add multiple tables to one sink](https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-06/multiple-tables.png)
+<div align="center">
+<img src="https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-06/multiple-tables.png" alt="Add multiple tables to one sink" width="600" />
+</div>
 
 Sinking a schema is supported in our [API](https://sequinstream.com/docs/management-api/sink-consumers/create#param-table) and in [sequin.yml](https://sequinstream.com/docs/reference/sequin-yaml#sink-source). You'll also see that we've moved backfills into a new tab to support multi-table backfills with improved monitoring:
 
-![New backfill tab to manage and observe multiple table backfills](https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-06/backfill-tab.png)
+<div align="center">
+<img src="https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-06/backfill-tab.png" alt="New backfill tab to manage and observe multiple table backfills" width="600" />
+</div>
 
 ### Trace for TypeSense
 

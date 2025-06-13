@@ -97,6 +97,116 @@ defmodule SequinWeb.YamlControllerTest do
       assert Sequin.String.uuid?(postgres_database_id)
     end
 
+    test "sensitive changes are present but obfuscated in plan response", %{conn: conn} do
+      # First create the initial database
+      initial_yaml = """
+      users:
+        - email: "admin@sequinstream.com"
+          password: "sequinpassword!"
+
+      databases:
+        - name: "test-db"
+          username: "postgres"
+          password: "postgres"
+          hostname: "localhost"
+          port: 5432
+          database: "sequin_test"
+          slot_name: "#{replication_slot()}"
+          publication_name: "#{@publication}"
+          pool_size: 10
+          tables:
+            - table_name: "Characters"
+              table_schema: "public"
+      """
+
+      # Apply the initial configuration
+      apply_conn = post(conn, ~p"/api/config/apply", %{yaml: initial_yaml})
+      assert json_response(apply_conn, 200)
+
+      # Now plan a change to update the password
+      update_yaml = """
+      users:
+        - email: "admin@sequinstream.com"
+          password: "sequinpassword!"
+
+      databases:
+        - name: "test-db"
+          username: "postgres"
+          password: "new-password"
+          hostname: "localhost"
+          port: 5432
+          database: "sequin_test"
+          slot_name: "#{replication_slot()}"
+          publication_name: "#{@publication}"
+          pool_size: 10
+          tables:
+            - table_name: "Characters"
+              table_schema: "public"
+      """
+
+      plan_conn = post(conn, ~p"/api/config/plan", %{yaml: update_yaml})
+
+      assert %{
+               "changes" => [
+                 %{
+                   "action" => "update",
+                   "new" => %{"id" => account_id, "name" => account_name},
+                   "old" => %{"id" => account_id, "name" => account_name},
+                   "resource_type" => "account"
+                 },
+                 %{
+                   "action" => "update",
+                   "new" => %{
+                     "email" => "admin@sequinstream.com",
+                     "id" => user_id,
+                     "password" => nil
+                   },
+                   "old" => %{
+                     "email" => "admin@sequinstream.com",
+                     "id" => user_id,
+                     "password" => nil
+                   },
+                   "resource_type" => "user"
+                 },
+                 %{
+                   "action" => "update",
+                   "new" => %{
+                     "database" => "sequin_test",
+                     "hostname" => "localhost",
+                     "id" => postgres_database_id,
+                     "ipv6" => false,
+                     "name" => "test-db",
+                     "password" => "new********d",
+                     "pool_size" => 10,
+                     "port" => 5432,
+                     "publication" => %{"name" => "characters_publication"},
+                     "slot" => %{"name" => "__yaml_controller_test_slot__"},
+                     "ssl" => false,
+                     "use_local_tunnel" => false,
+                     "username" => "postgres"
+                   },
+                   "old" => %{
+                     "database" => "sequin_test",
+                     "hostname" => "localhost",
+                     "id" => postgres_database_id,
+                     "ipv6" => false,
+                     "name" => "test-db",
+                     "password" => "p******s",
+                     "pool_size" => 10,
+                     "port" => 5432,
+                     "publication" => %{"name" => "characters_publication"},
+                     "slot" => %{"name" => "__yaml_controller_test_slot__"},
+                     "ssl" => false,
+                     "use_local_tunnel" => false,
+                     "username" => "postgres"
+                   },
+                   "resource_type" => "database"
+                 }
+               ],
+               "actions" => []
+             } = json_response(plan_conn, 200)
+    end
+
     test "returns error for invalid yaml", %{conn: conn} do
       yaml = """
       databases:

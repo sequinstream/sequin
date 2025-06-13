@@ -76,6 +76,7 @@
             "group": "How-to guides",
             "pages": [
               "how-to/deploy-to-production",
+              "how-to/testing",
               "how-to/create-audit-logs",
               "how-to/annotate-changes",
               "how-to/replicate-tables",

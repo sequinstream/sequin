@@ -1,0 +1,166 @@
+---
+title: "Test with Sequin"
+sidebarTitle: "Test with Sequin"
+description: "Learn how to test Sequin locally and in CI to verify configuration, transforms, filters, and end-to-end connectivity"
+---
+
+## What to test
+
+It is valuable to test the Sequin configurations that developers are responsible for writing and maintaining, especially source configuration, [filters](/reference/filters), [transforms](/reference/transforms), and [routing](/reference/routing).
+
+It is also valuable to test end-to-end connectivity between your source databases and sink destinations, often in a cloud CI environment.
+
+## Prerequisites
+
+Before testing, you should familiarize yourself with Sequin and implement the sinks that you want to test. You'll also need a test or CI environment for your application infrastructure.
+
+- A `sequin.yaml` file for your sinks that you want to test. This is used to programmatically configure Sequin in test environments
+- Tooling to run Sequin in your test environment (e.g. Docker, Helm, etc.)
+- A test / CI database with logical replication enabled
+
+## Local testing
+
+The primary benefit of testing Sequin locally is to proactively catch when schema migrations will break your sink configuration. This is especially useful when you have many tables in a sink or have relatively complex filters, transforms, and routing.
+
+<Tip>
+  If your sink configuration only includes a single table and transforms that simply removes metadata, it's often sufficient to stub out the payload you expect from Sequin.
+</Tip>
+
+<Steps titleSize="h3" >
+  <Step title="Configure your test database">
+    Ensure that your test database is properly configured for [logical replication](/connect-postgres#enable-logical-replication). As a best practice, you should create a [dedicated `sequin_test`](/connect-postgres#provision-a-postgres-user-for-sequin) user with replication privileges.
+  </Step>
+
+  <Step title="Re-use your `sequin.yml` for testing">
+    Use [environment variables](/reference/sequin-yaml#environment-variables) to repurpose your development `sequin.yml` as your test configuration. This ensures that your current dev configuration is properly tested without needing to update a separate `sequin.yml` file.
+
+    For instance, you can use environment variables in your`sequin.yml` to create:
+
+    - A `Test` [account](/reference/sequin-yaml#account-configuration)
+    - A [`TEST_API_TOKEN`](/reference/sequin-yaml#api-token-configuration) for use in your tests
+    - A [database configuration](/reference/sequin-yaml#database-configuration) for the test database using the `sequin_test` user.
+      <Tip>
+        For testing and development environments, it's appropriate to have Sequin create both the [replication slot and publication](/reference/sequin-yaml#replication-slot-and-publication-configuration). Set the `create_if_not_exists: true` flag.
+      </Tip>
+    - The sinks you need to test with appropriate [filters](/reference/filters), [transforms](/reference/transforms), and [routing](/reference/routing).
+
+    <Tip>
+      Use [YAML anchors](/reference/sequin-yaml#yaml-anchors) to easily reuse elements of your sink configurations.
+    </Tip>
+    <Tip>
+      Use the [`sequin config interpolate`](/reference/sequin-yaml#previewing-interpolated-yaml) command to preview your `sequin.yml` file after environment variables are interpolated. This will help you catch any issues with your environment variables.
+    </Tip>
+  </Step>
+
+  <Step title="Create a test-specific Sequin environment">
+    Create a new `docker-compose.test.yml` (or helm, etc.) file that includes all the [necessary services](/running-sequin) to run Sequin in a test environment. This should include the Sequin service and it's dependent Postgres and Redis services. A couple considerations:
+
+    1. Ensure that the Sequin service boots up using your test environment variables and the `sequin.yml` configuration file:
+
+        ```yaml
+        sequin:
+          # ...
+          CONFIG_FILE_PATH: sequin.test.yml
+        ```
+
+    2. For testing, you don't need to spin up Prometheus and Grafana.
+    3. You can safely disable telemetry by setting the `TELEMETRY_ENABLED` environment variable to `false`.
+
+  </Step>
+
+  <Step title="Write and run your tests">
+    Write tests to verify that your sink configuration is working as expected. This includes:
+
+    - Verifying that the correct data is being delivered to the destination. Assert that the payload matches your expectations.
+    - Verifying that filters are excluding and including the correct changes.
+    - Verifying that dynamic routers are working as you'd expect.
+    - Verifying that your transforms are working as you'd expect.
+
+    <Note>
+      Be sure that transactions are **fully committed** to your test database if you expect them to be replicated through Sequin.
+
+      Some ORMs use transaction isolation to allow concurrent testing which must be disabled to allow messages to replicate to Sequin. This, however, requires that tests are run sequentially instead of in parallel.
+    </Note>
+  </Step>
+</Steps>
+
+<Tip>
+  For sink destinations that are hard to set up in a test environment, you can use a [Sequin stream](/how-to/stream-postgres-to-sequin-stream) as a mock destination. This allows you to verify the data transformation, filtering, and payload delivered to the destination without needing the actual destination system. Be sure to acknowledge the messages in the stream to avoid duplicate delivery, and run your tests sequentially to avoid race conditions.
+</Tip>
+
+## CI Integration
+
+Local unit testing will ensure that any changes you make to your database schema, sink configuration, or other Sequin components deliver the correct data to your destination.
+
+In CI, you should test that Sequin can properly integrate with your infrastructure and deliver the correct data to your destination.
+
+<Steps titleSize="h3" >
+
+  <Step title="Create CI sequin.yml">
+    For CI, you'll often use the same `sequin.yml` file as you'll run in production - but use [environment variables](/reference/sequin-yaml#environment-variables) to properly configure your database connections and sinks for your CI environment.
+
+    A couple considerations in CI:
+    - For your database configuration, its appropriate to have Sequin create both the [replication slot and publication](/reference/sequin-yaml#replication-slot-and-publication-configuration).
+    - Ensure your sinks use similar filters, transforms, and routing as you'll use in production to properly test your sink configuration.
+
+    <Tip>
+      Use [YAML anchors](/reference/sequin-yaml#yaml-anchors) to easily reuse elements of your sink configurations.
+    </Tip>
+    <Tip>
+      Use the [`sequin config interpolate`](/reference/sequin-yaml#previewing-interpolated-yaml) command to preview your `sequin.yml` file after environment variables are interpolated. This will help you catch any issues with your environment variables.
+    </Tip>
+
+  </Step>
+
+  <Step title="Provision Sequin in your CI environment">
+    Provision Sequin and it's dependent services in your CI environment - you can use Docker or whatever tooling you're using to run Sequin. A couple considerations:
+
+    1. Ensure that the Sequin service boots up using your CI environment variables and the `sequin.ci.yml` configuration file:
+
+        ```yaml
+        sequin:
+          # ...
+          CONFIG_FILE_PATH: sequin.ci.yml
+        ```
+
+    2. For testing, you don't need to spin up Prometheus and Grafana.
+    3. You can safely disable telemetry by setting the `TELEMETRY_ENABLED` environment variable to `false`.
+  </Step>
+
+  <Step title="Run a script and leverage the Sequin API to run integration tests">
+    Write a script to ensure Sequin spins up properly, connects to your database, and delivers the correct data to your sinks:
+
+    - Check that Sequin's `/health` endpoint is returning a 200 status code.
+    - Commit transactions to your database and validate that the data is being delivered to your sinks.
+    - Use the Sequin API to check the [health of your sinks](/management-api/sink-consumers/list) and test [backfills](/management-api/backfills/create) as well.
+    - Verify that any filtering, transforms, and routing are working as expected and that the payload delivered to your sinks matches your assertions.
+
+    <Note>
+      You should test Sequin synchronously. This ensures that your tests are not affected by race conditions.
+    </Note>
+    <Note>
+      Be sure that transactions are **fully committed** to your test database if you expect them to be reflected in your Sequin tests. Often ORMs will automatically rollback transactions.
+    </Note>
+  </Step>
+</Steps>
+
+## Next Steps
+
+With testing in place, you can be confident changes to your application, schema, and sink configurations behave as you expect. From here, focus on shipping to production:
+
+<CardGroup>
+  <Card title="Deploy Sequin in production" icon="ship" href="/how-to/deploy-to-production">
+    Learn how to deploy Sequin in production.
+  </Card>
+    <Card title="Learn more about sequin.yml" icon="square-terminal" href="/reference/sequin-yaml">
+    Learn how to work configure Sequin using sequin.yml.
+  </Card>
+  <Card title="Learn more about Sequin's API" icon="code" href="/management-api/introduction">
+    Learn how to use Sequin's API to test your sink configuration.
+  </Card>
+  <Card title="Monitor your workflows" icon="chart-line" href="/reference/metrics">
+    Learn how to monitor your system with Sequin's built-in metrics.
+  </Card>
+</CardGroup>
+
+

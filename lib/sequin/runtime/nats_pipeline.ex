@@ -2,9 +2,15 @@ defmodule Sequin.Runtime.NatsPipeline do
   @moduledoc false
   @behaviour Sequin.Runtime.SinkPipeline
 
+  alias Sequin.Consumers.Function
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Functions.MiniElixir
+  alias Sequin.Runtime.RoutingInfo
+  alias Sequin.Runtime.RoutingInfo.RoutedMessage
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Nats
+  alias Sequin.Transforms.Message
 
   require Logger
 
@@ -27,12 +33,20 @@ defmodule Sequin.Runtime.NatsPipeline do
   end
 
   @impl SinkPipeline
+  def apply_routing(consumer, rinfo) do
+    RoutingInfo.apply_routing(consumer.type, rinfo)
+  end
+
+  @impl SinkPipeline
   def handle_batch(:default, messages, _batch_info, context) do
     %{consumer: consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    # Flatten the messages from each Broadway.Message
-    nats_messages = Enum.map(messages, & &1.data)
+    # Transform messages and apply routing
+    nats_messages =
+      Enum.map(messages, fn %{data: message} ->
+        maybe_apply_routing(consumer, message)
+      end)
 
     case Nats.send_messages(consumer, nats_messages) do
       :ok ->
@@ -49,6 +63,23 @@ defmodule Sequin.Runtime.NatsPipeline do
 
         {:error, reason}
     end
+  end
+
+  defp maybe_apply_routing(%SinkConsumer{routing: %Function{} = routing} = consumer, message) do
+    routing_info = MiniElixir.run_compiled(routing, message.data)
+    validated_routing = apply_routing(consumer, routing_info)
+
+    payload = Message.to_external(consumer, message)
+
+    %RoutedMessage{
+      original_message: message,
+      routing_info: validated_routing,
+      payload: payload
+    }
+  end
+
+  defp maybe_apply_routing(%SinkConsumer{routing: nil}, message) do
+    message
   end
 
   defp setup_allowances(nil), do: :ok

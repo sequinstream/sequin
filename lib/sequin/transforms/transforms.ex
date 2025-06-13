@@ -251,7 +251,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%KafkaSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "kafka",
       hosts: sink.hosts,
       topic: sink.topic,
@@ -263,7 +263,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%RabbitMqSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "rabbitmq",
       host: sink.host,
       port: sink.port,
@@ -277,7 +277,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%RedisStreamSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "redis_stream",
       host: sink.host,
       port: sink.port,
@@ -290,7 +290,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%RedisStringSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "redis_string",
       host: sink.host,
       port: sink.port,
@@ -303,7 +303,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%SqsSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "sqs",
       queue_url: sink.queue_url,
       region: sink.region,
@@ -314,7 +314,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%SnsSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "sns",
       topic_arn: sink.topic_arn,
       region: sink.region,
@@ -325,7 +325,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%KinesisSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "kinesis",
       stream_arn: sink.stream_arn,
       access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
@@ -334,7 +334,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%GcpPubsubSink{credentials: %Gcp.Credentials{} = credentials} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "gcp_pubsub",
       project_id: sink.project_id,
       topic_id: sink.topic_id,
@@ -359,7 +359,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%NatsSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "nats",
       host: sink.host,
       port: sink.port,
@@ -372,7 +372,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%AzureEventHubSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "azure_event_hub",
       namespace: sink.namespace,
       event_hub_name: sink.event_hub_name,
@@ -382,7 +382,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%TypesenseSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "typesense",
       endpoint_url: sink.endpoint_url,
       collection_name: sink.collection_name,
@@ -393,7 +393,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%ElasticsearchSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "elasticsearch",
       endpoint_url: sink.endpoint_url,
       index_name: sink.index_name,
@@ -1299,6 +1299,18 @@ defmodule Sequin.Transforms do
 
   def parse_status(nil), do: :active
   def parse_status(status), do: status
+
+  defp reject_nil_values(map) do
+    map
+    |> Enum.reject(fn {_, v} ->
+      case v do
+        %Sequin.Transforms.SensitiveValue{value: nil} -> true
+        nil -> true
+        _ -> false
+      end
+    end)
+    |> Map.new()
+  end
 
   # Helper function to parse SASL mechanism
   defp parse_sasl_mechanism(nil), do: {:ok, nil}

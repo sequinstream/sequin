@@ -11,7 +11,7 @@ This log is updated every Friday to track our feature releases and updates week 
 Building on our recent support for sinks with multiple source tables, we now give you fine-grained control over which schemas and tables flow into each sink:
 
 <div align="center">
-<img src="https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-013/advanced-source-controle.png" alt="Advanced tools for adding multiple tables to a sink" width="600" />
+<img src="https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-13/advanced-source-controle.png" alt="Advanced tools for adding multiple tables to a sink" width="600" />
 </div>
 
 * **All tables in the publication:** Capture changes from every table exposed by the publication. When new schemas or tables are added, they are automatically included.

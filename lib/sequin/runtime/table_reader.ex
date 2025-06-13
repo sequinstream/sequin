@@ -1,14 +1,11 @@
 defmodule Sequin.Runtime.TableReader do
   @moduledoc false
   alias Sequin.Constants
-  alias Sequin.Consumers
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.SchemaFilter
-  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase

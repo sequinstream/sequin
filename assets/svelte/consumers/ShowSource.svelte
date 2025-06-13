@@ -13,6 +13,7 @@
   import type { Consumer, Source } from "./types";
 
   export let consumer: Consumer;
+  export let tables: Table[];
 
   function getSchemaStatus(source: Source): {
     type: string;
@@ -62,7 +63,7 @@
   } {
     if (source.include_table_oids) {
       if (source.include_table_oids.length === 1) {
-        const table = consumer.tables_included_in_source.find(
+        const table = tables.find(
           (t) => t.oid === source.include_table_oids[0],
         );
         return {
@@ -74,9 +75,7 @@
           type: "including",
           description: `Including ${source.include_table_oids.length} tables`,
           items: source.include_table_oids.map((oid) => {
-            const table = consumer.tables_included_in_source.find(
-              (t) => t.oid === oid,
-            );
+            const table = tables.find((t) => t.oid === oid);
             return table?.name;
           }),
         };
@@ -85,7 +84,7 @@
 
     if (source.exclude_table_oids) {
       if (source.exclude_table_oids.length === 1) {
-        const table = consumer.tables_included_in_source.find(
+        const table = tables.find(
           (t) => t.oid === source.exclude_table_oids[0],
         );
         return {
@@ -97,9 +96,7 @@
           type: "excluding",
           description: `Excluding ${source.exclude_table_oids.length} tables`,
           items: source.exclude_table_oids.map((oid) => {
-            const table = consumer.tables_included_in_source.find(
-              (t) => t.oid === oid,
-            );
+            const table = tables.find((t) => t.oid === oid);
             return table?.name;
           }),
         };

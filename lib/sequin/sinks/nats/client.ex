@@ -10,6 +10,7 @@ defmodule Sequin.Sinks.Nats.Client do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.NetworkUtils
+  alias Sequin.Runtime.RoutingInfo.RoutedMessage
   alias Sequin.Sinks.Nats
   alias Sequin.Sinks.Nats.ConnectionCache
 
@@ -79,8 +80,7 @@ defmodule Sequin.Sinks.Nats.Client do
 
   defp publish_message(%SinkConsumer{} = consumer, message, connection) do
     opts = [headers: get_headers(message)]
-    payload = Sequin.Transforms.Message.to_external(consumer, message)
-    subject = subject(message)
+    {payload, subject} = get_payload_and_subject(consumer, message)
 
     try do
       Gnat.pub(connection, subject, Jason.encode_to_iodata!(payload), opts)
@@ -88,6 +88,17 @@ defmodule Sequin.Sinks.Nats.Client do
       error ->
         {:error, to_sequin_error(error)}
     end
+  end
+
+  defp get_payload_and_subject(%SinkConsumer{}, %RoutedMessage{} = routed_message) do
+    subject = subject(routed_message)
+    {routed_message.payload, subject}
+  end
+
+  defp get_payload_and_subject(%SinkConsumer{} = consumer, message) do
+    payload = Sequin.Transforms.Message.to_external(consumer, message)
+    subject = subject(message)
+    {payload, subject}
   end
 
   defp subject(%ConsumerEvent{data: %ConsumerEventData{} = data}) do
@@ -100,6 +111,10 @@ defmodule Sequin.Sinks.Nats.Client do
     "sequin.rows.#{database_name}.#{table_schema}.#{table_name}"
   end
 
+  defp subject(%RoutedMessage{routing_info: %{subject: subject}}) do
+    "sequin.routed.#{subject}"
+  end
+
   defp to_sequin_error(error) do
     case error do
       error when is_binary(error) ->
@@ -108,6 +123,10 @@ defmodule Sequin.Sinks.Nats.Client do
       _ ->
         Error.service(service: :nats, message: "Unknown NATS error")
     end
+  end
+
+  defp get_headers(%RoutedMessage{original_message: original_message}) do
+    get_headers(original_message)
   end
 
   defp get_headers(%ConsumerEvent{data: %{metadata: %{idempotency_key: idempotency_key}}} = _message)

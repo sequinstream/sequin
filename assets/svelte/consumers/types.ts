@@ -18,20 +18,7 @@ export type Backfill = {
 // Base consumer type with shared properties
 export type BaseConsumer = {
   id: string;
-  type:
-    | "http_push"
-    | "sqs"
-    | "sns"
-    | "kinesis"
-    | "redis_stream"
-    | "kafka"
-    | "sequin_stream"
-    | "gcp_pubsub"
-    | "nats"
-    | "rabbitmq"
-    | "typesense"
-    | "elasticsearch"
-    | "redis_string";
+  type: SinkType;
   name: string;
   annotations: Record<string, boolean>;
   status: "active" | "paused" | "disabled";
@@ -55,6 +42,7 @@ export type BaseConsumer = {
   };
   routing_id: string | null;
   routing: Function | null;
+  routing_mode?: "static" | "dynamic";
   filter_id: string | null;
   filter: Function | null;
   table: Table;
@@ -253,3 +241,21 @@ export type Consumer =
   | SnsConsumer
   | ElasticsearchConsumer
   | RedisStringConsumer;
+
+export const SinkTypeValues = [
+  "http_push",
+  // "sqs",
+  // "sns",
+  // "kinesis",
+  // "redis_stream",
+  // "kafka",
+  // "sequin_stream",
+  // "gcp_pubsub",
+  "nats",
+  // "rabbitmq",
+  // "typesense",
+  // "elasticsearch",
+  "redis_string",
+] as const;
+
+export type SinkType = (typeof SinkTypeValues)[number];

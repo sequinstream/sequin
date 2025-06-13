@@ -1,13 +1,3 @@
-<script context="module" lang="ts">
-  export type Source = {
-    publication_name: string;
-    include_schemas: string[] | null;
-    exclude_schemas: string[] | null;
-    include_table_oids: number[] | null;
-    exclude_table_oids: number[] | null;
-  };
-</script>
-
 <script lang="ts">
   import {
     Select,
@@ -34,6 +24,7 @@
   import { Button } from "$lib/components/ui/button";
   import { onMount } from "svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
+  import type { Source } from "../consumers/types";
 
   type Table = {
     oid: number;
@@ -56,6 +47,14 @@
     event: string,
     detail: any,
     callback: () => void,
+  ) => void;
+  export let onDatabaseSelect: (
+    database: {
+      id: string;
+      name: string;
+      tables: Array<Table>;
+      schemas: Array<string>;
+    } | null,
   ) => void;
 
   let selectedDatabase;
@@ -196,6 +195,8 @@
 
   function handleDbChange(event: any) {
     selectedDatabaseId = event.value;
+    const database = databases.find((db) => db.id === event.value);
+    onDatabaseSelect(database || null);
     // Reset selections when database changes
     selectedSchemas.clear();
     selectedTableOids.clear();

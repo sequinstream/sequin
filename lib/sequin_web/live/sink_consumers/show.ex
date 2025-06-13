@@ -35,7 +35,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Health
-  alias Sequin.Health.Check
   alias Sequin.Health.CheckSinkConfigurationWorker
   alias Sequin.Metrics
   alias Sequin.Replication.PostgresReplicationSlot
@@ -991,14 +990,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     %{sink_type: sink_type, code: code}
   end
 
-  defp encode_postgres_database(postgres_database) do
-    %{
-      id: postgres_database.id,
-      name: postgres_database.name,
-      pg_major_version: postgres_database.pg_major_version
-    }
-  end
-
   defp encode_table(%PostgresDatabaseTable{} = table) do
     %{
       oid: table.oid,
@@ -1318,8 +1309,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     root_table_names_without_full_replica_identity =
       tables_with_replica_identities
       |> Enum.filter(fn
-        %{"relkind" => "p", "partition_replica_identities" => partition_replica_identities} ->
-          Enum.any?(partition_replica_identities, &(&1["relreplident"] != "f"))
+        %{"relation_kind" => "p", "partition_replica_identities" => partition_replica_identities} ->
+          Enum.any?(partition_replica_identities, &(&1["replica_identity"] != "f"))
 
         _ ->
           false
@@ -1359,8 +1350,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     table_names_without_full_replica_identity =
       tables_with_replica_identities
-      |> Enum.filter(fn %{"relkind" => relkind, "relreplident" => relreplident} ->
-        relkind == "r" and relreplident != "f"
+      |> Enum.filter(fn %{"relation_kind" => relation_kind, "replica_identity" => replica_identity} ->
+        relation_kind == "r" and replica_identity != "f"
       end)
       |> Enum.map(fn %{"table_name" => table_name} -> table_name end)
       |> Enum.sort()
@@ -1387,7 +1378,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     )
   end
 
-  defp maybe_augment_alert(%{slug: :sink_configuration, error_slug: :toast_columns_detected} = check, consumer) do
+  defp maybe_augment_alert(%{slug: :sink_configuration, error_slug: :toast_columns_detected} = check, _consumer) do
     Map.merge(check, %{
       alertTitle: "Notice: TOAST columns detected",
       alertMessage: """

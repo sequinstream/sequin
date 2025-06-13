@@ -49,8 +49,6 @@
                 class="underline">router</a
               >
               <ExternalLink class="h-4 w-4 inline" />
-            {:else if consumer.sequence.table_name}
-              sequin:{consumer.sequence.table_name}:&lt;primary-keys&gt;
             {:else}
               sequin:&lt;table-name&gt;:&lt;primary-keys&gt;
             {/if}

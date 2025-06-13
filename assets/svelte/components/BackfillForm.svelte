@@ -1,17 +1,5 @@
 <script lang="ts">
-  import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
-  import { Label } from "$lib/components/ui/label";
-  import { Input } from "$lib/components/ui/input";
-  import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "$lib/components/ui/select";
-  import { ExternalLinkIcon, CheckIcon, TableIcon } from "lucide-svelte";
-  import Datetime from "./Datetime.svelte";
-  import { conditionalClass } from "$lib/utils";
+  import { CheckIcon, TableIcon } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import {
     Table as TableComponent,
@@ -19,14 +7,12 @@
     TableCell,
     TableRow,
   } from "$lib/components/ui/table";
-  import type { Consumer } from "$lib/consumers/types";
+  import type { Table } from "$lib/databases/types";
 
   export let form: {
     selectedTableOids?: number[];
   };
-  export let consumer: Consumer;
-
-  $: console.log(consumer);
+  export let tables_included_in_source: Table[];
 
   // Handle table selection for multi-table mode
   function toggleTableSelection(tableOid: number) {
@@ -43,24 +29,18 @@
   }
 
   function toggleSelectAll() {
-    if (!consumer.tables_included_in_source || !form.selectedTableOids) return;
+    if (!tables_included_in_source || !form.selectedTableOids) return;
 
-    if (
-      form.selectedTableOids.length ===
-      consumer.tables_included_in_source.length
-    ) {
+    if (form.selectedTableOids.length === tables_included_in_source.length) {
       form.selectedTableOids = [];
     } else {
-      form.selectedTableOids = consumer.tables_included_in_source.map(
-        (t) => t.oid,
-      );
+      form.selectedTableOids = tables_included_in_source.map((t) => t.oid);
     }
   }
 
   $: allTablesSelected =
-    form.selectedTableOids && consumer.tables_included_in_source
-      ? form.selectedTableOids.length ===
-        consumer.tables_included_in_source.length
+    form.selectedTableOids && tables_included_in_source
+      ? form.selectedTableOids.length === tables_included_in_source.length
       : false;
 </script>
 
@@ -68,8 +48,8 @@
   <div class="space-y-4">
     <div>
       <p class="text-sm text-muted-foreground mt-1">
-        Select one or more tables to backfill. All selected tables will be
-        backfilled from the beginning.
+        Select one or more tables to backfill. Sequin will backfill all rows in
+        the selected tables while concurrently capturing changes.
       </p>
     </div>
 
@@ -82,29 +62,35 @@
       </div>
 
       <div class="max-h-60 overflow-y-auto">
-        <TableComponent>
-          <TableBody>
-            {#each consumer.tables_included_in_source as table (table.oid)}
-              <TableRow
-                on:click={() => toggleTableSelection(table.oid)}
-                class="cursor-pointer {form.selectedTableOids?.includes(
-                  table.oid,
-                )
-                  ? 'bg-blue-50 hover:bg-blue-100'
-                  : 'hover:bg-gray-100'}"
-              >
-                <TableCell class="flex items-center space-x-2">
-                  {#if form.selectedTableOids?.includes(table.oid)}
-                    <CheckIcon class="h-4 w-4 text-green-500" />
-                  {:else}
-                    <TableIcon class="h-4 w-4 text-gray-400" />
-                  {/if}
-                  <span>{table.schema}.{table.name}</span>
-                </TableCell>
-              </TableRow>
-            {/each}
-          </TableBody>
-        </TableComponent>
+        {#if tables_included_in_source.length === 0}
+          <div class="p-8 text-center text-gray-500">
+            <p>No tables in source to backfill.</p>
+          </div>
+        {:else}
+          <TableComponent>
+            <TableBody>
+              {#each tables_included_in_source as table (table.oid)}
+                <TableRow
+                  on:click={() => toggleTableSelection(table.oid)}
+                  class="cursor-pointer {form.selectedTableOids?.includes(
+                    table.oid,
+                  )
+                    ? 'bg-blue-50 hover:bg-blue-100'
+                    : 'hover:bg-gray-100'}"
+                >
+                  <TableCell class="flex items-center space-x-2">
+                    {#if form.selectedTableOids?.includes(table.oid)}
+                      <CheckIcon class="h-4 w-4 text-green-500" />
+                    {:else}
+                      <TableIcon class="h-4 w-4 text-gray-400" />
+                    {/if}
+                    <span>{table.schema}.{table.name}</span>
+                  </TableCell>
+                </TableRow>
+              {/each}
+            </TableBody>
+          </TableComponent>
+        {/if}
       </div>
     </div>
   </div>

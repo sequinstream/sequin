@@ -60,32 +60,48 @@
     description: string;
     items?: string[];
   } {
-    if (source.include_table_names) {
-      if (source.include_table_names.length === 1) {
+    if (source.include_table_oids) {
+      if (source.include_table_oids.length === 1) {
+        const table = consumer.tables_included_in_source.find(
+          (t) => t.oid === source.include_table_oids[0],
+        );
         return {
           type: "including",
-          description: `Including table "${source.include_table_names[0]}"`,
+          description: `Including table "${table?.name}"`,
         };
       } else {
         return {
           type: "including",
-          description: `Including ${source.include_table_names.length} tables`,
-          items: source.include_table_names,
+          description: `Including ${source.include_table_oids.length} tables`,
+          items: source.include_table_oids.map((oid) => {
+            const table = consumer.tables_included_in_source.find(
+              (t) => t.oid === oid,
+            );
+            return table?.name;
+          }),
         };
       }
     }
 
-    if (source.exclude_table_names) {
-      if (source.exclude_table_names.length === 1) {
+    if (source.exclude_table_oids) {
+      if (source.exclude_table_oids.length === 1) {
+        const table = consumer.tables_included_in_source.find(
+          (t) => t.oid === source.exclude_table_oids[0],
+        );
         return {
           type: "excluding",
-          description: `Excluding table "${source.exclude_table_names[0]}"`,
+          description: `Excluding table "${table?.name}"`,
         };
       } else {
         return {
           type: "excluding",
-          description: `Excluding ${source.exclude_table_names.length} tables`,
-          items: source.exclude_table_names,
+          description: `Excluding ${source.exclude_table_oids.length} tables`,
+          items: source.exclude_table_oids.map((oid) => {
+            const table = consumer.tables_included_in_source.find(
+              (t) => t.oid === oid,
+            );
+            return table?.name;
+          }),
         };
       }
     }
@@ -100,7 +116,7 @@
     if (!source) return false;
 
     // If syncing all tables and all schemas (no specific table filter)
-    if (!source.include_table_names && !source.exclude_table_names) {
+    if (!source.include_table_oids && !source.exclude_table_oids) {
       return true;
     }
 
@@ -110,12 +126,12 @@
     }
 
     // If syncing multiple specific tables
-    if (source.include_table_names && source.include_table_names.length > 1) {
+    if (source.include_table_oids && source.include_table_oids.length > 1) {
       return true;
     }
 
     // If excluding specific tables (implies multiple remaining tables)
-    if (source.exclude_table_names) {
+    if (source.exclude_table_oids) {
       return true;
     }
 
@@ -224,30 +240,7 @@
           </Tooltip.Content>
         </Tooltip.Root>
       </div>
-      <p class="font-medium mt-2">
-        {#if isMultiTableSync(consumer.source)}
-          Each table's primary key columns
-        {:else}
-          {consumer.group_column_names.join(", ")}
-        {/if}
-      </p>
+      <p class="font-medium mt-2">Each table's primary key columns</p>
     </div>
-    {#if !isMultiTableSync(consumer.source) && consumer.table}
-      <div class="mb-4">
-        <h3 class="text-md font-semibold mb-2">Filters</h3>
-        <!-- Note: Filter functionality would need to be implemented based on actual consumer structure -->
-        <!-- The consumer.sequence.column_filters reference in the original code doesn't exist in the current types -->
-        <div
-          class="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center"
-        >
-          <h4 class="text-sm font-medium text-gray-900 mb-1">
-            No filters applied
-          </h4>
-          <p class="text-sm text-gray-500 mb-4">
-            This consumer will process all data from the source.
-          </p>
-        </div>
-      </div>
-    {/if}
   </CardContent>
 </Card>

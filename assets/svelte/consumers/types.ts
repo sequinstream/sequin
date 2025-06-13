@@ -1,4 +1,4 @@
-import type { Database } from "../databases/types";
+import type { Database, Table } from "../databases/types";
 import type { Function } from "../functions/types";
 
 export type Source = {

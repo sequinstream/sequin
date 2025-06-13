@@ -4,6 +4,44 @@ Sequin provides fast, real-time Postgres change data capture into streams and qu
 
 This log is updated every Friday to track our feature releases and updates week by week. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
+## June 13, 2025
+
+### Advanced table and schema inclusion / exclusion
+
+Building on our recent support for sinks with multiple source tables, we now give you fine-grained control over which schemas and tables flow into each sink
+
+* **All tables in the publication:** Capture changes from every table exposed by the publication. When new schemas or tables are added, they are automatically included.
+* **Include *only* selected schemas or tables:** Choose the schemas and tables you care about; changes from only those schemas and tables will be processed in your sink.
+* **Exclude specific schemas or tables:** Start with everything in the publication, then list the schemas or tables you want to omit. Future schemas and tables will be included in your sink unless they appear on your exclusion list.
+
+These settings make it easier to create and configure one sink to power your entire CDC use case. These new configuration options are supported in the Sequin console, `sequin.yml`, and in the API.
+
+### Trace for all sinks
+
+Trace is now available on all sinks! Expanding on the observability in the messages tab, trace surfaces the underlying logging for a given sink to give you more insight into the sinks state.
+
+As we make each sink more powerful with support for many tables and custom code in functions, we're also adding more tooling to debug and observe how is running.
+
+<details>
+
+<summary>Fixes and improvements</summary>
+
+### Improved
+
+* `sequin config plan` now shows the diff for sensitive values, like passwords
+* Use key up and down arrow keyboard commands to move through messages and trace logs in the console.
+* Added exponential back-off to HTTP Webhook sinks.
+* Redis Stream sinks now support transform functions.
+* Make it easier to retrieve and remove test messages when editing functions.
+* Add support for `infinity_timestamps` in Postgres.
+* Optimize Sequin performance on smaller boxes.
+
+### Fixed
+
+* Ensure the change retention page doesn't break if a table is removed from the database.
+
+</details>
+
 ## June 6, 2025
 
 ### Multiple tables per sink

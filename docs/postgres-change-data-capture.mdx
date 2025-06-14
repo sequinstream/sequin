@@ -31,7 +31,7 @@ If you're using Sequin Cloud, you'll need:
 
 Your change data capture pipeline will have three components:
 
-1. **Source tables**: The table or schema in Postgres that you want to capture changes from.
+1. **Source tables**: The tables or schemas in Postgres that you want to capture changes from.
 2. **Filters and transformations**: Optional filters and transformations to apply to changes before they're delivered to your sink.
 3. **Destination sink**: The message queue, stream, or webhook endpoint that Sequin delivers changes to (e.g. SQS, Kafka, or HTTP endpoint)
 
@@ -41,7 +41,7 @@ With your Postgres [database connected](/connect-postgres) to Sequin, create a s
 
 <Steps>
   <Step title="Select the source">
-    Select the table or schema you want to capture changes from.
+    Select to include all tables and schemas in the publication, or select specific tables and schemas to either include or exclude.
   </Step>
 
   <Step title="Select the message type">

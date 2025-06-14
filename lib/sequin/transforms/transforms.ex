@@ -906,12 +906,17 @@ defmodule Sequin.Transforms do
   defp parse_table_references(nil, _database), do: {:ok, nil}
 
   defp parse_table_references(table_refs, database) when is_list(table_refs) do
-    Enum.reduce_while(table_refs, {:ok, []}, fn table_ref, {:ok, acc} ->
+    table_refs
+    |> Enum.reduce_while({:ok, []}, fn table_ref, {:ok, acc} ->
       case find_table(database, table_ref) do
         {:ok, table} -> {:cont, {:ok, [table.oid | acc]}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
+    |> case do
+      {:ok, oids} -> {:ok, Enum.reverse(oids)}
+      {:error, error} -> {:error, error}
+    end
   end
 
   defp find_table(%PostgresDatabase{} = database, table_ref) do
@@ -943,12 +948,17 @@ defmodule Sequin.Transforms do
   defp parse_column_attnums(nil, _table), do: {:ok, []}
 
   defp parse_column_attnums(column_names, table) when is_list(column_names) do
-    Enum.reduce_while(column_names, {:ok, []}, fn column_name, {:ok, acc} ->
+    column_names
+    |> Enum.reduce_while({:ok, []}, fn column_name, {:ok, acc} ->
       case find_column(table, column_name) do
         {:ok, column} -> {:cont, {:ok, [column.attnum | acc]}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
+    |> case do
+      {:ok, attnums} -> {:ok, Enum.reverse(attnums)}
+      {:error, error} -> {:error, error}
+    end
   end
 
   defp find_column(%PostgresDatabaseTable{} = table, column_name) do

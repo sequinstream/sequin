@@ -22,7 +22,10 @@ defmodule Sequin.Repo.Migrations.AddSinkConsumerSource do
               FROM sinks_with_filters;
 
               IF sink_count > 0 THEN
-                RAISE EXCEPTION 'Cannot migrate: Found % sink(s) with column filters that need to be removed first: %', sink_count, sink_names;
+                RAISE EXCEPTION E'Cannot migrate: Found % sink(s) with column filters that need to be removed first: %\n\n'
+                  'Column filters are deprecated in v0.10.0.\n'
+                  'Please see the release notes for migration steps:\n'
+                  'https://github.com/sequinstream/sequin/releases/tag/v0.10.0\n', sink_count, sink_names;
               END IF;
             END $$;
             """,

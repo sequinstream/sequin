@@ -101,6 +101,9 @@ config :sequin,
   gcp_pubsub: [
     req_opts: [plug: {Req.Test, Sequin.Sinks.Gcp.PubSub}]
   ],
+  s2: [
+    req_opts: [plug: {Req.Test, Sequin.Sinks.S2.Client}]
+  ],
   redis_module: Sequin.Sinks.RedisMock,
   kafka_module: Sequin.Sinks.KafkaMock,
   nats_module: Sequin.Sinks.NatsMock,

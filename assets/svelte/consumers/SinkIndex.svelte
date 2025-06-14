@@ -22,6 +22,7 @@
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
   import SnsIcon from "../sinks/sns/SnsIcon.svelte";
   import KinesisIcon from "../sinks/kinesis/KinesisIcon.svelte";
+  import S2Icon from "../sinks/s2/S2Icon.svelte";
   import RedisIcon from "../sinks/redis_shared/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
@@ -101,6 +102,11 @@
       id: "kinesis",
       name: "Amazon Kinesis",
       icon: KinesisIcon,
+    },
+    {
+      id: "s2",
+      name: "S2",
+      icon: S2Icon,
     },
     {
       id: "redis_stream",

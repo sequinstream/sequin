@@ -14,7 +14,7 @@ Only changes and rows that match the filters will be sent to the sink.
 
 ## Operations to capture
 
-When using [change messages](/reference/payloads#change-messages), you can specify which Postgres operations to capture:
+When configuring a sink, you can specify which Postgres operations to capture:
 
 - `insert`
 - `update`
@@ -23,42 +23,6 @@ When using [change messages](/reference/payloads#change-messages), you can speci
 <Note>
   If you backfill a table to a sink, Sequin will send `read` messages for each row in the table, regardless of which operations you specify.
 </Note>
-
-
-## Column filters
-
-Column filters are SQL expressions (i.e. `where` clauses) that Sequin will use to filter the rows that are sent to the sink.
-
-- **Column**: The column to filter on.
-- **Operator**: The operator to use for the filter.
-- **Comparison value**: The comparison value to use for the filter.
-
-The available operators are:
-
-- `=`
-- `!=`
-- `>`
-- `>=`
-- `<`
-- `<=`
-- `in`
-- `not in`
-- `is null`
-- `is not null`
-
-### JSON filters
-
-Sequin also supports filtering on JSON columns. When you select a JSON column as the **Column** to filter on, you'll see an expanded set of input fields:
-
-<Frame>
-  <img style={{maxWidth: '600px'}} src="/images/reference/filter-component-jsonb.png" alt="Filter component for JSONB columns" />
-</Frame>
-
-- **Column**: The selected JSONB column to filter on.
-- **Field path**: The path to the JSONB field you want to filter on. Use dot notation for nested fields (e.g., "address.city").
-- **Field type**: The data type of the JSONB field you're filtering on. This helps ensure proper comparison and filtering.
-- **Operator**: The operator to use for the filter.
-- **Comparison value**: The comparison value to use for the filter.
 
 ## Filter functions
 
@@ -90,11 +54,7 @@ Parameters:
 
 ### How filters are combined
 
-When you set up a sink with multiple types of filters, all filters are applied with a logical AND. This means:
-
-1. The operation must match one of the selected operations (insert, update, delete)
-2. The data must pass all column filters (if any)
-3. The filter function (if specified) must return `true`
+When you set up a sink with multiple types of filters, all filters are applied with a logical AND. This means the operation must match one of the selected operations (insert, update, delete) and the filter function (if specified) must return `true`.
 
 If any of these conditions fail, the message will not be delivered to the sink.
 
@@ -125,7 +85,7 @@ def filter(action, record, changes, metadata) do
   # Filter based on both record content and metadata
   is_high_priority = record["priority"] == "high"
   is_users_table = metadata.table_name == "users"
-  
+
   # Only process high priority records from the users table
   is_high_priority and is_users_table
 end
@@ -136,8 +96,8 @@ end
 ```elixir
 def filter(action, record, changes, metadata) do
   # Only process updates where the status changed from "pending" to "approved"
-  action == "update" and 
-    changes["status"] == "pending" and 
+  action == "update" and
+    changes["status"] == "pending" and
     record["status"] == "approved"
 end
 ```

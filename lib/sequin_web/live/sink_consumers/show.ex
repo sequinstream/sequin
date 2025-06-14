@@ -1321,7 +1321,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           false
       end)
       |> Enum.map(fn %{"table_schema" => table_schema, "table_name" => table_name} ->
-        "#{table_schema}.#{table_name}"
+        ~s{"#{table_schema}"."#{table_name}"}
       end)
       |> Enum.sort()
 
@@ -1361,7 +1361,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         relation_kind == "r" and replica_identity != "f"
       end)
       |> Enum.map(fn %{"table_schema" => table_schema, "table_name" => table_name} ->
-        "#{table_schema}.#{table_name}"
+        ~s{"#{table_schema}"."#{table_name}"}
       end)
       |> Enum.sort()
 

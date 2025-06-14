@@ -1321,7 +1321,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           false
       end)
       |> Enum.map(fn %{"table_schema" => table_schema, "table_name" => table_name} ->
-        "#{table_schema}.#{table_name}"
+        ~s("#{table_schema}"."#{table_name}")
       end)
       |> Enum.sort()
 
@@ -1340,7 +1340,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           language: "sql",
           code:
             Enum.map_join(root_table_names_without_full_replica_identity, "\n", fn table_name ->
-              "alter table #{table_name} replica identity full;"
+              "ALTER TABLE #{table_name} REPLICA IDENTITY FULL;"
             end)
         }
       }
@@ -1361,7 +1361,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         relation_kind == "r" and replica_identity != "f"
       end)
       |> Enum.map(fn %{"table_schema" => table_schema, "table_name" => table_name} ->
-        "#{table_schema}.#{table_name}"
+        ~s("#{table_schema}"."#{table_name}")
       end)
       |> Enum.sort()
 
@@ -1380,7 +1380,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           language: "sql",
           code:
             Enum.map_join(table_names_without_full_replica_identity, "\n", fn table_name ->
-              "alter table #{table_name} replica identity full;"
+              "ALTER TABLE #{table_name} REPLICA IDENTITY FULL;"
             end)
         }
       }
@@ -1419,7 +1419,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       code: %{
         language: "sql",
         code: """
-        alter publication {publication_name} add table {table_name};
+        ALTER PUBLICATION {publication_name} ADD TABLE {table_name};
         """
       }
     })

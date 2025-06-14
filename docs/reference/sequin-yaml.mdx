@@ -155,11 +155,16 @@ A sink streams data from one or more tables to a destination (sink). All sinks s
 sinks:
   - name: "my-sink"                # Required, unique name for this sink
     database: "my-database"        # Required, references database name
-    table: "public.users"          # Optional, [schema.]table to stream
-    schema: "public"               # Optional, schema to stream
-    batch_size: 1                  # Optional, messages per batch, default: 1
+    source:
+      include_schemas:             # Optional, schemas to include
+        - "public"
+      exclude_schemas:             # Optional, schemas to exclude
+        - "private"
+      include_table_names:         # Optional, tables to include
+        - "public.users" 
+      exclude_table_names:         # Optional, tables to exclude
+        - "public.background_jobs"
     status: "active"               # Optional: active or disabled, default: active
-    group_column_names: ["id"]     # Optional, columns to group messages by
     transform: "my-transform"      # Optional, reference to a transform function name or "none"
     filter: "my-filter"            # Optional, reference to a filter function name or "none"
     routing: "my-routing"          # Optional, reference to a routing function name or "none"
@@ -169,10 +174,7 @@ sinks:
       - insert
       - update
       - delete
-    filters:                       # Optional, filter rows in the stream
-      - column_name: "status"
-        operator: "="
-        comparison_value: "active"
+    batch_size: 1                  # Optional, messages per batch, default: 1
     destination:                   # Required, sink-specific configuration
       type: "..."                  # Required, sink type
       ...                          # Additional sink-specific options
@@ -180,14 +182,20 @@ sinks:
 
 #### Sink source
 
-A sink must specify either a `table` or a `schema`.
+When no source configuration is specified, Sequin will capture changes from every table exposed by the publication. When new schemas or tables are added, they are automatically included.
 
-* If you specify a `table`, Sequin will stream all changes to that table.
-* If you specify a `schema`, Sequin will stream all changes to all tables in that schema.
+You can also specify schemas and tables to include or exclude from the stream.
+
+* Include only selected schemas or tables: Choose the schemas and tables you care about; changes from only those schemas and tables will be processed in your sink.
+* Exclude specific schemas or tables: Start with everything in the publication, then list the schemas or tables you want to omit. Future schemas and tables will be included in your sink unless they appear on your exclusion list.
 
 <Info>
   For Sequin to stream changes from a table, your [publication](/reference/databases#publications) must include that table.
 </Info>
+
+#### Sink actions
+
+Additionally, you can specify `actions` to stream. By default, all actions (`insert`, `update`, `delete`) are included.  `read` events are emitted during backfills and are always included.
 
 #### Sink functions
 
@@ -351,46 +359,6 @@ destination:
 The GCP PubSub sink requires a service account with permissions to publish to the specified topic. The `credentials` field should contain the JSON key file contents for a service account with the `roles/pubsub.publisher` role.
 
 Project ID must be between 6 and 30 characters, start with a letter, and contain only lowercase letters, numbers, and hyphens. Topic ID must be between 3 and 255 characters and match the pattern: `[a-zA-Z][a-zA-Z0-9-_.~+%]*`.
-
-#### Sink filters
-
-All sink types support filtering messages based on columns in your source table. The filtering syntax is consistent across sink types:
-
-```yaml
-filters:
-  # Comparison filter
-  - column_name: "status"
-    operator: "="                   # =, !=, >, >=, <, <=
-    comparison_value: "active"
-
-  # List filter
-  - column_name: "status"
-    operator: "in"                  # in, not in
-    comparison_value:
-      - "active"
-      - "inactive"
-
-  # Is null filter
-  - column_name: "status"
-    operator: "is null"              # is null, is not null
-
-  # JSONB field filter
-  - column_name: "metadata"
-    field_path: "preferences.theme" # Dot notation for nested fields
-    operator: "="                   # =, !=, >, >=, <, <=
-    comparison_value: "dark"
-    field_type: "string"           # string, number, boolean, null, list
-```
-
-Additioanlly, you can specify actions to consume. By default, all actions are consumed.
-
-```yaml
-sinks:
-  - name: "my-sink"
-    actions: ["insert", "update", "delete"]
-    ...
-```
-
 
 ### Function configuration
 

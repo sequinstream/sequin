@@ -201,7 +201,7 @@ defmodule Sequin.TransformsTest do
       consumer = ConsumersFactory.sink_consumer(source: ConsumersFactory.source())
       json = Transforms.to_external(consumer)
 
-      assert %{included_schemas: _, excluded_schemas: _, included_tables: _, excluded_tables: _} = json.source
+      assert %{include_schemas: _, exclude_schemas: _, include_tables: _, exclude_tables: _} = json.source
     end
 
     test "returns a map of the gcp pubsub consumer" do

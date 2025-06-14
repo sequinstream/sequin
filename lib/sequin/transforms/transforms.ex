@@ -490,10 +490,10 @@ defmodule Sequin.Transforms do
 
   defp to_external_source(%Source{} = source, %PostgresDatabase{} = database, _show_sensitive) do
     %{
-      included_schemas: source.include_schemas,
-      excluded_schemas: source.exclude_schemas,
-      included_tables: to_external_table_oids(source.include_table_oids, database),
-      excluded_tables: to_external_table_oids(source.exclude_table_oids, database)
+      include_schemas: source.include_schemas,
+      exclude_schemas: source.exclude_schemas,
+      include_tables: to_external_table_oids(source.include_table_oids, database),
+      exclude_tables: to_external_table_oids(source.exclude_table_oids, database)
     }
   end
 

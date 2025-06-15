@@ -55,6 +55,14 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_nats """
+  def route(action, record, changes, metadata) do
+    %{
+      subject: "\#{metadata.table_name}.\#{action}.\#{record["id"]}"
+    }
+  end
+  """
+
   @initial_filter """
   def filter(action, record, changes, metadata) do
     # Must return true or false!
@@ -68,7 +76,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "filter" => @initial_filter,
     "routing_undefined" => @initial_route_no_sink_type,
     "routing_http_push" => @initial_route_http,
-    "routing_redis_string" => @initial_route_redis_string
+    "routing_redis_string" => @initial_route_redis_string,
+    "routing_nats" => @initial_route_nats
   }
 
   # We generate the function completions at compile time because

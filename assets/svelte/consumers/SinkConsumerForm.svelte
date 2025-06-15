@@ -430,8 +430,8 @@
           title="Transform"
           onFunctionChange={(functionId) => (form.transform = functionId)}
           {refreshFunctions}
-          functionTypes={["transform", "path"]}
-          createNewQueryParams="?type=transform"
+          allowedFunctionTypes={["transform", "filter", "path"]}
+          newFunctionType="transform"
           bind:refreshState={functionRefreshState}
         >
           <svelte:fragment slot="none-option">
@@ -534,7 +534,13 @@
     {:else if consumer.type === "sequin_stream"}
       <SequinStreamSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "nats"}
-      <NatsSinkForm errors={errors.consumer} bind:form />
+      <NatsSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {:else if consumer.type === "rabbitmq"}
       <RabbitMqSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "azure_event_hub"}

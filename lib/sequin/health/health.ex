@@ -663,7 +663,13 @@ defmodule Sequin.Health do
         put_check_timestamps(%{base_check | status: :stale}, [config_checked_event])
 
       config_checked_event.data["tables_with_replica_identities"] == [] ->
-        put_check_timestamps(%{base_check | status: :error, error_slug: :no_tables_in_publication}, [
+        error =
+          Error.invariant(
+            message:
+              "No tables in publication. Either your database does not have tables or your publication is not configured to include them."
+          )
+
+        put_check_timestamps(%{base_check | status: :error, error: error, error_slug: :no_tables_in_publication}, [
           config_checked_event
         ])
 

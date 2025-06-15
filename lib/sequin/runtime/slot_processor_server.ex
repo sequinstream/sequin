@@ -166,6 +166,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       field :backfill_watermark_messages, [LogicalMessage.t()], default: []
       field :flush_timer, nil | reference()
+      field :flush_imminent?, boolean(), default: false
 
       # Message handlers
       field :message_handler_ctx, any()
@@ -561,7 +562,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   @impl ReplicationConnection
   @decorate track_metrics("flush_messages")
   def handle_info(:flush_messages, %State{} = state) do
-    state = %{state | flush_timer: nil}
+    state = %{state | flush_timer: nil, flush_imminent?: false}
 
     with :ok <- check_limit(state),
          {:ok, state} <- flush_messages(state) do
@@ -952,6 +953,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
+  defp maybe_schedule_flush(%State{flush_imminent?: true} = state) do
+    state
+  end
+
   defp maybe_schedule_flush(%State{} = state) do
     should_flush_now? =
       state.accumulated_msg_binaries.count > max_accumulated_messages() or
@@ -964,7 +969,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         end
 
         ref = schedule_flush(0)
-        %{state | flush_timer: ref}
+        # Prevent this timer from getting canceled/re-scheduled
+        %{state | flush_timer: ref, flush_imminent?: true}
 
       is_nil(state.flush_timer) ->
         ref = schedule_flush()

@@ -669,7 +669,7 @@ defmodule Sequin.Health do
               "No tables in publication. Either your database does not have tables or your publication is not configured to include them."
           )
 
-        put_check_timestamps(%{base_check | status: :error, error: error, error_slug: :no_tables_in_publication}, [
+        put_check_timestamps(%{base_check | status: :notice, error: error, error_slug: :no_tables_in_publication}, [
           config_checked_event
         ])
 

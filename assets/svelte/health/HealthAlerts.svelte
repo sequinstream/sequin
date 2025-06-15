@@ -89,7 +89,7 @@
             {check.error.message}
           </p>
         {:else if check.error}
-          <p class="text-sm text-yellow-600 bg-yellow-50 p-2 rounded mt-2">
+          <p class="text-sm p-2 rounded mt-2">
             {check.error.message}
           </p>
         {/if}

@@ -5,18 +5,12 @@ defmodule Sequin.Runtime.RedisStringPipeline do
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Error
   alias Sequin.Functions.MiniElixir
+  alias Sequin.Runtime.RoutingInfo
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Redis
 
   require Logger
-
-  defmodule RoutingInfo do
-    @moduledoc false
-    @derive Jason.Encoder
-    defstruct key: ""
-  end
 
   @impl SinkPipeline
   def init(context, _opts) do
@@ -24,19 +18,8 @@ defmodule Sequin.Runtime.RedisStringPipeline do
   end
 
   @impl SinkPipeline
-  def apply_routing(_consumer, rinfo) when is_map(rinfo) do
-    struct!(RoutingInfo, rinfo)
-  rescue
-    KeyError ->
-      expected_keys =
-        RoutingInfo.__struct__()
-        |> Map.keys()
-        |> Enum.reject(&(&1 == :__struct__))
-        |> Enum.join(", ")
-
-      raise Error.invariant(
-              message: "Invalid routing response. Expected a map with keys: #{expected_keys}, got: #{inspect(rinfo)}"
-            )
+  def apply_routing(consumer, rinfo) do
+    RoutingInfo.apply_routing(consumer.type, rinfo)
   end
 
   @impl SinkPipeline

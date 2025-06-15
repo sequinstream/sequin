@@ -13,17 +13,12 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Error.ServiceError
   alias Sequin.Functions.MiniElixir
   alias Sequin.Metrics
+  alias Sequin.Runtime.RoutingInfo
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.Trace
   alias Sequin.Transforms
 
   require Logger
-
-  defmodule RoutingInfo do
-    @moduledoc false
-    @derive Jason.Encoder
-    defstruct method: "POST", endpoint_path: ""
-  end
 
   @impl SinkPipeline
   def init(context, opts) do
@@ -86,22 +81,9 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   end
 
   @impl SinkPipeline
-  def apply_routing(_consumer, rinfo) when is_map(rinfo) do
-    struct!(RoutingInfo, rinfo)
-  rescue
-    KeyError ->
-      expected_keys =
-        RoutingInfo.__struct__()
-        |> Map.keys()
-        |> Enum.reject(&(&1 == :__struct__))
-        |> Enum.join(", ")
-
-      raise Error.invariant(
-              message: "Invalid routing response. Expected a map with keys: #{expected_keys}, got: #{inspect(rinfo)}"
-            )
+  def apply_routing(consumer, rinfo) do
+    RoutingInfo.apply_routing(consumer.type, rinfo)
   end
-
-  def apply_routing(_, v), do: raise("Routing function must return a map! Got: #{inspect(v)}")
 
   @impl SinkPipeline
   def handle_message(message, context) do

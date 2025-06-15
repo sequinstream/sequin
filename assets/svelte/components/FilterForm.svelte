@@ -68,7 +68,8 @@
       title="Filter"
       onFunctionChange={handleFilterFunctionChange}
       {refreshFunctions}
-      functionTypes={["filter"]}
+      allowedFunctionTypes={["filter"]}
+      newFunctionType="filter"
       createNewQueryParams="?type=filter"
       bind:refreshState={functionRefreshState}
     >

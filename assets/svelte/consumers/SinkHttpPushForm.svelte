@@ -448,10 +448,10 @@
               onFunctionChange={(functionId) =>
                 (form.routingId = functionId === "none" ? null : functionId)}
               {refreshFunctions}
-              functionTypes={["routing"]}
+              allowedFunctionTypes={["routing"]}
               typeLabelKey="sink_type"
-              createNewQueryParams="?type=routing&sink_type=http_push"
               bind:refreshState={functionRefreshState}
+              sinkType="http_push"
             >
               <p class="text-sm text-muted-foreground">
                 Select a routing transform to dynamically set request

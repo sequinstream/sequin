@@ -455,7 +455,7 @@ defmodule Sequin.ConsumersTest do
       assert Consumers.consumer_features(consumer) == []
     end
 
-    test "returns legacy_event_singleton_transform when account is old enough" do
+    test "not return legacy_event_singleton_transform when account is old enough" do
       account = AccountsFactory.account(features: [], inserted_at: ~D[2024-11-01])
 
       consumer =
@@ -464,7 +464,7 @@ defmodule Sequin.ConsumersTest do
           type: :http_push
         )
 
-      assert Consumers.consumer_features(consumer) == [{:legacy_event_singleton_transform, true}]
+      refute Consumers.consumer_features(consumer) == [{:legacy_event_singleton_transform, true}]
     end
   end
 

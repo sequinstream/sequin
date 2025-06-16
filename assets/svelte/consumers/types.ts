@@ -95,6 +95,17 @@ export type KinesisConsumer = BaseConsumer & {
   };
 };
 
+// S2 specific sink
+export type S2Consumer = BaseConsumer & {
+  sink: {
+    type: "s2";
+    basin: string;
+    stream: string;
+    access_token: string;
+    dashboard_url: string;
+  };
+};
+
 // Redis specific sink
 export type RedisStreamConsumer = BaseConsumer & {
   sink: {
@@ -235,6 +246,7 @@ export type Consumer =
   | HttpPushConsumer
   | SqsConsumer
   | KinesisConsumer
+  | S2Consumer
   | RedisStreamConsumer
   | KafkaConsumer
   | SequinStreamConsumer

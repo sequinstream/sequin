@@ -13,6 +13,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
@@ -1261,6 +1262,28 @@ defmodule Sequin.YamlLoaderTest do
                access_key_id: "AKIAXXXXXXXXXXXXXXXX",
                secret_access_key: "secret123"
              } = consumer.sink
+    end
+
+    test "creates s2 sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               sinks:
+                 - name: "s2-consumer"
+                   database: "test-db"
+                   destination:
+                     type: "s2"
+                     basin: "test-basin"
+                     stream: "my-stream"
+                     access_token: "tok"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+
+      assert consumer.name == "s2-consumer"
+
+      assert %S2Sink{type: :s2, basin: "test-basin", stream: "my-stream", access_token: "tok"} = consumer.sink
     end
 
     test "creates redis sink consumer" do

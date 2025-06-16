@@ -49,6 +49,7 @@ defmodule Sequin.Runtime.DatabaseLifecycleEventWorker do
 
       "update" ->
         with {:ok, %PostgresDatabase{} = db} <- Databases.get_db(id) do
+          Databases.ConnectionCache.invalidate_connection(db)
           db = Repo.preload(db, [:replication_slot])
           Runtime.Supervisor.restart_replication(db.replication_slot)
         end

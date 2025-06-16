@@ -407,6 +407,7 @@ defmodule SequinWeb.DatabasesLive.Form do
       "username" => database.username || "postgres",
       "password" => database.password,
       "ssl" => ssl,
+      "pool_size" => database.pool_size || 10,
       "publication_name" => database.replication_slot.publication_name || "sequin_pub",
       "slot_name" => database.replication_slot.slot_name || "sequin_slot",
       "useLocalTunnel" => database.use_local_tunnel || false,
@@ -449,6 +450,14 @@ defmodule SequinWeb.DatabasesLive.Form do
         port when is_integer(port) -> port
       end
 
+    pool_size =
+      case form["pool_size"] do
+        nil -> nil
+        "" -> nil
+        pool_size when is_binary(pool_size) -> String.to_integer(pool_size)
+        pool_size when is_integer(pool_size) -> pool_size
+      end
+
     ssl = if form["useLocalTunnel"], do: false, else: form["ssl"]
     hostname = if form["useLocalTunnel"], do: Application.get_env(:sequin, :portal_hostname), else: form["hostname"]
 
@@ -463,6 +472,7 @@ defmodule SequinWeb.DatabasesLive.Form do
         "username" => maybe_trim(form["username"]),
         "password" => form["password"],
         "ssl" => ssl,
+        "pool_size" => pool_size,
         "use_local_tunnel" => form["useLocalTunnel"],
         "primary" => primary
       },

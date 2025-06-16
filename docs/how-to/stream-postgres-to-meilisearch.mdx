@@ -1,0 +1,151 @@
+---
+title: "How to stream Postgres to Meilisearch"
+sidebarTitle: "Meilisearch"
+description: "Build real-time search indexes with Postgres change data capture (CDC) and Meilisearch. Learn to keep your search collections in sync with your database."
+---
+
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to Meilisearch using Sequin.
+
+With Postgres data streaming to Meilisearch, you can build real-time search experiences, maintain up-to-date search indexes, and provide fast, typo-tolerant search for your users.
+
+By the end of this how-to, you'll have a configured Meilisearch instance that stays in sync with your database.
+
+## Prerequisites
+
+If you're self-hosting Sequin, you'll need:
+
+1. [Sequin installed](/running-sequin)  
+2. [A database connected](/connect-postgres)
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)  
+2. [A database connected](/connect-postgres)
+
+## Basic setup
+
+### Prepare your Meilisearch instance
+
+Sequin converts Postgres changes and rows into JSON documents and sends them to your Meilisearch index.
+
+You'll need to have a Meilisearch instance running and accessible to Sequin. You can run Meilisearch locally for development or use a hosted version.
+
+<Tip>
+  If you're using Sequin Cloud and developing locally, you can use the Sequin CLI's [tunnel command](/reference/cli/overview#tunnel-sequin-cloud-only) to connect Sequin's servers to a local Meilisearch instance.
+</Tip>
+
+### Mapping Postgres tables to Meilisearch indexes
+
+From the [Meilisearch docs](https://www.meilisearch.com/docs/learn/core_concepts/indexes/):
+
+> In Meilisearch, each index contains documents with the same structure.
+
+Sequin recommends creating one sink per Postgres table. Each sink will stream changes from a single Postgres table to a single Meilisearch index. This ensures schema consistency across indexed documents.
+
+For large-scale applications, you may consider sharding indexes—e.g., sharding a `users` index by region into `users_us`, `users_eu`, `users_asia`, etc.
+
+You can use Sequin's [filters](/reference/filters) to accomplish this. For example, to shard `users` by region, create a sink per region with filters to route the correct rows to the corresponding Meilisearch index.
+
+<Note>
+  Sequin will soon support [Routing functions](/reference/transforms) for dynamically routing rows from one table to multiple Meilisearch indexes within a single sink.
+</Note>
+
+## Create Meilisearch sink
+
+Navigate to the "Sinks" tab, click "Create Sink", and select **Meilisearch Sink**.
+
+### Configure the source
+
+<Steps>
+  <Step title="Select source table or schema">
+    Under "Source", select the table or schema you want to stream data from.
+  </Step>
+
+  <Step title="Specify filters">
+    Choose whether to include `insert`, `update`, and/or `delete` actions. For full sync, select all three.
+
+    For example, if you uncheck `deletes`, rows deleted from Postgres won't be removed from the Meilisearch index.
+
+    You can also use [filters](/reference/filters) to only include certain rows—e.g., `WHERE in_stock = true` for product availability or for sharding by tenant.
+  </Step>
+
+  <Step title="Specify backfill">
+    Optionally trigger a [backfill](/reference/backfills) to populate your Meilisearch index with existing data from your table. This is optional at sink creation and can be done later.
+  </Step>
+
+  <Step title="Transforms">
+    Meilisearch requires a defined schema with:
+    1. A unique document `id` (string or integer).
+    2. Searchable and filterable fields.
+
+    Use a [functional transform](/reference/transforms#function-transform) to convert Postgres rows to Meilisearch documents:
+
+    ```elixir
+    def transform(record) do
+      %{
+        id: record["id"],
+        name: record["name"],
+        description: record["description"],
+        price: record["price"],
+        in_stock: record["in_stock"]
+      }
+    end
+    ```
+
+    For dynamic schemas or minimal transformation:
+
+    ```elixir
+    def transform(record) do
+      record
+    end
+    ```
+
+    Or explicitly assign the `id`:
+
+    ```elixir
+    def transform(record) do
+      Map.put(record, "id", record["product_id"])
+    end
+    ```
+  </Step>
+
+  <Step title="Specify message grouping">
+    Keep the default setting to ensure updates to the same row are processed in order. This helps maintain consistent state in Meilisearch.
+  </Step>
+</Steps>
+
+### Configure delivery
+
+<Steps>
+  <Step title="Specify batch size">
+    The right value for "Batch size" depends on your data and your requirements.
+
+    Meilisearch supports bulk document addition via the `/documents` endpoint. A good starting point is 100–1000 documents per batch. Very large batches (10k+) may impact memory or throughput depending on your instance size.
+  </Step>
+
+  <Step title="Select the Meilisearch index you created">
+    Under "Meilisearch Index", select the index you want to stream data to.
+  </Step>
+
+  <Step title="Create the sink">
+    Give your sink a name, then click "Create Meilisearch Sink".
+  </Step>
+</Steps>
+
+## Verify & debug
+
+To verify that your Meilisearch sink is working:
+
+1. Make some changes in your source table.
+2. Verify that the count of messages for your sink increases in the Sequin web console.
+3. Search in your Meilisearch index to confirm the document changes. (You can use the [meilisearch-ui](https://github.com/riccox/meilisearch-ui) for a simple UI to interact with your Meilisearch indexes/tasks)
+
+If documents don't seem to be flowing:
+
+1. Click the "Messages" tab to view the state of messages for your sink.
+2. Click any failed message.
+3. Check the delivery logs for error details, including the response from Meilisearch.
+
+## Next steps
+
+Assuming you've followed the steps above for your local environment, "[How to deploy to production](/how-to/deploy-to-production)" will show you how to deploy your implementation to production.

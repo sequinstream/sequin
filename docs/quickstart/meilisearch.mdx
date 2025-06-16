@@ -1,0 +1,227 @@
+---
+title: 'Get started with Meilisearch'
+sidebarTitle: 'Meilisearch'
+description: 'Learn how to create real-time search indexes from Postgres changes in minutes. Use Sequin to keep your Meilisearch indexes in sync with your database.'
+---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+import QuickstartSourceStep from '/snippets/quickstart-source-step.mdx';
+import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Meilisearch index. You'll:
+
+- Boot Sequin
+- Connect to a sample playground database
+- Start Meilisearch and create an index
+- Set up a sink to sync changes to Meilisearch
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin and Meilisearch. This same pattern can be used to setup your own Postgres CDC pipeline with Meilisearch.
+
+<Steps titleSize="h2">
+ <QuickstartInitialSteps />
+ <Step title="Create a Meilisearch Index" icon="database">
+  First, let's start Meilisearch and create an index to store our product data:
+
+  <Steps>
+    <Step title="Start Meilisearch">
+     Meilisearch offers a docker image that can be run locally. Let's start it up:
+
+      ```bash
+      docker run -d \
+        --name meilisearch \
+        -p 7700:7700 \
+        -v $(pwd)/meili_data:/meili_data \
+        getmeili/meilisearch:v1.15 \
+        meilisearch --master-key=my-api-key
+      ```
+    </Step>
+
+    <Step title="Create the index">
+      Run the following command to create a new index called "products":
+
+      ```bash
+      curl -X POST 'http://localhost:7700/indexes' \
+        -H 'Content-Type: application/json' \
+        -H 'Authorization: Bearer my-api-key' \
+        --data '{
+          "uid": "products"
+        }'
+      ```
+
+      Meilisearch will create the index and infer document structure from inserted data.
+    </Step>
+
+    <Step title="Verify the index">
+      You can verify the index was created by listing all indexes:
+
+      ```bash
+      curl -X GET 'http://localhost:7700/indexes' \
+        -H 'Authorization: Bearer my-api-key'
+      ```
+
+      You should see the `products` index listed.
+    </Step>
+  </Steps>
+ </Step>
+
+ <Step title="Create a Meilisearch Sink" icon="plug">
+  With the playground database connected and Meilisearch index created, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to your Meilisearch index:
+
+  <Steps>
+    <Step title="Navigate to Sinks">
+      Click "Sinks" in the sidebar navigation, then click "Create Sink".
+    </Step>
+
+    <Step title="Select sink type">
+      Select "Meilisearch" as the sink type and click "Continue".
+    </Step>
+
+    <QuickstartSourceStep />
+
+    <Step title="Setup a transform">
+      In the [Transform](/reference/transforms) card, click the toggle to view existing transforms. None exist, so click "+ Create new transform".
+
+      For "Transform name", put `products-meilisearch`. For "Transform type", select "Transform function".
+
+      In the "Transform function" field, input the following code:
+
+      ```elixir
+      def transform(action, record, changes, metadata) do
+        Map.take(record, ["id", "name", "price"])
+      end
+      ```
+
+      This transform will take the `id`, `name`, and `price` fields from the `products` table and use them to create a new document in Meilisearch.
+
+      <Frame>
+        <img src="/images/quickstart/meilisearch/transform-card.png" alt="Transform card with Elixir transform" />
+      </Frame>
+
+      Click "Create Transform", then select `products-meilisearch` in the transform list.
+    </Step>
+
+    <QuickstartBackfillStep />
+
+    <Step title='Configure Meilisearch'>
+      In the Meilisearch card, enter your configuration:
+
+      - Host: `http://host.docker.internal:7700`
+      - Index: `products`
+      - API Key: `my-api-key`
+
+      <Frame>
+        <img src="/images/quickstart/meilisearch/config-card.png" alt="Meilisearch configuration card" />
+      </Frame>
+    </Step>
+
+    <Step title="Create the sink">
+      Give your sink a name, like `products-meilisearch`, and click "Create Sink".
+
+      The Meilisearch index will first receive a backfill, then will stay in sync in real-time.
+    </Step>
+  </Steps>
+ </Step>
+
+ <Step title="Query your data in Meilisearch" icon="waveform-lines">
+    With the backfill complete, query Meilisearch for your `products`:
+
+    ```bash
+    curl -X POST 'http://localhost:7700/indexes/products/search' \
+      -H 'Content-Type: application/json' \
+      -H 'Authorization: Bearer my-api-key' \
+      --data '{
+        "q": ""
+      }'
+    ```
+
+    To search for "avocado":
+
+    ```bash
+    curl -X POST 'http://localhost:7700/indexes/products/search' \
+      -H 'Content-Type: application/json' \
+      -H 'Authorization: Bearer my-api-key' \
+      --data '{
+        "q": "avocado",
+        "attributesToHighlight": ["name"]
+      }'
+    ```
+ </Step>
+
+ <Step title="See changes flow to Meilisearch" icon="waveform-lines">
+    On the new sink's overview page, watch for a green "Health" status.
+
+    Now make changes and see them appear in Meilisearch:
+
+    <Steps>
+      <Step title="Insert a product">
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+        ```
+
+        Then search in Meilisearch:
+
+        ```bash
+        curl -X POST 'http://localhost:7700/indexes/products/search' \
+          -H 'Content-Type: application/json' \
+          -H 'Authorization: Bearer my-api-key' \
+          --data '{ "q": "honey" }'
+        ```
+      </Step>
+
+      <AccordionGroup>
+        <Accordion title="Update a product's price">
+          ```bash
+          docker exec -i sequin-sequin_postgres-1 \
+            psql -U postgres -d sequin_playground -c \
+            "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+          ```
+        </Accordion>
+
+        <Accordion title="Change a product's name">
+          ```bash
+          docker exec -i sequin-sequin_postgres-1 \
+            psql -U postgres -d sequin_playground -c \
+            "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+          ```
+        </Accordion>
+
+        <Accordion title="Delete a product">
+          ```bash
+          docker exec -i sequin-sequin_postgres-1 \
+            psql -U postgres -d sequin_playground -c \
+            "delete from products where name = 'Blueberries (6 oz)';"
+          ```
+        </Accordion>
+      </AccordionGroup>
+    </Steps>
+ </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Created a Meilisearch index
+- Loaded existing data through a backfill
+- Made changes to the `products` table
+- Verified changes are flowing to Meilisearch
+- Tested search functionality
+- Set up a complete Postgres change data capture pipeline
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  <Card title="Guide: Setting up a Meilisearch sink" icon="search" href="/how-to/stream-postgres-to-meilisearch">
+    Setup a Meilisearch sink to keep your search index in sync.
+  </Card>
+</CardGroup>

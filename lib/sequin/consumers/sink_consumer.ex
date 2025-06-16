@@ -28,6 +28,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TypesenseSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Replication.PostgresReplicationSlot
 
   @type id :: String.t()
@@ -48,6 +49,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     :rabbitmq,
     :azure_event_hub,
     :typesense,
+    :meilisearch,
     :sns,
     :elasticsearch
   ]
@@ -130,6 +132,7 @@ defmodule Sequin.Consumers.SinkConsumer do
         rabbitmq: RabbitMqSink,
         azure_event_hub: AzureEventHubSink,
         typesense: TypesenseSink,
+        meilisearch: MeilisearchSink,
         elasticsearch: ElasticsearchSink
       ],
       on_replace: :update,

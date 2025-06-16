@@ -33,6 +33,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Health
@@ -923,6 +924,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sink(%SinkConsumer{sink: %MeilisearchSink{} = sink}) do
+    %{
+      type: :meilisearch,
+      endpoint_url: sink.endpoint_url,
+      index_name: sink.index_name,
+      batch_size: sink.batch_size,
+      timeout_seconds: sink.timeout_seconds
+    }
+  end
+
   defp encode_sink(%SinkConsumer{sink: %ElasticsearchSink{} = sink}) do
     %{
       type: :elasticsearch,
@@ -1279,6 +1290,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :s2}}), do: "S2 Sink"
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"
   defp consumer_title(%{sink: %{type: :typesense}}), do: "Typesense Sink"
+  defp consumer_title(%{sink: %{type: :meilisearch}}), do: "Meilisearch Sink"
 
   defp put_health(%SinkConsumer{} = consumer) do
     with {:ok, health} <- Health.health(consumer),

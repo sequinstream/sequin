@@ -164,6 +164,34 @@ defmodule Sequin.PostgresReplicationTest do
           ]
         )
 
+      http_endpoint =
+        ConsumersFactory.insert_http_endpoint!(
+          account_id: account_id,
+          scheme: :http,
+          host: Application.get_env(:sequin, :jepsen_http_host),
+          port: Application.get_env(:sequin, :jepsen_http_port),
+          path: "/",
+          headers: %{"Content-Type" => "application/json"}
+        )
+
+      test_event_log_partitioned_consumer_http =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account_id,
+          type: :http_push,
+          source: %{
+            include_table_oids: [TestEventLogPartitioned.table_oid()]
+          },
+          sink: %{
+            type: :http_push,
+            http_endpoint_id: http_endpoint.id,
+            http_endpoint: http_endpoint,
+            batch: true
+          },
+          replication_slot_id: pg_replication.id,
+          message_kind: :event,
+          status: :active
+        )
+
       test_event_log_partitioned_consumer =
         ConsumersFactory.insert_sink_consumer!(
           name: "test_event_log_partitioned_consumer",
@@ -201,7 +229,8 @@ defmodule Sequin.PostgresReplicationTest do
         record_character_consumer: record_character_consumer,
         record_character_ident_consumer: record_character_ident_consumer,
         record_character_multi_pk_consumer: record_character_multi_pk_consumer,
-        test_event_log_partitioned_consumer: test_event_log_partitioned_consumer
+        test_event_log_partitioned_consumer: test_event_log_partitioned_consumer,
+        test_event_log_partitioned_consumer_http: test_event_log_partitioned_consumer_http
       }
     end
 

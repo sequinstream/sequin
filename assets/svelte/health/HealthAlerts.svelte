@@ -84,12 +84,8 @@
             code={check.code.code}
           />
         {/if}
-        {#if check.error && check.status === "error"}
-          <p class="text-sm text-red-600 bg-red-50 p-2 rounded mt-2">
-            {check.error.message}
-          </p>
-        {:else if check.error}
-          <p class="text-sm p-2 rounded mt-2">
+        {#if check.error}
+          <p class="text-sm py-2 rounded mt-2">
             {check.error.message}
           </p>
         {/if}

@@ -285,7 +285,6 @@
         {#if consumer.active_backfills.length > 0}
           <Badge variant="secondary" class="ml-1">
             {consumer.active_backfills.length} active
-            <ArrowDownSquare class="h-4 w-4 ml-1" />
           </Badge>
         {/if}
       </a>

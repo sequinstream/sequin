@@ -31,7 +31,6 @@ databases:
 sinks:
   - name: "demo-to-kafka"
     database: "e2e-database"
-    table: "public.demo_table"
     batch_size: 10
     status: "active"
     actions:

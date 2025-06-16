@@ -199,7 +199,8 @@ cd assets && npm install
 ```
 3. Start PostgreSQL and Redis services:
 ```bash
-docker-compose up -d
+# Start PostgreSQL, Redis, Prometheus, and Grafana
+docker-compose --profile databases --profile monitoring up -d
 ```
 4. Start the development server from the top-level directory:
 ```bash

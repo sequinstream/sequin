@@ -19,6 +19,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingFunction
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
@@ -297,6 +298,15 @@ defmodule Sequin.Transforms do
       stream_arn: sink.stream_arn,
       access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
       secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive)
+    })
+  end
+
+  def to_external(%S2Sink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "s2",
+      basin: sink.basin,
+      stream: sink.stream,
+      access_token: SensitiveValue.new(sink.access_token, show_sensitive)
     })
   end
 
@@ -1036,6 +1046,16 @@ defmodule Sequin.Transforms do
        stream_arn: attrs["stream_arn"],
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "s2"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :s2,
+       basin: attrs["basin"],
+       stream: attrs["stream"],
+       access_token: attrs["access_token"]
      }}
   end
 

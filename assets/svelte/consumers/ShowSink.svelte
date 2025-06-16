@@ -16,6 +16,7 @@
     SqsConsumer,
     SnsConsumer,
     KinesisConsumer,
+    S2Consumer,
     RedisStreamConsumer,
     KafkaConsumer,
     SequinStreamConsumer,
@@ -30,6 +31,7 @@
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
   import SnsSinkCard from "../sinks/sns/SnsSinkCard.svelte";
   import KinesisSinkCard from "../sinks/kinesis/KinesisSinkCard.svelte";
+  import S2SinkCard from "../sinks/s2/S2SinkCard.svelte";
   import RedisStreamSinkCard from "../sinks/redis-stream/RedisStreamSinkCard.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SequinStreamSinkCard from "../sinks/sequin_stream/SequinStreamSinkCard.svelte";
@@ -95,6 +97,10 @@
 
   function isKinesisConsumer(consumer: Consumer): consumer is KinesisConsumer {
     return consumer.sink.type === "kinesis";
+  }
+
+  function isS2Consumer(consumer: Consumer): consumer is S2Consumer {
+    return consumer.sink.type === "s2";
   }
 
   function isRedisStreamConsumer(
@@ -1139,6 +1145,8 @@
         <SnsSinkCard {consumer} />
       {:else if isKinesisConsumer(consumer)}
         <KinesisSinkCard {consumer} />
+      {:else if isS2Consumer(consumer)}
+        <S2SinkCard {consumer} />
       {:else if isRedisStreamConsumer(consumer)}
         <RedisStreamSinkCard {consumer} />
       {:else if isKafkaConsumer(consumer)}

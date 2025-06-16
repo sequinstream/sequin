@@ -15,7 +15,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   @type message :: ConsumerRecord.t() | ConsumerEvent.t()
   @type cursor_tuple :: {commit_lsn :: non_neg_integer(), commit_idx :: non_neg_integer()}
 
-  @default_setting_max_messages 500_000
+  @default_setting_max_messages 25_000
 
   typedstruct do
     field :consumer, SinkConsumer.t()

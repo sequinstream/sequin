@@ -179,6 +179,38 @@ defmodule Sequin.PostgresReplicationTest do
           ]
         )
 
+      http_endpoint =
+        ConsumersFactory.insert_http_endpoint!(
+          account_id: account_id,
+          scheme: :http,
+          host: Application.get_env(:sequin, :jepsen_http_host),
+          port: Application.get_env(:sequin, :jepsen_http_port),
+          path: "/",
+          headers: %{"Content-Type" => "application/json"}
+        )
+
+      test_event_log_partitioned_consumer_http =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account_id,
+          type: :http_push,
+          legacy_transform: :none,
+          sink: %{
+            type: :http_push,
+            http_endpoint_id: http_endpoint.id,
+            http_endpoint: http_endpoint,
+            batch: true
+          },
+          replication_slot_id: pg_replication.id,
+          message_kind: :event,
+          status: :active,
+          source_tables: [
+            ConsumersFactory.source_table_attrs(
+              table_oid: TestEventLogPartitioned.table_oid(),
+              group_column_attnums: [TestEventLogPartitioned.column_attnum("id")]
+            )
+          ]
+        )
+
       event_character_consumer = Repo.preload(event_character_consumer, :postgres_database)
       event_character_ident_consumer = Repo.preload(event_character_ident_consumer, :postgres_database)
       event_character_multi_pk_consumer = Repo.preload(event_character_multi_pk_consumer, :postgres_database)
@@ -201,7 +233,8 @@ defmodule Sequin.PostgresReplicationTest do
         record_character_consumer: record_character_consumer,
         record_character_ident_consumer: record_character_ident_consumer,
         record_character_multi_pk_consumer: record_character_multi_pk_consumer,
-        test_event_log_partitioned_consumer: test_event_log_partitioned_consumer
+        test_event_log_partitioned_consumer: test_event_log_partitioned_consumer,
+        test_event_log_partitioned_consumer_http: test_event_log_partitioned_consumer_http
       }
     end
 

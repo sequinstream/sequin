@@ -154,7 +154,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
             reconnect_backoff: 500,
             streaming: nil,
             buffering_sock_messages?: false,
-            buffered_sock_messages: []
+            buffered_sock_message: nil
 
   ## PUBLIC API ##
 
@@ -462,7 +462,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
         state = %__MODULE__{
           reconnect_backoff: reconnect_backoff,
           state: {mod, mod_state},
-          buffered_sock_messages: []
+          buffered_sock_message: nil
         }
 
         put_opts(opts)
@@ -501,8 +501,13 @@ defmodule Sequin.Postgres.ReplicationConnection do
     handle(mod, :handle_call, [msg, from, mod_state], from, s)
   end
 
-  def handle_event(:info, msg, @state, %__MODULE__{buffering_sock_messages?: true} = s) when is_socket_message(msg) do
-    {:keep_state, %{s | buffered_sock_messages: [msg | s.buffered_sock_messages]}}
+  def handle_event(:info, msg, @state, %__MODULE__{buffering_sock_messages?: true, buffered_sock_message: nil} = s)
+      when is_socket_message(msg) do
+    {:keep_state, %{s | buffered_sock_message: msg}}
+  end
+
+  def handle_event(:info, msg, @state, %__MODULE__{buffering_sock_messages?: true}) when is_socket_message(msg) do
+    raise "Unexpectedly received a second socket message while buffering sock messages"
   end
 
   def handle_event(:info, msg, @state, %__MODULE__{protocol: protocol, streaming: streaming} = s)
@@ -572,7 +577,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
         {:keep_state, s}
 
       {:activate_socket, mod_state} ->
-        s = maybe_flush_buffered_messages(s)
+        s = maybe_flush_buffered_message(s)
         {:keep_state, %{s | state: {mod, mod_state}}}
 
       {:stream, query, opts, mod_state} when streaming == nil ->
@@ -613,18 +618,16 @@ defmodule Sequin.Postgres.ReplicationConnection do
     end
   end
 
-  defp maybe_flush_buffered_messages(%__MODULE__{buffering_sock_messages?: true, buffered_sock_messages: []} = s),
+  defp maybe_flush_buffered_message(%__MODULE__{buffering_sock_messages?: true, buffered_sock_message: nil} = s),
     do: %{s | buffering_sock_messages?: false}
 
-  defp maybe_flush_buffered_messages(%__MODULE__{buffering_sock_messages?: true} = s) do
-    s.buffered_sock_messages
-    |> Enum.reverse()
-    |> Enum.each(fn msg -> send(self(), msg) end)
+  defp maybe_flush_buffered_message(%__MODULE__{buffering_sock_messages?: true} = s) do
+    send(self(), s.buffered_sock_message)
 
-    %{s | buffering_sock_messages?: false, buffered_sock_messages: []}
+    %{s | buffering_sock_messages?: false, buffered_sock_message: nil}
   end
 
-  defp maybe_flush_buffered_messages(s), do: s
+  defp maybe_flush_buffered_message(s), do: s
 
   defp stream_in_progress(command, mod, mod_state, from, s) do
     Logger.warning("received #{command} while stream is already in progress")
@@ -642,7 +645,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
       s
       | protocol: nil,
         streaming: nil,
-        buffered_sock_messages: []
+        buffered_sock_message: nil
     })
   end
 

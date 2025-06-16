@@ -65,17 +65,18 @@ defmodule Sequin.Consumers.SqsSink do
   defp ends_with_fifo?(url), do: String.ends_with?(url, ".fifo")
 
   def aws_client(%__MODULE__{} = sink) do
-    client = sink.access_key_id
-    |> AWS.Client.create(sink.secret_access_key, sink.region)
+    client = AWS.Client.create(sink.access_key_id, sink.secret_access_key, sink.region)
 
-    if sink.endpoint do
-      client
-      |> Map.put(:endpoint, sink.endpoint)
-      |> Map.put(:proto, sink.proto)
-    else
-      client
-    end
-    |> HttpClient.put_client()
+    client =
+      if sink.endpoint do
+        client
+        |> Map.put(:endpoint, sink.endpoint)
+        |> Map.put(:proto, sink.proto)
+      else
+        client
+      end
+
+    HttpClient.put_client(client)
   end
 
   @doc """
@@ -104,6 +105,6 @@ defmodule Sequin.Consumers.SqsSink do
   end
 
   def sqs_url_regex do
-    ~r/^https?:\/\/sqs\.(?<region>[a-z0-9-]+)\.(amazonaws\.com|localhost\.localstack\.cloud)(?::\d+)?\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/
+    ~r/^https?:\/\/sqs\.(?<region>[a-z0-9-]+)\.([a-zA-Z0-9.-]+)(?::\d+)?\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/
   end
 end

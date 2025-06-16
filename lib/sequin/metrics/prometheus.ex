@@ -251,31 +251,19 @@ defmodule Sequin.Prometheus do
   @spec increment_message_deliver_attempt(consumer_id :: String.t(), consumer_name :: String.t(), count :: number()) ::
           :ok
   def increment_message_deliver_attempt(consumer_id, consumer_name, count \\ 1) do
-    Counter.inc(
-      name: :sequin_message_deliver_attempt_count,
-      labels: [consumer_id, consumer_name],
-      count: count
-    )
+    Counter.inc([name: :sequin_message_deliver_attempt_count, labels: [consumer_id, consumer_name]], count)
   end
 
   @spec increment_message_deliver_success(consumer_id :: String.t(), consumer_name :: String.t(), count :: number()) ::
           :ok
   def increment_message_deliver_success(consumer_id, consumer_name, count \\ 1) do
-    Counter.inc(
-      name: :sequin_message_deliver_success_count,
-      labels: [consumer_id, consumer_name],
-      count: count
-    )
+    Counter.inc([name: :sequin_message_deliver_success_count, labels: [consumer_id, consumer_name]], count)
   end
 
   @spec increment_message_deliver_failure(consumer_id :: String.t(), consumer_name :: String.t(), count :: number()) ::
           :ok
   def increment_message_deliver_failure(consumer_id, consumer_name, count \\ 1) do
-    Counter.inc(
-      name: :sequin_message_deliver_failure_count,
-      labels: [consumer_id, consumer_name],
-      count: count
-    )
+    Counter.inc([name: :sequin_message_deliver_failure_count, labels: [consumer_id, consumer_name]], count)
   end
 
   @spec observe_messages_ingested_latency(consumer_id :: String.t(), consumer_name :: String.t(), latency_ms :: number()) ::
@@ -406,20 +394,12 @@ defmodule Sequin.Prometheus do
 
   @spec increment_bytes_ingested(consumer_id :: String.t(), consumer_name :: String.t(), bytes :: number()) :: :ok
   def increment_bytes_ingested(consumer_id, consumer_name, bytes) do
-    Counter.inc(
-      name: :sequin_bytes_ingested_total,
-      labels: [consumer_id, consumer_name],
-      count: bytes
-    )
+    Counter.inc([name: :sequin_bytes_ingested_total, labels: [consumer_id, consumer_name]], bytes)
   end
 
   @spec increment_bytes_delivered(consumer_id :: String.t(), consumer_name :: String.t(), bytes :: number()) :: :ok
   def increment_bytes_delivered(consumer_id, consumer_name, bytes) do
-    Counter.inc(
-      name: :sequin_bytes_delivered_total,
-      labels: [consumer_id, consumer_name],
-      count: bytes
-    )
+    Counter.inc([name: :sequin_bytes_delivered_total, labels: [consumer_id, consumer_name]], bytes)
   end
 
   @spec set_messages_in_redelivery(consumer_id :: String.t(), consumer_name :: String.t(), count :: number()) :: :ok

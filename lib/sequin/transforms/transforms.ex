@@ -891,6 +891,26 @@ defmodule Sequin.Transforms do
         ignored when ignored in ~w(id inserted_at updated_at account_id replication_slot_id sequence_id) ->
           {:cont, {:ok, acc}}
 
+        "table" ->
+          msg = """
+          `table` is deprecated. Use `source.include_tables` instead.
+
+          https://sequinstream.com/docs/reference/sequin-yaml#sink-source
+          """
+
+          error = Error.validation(summary: msg)
+          {:halt, {:error, error}}
+
+        "schema" ->
+          msg = """
+          `schema` is deprecated. Use `source.include_schemas` instead.
+
+          https://sequinstream.com/docs/reference/sequin-yaml#sink-source
+          """
+
+          error = Error.validation(summary: msg)
+          {:halt, {:error, error}}
+
         # Unknown field
         _ ->
           {:halt, {:error, Error.validation(summary: "Unknown field: #{key}")}}

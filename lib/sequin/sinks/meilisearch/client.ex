@@ -34,7 +34,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
       )
 
     case Req.put(req) do
-      {:ok, %{status: st } = resp} when st in 200..299 ->
+      {:ok, %{status: st} = resp} when st in 200..299 ->
         Trace.info(consumer.id, %Trace.Event{
           message: "Imported documents to #{index_name}",
           req_request: req,
@@ -162,7 +162,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
     end
   end
 
-    @doc """
+  @doc """
   Get information about an index.
   """
   def get_index(%__MODULE__{} = client, index_name) do

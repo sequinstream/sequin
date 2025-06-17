@@ -81,6 +81,7 @@
               "how-to/annotate-changes",
               "how-to/replicate-tables",
               "how-to/maintain-caches",
+              "how-to/sync-search-indexes",
               "how-to/setup-change-retention",
               "how-to/trigger-automated-workflows",
               "how-to/stream-postgres-to-aws-lambda"

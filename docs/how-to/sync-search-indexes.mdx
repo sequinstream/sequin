@@ -1,0 +1,163 @@
+---
+title: "How to sync search indexes with Sequin"
+sidebarTitle: "Sync search indexes"
+description: "Learn how to keep your search indexes in sync with your Postgres database. Deliver accurate, fresh search results in milliseconds."
+---
+
+This guide shows you how to keep your search indexes in sync with your Postgres database in real-time using Sequin.
+
+By the end of this guide, you'll have a working sink that automatically creates, updates, and deletes search index entries. Your users will get accurate, fresh search results as your data changes in your database.
+
+## When to use this approach
+
+This approach works well when:
+- **Row-to-document mapping is straightforward:** each search document maps to one table row.
+- **Freshness matters:** you want inserts, updates, and deletes reflected in search results within milliseconds, not minutes or hours.
+- **Transform logic is stateless:** everything you need to index already lives on the row or can be computed in a simple transform function.
+
+This approach is not a good fit if:
+- **Complex document assembly:** a single search document needs data from many tables or requires heavy joins/aggregations. (We’re building a join feature, but today you’d need an external pipeline.)
+- **Hard transactional guarantees:** you must update a row and query it in the same SQL transaction. Sequin provides eventual consistency, not in-transaction consistency.
+
+## Prerequisites
+
+If you're self-hosting Sequin, you'll need:
+
+1. [Sequin installed](/running-sequin) or a [Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/connect-postgres) to Sequin
+3. A supported search engine ([Elasticsearch](/reference/sinks/elasticsearch), [Typesense](/reference/sinks/typesense), etc.)
+
+## Create a sink to your search engine
+
+To get started, navigate to the "Sinks" page in the Sequin UI and click "Create Sink". Select your search engine as the sink type. Configure the sink as follows:
+
+<Steps titleSize="h3">
+  <Step title="Select the source">
+    1. Select your database from the connected databases list.
+    2. Choose the tables or schemas containing the data you want to index.
+  </Step>
+
+  <Step title="Apply filters">
+    Keep all operations enabled (insert, update, delete) to ensure every change in your database is accurately reflected in your search engine.
+
+    <Tip>
+      If there are rows in the source table you don't need to cache (for instance, perhaps you only want to index `active` products), you can apply a [filter](/reference/filters) to exclude them.
+    </Tip>
+  </Step>
+
+  <Step title="Transform the data">
+    Configure a [transform function](/reference/transforms) to store only the data you need in your search index:
+
+    ```elixir
+    def transform(_action, record, _changes, _metadata) do
+      record  # Remove unneeded metadata
+    end
+    ```
+    You can be more selective and only store certain fields in your search index:
+
+    ```elixir
+    def transform(_action, record, _changes, _metadata) do
+      %{
+        id: record.id,
+        name: record.name,
+        description: record.description
+      }
+    end
+    ```
+  </Step>
+
+  <Step title="Backfill your search index">
+    To hydrate your search index with the existing data in your database, you can start the sink with an initial [backfill](/reference/backfills).
+
+    If you only want a subset of your source tables in your search index, skip this step for now and run an [incremental backfill](/reference/backfills#backfill-configuration) after the sink is running.
+  </Step>
+
+  <Step title="Group by primary key">
+    by default, Sequin will group messages by primary key. This is a good default for most use cases as this will ensure every change to a specific row is processed in order.
+
+    If you need to more specific message grouping, you can configure the sink to group messages by a different field.
+  </Step>
+
+  <Step title="Configure routing">
+    By default, every change in your database will be routed to one index. This is a good default for sinks that include a single table.
+
+    For sinks that include multiple tables, you can enable "Dynamic routing" and add a [routing function](/reference/routing#redis-string-sink):
+
+    ```elixir
+    def route(action, record, changes, metadata) do
+      %{index: "#{metadata.table_name}"}
+    end
+    ```
+
+    This will route messages to the index corresponding to the table name. You could build more complex routing that sends messages to multiple indexes based on the data in the message.
+  </Step>
+
+  <Step title="Enter the connection details for your search engine">
+    Enter the configuration parameters for your search engine:
+    - [Elasticsearch](/reference/sinks/elasticsearch)
+    - [Typesense](/reference/sinks/typesense)
+    - [Meilisearch](https://github.com/sequinstream/sequin/issues/1371)
+    - [Turbopuffe](https://github.com/sequinstream/sequin/issues/1801)
+  </Step>
+
+  <Step title="Create the sink">
+    Give you sink a name and click "Create Sink".
+  </Step>
+</Steps>
+
+## Verify your cache is being updated
+
+If you specified a backfill, there should be messages in your search index:
+
+1. On the sink overview page, click the "Messages" tab. You should see messages flowing to your sink.
+2. Query your search engine to verify that the data is being updated:
+
+    <CodeGroup>
+
+    ```bash Typesense
+    curl -X GET "http://localhost:8108/collections/{{YOUR_COLLECTION_NAME}}/documents/search?q=*" \
+    -H "X-TYPESENSE-API-KEY: my-api-key"
+    ```
+
+    ```bash Elasticsearch
+    curl -X GET "http://localhost:9200/{{YOUR_INDEX_NAME}}/_search?pretty" \
+    -H "Authorization: ApiKey <api-key>" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "query": {
+        "match_all": {}
+      }
+    }'
+    ```
+    </CodeGroup>
+
+## Re-backfilling your search index
+
+You may need to re-backfill your search index in these scenarios:
+
+1. **After infrastructure changes**: after a search engine upgrade or migration
+2. **Data model updates**: after a data model or transform function change
+3. **Accidental deletion**: after a search index is accidentally deleted or dropped
+
+To do so, run a [backfill](/reference/backfills). You can trigger a backfill manually in the Sequin Console or using the [Sequin management API](/management-api/backfills/create).
+
+## Next steps
+
+You're search engine is now in sync with your database. Changes to your Postgres data will appear in your indexes within milliseconds, without any manual intervention or risk of stale data.
+
+Here are some helpful resources to bring this approach to production:
+
+<CardGroup>
+  <Card title="Connect your production database" icon="database" href="/connect-postgres">
+    Learn how to connect your production database to Sequin.
+  </Card>
+  <Card title="Deploy Sequin in production" icon="code" href="/how-to/deploy-to-production">
+    Learn how to deploy Sequin in production.
+  </Card>
+  <Card title="Learn more about Elasticsearch" icon="rotate" href="/reference/sinks/elasticsearch">
+    Learn more about how to configure your Elasticsearch sink.
+  </Card>
+  <Card title="Monitor your workflows" icon="chart-line" href="/reference/metrics">
+    Learn how to monitor your system with Sequin's built-in metrics.
+  </Card>
+</CardGroup>

@@ -134,6 +134,49 @@ defmodule SequinWeb.SinkConsumerControllerTest do
       assert %{"user_name" => "Thingy"} = sink_consumer.annotations
     end
 
+    test "creates a webhook sink (backwards compatible with `table` key)", %{
+      conn: conn,
+      account: account,
+      valid_attrs: valid_attrs,
+      table: table
+    } do
+      valid_attrs =
+        valid_attrs
+        |> Map.put(:table, "#{table.schema}.#{table.name}")
+        |> Map.delete(:source)
+
+      conn = post(conn, ~p"/api/sinks", valid_attrs)
+      assert %{"name" => name} = json_response(conn, 200)
+
+      {:ok, sink_consumer} = Consumers.find_sink_consumer(account.id, name: name)
+      assert sink_consumer.sink.type == :http_push
+      assert sink_consumer.actions == Enum.map(valid_attrs.actions, &String.to_atom/1)
+      assert is_nil(sink_consumer.transform_id)
+      assert [table_oid] = sink_consumer.source.include_table_oids
+      assert table_oid == table.oid
+    end
+
+    test "creates a webhook sink (backwards compatible with `schema` key)", %{
+      conn: conn,
+      account: account,
+      valid_attrs: valid_attrs,
+      table: table
+    } do
+      valid_attrs =
+        valid_attrs
+        |> Map.put(:schema, table.schema)
+        |> Map.delete(:source)
+
+      conn = post(conn, ~p"/api/sinks", valid_attrs)
+      assert %{"name" => name} = json_response(conn, 200)
+
+      {:ok, sink_consumer} = Consumers.find_sink_consumer(account.id, name: name)
+      assert sink_consumer.sink.type == :http_push
+      assert sink_consumer.actions == Enum.map(valid_attrs.actions, &String.to_atom/1)
+      assert is_nil(sink_consumer.transform_id)
+      assert [table.schema] == sink_consumer.source.include_schemas
+    end
+
     test "creates a webhook sink consumer defaulting batch to true", %{
       conn: conn,
       account: account,

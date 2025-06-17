@@ -12,13 +12,22 @@
   let listening = false;
 
   function handleEscapeKey(event: KeyboardEvent) {
-    if (event.key === "Escape" && !showConfirmDialog) {
+    if (event.key === "Escape") {
       event.preventDefault();
-      if (showConfirmOnExit) {
+      if (showConfirmDialog) {
+        cancelClose();
+      } else if (showConfirmOnExit) {
         showConfirmDialog = true;
       } else {
         dispatch("close");
       }
+    }
+  }
+
+  function handleKeyDown(event: CustomEvent<{ originalEvent: KeyboardEvent }>) {
+    if (event.detail.originalEvent.key === "Escape") {
+      event.detail.originalEvent.preventDefault();
+      handleEscapeKey(event.detail.originalEvent);
     }
   }
 
@@ -95,7 +104,9 @@
       </AlertDialog.Description>
     </AlertDialog.Header>
     <AlertDialog.Footer>
-      <AlertDialog.Cancel on:click={cancelClose}>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Cancel on:click={cancelClose} on:keydown={handleKeyDown}
+        >Cancel</AlertDialog.Cancel
+      >
       <AlertDialog.Action on:click={confirmClose}>Exit</AlertDialog.Action>
     </AlertDialog.Footer>
   </AlertDialog.Content>

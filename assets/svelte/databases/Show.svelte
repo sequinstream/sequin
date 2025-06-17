@@ -137,7 +137,7 @@
           <div class="space-y-4">
             <div>
               <div class="text-sm text-gray-500 mb-1">Avg. Latency</div>
-              {#if metrics.avg_latency}
+              {#if metrics.avg_latency !== null}
                 <div class="text-l font-bold">{metrics.avg_latency} ms</div>
               {:else}
                 <div class="flex items-center">

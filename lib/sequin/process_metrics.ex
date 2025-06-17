@@ -73,16 +73,45 @@ defmodule Sequin.ProcessMetrics do
 
   @metrics_key :__process_metrics__
   @metrics_last_logged_at_key :__process_metrics_last_logged_at__
+  @stack_key :__process_metrics_stack__
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Per‑process call‑stack for exclusive‑time bookkeeping
+  # Each frame is %{name: binary, start_us: integer, child_us: integer}
+  # ──────────────────────────────────────────────────────────────────────────
+
+  def __push_frame__(name, start_us) when is_binary(name) do
+    frame = %{name: name, start_us: start_us, child_us: 0}
+    Process.put(@stack_key, [frame | Process.get(@stack_key, [])])
+    :ok
+  end
+
+  # Pops the top frame, returns {exclusive_us, inclusive_us}
+  def __pop_frame__(finish_us) when is_integer(finish_us) do
+    [[%{start_us: start_us, child_us: child_us} = frame | rest]] =
+      [Process.get(@stack_key, [])]
+
+    inclusive_us = finish_us - start_us
+    exclusive_us = max(inclusive_us - child_us, 0)
+
+    # propagate my inclusive time to the parent (if any)
+    case rest do
+      [] ->
+        Process.delete(@stack_key)
+
+      [parent | tail] ->
+        parent = Map.update!(parent, :child_us, &(&1 + inclusive_us))
+        Process.put(@stack_key, [parent | tail])
+    end
+
+    {exclusive_us, inclusive_us, frame.name, length(rest)}
+  end
 
   # Default empty metrics structure
   @default_state %{
-    # Stores function timing metrics
     timing: %{},
-    # Stores throughput counters
     throughput: %{},
-    # Stores gauge values
     gauge: %{},
-    # Stores tags/metadata
     metadata: %{}
   }
 
@@ -100,7 +129,7 @@ defmodule Sequin.ProcessMetrics do
       @opts opts
 
       defp process_metrics_interval do
-        Keyword.get(@opts, :interval, :timer.seconds(30))
+        Keyword.get(@opts, :interval, :timer.seconds(10))
       end
 
       defp process_metrics_logger_prefix do
@@ -248,12 +277,9 @@ defmodule Sequin.ProcessMetrics do
 
   @doc """
   Updates timing metrics for a function.
-  Used internally by the decorator.
 
-  ## Parameters
-
-  * `name` - The name of the function
-  * `time_ms` - The time in milliseconds
+  * `name` – function name
+  * `time_ms` – **exclusive** runtime in milliseconds
   """
   def update_timing(name, time_ms) do
     update_metric(:timing, name, %{count: 1, total_ms: time_ms}, fn metrics ->
@@ -265,21 +291,7 @@ defmodule Sequin.ProcessMetrics do
   end
 
   @doc """
-  Handles the process_logging message.
-
-  This function:
-  1. Collects process stats (memory, message queue length)
-  2. Collects timing metrics from the process dictionary
-  3. Calculates unaccounted time
-  4. Logs all metrics
-  5. Clears timing metrics
-  6. Schedules the next process_logging message
-
-  ## Parameters
-
-  * `interval` - The interval in milliseconds between logging process metrics
-  * `metric_prefix` - The prefix to use for StatsD metrics
-  * `tags` - Additional tags to include in StatsD metrics
+  Handles the `:process_logging` tick.
   """
   def handle_process_logging(metric_prefix: metric_prefix, logger_prefix: logger_prefix, tags: tags) do
     now = System.monotonic_time(:millisecond)
@@ -445,39 +457,36 @@ end
 
 defmodule Sequin.ProcessMetrics.Decorator do
   @moduledoc """
-  Provides decorators for tracking function invocations and runtime.
-
-  ## Usage
-
-  ```elixir
-  use Sequin.ProcessMetrics.Decorator
-
-  @decorate track_metrics("process_message")
-  def process_message(message) do
-    # Your code here
-  end
-  ```
+  Decorators for tracking **exclusive** function runtimes.
   """
 
   use Decorator.Define, track_metrics: 1
 
   @doc """
-  A decorator that tracks function invocations and runtime.
+  `@decorate track_metrics("my_fun")`
 
-  ## Parameters
-
-  * `name` - The name of the function to track
+  Records *self time* only; parent time is not double‑counted.
   """
   def track_metrics(name, body, _context) do
     quote do
-      # Execute the function and time it
-      {time, result} = :timer.tc(fn -> unquote(body) end)
+      start_us = System.monotonic_time(:microsecond)
+      # push a new frame onto the per‑process stack
+      Sequin.ProcessMetrics.__push_frame__(unquote(name), start_us)
 
-      # Convert microseconds to milliseconds and update metrics
-      time_ms = div(time, 1000)
-      Sequin.ProcessMetrics.update_timing(unquote(name), time_ms)
+      try do
+        unquote(body)
+      after
+        finish_us = System.monotonic_time(:microsecond)
 
-      result
+        {exclusive_us, _inclusive_us, _fun_name, _depth} =
+          Sequin.ProcessMetrics.__pop_frame__(finish_us)
+
+        # Convert µs → ms (integer division) and record
+        Sequin.ProcessMetrics.update_timing(
+          unquote(name),
+          div(exclusive_us, 1_000)
+        )
+      end
     end
   end
 end

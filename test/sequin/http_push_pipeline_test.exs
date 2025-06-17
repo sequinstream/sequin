@@ -543,7 +543,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       }
 
       assert :ok = MessageLedgers.wal_cursors_ingested(consumer.id, [wal_cursor])
-      assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
+      assert {:ok, 1} = MessageLedgers.count_undelivered_wal_cursors(consumer.id)
 
       start_supervised!(
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
@@ -556,7 +556,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 1_000
 
-      assert {:ok, 0} = MessageLedgers.count_commit_verification_set(consumer.id)
+      assert {:ok, 0} = MessageLedgers.count_undelivered_wal_cursors(consumer.id)
     end
   end
 

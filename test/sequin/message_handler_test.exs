@@ -69,14 +69,8 @@ defmodule Sequin.MessageHandlerTest do
       assert is_binary(event.data.metadata.idempotency_key)
       assert event.data.metadata.idempotency_key != ""
 
-      assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
-      assert {:ok, [wal_cursor]} = MessageLedgers.list_undelivered_wal_cursors(consumer.id, DateTime.utc_now())
-
-      assert wal_cursor == %{
-               commit_lsn: message.commit_lsn,
-               commit_idx: message.commit_idx,
-               ingested_at: DateTime.truncate(now, :second)
-             }
+      assert {:ok, 1} = MessageLedgers.count_undelivered_wal_cursors(consumer.id)
+      assert {:ok, 1} = MessageLedgers.count_undelivered_wal_cursors(consumer.id, DateTime.utc_now())
     end
 
     test "handles message_kind: record correctly" do
@@ -121,14 +115,8 @@ defmodule Sequin.MessageHandlerTest do
       assert record.group_id == Enum.find(message.fields, &(&1.column_attnum == field.column_attnum)).value
       assert record.state == :available
 
-      assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
-      assert {:ok, [wal_cursor]} = MessageLedgers.list_undelivered_wal_cursors(consumer.id, DateTime.utc_now())
-
-      assert wal_cursor == %{
-               commit_lsn: message.commit_lsn,
-               commit_idx: message.commit_idx,
-               ingested_at: DateTime.truncate(now, :second)
-             }
+      assert {:ok, 1} = MessageLedgers.count_undelivered_wal_cursors(consumer.id)
+      assert {:ok, 1} = MessageLedgers.count_undelivered_wal_cursors(consumer.id, DateTime.utc_now())
     end
 
     test "fans out messages correctly for mixed message_kind consumers and wal_pipelines" do

@@ -114,6 +114,7 @@
                   "reference/sinks/rabbitmq",
                   "reference/sinks/redis-string",
                   "reference/sinks/redis-stream",
+                  "reference/sinks/s2",
                   {
                     "group": "Sequin Stream sink",
                     "pages": [

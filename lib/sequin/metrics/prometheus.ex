@@ -48,6 +48,43 @@ defmodule Sequin.Prometheus do
       labels: [:replication_slot_id, :slot_name]
     )
 
+    # Process metrics
+    Gauge.new(
+      name: :sequin_slot_processor_server_busy_percent,
+      labels: [:replication_id, :slot_name],
+      help: "The busy percent of the slot processor server."
+    )
+
+    Gauge.new(
+      name: :sequin_slot_processor_server_operation_percent,
+      labels: [:replication_id, :slot_name, :operation],
+      help: "The percent of time spent on each operation in the slot processor server."
+    )
+
+    Gauge.new(
+      name: :sequin_slot_message_handler_busy_percent,
+      labels: [:replication_id, :slot_name, :processor_idx],
+      help: "The busy percent of the slot message handler."
+    )
+
+    Gauge.new(
+      name: :sequin_slot_message_handler_operation_percent,
+      labels: [:replication_id, :slot_name, :processor_idx, :operation],
+      help: "The percent of time spent on each operation in the slot message handler."
+    )
+
+    Gauge.new(
+      name: :sequin_slot_message_store_busy_percent,
+      labels: [:consumer_id, :consumer_name, :partition],
+      help: "The busy percent of the slot message store."
+    )
+
+    Gauge.new(
+      name: :sequin_slot_message_store_operation_percent,
+      labels: [:consumer_id, :consumer_name, :partition, :operation],
+      help: "The percent of time spent on each operation in the slot message store."
+    )
+
     # SQS Pipeline metrics
     Counter.declare(
       name: :sequin_http_via_sqs_message_deliver_attempt_count,
@@ -322,6 +359,80 @@ defmodule Sequin.Prometheus do
   @spec set_messages_buffered(consumer_id :: String.t(), consumer_name :: String.t(), count :: number()) :: :ok
   def set_messages_buffered(consumer_id, consumer_name, count) do
     Gauge.set([name: :sequin_messages_buffered, labels: [consumer_id, consumer_name]], count)
+  end
+
+  @spec set_slot_processor_server_busy_percent(replication_id :: String.t(), slot_name :: String.t(), percent :: number()) ::
+          :ok
+  def set_slot_processor_server_busy_percent(replication_id, slot_name, percent) do
+    Gauge.set([name: :sequin_slot_processor_server_busy_percent, labels: [replication_id, slot_name]], percent)
+  end
+
+  @spec set_slot_processor_server_operation_percent(
+          replication_id :: String.t(),
+          slot_name :: String.t(),
+          operation :: String.t(),
+          percent :: number()
+        ) :: :ok
+  def set_slot_processor_server_operation_percent(replication_id, slot_name, operation, percent) do
+    Gauge.set(
+      [name: :sequin_slot_processor_server_operation_percent, labels: [replication_id, slot_name, operation]],
+      percent
+    )
+  end
+
+  @spec set_slot_message_handler_busy_percent(
+          replication_id :: String.t(),
+          slot_name :: String.t(),
+          processor_idx :: number(),
+          percent :: number()
+        ) ::
+          :ok
+  def set_slot_message_handler_busy_percent(replication_id, slot_name, processor_idx, percent) do
+    Gauge.set(
+      [name: :sequin_slot_message_handler_busy_percent, labels: [replication_id, slot_name, processor_idx]],
+      percent
+    )
+  end
+
+  @spec set_slot_message_handler_operation_percent(
+          replication_id :: String.t(),
+          slot_name :: String.t(),
+          processor_idx :: number(),
+          operation :: String.t(),
+          percent :: number()
+        ) :: :ok
+  def set_slot_message_handler_operation_percent(replication_id, slot_name, processor_idx, operation, percent) do
+    Gauge.set(
+      [
+        name: :sequin_slot_message_handler_operation_percent,
+        labels: [replication_id, slot_name, processor_idx, operation]
+      ],
+      percent
+    )
+  end
+
+  @spec set_slot_message_store_busy_percent(
+          consumer_id :: String.t(),
+          consumer_name :: String.t(),
+          partition :: number(),
+          percent :: number()
+        ) :: :ok
+  def set_slot_message_store_busy_percent(consumer_id, consumer_name, partition, percent) do
+    Gauge.set([name: :sequin_slot_message_store_busy_percent, labels: [consumer_id, consumer_name, partition]], percent)
+  end
+
+  @spec set_slot_message_store_operation_percent(
+          consumer_id :: String.t(),
+          consumer_name :: String.t(),
+          partition :: number(),
+          operation :: String.t(),
+          percent :: number()
+        ) :: :ok
+  def set_slot_message_store_operation_percent(consumer_id, consumer_name, partition, operation, percent) do
+    Gauge.set(
+      [name: :sequin_slot_message_store_operation_percent, labels: [consumer_id, consumer_name, partition, operation]],
+      percent
+    )
   end
 
   @spec increment_http_via_sqs_message_deliver_attempt_count(

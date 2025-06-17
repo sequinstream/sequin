@@ -315,9 +315,9 @@ defmodule Sequin.Runtime.SinkPipeline do
   defp processors_config(pipeline_mod, consumer) do
     default = [
       default: [
-        concurrency: System.schedulers_online(),
-        max_demand: 10,
-        min_demand: 5
+        concurrency: System.schedulers_online() * 2,
+        max_demand: 150,
+        min_demand: 50
       ]
     ]
 

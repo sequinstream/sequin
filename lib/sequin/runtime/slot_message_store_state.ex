@@ -15,7 +15,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   @type message :: ConsumerRecord.t() | ConsumerEvent.t()
   @type cursor_tuple :: {commit_lsn :: non_neg_integer(), commit_idx :: non_neg_integer()}
 
-  @default_setting_max_messages 500_000
+  @default_setting_max_messages 50_000
 
   typedstruct do
     field :consumer, SinkConsumer.t()
@@ -135,7 +135,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     unpersisted_cursor_tuples_for_table_reader_batches =
       Multiset.union(state.unpersisted_cursor_tuples_for_table_reader_batches, batch_id, MapSet.new(cursor_tuples))
 
-    case put_messages(state, messages) do
+    case put_messages(state, messages, skip_limit_check?: true) do
       {:ok, %State{} = state} ->
         {:ok,
          %{

@@ -50,7 +50,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   # 100 MB
   @max_accumulated_bytes 100 * 1024 * 1024
-  @max_accumulated_messages 100_000
+  @max_accumulated_messages 2500
   @backfill_batch_high_watermark Constants.backfill_batch_high_watermark()
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])

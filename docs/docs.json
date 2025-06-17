@@ -33,6 +33,7 @@
                   "quickstart/gcp-pubsub",
                   "quickstart/nats",
                   "quickstart/rabbitmq",
+                  "quickstart/s2",
                   "quickstart/sequin-stream",
                   "quickstart/azure-event-hubs",
                   "quickstart/redpanda"
@@ -64,12 +65,13 @@
               "how-to/stream-postgres-to-gcp-pubsub",
               "how-to/stream-postgres-to-kafka",
               "how-to/stream-postgres-to-nats",
-              "how-to/stream-postgres-to-typesense",
-              "how-to/stream-postgres-to-a-webhook-endpoint",
               "how-to/stream-postgres-to-rabbitmq",
               "how-to/stream-postgres-to-redis-string",
               "how-to/stream-postgres-to-redis-stream",
-              "how-to/stream-postgres-to-sequin-stream"
+              "how-to/stream-postgres-to-s2",
+              "how-to/stream-postgres-to-sequin-stream",
+              "how-to/stream-postgres-to-typesense",
+              "how-to/stream-postgres-to-a-webhook-endpoint"
             ]
           },
           {

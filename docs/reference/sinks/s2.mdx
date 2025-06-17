@@ -1,0 +1,77 @@
+---
+title: "S2 sink"
+sidebarTitle: "S2 sink"
+description: "Reference for configuring and using the S2 sink with Sequin."
+---
+The **S2 sink** delivers database change events to an [S2](https://s2.dev/) stream.
+
+S2 ("Stream Store") is a cloud-native storage layer purpose-built for **data in motion**. Streams are unlimited, durable, and serverless – you pay only for the data you append and read.
+
+## Configuration
+
+When you create an S2 sink you'll provide three fields:
+
+- **Basin**
+
+    The S2 basin that owns your stream. A basin is similar to an S3 bucket – it namespaces one or more streams.
+
+- **Stream**
+
+    The name of the stream inside the basin (e.g. `products`).
+
+- **Access Token**
+
+    An S2 access token with *append* permissions for the target stream. Generate tokens in the S2 web console under **Access Tokens**.
+
+<Info>
+  The Sequin S2 sink uses the access token provided to make HTTPS requests to the S2 REST API.
+</Info>
+
+## Message format
+
+Sequin sends **JSON** [messages](/reference/messages) and is encoded as UTF-8 text.
+
+You can customize the payload with [transform functions](/reference/transforms).
+
+## Retry behavior
+
+If S2 rejects a write (for example due to throttling or network errors) Sequin:
+
+1. Immediately re-queues the message at the front of the delivery queue.
+2. Retries with exponential back-off
+3. Continues indefinitely until the message is acknowledged by S2 or you "Acknowledge" the message from the **Messages** tab.
+
+## Record size limits
+
+S2 currently supports records up to **4 MiB** (the maximum size of a single append request). If a message exceeds this limit S2 returns `payload too large` and Sequin will keep retrying. The typical fix is to:
+
+1. Identify the offending column(s).
+2. Create a transform that removes or compresses those fields.
+3. Retry the failed message or "Acknowledge" it as undeliverable.
+
+## Grouping & ordering
+
+The S2 sink preserves the *commit-timestamp order* of messages that share the same **group**. By default the group is the primary key of the source row, ensuring changes to a single row arrive in order.
+
+You can override grouping in the sink UI by specifying one or more columns (for example `user_id`). Messages with different group values may be interleaved, but messages with the same group value are delivered sequentially.
+
+## Debugging
+
+Use the Sequin console to monitor delivery:
+
+1. Open the sink and switch to the **Messages** tab.
+2. Filter by *Failed* to see messages Sequin could not deliver.
+3. Click a message to inspect the last S2 error response and stack trace.
+
+Common issues include:
+
+- Invalid or expired access token (S2 returns **401 Unauthorized**).
+- Basin / stream name typo (S2 returns **404 Not Found**).
+- Record size > 4 MiB (**413 Payload Too Large**).
+
+For live verification you can tail the stream with the S2 CLI:
+
+```bash
+s2 read s2://<basin>/<stream>
+```
+Successful reads confirm that S2 is receiving and storing events.

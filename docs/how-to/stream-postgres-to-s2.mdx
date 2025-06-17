@@ -1,0 +1,128 @@
+---
+title: "How to stream Postgres to S2"
+sidebarTitle: "S2"
+description: "Connect Postgres to S2 with Sequin. Stream database changes for real-time analytics and event-driven pipelines."
+---
+
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to an **S2** stream using Sequin.
+
+With Postgres data streaming to S2 you can trigger event-driven workflows, feed analytics pipelines, and fan-out events to other services.
+
+By the end of this how-to, you'll have database changes flowing to an S2 stream.
+
+## Prerequisites
+
+If you're self-hosting Sequin, you'll need:
+
+1. [Sequin installed](/running-sequin)
+2. [A database connected](/connect-postgres)
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/connect-postgres)
+
+And for S2 you'll need:
+
+1. A [S2 Cloud account](https://s2.dev/sign-up)
+2. The [S2 CLI](https://s2.dev/docs/quickstart#get-started-with-the-cli) installed (optional but recommended)
+
+## Basic setup
+
+### Create an S2 Access Token
+
+In the [S2 web console](https://s2.dev/dashboard), open the **Access Tokens** page and click **+ Issue** to generate a new token.
+
+Save this token in a secure location—you'll use it to configure both the S2 CLI and your Sequin S2 sink.
+
+### Create a basin and stream
+
+If you don't already have a basin and stream, create them via the S2 console or the CLI:
+
+```bash
+# Configure the CLI with your access token
+s2 config set --access-token <your-access-token>
+
+# Create a basin
+s2 create-basin my-basin
+
+# Create a stream called `products` inside that basin
+s2 create-stream s2://my-basin/products
+```
+
+You can also perform these steps in the S2 console by navigating to **Basins → + Create Basin** and then **+ Create Stream**.
+
+<Check>
+  Your S2 stream is now ready to receive data.
+</Check>
+
+## Create an S2 sink
+
+Navigate to the **Sinks** tab in the Sequin console, click **Create Sink**, and choose **S2** as the sink type.
+
+### Configure the source
+
+<Steps>
+  <Step title="Select source schemas and tables">
+    Under **Source**, pick the schemas and tables you want to stream data from.
+  </Step>
+
+  <Step title="Specify filters">
+    You can restrict to `insert`, `update`, and/or `delete` actions, and you can apply additional [filters](/reference/filters).
+  </Step>
+
+  <Step title="Specify backfill">
+    Optionally send a [backfill](/reference/backfills) of existing rows. Disable **Backfill** if you only want new changes.
+  </Step>
+</Steps>
+
+### Configure S2
+
+<Steps>
+  <Step title="Enter connection details">
+    In the **S2** configuration card, enter:
+
+    - **Basin** – the basin name you created earlier (e.g. `my-basin`)
+    - **Stream** – the stream name (e.g. `products`)
+    - **Access Token** – the S2 access token you generated
+  </Step>
+
+  <Step title="Create the sink">
+    Give your sink a name and click **Create Sink**.
+  </Step>
+</Steps>
+
+## Verify & debug
+
+To verify that your S2 sink is working:
+
+1. Make a change in your source table.
+2. Confirm that the **Messages** count for your sink increases in the Sequin console, and observe the new message in the **Messages** tab.
+3. Use the S2 CLI to read from the stream and confirm events arrive:
+
+   ```bash
+   s2 read s2://my-basin/products
+   ```
+
+If messages don't seem to be flowing:
+
+1. Open the sink's **Messages** tab to inspect in-flight, failed, and delivered messages.
+2. Click a failed message to see delivery logs and error details returned by S2.
+
+## Next steps
+
+- **Process the events**
+
+  Build a consumer that reads from your S2 stream and processes the data.
+
+- **Deploy your implementation**
+
+  When you're ready, follow "[How to deploy to production](/how-to/deploy-to-production)".
+
+- **Advanced configuration**
+
+  Learn about batching, ordering guarantees, and other options in the [S2 sink reference](/reference/sinks/s2).
+
+- **Start from scratch**
+
+  If you need a more guided tutorial, check out the [S2 sink quickstart](/quickstart/s2).

@@ -202,9 +202,24 @@
             <ResponseField name="emulator_base_url" type="string" >
                 Emulator base URL if using emulator
             </ResponseField>
-            </Expandable>
+        </Expandable>
 
-            <Expandable title="Sequin Stream properties" >
+        <Expandable title="S2 properties" >
+            <ResponseField name="type" type="string" >
+                Must be "s2"
+            </ResponseField>
+            <ResponseField name="basin" type="string" >
+                The name of the S2 basin
+            </ResponseField>
+            <ResponseField name="stream" type="string" >
+                The name of the S2 stream
+            </ResponseField>
+            <ResponseField name="access_token" type="string" >
+                The access token for the S2 account associated with the basin and stream
+            </ResponseField>
+        </Expandable>
+
+        <Expandable title="Sequin Stream properties" >
             <ResponseField name="type" type="string" >
                 Must be "sequin_stream"
             </ResponseField>

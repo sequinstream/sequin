@@ -4,7 +4,6 @@ defmodule Sequin.Factory.ReplicationFactory do
 
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
-  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
@@ -13,6 +12,7 @@ defmodule Sequin.Factory.ReplicationFactory do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.WalPipeline.SourceTable.ColumnFilter
 
   def commit_lsn, do: Factory.unique_integer()
 
@@ -255,7 +255,7 @@ defmodule Sequin.Factory.ReplicationFactory do
       %WalPipeline{
         name: "wal_pipeline_#{Factory.sequence()}",
         seq: Factory.sequence(),
-        source_tables: [ConsumersFactory.source_table()],
+        source_tables: [source_table()],
         replication_slot_id: Factory.uuid(),
         destination_oid: Factory.unique_integer(),
         destination_database_id: Factory.uuid(),
@@ -356,4 +356,70 @@ defmodule Sequin.Factory.ReplicationFactory do
     |> then(&WalEvent.create_changeset(%WalEvent{}, &1))
     |> Repo.insert!()
   end
+
+  def source_table(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Sequin.WalPipeline.SourceTable{
+        oid: Factory.unique_integer(),
+        actions: [:insert, :update, :delete],
+        column_filters: [column_filter()],
+        group_column_attnums: nil,
+        sort_column_attnum: Factory.unique_integer()
+      },
+      attrs
+    )
+  end
+
+  def source_table_attrs(attrs \\ []) do
+    attrs
+    |> source_table()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def column_filter(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    value_type =
+      Map.get(
+        attrs,
+        :value_type,
+        Enum.random([
+          :string,
+          :cistring,
+          :number,
+          :boolean,
+          :null,
+          :list
+        ])
+      )
+
+    merge_attributes(
+      %ColumnFilter{
+        column_attnum: Factory.unique_integer(),
+        operator: generate_operator(value_type),
+        value: %{__type__: value_type, value: generate_value(value_type)}
+      },
+      Map.delete(attrs, :value_type)
+    )
+  end
+
+  def column_filter_attrs(attrs \\ []) do
+    attrs
+    |> column_filter()
+    |> Sequin.Map.from_ecto()
+  end
+
+  defp generate_value(:string), do: Faker.Lorem.sentence()
+  defp generate_value(:cistring), do: Faker.Internet.email()
+  defp generate_value(:number), do: Enum.random([Factory.integer(), Factory.float()])
+  defp generate_value(:boolean), do: Factory.boolean()
+  defp generate_value(:null), do: nil
+  defp generate_value(:list), do: Enum.map(1..3, fn _ -> Factory.word() end)
+
+  defp generate_operator(:null), do: Factory.one_of([:is_null, :not_null])
+  defp generate_operator(:list), do: Factory.one_of([:in, :not_in])
+  defp generate_operator(:boolean), do: Factory.one_of([:==, :!=])
+  defp generate_operator(_), do: Factory.one_of([:==, :!=, :>, :<, :>=, :<=])
 end

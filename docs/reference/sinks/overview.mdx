@@ -8,11 +8,15 @@ A **sink** in Sequin is a destination for your Postgres data.
 
 ## Source tables
 
-Sequin sinks can be configured to stream changes for one or more tables in your database. You can either specify a single table or an entire schema.
+Sequin sinks can be configured to stream changes for one or many tables in your database. You can specify to sink:
 
-When specifying a schema, Sequin will stream changes for all tables in that schema. You can include/exclude tables in the schema when configuring the [publication](/reference/databases#publications).
+- **All**: Capture changes from every table / schema exposed by the publication. When new schemas or tables are added, they are automatically included.
+- **Include only selected schemas or tables**: Choose the schemas and tables you care about; changes from only those schemas and tables will be processed in your sink.
+- **Exclude specific schemas or tables**: Start with everything in the publication, then list the schemas or tables you want to omit. Future schemas and tables will be included in your sink unless they appear on your exclusion list.
 
-When specifying a single table, Sequin will stream changes for that table.
+<Note>
+Sequin will only stream changes for tables that are exposed by the [publication](/connect-postgres#adding-tables-to-your-publication). If you don't see a table in the sink configuration, it's because it's not exposed by the publication.
+</Note>
 
 ## Delivery Guarantees
 
@@ -53,11 +57,6 @@ All sinks have a "Messages" tab that shows the status of messages currently in f
 You can click into any failed message to view the delivery logs and error details.
 
 ## Advanced configuration
-
-### Max memory usage
-When sink destinations can't keep up with incoming messages, Sequin continues to advance the Postgres replication slot and buffer messages in memory.
-
-By default, each sink is set to a max memory usage of 128MB. You can configure the max memory usage for a sink by setting the `max_memory_mb` parameter in the sink configuration.
 
 ### Load shedding policy
 If a sink's in-memory buffer fills up, the `load_shedding_policy` will be triggered. There are two available load shedding policies:

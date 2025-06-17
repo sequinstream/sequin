@@ -3,14 +3,14 @@ defmodule SequinWeb.WalPipelinesLive.Show do
   @moduledoc false
   use SequinWeb, :live_view
 
-  alias Sequin.Consumers.SequenceFilter.ColumnFilter
-  alias Sequin.Consumers.SourceTable
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Health
   alias Sequin.Postgres
   alias Sequin.Replication
   alias Sequin.Repo
+  alias Sequin.WalPipeline.SourceTable
+  alias Sequin.WalPipeline.SourceTable.ColumnFilter
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do

@@ -152,7 +152,9 @@ defmodule Sequin.Postgres.ReplicationConnection do
   defstruct protocol: nil,
             state: nil,
             reconnect_backoff: 500,
-            streaming: nil
+            streaming: nil,
+            buffering_sock_messages?: false,
+            buffered_sock_message: nil
 
   ## PUBLIC API ##
 
@@ -237,6 +239,8 @@ defmodule Sequin.Postgres.ReplicationConnection do
               | {:query, query, state}
               | {:stream, query, stream_opts, state}
               | {:disconnect, reason, state}
+              | {:inactivate_socket, state}
+              | {:activate_socket, state}
 
   @doc """
   Callback for `call/3`.
@@ -437,6 +441,9 @@ defmodule Sequin.Postgres.ReplicationConnection do
   @impl :gen_statem
   def callback_mode, do: :handle_event_function
 
+  defguardp is_socket_message(message)
+            when elem(message, 0) in [:tcp, :tcp_closed, :tcp_error, :ssl, :ssl_closed, :ssl_error]
+
   @doc false
   @impl :gen_statem
   def init({mod, arg, opts}) do
@@ -454,7 +461,8 @@ defmodule Sequin.Postgres.ReplicationConnection do
 
         state = %__MODULE__{
           reconnect_backoff: reconnect_backoff,
-          state: {mod, mod_state}
+          state: {mod, mod_state},
+          buffered_sock_message: nil
         }
 
         put_opts(opts)
@@ -493,18 +501,29 @@ defmodule Sequin.Postgres.ReplicationConnection do
     handle(mod, :handle_call, [msg, from, mod_state], from, s)
   end
 
-  def handle_event(:info, msg, @state, %{protocol: protocol, streaming: streaming} = s) do
+  def handle_event(:info, msg, @state, %__MODULE__{buffering_sock_messages?: true, buffered_sock_message: nil} = s)
+      when is_socket_message(msg) do
+    {:keep_state, %{s | buffered_sock_message: msg}}
+  end
+
+  def handle_event(:info, msg, @state, %__MODULE__{buffering_sock_messages?: true}) when is_socket_message(msg) do
+    raise "Unexpectedly received a second socket message while buffering sock messages"
+  end
+
+  def handle_event(:info, msg, @state, %__MODULE__{protocol: protocol, streaming: streaming} = s)
+      when is_socket_message(msg) do
     case Protocol.handle_copy_recv(msg, streaming, protocol) do
       {:ok, copies, protocol} ->
         handle_data(copies, %{s | protocol: protocol})
 
-      :unknown ->
-        %{state: {mod, mod_state}} = s
-        maybe_handle(mod, :handle_info, [msg, mod_state], s)
-
       {error, reason, protocol} ->
         reconnect_or_stop(error, reason, protocol, s)
     end
+  end
+
+  def handle_event(:info, msg, _state, s) do
+    %{state: {mod, mod_state}} = s
+    maybe_handle(mod, :handle_info, [msg, mod_state], s)
   end
 
   def handle_event({:timeout, :reconnect}, nil, @state, s) do
@@ -553,6 +572,14 @@ defmodule Sequin.Postgres.ReplicationConnection do
           {error, reason, protocol} -> reconnect_or_stop(error, reason, protocol, s)
         end
 
+      {:inactivate_socket, mod_state} ->
+        s = %__MODULE__{s | buffering_sock_messages?: true, state: {mod, mod_state}}
+        {:keep_state, s}
+
+      {:activate_socket, mod_state} ->
+        s = maybe_flush_buffered_message(s)
+        {:keep_state, %{s | state: {mod, mod_state}}}
+
       {:stream, query, opts, mod_state} when streaming == nil ->
         s = %{s | state: {mod, mod_state}}
         max_messages = opts[:max_messages] || @max_messages
@@ -591,6 +618,17 @@ defmodule Sequin.Postgres.ReplicationConnection do
     end
   end
 
+  defp maybe_flush_buffered_message(%__MODULE__{buffering_sock_messages?: true, buffered_sock_message: nil} = s),
+    do: %{s | buffering_sock_messages?: false}
+
+  defp maybe_flush_buffered_message(%__MODULE__{buffering_sock_messages?: true} = s) do
+    send(self(), s.buffered_sock_message)
+
+    %{s | buffering_sock_messages?: false, buffered_sock_message: nil}
+  end
+
+  defp maybe_flush_buffered_message(s), do: s
+
   defp stream_in_progress(command, mod, mod_state, from, s) do
     Logger.warning("received #{command} while stream is already in progress")
     from && reply(from, {__MODULE__, :stream_in_progress})
@@ -603,7 +641,12 @@ defmodule Sequin.Postgres.ReplicationConnection do
     # Exception is unused
     Protocol.disconnect(%RuntimeError{}, protocol)
 
-    maybe_handle(mod, :handle_disconnect, [error, reason, mod_state], %{s | protocol: nil, streaming: nil})
+    maybe_handle(mod, :handle_disconnect, [error, reason, mod_state], %__MODULE__{
+      s
+      | protocol: nil,
+        streaming: nil,
+        buffered_sock_message: nil
+    })
   end
 
   # defp reconnect_or_stop(error, reason, _protocol, %{auto_reconnect: true} = s) when error in [:error, :disconnect] do

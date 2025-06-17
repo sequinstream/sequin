@@ -13,13 +13,9 @@ defmodule SequinWeb.BackfillControllerTest do
     database = DatabasesFactory.insert_postgres_database!(account_id: account.id, tables: [table_attrs])
     [table] = database.tables
 
-    sequence =
-      DatabasesFactory.insert_sequence!(account_id: account.id, postgres_database_id: database.id, table_oid: table.oid)
-
     sink_consumer =
       ConsumersFactory.insert_sink_consumer!(
         account_id: account.id,
-        sequence_id: sequence.id,
         postgres_database_id: database.id
       )
 
@@ -98,14 +94,25 @@ defmodule SequinWeb.BackfillControllerTest do
   describe "create" do
     test "creates a backfill for the given sink consumer", %{
       conn: conn,
-      sink_consumer: sink_consumer
+      sink_consumer: sink_consumer,
+      table: table
     } do
       sink_identifier = Enum.random([sink_consumer.id, sink_consumer.name])
-      conn = post(conn, ~p"/api/sinks/#{sink_identifier}/backfills")
+      conn = post(conn, ~p"/api/sinks/#{sink_identifier}/backfills", %{table: "#{table.schema}.#{table.name}"})
       assert backfill_json = json_response(conn, 200)
 
       assert backfill_json["sink_consumer"] == sink_consumer.name
       assert backfill_json["state"] == "active"
+    end
+
+    test "returns error when table is not found", %{
+      conn: conn,
+      table: table,
+      sink_consumer: sink_consumer
+    } do
+      sink_identifier = Enum.random([sink_consumer.id, sink_consumer.name])
+      conn = post(conn, ~p"/api/sinks/#{sink_identifier}/backfills", %{table: "public.#{table.name}"})
+      assert json_response(conn, 422)
     end
 
     test "returns 404 if sink consumer belongs to another account", %{
@@ -117,21 +124,18 @@ defmodule SequinWeb.BackfillControllerTest do
     end
   end
 
-  describe "create with schema filter" do
+  describe "create with exactly one included_table_oid" do
     setup %{account: account} do
       column_attrs = DatabasesFactory.column_attrs(type: "text", is_pk?: true)
       table_attrs = DatabasesFactory.table_attrs(columns: [column_attrs])
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id, tables: [table_attrs])
       [table] = database.tables
 
-      schema_filter = ConsumersFactory.schema_filter_attrs(schema: table.schema)
-
       sink_consumer =
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
-          schema_filter: schema_filter,
-          sequence_id: nil,
-          postgres_database_id: database.id
+          postgres_database_id: database.id,
+          source: ConsumersFactory.source_attrs(include_table_oids: [table.oid])
         )
 
       %{
@@ -140,26 +144,15 @@ defmodule SequinWeb.BackfillControllerTest do
       }
     end
 
-    test "creates a backfill for a sink consumer with schema filter (schema.table)", %{
+    test "creates a backfill for a sink consumer without specifying a table", %{
       conn: conn,
-      table: table,
       sink_consumer: sink_consumer
     } do
       sink_identifier = Enum.random([sink_consumer.id, sink_consumer.name])
 
-      conn = post(conn, ~p"/api/sinks/#{sink_identifier}/backfills", %{table: "#{table.schema}.#{table.name}"})
+      conn = post(conn, ~p"/api/sinks/#{sink_identifier}/backfills")
       assert backfill_json = json_response(conn, 200)
       assert backfill_json["sink_consumer"] == sink_consumer.name
-    end
-
-    test "returns error when table is not found", %{
-      conn: conn,
-      table: table,
-      sink_consumer: sink_consumer
-    } do
-      sink_identifier = Enum.random([sink_consumer.id, sink_consumer.name])
-      conn = post(conn, ~p"/api/sinks/#{sink_identifier}/backfills", %{table: "public.#{table.name}"})
-      assert json_response(conn, 422)
     end
   end
 

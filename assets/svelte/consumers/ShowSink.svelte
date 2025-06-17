@@ -9,13 +9,14 @@
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatNumberWithCommas } from "../utils";
   import HealthSummary from "../health/HealthSummary.svelte";
-  import ShowStream from "./ShowStream.svelte";
+  import ShowSource from "./ShowSource.svelte";
   import type {
     Consumer,
     HttpPushConsumer,
     SqsConsumer,
     SnsConsumer,
     KinesisConsumer,
+    S2Consumer,
     RedisStreamConsumer,
     KafkaConsumer,
     SequinStreamConsumer,
@@ -30,6 +31,7 @@
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
   import SnsSinkCard from "../sinks/sns/SnsSinkCard.svelte";
   import KinesisSinkCard from "../sinks/kinesis/KinesisSinkCard.svelte";
+  import S2SinkCard from "../sinks/s2/S2SinkCard.svelte";
   import RedisStreamSinkCard from "../sinks/redis-stream/RedisStreamSinkCard.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SequinStreamSinkCard from "../sinks/sequin_stream/SequinStreamSinkCard.svelte";
@@ -48,6 +50,7 @@
   export let live;
   export let parent;
   export let consumer: Consumer;
+  export let tables: Table[];
   export let transform: {
     id: string;
     name: string;
@@ -94,6 +97,10 @@
 
   function isKinesisConsumer(consumer: Consumer): consumer is KinesisConsumer {
     return consumer.sink.type === "kinesis";
+  }
+
+  function isS2Consumer(consumer: Consumer): consumer is S2Consumer {
+    return consumer.sink.type === "s2";
   }
 
   function isRedisStreamConsumer(
@@ -1138,6 +1145,8 @@
         <SnsSinkCard {consumer} />
       {:else if isKinesisConsumer(consumer)}
         <KinesisSinkCard {consumer} />
+      {:else if isS2Consumer(consumer)}
+        <S2SinkCard {consumer} />
       {:else if isRedisStreamConsumer(consumer)}
         <RedisStreamSinkCard {consumer} />
       {:else if isKafkaConsumer(consumer)}
@@ -1158,7 +1167,7 @@
         <RedisStringSinkCard {consumer} />
       {/if}
 
-      <ShowStream {consumer} />
+      <ShowSource {consumer} {tables} />
     </div>
   </div>
 </div>

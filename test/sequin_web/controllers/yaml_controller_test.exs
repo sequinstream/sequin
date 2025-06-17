@@ -2,7 +2,6 @@ defmodule SequinWeb.YamlControllerTest do
   use SequinWeb.ConnCase, async: true
 
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.Sequence
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.ReplicationSlots
@@ -97,6 +96,116 @@ defmodule SequinWeb.YamlControllerTest do
       assert Sequin.String.uuid?(postgres_database_id)
     end
 
+    test "sensitive changes are present but obfuscated in plan response", %{conn: conn} do
+      # First create the initial database
+      initial_yaml = """
+      users:
+        - email: "admin@sequinstream.com"
+          password: "sequinpassword!"
+
+      databases:
+        - name: "test-db"
+          username: "postgres"
+          password: "postgres"
+          hostname: "localhost"
+          port: 5432
+          database: "sequin_test"
+          slot_name: "#{replication_slot()}"
+          publication_name: "#{@publication}"
+          pool_size: 10
+          tables:
+            - table_name: "Characters"
+              table_schema: "public"
+      """
+
+      # Apply the initial configuration
+      apply_conn = post(conn, ~p"/api/config/apply", %{yaml: initial_yaml})
+      assert json_response(apply_conn, 200)
+
+      # Now plan a change to update the password
+      update_yaml = """
+      users:
+        - email: "admin@sequinstream.com"
+          password: "sequinpassword!"
+
+      databases:
+        - name: "test-db"
+          username: "postgres"
+          password: "new-password"
+          hostname: "localhost"
+          port: 5432
+          database: "sequin_test"
+          slot_name: "#{replication_slot()}"
+          publication_name: "#{@publication}"
+          pool_size: 10
+          tables:
+            - table_name: "Characters"
+              table_schema: "public"
+      """
+
+      plan_conn = post(conn, ~p"/api/config/plan", %{yaml: update_yaml})
+
+      assert %{
+               "changes" => [
+                 %{
+                   "action" => "update",
+                   "new" => %{"id" => account_id, "name" => account_name},
+                   "old" => %{"id" => account_id, "name" => account_name},
+                   "resource_type" => "account"
+                 },
+                 %{
+                   "action" => "update",
+                   "new" => %{
+                     "email" => "admin@sequinstream.com",
+                     "id" => user_id,
+                     "password" => nil
+                   },
+                   "old" => %{
+                     "email" => "admin@sequinstream.com",
+                     "id" => user_id,
+                     "password" => nil
+                   },
+                   "resource_type" => "user"
+                 },
+                 %{
+                   "action" => "update",
+                   "new" => %{
+                     "database" => "sequin_test",
+                     "hostname" => "localhost",
+                     "id" => postgres_database_id,
+                     "ipv6" => false,
+                     "name" => "test-db",
+                     "password" => "new********d",
+                     "pool_size" => 10,
+                     "port" => 5432,
+                     "publication" => %{"name" => "characters_publication"},
+                     "slot" => %{"name" => "__yaml_controller_test_slot__"},
+                     "ssl" => false,
+                     "use_local_tunnel" => false,
+                     "username" => "postgres"
+                   },
+                   "old" => %{
+                     "database" => "sequin_test",
+                     "hostname" => "localhost",
+                     "id" => postgres_database_id,
+                     "ipv6" => false,
+                     "name" => "test-db",
+                     "password" => "p******s",
+                     "pool_size" => 10,
+                     "port" => 5432,
+                     "publication" => %{"name" => "characters_publication"},
+                     "slot" => %{"name" => "__yaml_controller_test_slot__"},
+                     "ssl" => false,
+                     "use_local_tunnel" => false,
+                     "username" => "postgres"
+                   },
+                   "resource_type" => "database"
+                 }
+               ],
+               "actions" => []
+             } = json_response(plan_conn, 200)
+    end
+
     test "returns error for invalid yaml", %{conn: conn} do
       yaml = """
       databases:
@@ -147,8 +256,6 @@ defmodule SequinWeb.YamlControllerTest do
       sinks:
         - name: accounts_sink
           status: active
-          table: public.#{Character.table_name()}
-          filters: []
           destination:
             port: 4222
             type: nats
@@ -165,8 +272,6 @@ defmodule SequinWeb.YamlControllerTest do
             - insert
             - update
             - delete
-          group_column_names:
-            - id
       transforms:
         - name: record-transform
           type: path
@@ -294,7 +399,8 @@ defmodule SequinWeb.YamlControllerTest do
       sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
-          table: "DOES NOT EXIST LMAO"
+          source:
+            include_tables: ["does not exist"]
           destination:
             type: "webhook"
             http_endpoint: "sequin-playground-webhook"
@@ -302,9 +408,8 @@ defmodule SequinWeb.YamlControllerTest do
 
       conn = post(conn, ~p"/api/config/apply", %{yaml: yaml})
 
-      %{"summary" => summary} = json_response(conn, 404)
-      assert summary =~ "table"
-      refute summary =~ "sequence"
+      %{"summary" => summary} = json_response(conn, 422)
+      assert summary =~ "Table 'does not exist' not found in database 'test-db'"
     end
 
     test "returns error for invalid yaml", %{conn: conn} do
@@ -339,9 +444,6 @@ defmodule SequinWeb.YamlControllerTest do
           slot_name: "#{replication_slot()}"
           publication_name: "#{@publication}"
           pool_size: 10
-          tables:
-            - table_name: "Characters"
-              table_schema: "public"
 
       http_endpoints:
         - name: "sequin-playground-webhook"
@@ -350,7 +452,6 @@ defmodule SequinWeb.YamlControllerTest do
       sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
-          table: "Characters"
           destination:
             type: "webhook"
             http_endpoint: "sequin-playground-webhook"
@@ -365,8 +466,6 @@ defmodule SequinWeb.YamlControllerTest do
       assert %{"yaml" => exported_yaml} = json_response(conn, 200)
 
       [_database] = Repo.all(PostgresDatabase)
-      [sequence] = Repo.all(Sequence)
-      assert sequence.name == "test-db.public.Characters"
 
       # Parse the exported YAML to verify its structure
       parsed_yaml = YamlElixir.read_from_string!(exported_yaml)
@@ -394,7 +493,6 @@ defmodule SequinWeb.YamlControllerTest do
       assert %{
                "name" => "sequin-playground-webhook",
                "database" => "test-db",
-               "table" => "public.Characters",
                "destination" => %{
                  "type" => "webhook",
                  "http_endpoint" => "sequin-playground-webhook"

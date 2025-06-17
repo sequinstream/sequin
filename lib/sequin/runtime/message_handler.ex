@@ -10,7 +10,6 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.ConsumerRecordData.Metadata.Sink
-  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -40,10 +39,6 @@ defmodule Sequin.Runtime.MessageHandler do
     @moduledoc false
     use TypedStruct
 
-    alias Sequin.Consumers.SchemaFilter
-    alias Sequin.Databases.Sequence
-    alias Sequin.Runtime.MessageHandler.Context.Indices
-
     typedstruct do
       field :consumers, [Sequin.Consumers.consumer()], default: []
       field :wal_pipelines, [WalPipeline.t()], default: []
@@ -51,40 +46,6 @@ defmodule Sequin.Runtime.MessageHandler do
       field :postgres_database, PostgresDatabase.t()
       field :table_reader_mod, module(), default: TableReaderServer
       field :partition_count, non_neg_integer()
-      field :indices, Indices.t()
-    end
-
-    defmodule Indices do
-      @moduledoc false
-      use TypedStruct
-
-      typedstruct do
-        field :consumers_by_id, %{optional(SinkConsumer.id()) => SinkConsumer.t()}
-        field :consumer_ids_by_table_oid, %{optional(integer() | :all) => [SinkConsumer.id()]}
-      end
-    end
-
-    def set_indices(%Context{} = ctx) do
-      consumers_by_id = Map.new(ctx.consumers, fn consumer -> {consumer.id, consumer} end)
-
-      consumer_ids_by_table_oid =
-        Enum.reduce(ctx.consumers, %{}, fn
-          %SinkConsumer{sequence: %Sequence{table_oid: table_oid}} = consumer, acc ->
-            Map.update(acc, table_oid, [consumer.id], &[consumer.id | &1])
-
-          %SinkConsumer{sequence: nil, schema_filter: %SchemaFilter{}} = consumer, acc ->
-            Map.update(acc, :all, [consumer.id], &[consumer.id | &1])
-        end)
-
-      indices = %Indices{consumers_by_id: consumers_by_id, consumer_ids_by_table_oid: consumer_ids_by_table_oid}
-      %Context{ctx | indices: indices}
-    end
-
-    def consumers_by_table_oid(%Context{} = ctx, table_oid) do
-      consumer_ids_for_table_oid = Map.get(ctx.indices.consumer_ids_by_table_oid, table_oid, [])
-      consumer_ids_for_all = Map.get(ctx.indices.consumer_ids_by_table_oid, :all, [])
-      consumer_ids = consumer_ids_for_table_oid ++ consumer_ids_for_all
-      Enum.map(consumer_ids, &Map.fetch!(ctx.indices.consumers_by_id, &1))
     end
   end
 
@@ -94,21 +55,17 @@ defmodule Sequin.Runtime.MessageHandler do
     pr =
       Repo.preload(
         pr,
-        [
-          :wal_pipelines,
-          [postgres_database: :sequences],
-          [not_disabled_sink_consumers: [:sequence]]
-        ],
+        [:wal_pipelines, :not_disabled_sink_consumers, :postgres_database],
         force: true
       )
 
-    Context.set_indices(%Context{
+    %Context{
       consumers: pr.not_disabled_sink_consumers,
       wal_pipelines: pr.wal_pipelines,
       postgres_database: pr.postgres_database,
       replication_slot_id: pr.id,
       partition_count: pr.partition_count
-    })
+    }
   end
 
   def before_handle_messages(%Context{} = ctx, messages) do
@@ -388,8 +345,8 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
-  @max_backoff_ms :timer.seconds(1)
-  @max_attempts 5
+  @max_backoff_ms 100
+  @max_attempts 15
   @decorate track_metrics("put_messages")
   defp put_messages(consumer, messages_to_ingest) do
     do_put_messages(consumer, messages_to_ingest)
@@ -402,7 +359,7 @@ defmodule Sequin.Runtime.MessageHandler do
         :ok
 
       {:error, %InvariantError{code: :payload_size_limit_exceeded}} when attempt <= @max_attempts ->
-        backoff = Sequin.Time.exponential_backoff(50, attempt, @max_backoff_ms)
+        backoff = Sequin.Time.exponential_backoff(5, attempt, @max_backoff_ms)
 
         Logger.debug(
           "[MessageHandler] Slot message store for consumer #{consumer.id} is full. " <>
@@ -427,13 +384,10 @@ defmodule Sequin.Runtime.MessageHandler do
     messages
     # First we get a list of consumer_ids that match the SlotProcessor.Message
     |> Stream.map(fn %SlotProcessor.Message{} = message ->
-      # First we filter on the SlotProcessor.Message table oid
-      consumers = Context.consumers_by_table_oid(ctx, message.table_oid)
-
       matching_consumer_ids =
-        consumers
-        # Then we filter on the SlotProcessor.Message
-        |> Enum.filter(&Consumers.matches_message?(&1, message))
+        ctx.consumers
+        |> Stream.filter(&Consumers.matches_message?(&1, message))
+        # Then we map to a list of consumer_ids
         |> Enum.map(& &1.id)
 
       {message, matching_consumer_ids}
@@ -549,19 +503,24 @@ defmodule Sequin.Runtime.MessageHandler do
   defp get_fields(%Message{action: :delete} = message), do: message.old_fields
 
   defp generate_group_id(consumer, message) do
-    # This should be way more assertive - we should error if we don't find the source table
-    # We have a lot of tests that do not line up consumer source_tables with the message table oid
-    case consumer do
-      %SinkConsumer{sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums}}
-      when not is_nil(group_column_attnums) ->
-        Enum.map_join(consumer.sequence_filter.group_column_attnums, ":", fn attnum ->
-          fields = if message.action == :delete, do: message.old_fields, else: message.fields
-          field = Sequin.Enum.find!(fields, &(&1.column_attnum == attnum))
-          to_string(field.value)
-        end)
+    default_group_id = Enum.map_join(message.ids, ":", &to_string/1)
 
-      _ ->
-        Enum.map_join(message.ids, ":", &to_string/1)
+    case consumer do
+      %SinkConsumer{source_tables: nil} ->
+        default_group_id
+
+      %SinkConsumer{source_tables: source_tables} ->
+        if source_table = Enum.find(source_tables, &(&1.table_oid == message.table_oid)) do
+          source_table.group_column_attnums
+          |> Enum.map(fn attnum ->
+            fields = if message.action == :delete, do: message.old_fields, else: message.fields
+            Enum.find(fields, &(&1.column_attnum == attnum))
+          end)
+          |> Enum.filter(& &1)
+          |> Enum.map_join(":", &to_string(&1.value))
+        else
+          default_group_id
+        end
     end
   end
 
@@ -633,7 +592,6 @@ defmodule Sequin.Runtime.MessageHandler do
           message_kind: :event,
           name: "test-consumer",
           postgres_database: ctx.postgres_database,
-          sequence_filter: %SequenceFilter{},
           annotations: %{"test_message" => true, "info" => "Test messages are not associated with any sink"}
         }
 

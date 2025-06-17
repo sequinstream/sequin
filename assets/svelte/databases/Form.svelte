@@ -55,6 +55,7 @@
     username: string;
     password: string;
     ssl: boolean;
+    pool_size: number;
     publication_name: string;
     slot_name: string;
     useLocalTunnel: boolean;
@@ -312,6 +313,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       username: "",
       password: "",
       ssl: true,
+      pool_size: 10,
       publication_name: database.publication_name,
       slot_name: database.slot_name,
       useLocalTunnel: false,
@@ -493,6 +495,40 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
           </div>
           {#if databaseErrors.password}
             <p class="text-destructive text-sm">{databaseErrors.password}</p>
+          {/if}
+        </div>
+
+        <div class="space-y-2">
+          <Label for="pool_size" class="flex items-center">
+            Pool Size
+            <Tooltip.Root openDelay={200}>
+              <Tooltip.Trigger>
+                <HelpCircle
+                  class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help"
+                />
+              </Tooltip.Trigger>
+              <Tooltip.Content class="max-w-xs">
+                <p class="text-xs text-gray-500">
+                  <b>Pool Size</b>
+                  <br />
+                  The maximum number of concurrent connections that Sequin will maintain
+                  to your PostgreSQL database, aside from the replication slot connection.
+                  Higher values allow for better throughput but consume more database
+                  resources.
+                </p>
+              </Tooltip.Content>
+            </Tooltip.Root>
+          </Label>
+          <Input
+            type="number"
+            id="pool_size"
+            bind:value={form.pool_size}
+            placeholder="10"
+          />
+          {#if databaseErrors.pool_size}
+            <p class="text-destructive text-sm">
+              {databaseErrors.pool_size}
+            </p>
           {/if}
         </div>
 

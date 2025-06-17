@@ -76,40 +76,6 @@ defmodule Sequin.SlotMessageStoreTest do
     end
   end
 
-  describe "SlotMessageStore with persisted messages that exceed max_memory_bytes" do
-    test "raises an error" do
-      consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 1)
-
-      data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
-      data_size_bytes = :erlang.external_size(data)
-
-      for _ <- 1..20 do
-        ConsumersFactory.insert_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id,
-          data: data
-        )
-      end
-
-      max_memory_bytes = data_size_bytes * 10 / 2
-
-      log =
-        capture_log(fn ->
-          pid =
-            start_supervised!(
-              {SlotMessageStoreSupervisor,
-               consumer_id: consumer.id, max_memory_bytes: max_memory_bytes, test_pid: self(), restart: :temporary}
-            )
-
-          Process.monitor(pid)
-
-          assert_receive {:DOWN, _, :process, ^pid, _}
-        end)
-
-      assert log =~ "Max memory limit exceeded"
-    end
-  end
-
   describe "SlotMessageStore with persisted messages that exceed max_memory_bytes and multiple partitions" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 3)
@@ -475,16 +441,8 @@ defmodule Sequin.SlotMessageStoreTest do
     end
 
     test "produces messages with same group_id from different tables simultaneously", %{} do
-      # Create a consumer with schema_filter instead of sequence_filter
-      schema_filter = ConsumersFactory.schema_filter_attrs(schema: "public")
-
       consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          message_kind: :event,
-          sequence_id: nil,
-          sequence_filter: nil,
-          schema_filter: schema_filter
-        )
+        ConsumersFactory.insert_sink_consumer!(message_kind: :event)
 
       start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 

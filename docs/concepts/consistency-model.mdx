@@ -12,7 +12,7 @@ Postgres' logical replication stream provides strong guarantees. However, proces
 
 Home-grown change data capture (CDC) solutions often lack performance or strong guarantees. And power features like incremental backfills are hard to do correctly.
 
-Debezium and similar frameworks produce a lot of duplicate messages, have quirks around their backfill processes, and don't offer as much parallelism.
+Debezium and similar tools produce a lot of duplicate messages, have quirks around their backfill processes, and don't offer as much parallelism.
 
 Sequin offers better safety and higher throughput with fewer operational requirements. This document explains how.
 
@@ -120,7 +120,7 @@ Sequin is built to handle restarts gracefully. When Sequin reconnects to the rep
 
 ## Contrast to Debezium
 
-Debezium is another CDC framework. Its approach differs from Sequin's in a few key ways:
+Debezium is another CDC tool. Its approach differs from Sequin's in a few key ways:
 
 ### At-least-once vs. near-exactly-once
 

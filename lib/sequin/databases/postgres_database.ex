@@ -9,7 +9,6 @@ defmodule Sequin.Databases.PostgresDatabase do
   alias Ecto.Queryable
   alias Sequin.Databases.PostgresDatabasePrimary
   alias Sequin.Databases.PostgresDatabaseTable
-  alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
   require Logger
@@ -63,7 +62,6 @@ defmodule Sequin.Databases.PostgresDatabase do
     belongs_to(:account, Sequin.Accounts.Account)
     has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
     has_many(:wal_pipelines, through: [:replication_slot, :wal_pipelines])
-    has_many(:sequences, Sequence)
     has_many(:sink_consumers, through: [:replication_slot, :sink_consumers])
 
     timestamps()
@@ -90,6 +88,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     ])
     |> validate_required([:hostname, :database, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
+    |> validate_number(:pool_size, greater_than_or_equal_to: 1)
     |> validate_not_supabase_pooled()
     |> cast_embed(:tables, with: &PostgresDatabaseTable.changeset/2, required: false)
     |> cast_embed(:primary, with: &PostgresDatabasePrimary.changeset/2, required: false)

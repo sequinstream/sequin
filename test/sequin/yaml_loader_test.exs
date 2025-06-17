@@ -13,18 +13,15 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
-  alias Sequin.Consumers.SequenceFilter
-  alias Sequin.Consumers.SequenceFilter.NullValue
-  alias Sequin.Consumers.SequenceFilter.StringValue
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
-  alias Sequin.Consumers.SourceTable
+  alias Sequin.Consumers.SourceTable, as: ConsumersSourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabasePrimary
-  alias Sequin.Databases.Sequence
   alias Sequin.Error.BadRequestError
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
@@ -35,6 +32,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.ReplicationSlots
+  alias Sequin.WalPipeline.SourceTable, as: WalPipelineSourceTable
   alias Sequin.YamlLoader
 
   @moduletag :unboxed
@@ -134,7 +132,7 @@ defmodule Sequin.YamlLoaderTest do
 
       assert wal_pipeline.name == "test-pipeline"
       assert wal_pipeline.status == :active
-      assert [%SourceTable{} = source_table] = wal_pipeline.source_tables
+      assert [%WalPipelineSourceTable{} = source_table] = wal_pipeline.source_tables
       assert source_table.oid == Character.table_oid()
       assert source_table.actions == [:insert, :delete]
     end
@@ -154,7 +152,7 @@ defmodule Sequin.YamlLoaderTest do
   end
 
   describe "playground.yml" do
-    test "creates database and sequence with no existing account" do
+    test "creates database with no existing account" do
       assert :ok = YamlLoader.apply_from_yml!(playground_yml())
 
       assert [account] = Repo.all(Account)
@@ -238,9 +236,6 @@ defmodule Sequin.YamlLoaderTest do
       assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
       assert db.account_id == account.id
       assert db.name == "test-db"
-
-      db = Repo.preload(db, [:sequences])
-      assert [] = db.sequences
     end
 
     test "updates a database" do
@@ -742,15 +737,6 @@ defmodule Sequin.YamlLoaderTest do
       table_attrs = DatabasesFactory.table_attrs()
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id, tables: [table_attrs])
 
-      sequence =
-        DatabasesFactory.insert_sequence!(
-          account_id: account.id,
-          postgres_database_id: database.id,
-          table_oid: table_attrs.oid,
-          table_name: table_attrs.name,
-          table_schema: table_attrs.schema
-        )
-
       transform = FunctionsFactory.insert_transform_function!(account_id: account.id)
       filter = FunctionsFactory.insert_filter_function!(account_id: account.id)
       routing = FunctionsFactory.insert_routing_function!(account_id: account.id)
@@ -759,7 +745,6 @@ defmodule Sequin.YamlLoaderTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :redis_string,
-          sequence_id: sequence.id,
           postgres_database_id: database.id,
           transform_id: transform.id,
           filter_id: filter.id,
@@ -767,21 +752,19 @@ defmodule Sequin.YamlLoaderTest do
           routing_id: routing.id
         )
 
-      sink = Repo.preload(sink, [:transform, :filter, :routing, :postgres_database, :sequence])
+      sink = Repo.preload(sink, [:transform, :filter, :routing, :postgres_database])
 
       assert %Function{} = sink.transform
       assert %Function{} = sink.filter
       assert %Function{} = sink.routing
 
       database_name = sink.postgres_database.name
-      table_name = "#{sink.sequence.table_schema}.#{sink.sequence.table_name}"
 
       assert :ok =
                YamlLoader.apply_from_yml!(account.id, """
                sinks:
                  - name: #{sink.name}
                    database: #{database_name}
-                   table: #{table_name}
                    destination:
                      type: "redis_string"
                      host: #{sink.sink.host}
@@ -797,7 +780,7 @@ defmodule Sequin.YamlLoaderTest do
   end
 
   describe "sinks" do
-    def account_db_and_sequence_yml do
+    def account_and_db_yml do
       """
       account:
         name: "Configured by Sequin"
@@ -814,7 +797,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "record_only"
@@ -829,7 +812,6 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
@@ -838,25 +820,19 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, [:sequence, :transform])
+      consumer = Repo.preload(consumer, [:transform])
 
       assert consumer.name == "sequin-playground-webhook"
-      assert consumer.sequence.name == "test-db.public.Characters"
       assert consumer.transform.name == "record_only"
       assert consumer.sink.batch == true
       assert consumer.max_retry_count == 5
-
-      assert consumer.sequence_filter == %SequenceFilter{
-               actions: [:insert, :update, :delete],
-               column_filters: [],
-               group_column_attnums: [1]
-             }
+      assert is_nil(consumer.source)
     end
 
     test "creates webhook subscription with batch=false" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                http_endpoints:
                  - name: "sequin-playground-http"
@@ -865,7 +841,6 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
@@ -877,79 +852,9 @@ defmodule Sequin.YamlLoaderTest do
       assert is_nil(consumer.max_retry_count)
     end
 
-    test "creates sink consumer with filters" do
-      assert :ok =
-               YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
-
-               http_endpoints:
-                 - name: "sequin-playground-http"
-                   url: "https://api.example.com/webhook"
-
-               sinks:
-                 - name: "sequin-playground-webhook"
-                   database: "test-db"
-                   table: "Characters"
-                   destination:
-                     type: "webhook"
-                     http_endpoint: "sequin-playground-http"
-                   filters:
-                     - column_name: "house"
-                       operator: "="
-                       comparison_value: "Stark"
-                     - column_name: "name"
-                       operator: "is not null"
-                     - column_name: "metadata"
-                       field_path: "rank.title"
-                       operator: "="
-                       comparison_value: "Lord"
-                       field_type: "string"
-                     - column_name: "is_active"
-                       operator: "="
-                       comparison_value: true
-                     - column_name: "planet"
-                       operator: "in"
-                       comparison_value:
-                        - "Alderaan"
-                        - "Tatooine"
-               """)
-
-      assert [consumer] = Repo.all(SinkConsumer)
-      assert consumer.name == "sequin-playground-webhook"
-
-      filters = consumer.sequence_filter.column_filters
-      assert length(filters) == 5
-
-      # House filter
-      house_filter = Enum.find(filters, &(&1.value.value == "Stark"))
-      assert house_filter.operator == :==
-      assert house_filter.is_jsonb == false
-
-      # Name filter
-      name_filter = Enum.find(filters, &(&1.operator == :not_null))
-      assert name_filter.value == %NullValue{value: nil}
-      assert name_filter.is_jsonb == false
-
-      # Metadata filter
-      metadata_filter = Enum.find(filters, &(&1.jsonb_path == "rank.title"))
-      assert metadata_filter.operator == :==
-      assert metadata_filter.is_jsonb == true
-      assert metadata_filter.value == %StringValue{value: "Lord"}
-
-      # Is active filter
-      active_filter = Enum.find(filters, &(&1.value.value == true))
-      assert active_filter.operator == :==
-      assert active_filter.is_jsonb == false
-
-      # Planet filter
-      planet_filter = Enum.find(filters, &(&1.value.value == ["Alderaan", "Tatooine"]))
-      assert planet_filter.operator == :in
-      assert planet_filter.is_jsonb == false
-    end
-
     test "applying yml twice creates no duplicates" do
       yaml = """
-      #{account_db_and_sequence_yml()}
+      #{account_and_db_yml()}
 
       http_endpoints:
         - name: "sequin-playground-http"
@@ -958,13 +863,11 @@ defmodule Sequin.YamlLoaderTest do
       sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
-          table: "Characters"
           destination:
             type: "webhook"
             http_endpoint: "sequin-playground-http"
         - name: "sequin-playground-kafka"
           database: "test-db"
-          table: "Characters"
           destination:
             type: "kafka"
             hosts: "localhost:9092"
@@ -985,7 +888,7 @@ defmodule Sequin.YamlLoaderTest do
 
     test "updates webhook subscription" do
       create_yaml = """
-      #{account_db_and_sequence_yml()}
+      #{account_and_db_yml()}
 
       http_endpoints:
         - name: "sequin-playground-http"
@@ -994,7 +897,6 @@ defmodule Sequin.YamlLoaderTest do
       sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
-          table: "Characters"
           destination:
             type: "webhook"
             http_endpoint: "sequin-playground-http"
@@ -1009,7 +911,7 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.sink.http_endpoint.name == "sequin-playground-http"
 
       update_yaml = """
-      #{account_db_and_sequence_yml()}
+      #{account_and_db_yml()}
 
       http_endpoints:
         - name: "new-http-endpoint"
@@ -1018,7 +920,6 @@ defmodule Sequin.YamlLoaderTest do
       sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
-          table: "Characters"
           destination:
             type: "webhook"
             http_endpoint: "new-http-endpoint"
@@ -1037,29 +938,19 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sequin stream consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "sequin-playground-consumer"
                    database: "test-db"
-                   table: "Characters"
-                   group_column_names: ["house"]
                    destination:
                      type: "sequin_stream"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "sequin-playground-consumer"
-      assert consumer.sequence.name == "test-db.public.Characters"
       assert consumer.legacy_transform == :none
-
-      assert consumer.sequence_filter == %SequenceFilter{
-               actions: [:insert, :update, :delete],
-               column_filters: [],
-               group_column_attnums: [Character.column_attnum("house")]
-             }
 
       assert %SequinStreamSink{} = consumer.sink
     end
@@ -1067,30 +958,28 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sink consumer with schema filter" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "schema-consumer"
                    database: "test-db"
-                   schema: "public"
+                   source:
+                     include_schemas: ["public"]
                    destination:
                      type: "sequin_stream"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, [:sequence])
 
       assert consumer.name == "schema-consumer"
-      assert is_nil(consumer.sequence)
-      assert is_nil(consumer.sequence_filter)
-      assert consumer.schema_filter.schema == "public"
+      assert consumer.source.include_schemas == ["public"]
       assert %SequinStreamSink{} = consumer.sink
     end
 
-    test "creates webhook subscription with schema filter" do
+    test "creates webhook subscription excluding schemas" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                http_endpoints:
                  - name: "sequin-playground-http"
@@ -1099,176 +988,159 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "schema-webhook-consumer"
                    database: "test-db"
-                   schema: "public"
+                   source:
+                     exclude_schemas: ["private"]
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, [:sequence])
 
       assert consumer.name == "schema-webhook-consumer"
-      assert is_nil(consumer.sequence)
-      assert is_nil(consumer.sequence_filter)
-      assert consumer.schema_filter.schema == "public"
+      assert consumer.source.exclude_schemas == ["private"]
       assert consumer.sink.type == :http_push
     end
 
-    @tag :skip
     test "updates sink consumer from table to schema filter" do
       # First create consumer with table
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "update-consumer"
                    database: "test-db"
-                   table: "Characters"
+                   source:
+                     include_tables: ["Characters"]
                    destination:
                      type: "sequin_stream"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, [:sequence])
-      assert consumer.sequence.name == "test-db.public.Characters"
-      assert is_nil(consumer.schema_filter)
+      assert [table_oid] = consumer.source.include_table_oids
+      assert is_integer(table_oid)
 
       # Now update to use schema filter
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "update-consumer"
                    database: "test-db"
-                   schema: "public"
+                   source:
+                     include_schemas: ["public"]
                    destination:
                      type: "sequin_stream"
                """)
 
       assert [updated_consumer] = Repo.all(SinkConsumer)
-      updated_consumer = Repo.preload(updated_consumer, [:sequence])
-      assert is_nil(updated_consumer.sequence)
-      assert is_nil(updated_consumer.sequence_filter)
-      assert updated_consumer.schema_filter.schema == "public"
+      assert updated_consumer.source.include_schemas == ["public"]
+      assert is_nil(updated_consumer.source.include_table_oids)
     end
 
-    @tag :skip
     test "updates sink consumer from schema to table filter" do
       # First create consumer with schema
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "reverse-update-consumer"
                    database: "test-db"
-                   schema: "public"
+                   source:
+                     include_schemas: ["public"]
                    destination:
                      type: "sequin_stream"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, [:sequence])
-      assert is_nil(consumer.sequence)
-      assert consumer.schema_filter.schema == "public"
+      assert consumer.source.include_schemas == ["public"]
+      assert is_nil(consumer.source.include_table_oids)
 
       # Now update to use table filter
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "reverse-update-consumer"
                    database: "test-db"
-                   table: "Characters"
+                   source:
+                     include_tables: ["Characters"]
                    destination:
                      type: "sequin_stream"
                """)
 
       assert [updated_consumer] = Repo.all(SinkConsumer)
-      updated_consumer = Repo.preload(updated_consumer, [:sequence])
-      assert updated_consumer.sequence.name == "test-db.public.Characters"
-      assert is_nil(updated_consumer.schema_filter)
+      assert [table_oid] = updated_consumer.source.include_table_oids
+      assert is_integer(table_oid)
+      assert is_nil(updated_consumer.source.include_schemas)
     end
 
-    test "fails when both schema and table are specified" do
-      assert_raise RuntimeError, ~r/Cannot specify both `schema` and `table`/, fn ->
+    test "fails when both include and exclude are specified" do
+      assert_raise RuntimeError, ~r/cannot be set when include_schemas is set/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         sinks:
           - name: "invalid-consumer"
             database: "test-db"
-            schema: "public"
-            table: "Characters"
+            source:
+              include_schemas: ["public"]
+              exclude_schemas: ["private"]
             destination:
               type: "sequin_stream"
         """)
       end
     end
 
-    test "fails when neither schema nor table are specified" do
-      assert_raise RuntimeError, ~r/Failed to apply config:/, fn ->
-        YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+    test "sets group_column_attnums on a table" do
+      YamlLoader.apply_from_yml!("""
+      #{account_and_db_yml()}
 
-        sinks:
-          - name: "invalid-consumer"
-            database: "test-db"
-            destination:
-              type: "sequin_stream"
-        """)
-      end
-    end
+      sinks:
+        - name: "group-column-attnums-consumer"
+          database: "test-db"
+          tables:
+            - name: "Characters"
+              group_column_names: ["id"]
+          destination:
+            type: "sequin_stream"
+      """)
 
-    test "fails when group_column_names is specified with schema" do
-      assert_raise RuntimeError, ~r/Cannot specify `group_column_names` with `schema`/, fn ->
-        YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
-
-        sinks:
-          - name: "invalid-consumer"
-            database: "test-db"
-            schema: "public"
-            group_column_names: ["id"]
-            destination:
-              type: "sequin_stream"
-        """)
-      end
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert [%ConsumersSourceTable{group_column_attnums: [1]}] = consumer.source_tables
     end
 
     test "fails when group_column_names contains non-existent column" do
-      assert_raise RuntimeError, ~r/Column 'non_existent_column' does not exist for table 'public\.Characters'/, fn ->
+      assert_raise RuntimeError, ~r/Failed to parse tables.*No `postgres column` found.*non_existent_column/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         sinks:
           - name: "invalid-consumer"
             database: "test-db"
-            table: "Characters"
-            group_column_names: ["id", "non_existent_column"]
+            tables:
+              - name: "Characters"
+                group_column_names: ["id", "non_existent_column"]
             destination:
               type: "sequin_stream"
         """)
       end
     end
 
-    test "fails when column filter references non-existent column" do
-      assert_raise RuntimeError, ~r/Column 'non_existent_column' not found in table 'public\.Characters'/, fn ->
+    test "fails when group_column_names is empty" do
+      assert_raise RuntimeError, ~r/Invalid table.group_column_names: should have at least 1 item\(s\)/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         sinks:
           - name: "invalid-consumer"
             database: "test-db"
-            table: "Characters"
-            filters:
-              - column_name: "non_existent_column"
-                operator: "="
-                comparison_value: "test"
+            tables:
+              - name: "Characters"
             destination:
               type: "sequin_stream"
         """)
@@ -1278,12 +1150,11 @@ defmodule Sequin.YamlLoaderTest do
     test "creates kafka sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "kafka-consumer"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "kafka"
                      hosts: "localhost:9092"
@@ -1295,10 +1166,8 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "kafka-consumer"
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %KafkaSink{
                type: :kafka,
@@ -1314,12 +1183,11 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sqs sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "sqs-consumer"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "sqs"
                      queue_url: "https://sqs.us-west-2.amazonaws.com/123456789012/MyQueue.fifo"
@@ -1328,10 +1196,8 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "sqs-consumer"
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %SqsSink{
                type: :sqs,
@@ -1346,12 +1212,11 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sns sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "sns-consumer"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "sns"
                      topic_arn: "arn:aws:sns:us-west-2:123456789012:MyTopic"
@@ -1360,10 +1225,8 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "sns-consumer"
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %SnsSink{
                type: :sns,
@@ -1377,12 +1240,11 @@ defmodule Sequin.YamlLoaderTest do
     test "creates kinesis sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "kinesis-consumer"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "kinesis"
                      stream_arn: "arn:aws:kinesis:us-west-2:1:stream/test"
@@ -1391,10 +1253,8 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "kinesis-consumer"
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %KinesisSink{
                type: :kinesis,
@@ -1404,15 +1264,36 @@ defmodule Sequin.YamlLoaderTest do
              } = consumer.sink
     end
 
+    test "creates s2 sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               sinks:
+                 - name: "s2-consumer"
+                   database: "test-db"
+                   destination:
+                     type: "s2"
+                     basin: "test-basin"
+                     stream: "my-stream"
+                     access_token: "tok"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+
+      assert consumer.name == "s2-consumer"
+
+      assert %S2Sink{type: :s2, basin: "test-basin", stream: "my-stream", access_token: "tok"} = consumer.sink
+    end
+
     test "creates redis sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "redis-consumer"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "redis_stream"
                      host: "localhost"
@@ -1425,10 +1306,8 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "redis-consumer"
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %RedisStreamSink{
                type: :redis_stream,
@@ -1445,12 +1324,11 @@ defmodule Sequin.YamlLoaderTest do
     test "creates gcp pubsub sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "pubsub-consumer"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "gcp_pubsub"
                      project_id: "my-project"
@@ -1469,10 +1347,8 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "pubsub-consumer"
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %GcpPubsubSink{
                type: :gcp_pubsub,
@@ -1497,12 +1373,11 @@ defmodule Sequin.YamlLoaderTest do
     test "creates elasticsearch sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "elasticsearch-consumer"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "elasticsearch"
                      endpoint_url: "https://elasticsearch.example.com"
@@ -1513,10 +1388,8 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "elasticsearch-consumer"
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %ElasticsearchSink{
                type: :elasticsearch,
@@ -1531,12 +1404,11 @@ defmodule Sequin.YamlLoaderTest do
     test "creates redis string sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sinks:
                  - name: "redis-string-consumer"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "redis_string"
                      host: "redis-string.example.com"
@@ -1548,10 +1420,8 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "redis-string-consumer"
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %RedisStringSink{
                type: :redis_string,
@@ -1567,7 +1437,7 @@ defmodule Sequin.YamlLoaderTest do
     test "handles removing and re-adding a sink after the table is renamed" do
       # First apply config with sink
       initial_yaml = """
-      #{account_db_and_sequence_yml()}
+      #{account_and_db_yml()}
 
       http_endpoints:
         - name: "sequin-playground-http"
@@ -1576,7 +1446,11 @@ defmodule Sequin.YamlLoaderTest do
       sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
-          table: "Characters"
+          source:
+            include_tables: ["Characters"]
+          tables:
+            - name: "Characters"
+              group_column_names: ["id"]
           destination:
             type: "webhook"
             http_endpoint: "sequin-playground-http"
@@ -1585,16 +1459,19 @@ defmodule Sequin.YamlLoaderTest do
       assert :ok = YamlLoader.apply_from_yml!(initial_yaml)
 
       # Verify initial state
-      assert [initial_sequence] = Repo.all(Sequence)
-      assert [initial_consumer] = Repo.all(SinkConsumer)
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.source.include_table_oids == [Character.table_oid()]
+
+      assert consumer.source_tables == [
+               %ConsumersSourceTable{table_oid: Character.table_oid(), group_column_attnums: [1]}
+             ]
+
       assert [db] = Repo.all(PostgresDatabase)
-      assert initial_consumer.sequence_id == initial_sequence.id
 
       # Remove the sink
-      Consumers.delete_sink_consumer(initial_consumer)
+      Consumers.delete_sink_consumer(consumer)
 
-      # Verify sink was removed but sequence remains
-      assert [_sequence] = Repo.all(Sequence)
+      # Verify sink was removed
       assert [] = Repo.all(SinkConsumer)
 
       # Re-apply original config with sink and a renamed table
@@ -1615,17 +1492,19 @@ defmodule Sequin.YamlLoaderTest do
 
       assert :ok = YamlLoader.apply_from_yml!(new_yaml)
 
-      # Verify final state - should reuse existing sequence
-      assert [final_sequence] = Repo.all(Sequence)
-      assert [final_consumer] = Repo.all(SinkConsumer)
-      assert final_sequence.id == initial_sequence.id
-      assert final_consumer.sequence_id == final_sequence.id
+      # Verify final state
+      assert [updated_consumer] = Repo.all(SinkConsumer)
+      assert updated_consumer.source.include_table_oids == [Character.table_oid()]
+
+      assert updated_consumer.source_tables == [
+               %ConsumersSourceTable{table_oid: Character.table_oid(), group_column_attnums: [1]}
+             ]
     end
 
     test "creates multiple sinks using YAML anchors" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sink_template: &sink_template
                  status: active
@@ -1641,16 +1520,13 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - <<: *sink_template
                    name: gcp-events-characters
-                   table: public.Characters
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "gcp-events-characters"
       assert consumer.status == :active
       assert consumer.legacy_transform == :none
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert %GcpPubsubSink{
                type: :gcp_pubsub,
@@ -1664,7 +1540,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates sink with custom actions and timestamp format" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                http_endpoints:
                 - name: "sequin-playground-http"
@@ -1673,7 +1549,6 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "custom-actions-sink"
                    database: "test-db"
-                   table: "Characters"
                    actions:
                      - insert
                      - delete
@@ -1684,24 +1559,45 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "custom-actions-sink"
-      assert consumer.sequence.name == "test-db.public.Characters"
+      assert consumer.actions == [:insert, :delete]
+    end
 
-      assert consumer.sequence_filter == %SequenceFilter{
-               actions: [:insert, :delete],
-               column_filters: [],
-               group_column_attnums: [1]
-             }
+    test "creates sink with source includes and excludes" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
 
-      assert consumer.timestamp_format == :unix_microsecond
+               http_endpoints:
+                - name: "sequin-playground-http"
+                  url: "https://api.example.com/webhook"
+
+               sinks:
+                 - name: "custom-actions-sink"
+                   database: "test-db"
+                   destination:
+                     type: "webhook"
+                     http_endpoint: "sequin-playground-http"
+                   source:
+                     include_tables:
+                       - Characters
+                       - characters_detailed
+                     exclude_schemas: ["private"]
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+
+      assert consumer.name == "custom-actions-sink"
+      assert length(consumer.source.include_table_oids) == 2
+      assert Enum.all?(consumer.source.include_table_oids, &is_integer/1)
+      assert consumer.source.exclude_schemas == ["private"]
     end
 
     test "creates multiple sinks with different names using YAML anchors" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                sink_template: &sink_template
                  status: active
@@ -1717,10 +1613,8 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - <<: *sink_template
                    name: gcp-events-characters-1
-                   table: public.Characters
                  - <<: *sink_template
                    name: gcp-events-characters-2
-                   table: public.Characters
                """)
 
       assert consumers = Repo.all(SinkConsumer)
@@ -1731,10 +1625,8 @@ defmodule Sequin.YamlLoaderTest do
       assert "gcp-events-characters-2" in consumer_names
 
       for consumer <- consumers do
-        consumer = Repo.preload(consumer, :sequence)
         assert consumer.status == :active
         assert consumer.legacy_transform == :none
-        assert consumer.sequence.name == "test-db.public.Characters"
 
         assert %GcpPubsubSink{
                  type: :gcp_pubsub,
@@ -1749,7 +1641,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with transform reference" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "my-transform"
@@ -1764,7 +1656,6 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
@@ -1777,17 +1668,15 @@ defmodule Sequin.YamlLoaderTest do
       assert function.function.path == "record"
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "sequin-playground-webhook"
-      assert consumer.sequence.name == "test-db.public.Characters"
       assert consumer.transform_id == function.id
     end
 
     test "creates webhook subscription with transform function" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "id-action-transform"
@@ -1809,7 +1698,6 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
@@ -1832,17 +1720,15 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "sequin-playground-webhook"
-      assert consumer.sequence.name == "test-db.public.Characters"
       assert consumer.transform_id == function.id
     end
 
     test "creates sink with no transform" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                http_endpoints:
                  - name: "sequin-playground-http"
@@ -1851,7 +1737,6 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
@@ -1859,17 +1744,15 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "sequin-playground-webhook"
-      assert consumer.sequence.name == "test-db.public.Characters"
       assert consumer.transform_id == nil
     end
 
     test "raises error when referenced transform not found" do
       assert_raise RuntimeError, ~r/Function 'missing-function' not found/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         http_endpoints:
           - name: "sequin-playground-http"
@@ -1878,7 +1761,6 @@ defmodule Sequin.YamlLoaderTest do
         sinks:
           - name: "sequin-playground-webhook"
             database: "test-db"
-            table: "Characters"
             destination:
               type: "webhook"
               http_endpoint: "sequin-playground-http"
@@ -1890,7 +1772,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with routing and filter functions" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "my-routing"
@@ -1919,7 +1801,6 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
@@ -1928,10 +1809,9 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, [:sequence, :routing, :filter])
+      consumer = Repo.preload(consumer, [:routing, :filter])
 
       assert consumer.name == "sequin-playground-webhook"
-      assert consumer.sequence.name == "test-db.public.Characters"
 
       # Check routing function reference was used
       assert consumer.routing
@@ -1952,7 +1832,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with new yaml names" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "my-routing"
@@ -1974,7 +1854,6 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
-                   table: "Characters"
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
@@ -1982,7 +1861,7 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, [:sequence, :routing])
+      consumer = Repo.preload(consumer, [:routing])
 
       assert consumer.routing.name == "my-routing"
     end
@@ -1990,7 +1869,7 @@ defmodule Sequin.YamlLoaderTest do
     test "creates webhook subscription with FLAT YAML" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
-               #{account_db_and_sequence_yml()}
+               #{account_and_db_yml()}
 
                functions:
                  - name: "my-routing"
@@ -2011,7 +1890,8 @@ defmodule Sequin.YamlLoaderTest do
                sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
-                   table: "Characters"
+                   source:
+                     include_tables: ["Characters"]
                    destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
@@ -2019,7 +1899,7 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
-      consumer = Repo.preload(consumer, [:sequence, :routing])
+      consumer = Repo.preload(consumer, [:routing])
 
       assert consumer.routing.name == "my-routing"
     end
@@ -2027,7 +1907,7 @@ defmodule Sequin.YamlLoaderTest do
     test "errors when routing function doesn't exist" do
       assert_raise RuntimeError, ~r/[Ff]unction 'non-existent-routing' not found/, fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         http_endpoints:
           - name: "sequin-playground-http"
@@ -2036,7 +1916,6 @@ defmodule Sequin.YamlLoaderTest do
         sinks:
           - name: "sequin-playground-webhook"
             database: "test-db"
-            table: "Characters"
             destination:
               type: "webhook"
               http_endpoint: "sequin-playground-http"
@@ -2048,7 +1927,7 @@ defmodule Sequin.YamlLoaderTest do
     test "errors when function referenced for routing is not a routing function" do
       assert_raise RuntimeError, "`routing` must reference a function with type `routing`", fn ->
         YamlLoader.apply_from_yml!("""
-        #{account_db_and_sequence_yml()}
+        #{account_and_db_yml()}
 
         functions:
           - name: "regular-transform"
@@ -2063,7 +1942,6 @@ defmodule Sequin.YamlLoaderTest do
         sinks:
           - name: "sequin-playground-webhook"
             database: "test-db"
-            table: "Characters"
             destination:
               type: "webhook"
               http_endpoint: "sequin-playground-http"

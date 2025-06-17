@@ -1,8 +1,8 @@
 defmodule SequinWeb.WalPipelinesLive.Form do
   @moduledoc false
+
   use SequinWeb, :live_view
 
-  alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Error
@@ -13,6 +13,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
   alias Sequin.Posthog
   alias Sequin.Replication
   alias Sequin.Replication.WalPipeline
+  alias Sequin.WalPipeline.SourceTable.ColumnFilter
 
   require Logger
 

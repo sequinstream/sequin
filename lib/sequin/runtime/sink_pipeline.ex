@@ -315,9 +315,9 @@ defmodule Sequin.Runtime.SinkPipeline do
   defp processors_config(pipeline_mod, consumer) do
     default = [
       default: [
-        concurrency: System.schedulers_online(),
-        max_demand: 10,
-        min_demand: 5
+        concurrency: System.schedulers_online() * 2,
+        max_demand: 150,
+        min_demand: 50
       ]
     ]
 
@@ -348,8 +348,8 @@ defmodule Sequin.Runtime.SinkPipeline do
         batch_timeout: batch_timeout
       ],
       filtered_messages: [
-        concurrency: 1,
-        batch_size: 1
+        concurrency: 10,
+        batch_size: 100
       ]
     ]
 
@@ -398,6 +398,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       :redis_string -> Sequin.Runtime.RedisStringPipeline
       :sequin_stream -> Sequin.Runtime.SequinStreamPipeline
       :sqs -> Sequin.Runtime.SqsPipeline
+      :s2 -> Sequin.Runtime.S2Pipeline
       :typesense -> Sequin.Runtime.TypesensePipeline
       :sns -> Sequin.Runtime.SnsPipeline
     end
@@ -550,7 +551,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   end
 
   defp preload_consumer(consumer) do
-    Repo.lazy_preload(consumer, [:sequence, :transform, :routing, :filter])
+    Repo.lazy_preload(consumer, [:transform, :routing, :filter])
   end
 
   # Formats timestamps according to the consumer's timestamp_format setting

@@ -15,4 +15,12 @@ type Table = {
   isEventTable: boolean;
 };
 
-export type { Column, Table };
+type Database = {
+  id: string;
+  name: string;
+  tables: Table[];
+  publication_name: string;
+  pg_major_version: number;
+};
+
+export type { Column, Database, Table };

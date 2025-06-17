@@ -19,9 +19,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
-  alias Sequin.Consumers.SchemaFilter
-  alias Sequin.Consumers.SequenceFilter
-  alias Sequin.Consumers.SequenceFilter.ColumnFilter
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
@@ -58,6 +56,7 @@ defmodule Sequin.Factory.ConsumersFactory do
           :redis_string,
           :sqs,
           :kinesis,
+          :s2,
           :sns,
           :kafka,
           :sequin_stream,
@@ -87,26 +86,13 @@ defmodule Sequin.Factory.ConsumersFactory do
         ).id
       end)
 
-    {sequence_id, attrs} =
-      Map.pop_lazy(attrs, :sequence_id, fn ->
-        if postgres_database do
-          DatabasesFactory.insert_sequence!(account_id: account_id, postgres_database: postgres_database).id
-        else
-          DatabasesFactory.insert_sequence!(account_id: account_id, postgres_database_id: postgres_database_id).id
-        end
-      end)
-
-    {sequence_filter, attrs} =
-      Map.pop_lazy(attrs, :sequence_filter, fn ->
-        if sequence_id, do: sequence_filter()
-      end)
-
     {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
 
     merge_attributes(
       %SinkConsumer{
         id: Factory.uuid(),
         account_id: account_id,
+        actions: [:insert, :update, :delete],
         ack_wait_ms: 30_000,
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         sink: sink,
@@ -119,8 +105,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         replication_slot_id: replication_slot_id,
         partition_count: Enum.random(1..10),
         status: :active,
-        sequence_id: sequence_id,
-        sequence_filter: sequence_filter,
         legacy_transform: :none,
         timestamp_format: :iso8601
       },
@@ -139,15 +123,6 @@ defmodule Sequin.Factory.ConsumersFactory do
 
       sink ->
         Sequin.Map.from_ecto(sink)
-    end)
-    |> Map.update!(:sequence_filter, fn sequence_filter ->
-      if sequence_filter do
-        sequence_filter
-        |> Sequin.Map.from_ecto()
-        |> Map.update!(:column_filters, fn column_filters ->
-          Enum.map(column_filters, &Sequin.Map.from_ecto/1)
-        end)
-      end
     end)
     |> Sequin.Map.from_ecto()
   end
@@ -221,6 +196,18 @@ defmodule Sequin.Factory.ConsumersFactory do
           ]),
         access_key_id: Factory.word(),
         secret_access_key: Factory.word()
+      },
+      attrs
+    )
+  end
+
+  defp sink(:s2, _account_id, attrs) do
+    merge_attributes(
+      %S2Sink{
+        type: :s2,
+        basin: "test-basin",
+        stream: Factory.word(),
+        access_token: Factory.word()
       },
       attrs
     )
@@ -357,17 +344,22 @@ defmodule Sequin.Factory.ConsumersFactory do
     Sequin.Map.from_ecto(gcp_credential(attrs))
   end
 
-  def source_table(attrs \\ []) do
-    attrs = Map.new(attrs)
-
+  def source(attrs \\ []) do
     merge_attributes(
-      %Sequin.Consumers.SourceTable{
-        oid: Factory.unique_integer(),
-        actions: [:insert, :update, :delete],
-        column_filters: [column_filter()],
-        group_column_attnums: nil,
-        sort_column_attnum: Factory.unique_integer()
-      },
+      %Sequin.Consumers.Source{},
+      attrs
+    )
+  end
+
+  def source_attrs(attrs \\ []) do
+    attrs
+    |> source()
+    |> Sequin.Map.from_ecto(keep_nils: true)
+  end
+
+  def source_table(attrs \\ []) do
+    merge_attributes(
+      %Sequin.Consumers.SourceTable{},
       attrs
     )
   end
@@ -375,53 +367,9 @@ defmodule Sequin.Factory.ConsumersFactory do
   def source_table_attrs(attrs \\ []) do
     attrs
     |> source_table()
-    |> Sequin.Map.from_ecto()
+    |> Sequin.Map.from_ecto(keep_nils: true)
   end
 
-  def column_filter(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    value_type =
-      Map.get(
-        attrs,
-        :value_type,
-        Enum.random([
-          :string,
-          :cistring,
-          :number,
-          :boolean,
-          :null,
-          :list
-        ])
-      )
-
-    merge_attributes(
-      %ColumnFilter{
-        column_attnum: Factory.unique_integer(),
-        operator: generate_operator(value_type),
-        value: %{__type__: value_type, value: generate_value(value_type)}
-      },
-      Map.delete(attrs, :value_type)
-    )
-  end
-
-  def column_filter_attrs(attrs \\ []) do
-    attrs
-    |> column_filter()
-    |> Sequin.Map.from_ecto()
-  end
-
-  defp generate_value(:string), do: Faker.Lorem.sentence()
-  defp generate_value(:cistring), do: Faker.Internet.email()
-  defp generate_value(:number), do: Enum.random([Factory.integer(), Factory.float()])
-  defp generate_value(:boolean), do: Factory.boolean()
-  defp generate_value(:null), do: nil
-  defp generate_value(:list), do: Enum.map(1..3, fn _ -> Factory.word() end)
-
-  defp generate_operator(:null), do: Factory.one_of([:is_null, :not_null])
-  defp generate_operator(:list), do: Factory.one_of([:in, :not_in])
-  defp generate_operator(:boolean), do: Factory.one_of([:==, :!=])
-  defp generate_operator(_), do: Factory.one_of([:==, :!=, :>, :<, :>=, :<=])
   # HttpEndpoint
 
   def http_endpoint(attrs \\ []) do
@@ -787,68 +735,6 @@ defmodule Sequin.Factory.ConsumersFactory do
       :record -> consumer_record_data_attrs(attrs)
       :event -> consumer_event_data_attrs(attrs)
     end
-  end
-
-  def sequence_filter(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    merge_attributes(
-      %SequenceFilter{
-        actions: [:insert, :update, :delete],
-        column_filters: [sequence_filter_column_filter()],
-        group_column_attnums: [Enum.random([1, 2, 3])]
-      },
-      attrs
-    )
-  end
-
-  def sequence_filter_attrs(attrs \\ []) do
-    attrs
-    |> sequence_filter()
-    |> Sequin.Map.from_ecto(keep_nils: true)
-    |> Map.update!(:column_filters, fn column_filters ->
-      Enum.map(column_filters, &Sequin.Map.from_ecto/1)
-    end)
-  end
-
-  def sequence_filter_column_filter(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    value_type = Map.get(attrs, :value_type, Enum.random([:string, :number, :boolean, :null, :list]))
-
-    merge_attributes(
-      %ColumnFilter{
-        column_attnum: Factory.unique_integer(),
-        operator: generate_operator(value_type),
-        value: %{__type__: value_type, value: generate_value(value_type)},
-        is_jsonb: false,
-        jsonb_path: nil
-      },
-      Map.delete(attrs, :value_type)
-    )
-  end
-
-  def sequence_filter_column_filter_attrs(attrs \\ []) do
-    attrs
-    |> sequence_filter_column_filter()
-    |> Sequin.Map.from_ecto()
-  end
-
-  def schema_filter(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    merge_attributes(
-      %SchemaFilter{
-        schema: Factory.postgres_object()
-      },
-      attrs
-    )
-  end
-
-  def schema_filter_attrs(attrs \\ []) do
-    attrs
-    |> schema_filter()
-    |> Sequin.Map.from_ecto(keep_nils: true)
   end
 
   def backfill(attrs \\ []) do

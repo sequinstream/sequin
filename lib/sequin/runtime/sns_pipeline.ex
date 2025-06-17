@@ -17,11 +17,9 @@ defmodule Sequin.Runtime.SnsPipeline do
 
   @impl SinkPipeline
   def batchers_config(_consumer) do
-    concurrency = min(System.schedulers_online() * 2, 80)
-
     [
       default: [
-        concurrency: concurrency,
+        concurrency: 400,
         batch_size: 10,
         batch_timeout: 50
       ]

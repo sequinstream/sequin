@@ -968,68 +968,40 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   defp stream_messages_into_state(%State{} = state) do
-    # Allow for a padding of 2x max_memory_bytes on initial load from disk
-    max_memory_bytes = state.max_memory_bytes * 2
-    max_messages = state.setting_max_messages * 2
-
     # Stream messages and stop when we reach max_memory_bytes
-    {time, res} =
+    {time, persisted_messages} =
       :timer.tc(fn ->
         state.consumer
         |> Consumers.stream_consumer_messages_for_consumer()
         |> Stream.filter(&(message_partition(&1, state.consumer.partition_count) == state.partition))
         |> Stream.reject(&State.message_exists?(state, &1))
-        |> Enum.reduce_while({:ok, {[], 0, 0}}, fn msg, {:ok, {messages, current_size, message_count}} ->
-          msg = %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
-          new_size = current_size + msg.payload_size_bytes
-          new_message_count = message_count + 1
-
-          if new_size <= max_memory_bytes and new_message_count <= max_messages do
-            {:cont, {:ok, {[msg | messages], new_size, new_message_count}}}
-          else
-            error =
-              {:error,
-               Error.invariant(
-                 message:
-                   "Max memory limit exceeded. Sink has more messages on disk than can fit in memory. Please increase max_memory_bytes or max_messages on the sink."
-               )}
-
-            {:halt, error}
-          end
+        |> Enum.map(fn msg ->
+          %{msg | payload_size_bytes: :erlang.external_size(msg.data)}
         end)
       end)
 
-    case res do
-      {:ok, {persisted_messages, current_size_bytes, message_count}} ->
-        duration_ms = time / 1000
+    duration_ms = time / 1000
 
-        if duration_ms > 100 do
-          Logger.warning("[SlotMessageStore] Loaded messages from disk (duration=#{duration_ms}ms)",
-            consumer_id: state.consumer_id,
-            partition: state.partition,
-            message_count: message_count,
-            size_bytes: current_size_bytes,
-            duration_ms: duration_ms
-          )
-        else
-          if message_count > 0 do
-            Logger.info("[SlotMessageStore] Loaded messages from disk",
-              consumer_id: state.consumer_id,
-              partition: state.partition,
-              message_count: message_count,
-              size_bytes: current_size_bytes,
-              duration_ms: duration_ms
-            )
-          end
-        end
-
-        # Now put the messages into state
-        {:ok, State.put_persisted_messages(state, persisted_messages)}
-
-      {:error, error} ->
-        Logger.error("[SlotMessageStore] Failed to load messages from disk", error: error)
-        {:error, error}
+    if duration_ms > 100 do
+      Logger.warning("[SlotMessageStore] Loaded messages from disk (duration=#{duration_ms}ms)",
+        consumer_id: state.consumer_id,
+        partition: state.partition,
+        message_count: length(persisted_messages),
+        duration_ms: duration_ms
+      )
+    else
+      unless persisted_messages == [] do
+        Logger.info("[SlotMessageStore] Loaded messages from disk",
+          consumer_id: state.consumer_id,
+          partition: state.partition,
+          message_count: length(persisted_messages),
+          duration_ms: duration_ms
+        )
+      end
     end
+
+    # Now put the messages into state
+    {:ok, State.put_persisted_messages(state, persisted_messages)}
   end
 
   @decorate track_metrics("delete_messages_noop")

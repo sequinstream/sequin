@@ -11,8 +11,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   use Sequin.ProcessMetrics.Decorator
 
-  import Sequin.Error.Guards, only: [is_error: 1]
-
   alias __MODULE__
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Constants
@@ -40,6 +38,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Origin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
+  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Truncate
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Runtime.PostgresRelationHashCache
   alias Sequin.Runtime.SlotMessageStore
@@ -51,7 +50,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   # 100 MB
   @max_accumulated_bytes 100 * 1024 * 1024
-  @max_accumulated_messages 100_000
+  @max_accumulated_messages 2500
   @backfill_batch_high_watermark Constants.backfill_batch_high_watermark()
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
@@ -84,6 +83,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
+  def retry_flush_after_ms do
+    case get_config(:retry_flush_after_ms) do
+      nil ->
+        if Application.get_env(:sequin, :env) == :test do
+          5
+        else
+          :timer.seconds(1)
+        end
+
+      value ->
+        value
+    end
+  end
+
   def set_max_accumulated_messages(value) do
     put_config(:max_accumulated_messages, value)
   end
@@ -94,6 +107,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   def set_max_accumulated_messages_time_ms(value) do
     put_config(:max_accumulated_messages_time_ms, value)
+  end
+
+  def set_retry_flush_after_ms(value) do
+    put_config(:retry_flush_after_ms, value)
   end
 
   defp get_config(key) do
@@ -149,6 +166,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       field :backfill_watermark_messages, [LogicalMessage.t()], default: []
       field :flush_timer, nil | reference()
+      field :flush_imminent?, boolean(), default: false
 
       # Message handlers
       field :message_handler_ctx, any()
@@ -156,7 +174,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
 
       # Health and monitoring
-      field :bytes_received_since_last_limit_check, non_neg_integer(), default: 0
       field :check_memory_fn, nil | (-> non_neg_integer())
       field :dirty, boolean(), default: false
 
@@ -422,7 +439,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     raw_bytes_received = byte_size(msg)
     ProcessMetrics.increment_throughput("raw_bytes_received", raw_bytes_received)
 
-    state = maybe_schedule_flush(state)
     state = %{state | message_received_since_last_heartbeat: true}
 
     state =
@@ -430,49 +446,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, binaries: [msg | acc.binaries]}
       end)
 
+    state = maybe_schedule_flush(state)
+
     ProcessMetrics.gauge("accumulated_msg_binaries_count", state.accumulated_msg_binaries.count)
     ProcessMetrics.gauge("accumulated_msg_binaries_bytes", state.accumulated_msg_binaries.bytes)
 
-    # Update bytes processed and check limits
-    with {:ok, state} <- check_limit(state, raw_bytes_received),
-         {:ok, state} <- maybe_flush_messages(state) do
-      {:keep_state, state}
-    else
-      {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
-        Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
-        {:disconnect, :payload_size_limit_exceeded, state}
-
-      {:error, %InvariantError{code: :over_system_memory_limit}} ->
-        Health.put_event(
-          state.replication_slot,
-          %Event{slug: :replication_memory_limit_exceeded, status: :info}
-        )
-
-        Logger.warning("[SlotProcessorServer] System hit memory limit, shutting down",
-          limit: state.max_memory_bytes,
-          current_memory: state.check_memory_fn.()
-        )
-
-        {:ok, state} = flush_messages(state)
-
-        if state.test_pid do
-          send(state.test_pid, {:stop_replication, state.id})
-        end
-
-        {:disconnect, :over_system_memory_limit, state}
-    end
-  rescue
-    e ->
-      Logger.error("Error processing message: #{inspect(e)}")
-
-      error = if is_error(e), do: e, else: Error.service(service: :replication, message: Exception.message(e))
-
-      Health.put_event(
-        state.replication_slot,
-        %Event{slug: :replication_message_processed, status: :fail, error: error}
-      )
-
-      reraise e, __STACKTRACE__
+    {:keep_state, state}
   end
 
   # Primary keepalive message from server:
@@ -583,13 +562,37 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   @impl ReplicationConnection
   @decorate track_metrics("flush_messages")
   def handle_info(:flush_messages, %State{} = state) do
-    case flush_messages(state) do
-      {:ok, state} ->
-        {:keep_state, %{state | flush_timer: nil}}
+    state = %{state | flush_timer: nil, flush_imminent?: false}
 
+    with :ok <- check_limit(state),
+         {:ok, state} <- flush_messages(state) do
+      {:activate_socket, state}
+    else
       {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
-        Logger.warning("Hit payload size limit for one or more slot message stores. Disconnecting temporarily.")
-        {:disconnect, :payload_size_limit_exceeded, %{state | flush_timer: nil}}
+        if state.test_pid do
+          send(state.test_pid, {__MODULE__, :inactivate_socket})
+        end
+
+        Logger.warning("Hit payload size limit for one or more slot message stores. Backing off.")
+
+        ref = schedule_flush(retry_flush_after_ms())
+        {:inactivate_socket, %{state | flush_timer: ref}}
+
+      {:error, %InvariantError{code: :over_system_memory_limit}} ->
+        Health.put_event(
+          state.replication_slot,
+          %Event{slug: :replication_memory_limit_exceeded, status: :info}
+        )
+
+        Logger.warning("[SlotProcessorServer] System hit memory limit, backing off",
+          limit: state.max_memory_bytes,
+          current_memory: state.check_memory_fn.()
+        )
+
+        {:ok, state} = flush_messages(state)
+
+        ref = schedule_flush(retry_flush_after_ms())
+        {:inactivate_socket, %{state | flush_timer: ref}}
 
       {:error, error} ->
         raise error
@@ -950,13 +953,50 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  defp maybe_schedule_flush(%State{flush_timer: nil} = state) do
-    ref = Process.send_after(self(), :flush_messages, max_accumulated_messages_time_ms())
-    %{state | flush_timer: ref}
+  defp maybe_schedule_flush(%State{flush_imminent?: true} = state) do
+    state
   end
 
-  defp maybe_schedule_flush(%State{flush_timer: ref} = state) when is_reference(ref) do
-    state
+  defp maybe_schedule_flush(%State{} = state) do
+    should_flush_now? =
+      state.accumulated_msg_binaries.count > max_accumulated_messages() or
+        state.accumulated_msg_binaries.bytes > max_accumulated_bytes()
+
+    cond do
+      should_flush_now? ->
+        unless is_nil(state.flush_timer) do
+          cancel_flush_timer(state.flush_timer)
+        end
+
+        ref = schedule_flush(0)
+        # Prevent this timer from getting canceled/re-scheduled
+        %{state | flush_timer: ref, flush_imminent?: true}
+
+      is_nil(state.flush_timer) ->
+        ref = schedule_flush()
+        %{state | flush_timer: ref}
+
+      true ->
+        state
+    end
+  end
+
+  defp schedule_flush(time_ms \\ max_accumulated_messages_time_ms()) do
+    Process.send_after(self(), :flush_messages, time_ms)
+  end
+
+  defp cancel_flush_timer(timer) when is_reference(timer) do
+    case Process.cancel_timer(timer) do
+      false ->
+        receive do
+          :flush_messages -> :ok
+        after
+          0 -> :ok
+        end
+
+      _ ->
+        :ok
+    end
   end
 
   defp schedule_heartbeat(state, interval \\ nil)
@@ -1237,6 +1277,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     state
   end
 
+  defp process_message(%State{} = state, %Truncate{}) do
+    state
+  end
+
   # It's important we assert this message is not a message that we *should* have a handler for
   defp process_message(%State{} = state, %struct{} = msg)
        when struct not in [Begin, Commit, Message, LogicalMessage, Relation] do
@@ -1361,23 +1405,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     }
   end
 
-  defp maybe_flush_messages(%State{} = state) do
-    should_flush? =
-      state.accumulated_msg_binaries.count > max_accumulated_messages() or
-        state.accumulated_msg_binaries.bytes > max_accumulated_bytes()
-
-    if should_flush? do
-      flush_messages(state)
-    else
-      {:ok, state}
-    end
-  end
-
   @spec flush_messages(State.t()) :: {:ok, State.t()} | {:error, Error.t()}
   @decorate track_metrics("flush_messages")
   defp flush_messages(%State{} = state) do
     if ref = state.flush_timer do
-      Process.cancel_timer(ref)
+      cancel_flush_timer(ref)
     end
 
     state = %{state | flush_timer: nil}
@@ -1683,26 +1715,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   # Give the system 3 seconds to lower memory
   @check_limit_attempts 30
   @check_limit_interval 100
-  defp check_limit(state, raw_bytes_received, attempt \\ 1)
+  defp check_limit(state, attempt \\ 1)
 
-  defp check_limit(_state, _raw_bytes_received, attempt) when attempt > @check_limit_attempts do
+  defp check_limit(_state, attempt) when attempt > @check_limit_attempts do
     {:error, Error.invariant(message: "Memory limit exceeded", code: :over_system_memory_limit)}
   end
 
-  defp check_limit(%State{} = state, raw_bytes_received, attempt) do
-    # Check if it's been a while since we last checked the limit
-    if state.bytes_received_since_last_limit_check + raw_bytes_received >= state.bytes_between_limit_checks do
-      current_memory = state.check_memory_fn.()
+  defp check_limit(%State{} = state, attempt) do
+    current_memory = state.check_memory_fn.()
 
-      if current_memory >= state.max_memory_bytes do
-        Process.sleep(@check_limit_interval)
-        check_limit(state, raw_bytes_received, attempt + 1)
-      else
-        {:ok, %{state | bytes_received_since_last_limit_check: 0}}
-      end
+    if current_memory >= state.max_memory_bytes do
+      Process.sleep(@check_limit_interval)
+      check_limit(state, attempt + 1)
     else
-      new_bytes = state.bytes_received_since_last_limit_check + raw_bytes_received
-      {:ok, %{state | bytes_received_since_last_limit_check: new_bytes}}
+      :ok
     end
   end
 

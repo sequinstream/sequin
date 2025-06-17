@@ -19,18 +19,18 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.RoutingFunction
-  alias Sequin.Consumers.SequenceFilter.ColumnFilter
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
+  alias Sequin.Consumers.Source
+  alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Consumers.WebhookSiteGenerator
-  alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
-  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Error.ValidationError
@@ -38,6 +38,41 @@ defmodule Sequin.Transforms do
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
   alias Sequin.Sinks.Gcp
+  alias Sequin.WalPipeline.SourceTable.ColumnFilter
+
+  defmodule SensitiveValue do
+    @moduledoc """
+    A struct that wraps a sensitive value, allowing comparison while keeping the value hidden.
+    """
+    defstruct [:value, :show_value]
+
+    @type t :: %__MODULE__{
+            value: any(),
+            show_value: boolean()
+          }
+
+    def new(value, show_value \\ false) do
+      %__MODULE__{value: value, show_value: show_value}
+    end
+
+    defimpl String.Chars do
+      def to_string(%{value: nil}), do: ""
+      def to_string(%{value: value, show_value: true}), do: Kernel.to_string(value)
+      def to_string(%{value: value, show_value: false}), do: Sequin.String.obfuscate(value)
+    end
+
+    defimpl Jason.Encoder do
+      def encode(%{value: nil}, opts), do: Jason.Encoder.encode(nil, opts)
+      def encode(%{value: value, show_value: true}, opts), do: Jason.Encoder.encode(value, opts)
+      def encode(sensitive, opts), do: Jason.Encoder.encode(to_string(sensitive), opts)
+    end
+
+    defimpl Ymlr.Encoder do
+      def encode(%{value: nil}, indent, opts), do: Ymlr.Encoder.encode(nil, indent, opts)
+      def encode(%{value: value, show_value: true}, indent, opts), do: Ymlr.Encoder.encode(value, indent, opts)
+      def encode(sensitive, indent, opts), do: Ymlr.Encoder.encode(to_string(sensitive), indent, opts)
+    end
+  end
 
   def to_external(resource, show_sensitive \\ false)
 
@@ -52,18 +87,18 @@ defmodule Sequin.Transforms do
     %{
       id: user.id,
       email: user.email,
-      password: maybe_obfuscate(user.password, show_sensitive)
+      password: SensitiveValue.new(user.password, show_sensitive)
     }
   end
 
   def to_external(%PostgresDatabase{} = database, show_sensitive) do
-    database = Repo.preload(database, [:replication_slot, :sequences])
+    database = Repo.preload(database, [:replication_slot])
 
     result = %{
       id: database.id,
       name: database.name,
       username: database.username,
-      password: maybe_obfuscate(database.password, show_sensitive),
+      password: SensitiveValue.new(database.password, show_sensitive),
       hostname: database.hostname,
       database: database.database,
       slot: %{
@@ -84,7 +119,7 @@ defmodule Sequin.Transforms do
     else
       Map.put(result, :primary, %{
         username: database.primary.username,
-        password: maybe_obfuscate(database.primary.password, show_sensitive),
+        password: SensitiveValue.new(database.primary.password, show_sensitive),
         hostname: database.primary.hostname,
         port: database.primary.port,
         database: database.primary.database
@@ -98,8 +133,7 @@ defmodule Sequin.Transforms do
       name: http_endpoint.name,
       "webhook.site": true,
       headers: format_headers(http_endpoint.headers),
-      encrypted_headers:
-        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
+      encrypted_headers: encrypted_headers(http_endpoint, show_sensitive)
     }
   end
 
@@ -110,8 +144,7 @@ defmodule Sequin.Transforms do
       local: true,
       path: http_endpoint.path,
       headers: format_headers(http_endpoint.headers),
-      encrypted_headers:
-        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
+      encrypted_headers: encrypted_headers(http_endpoint, show_sensitive)
     }
   end
 
@@ -130,76 +163,42 @@ defmodule Sequin.Transforms do
           fragment: http_endpoint.fragment
         }),
       headers: format_headers(http_endpoint.headers),
-      encrypted_headers:
-        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
+      encrypted_headers: encrypted_headers(http_endpoint, show_sensitive)
     }
   end
 
   def to_external(%SinkConsumer{sink: sink} = consumer, show_sensitive) do
     consumer =
       consumer
-      |> Repo.preload([:active_backfills, :transform, sequence: [:postgres_database]])
+      |> Repo.preload([:active_backfills, :transform, :postgres_database])
       |> SinkConsumer.preload_http_endpoint!()
 
-    table =
-      cond do
-        is_nil(consumer.sequence) -> nil
-        table = Enum.find(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid)) -> table
-        true -> nil
+    source_tables =
+      if consumer.source_tables do
+        Enum.map(consumer.source_tables, &to_external_source_table(&1, consumer.postgres_database))
       end
 
-    filters =
-      cond do
-        is_nil(table) -> []
-        is_nil(consumer.sequence_filter) -> []
-        is_nil(consumer.sequence_filter.column_filters) -> []
-        true -> consumer.sequence_filter.column_filters
-      end
-
-    schema =
-      if is_nil(consumer.schema_filter) do
-        nil
-      else
-        consumer.schema_filter.schema
-      end
-
-    database_name =
-      if consumer.sequence do
-        consumer.sequence.postgres_database.name
-      else
-        # For schema filters, we need to get the database from the replication slot
-        consumer = Repo.preload(consumer, replication_slot: [:postgres_database])
-        consumer.replication_slot.postgres_database.name
-      end
-
-    actions =
-      if consumer.sequence_filter do
-        consumer.sequence_filter.actions
-      else
-        # For schema filters, we don't have specific actions, so use default
-        [:insert, :update, :delete]
-      end
-
-    %{
-      id: consumer.id,
-      name: consumer.name,
-      database: database_name,
-      status: consumer.status,
-      actions: actions,
-      destination: to_external(sink, show_sensitive),
-      filters: Enum.map(filters, &format_filter(&1, table)),
-      batch_size: consumer.batch_size,
-      transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
-      timestamp_format: consumer.timestamp_format,
-      active_backfills: Enum.map(consumer.active_backfills, &to_external(&1, show_sensitive)),
-      max_retry_count: consumer.max_retry_count,
-      load_shedding_policy: consumer.load_shedding_policy,
-      annotations: consumer.annotations
-    }
-    |> Sequin.Map.put_if_present(:table, if(table, do: "#{table.schema}.#{table.name}"))
-    |> Sequin.Map.put_if_present(:schema, schema)
-    |> Sequin.Map.put_if_present(:group_column_names, group_column_names(consumer, table))
-    |> Sequin.Map.put_if_present(:health, if(consumer.health, do: to_external(consumer.health, show_sensitive)))
+    Sequin.Map.put_if_present(
+      %{
+        id: consumer.id,
+        name: consumer.name,
+        database: consumer.postgres_database.name,
+        status: consumer.status,
+        actions: consumer.actions,
+        destination: to_external(sink, show_sensitive),
+        batch_size: consumer.batch_size,
+        transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
+        timestamp_format: consumer.timestamp_format,
+        active_backfills: Enum.map(consumer.active_backfills, &to_external(&1, show_sensitive)),
+        max_retry_count: consumer.max_retry_count,
+        load_shedding_policy: consumer.load_shedding_policy,
+        annotations: consumer.annotations,
+        source: to_external_source(consumer.source, consumer.postgres_database, show_sensitive),
+        tables: source_tables
+      },
+      :health,
+      if(consumer.health, do: to_external(consumer.health, show_sensitive))
+    )
   end
 
   def to_external(%HttpPushSink{} = sink, _show_sensitive) do
@@ -220,24 +219,24 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%KafkaSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "kafka",
       hosts: sink.hosts,
       topic: sink.topic,
       tls: sink.tls,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive),
+      password: SensitiveValue.new(sink.password, show_sensitive),
       sasl_mechanism: sink.sasl_mechanism
     })
   end
 
   def to_external(%RabbitMqSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "rabbitmq",
       host: sink.host,
       port: sink.port,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive),
+      password: SensitiveValue.new(sink.password, show_sensitive),
       virtual_host: sink.virtual_host,
       tls: sink.tls,
       exchange: sink.exchange,
@@ -246,7 +245,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%RedisStreamSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "redis_stream",
       host: sink.host,
       port: sink.port,
@@ -254,56 +253,65 @@ defmodule Sequin.Transforms do
       database: sink.database,
       tls: sink.tls,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive)
+      password: SensitiveValue.new(sink.password, show_sensitive)
     })
   end
 
   def to_external(%RedisStringSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "redis_string",
       host: sink.host,
       port: sink.port,
       database: sink.database,
       tls: sink.tls,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive),
+      password: SensitiveValue.new(sink.password, show_sensitive),
       expire_ms: sink.expire_ms
     })
   end
 
   def to_external(%SqsSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "sqs",
       queue_url: sink.queue_url,
       region: sink.region,
-      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
-      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
+      access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
+      secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive),
       is_fifo: sink.is_fifo
     })
   end
 
   def to_external(%SnsSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "sns",
       topic_arn: sink.topic_arn,
       region: sink.region,
-      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
-      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
+      access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
+      secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive),
       is_fifo: sink.is_fifo
     })
   end
 
   def to_external(%KinesisSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "kinesis",
       stream_arn: sink.stream_arn,
-      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
-      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive)
+      access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
+      secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive)
+    })
+  end
+
+  def to_external(%S2Sink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "s2",
+      basin: sink.basin,
+      stream: sink.stream,
+      access_token: SensitiveValue.new(sink.access_token, show_sensitive)
     })
   end
 
   def to_external(%GcpPubsubSink{credentials: %Gcp.Credentials{} = credentials} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "gcp_pubsub",
       project_id: sink.project_id,
       topic_id: sink.topic_id,
@@ -312,62 +320,62 @@ defmodule Sequin.Transforms do
       credentials: %{
         type: credentials.type,
         project_id: credentials.project_id,
-        private_key_id: maybe_obfuscate(credentials.private_key_id, show_sensitive),
-        private_key: maybe_obfuscate(credentials.private_key, show_sensitive),
-        client_email: maybe_obfuscate(credentials.client_email, show_sensitive),
-        client_id: maybe_obfuscate(credentials.client_id, show_sensitive),
+        private_key_id: SensitiveValue.new(credentials.private_key_id, show_sensitive),
+        private_key: SensitiveValue.new(credentials.private_key, show_sensitive),
+        client_email: SensitiveValue.new(credentials.client_email, show_sensitive),
+        client_id: SensitiveValue.new(credentials.client_id, show_sensitive),
         auth_uri: credentials.auth_uri,
         token_uri: credentials.token_uri,
         auth_provider_x509_cert_url: credentials.auth_provider_x509_cert_url,
         client_x509_cert_url: credentials.client_x509_cert_url,
-        universe_domain: maybe_obfuscate(credentials.universe_domain, show_sensitive),
-        client_secret: maybe_obfuscate(credentials.client_secret, show_sensitive),
-        api_key: maybe_obfuscate(credentials.api_key, show_sensitive)
+        universe_domain: SensitiveValue.new(credentials.universe_domain, show_sensitive),
+        client_secret: SensitiveValue.new(credentials.client_secret, show_sensitive),
+        api_key: SensitiveValue.new(credentials.api_key, show_sensitive)
       }
     })
   end
 
   def to_external(%NatsSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "nats",
       host: sink.host,
       port: sink.port,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive),
-      jwt: maybe_obfuscate(sink.jwt, show_sensitive),
-      nkey_seed: maybe_obfuscate(sink.nkey_seed, show_sensitive),
+      password: SensitiveValue.new(sink.password, show_sensitive),
+      jwt: SensitiveValue.new(sink.jwt, show_sensitive),
+      nkey_seed: SensitiveValue.new(sink.nkey_seed, show_sensitive),
       tls: sink.tls
     })
   end
 
   def to_external(%AzureEventHubSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "azure_event_hub",
       namespace: sink.namespace,
       event_hub_name: sink.event_hub_name,
       shared_access_key_name: sink.shared_access_key_name,
-      shared_access_key: maybe_obfuscate(sink.shared_access_key, show_sensitive)
+      shared_access_key: SensitiveValue.new(sink.shared_access_key, show_sensitive)
     })
   end
 
   def to_external(%TypesenseSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "typesense",
       endpoint_url: sink.endpoint_url,
       collection_name: sink.collection_name,
-      api_key: maybe_obfuscate(sink.api_key, show_sensitive),
+      api_key: SensitiveValue.new(sink.api_key, show_sensitive),
       batch_size: sink.batch_size,
       timeout_seconds: sink.timeout_seconds
     })
   end
 
   def to_external(%ElasticsearchSink{} = sink, show_sensitive) do
-    Sequin.Map.reject_nil_values(%{
+    reject_nil_values(%{
       type: "elasticsearch",
       endpoint_url: sink.endpoint_url,
       index_name: sink.index_name,
       auth_type: sink.auth_type,
-      auth_value: maybe_obfuscate(sink.auth_value, show_sensitive),
+      auth_value: SensitiveValue.new(sink.auth_value, show_sensitive),
       batch_size: sink.batch_size
     })
   end
@@ -439,7 +447,7 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%Backfill{} = backfill, _show_sensitive) do
-    backfill = Repo.preload(backfill, sink_consumer: [:sequence, :postgres_database])
+    backfill = Repo.preload(backfill, sink_consumer: [:postgres_database])
     database = backfill.sink_consumer.postgres_database
 
     table = Enum.find(database.tables, &(&1.oid == backfill.table_oid))
@@ -477,28 +485,50 @@ defmodule Sequin.Transforms do
     )
   end
 
-  def group_column_names(%SinkConsumer{}, nil), do: nil
+  defp group_column_names(%SourceTable{}, nil), do: nil
 
-  def group_column_names(%SinkConsumer{} = consumer, table) do
-    default_group_column_names =
-      table.columns
-      |> Enum.filter(& &1.is_pk?)
-      |> Enum.sort_by(& &1.attnum)
-      |> Enum.map(& &1.name)
+  defp group_column_names(%SourceTable{} = source_table, table) do
+    source_table.group_column_attnums
+    |> Enum.map(fn attnum ->
+      Enum.find(table.columns, &(&1.attnum == attnum))
+    end)
+    |> Enum.filter(& &1)
+    |> Enum.map(& &1.name)
+  end
 
-    cond do
-      is_nil(consumer.sequence_filter) ->
-        default_group_column_names
+  defp to_external_source(nil, _database, _show_sensitive), do: nil
 
-      is_nil(consumer.sequence_filter.group_column_attnums) ->
-        default_group_column_names
+  defp to_external_source(%Source{} = source, %PostgresDatabase{} = database, _show_sensitive) do
+    %{
+      include_schemas: source.include_schemas,
+      exclude_schemas: source.exclude_schemas,
+      include_tables: to_external_table_oids(source.include_table_oids, database),
+      exclude_tables: to_external_table_oids(source.exclude_table_oids, database)
+    }
+  end
 
-      true ->
-        Enum.map(consumer.sequence_filter.group_column_attnums, fn attnum ->
-          column = Enum.find(table.columns, &(&1.attnum == attnum))
-          column.name
-        end)
-    end
+  defp to_external_source_table(%SourceTable{} = source_table, %PostgresDatabase{} = database) do
+    table = Enum.find(database.tables, &(&1.oid == source_table.table_oid))
+    table_ref = if table, do: "#{table.schema}.#{table.name}"
+    group_column_names = group_column_names(source_table, table)
+
+    %{
+      table: table_ref,
+      group_column_names: group_column_names
+    }
+  end
+
+  defp to_external_table_oids(nil, _database), do: nil
+
+  defp to_external_table_oids(table_oids, database) do
+    table_oids
+    |> Enum.map(fn table_oid ->
+      case Enum.find(database.tables, &(&1.oid == table_oid)) do
+        nil -> nil
+        table -> "#{table.schema}.#{table.name}"
+      end
+    end)
+    |> Enum.filter(& &1)
   end
 
   # Helper functions
@@ -507,34 +537,11 @@ defmodule Sequin.Transforms do
     Map.new(headers, fn {key, value} -> {key, value} end)
   end
 
-  defp format_filter(filter, table) do
-    column = Sequin.Enum.find!(table.columns, &(&1.attnum == filter.column_attnum))
+  defp encrypted_headers(%HttpEndpoint{encrypted_headers: nil}, _show_sensitive), do: %{}
 
-    base = %{
-      column_name: column.name,
-      operator: format_operator(filter.operator)
-    }
-
-    if filter.operator == :not_null do
-      base
-    else
-      Map.put(base, :comparison_value, filter.value.value)
-    end
+  defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}, show_sensitive) do
+    Map.new(encrypted_headers, fn {key, value} -> {key, SensitiveValue.new(value, show_sensitive)} end)
   end
-
-  defp format_operator(:is_null), do: "is null"
-  defp format_operator(:not_null), do: "is not null"
-  defp format_operator(op), do: to_string(op)
-
-  defp encrypted_headers(%HttpEndpoint{encrypted_headers: nil}), do: %{}
-
-  defp encrypted_headers(%HttpEndpoint{encrypted_headers: encrypted_headers}) do
-    Map.new(encrypted_headers, fn {key, value} -> {key, maybe_obfuscate(value, false)} end)
-  end
-
-  defp maybe_obfuscate(nil, _), do: nil
-  defp maybe_obfuscate(value, true), do: value
-  defp maybe_obfuscate(value, false), do: Sequin.String.obfuscate(value)
 
   def from_external_postgres_database(params, account_id) do
     with {:ok, db_params} <- parse_db_params(params) do
@@ -544,7 +551,6 @@ defmodule Sequin.Transforms do
         |> Sequin.Map.atomize_keys()
 
       {:ok, struct(PostgresDatabase, sparams)}
-      # {:ok, struct(PostgresDatabase, Map.put(db_params, "account_id", account_id))}
     end
   end
 
@@ -790,63 +796,38 @@ defmodule Sequin.Transforms do
               {:halt, {:error, Error.validation(summary: "batch_size must be a positive integer <= 1000")}}
           end
 
-        "table" ->
-          # Check for mutual exclusion with schema
-          if consumer_attrs["schema"] do
-            {:halt, {:error, Error.validation(summary: "Cannot specify both `schema` and `table`. Choose one.")}}
-          else
-            {schema, table_name} = parse_table_reference(value)
-            databases = Repo.preload(databases, [:sequences, :replication_slot])
+        "actions" ->
+          {:cont, {:ok, Map.put(acc, :actions, value)}}
 
-            with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
-                 {:ok, sequence} <- find_sequence_by_name(database, value),
-                 table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name)),
-                 {:ok, group_column_attnums} <- group_column_attnums(consumer_attrs["group_column_names"], table),
-                 {:ok, column_filters} <- column_filters(consumer_attrs["filters"], table) do
-              {:cont,
-               {:ok,
-                acc
-                |> Map.put(:sequence_id, sequence.id)
-                |> Map.put(:replication_slot_id, database.replication_slot.id)
-                |> Map.put(:sequence_filter, %{
-                  actions: consumer_attrs["actions"] || ["insert", "update", "delete"],
-                  group_column_attnums: group_column_attnums,
-                  column_filters: column_filters
-                })}}
-            else
-              {:error, error} -> {:halt, {:error, error}}
-            end
+        "database" ->
+          case find_database_by_name(value, databases) do
+            {:ok, database} ->
+              {:cont, {:ok, Map.put(acc, :replication_slot_id, database.replication_slot.id)}}
+
+            {:error, error} ->
+              {:halt, {:error, error}}
           end
 
-        "schema" ->
-          # Check for mutual exclusion with table
-          cond do
-            Map.has_key?(consumer_attrs, "table") ->
-              {:halt, {:error, Error.validation(summary: "Cannot specify both `schema` and `table`. Choose one.")}}
+        "source" ->
+          with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
+               {:ok, source} <- parse_source(value, database) do
+            {:cont, {:ok, Map.put(acc, :source, source)}}
+          else
+            {:error, error} ->
+              {:halt, {:error, error}}
+          end
 
-            Map.has_key?(consumer_attrs, "group_column_names") ->
-              {:halt, {:error, Error.validation(summary: "Cannot specify `group_column_names` with `schema`.")}}
-
-            true ->
-              databases = Repo.preload(databases, [:replication_slot])
-
-              case find_database_by_name(consumer_attrs["database"], databases) do
-                {:ok, database} ->
-                  {:cont,
-                   {:ok,
-                    acc
-                    |> Map.put(:replication_slot_id, database.replication_slot.id)
-                    |> Map.put(:schema_filter, %{
-                      schema: value
-                    })}}
-
-                {:error, error} ->
-                  {:halt, {:error, error}}
-              end
+        "tables" ->
+          with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
+               {:ok, source_tables} <- parse_source_tables(value, database) do
+            {:cont, {:ok, Map.put(acc, :source_tables, source_tables)}}
+          else
+            {:error, error} ->
+              {:halt, {:error, error}}
           end
 
         # handled in "table" or "schema"
-        key when key in ~w(database filters group_column_names actions) ->
+        key when key in ~w(database) ->
           {:cont, {:ok, acc}}
 
         "destination" ->
@@ -910,11 +891,115 @@ defmodule Sequin.Transforms do
         ignored when ignored in ~w(id inserted_at updated_at account_id replication_slot_id sequence_id) ->
           {:cont, {:ok, acc}}
 
+        "table" ->
+          msg = """
+          `table` is deprecated. Use `source.include_tables` instead.
+
+          https://sequinstream.com/docs/reference/sequin-yaml#sink-source
+          """
+
+          error = Error.validation(summary: msg)
+          {:halt, {:error, error}}
+
+        "schema" ->
+          msg = """
+          `schema` is deprecated. Use `source.include_schemas` instead.
+
+          https://sequinstream.com/docs/reference/sequin-yaml#sink-source
+          """
+
+          error = Error.validation(summary: msg)
+          {:halt, {:error, error}}
+
         # Unknown field
         _ ->
           {:halt, {:error, Error.validation(summary: "Unknown field: #{key}")}}
       end
     end)
+  end
+
+  defp parse_source(nil, _databases), do: {:ok, nil}
+
+  defp parse_source(source, %PostgresDatabase{} = database) when is_map(source) do
+    with {:ok, include_table_oids} <- parse_table_references(source["include_tables"], database),
+         {:ok, exclude_table_oids} <- parse_table_references(source["exclude_tables"], database) do
+      {:ok,
+       %{
+         include_table_oids: include_table_oids,
+         exclude_table_oids: exclude_table_oids,
+         include_schemas: source["include_schemas"],
+         exclude_schemas: source["exclude_schemas"]
+       }}
+    end
+  end
+
+  defp parse_table_references(nil, _database), do: {:ok, nil}
+
+  defp parse_table_references(table_refs, database) when is_list(table_refs) do
+    table_refs
+    |> Enum.reduce_while({:ok, []}, fn table_ref, {:ok, acc} ->
+      case find_table(database, table_ref) do
+        {:ok, table} -> {:cont, {:ok, [table.oid | acc]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+    |> case do
+      {:ok, oids} -> {:ok, Enum.reverse(oids)}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp find_table(%PostgresDatabase{} = database, table_ref) do
+    {schema, table_name} = parse_table_reference(table_ref)
+    table = Enum.find(database.tables, &(&1.name == table_name and &1.schema == schema))
+
+    if table do
+      {:ok, table}
+    else
+      {:error, Error.validation(summary: "Table '#{table_ref}' not found in database '#{database.name}'")}
+    end
+  end
+
+  defp parse_source_tables(nil, _databases), do: {:ok, nil}
+
+  defp parse_source_tables(source_tables, database) when is_list(source_tables) do
+    Enum.reduce_while(source_tables, {:ok, []}, fn source_table, {:ok, acc} ->
+      with {:ok, table} <- find_table(database, source_table["name"]),
+           {:ok, column_attnums} <- parse_column_attnums(source_table["group_column_names"], table) do
+        {:cont, {:ok, [%{table_oid: table.oid, group_column_attnums: column_attnums} | acc]}}
+      else
+        {:error, error} ->
+          error = Error.validation(summary: "Failed to parse tables: #{Exception.message(error)}")
+          {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp parse_column_attnums(nil, _table), do: {:ok, []}
+
+  defp parse_column_attnums(column_names, table) when is_list(column_names) do
+    column_names
+    |> Enum.reduce_while({:ok, []}, fn column_name, {:ok, acc} ->
+      case find_column(table, column_name) do
+        {:ok, column} -> {:cont, {:ok, [column.attnum | acc]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+    |> case do
+      {:ok, attnums} -> {:ok, Enum.reverse(attnums)}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp find_column(%PostgresDatabaseTable{} = table, column_name) do
+    case Enum.find(table.columns, &(&1.name == column_name)) do
+      nil ->
+        {:error,
+         Error.not_found(entity: :postgres_column, params: %{column: column_name, table: "#{table.schema}.#{table.name}"})}
+
+      column ->
+        {:ok, column}
+    end
   end
 
   defp parse_sink(nil, _resources), do: {:error, Error.validation(summary: "`sink` is required on sink consumers.")}
@@ -983,6 +1068,16 @@ defmodule Sequin.Transforms do
        stream_arn: attrs["stream_arn"],
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "s2"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :s2,
+       basin: attrs["basin"],
+       stream: attrs["stream"],
+       access_token: attrs["access_token"]
      }}
   end
 
@@ -1118,22 +1213,6 @@ defmodule Sequin.Transforms do
     end
   end
 
-  defp column_filters(nil, _table), do: {:ok, []}
-
-  defp column_filters(filters, table) when is_list(filters) do
-    filters
-    |> Enum.reduce_while({:ok, []}, fn filter, {:ok, acc} ->
-      case parse_column_filter(filter, table) do
-        {:ok, column_filter} -> {:cont, {:ok, [column_filter | acc]}}
-        {:error, error} -> {:halt, {:error, error}}
-      end
-    end)
-    |> case do
-      {:ok, filters} -> {:ok, Enum.reverse(filters)}
-      {:error, error} -> {:error, error}
-    end
-  end
-
   def parse_column_filter(%{"column_name" => column_name} = filter, table) do
     case Enum.find(table.columns, &(&1.name == column_name)) do
       nil ->
@@ -1144,7 +1223,7 @@ defmodule Sequin.Transforms do
         value_type = determine_value_type(filter, column)
 
         {:ok,
-         Sequin.Consumers.SequenceFilter.ColumnFilter.from_external(%{
+         Sequin.WalPipeline.SourceTable.ColumnFilter.from_external(%{
            "columnAttnum" => column.attnum,
            "operator" => filter["operator"],
            "valueType" => value_type,
@@ -1206,76 +1285,20 @@ defmodule Sequin.Transforms do
     end
   end
 
-  defp find_sequence_by_name(%PostgresDatabase{} = database, table_name) do
-    {schema, table_name} = parse_table_reference(table_name)
-
-    with %PostgresDatabaseTable{} = table <- Enum.find(database.tables, &(&1.schema == schema and &1.name == table_name)),
-         {:ok, %Sequence{} = sequence} <- find_or_create_sequence(database, table) do
-      {:ok, sequence}
-    else
-      {:error, error} -> {:error, error}
-      _ -> {:error, Error.not_found(entity: :sequence, params: %{database: database.name, table: table_name})}
-    end
-  end
-
-  # This is a hack while sequences are required
-  # Functions should not perform any database operations
-  # TODO: Excise this once sequences are removed
-  defp find_or_create_sequence(%PostgresDatabase{} = database, %PostgresDatabaseTable{} = table) do
-    case Enum.find(database.sequences, &(&1.table_oid == table.oid)) do
-      %Sequence{} = sequence ->
-        {:ok, sequence}
-
-      nil ->
-        name = "#{database.name}.#{table.schema}.#{table.name}"
-
-        Databases.create_sequence(database.account_id, %{
-          name: name,
-          postgres_database_id: database.id,
-          table_oid: table.oid,
-          table_schema: table.schema
-        })
-    end
-  end
-
-  defp group_column_attnums(nil, %PostgresDatabaseTable{} = table) do
-    case PostgresDatabaseTable.default_group_column_attnums(table) do
-      [] ->
-        {:error,
-         Error.validation(
-           summary:
-             "[group_column_names] No defaults found for table '#{table.schema}.#{table.name}'. If this table does not have primary keys, you must specify the group_column_names."
-         )}
-
-      attnums ->
-        {:ok, attnums}
-    end
-  end
-
-  defp group_column_attnums(column_names, table) when is_list(column_names) do
-    column_names
-    |> Enum.reduce_while({:ok, []}, fn column_name, {:ok, attnums} ->
-      case Enum.find(table.columns, &(&1.name == column_name)) do
-        nil ->
-          {:halt,
-           {:error,
-            Error.validation(
-              summary:
-                "[group_column_names] Column '#{column_name}' does not exist for table '#{table.schema}.#{table.name}'"
-            )}}
-
-        column ->
-          {:cont, {:ok, [column.attnum | attnums]}}
-      end
-    end)
-    |> case do
-      {:ok, attnums} -> {:ok, attnums |> Enum.sort() |> Enum.uniq()}
-      {:error, error} -> {:error, error}
-    end
-  end
-
   def parse_status(nil), do: :active
   def parse_status(status), do: status
+
+  defp reject_nil_values(map) do
+    map
+    |> Enum.reject(fn {_, v} ->
+      case v do
+        %Sequin.Transforms.SensitiveValue{value: nil} -> true
+        nil -> true
+        _ -> false
+      end
+    end)
+    |> Map.new()
+  end
 
   # Helper function to parse SASL mechanism
   defp parse_sasl_mechanism(nil), do: {:ok, nil}

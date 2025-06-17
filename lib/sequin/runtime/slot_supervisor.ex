@@ -49,11 +49,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
   end
 
   def start_children(%PostgresReplicationSlot{} = pg_replication, opts) do
-    pg_replication =
-      Repo.preload(pg_replication,
-        sink_consumers: [:sequence],
-        not_disabled_sink_consumers: [:sequence]
-      )
+    pg_replication = Repo.preload(pg_replication, [:sink_consumers, :not_disabled_sink_consumers])
 
     opts = Keyword.put(opts, :replication_slot_id, pg_replication.id)
     slot_processor_spec = SlotProcessorSupervisor.child_spec(opts)
@@ -68,7 +64,8 @@ defmodule Sequin.Runtime.SlotSupervisor do
         if test_pid = opts[:test_pid], do: Sandbox.allow(Sequin.Repo, test_pid, self())
         start_stores_and_pipeline!(consumer, opts)
       end,
-      max_concurrency: 10
+      max_concurrency: 10,
+      timeout: :timer.seconds(20)
     )
     |> Stream.map(fn
       {:ok, :ok} -> :ok

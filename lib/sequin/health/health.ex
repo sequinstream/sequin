@@ -52,6 +52,7 @@ defmodule Sequin.Health do
   alias Sequin.Health.HealthSnapshot
   alias Sequin.IncidentIO
   alias Sequin.Pagerduty
+  alias Sequin.Postgres
   alias Sequin.Redis
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
@@ -638,6 +639,14 @@ defmodule Sequin.Health do
     base_check = %Check{slug: :sink_configuration, status: :initializing}
     config_checked_event = find_event(events, :sink_config_checked)
 
+    base_check =
+      if config_checked_event do
+        # We pass along sink configuration data to the check so we can use it in the UI
+        %Check{base_check | extra: config_checked_event.data}
+      else
+        base_check
+      end
+
     toast_columns_detected = find_event(events, :toast_columns_detected)
     alert_replica_identity_not_full_dismissed = find_event(events, :alert_replica_identity_not_full_dismissed)
     alert_toast_columns_detected_dismissed = find_event(events, :alert_toast_columns_detected_dismissed)
@@ -653,35 +662,50 @@ defmodule Sequin.Health do
       Time.before_min_ago?(config_checked_event.last_event_at, 30) ->
         put_check_timestamps(%{base_check | status: :stale}, [config_checked_event])
 
-      config_checked_event.status == :fail and
-          match?(%Error.NotFoundError{entity: :publication_membership}, config_checked_event.error) ->
-        put_check_timestamps(%{base_check | status: :error, error_slug: :table_not_in_publication}, [
+      config_checked_event.data["tables_with_replica_identities"] == [] ->
+        error =
+          Error.invariant(
+            message:
+              "No tables in publication. Either your database does not have tables or your publication is not configured to include them."
+          )
+
+        put_check_timestamps(%{base_check | status: :notice, error: error, error_slug: :no_tables_in_publication}, [
           config_checked_event
         ])
 
-      config_checked_event.status == :fail ->
-        put_check_timestamps(%{base_check | status: :error, error: config_checked_event.error}, [
+      is_nil(config_checked_event.data["tables_with_replica_identities"]) ->
+        error =
+          Error.invariant(
+            message:
+              "Expected tables_with_replica_identities in sink configuration but none was found. Try re-running the health check."
+          )
+
+        put_check_timestamps(%{base_check | status: :notice, error: error}, [
           config_checked_event
         ])
 
-      config_checked_event.data["using_schema_filter"] == true ->
-        put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
-
-      config_checked_event.data["replica_identity"] == "full" ->
-        put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
-
-      consumer.message_kind == :event and is_nil(alert_replica_identity_not_full_dismissed) and
-          config_checked_event.data["relation_kind"] == "p" ->
-        put_check_timestamps(%{base_check | status: :notice, error_slug: :replica_identity_not_full_partitioned}, [
-          config_checked_event
-        ])
-
-      consumer.message_kind == :event and is_nil(alert_replica_identity_not_full_dismissed) ->
+      Postgres.any_tables_without_full_replica_identity?(config_checked_event.data["tables_with_replica_identities"]) and
+          is_nil(alert_replica_identity_not_full_dismissed) ->
         put_check_timestamps(%{base_check | status: :notice, error_slug: :replica_identity_not_full}, [
           config_checked_event
         ])
 
-      not is_nil(toast_columns_detected) and is_nil(alert_toast_columns_detected_dismissed) ->
+      Postgres.any_partitioned_tables_without_full_replica_identity?(
+        config_checked_event.data["tables_with_replica_identities"]
+      ) and is_nil(alert_replica_identity_not_full_dismissed) ->
+        put_check_timestamps(%{base_check | status: :notice, error_slug: :replica_identity_not_full_partitioned}, [
+          config_checked_event
+        ])
+
+      Postgres.any_partitioned_tables?(config_checked_event.data["tables_with_replica_identities"]) and
+        config_checked_event.data["pubviaroot"] == false and
+          is_nil(alert_replica_identity_not_full_dismissed) ->
+        put_check_timestamps(%{base_check | status: :notice, error_slug: :pubviaroot_not_set}, [
+          config_checked_event
+        ])
+
+      not is_nil(toast_columns_detected) and is_nil(alert_toast_columns_detected_dismissed) and
+          Postgres.any_tables_without_full_replica_identity?(config_checked_event.data["tables_with_replica_identities"]) ->
         put_check_timestamps(%{base_check | status: :notice, error_slug: :toast_columns_detected}, [
           config_checked_event
         ])

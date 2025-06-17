@@ -21,6 +21,7 @@
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
   import SnsIcon from "../sinks/sns/SnsIcon.svelte";
   import KinesisIcon from "../sinks/kinesis/KinesisIcon.svelte";
+  import S2Icon from "../sinks/s2/S2Icon.svelte";
   import RedisIcon from "../sinks/redis_shared/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
@@ -180,6 +181,8 @@
             <SnsIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "kinesis"}
             <KinesisIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "s2"}
+            <S2Icon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumer.name}
@@ -285,7 +288,6 @@
         {#if consumer.active_backfills.length > 0}
           <Badge variant="secondary" class="ml-1">
             {consumer.active_backfills.length} active
-            <ArrowDownSquare class="h-4 w-4 ml-1" />
           </Badge>
         {/if}
       </a>

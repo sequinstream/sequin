@@ -13,7 +13,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Error.ServiceError
   alias Sequin.Functions.MiniElixir
   alias Sequin.Metrics
-  alias Sequin.Runtime.RoutingInfo
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.Trace
   alias Sequin.Transforms
@@ -80,10 +79,10 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     |> HttpClient.put_client()
   end
 
-  @impl SinkPipeline
-  def apply_routing(consumer, rinfo) do
-    RoutingInfo.apply_routing(consumer.type, rinfo)
-  end
+  # @impl SinkPipeline
+  # def apply_routing(consumer, rinfo) do
+  #   RoutingInfo.apply_routing(consumer.type, rinfo)
+  # end
 
   @impl SinkPipeline
   def handle_message(message, context) do
@@ -92,8 +91,9 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     if is_nil(routing) do
       {:ok, message, context}
     else
-      res = MiniElixir.run_compiled(routing, message.data.data)
-      message = Broadway.Message.put_batch_key(message, apply_routing(context.consumer, res))
+      dbg(message)
+      _res = MiniElixir.run_compiled(routing, message.data.data)
+      message = Broadway.Message.put_batch_key(message, "TODO")
       {:ok, message, context}
     end
   end

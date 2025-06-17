@@ -58,11 +58,6 @@ You can click into any failed message to view the delivery logs and error detail
 
 ## Advanced configuration
 
-### Max memory usage
-When sink destinations can't keep up with incoming messages, Sequin continues to advance the Postgres replication slot and buffer messages in memory.
-
-By default, each sink is set to a max memory usage of 128MB. You can configure the max memory usage for a sink by setting the `max_memory_mb` parameter in the sink configuration.
-
 ### Load shedding policy
 If a sink's in-memory buffer fills up, the `load_shedding_policy` will be triggered. There are two available load shedding policies:
 

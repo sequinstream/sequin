@@ -345,8 +345,8 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
-  @max_backoff_ms :timer.seconds(1)
-  @max_attempts 5
+  @max_backoff_ms 100
+  @max_attempts 15
   @decorate track_metrics("put_messages")
   defp put_messages(consumer, messages_to_ingest) do
     do_put_messages(consumer, messages_to_ingest)
@@ -359,7 +359,7 @@ defmodule Sequin.Runtime.MessageHandler do
         :ok
 
       {:error, %InvariantError{code: :payload_size_limit_exceeded}} when attempt <= @max_attempts ->
-        backoff = Sequin.Time.exponential_backoff(50, attempt, @max_backoff_ms)
+        backoff = Sequin.Time.exponential_backoff(5, attempt, @max_backoff_ms)
 
         Logger.debug(
           "[MessageHandler] Slot message store for consumer #{consumer.id} is full. " <>

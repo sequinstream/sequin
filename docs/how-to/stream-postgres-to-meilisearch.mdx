@@ -81,7 +81,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select **Meilisearch Sink*
     Use a [functional transform](/reference/transforms#function-transform) to convert Postgres rows to Meilisearch documents:
 
     ```elixir
-    def transform(record) do
+    def transform(action, record, changes, metadata) do
       %{
         id: record["id"],
         name: record["name"],
@@ -95,7 +95,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select **Meilisearch Sink*
     For dynamic schemas or minimal transformation:
 
     ```elixir
-    def transform(record) do
+    def transform(action, record, changes, metadata) do
       record
     end
     ```
@@ -103,7 +103,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select **Meilisearch Sink*
     Or explicitly assign the `id`:
 
     ```elixir
-    def transform(record) do
+    def transform(action, record, changes, metadata) do
       Map.put(record, "id", record["product_id"])
     end
     ```

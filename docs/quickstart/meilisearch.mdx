@@ -107,7 +107,8 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       In the Meilisearch card, enter your configuration:
 
       - Host: `http://host.docker.internal:7700`
-      - Index: `products`
+      - Index name: `products`
+      - Primary key: `id`
       - API Key: `my-api-key`
 
       <Frame>
@@ -142,8 +143,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       -H 'Content-Type: application/json' \
       -H 'Authorization: Bearer my-api-key' \
       --data '{
-        "q": "avocado",
-        "attributesToHighlight": ["name"]
+        "q": "avocado"
       }'
     ```
  </Step>

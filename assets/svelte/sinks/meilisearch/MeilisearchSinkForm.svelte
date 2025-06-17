@@ -47,8 +47,7 @@
           This includes an <code>id</code> field which is mandatory.
         </p>
         <div class="mb-2">
-          Sequin uses Meilisearch's batch add/update action, which
-          means:
+          Sequin uses Meilisearch's batch add/update action, which means:
           <ul class="ml-6 list-disc">
             <li>
               Meilisearch will create a new document or update an existing one
@@ -87,6 +86,18 @@
       />
       {#if errors.sink?.index_name}
         <p class="text-destructive text-sm">{errors.sink.index_name}</p>
+      {/if}
+    </div>
+
+    <div class="space-y-2">
+      <Label for="primary_key">Primary key</Label>
+      <Input
+        id="primary_key"
+        bind:value={form.sink.primary_key}
+        placeholder="my-primary-key"
+      />
+      {#if errors.sink?.primary_key}
+        <p class="text-destructive text-sm">{errors.sink.primary_key}</p>
       {/if}
     </div>
 

@@ -2,10 +2,11 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   @moduledoc false
   @behaviour Sequin.Runtime.SinkPipeline
 
-  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.MeilisearchSink
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Meilisearch.Client
+  alias Sequin.Transforms.Message
 
   @impl SinkPipeline
   def init(context, _opts) do
@@ -53,7 +54,11 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
 
     setup_allowances(test_pid)
 
-    records = Enum.map(messages, fn %{data: data} -> data.data.record end)
+    records =
+      messages
+      |> Enum.map(&Message.to_external(consumer, &1.data))
+      |> Enum.map(& &1.record)
+
     jsonl = encode_as_jsonl(records)
 
     case Client.import_documents(consumer, client, sink.index_name, jsonl) do
@@ -74,13 +79,11 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
 
     document_ids =
       messages
-      |> Enum.map(fn %{data: data} -> data.data.record end)
-      |> Enum.map(&ensure_id_string/1)
-      |> Enum.map(& &1["id"])
-      |> Enum.filter(&is_binary/1)
+      |> Enum.map(&Message.to_external(consumer, &1.data))
+      |> Enum.map(& &1.record[sink.primary_key])
 
     case Client.delete_documents(consumer, client, sink.index_name, document_ids) do
-      {:ok, _} -> {:ok, messages, context}
+      :ok -> {:ok, messages, context}
       {:error, error} -> {:error, error}
     end
   end
@@ -90,10 +93,6 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   defp encode_as_jsonl(records) do
     Enum.map_join(records, "\n", &Jason.encode!/1)
   end
-
-  defp ensure_id_string(%{"id" => id} = m) when is_binary(id), do: m
-  defp ensure_id_string(%{"id" => id} = m), do: %{m | "id" => to_string(id)}
-  defp ensure_id_string(m), do: m
 
   defp setup_allowances(nil), do: :ok
 

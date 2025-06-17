@@ -225,6 +225,8 @@ export type MeilisearchConsumer = BaseConsumer & {
     type: "meilisearch";
     endpoint_url: string;
     index_name: string;
+    api_key: string;
+    primary_key: string;
     batch_size: number;
     timeout_seconds: number;
   };

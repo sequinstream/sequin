@@ -19,6 +19,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
@@ -33,7 +34,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
-  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Health
@@ -929,6 +929,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       type: :meilisearch,
       endpoint_url: sink.endpoint_url,
       index_name: sink.index_name,
+      primary_key: sink.primary_key,
       batch_size: sink.batch_size,
       timeout_seconds: sink.timeout_seconds
     }

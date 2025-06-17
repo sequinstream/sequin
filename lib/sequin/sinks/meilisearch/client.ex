@@ -20,6 +20,38 @@ defmodule Sequin.Sinks.Meilisearch.Client do
   end
 
   @doc """
+  Verify the status of a task by its ID.
+  """
+  def verify_task_by_id(%__MODULE__{} = client, task_id) do
+    req = base_request(client)
+
+    case Req.get(req, url: "/tasks/#{task_id}") do
+      {:ok, %{body: body}} ->
+        case body do
+          %{"status" => status} when status in ["enqueued", "processing"] ->
+            :timer.sleep(1000)
+            verify_task_by_id(client, task_id)
+
+          %{"status" => "failed"} ->
+            message = extract_error_message(body["error"])
+
+            {:error,
+             Error.service(
+               service: :meilisearch,
+               message: message,
+               details: body
+             )}
+
+          _ ->
+            {:ok}
+        end
+
+      {:error, reason} ->
+        {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
+    end
+  end
+
+  @doc """
   Import multiple documents in JSONL format.
   """
   def import_documents(%SinkConsumer{} = consumer, %__MODULE__{} = client, index_name, jsonl) do
@@ -30,37 +62,31 @@ defmodule Sequin.Sinks.Meilisearch.Client do
         url: "/indexes/#{index_name}/documents",
         headers: [{"Content-Type", "application/x-ndjson"}],
         body: jsonl,
-        params: %{primaryKey: "id"}
+        compress_body: true
       )
 
     case Req.put(req) do
-      {:ok, %{status: st} = resp} when st in 200..299 ->
-        Trace.info(consumer.id, %Trace.Event{
-          message: "Imported documents to #{index_name}",
-          req_request: req,
-          req_response: resp
-        })
+      {:ok, %{body: body}} ->
+        case verify_task_by_id(client, body["taskUid"]) do
+          {:ok} ->
+            Trace.info(consumer.id, %Trace.Event{
+              message: "Imported documents to #{index_name}"
+            })
 
-        {:ok}
+            {:ok}
 
-      {:ok, %{status: status, body: body} = resp} ->
-        error_message = extract_error_message(body)
+          {:error, err} ->
+            Trace.error(consumer.id, %Trace.Event{
+              message: "Failed to import documents to #{index_name}",
+              req_request: req,
+              error: err
+            })
 
-        Trace.error(consumer.id, %Trace.Event{
-          message: "Batch import failed: #{error_message}",
-          req_request: req,
-          req_response: resp
-        })
-
-        {:error,
-         Error.service(
-           service: :meilisearch,
-           message: "Batch import failed: #{error_message}",
-           details: %{status: status, body: body}
-         )}
+            {:error, err}
+        end
 
       {:error, %Req.TransportError{} = error} ->
-        Logger.error("[Meilisearch] Transport error: #{Exception.message(error)}")
+        Logger.error("[Meilisearch] Failed to import documents: #{Exception.message(error)}")
 
         err =
           Error.service(
@@ -69,7 +95,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
           )
 
         Trace.error(consumer.id, %Trace.Event{
-          message: "Batch import failed",
+          message: "Failed to import documents",
           req_request: req,
           error: err
         })
@@ -80,7 +106,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
         err = Error.service(service: :meilisearch, message: "Unknown error", details: reason)
 
         Trace.error(consumer.id, %Trace.Event{
-          message: "Batch import failed",
+          message: "Failed to import documents",
           req_request: req,
           error: err
         })
@@ -92,12 +118,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
   @doc """
   Delete documents from an index.
   """
-  def delete_documents(
-        %SinkConsumer{} = consumer,
-        %__MODULE__{} = client,
-        index_name,
-        document_ids
-      ) do
+  def delete_documents(%SinkConsumer{} = consumer, %__MODULE__{} = client, index_name, document_ids) do
     req =
       client
       |> base_request()
@@ -108,29 +129,22 @@ defmodule Sequin.Sinks.Meilisearch.Client do
       )
 
     case Req.post(req) do
-      {:ok, %{status: st, body: body} = resp} when st in 200..299 ->
-        Trace.info(consumer.id, %Trace.Event{
-          message: "Deleted documents from #{index_name}",
-          req_request: req,
-          req_response: resp
-        })
+      {:ok, %{body: body}} ->
+        case verify_task_by_id(client, body["taskUid"]) do
+          {:ok} ->
+            Trace.info(consumer.id, %Trace.Event{
+              message: "Deleted documents #{document_ids} from #{index_name}"
+            })
 
-        {:ok, body}
+          {:error, err} ->
+            Trace.error(consumer.id, %Trace.Event{
+              message: "Failed to delete documents from #{index_name}",
+              req_request: req,
+              error: err
+            })
 
-      {:ok, %{status: status, body: body} = resp} ->
-        error_message = extract_error_message(body)
-
-        Trace.error(consumer.id, %Trace.Event{
-          message: "Failed to delete documents: [#{status}] #{error_message}",
-          req_request: req,
-          req_response: resp
-        })
-
-        {:error,
-         Error.service(
-           service: :meilisearch,
-           message: "Failed to delete document: [#{status}] #{error_message}"
-         )}
+            {:error, err}
+        end
 
       {:error, %Req.TransportError{} = error} ->
         Logger.error("[Meilisearch] Failed to delete documents: #{Exception.message(error)}")
@@ -169,33 +183,19 @@ defmodule Sequin.Sinks.Meilisearch.Client do
     req = base_request(client)
 
     case Req.get(req, url: "/indexes/#{index_name}") do
-      {:ok, %{status: st, body: body}} when st in 200..299 ->
-        {:ok, body}
+      {:ok, %{status: status}} when status in 200..299 ->
+        {:ok}
 
-      {:ok, %{status: 404}} ->
-        {:error,
-         Error.service(
-           service: :meilisearch,
-           message: "Index '#{index_name}' not found"
-         )}
-
-      {:ok, %{status: status, body: body}} ->
+      {:ok, %{status: status, body: body}} when status == 401 ->
         error_message = extract_error_message(body)
 
+        Logger.error("[Meilisearch] Unauthorized access: #{error_message}")
+
         {:error,
          Error.service(
            service: :meilisearch,
-           message: "Failed to get index: #{error_message}",
+           message: "Unauthorized access: #{error_message}",
            details: %{status: status, body: body}
-         )}
-
-      {:error, %Req.TransportError{} = error} ->
-        Logger.error("[Meilisearch] Failed to get index: #{Exception.message(error)}")
-
-        {:error,
-         Error.service(
-           service: :meilisearch,
-           message: "Transport error: #{Exception.message(error)}"
          )}
 
       {:error, reason} ->
@@ -210,30 +210,16 @@ defmodule Sequin.Sinks.Meilisearch.Client do
     req = base_request(client)
 
     case Req.get(req, url: "/health") do
-      {:ok, %{status: st, body: %{"ok" => true}}} when st in 200..299 ->
+      {:ok, %{status: status}} when status == 200 ->
         :ok
 
-      {:ok, %{status: status, body: body}} ->
-        error_message = extract_error_message(body)
-
-        {:error,
-         Error.service(
-           service: :meilisearch,
-           message: "Failed to connect to Meilisearch: #{error_message}",
-           details: %{status: status, body: body}
-         )}
-
-      {:error, %Req.TransportError{} = error} ->
-        Logger.error("[Meilisearch] Failed to connect: #{Exception.message(error)}")
-
-        {:error,
-         Error.service(
-           service: :meilisearch,
-           message: "Transport error: #{Exception.message(error)}"
-         )}
-
       {:error, reason} ->
-        {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
+        {:error,
+         Error.service(
+           service: :meilisearch,
+           message: "Cannot connect to Meilisearch",
+           details: reason
+         )}
     end
   end
 
@@ -248,20 +234,11 @@ defmodule Sequin.Sinks.Meilisearch.Client do
     )
   end
 
-  defp extract_error_message(body) when is_map(body) do
+  defp extract_error_message(error) do
     cond do
-      is_binary(body["message"]) -> body["message"]
-      is_binary(body["code"]) -> body["code"]
-      true -> Jason.encode!(body)
+      is_binary(error["message"]) -> error["message"]
+      is_binary(error["code"]) -> error["code"]
+      true -> nil
     end
   end
-
-  defp extract_error_message(body) when is_binary(body) do
-    case Jason.decode(body) do
-      {:ok, decoded} -> extract_error_message(decoded)
-      {:error, _} -> body
-    end
-  end
-
-  defp extract_error_message(body), do: inspect(body)
 end

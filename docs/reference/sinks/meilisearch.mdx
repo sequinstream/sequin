@@ -16,6 +16,10 @@ The Meilisearch sink indexes documents into a Meilisearch index, using the Meili
 
     The name of the Meilisearch index where documents will be indexed. The index must exist before imports can work.
 
+- **Primary key**
+
+    The primary key field for the Meilisearch index. (By default, this is `id`)
+
 - **API key**
 
     The API key for authenticating with your Meilisearch server.
@@ -24,16 +28,11 @@ The Meilisearch sink indexes documents into a Meilisearch index, using the Meili
 
 Your [transform](/reference/transforms) must return a document matching the schema of the [Meilisearch index](https://www.meilisearch.com/docs/learn/core_concepts/documents).
 
-This includes a primary key field (usually called `id`) which is mandatory for Meilisearch.  
-It's also okay to use an integer/serial/bigserial/uuid `id` – Sequin will automatically stringify it for you.  
-
-<Note>The `id` should not include spaces or any other characters that require encoding in URLs.</Note>
-
-For example, the following transform would convert a numeric `product_id` column into the string `id`:
+For example, the following transform ensures the primary key (`id`) is at the top level of the returned map:
 
 ```elixir
 def transform(action, record, changes, metadata) do
-  Map.put(record, "id", Kernel.to_string(record["product_id"]))
+  Map.put(record, "id", Kernel.to_string(record["product"]["id"]))
 end
 ```
 
@@ -66,9 +65,8 @@ Sequin does not perform any searches.
 Common errors that can occur when working with the Meilisearch sink include:
 
 - Connection issues to the Meilisearch server (HTTP vs HTTPS, TCP port, URL typos, etc.)
-- Index doesn't exist (Meilisearch reports "Not Found")
 - Schema mismatches
-- Missing `id` fields
+- Missing primary key fields
 
 When errors occur, they will be visible in the "Messages" tab of the Sequin web console. You can click on a message to see details about the error.  
 Error messages from the Meilisearch API are passed through unchanged to the Sequin console, including messages for asynchronous batch imports.

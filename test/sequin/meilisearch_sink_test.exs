@@ -35,12 +35,16 @@ defmodule Sequin.Consumers.MeilisearchSinkTest do
     end
 
     test "validates endpoint_url with query params", %{valid_params: params} do
-      changeset = MeilisearchSink.changeset(%MeilisearchSink{}, %{params | endpoint_url: "https://meilisearch.com?param=value"})
+      changeset =
+        MeilisearchSink.changeset(%MeilisearchSink{}, %{params | endpoint_url: "https://meilisearch.com?param=value"})
+
       assert Sequin.Error.errors_on(changeset)[:endpoint_url] == ["must not include query params, found: param=value"]
     end
 
     test "validates endpoint_url with fragment", %{valid_params: params} do
-      changeset = MeilisearchSink.changeset(%MeilisearchSink{}, %{params | endpoint_url: "https://meilisearch.com#fragment"})
+      changeset =
+        MeilisearchSink.changeset(%MeilisearchSink{}, %{params | endpoint_url: "https://meilisearch.com#fragment"})
+
       assert Sequin.Error.errors_on(changeset)[:endpoint_url] == ["must not include a fragment, found: fragment"]
     end
   end

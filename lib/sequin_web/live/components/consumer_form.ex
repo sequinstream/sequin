@@ -12,6 +12,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -24,7 +25,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.Source
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TypesenseSink
-  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -40,11 +40,11 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Sinks.Gcp.Credentials
   alias Sequin.Sinks.Gcp.PubSub
   alias Sequin.Sinks.Kafka
+  alias Sequin.Sinks.Meilisearch.Client, as: MeilisearchClient
   alias Sequin.Sinks.Nats
   alias Sequin.Sinks.RabbitMq
   alias Sequin.Sinks.Redis
   alias Sequin.Sinks.Typesense.Client, as: TypesenseClient
-  alias Sequin.Sinks.Meilisearch.Client, as: MeilisearchClient
   alias SequinWeb.RouteHelpers
 
   require Logger
@@ -590,7 +590,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       client = MeilisearchClient.new(MeilisearchSink.client_params(sink))
 
       case MeilisearchClient.get_index(client, sink.index_name) do
-        {:ok, _} -> :ok
+        {:ok} -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
@@ -840,6 +840,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "meilisearch",
       "endpoint_url" => sink["endpoint_url"],
       "index_name" => sink["index_name"],
+      "primary_key" => sink["primary_key"],
       "api_key" => sink["api_key"],
       "batch_size" => sink["batch_size"],
       "timeout_seconds" => sink["timeout_seconds"]
@@ -1097,12 +1098,12 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
-
   defp encode_sink(%MeilisearchSink{} = sink) do
     %{
       "type" => "meilisearch",
       "endpoint_url" => sink.endpoint_url,
       "index_name" => sink.index_name,
+      "primary_key" => sink.primary_key,
       "api_key" => sink.api_key,
       "batch_size" => sink.batch_size,
       "timeout_seconds" => sink.timeout_seconds

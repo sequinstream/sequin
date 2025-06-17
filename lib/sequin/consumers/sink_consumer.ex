@@ -17,6 +17,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -28,7 +29,6 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TypesenseSink
-  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Replication.PostgresReplicationSlot
 
   @type id :: String.t()

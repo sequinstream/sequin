@@ -35,8 +35,7 @@ defmodule Sequin.Runtime.MessageLedgersTest do
       assert delivered == wal_cursors
 
       # Verify they're removed from verification set
-      {:ok, undelivered} = MessageLedgers.list_undelivered_wal_cursors(consumer_id, DateTime.utc_now())
-      assert undelivered == []
+      assert {:ok, 0} = MessageLedgers.count_undelivered_wal_cursors(consumer_id, DateTime.utc_now())
     end
   end
 
@@ -78,9 +77,7 @@ defmodule Sequin.Runtime.MessageLedgersTest do
       assert :ok = MessageLedgers.wal_cursors_ingested(consumer_id, wal_cursors)
 
       # Verify the wal cursors were recorded
-      {:ok, undelivered} = MessageLedgers.list_undelivered_wal_cursors(consumer_id, datetime(now, 300))
-      assert length(undelivered) == 2
-      assert assert_lists_equal(undelivered, wal_cursors, &assert_maps_equal(&1, &2, [:commit_lsn, :commit_idx]))
+      assert {:ok, 2} = MessageLedgers.count_undelivered_wal_cursors(consumer_id, datetime(now, 300))
     end
   end
 
@@ -134,9 +131,7 @@ defmodule Sequin.Runtime.MessageLedgersTest do
       assert :ok = MessageLedgers.trim_stale_undelivered_wal_cursors(consumer_id, datetime(now, -25))
 
       # Verify only newer wal cursor remains
-      {:ok, [cursor]} = MessageLedgers.list_undelivered_wal_cursors(consumer_id, datetime(now, 200))
-      assert cursor.commit_lsn == 102
-      assert cursor.commit_idx == 202
+      assert {:ok, 1} = MessageLedgers.count_undelivered_wal_cursors(consumer_id, datetime(now, 200))
     end
 
     test "handles empty set gracefully", %{consumer_id: consumer_id} do
@@ -144,8 +139,8 @@ defmodule Sequin.Runtime.MessageLedgersTest do
     end
   end
 
-  describe "list_undelivered_wal_cursors/2" do
-    test "returns wal cursors older than specified timestamp", %{consumer_id: consumer_id} do
+  describe "count_undelivered_wal_cursors/2" do
+    test "returns count of wal cursors older than specified timestamp", %{consumer_id: consumer_id} do
       now = DateTime.utc_now()
 
       old_cursors = [
@@ -166,15 +161,11 @@ defmodule Sequin.Runtime.MessageLedgersTest do
       :ok = MessageLedgers.wal_cursors_ingested(consumer_id, [new_cursor])
 
       # Get cursors older than (now - 25)
-      {:ok, unverified} = MessageLedgers.list_undelivered_wal_cursors(consumer_id, datetime(now, -25))
-
-      assert length(unverified) == 2
-      assert assert_lists_equal(unverified, old_cursors, &assert_maps_equal(&1, &2, [:commit_lsn, :commit_idx]))
+      assert {:ok, 2} = MessageLedgers.count_undelivered_wal_cursors(consumer_id, datetime(now, -25))
     end
 
-    test "returns empty list when no wal cursors exist", %{consumer_id: consumer_id} do
-      {:ok, unverified} = MessageLedgers.list_undelivered_wal_cursors(consumer_id, DateTime.utc_now())
-      assert unverified == []
+    test "returns 0 when no wal cursors exist", %{consumer_id: consumer_id} do
+      assert {:ok, 0} = MessageLedgers.count_undelivered_wal_cursors(consumer_id, DateTime.utc_now())
     end
 
     test "excludes delivered wal cursors", %{consumer_id: consumer_id} do
@@ -189,8 +180,7 @@ defmodule Sequin.Runtime.MessageLedgersTest do
       :ok = MessageLedgers.wal_cursors_ingested(consumer_id, wal_cursors)
       :ok = MessageLedgers.wal_cursors_delivered(consumer_id, wal_cursors)
 
-      {:ok, unverified} = MessageLedgers.list_undelivered_wal_cursors(consumer_id, datetime(now, 100))
-      assert unverified == []
+      assert {:ok, 0} = MessageLedgers.count_undelivered_wal_cursors(consumer_id, datetime(now, 100))
     end
   end
 

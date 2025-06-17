@@ -157,32 +157,32 @@ defmodule Sequin.Runtime.MessageLedgers do
 
   Any remaining cursors are in bucket 3, and are undelivered because of a bug. The hope is that we can use this functionality to catch these in QA and fix before shipping to prod. Worst case, we catch them via prod monitoring, and fix ASAP.
   """
-  @spec list_undelivered_wal_cursors(consumer_id(), DateTime.t()) ::
-          {:ok, [Replication.wal_cursor()]} | {:error, Error.t()}
-  def list_undelivered_wal_cursors(consumer_id, older_than_timestamp) do
+  @spec count_undelivered_wal_cursors(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
+  def count_undelivered_wal_cursors(consumer_id) do
+    query_name = "message_ledgers:count_undelivered_wal_cursors"
+
+    case Redis.command(["ZCARD", undelivered_cursors_key(consumer_id)], query_name: query_name) do
+      {:ok, count} ->
+        {:ok, String.to_integer(count)}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @spec count_undelivered_wal_cursors(consumer_id(), DateTime.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
+  def count_undelivered_wal_cursors(consumer_id, older_than_timestamp) do
     older_than_timestamp = DateTime.to_unix(older_than_timestamp, :second)
-    query_name = "message_ledgers:list_undelivered_wal_cursors"
+    query_name = "message_ledgers:count_undelivered_wal_cursors"
 
-    res =
-      Redis.command(["ZRANGEBYSCORE", undelivered_cursors_key(consumer_id), "-inf", older_than_timestamp, "WITHSCORES"],
-        query_name: query_name
-      )
+    case Redis.command(["ZCOUNT", undelivered_cursors_key(consumer_id), "-inf", older_than_timestamp],
+           query_name: query_name
+         ) do
+      {:ok, count} ->
+        {:ok, String.to_integer(count)}
 
-    with {:ok, results} <- res do
-      cursors =
-        results
-        |> Enum.chunk_every(2)
-        |> Enum.map(fn [member, score] ->
-          [lsn, idx] = String.split(member, ":")
-
-          %{
-            commit_lsn: String.to_integer(lsn),
-            commit_idx: String.to_integer(idx),
-            ingested_at: DateTime.from_unix!(String.to_integer(score), :second)
-          }
-        end)
-
-      {:ok, cursors}
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -219,17 +219,6 @@ defmodule Sequin.Runtime.MessageLedgers do
   def count_delivered_cursors_set(consumer_id) do
     key = delivered_cursors_key(consumer_id)
     query_name = "message_ledgers:count_delivered_cursors_set"
-
-    case Redis.command(["ZCARD", key], query_name: query_name) do
-      {:ok, count} -> {:ok, String.to_integer(count)}
-      {:error, error} -> {:error, error}
-    end
-  end
-
-  @spec count_commit_verification_set(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
-  def count_commit_verification_set(consumer_id) do
-    key = undelivered_cursors_key(consumer_id)
-    query_name = "message_ledgers:count_commit_verification_set"
 
     case Redis.command(["ZCARD", key], query_name: query_name) do
       {:ok, count} -> {:ok, String.to_integer(count)}

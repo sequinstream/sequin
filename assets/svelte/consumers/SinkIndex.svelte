@@ -458,40 +458,20 @@
       </DialogDescription>
     </DialogHeader>
     <div class="flex-1 overflow-y-auto">
-      <RadioGroup
-        bind:value={selectedDestination}
-        class="grid grid-cols-3 gap-4 py-4"
-      >
+      <div class="grid grid-cols-3 gap-4 py-4">
         {#each sinks as dest}
-          <Label
-            for={dest.id}
-            class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary text-center leading-tight cursor-pointer"
-          >
-            <RadioGroupItem value={dest.id} id={dest.id} class="sr-only" />
-            <svelte:component this={dest.icon} class="mb-3 h-12 w-12" />
-            {dest.name}
-          </Label>
+          <LinkPatchNavigate href={`/sinks/new?kind=${dest.id}`}>
+            <Label
+              for={dest.id}
+              class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground text-center leading-tight cursor-pointer"
+            >
+              <svelte:component this={dest.icon} class="mb-3 h-12 w-12" />
+              {dest.name}
+            </Label>
+          </LinkPatchNavigate>
         {/each}
-      </RadioGroup>
+      </div>
     </div>
-    <DialogFooter class="mt-4">
-      {#if selectedDestination}
-        <LinkPatchNavigate
-          class="w-full"
-          href={`/sinks/new?kind=${selectedDestination}`}
-        >
-          <Button type="submit" class="w-full">
-            Continue
-            <ChevronRight class="ml-2 h-4 w-4" />
-          </Button>
-        </LinkPatchNavigate>
-      {:else}
-        <Button type="submit" class="w-full" disabled>
-          Continue
-          <ChevronRight class="ml-2 h-4 w-4" />
-        </Button>
-      {/if}
-    </DialogFooter>
   </DialogContent>
 </Dialog>
 

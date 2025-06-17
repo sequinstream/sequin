@@ -587,31 +587,6 @@
               <AccordionContent>
                 <div class="space-y-4 pt-4">
                   <div class="space-y-2">
-                    <Label for="max-memory">Memory limit</Label>
-                    <div class="flex flex-col gap-1">
-                      <div class="flex items-center gap-2">
-                        <Input
-                          id="max-memory"
-                          type="number"
-                          min="128"
-                          bind:value={form.maxMemoryMb}
-                          class="w-32"
-                        />
-                        <span class="text-sm text-muted-foreground">MB</span>
-                      </div>
-                      <p class="text-xs font-light">
-                        The soft memory limit for this specific sink. Defaults
-                        to 128MB, which is a good starting point.
-                      </p>
-                    </div>
-                    {#if errors.consumer.max_memory_mb}
-                      <p class="text-destructive text-sm">
-                        {errors.consumer.max_memory_mb}
-                      </p>
-                    {/if}
-                  </div>
-
-                  <div class="space-y-2">
                     <Label for="timestamp-format">Timestamp format</Label>
                     <Select
                       selected={{

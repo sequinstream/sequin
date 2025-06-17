@@ -16,17 +16,6 @@ defmodule Sequin.Runtime.KafkaPipeline do
   end
 
   @impl SinkPipeline
-  def processors_config(%SinkConsumer{}) do
-    [
-      default: [
-        concurrency: System.schedulers_online() * 2,
-        max_demand: 10,
-        min_demand: 5
-      ]
-    ]
-  end
-
-  @impl SinkPipeline
   def batchers_config(%SinkConsumer{batch_size: batch_size}) do
     [
       default: [

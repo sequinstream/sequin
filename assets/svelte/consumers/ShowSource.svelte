@@ -11,6 +11,7 @@
   } from "lucide-svelte";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import type { Consumer, Source } from "./types";
+  import type { Table } from "$lib/databases/types";
 
   export let consumer: Consumer;
   export let tables: Table[];

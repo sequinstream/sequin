@@ -70,7 +70,8 @@
 
   // Selected items
   let selectedSchemas: Set<string> = new Set();
-  let selectedTableOids: Set<number> = new Set(); // Store as "schema.table"
+  let selectedTableOids: Set<number> = new Set();
+  let filteredSelectedTableOids: Set<number> = new Set();
 
   if (isEditMode) {
     if (source.include_schemas) {
@@ -89,9 +90,6 @@
       selectedTableOids = new Set(source.exclude_table_oids);
     }
   }
-
-  let includingAllSchemasText = "";
-  let includingAllTablesText = "";
 
   function isTableIncludedBySchemaMode(table: Table): boolean {
     if (schemaMode === "all") return true;
@@ -120,20 +118,73 @@
       return includedInSearch && isTableIncludedBySchemaMode(table);
     }) || [];
 
-  // Compute descriptive text based on filtered data
-  $: includingAllSchemasText =
-    schemaMode === "all"
-      ? filteredSchemas.length === 0
-        ? "No schemas found in database"
-        : `Tables in all current and future schemas are included in this sink.`
-      : "";
+  $: filteredSelectedTableOids = new Set(
+    Array.from(selectedTableOids).filter((oid) => {
+      const table = selectedDatabase?.tables.find((t) => t.oid === oid);
+      return table && isTableIncludedBySchemaMode(table);
+    }),
+  );
 
-  $: includingAllTablesText =
-    tableMode === "all"
-      ? filteredTables.length === 0
-        ? "No tables found in database"
-        : `All current and future tables are included in this sink.`
-      : "";
+  let summaryText = "";
+
+  $: {
+    summaryText = "";
+    if (tableMode === "all") {
+      if (schemaMode === "all") {
+        summaryText = "All current and future tables in your publication.";
+      } else if (schemaMode === "include") {
+        if (selectedSchemas.size === 0) {
+          summaryText = "No schemas included; select one or more.";
+        } else if (selectedSchemas.size === 1) {
+          summaryText = `All current and future tables in schema "${Array.from(selectedSchemas)[0]}".`;
+        } else {
+          summaryText = `All current and future tables in ${selectedSchemas.size} schemas.`;
+        }
+      } else if (schemaMode === "exclude") {
+        if (selectedSchemas.size === 0) {
+          summaryText = "No schemas excluded; select one or more.";
+        } else if (selectedSchemas.size === 1) {
+          summaryText = `All current and future tables other than those in schema "${Array.from(selectedSchemas)[0]}".`;
+        } else {
+          summaryText = `All current and future tables other than those in ${selectedSchemas.size} schemas.`;
+        }
+      }
+    } else if (tableMode === "include") {
+      if (filteredSelectedTableOids.size === 0) {
+        summaryText = "No tables included; select one or more.";
+      } else if (filteredSelectedTableOids.size === 1) {
+        const table = selectedDatabase?.tables.find(
+          (t) => t.oid === Array.from(filteredSelectedTableOids)[0],
+        );
+        summaryText = `Including table "${table?.schema}.${table?.name}".`;
+      } else {
+        summaryText = `Including ${filteredSelectedTableOids.size} tables.`;
+      }
+    } else if (tableMode === "exclude") {
+      if (filteredSelectedTableOids.size === 0) {
+        summaryText = "No tables excluded; select one or more.";
+      } else if (filteredSelectedTableOids.size === 1) {
+        const table = selectedDatabase?.tables.find(
+          (t) => t.oid === Array.from(filteredSelectedTableOids)[0],
+        );
+        if (schemaMode === "all") {
+          summaryText = `All current and future tables other than "${table?.schema}.${table?.name}".`;
+        } else if (schemaMode === "include") {
+          summaryText = `All current and future tables in selected schemas other than "${table?.schema}.${table?.name}".`;
+        } else if (schemaMode === "exclude") {
+          summaryText = `All current and future tables except those in excluded schemas and except "${table?.schema}.${table?.name}".`;
+        }
+      } else {
+        if (schemaMode === "all") {
+          summaryText = `All current and future tables other than ${filteredSelectedTableOids.size} tables.`;
+        } else if (schemaMode === "include") {
+          summaryText = `All current and future tables in selected schemas other than ${filteredSelectedTableOids.size} tables.`;
+        } else if (schemaMode === "exclude") {
+          summaryText = `All current and future tables except those in excluded schemas and except ${filteredSelectedTableOids.size} tables.`;
+        }
+      }
+    }
+  }
 
   function updateSource() {
     // Update schema-related properties
@@ -225,7 +276,17 @@
 </script>
 
 <div class="w-full mx-auto space-y-4">
-  {#if !isEditMode}
+  <div class="flex items-center space-x-2">
+    <h2 class="font-medium">Database</h2>
+  </div>
+  {#if isEditMode}
+    <div class="flex items-center space-x-2">
+      <DatabaseIcon class="h-5 w-5 text-gray-400" />
+      <h2 class="text-lg font-medium">
+        {selectedDatabase?.name}
+      </h2>
+    </div>
+  {:else}
     <div class="flex items-center space-x-2">
       <Select
         onSelectedChange={handleDbChange}
@@ -268,15 +329,6 @@
 
   {#if selectedDatabaseId}
     <div class="space-y-4">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center space-x-2">
-          <DatabaseIcon class="h-5 w-5 text-gray-400" />
-          <h2 class="text-lg font-semibold">
-            {selectedDatabase.name}
-          </h2>
-        </div>
-      </div>
-
       <!-- Schema Selection Mode -->
       <div class="space-y-2">
         <div class="flex items-center justify-between">
@@ -322,20 +374,7 @@
         </div>
       </div>
 
-      {#if schemaMode === "all"}
-        <p class="text-sm text-gray-500">
-          {includingAllSchemasText}
-        </p>
-      {:else}
-        {#if schemaMode === "include"}
-          <p class="text-sm text-gray-500">
-            Tables in the selected schemas will be included in this sink.
-          </p>
-        {:else if schemaMode === "exclude"}
-          <p class="text-sm text-gray-500">
-            Tables in the excluded schemas will not be included in this sink.
-          </p>
-        {/if}
+      {#if schemaMode !== "all"}
         <div class="border rounded-lg overflow-hidden">
           <div class="p-2 border-b bg-gray-50">
             <div class="relative">
@@ -444,27 +483,7 @@
         </div>
       </div>
 
-      {#if tableMode === "all"}
-        <p class="text-sm text-gray-500">
-          {includingAllTablesText}
-        </p>
-      {:else}
-        {#if tableMode === "include"}
-          <p class="text-sm text-gray-500">
-            Tables in the selected schemas will be included in this sink.
-          </p>
-          <p class="text-sm text-gray-500">
-            By default, tables added later will not be included in this sink.
-          </p>
-        {:else if tableMode === "exclude"}
-          <p class="text-sm text-gray-500">
-            Tables in the excluded schemas will not be included in this sink.
-          </p>
-          <p class="text-sm text-gray-500">
-            All other tables, including tables added later, will be included in
-            this sink.
-          </p>
-        {/if}
+      {#if tableMode !== "all"}
         <div class="border rounded-lg overflow-hidden">
           <div class="p-2 border-b bg-gray-50">
             <div class="relative">
@@ -529,4 +548,8 @@
       {/if}
     </div>
   {/if}
+  <div class="space-y-2">
+    <h2 class="font-medium">Summary</h2>
+    <p class="text-sm text-muted-foreground">{summaryText}</p>
+  </div>
 </div>

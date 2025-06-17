@@ -892,24 +892,17 @@ defmodule Sequin.Transforms do
           {:cont, {:ok, acc}}
 
         "table" ->
-          msg = """
-          `table` is deprecated. Use `source.include_tables` instead.
-
-          https://sequinstream.com/docs/reference/sequin-yaml#sink-source
-          """
-
-          error = Error.validation(summary: msg)
-          {:halt, {:error, error}}
+          # Convert deprecated table key to source format
+          with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
+               {:ok, table} <- find_table(database, value) do
+            {:cont, {:ok, Map.put(acc, :source, %{include_table_oids: [table.oid]})}}
+          else
+            {:error, error} -> {:halt, {:error, error}}
+          end
 
         "schema" ->
-          msg = """
-          `schema` is deprecated. Use `source.include_schemas` instead.
-
-          https://sequinstream.com/docs/reference/sequin-yaml#sink-source
-          """
-
-          error = Error.validation(summary: msg)
-          {:halt, {:error, error}}
+          # Convert deprecated schema key to source format
+          {:cont, {:ok, Map.put(acc, :source, %{include_schemas: [value]})}}
 
         # Unknown field
         _ ->

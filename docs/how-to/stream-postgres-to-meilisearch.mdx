@@ -75,7 +75,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select **Meilisearch Sink*
 
   <Step title="Transforms">
     Meilisearch requires a defined schema with:
-    1. A unique document `id` (string or integer).
+    1. A unique document primary key (string or integer).
     2. Searchable and filterable fields.
 
     Use a [functional transform](/reference/transforms#function-transform) to convert Postgres rows to Meilisearch documents:

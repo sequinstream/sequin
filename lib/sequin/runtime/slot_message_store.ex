@@ -30,7 +30,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   use GenServer
 
   use Sequin.ProcessMetrics,
-    metric_prefix: "sequin.slot_message_store"
+    metric_prefix: "sequin.slot_message_store",
+    on_log: {__MODULE__, :process_metrics_on_log, []}
 
   use Sequin.ProcessMetrics.Decorator
 
@@ -45,6 +46,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   alias Sequin.Error.NotFoundError
   alias Sequin.Health
   alias Sequin.Health.Event
+  alias Sequin.ProcessMetrics
+  alias Sequin.Prometheus
   alias Sequin.Replication
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotMessageStore.State
@@ -84,6 +87,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     %SinkConsumer{} = consumer = Consumers.get_sink_consumer!(consumer_id)
 
     Logger.metadata(consumer_id: consumer_id)
+    ProcessMetrics.metadata(%{consumer_id: consumer_id, consumer_name: consumer.name, partition: partition})
     Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
 
     state = %State{
@@ -1058,5 +1062,19 @@ defmodule Sequin.Runtime.SlotMessageStore do
   defp flush_batch_size do
     conf = Application.get_env(:sequin, :slot_message_store, [])
     conf[:flush_batch_size] || @default_flush_batch_size
+  end
+
+  def process_metrics_on_log(%ProcessMetrics.Metrics{busy_percent: nil}), do: :ok
+
+  def process_metrics_on_log(%ProcessMetrics.Metrics{} = metrics) do
+    %{consumer_id: consumer_id, consumer_name: consumer_name, partition: partition} = metrics.metadata
+
+    # Busy percent
+    Prometheus.set_slot_message_store_busy_percent(consumer_id, consumer_name, partition, metrics.busy_percent)
+
+    # Operation percent
+    Enum.each(metrics.timing, fn {name, %{percent: percent}} ->
+      Prometheus.set_slot_message_store_operation_percent(consumer_id, consumer_name, partition, name, percent)
+    end)
   end
 end

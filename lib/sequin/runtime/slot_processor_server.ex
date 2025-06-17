@@ -7,7 +7,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   use Sequin.Postgres.ReplicationConnection
 
   use Sequin.ProcessMetrics,
-    metric_prefix: "sequin.slot_processor_server"
+    metric_prefix: "sequin.slot_processor_server",
+    on_log: {__MODULE__, :process_metrics_on_log, []}
 
   use Sequin.ProcessMetrics.Decorator
 
@@ -295,6 +296,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       replication_id: state.id,
       database_id: state.postgres_database.id
     )
+
+    ProcessMetrics.metadata(%{replication_id: state.id, slot_name: state.slot_name})
 
     Logger.info(
       "[SlotProcessorServer] Initialized with opts: #{inspect(Keyword.delete(state.connection, :password), pretty: true)}"
@@ -1747,5 +1750,19 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp observe_ingestion_latency(%State{} = state, ts) do
     latency_us = DateTime.diff(Sequin.utc_now(), ts, :microsecond)
     Prometheus.observe_ingestion_latency(state.replication_slot.id, state.replication_slot.slot_name, latency_us)
+  end
+
+  def process_metrics_on_log(%ProcessMetrics.Metrics{busy_percent: nil}), do: :ok
+
+  def process_metrics_on_log(%ProcessMetrics.Metrics{} = metrics) do
+    %{replication_id: replication_id, slot_name: slot_name} = metrics.metadata
+
+    # Busy percent
+    Prometheus.set_slot_processor_server_busy_percent(replication_id, slot_name, metrics.busy_percent)
+
+    # Operation percent
+    Enum.each(metrics.timing, fn {name, %{percent: percent}} ->
+      Prometheus.set_slot_processor_server_operation_percent(replication_id, slot_name, name, percent)
+    end)
   end
 end

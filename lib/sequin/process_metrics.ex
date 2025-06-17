@@ -68,10 +68,9 @@ defmodule Sequin.ProcessMetrics do
   - The decorator tracks function invocations and runtime in the process dictionary
   - StatsD metrics are sent with the configured prefix and tags
   """
-  alias Sequin.Statsd
-
   require Logger
 
+  @metadata_key :__process_metrics_metadata__
   @metrics_key :__process_metrics__
   @metrics_last_logged_at_key :__process_metrics_last_logged_at__
   @stack_key :__process_metrics_stack__
@@ -128,8 +127,7 @@ defmodule Sequin.ProcessMetrics do
   @default_state %{
     timing: %{},
     throughput: %{},
-    gauge: %{},
-    metadata: %{}
+    gauge: %{}
   }
 
   @doc """
@@ -195,7 +193,6 @@ defmodule Sequin.ProcessMetrics do
         tags = Map.merge(process_metrics_tags(), dynamic_tags)
 
         Sequin.ProcessMetrics.handle_process_logging(
-          metric_prefix: process_metrics_metric_prefix(),
           logger_prefix: process_metrics_logger_prefix(),
           tags: tags,
           on_log: process_metrics_on_log()
@@ -254,7 +251,7 @@ defmodule Sequin.ProcessMetrics do
   * `tags` - A map of tags to include in StatsD metrics
   """
   def metadata(tags) when is_map(tags) do
-    update_metrics(:metadata, &Map.merge(&1, tags))
+    Process.put(@metadata_key, Map.merge(Process.get(@metadata_key, %{}), tags))
   end
 
   @doc """
@@ -265,7 +262,7 @@ defmodule Sequin.ProcessMetrics do
   A map of tags
   """
   def get_metadata do
-    get_metrics().metadata
+    Process.get(@metadata_key, %{})
   end
 
   @doc """
@@ -316,7 +313,7 @@ defmodule Sequin.ProcessMetrics do
   @doc """
   Handles the `:process_logging` tick.
   """
-  def handle_process_logging(metric_prefix: metric_prefix, logger_prefix: logger_prefix, tags: tags, on_log: on_log) do
+  def handle_process_logging(logger_prefix: logger_prefix, tags: tags, on_log: on_log) do
     now = System.monotonic_time(:millisecond)
     last_logged_at = Process.get(@metrics_last_logged_at_key)
     interval_ms = if last_logged_at, do: now - last_logged_at
@@ -390,7 +387,7 @@ defmodule Sequin.ProcessMetrics do
       timing: timing_with_percentages,
       throughput: throughput_per_sec,
       gauge: gauge,
-      metadata: Map.merge(metrics.metadata, tags)
+      metadata: Map.merge(get_metadata(), tags)
     }
 
     # Call the on_log callback if configured
@@ -398,9 +395,6 @@ defmodule Sequin.ProcessMetrics do
       {module, function, args} = on_log
       apply(module, function, [metrics | args])
     end
-
-    # Send metrics to StatsD
-    statsd(metrics, metric_prefix, tags)
 
     case metrics do
       %{busy_percent: nil} ->
@@ -443,25 +437,6 @@ defmodule Sequin.ProcessMetrics do
       ]
     end)
     |> Keyword.new()
-  end
-
-  defp statsd(%Metrics{} = metrics, metric_prefix, tags) do
-    # Log timing metrics as histograms with operation tag
-    Enum.each(metrics.timing, fn {name, data} ->
-      Statsd.histogram("#{metric_prefix}.operation_time_ms", data.total_ms, tags: Map.put(tags, :operation, name))
-    end)
-
-    # Log throughput metrics to StatsD
-    if metrics.interval_ms && metrics.interval_ms > 0 do
-      Enum.each(metrics.throughput, fn {name, rate} ->
-        Statsd.gauge("#{metric_prefix}.#{name}_per_sec", rate, tags: tags)
-      end)
-    end
-
-    # Log gauge metrics to StatsD
-    Enum.each(metrics.gauge, fn {name, value} ->
-      Statsd.gauge("#{metric_prefix}.#{name}", value, tags: tags)
-    end)
   end
 end
 

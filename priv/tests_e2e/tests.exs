@@ -53,12 +53,14 @@ defmodule Sequin.E2E.IntegrationTest do
   end
 
   describe "kafka integration" do
+    @tag :kafka
     test "changes are streamed to kafka", %{conn: conn, tid: tid} do
       insert_test_data(conn, "kafka_test_table", tid, @expected_count)
       messages = get_messages_until_complete(@expected_count, :timer.seconds(30))
       assert_messages(messages, @expected_count, tid)
     end
 
+    @tag :kafka
     test "changes are buffered when kafka is down and sent after recovery", %{conn: conn, tid: tid} do
       Logger.info("Stopping kafka_ex application...")
       :ok = Application.stop(:kafka_ex)
@@ -87,6 +89,7 @@ defmodule Sequin.E2E.IntegrationTest do
   end
 
   describe "sqs integration" do
+    @tag :sqs
     test "changes are streamed to sqs", %{conn: conn, tid: tid, queue_url: queue_url, aws_client: client} do
       IO.inspect(queue_url)
       insert_test_data(conn, "sqs_test_table", tid, @expected_count)
@@ -94,6 +97,7 @@ defmodule Sequin.E2E.IntegrationTest do
       assert_messages(messages, @expected_count, tid)
     end
 
+    @tag :sqs
     test "changes are buffered when sqs is down and sent after recovery", %{conn: conn, tid: tid, aws_client: client} do
       Logger.info("Stopping localstack container...")
       :ok = docker_stop("tests_e2e-localstack-1")

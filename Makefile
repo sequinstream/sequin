@@ -167,6 +167,13 @@ e2e-restart: e2e-down e2e-up ## Restart e2e test environment (shortcut for down+
 e2e-tests: ## Run the e2e test suite
 	cd priv/tests_e2e && elixir tests.exs
 
+e2e-test: ## Run the e2e test suite with specific tag: make e2e-test tag=kafka
+	@if [ -z "$(tag)" ]; then \
+		echo "Usage: make e2e-test tag=<tag-name> (available tags: kafka, sqs)"; \
+		exit 1; \
+	fi
+	cd priv/tests_e2e && elixir tests.exs $(tag)
+
 e2e-clean: ## Remove e2e kafka container
 	docker stop sequin-e2e-kafka || true
 	docker rm sequin-e2e-kafka || true

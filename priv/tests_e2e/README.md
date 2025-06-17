@@ -18,14 +18,21 @@ Environment variables:
 
 Example configurations:
 ```bash
-# Run with default 1000 messages
-make e2e-test
+# Run all tests with default 1000 messages
+make e2e-tests
+
+# Run specific integration tests
+make e2e-test tag=kafka  # Only Kafka tests
+make e2e-test tag=sqs    # Only SQS tests
 
 # Run with custom message count
-TEST_MESSAGES_COUNT=500 make e2e-test
+TEST_MESSAGES_COUNT=500 make e2e-tests
+
+# Run specific tests with custom message count
+TEST_MESSAGES_COUNT=500 make e2e-test tag=kafka
 
 # Run with larger dataset
-TEST_MESSAGES_COUNT=10000 make e2e-test
+TEST_MESSAGES_COUNT=10000 make e2e-tests
 ```
 
 ## Directory Structure
@@ -48,7 +55,9 @@ make e2e-up        # Start all containers
 make e2e-down      # Stop and remove containers and volumes
 make e2e-rebuild   # Rebuild containers without cache
 make e2e-restart   # Restart all containers (down + up)
-make e2e-test      # Run the e2e tests
+make e2e-tests     # Run all e2e tests
+make e2e-test tag=kafka  # Run only Kafka integration tests
+make e2e-test tag=sqs    # Run only SQS integration tests
 make e2e-clean     # Clean up containers
 ```
 
@@ -79,11 +88,16 @@ To run the complete test suite:
 
 2. Run the tests (with optional configuration):
    ```bash
-   # Default configuration
-   make e2e-test
+   # Run all tests
+   make e2e-tests
+
+   # Run specific integration tests
+   make e2e-test tag=kafka  # Only Kafka tests
+   make e2e-test tag=sqs    # Only SQS tests
 
    # Custom message count
-   TEST_MESSAGES_COUNT=500 make e2e-test
+   TEST_MESSAGES_COUNT=500 make e2e-tests          # All tests
+   TEST_MESSAGES_COUNT=500 make e2e-test tag=kafka # Only Kafka tests
    ```
 
 3. Clean up after:

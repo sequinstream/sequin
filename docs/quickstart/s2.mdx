@@ -1,0 +1,191 @@
+---
+title: 'Get started with S2'
+sidebarTitle: 'S2'
+description: 'Stream Postgres changes to an S2 stream in minutes with Sequin.'
+---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+import QuickstartSourceStep from '/snippets/quickstart-source-step.mdx';
+import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to an S2 stream. You'll:
+
+- Set up an S2 stream using the S2 web console and CLI
+- Boot Sequin and connect to a sample playground database
+- Configure Sequin to stream database changes to your S2 stream
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin and S2.
+
+## Prerequisites
+
+- A [S2 cloud account](https://s2.dev/sign-up)
+- The [S2 CLI](https://s2.dev/docs/quickstart#get-started-with-the-cli) installed
+
+<Steps titleSize="h2">
+  <Step title="Set up your S2 stream" icon="s">
+    First, let's create an S2 stream
+
+    <Steps>
+      <Step title="Create an S2 Access Token">
+        In the [S2 web console](https://s2.dev/dashboard), navigate to the "Access Tokens" section and click the "+ Issue" button to generate a new token.
+
+        Save this token to a secure location as you'll need it to configure the S2 CLI and your Sequin S2 sink.
+      </Step>
+
+      <Step title="Create an S2 Basin">
+        Navigate to the ["Basins" tab](https://s2.dev/dashboard/basins) and click the "+ Create Basin" button. Enter a name for your basin (e.g. `sequin-quickstart`) and accept the default settings. Click the "Create Basin" button to create your basin.
+      </Step>
+
+      <Step title="Create an S2 Stream">
+        Select the basin you just created and click the "+ Create Stream" button. Name your stream `products` and accept the default settings. Click the "Create Stream" button to create your stream.
+      </Step>
+
+      <Step title="Connect to your S2 stream using the S2 CLI">
+        Now, open your terminal and configure the S2 CLI with your access token:
+
+        ```bash
+        s2 config set access-token <your-access-token>
+        ```
+
+        Then, begin reading from your stream:
+
+        ```bash
+        s2 read s2://{{your-basin-name}}/products
+
+        $
+        ```
+      </Step>
+    </Steps>
+
+    <Check>
+      Your S2 stream is now ready to receive data.
+    </Check>
+  </Step>
+  <QuickstartInitialSteps />
+  <Step title="Create a S2 Sink" icon="s">
+    With the playground database connected, create a [sink](/reference/sinks/overview) that will send changes to your S2 stream:
+
+    <Steps>
+      <Step title="Navigate to Sinks">
+        Click "Sinks" in the sidebar navigation, then click "Create Sink".
+      </Step>
+
+      <Step title="Select sink type">
+        Select "S2" as the sink type and click "Continue".
+      </Step>
+
+      <QuickstartSourceStep />
+      <QuickstartBackfillStep />
+
+      <Step title='Configure S2 connection'>
+        In the S2 configuration card, enter:
+
+        - **Basin**: The name of the basin you created previously
+        - **Stream**: The name of the stream you created previously
+        - **Access Token**: The access token for the S2 account associated with the basin and stream
+      </Step>
+
+      <Step title="Create the sink">
+        Click "Create Sink" to finish setting up your S2 sink.
+      </Step>
+    </Steps>
+  </Step>
+
+  <Step title="See changes flow to your S2 stream" icon="waveform-lines">
+    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to your stream.
+
+    <Steps>
+      <Step title="Messages tab">
+        Click the "Messages" tab to see recently delivered messages.
+      </Step>
+
+      <Step title="Verify in S2">
+        Return to your terminal and you should see the data flowing into your S2 stream.
+
+        ```bash
+        s2 read s2://sequin-quickstart/products
+        ⦿ 3500 bytes (6 records in range 6..=11)
+        {"record":{"id":1,"inserted_at":"2025-06-11T01:19:22.402358","name":"Avocados (3 pack)","price":"5.99","updated_at":"2025-06-11T01:19:22.402358"},"metadata":{"consumer":{"id":"282713d8-76c4-42db-8e16-3e0df04cc5f6","name":"sequin-playground-s2-sink","annotations":null},"table_name":"products","commit_timestamp":"2025-06-17T19:19:51.955551Z","commit_lsn":null,"commit_idx":null,"transaction_annotations":null,"table_schema":"public","idempotency_key":"ODQ5NWNhMzEtYTM0MC00MDI5LThjODItMTcxYmRjMmY4YjI2OjE=","database_name":"sequin-playground"},"action":"read","changes":null}
+        {"record":{"id":2,"inserted_at":"2025-06-11T01:19:22.402358","name":"Flank Steak (1 lb)","price":"8.99","updated_at":"2025-06-11T01:19:22.402358"},"metadata":{"consumer":{"id":"282713d8-76c4-42db-8e16-3e0df04cc5f6","name":"sequin-playground-s2-sink","annotations":null},"table_name":"products","commit_timestamp":"2025-06-17T19:19:51.955968Z","commit_lsn":null,"commit_idx":null,"transaction_annotations":null,"table_schema":"public","idempotency_key":"ODQ5NWNhMzEtYTM0MC00MDI5LThjODItMTcxYmRjMmY4YjI2OjI=","database_name":"sequin-playground"},"action":"read","changes":null}
+        ...
+        ```
+
+        <Check>
+          Messages are flowing from Sequin to your S2 stream.
+        </Check>
+      </Step>
+
+      <Step title="Make some changes">
+        Let's make some changes to the `products` table and see them flow to your S2 stream.
+
+        In a new terminal window, run the following command to insert a new row into the `products` table:
+
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+        ```
+
+        Back in your S2 stream, you should see a new message appear in the request log:
+
+        ```bash
+        {"record":{"id":7,"inserted_at":"2025-06-17T21:03:40.350239","name":"Organic Honey (16 oz)","price":"12.99","updated_at":"2025-06-17T21:03:40.350239"},"metadata":{"consumer":{"id":"282713d8-76c4-42db-8e16-3e0df04cc5f6","name":"sequin-playground-s2-sink","annotations":{}},"table_name":"products","commit_timestamp":"2025-06-17T21:03:40.355455Z","commit_lsn":73220408,"commit_idx":0,"transaction_annotations":null,"table_schema":"public","idempotency_key":"NzMyMjA0MDg6MA==","database_name":"sequin-playground"},"action":"insert","changes":null}
+        ```
+
+        Feel free to try other changes:
+
+        <AccordionGroup>
+          <Accordion title="Update a product's price">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Change a product's name">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Delete a product">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "delete from products where name = 'Blueberries (6 oz)';"
+            ```
+          </Accordion>
+        </AccordionGroup>
+
+        Each change will appear in your S2 stream within a few seconds.
+      </Step>
+    </Steps>
+  </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Created an S2 stream
+- Connected Sequin to stream Postgres changes to S2
+- Verified changes are flowing to your S2 stream
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  <Card title="Guide: Setting up a S2 sink" icon="s" href="/how-to/stream-postgres-to-s2">
+    Setup a S2 sink to send changes to your stream.
+  </Card>
+</CardGroup>

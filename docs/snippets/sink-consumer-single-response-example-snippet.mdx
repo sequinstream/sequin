@@ -200,6 +200,32 @@
 }
 ```
 
+```json S2
+{
+  "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+  "name": "my-s2-sink",
+  "status": "active",
+  "filters": [],
+  "destination": {
+    "type": "s2",
+    "basin": "my-basin",
+    "stream": "my-stream",
+    "access_token": "my-access-token"
+  },
+  "database": "dune",
+  "transform": "id-transform",
+  "schema": "public",
+  "max_retry_count": null,
+  "annotations": {},
+  "active_backfills": [],
+  "batch_size": 50,
+  "load_shedding_policy": "pause_on_full",
+  "timestamp_format": "iso8601",
+  "actions": ["insert", "update", "delete"],
+  "group_column_names": ["id"]
+}
+```
+
 ```json Sequin Stream
 {
   "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",

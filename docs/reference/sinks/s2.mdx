@@ -43,7 +43,7 @@ If S2 rejects a write (for example due to throttling or network errors) Sequin:
 
 ## Record size limits
 
-S2 currently supports records up to **4 MiB** (the maximum size of a single append request). If a message exceeds this limit S2 returns `payload too large` and Sequin will keep retrying. The typical fix is to:
+S2 currently supports records up to **1 MiB** (the maximum size of a single append request). If a message exceeds this limit S2 returns `payload too large` and Sequin will keep retrying. The typical fix is to:
 
 1. Identify the offending column(s).
 2. Create a transform that removes or compresses those fields.
@@ -67,11 +67,11 @@ Common issues include:
 
 - Invalid or expired access token (S2 returns **401 Unauthorized**).
 - Basin / stream name typo (S2 returns **404 Not Found**).
-- Record size > 4 MiB (**413 Payload Too Large**).
+- Record size > 1 MiB (**413 Payload Too Large**).
 
 For live verification you can tail the stream with the S2 CLI:
 
 ```bash
-s2 read s2://<basin>/<stream>
+s2 tail s2://<basin>/<stream>
 ```
 Successful reads confirm that S2 is receiving and storing events.

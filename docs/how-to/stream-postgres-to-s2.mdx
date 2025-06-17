@@ -52,6 +52,10 @@ s2 create-stream s2://my-basin/products
 
 You can also perform these steps in the S2 console by navigating to **Basins → + Create Basin** and then **+ Create Stream**.
 
+<Info>
+  You can configure S2 Basins to automatically create streams when you create a new sink in Sequin by enabling the `Create stream on append` option in the S2 console or passing the `--create-stream-on-append` flag to the `s2 create-basin` command.
+</Info>
+
 <Check>
   Your S2 stream is now ready to receive data.
 </Check>
@@ -101,7 +105,7 @@ To verify that your S2 sink is working:
 3. Use the S2 CLI to read from the stream and confirm events arrive:
 
    ```bash
-   s2 read s2://my-basin/products
+   s2 tail -f s2://my-basin/products
    ```
 
 If messages don't seem to be flowing:

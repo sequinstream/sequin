@@ -15,7 +15,7 @@ defmodule Sequin.SinkPipelineTest do
 
       stub(SinkPipelineMock, :handle_batch, fn _batch_name, messages, _batch_info, context -> {:ok, messages, context} end)
 
-      stub(SinkPipelineMock, :apply_routing, fn _consumer, rinfo -> rinfo end)
+      # stub(SinkPipelineMock, :apply_routing, fn _consumer, rinfo -> rinfo end)
       :ok
     end
 

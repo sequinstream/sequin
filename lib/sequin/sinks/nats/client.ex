@@ -2,10 +2,6 @@ defmodule Sequin.Sinks.Nats.Client do
   @moduledoc false
   @behaviour Sequin.Sinks.Nats
 
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
@@ -78,41 +74,19 @@ defmodule Sequin.Sinks.Nats.Client do
       {:error, to_sequin_error(error)}
   end
 
-  defp publish_message(%SinkConsumer{} = consumer, message, connection) do
-    opts = [headers: get_headers(message)]
-    {payload, subject} = get_payload_and_subject(consumer, message)
+  defp publish_message(
+         %SinkConsumer{} = _consumer,
+         %RoutedMessage{routing_info: %{subject: subject, headers: headers}, payload: payload},
+         connection
+       ) do
+    opts = [headers: headers]
 
     try do
-      Gnat.pub(connection, subject, Jason.encode_to_iodata!(payload), opts)
+      Gnat.pub(connection, subject, payload, opts)
     catch
       error ->
         {:error, to_sequin_error(error)}
     end
-  end
-
-  defp get_payload_and_subject(%SinkConsumer{}, %RoutedMessage{} = routed_message) do
-    subject = subject(routed_message)
-    {routed_message.payload, subject}
-  end
-
-  defp get_payload_and_subject(%SinkConsumer{} = consumer, message) do
-    payload = Sequin.Transforms.Message.to_external(consumer, message)
-    subject = subject(message)
-    {payload, subject}
-  end
-
-  defp subject(%ConsumerEvent{data: %ConsumerEventData{} = data}) do
-    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
-    "sequin.changes.#{database_name}.#{table_schema}.#{table_name}.#{data.action}"
-  end
-
-  defp subject(%ConsumerRecord{data: %ConsumerRecordData{} = data}) do
-    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
-    "sequin.rows.#{database_name}.#{table_schema}.#{table_name}"
-  end
-
-  defp subject(%RoutedMessage{routing_info: %{subject: subject}}) do
-    "sequin.routed.#{subject}"
   end
 
   defp to_sequin_error(error) do
@@ -123,19 +97,5 @@ defmodule Sequin.Sinks.Nats.Client do
       _ ->
         Error.service(service: :nats, message: "Unknown NATS error")
     end
-  end
-
-  defp get_headers(%RoutedMessage{original_message: original_message}) do
-    get_headers(original_message)
-  end
-
-  defp get_headers(%ConsumerEvent{data: %{metadata: %{idempotency_key: idempotency_key}}} = _message)
-       when not is_nil(idempotency_key) do
-    [{"Nats-Msg-Id", idempotency_key}]
-  end
-
-  defp get_headers(%ConsumerRecord{data: %{metadata: %{idempotency_key: idempotency_key}}} = _message)
-       when not is_nil(idempotency_key) do
-    [{"Nats-Msg-Id", idempotency_key}]
   end
 end

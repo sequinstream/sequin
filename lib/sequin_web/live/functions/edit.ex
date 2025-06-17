@@ -15,7 +15,6 @@ defmodule SequinWeb.FunctionsLive.Edit do
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.TestMessages
-  alias Sequin.Runtime.SinkPipeline
   alias SequinWeb.FunctionLive.AutoComplete
 
   require Logger
@@ -517,9 +516,10 @@ defmodule SequinWeb.FunctionsLive.Edit do
     end
   end
 
-  defp run_function(%SinkConsumer{routing: %Function{} = function} = sink_consumer, message) do
-    result = MiniElixir.run_interpreted(function, message.data)
-    SinkPipeline.apply_routing(sink_consumer, result)
+  defp run_function(%SinkConsumer{routing: %Function{} = function} = _sink_consumer, message) do
+    _result = MiniElixir.run_interpreted(function, message.data)
+    # SinkPipeline.apply_routing(sink_consumer, result)
+    raise "HOLD ON!"
   end
 
   defp run_function(%SinkConsumer{filter: %Function{} = function}, message) do

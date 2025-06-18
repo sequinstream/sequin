@@ -91,15 +91,6 @@ defmodule Sequin.Metrics do
     Store.get_throughput("http_endpoint_throughput:#{id}")
   end
 
-  # HTTP Endpoint Average Latency
-  def measure_http_endpoint_avg_latency(%HttpEndpoint{id: id}, latency) do
-    Store.measure_latency("http_endpoint_avg_latency:#{id}", latency)
-  end
-
-  def get_http_endpoint_avg_latency(%HttpEndpoint{id: id}) do
-    Store.get_latency("http_endpoint_avg_latency:#{id}")
-  end
-
   def measure_postgres_replication_slot_lag(%PostgresReplicationSlot{id: id}, lag_bytes) do
     Store.measure_gauge("postgres_replication_slot_lag:#{id}", lag_bytes)
   end

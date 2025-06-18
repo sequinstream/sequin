@@ -54,10 +54,7 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
 
     setup_allowances(test_pid)
 
-    records =
-      messages
-      |> Enum.map(&Message.to_external(consumer, &1.data))
-      |> Enum.map(& &1.record)
+    records = Enum.map(messages, &Message.to_external(consumer, &1.data))
 
     jsonl = encode_as_jsonl(records)
 
@@ -80,7 +77,7 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
     document_ids =
       messages
       |> Enum.map(&Message.to_external(consumer, &1.data))
-      |> Enum.map(& &1.record[sink.primary_key])
+      |> Enum.map(& &1[sink.primary_key])
 
     case Client.delete_documents(consumer, client, sink.index_name, document_ids) do
       :ok -> {:ok, messages, context}

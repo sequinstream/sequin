@@ -545,7 +545,10 @@ defmodule Sequin.Health do
         base_check
 
       connected_event.status == :fail ->
-        put_check_timestamps(%{base_check | status: :error, error: connected_event.error}, [
+        error_slug = Map.get(connected_event.error, :code)
+        error_slug = if is_binary(error_slug), do: Sequin.String.to_existing_atom_safe(error_slug), else: error_slug
+
+        put_check_timestamps(%{base_check | status: :error, error: connected_event.error, error_slug: error_slug}, [
           connected_event
         ])
 

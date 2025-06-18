@@ -18,8 +18,8 @@
     "editable": true,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 0,
-    "id": 1,
     "links": [],
+    "liveNow": false,
     "panels": [
         {
             "datasource": {
@@ -32,13 +32,11 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisBorderShow": false,
                         "axisCenteredZero": false,
                         "axisColorMode": "text",
                         "axisLabel": "msg/s",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
-                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 0,
                         "gradientMode": "none",
@@ -47,7 +45,6 @@
                             "tooltip": false,
                             "viz": false
                         },
-                        "insertNulls": false,
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
@@ -69,7 +66,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -128,13 +126,11 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisBorderShow": false,
                         "axisCenteredZero": false,
                         "axisColorMode": "text",
                         "axisLabel": "msg/s",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
-                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 0,
                         "gradientMode": "none",
@@ -143,7 +139,6 @@
                             "tooltip": false,
                             "viz": false
                         },
-                        "insertNulls": false,
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
@@ -165,7 +160,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -224,7 +220,6 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisBorderShow": false,
                         "axisCenteredZero": false,
                         "axisColorMode": "text",
                         "axisLabel": "Deliver Success/Attempts",
@@ -232,7 +227,6 @@
                         "axisSoftMax": 1,
                         "axisSoftMin": 0.9,
                         "barAlignment": 0,
-                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 0,
                         "gradientMode": "none",
@@ -241,7 +235,6 @@
                             "tooltip": false,
                             "viz": false
                         },
-                        "insertNulls": false,
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
@@ -263,7 +256,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "red"
+                                "color": "red",
+                                "value": null
                             }
                         ]
                     },
@@ -325,7 +319,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "red"
+                                "color": "red",
+                                "value": null
                             },
                             {
                                 "color": "orange",
@@ -363,7 +358,7 @@
                 "showThresholdMarkers": true,
                 "sizing": "auto"
             },
-            "pluginVersion": "11.6.0",
+            "pluginVersion": "10.0.3",
             "targets": [
                 {
                     "editorMode": "code",
@@ -389,13 +384,11 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisBorderShow": false,
                         "axisCenteredZero": false,
                         "axisColorMode": "text",
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
-                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 0,
                         "gradientMode": "none",
@@ -404,7 +397,6 @@
                             "tooltip": false,
                             "viz": false
                         },
-                        "insertNulls": false,
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
@@ -426,7 +418,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -492,14 +485,12 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisBorderShow": false,
                         "axisCenteredZero": false,
                         "axisColorMode": "text",
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "axisSoftMin": -4,
                         "barAlignment": 0,
-                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 0,
                         "gradientMode": "none",
@@ -508,7 +499,6 @@
                             "tooltip": false,
                             "viz": false
                         },
-                        "insertNulls": false,
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
@@ -532,7 +522,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -598,14 +589,12 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisBorderShow": false,
                         "axisCenteredZero": false,
                         "axisColorMode": "text",
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "axisSoftMin": -4,
                         "barAlignment": 0,
-                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 0,
                         "gradientMode": "none",
@@ -614,7 +603,6 @@
                             "tooltip": false,
                             "viz": false
                         },
-                        "insertNulls": false,
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
@@ -638,7 +626,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -704,13 +693,11 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisBorderShow": false,
                         "axisCenteredZero": false,
                         "axisColorMode": "text",
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
-                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 0,
                         "gradientMode": "none",
@@ -719,7 +706,6 @@
                             "tooltip": false,
                             "viz": false
                         },
-                        "insertNulls": false,
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
@@ -741,7 +727,302 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 11,
+                "w": 8,
+                "x": 0,
+                "y": 25
+            },
+            "id": 10,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true,
+                    "sortBy": "Mean",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "single",
+                    "sort": "none"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "sqpds"
+                    },
+                    "editorMode": "code",
+                    "expr": "sum(sequin_slot_processor_server_operation_percent) by (replication_id, slot_name, operation)",
+                    "instant": false,
+                    "legendFormat": "{{slot_name}} - {{operation}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "SlotProcessorServer operations",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "sqpds"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 11,
+                "w": 8,
+                "x": 8,
+                "y": 25
+            },
+            "id": 11,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true,
+                    "sortBy": "Mean",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "single",
+                    "sort": "none"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "sqpds"
+                    },
+                    "editorMode": "code",
+                    "expr": "sum(sequin_slot_message_handler_operation_percent) by (replication_id, slot_name, operation)",
+                    "instant": false,
+                    "legendFormat": "{{slot_name}} - {{operation}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "SlotMessageHandler operations",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "sqpds"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 11,
+                "w": 8,
+                "x": 16,
+                "y": 25
+            },
+            "id": 12,
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ],
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true,
+                    "sortBy": "Mean",
+                    "sortDesc": true
+                },
+                "tooltip": {
+                    "mode": "single",
+                    "sort": "none"
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "sqpds"
+                    },
+                    "editorMode": "code",
+                    "expr": "sum(sequin_slot_message_store_operation_percent) by (consumer_id, consumer_name, operation)",
+                    "instant": false,
+                    "legendFormat": "{{consumer_name}} - {{operation}}",
+                    "range": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "SlotMessageStore operations",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "sqpds"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisCenteredZero": false,
+                        "axisColorMode": "text",
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 0,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "auto",
+                        "spanNulls": false,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -756,7 +1037,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 25
+                "y": 36
             },
             "id": 3,
             "options": {
@@ -800,13 +1081,11 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisBorderShow": false,
                         "axisCenteredZero": false,
                         "axisColorMode": "text",
                         "axisLabel": "",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
-                        "barWidthFactor": 0.6,
                         "drawStyle": "line",
                         "fillOpacity": 0,
                         "gradientMode": "none",
@@ -815,7 +1094,6 @@
                             "tooltip": false,
                             "viz": false
                         },
-                        "insertNulls": false,
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
@@ -837,7 +1115,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -853,7 +1132,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 25
+                "y": 36
             },
             "id": 2,
             "options": {
@@ -893,20 +1172,21 @@
             "type": "timeseries"
         }
     ],
-    "preload": false,
     "refresh": "5s",
-    "schemaVersion": 41,
+    "schemaVersion": 38,
+    "style": "dark",
     "tags": [],
     "templating": {
         "list": []
     },
     "time": {
-        "from": "now-5m",
+        "from": "now-15m",
         "to": "now"
     },
     "timepicker": {},
     "timezone": "browser",
     "title": "Sequin",
     "uid": "behuozial454wc",
-    "version": 2
+    "version": 1,
+    "weekStart": ""
 }

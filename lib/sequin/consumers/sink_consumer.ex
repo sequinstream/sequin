@@ -234,7 +234,7 @@ defmodule Sequin.Consumers.SinkConsumer do
 
   defp put_defaults(changeset) do
     changeset
-    |> put_change(:batch_size, get_field(changeset, :batch_size) || 1)
+    |> put_change(:batch_size, get_field(changeset, :batch_size) || default_batch_size(get_field(changeset, :type)))
     |> put_change(:ack_wait_ms, get_field(changeset, :ack_wait_ms) || 30_000)
     |> put_change(:max_waiting, get_field(changeset, :max_waiting) || 20)
     |> put_change(:max_ack_pending, get_field(changeset, :max_ack_pending) || 10_000)
@@ -242,6 +242,21 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> put_change(:partition_count, get_field(changeset, :partition_count) || 1)
     |> put_change(:legacy_transform, get_field(changeset, :legacy_transform) || :none)
     |> put_change(:message_kind, get_field(changeset, :message_kind) || :event)
+  end
+
+  defp default_batch_size(type) when is_atom(type) do
+    case type do
+      :sqs -> 10
+      :sns -> 10
+      :kinesis -> 100
+      :s2 -> 10
+      :kafka -> 200
+      :redis_stream -> 50
+      :gcp_pubsub -> 10
+      :azure_event_hub -> 10
+      :redis_string -> 10
+      _ -> 1
+    end
   end
 
   def where_account_id(query \\ base_query(), account_id) do

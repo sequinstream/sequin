@@ -1338,7 +1338,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         :sns -> {%SnsSink{}, %{batch_size: 10}}
         :kinesis -> {%KinesisSink{}, %{batch_size: 100}}
         :s2 -> {%S2Sink{}, %{batch_size: 10}}
-        :kafka -> {%KafkaSink{tls: false}, %{batch_size: 100}}
+        :kafka -> {%KafkaSink{tls: false}, %{batch_size: 200}}
         :redis_stream -> {%RedisStreamSink{}, %{batch_size: 50}}
         :sequin_stream -> {%SequinStreamSink{}, %{}}
         :gcp_pubsub -> {%GcpPubsubSink{}, %{}}

@@ -590,8 +590,15 @@ defmodule SequinWeb.Components.ConsumerForm do
       client = MeilisearchClient.new(MeilisearchSink.client_params(sink))
 
       case MeilisearchClient.get_index(client, sink.index_name) do
-        {:ok} -> :ok
-        {:error, error} -> {:error, Exception.message(error)}
+        {:ok, primary_key} ->
+          if primary_key == sink.primary_key do
+            :ok
+          else
+            {:error, "Primary key mismatch: expected \"#{primary_key}\", got \"#{sink.primary_key}\""}
+          end
+
+        {:error, error} ->
+          {:error, Exception.message(error)}
       end
     else
       {:error, encode_errors(sink_changeset)}

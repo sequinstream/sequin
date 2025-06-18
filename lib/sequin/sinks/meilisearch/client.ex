@@ -183,20 +183,12 @@ defmodule Sequin.Sinks.Meilisearch.Client do
     req = base_request(client)
 
     case Req.get(req, url: "/indexes/#{index_name}") do
-      {:ok, %{status: status}} when status in 200..299 ->
-        {:ok}
+      {:ok, %{status: status, body: body}} when status == 200 ->
+        {:ok, body["primaryKey"]}
 
-      {:ok, %{status: status, body: body}} when status == 401 ->
-        error_message = extract_error_message(body)
-
-        Logger.error("[Meilisearch] Unauthorized access: #{error_message}")
-
-        {:error,
-         Error.service(
-           service: :meilisearch,
-           message: "Unauthorized access: #{error_message}",
-           details: %{status: status, body: body}
-         )}
+      {:ok, %{body: body}} ->
+        message = extract_error_message(body)
+        {:error, Error.service(service: :meilisearch, message: message, details: body)}
 
       {:error, reason} ->
         {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}

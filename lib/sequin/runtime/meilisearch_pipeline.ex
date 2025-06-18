@@ -8,6 +8,8 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   alias Sequin.Sinks.Meilisearch.Client
   alias Sequin.Transforms.Message
 
+  require Logger
+
   @impl SinkPipeline
   def init(context, _opts) do
     %{consumer: consumer} = context
@@ -47,14 +49,19 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   @impl SinkPipeline
   def handle_batch(:default, messages, _batch_info, context) do
     %{
-      consumer: %SinkConsumer{sink: sink} = consumer,
+      consumer: %SinkConsumer{sink: sink, transform: transform} = consumer,
       meilisearch_client: client,
       test_pid: test_pid
     } = context
 
     setup_allowances(test_pid)
 
-    records = Enum.map(messages, &Message.to_external(consumer, &1.data))
+    records =
+      Enum.map(messages, fn %{data: message} ->
+        consumer
+        |> Message.to_external(message)
+        |> attempt_to_fill_primary_key(transform, sink.primary_key)
+      end)
 
     jsonl = encode_as_jsonl(records)
 
@@ -75,9 +82,7 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
     setup_allowances(test_pid)
 
     document_ids =
-      messages
-      |> Enum.map(&Message.to_external(consumer, &1.data))
-      |> Enum.map(& &1[sink.primary_key])
+      Enum.flat_map(messages, fn %{data: message} -> message.record_pks end)
 
     case Client.delete_documents(consumer, client, sink.index_name, document_ids) do
       :ok -> {:ok, messages, context}
@@ -96,4 +101,21 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
+
+  # If the consumer does not have a transform, attempt to fill in missing primary key
+  # by extracting it from record, but only for simple (non-dotted) primary keys
+  defp attempt_to_fill_primary_key(message, nil, primary_key) do
+    if String.contains?(primary_key, ".") do
+      # If primary key contains a dot, it's a nested primary key - leave message untouched
+      message
+    else
+      # For simple primary keys, attempt to extract from record if not already present
+      case get_in(message, [:record, primary_key]) do
+        nil -> message
+        value -> Map.put(message, primary_key, value)
+      end
+    end
+  end
+
+  defp attempt_to_fill_primary_key(message, _transform, _primary_key), do: message
 end

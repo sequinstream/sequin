@@ -2,7 +2,7 @@
 
 # Sequin
 
-### Postgres change data capture to streams and queues like Kafka, SQS, HTTP endpoints, and more
+### Postgres change data capture to streams, queues, and search indexes like Kafka, SQS, Elasticsearch, HTTP endpoints, and more
 
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](./LICENSE)
 

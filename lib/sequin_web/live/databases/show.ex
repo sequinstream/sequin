@@ -413,6 +413,26 @@ defmodule SequinWeb.DatabasesLive.Show do
     )
   end
 
+  defp maybe_augment_alert(%{error_slug: :publication_not_recognized} = check, database) do
+    publication_name = database.replication_slot.publication_name
+
+    # ""
+
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Issue with publication",
+        alertMessage: """
+        There is an issue with publication `#{publication_name}`. The publication exists, but the replication slot does not recognize it. This is likely related to a [known issue](https://www.postgresql.org/message-id/18683-a98f79c0673be358%40postgresql.org) with Postgres. This issue occurs when you create a publication *after* creating a replication slot.
+
+        You'll need to [drop and re-create your replication slot](https://sequinstream.com/docs/reference/databases#publication-not-recognized-by-replication-slot) in order to use this publication with this slot.
+        """,
+        refreshable: false,
+        dismissable: false
+      }
+    )
+  end
+
   defp maybe_augment_alert(check, _database), do: check
 
   defp preload_database(database) do

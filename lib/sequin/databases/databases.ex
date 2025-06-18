@@ -388,7 +388,7 @@ defmodule Sequin.Databases do
   def verify_slot(%PostgresDatabase{} = database, %PostgresReplicationSlot{} = slot) do
     with_uncached_connection(database, fn conn ->
       with {:ok, _} <- Postgres.get_publication(conn, slot.publication_name),
-           {:ok, slot_info} <- Postgres.fetch_replication_slot(conn, slot.slot_name),
+           {:ok, slot_info} <- Postgres.get_replication_slot(conn, slot.slot_name),
            :ok <- validate_slot(database, slot_info) do
         Postgres.check_replication_permissions(conn)
       end

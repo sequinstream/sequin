@@ -8,7 +8,6 @@
     actions: string[];
     filterId: string;
   };
-  export let errors: any;
   export let showTitle: boolean = true;
   export let functions: Array<{
     id: string;

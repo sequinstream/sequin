@@ -88,9 +88,10 @@
       return `${count} health check${count > 1 ? "s are" : " is"} failing`;
     } else if (health.status === "warning") {
       return `${count} health check${count > 1 ? "s are" : " is"} warning`;
-    } else if (health.status === "initializing") {
-      const healthyCount = checkCounts.healthy;
-      return `${healthyCount} of ${totalChecks} check${totalChecks > 1 ? "s" : ""} healthy, ${count} waiting`;
+    } else if (health.status === "initializing" && checkCounts.healthy > 0) {
+      return `${checkCounts.healthy} check${checkCounts.healthy > 1 ? "s" : ""} healthy, ${count} waiting`;
+    } else if (health.status === "initializing" && checkCounts.healthy === 0) {
+      return `${count} health check${count > 1 ? "s are" : " is"} waiting`;
     } else {
       return `${count} health check${count > 1 ? "s are" : " is"} ${health.status}`;
     }

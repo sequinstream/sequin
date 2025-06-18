@@ -8,8 +8,6 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   alias Sequin.Sinks.Meilisearch.Client
   alias Sequin.Transforms.Message
 
-  require Logger
-
   @impl SinkPipeline
   def init(context, _opts) do
     %{consumer: consumer} = context

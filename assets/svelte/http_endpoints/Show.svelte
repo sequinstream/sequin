@@ -152,7 +152,7 @@
   </header>
 
   <div class="container mx-auto px-4 py-8">
-    <div class="grid gap-6 md:grid-cols-3 mb-8">
+    <div class="grid gap-6 md:grid-cols-2 mb-8">
       <HealthSummary health={http_endpoint.health} {pushEvent} />
       <Card>
         <CardContent class="p-6">
@@ -161,22 +161,6 @@
             <Activity class="h-5 w-5 text-blue-500" />
           </div>
           <span class="text-2xl font-bold">{metrics.throughput} req/min</span>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
-            <Clock class="h-5 w-5 text-green-500" />
-          </div>
-          {#if metrics.avg_latency}
-            <span class="text-2xl font-bold">{metrics.avg_latency} ms</span>
-          {:else}
-            <div class="flex items-center">
-              <Loader2 class="h-6 w-6 text-gray-500 animate-spin mr-2" />
-              <span class="text-2xl font-bold text-gray-500">ms</span>
-            </div>
-          {/if}
         </CardContent>
       </Card>
     </div>

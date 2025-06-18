@@ -373,7 +373,6 @@
           messageKind={form.messageKind}
           {selectedDatabase}
           bind:form
-          {errors}
           {refreshFunctions}
           {functionRefreshState}
           showTitle={false}

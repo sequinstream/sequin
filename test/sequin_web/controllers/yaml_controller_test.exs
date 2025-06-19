@@ -2,6 +2,8 @@ defmodule SequinWeb.YamlControllerTest do
   use SequinWeb.ConnCase, async: true
 
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.FunctionsFactory
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.ReplicationSlots
@@ -496,8 +498,33 @@ defmodule SequinWeb.YamlControllerTest do
                "destination" => %{
                  "type" => "webhook",
                  "http_endpoint" => "sequin-playground-webhook"
-               }
+               },
+               "filter" => "none",
+               "routing" => "none",
+               "transform" => "none"
              } = get_in(parsed_yaml, ["sinks", Access.at(0)])
+    end
+
+    test "exports function names for filters, transforms, and routing", %{account: account, conn: conn} do
+      filter_function = FunctionsFactory.insert_filter_function!(account_id: account.id)
+      transform_function = FunctionsFactory.insert_transform_function!(account_id: account.id)
+      routing_function = FunctionsFactory.insert_routing_function!(account_id: account.id)
+
+      ConsumersFactory.insert_sink_consumer!(
+        account_id: account.id,
+        filter_id: filter_function.id,
+        transform_id: transform_function.id,
+        routing_id: routing_function.id,
+        routing_mode: :dynamic
+      )
+
+      conn = get(conn, ~p"/api/config/export")
+      assert %{"yaml" => exported_yaml} = json_response(conn, 200)
+      parsed_yaml = YamlElixir.read_from_string!(exported_yaml)
+
+      assert get_in(parsed_yaml, ["sinks", Access.at(0), "filter"]) == filter_function.name
+      assert get_in(parsed_yaml, ["sinks", Access.at(0), "transform"]) == transform_function.name
+      assert get_in(parsed_yaml, ["sinks", Access.at(0), "routing"]) == routing_function.name
     end
   end
 

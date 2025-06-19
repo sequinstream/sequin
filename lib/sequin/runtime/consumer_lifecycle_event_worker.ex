@@ -134,7 +134,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
             :active ->
               RuntimeSupervisor.restart_table_reader(backfill)
 
-            s when s in [:cancelled, :completed] ->
+            s when s in [:cancelled, :completed, :failed] ->
               # Clear out the backfill_fetch_batch event - if backfill was erroring, we want to
               # clear out that state/event.
               Health.delete_event(consumer.id, "backfill_fetch_batch")

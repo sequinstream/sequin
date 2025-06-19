@@ -288,7 +288,8 @@ defmodule Sequin.Runtime.MessageHandler do
         annotations: consumer.annotations
       },
       transaction_annotations: nil,
-      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}")
+      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}"),
+      record_pks: Enum.map(message.ids, &to_string/1)
     }
 
     if consumer.message_kind == :event do

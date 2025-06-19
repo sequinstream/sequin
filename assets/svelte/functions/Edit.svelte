@@ -107,6 +107,7 @@
   let sinkTypeInternalToExternal = {
     http_push: "Webhook sink",
     redis_string: "Redis string sink",
+    nats: "NATS sink",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];
@@ -816,6 +817,10 @@ Please help me create or modify the Elixir function transform to achieve the des
                   <SelectItem
                     value="redis_string"
                     label={sinkTypeInternalToExternal.redis_string}
+                  />
+                  <SelectItem
+                    value="nats"
+                    label={sinkTypeInternalToExternal.nats}
                   />
                 </SelectContent>
               </Select>

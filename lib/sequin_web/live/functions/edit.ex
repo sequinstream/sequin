@@ -15,7 +15,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.TestMessages
-  alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Runtime.RoutingInfo
   alias SequinWeb.FunctionLive.AutoComplete
 
   require Logger
@@ -37,11 +37,15 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  # TODO Extract these default functions from the RoutedSinks
   @initial_route_http """
   def route(action, record, changes, metadata) do
     %{
       method: "POST",
-      endpoint_path: "/entities/\#{record["id"]}"
+      endpoint_path: "/entities/\#{record["id"]}",
+      headers: %{
+        "Idempotency-Key" => metadata.idempotency_key
+      }
     }
   end
   """
@@ -52,6 +56,14 @@ defmodule SequinWeb.FunctionsLive.Edit do
     key = "\#{prefix}:\#{record["id"]}"
 
     %{key: key}
+  end
+  """
+
+  @initial_route_nats """
+  def route(action, record, changes, metadata) do
+    %{
+      subject: "\#{metadata.table_name}.\#{action}.\#{record["id"]}"
+    }
   end
   """
 
@@ -68,7 +80,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "filter" => @initial_filter,
     "routing_undefined" => @initial_route_no_sink_type,
     "routing_http_push" => @initial_route_http,
-    "routing_redis_string" => @initial_route_redis_string
+    "routing_redis_string" => @initial_route_redis_string,
+    "routing_nats" => @initial_route_nats
   }
 
   # We generate the function completions at compile time because
@@ -508,9 +521,9 @@ defmodule SequinWeb.FunctionsLive.Edit do
     end
   end
 
-  defp run_function(%SinkConsumer{routing: %Function{} = function} = sink_consumer, message) do
-    result = MiniElixir.run_interpreted(function, message.data)
-    SinkPipeline.apply_routing(sink_consumer, result)
+  defp run_function(%SinkConsumer{routing: %Function{} = _function} = sink_consumer, message) do
+    # TODO Unify RoutingInfo and SinkPipeline as both do dynamic dispatch
+    RoutingInfo.route_message(sink_consumer, message)
   end
 
   defp run_function(%SinkConsumer{filter: %Function{} = function}, message) do

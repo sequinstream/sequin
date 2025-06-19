@@ -11,19 +11,13 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Error.ServiceError
-  alias Sequin.Functions.MiniElixir
   alias Sequin.Metrics
+  alias Sequin.Runtime.RoutingInfo
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.Trace
   alias Sequin.Transforms
 
   require Logger
-
-  defmodule RoutingInfo do
-    @moduledoc false
-    @derive Jason.Encoder
-    defstruct method: "POST", endpoint_path: ""
-  end
 
   @impl SinkPipeline
   def init(context, opts) do
@@ -86,34 +80,17 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   end
 
   @impl SinkPipeline
-  def apply_routing(_consumer, rinfo) when is_map(rinfo) do
-    struct!(RoutingInfo, rinfo)
-  rescue
-    KeyError ->
-      expected_keys =
-        RoutingInfo.__struct__()
-        |> Map.keys()
-        |> Enum.reject(&(&1 == :__struct__))
-        |> Enum.join(", ")
-
-      raise Error.invariant(
-              message: "Invalid routing response. Expected a map with keys: #{expected_keys}, got: #{inspect(rinfo)}"
-            )
+  def apply_routing(consumer, message) do
+    RoutingInfo.route_messages(consumer, [message])
   end
-
-  def apply_routing(_, v), do: raise("Routing function must return a map! Got: #{inspect(v)}")
 
   @impl SinkPipeline
   def handle_message(message, context) do
-    routing = context.consumer.routing
+    consumer = context.consumer
+    routing_info = RoutingInfo.route_message(consumer, message)
+    message = Broadway.Message.put_batch_key(message, routing_info)
 
-    if is_nil(routing) do
-      {:ok, message, context}
-    else
-      res = MiniElixir.run_compiled(routing, message.data.data)
-      message = Broadway.Message.put_batch_key(message, apply_routing(context.consumer, res))
-      {:ok, message, context}
-    end
+    {:ok, message, context}
   end
 
   defguardp uses_via_sqs?(context) when context.consumer.sink.via_sqs == true
@@ -123,6 +100,8 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     %{consumer: consumer, test_pid: test_pid} = context
 
     setup_allowances(test_pid)
+
+    # TODO Ensure this works with new RoutingInfo
 
     case push_to_sqs(consumer, messages, context) do
       {:ok, messages} ->
@@ -154,7 +133,14 @@ defmodule Sequin.Runtime.HttpPushPipeline do
         :default ->
           req_opts
 
+        %RoutingInfo.HttpPush{} = routing_info ->
+          req_opts
+          |> Keyword.put(:url, routing_info.endpoint_path)
+          |> Keyword.put(:method, routing_info.method)
+          |> maybe_put_headers(routing_info.headers)
+
         m when is_map(m) ->
+          # Legacy support for old batch_key format
           req_opts
           |> Keyword.put(:url, m.endpoint_path)
           |> Keyword.put(:method, m.method)
@@ -425,6 +411,14 @@ defmodule Sequin.Runtime.HttpPushPipeline do
          details: %{status: response.status, body: response.body}
        )}
     end
+  end
+
+  defp maybe_put_headers(req_opts, headers) when map_size(headers) == 0, do: req_opts
+
+  defp maybe_put_headers(req_opts, headers) when is_map(headers) do
+    existing_headers = Keyword.get(req_opts, :headers, [])
+    merged_headers = Map.merge(Map.new(existing_headers), headers)
+    Keyword.put(req_opts, :headers, merged_headers)
   end
 
   defp setup_allowances(nil), do: :ok

@@ -79,7 +79,19 @@ defmodule Sequin.Sinks.Nats.Client do
          %RoutedMessage{routing_info: %{subject: subject, headers: headers}, payload: payload},
          connection
        ) do
-    opts = [headers: headers]
+    list_headers =
+      case headers do
+        %{} ->
+          Map.to_list(headers)
+
+        headers when is_list(headers) ->
+          headers
+
+        _ ->
+          raise "Invalid headers shape. Only maps and lists of tuples are supported. Got: #{inspect(headers)}"
+      end
+
+    opts = [headers: list_headers]
 
     try do
       Gnat.pub(connection, subject, payload, opts)

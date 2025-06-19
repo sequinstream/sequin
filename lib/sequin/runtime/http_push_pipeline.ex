@@ -13,8 +13,8 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Error.ServiceError
   alias Sequin.Functions.MiniElixir
   alias Sequin.Metrics
-  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.RoutingInfo
+  alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.Trace
   alias Sequin.Transforms
 
@@ -82,7 +82,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
   @impl SinkPipeline
   def apply_routing(consumer, message) do
-    RoutingInfo.prepare_messages(consumer, [message])
+    RoutingInfo.route_messages(consumer, [message])
   end
 
   @impl SinkPipeline

@@ -26,7 +26,7 @@ defmodule Sequin.Functions.MiniElixir do
         {:ok, answer} -> answer
         {:error, error} -> raise error
         {:error, :validator, error} -> raise error
-      end |> dbg()
+      end
     else
       raise Error.invariant(message: "Transform functions are not enabled. Talk to the Sequin team to enable them.")
     end
@@ -86,17 +86,15 @@ defmodule Sequin.Functions.MiniElixir do
   end
 
   def run_compiled_inner(%Function{id: id}, data) do
-    dbg(id)
-    dbg(data)
     changes =
       case data do
         %ConsumerRecordData{} -> %{}
         %ConsumerEventData{changes: changes} -> changes
       end
-    dbg(changes)
 
-    {:ok, mod} = ensure_code_is_loaded(id) |> dbg()
-    {:ok, mod.run(to_string(data.action), data.record, changes, Sequin.Map.from_struct_deep(data.metadata)) |> dbg()}
+    {:ok, mod} = ensure_code_is_loaded(id)
+
+    {:ok, data.action |> to_string() |> mod.run(data.record, changes, Sequin.Map.from_struct_deep(data.metadata))}
   rescue
     error ->
       :telemetry.execute([:minielixir, :compile, :exception], %{id: id})

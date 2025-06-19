@@ -16,7 +16,7 @@ defmodule Sequin.Runtime.NatsPipeline do
 
   @impl SinkPipeline
   def apply_routing(consumer, message) do
-    RoutingInfo.prepare_messages(consumer, [message])
+    RoutingInfo.route_messages(consumer, [message])
   end
 
   @impl SinkPipeline
@@ -37,7 +37,7 @@ defmodule Sequin.Runtime.NatsPipeline do
     %{consumer: consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    nats_messages = RoutingInfo.prepare_messages(consumer, messages)
+    nats_messages = RoutingInfo.route_and_encode_messages(consumer, messages)
 
     case Nats.send_messages(consumer, nats_messages) do
       :ok ->

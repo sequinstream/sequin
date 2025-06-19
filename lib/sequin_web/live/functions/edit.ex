@@ -15,7 +15,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.TestMessages
-  alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Runtime.RoutingInfo
   alias SequinWeb.FunctionLive.AutoComplete
 
   require Logger
@@ -519,8 +519,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp run_function(%SinkConsumer{routing: %Function{} = _function} = sink_consumer, message) do
-    [head | _tail] = SinkPipeline.apply_routing(sink_consumer, message)
-    head
+    # TODO Unify RoutingInfo and SinkPipeline as both do dynamic dispatch
+    RoutingInfo.route_message(sink_consumer, message)
   end
 
   defp run_function(%SinkConsumer{filter: %Function{} = function}, message) do

@@ -4,6 +4,7 @@ defmodule Sequin.Runtime.RoutingInfo do
   These structs are used to validate and type-check routing function responses.
   """
 
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Functions.MiniElixir
 
@@ -18,7 +19,6 @@ defmodule Sequin.Runtime.RoutingInfo do
             routing_info: struct(),
             payload: any()
           }
-
   end
 
   defmodule RoutedSink do
@@ -51,7 +51,7 @@ defmodule Sequin.Runtime.RoutingInfo do
 
   defmodule HttpPush do
     @moduledoc false
-    use RoutedSink, [method: "POST", endpoint_path: "/"]
+    use RoutedSink, method: "POST", endpoint_path: "/"
 
     # The default is just a struct with static defaults
     def route(_action, _record, _changes, _metadata) do
@@ -72,11 +72,10 @@ defmodule Sequin.Runtime.RoutingInfo do
       # TODO Consider having this outside of routing
       redis_action =
         case action do
-          # TODO atom vs string?
-          "insert" -> :set
-          "update" -> :set
-          "delete" -> :del
-          "read" -> :set
+          :insert -> :set
+          :update -> :set
+          :delete -> :del
+          :read -> :set
         end
 
       struct(__MODULE__, %{key: "sequin:#{table_name}:#{pks}", action: redis_action})
@@ -103,21 +102,53 @@ defmodule Sequin.Runtime.RoutingInfo do
     def encode(message), do: Jason.encode_to_iodata!(message)
   end
 
+  def route_message(%SinkConsumer{} = consumer, message) do
+    [head | _tail] = route_messages(consumer, [message])
+    head
+  end
+
+  def route_messages(%SinkConsumer{} = consumer, messages) do
+    case routing_module(consumer.type) do
+      nil ->
+        raise "The Sink type #{consumer.type} does not yet support the new Routing mechanism"
+
+      routing_module ->
+        Enum.map(messages, fn message ->
+          inner_route_message(routing_module, consumer, message)
+        end)
+    end
+  end
+
+  def route_and_encode_messages(%SinkConsumer{} = consumer, messages) do
+    case routing_module(consumer.type) do
+      nil ->
+        raise "The Sink type #{consumer.type} does not yet support the new Routing mechanism"
+
+      routing_module ->
+        Enum.map(messages, fn message ->
+          routing_info = inner_route_message(routing_module, consumer, message)
+          payload = inner_encode_message(routing_module, message)
+          %RoutedMessage{routing_info: routing_info, payload: payload}
+        end)
+    end
+  end
+
+  # Private functions
+
   defp merge_with_defaults(default_routing, user_routing) when is_struct(default_routing) and is_map(user_routing) do
     default_map = Map.from_struct(default_routing)
 
     # Only include user values that are not nil
     filtered_user_map = user_routing |> Enum.filter(fn {_key, value} -> not is_nil(value) end) |> Map.new()
 
+    # TODO Only override if shape/type matches with defaults
+
     # Merge and convert back to struct
     merged_map = Map.merge(default_map, filtered_user_map)
     struct(default_routing.__struct__, merged_map)
   end
 
-  @doc """
-  Returns the routing info struct module for a given sink type.
-  """
-  def routing_module(sink_type) do
+  defp routing_module(sink_type) do
     case sink_type do
       :http_push -> HttpPush
       :redis_string -> RedisString
@@ -126,83 +157,59 @@ defmodule Sequin.Runtime.RoutingInfo do
     end
   end
 
-  @doc """
-  Applies routing info validation for a given sink type.
-
-  Takes a sink type atom and routing info map, validates the structure
-  and returns the appropriate routing info struct.
-  """
-  def apply_routing(%SinkConsumer{} = consumer, internal_message, external_message, routing_module) do
-    %{action: action, record: record, metadata: metadata, changes: changes} = external_message
-    dbg(consumer)
-    dbg(external_message)
-    dbg(internal_message)
-
-    case consumer.routing do
-      nil ->
-        routing_module.route(action, record, changes, metadata)
-
-      routing ->
-        # TODO Memoize default_routing if possible
-        default_routing = routing_module.route(action, record, changes, metadata)
-        dbg(default_routing)
-        dbg(routing)
-        # TODO Move this check somewhere else
-        user_routing = case consumer.routing.id do
-                         nil ->
-                           MiniElixir.run_interpreted(routing, internal_message.data)
-                         _id ->
-                           MiniElixir.run_compiled(routing, internal_message.data)
-                       end
-        dbg(user_routing)
-
-        # Merge user routing with defaults, user values take precedence
-        merge_with_defaults(default_routing, user_routing)
-    end
-
-    # TODO Validate that the result fits the matched structure and validation constraints
+  defp inner_route_message(routing_module, consumer, %Broadway.Message{data: event_message}) do
+    inner_route_message(routing_module, consumer, event_message)
   end
 
-  def encode_message(message, routing_module) do
-    routing_module.encode(message)
-  end
-
-  def prepare_messages(%SinkConsumer{} = consumer, internal_messages) do
-    dbg(consumer)
-    dbg(internal_messages)
-    case routing_module(consumer.type) do
-      nil ->
-        raise "The Sink type #{consumer.type} does not yet support the new Routing mechanism"
-
-      routing_module ->
-        dbg(routing_module)
-        Enum.map(internal_messages, fn internal_message ->
-          inner_prepare_message(routing_module, consumer, internal_message)
-        end)
-    end
-  end
-
-  def prepare_message(_routing_module, consumer, internal_message) do
-    case routing_module(consumer.type) do
-      nil ->
-        raise "The Sink type #{consumer.type} does not yet support the new Routing mechanism"
-
-      routing_module ->
-        inner_prepare_message(routing_module, consumer, internal_message)
-    end
-  end
-
-  def inner_prepare_message(routing_module, consumer,internal_message) do
-    dbg(internal_message)
-    external_message = Sequin.Transforms.Message.to_external(consumer, internal_message) |> dbg()
-    dbg(external_message)
+  defp inner_route_message(routing_module, consumer, %ConsumerEvent{data: message}) do
+    dbg(message)
     # TODO Separate calculating routing attributes from encoding
-    routing_info = apply_routing(consumer, internal_message, external_message, routing_module)
-    dbg(routing_info)
-    dbg(external_message)
-    # encoded_message = encode_message(external_message, routing_module)
-    # dbg(encoded_message)
-    # %RoutedMessage{routing_info: routing_info, payload: encoded_message}
-    routing_info
+    %{action: action, record: record, metadata: metadata, changes: changes} = message
+    dbg(consumer)
+    dbg(message)
+
+    # TODO Memoize default_routing if possible
+    default_routing = routing_module.route(action, record, changes, metadata)
+    dbg(default_routing)
+
+    case_result =
+      case consumer.routing do
+        nil ->
+          # Does not have a routing function, apply default routing
+          default_routing
+
+        routing ->
+          # Has a routing function, calculate default routing and override with evaluated function
+          dbg(routing)
+
+          # TODO Move this check somewhere else
+          # If function is not persisted (via function edit) run interpreted
+          # If function is persisted (during runtime) run compiled
+          user_routing =
+            case consumer.routing.id do
+              nil ->
+                MiniElixir.run_interpreted(routing, message)
+
+              _id ->
+                MiniElixir.run_compiled(routing, message)
+            end
+
+          dbg(user_routing)
+
+          # Merge user routing with defaults, user values override defaults
+          merge_with_defaults(default_routing, user_routing)
+      end
+
+    dbg(case_result)
+
+    # TODO Validate that the default or merged result fits the matched structure and validation constraints
+  end
+
+  defp inner_encode_message(routing_module, %Broadway.Message{data: event_message}) do
+    inner_encode_message(routing_module, event_message)
+  end
+
+  defp inner_encode_message(routing_module, %ConsumerEvent{data: message}) do
+    routing_module.encode(message)
   end
 end

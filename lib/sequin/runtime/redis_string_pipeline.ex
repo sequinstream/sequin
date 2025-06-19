@@ -17,7 +17,7 @@ defmodule Sequin.Runtime.RedisStringPipeline do
 
   @impl SinkPipeline
   def apply_routing(consumer, message) do
-    RoutingInfo.prepare_messages(consumer, [message])
+    RoutingInfo.route_messages(consumer, [message])
   end
 
   @impl SinkPipeline
@@ -25,7 +25,7 @@ defmodule Sequin.Runtime.RedisStringPipeline do
     %{consumer: %SinkConsumer{sink: %RedisStringSink{} = sink} = consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    redis_messages = RoutingInfo.prepare_messages(consumer, messages)
+    redis_messages = RoutingInfo.route_and_encode_messages(consumer, messages)
 
     case Redis.set_messages(sink, redis_messages) do
       :ok ->

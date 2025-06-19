@@ -119,6 +119,27 @@ defmodule Sequin.MessageHandlerTest do
       assert {:ok, 1} = MessageLedgers.count_undelivered_wal_cursors(consumer.id, DateTime.utc_now())
     end
 
+    test "sets nil group_id for messages with no ids" do
+      # This is important so that we can produce messages without group_id at the same time
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, ids: [])
+
+      consumer = ConsumersFactory.insert_sink_consumer!(account_id: account.id)
+
+      start_supervised!(
+        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
+      )
+
+      context = context(consumers: [consumer], postgres_database: database)
+
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+
+      [record] = list_messages(consumer)
+      assert record.group_id == nil
+    end
+
     test "fans out messages correctly for mixed message_kind consumers and wal_pipelines" do
       account = AccountsFactory.insert_account!()
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id)

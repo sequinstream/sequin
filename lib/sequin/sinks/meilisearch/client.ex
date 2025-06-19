@@ -22,32 +22,43 @@ defmodule Sequin.Sinks.Meilisearch.Client do
   @doc """
   Verify the status of a task by its ID.
   """
-  def verify_task_by_id(%__MODULE__{} = client, task_id) do
-    req = base_request(client)
+  def verify_task_by_id(%__MODULE__{} = client, task_id, retries) do
+    if retries > 10 do
+      {:error,
+       Error.service(
+         service: :meilisearch,
+         message: "Task verification timed out",
+         details: %{task_id: task_id}
+       )}
+    else
+      req = base_request(client)
 
-    case Req.get(req, url: "/tasks/#{task_id}") do
-      {:ok, %{body: body}} ->
-        case body do
-          %{"status" => status} when status in ["enqueued", "processing"] ->
-            :timer.sleep(1000)
-            verify_task_by_id(client, task_id)
+      case Req.get(req, url: "/tasks/#{task_id}") do
+        {:ok, %{body: body}} ->
+          case body do
+            %{"status" => status} when status in ["enqueued", "processing"] ->
+              timeout = Sequin.Time.exponential_backoff(50, retries, 10_000)
+              Logger.warning("[Meilisearch] Task #{task_id} is still in progress (#{retries}/10)")
+              :timer.sleep(timeout)
+              verify_task_by_id(client, task_id, retries + 1)
 
-          %{"status" => "failed"} ->
-            message = extract_error_message(body["error"])
+            %{"status" => "failed"} ->
+              message = extract_error_message(body["error"])
 
-            {:error,
-             Error.service(
-               service: :meilisearch,
-               message: message,
-               details: body
-             )}
+              {:error,
+               Error.service(
+                 service: :meilisearch,
+                 message: message,
+                 details: body
+               )}
 
-          _ ->
-            {:ok}
-        end
+            _ ->
+              {:ok}
+          end
 
-      {:error, reason} ->
-        {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
+        {:error, reason} ->
+          {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
+      end
     end
   end
 
@@ -67,7 +78,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
 
     case Req.put(req) do
       {:ok, %{body: body}} ->
-        case verify_task_by_id(client, body["taskUid"]) do
+        case verify_task_by_id(client, body["taskUid"], 0) do
           {:ok} ->
             Trace.info(consumer.id, %Trace.Event{
               message: "Imported documents to #{index_name}"
@@ -130,7 +141,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
 
     case Req.post(req) do
       {:ok, %{body: body}} ->
-        case verify_task_by_id(client, body["taskUid"]) do
+        case verify_task_by_id(client, body["taskUid"], 0) do
           {:ok} ->
             Trace.info(consumer.id, %Trace.Event{
               message: "Deleted documents #{document_ids} from #{index_name}"

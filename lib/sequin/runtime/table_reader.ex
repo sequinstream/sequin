@@ -174,33 +174,40 @@ defmodule Sequin.Runtime.TableReader do
       |> Enum.filter(& &1.is_pk?)
       |> Enum.sort_by(& &1.attnum)
 
-    case Postgres.query(db_or_conn, sql, params, timeout: timeout) do
-      {:ok, %Postgrex.Result{num_rows: 0}} ->
-        {:ok, %{pks: [], next_cursor: nil}}
+    with :ok <- validate_primary_key_columns(primary_key_columns) do
+      {:ok, %Postgrex.Result{} = result} = Postgres.query(db_or_conn, sql, params, timeout: timeout)
 
-      {:ok, %Postgrex.Result{} = result} ->
-        rows = Postgres.result_to_maps(result)
-        rows = Postgres.load_rows(table, rows)
+      case result do
+        %Postgrex.Result{num_rows: 0} ->
+          {:ok, %{pks: [], next_cursor: nil}}
 
-        primary_key_rows =
-          Enum.map(rows, fn row ->
-            primary_key_columns |> Enum.map(fn column -> Map.fetch!(row, column.name) end) |> Enum.map(&to_string/1)
-          end)
+        %Postgrex.Result{} = result ->
+          rows = Postgres.result_to_maps(result)
+          rows = Postgres.load_rows(table, rows)
 
-        last_row = List.last(rows)
+          primary_key_rows =
+            Enum.map(rows, fn row ->
+              primary_key_columns |> Enum.map(fn column -> Map.fetch!(row, column.name) end) |> Enum.map(&to_string/1)
+            end)
 
-        next_cursor =
-          case rows do
-            [] -> nil
-            _records -> KeysetCursor.cursor_from_row(table, last_row)
-          end
+          last_row = List.last(rows)
 
-        {:ok, %{pks: primary_key_rows, next_cursor: next_cursor}}
+          next_cursor =
+            case rows do
+              [] -> nil
+              _records -> KeysetCursor.cursor_from_row(table, last_row)
+            end
 
-      error ->
-        error
+          {:ok, %{pks: primary_key_rows, next_cursor: next_cursor}}
+      end
     end
   end
+
+  defp validate_primary_key_columns([]) do
+    {:error, Error.invariant(code: :no_primary_key_columns, message: "No primary key columns")}
+  end
+
+  defp validate_primary_key_columns(_), do: :ok
 
   @spec fetch_batch(
           db_or_conn :: Postgres.db_conn(),

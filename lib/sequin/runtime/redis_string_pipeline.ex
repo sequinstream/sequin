@@ -15,10 +15,10 @@ defmodule Sequin.Runtime.RedisStringPipeline do
     context
   end
 
-  # @impl SinkPipeline
-  # def apply_routing(consumer, rinfo) do
-  #   RoutingInfo.apply_routing(consumer.type, rinfo)
-  # end
+  @impl SinkPipeline
+  def apply_routing(consumer, message) do
+    RoutingInfo.prepare_messages(consumer, [message])
+  end
 
   @impl SinkPipeline
   def handle_batch(:default, messages, _batch_info, context) do

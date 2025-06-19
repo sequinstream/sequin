@@ -5,6 +5,7 @@ defmodule Sequin.Runtime.RoutingInfo do
   """
 
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Functions.MiniElixir
 
   defmodule RoutedMessage do
@@ -18,6 +19,7 @@ defmodule Sequin.Runtime.RoutingInfo do
             routing_info: struct(),
             payload: any()
           }
+
   end
 
   defmodule RoutedSink do
@@ -28,29 +30,39 @@ defmodule Sequin.Runtime.RoutingInfo do
     Implementing modules should define a struct and implement the route/4 and encode/1 callbacks.
     The route/4 function should return a struct of the implementing module's type.
     """
+    defmacro __using__(struct_attrs) do
+      quote do
+        @behaviour RoutedSink
+        defstruct unquote(struct_attrs)
+
+        defimpl Jason.Encoder do
+          def encode(message, opts) do
+            message
+            |> Map.from_struct()
+            |> Jason.Encode.map(opts)
+          end
+        end
+      end
+    end
 
     # TODO Keep the callback spec specific with the module's struct
     @callback route(action :: atom(), record :: struct(), changes :: struct(), metadata :: struct()) :: struct()
     @callback encode(message :: struct()) :: any()
   end
 
-  # defmodule HttpPush do
-  #   @moduledoc false
-  #   use RoutedSink
+  defmodule HttpPush do
+    @moduledoc false
+    use RoutedSink, [method: "POST", endpoint_path: "/"]
 
-  #   defstruct method: "POST", endpoint_path: "/"
-
-  #   # The default is just a struct with static defaults
-  #   def route(_action, _record, _changes, _metadata) do
-  #     struct(__MODULE__)
-  #   end
-  # end
+    # The default is just a struct with static defaults
+    def route(_action, _record, _changes, _metadata) do
+      struct(__MODULE__)
+    end
+  end
 
   defmodule RedisString do
     @moduledoc false
-    @behaviour RoutedSink
-
-    defstruct [:key, :action]
+    use RoutedSink, [:key, :action]
 
     def route(action, _record, _changes, metadata) do
       table_name = metadata.table_name
@@ -59,10 +71,11 @@ defmodule Sequin.Runtime.RoutingInfo do
       # TODO Consider having this outside of routing
       redis_action =
         case action do
-          :insert -> :set
-          :update -> :set
-          :delete -> :del
-          :read -> :set
+          # TODO atom vs string?
+          "insert" -> :set
+          "update" -> :set
+          "delete" -> :del
+          "read" -> :set
         end
 
       struct(__MODULE__, %{key: "sequin:#{table_name}:#{pks}", action: redis_action})
@@ -74,16 +87,14 @@ defmodule Sequin.Runtime.RoutingInfo do
 
   defmodule Nats do
     @moduledoc false
-    @behaviour RoutedSink
-
-    defstruct [:subject, :headers]
+    use RoutedSink, [:subject, :headers]
 
     def route(action, _record, _changes, metadata) do
       struct(
         __MODULE__,
         %{
           subject: "sequin.changes.#{metadata.database_name}.#{metadata.table_schema}.#{metadata.table_name}.#{action}",
-          headers: [{"Nats-Msg-Id", metadata.idempotency_key}]
+          headers: %{"Nats-Msg-Id" => metadata.idempotency_key}
         }
       )
     end
@@ -107,7 +118,7 @@ defmodule Sequin.Runtime.RoutingInfo do
   """
   def routing_module(sink_type) do
     case sink_type do
-      # :http_push -> HttpPush
+      :http_push -> HttpPush
       :redis_string -> RedisString
       :nats -> Nats
       _ -> nil
@@ -120,8 +131,11 @@ defmodule Sequin.Runtime.RoutingInfo do
   Takes a sink type atom and routing info map, validates the structure
   and returns the appropriate routing info struct.
   """
-  def apply_routing(%SinkConsumer{} = consumer, message, routing_module) do
-    %{action: action, record: record, metadata: metadata, changes: changes} = message.data
+  def apply_routing(%SinkConsumer{} = consumer, internal_message, external_message, routing_module) do
+    %{action: action, record: record, metadata: metadata, changes: changes} = external_message
+    dbg(consumer)
+    dbg(external_message)
+    dbg(internal_message)
 
     case consumer.routing do
       nil ->
@@ -130,7 +144,16 @@ defmodule Sequin.Runtime.RoutingInfo do
       routing ->
         # TODO Memoize default_routing if possible
         default_routing = routing_module.route(action, record, changes, metadata)
-        user_routing = MiniElixir.run_compiled(routing, message.data)
+        dbg(default_routing)
+        dbg(routing)
+        # TODO Move this check somewhere else
+        user_routing = case consumer.routing.id do
+                         nil ->
+                           MiniElixir.run_interpreted(routing, internal_message.data)
+                         id ->
+                           MiniElixir.run_compiled(routing, internal_message.data)
+                       end
+        dbg(user_routing)
 
         # Merge user routing with defaults, user values take precedence
         merge_with_defaults(default_routing, user_routing)
@@ -143,18 +166,42 @@ defmodule Sequin.Runtime.RoutingInfo do
     routing_module.encode(message)
   end
 
-  def prepare_messages(%SinkConsumer{} = consumer, messages) do
+  def prepare_messages(%SinkConsumer{} = consumer, internal_messages) do
+    dbg(consumer)
+    dbg(internal_messages)
     case routing_module(consumer.type) do
       nil ->
         raise "The Sink type #{consumer.type} does not yet support the new Routing mechanism"
 
       routing_module ->
-        Enum.map(messages, fn %{data: message} ->
-          routing_info = apply_routing(consumer, message, routing_module)
-          external_message = Sequin.Transforms.Message.to_external(consumer, message)
-          encoded_message = encode_message(external_message, routing_module)
-          %RoutedMessage{routing_info: routing_info, payload: encoded_message}
+        dbg(routing_module)
+        Enum.map(internal_messages, fn internal_message ->
+          inner_prepare_message(routing_module, consumer, internal_message)
         end)
     end
+  end
+
+  def prepare_message(routing_module, consumer, internal_message) do
+    case routing_module(consumer.type) do
+      nil ->
+        raise "The Sink type #{consumer.type} does not yet support the new Routing mechanism"
+
+      routing_module ->
+        inner_prepare_message(routing_module, consumer, internal_message)
+    end
+  end
+
+  def inner_prepare_message(routing_module, consumer,internal_message) do
+    dbg(internal_message)
+    external_message = Sequin.Transforms.Message.to_external(consumer, internal_message) |> dbg()
+    dbg(external_message)
+    # TODO Separate calculating routing attributes from encoding
+    routing_info = apply_routing(consumer, internal_message, external_message, routing_module)
+    dbg(routing_info)
+    dbg(external_message)
+    # encoded_message = encode_message(external_message, routing_module)
+    # dbg(encoded_message)
+    # %RoutedMessage{routing_info: routing_info, payload: encoded_message}
+    routing_info
   end
 end

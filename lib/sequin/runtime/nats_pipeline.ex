@@ -15,6 +15,11 @@ defmodule Sequin.Runtime.NatsPipeline do
   end
 
   @impl SinkPipeline
+  def apply_routing(consumer, message) do
+    RoutingInfo.prepare_messages(consumer, [message])
+  end
+
+  @impl SinkPipeline
   def batchers_config(_consumer) do
     concurrency = min(System.schedulers_online() * 2, 80)
 

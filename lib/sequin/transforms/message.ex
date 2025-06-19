@@ -4,6 +4,7 @@ defmodule Sequin.Transforms.Message do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.PathFunction
+  alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Functions.MiniElixir
@@ -55,5 +56,15 @@ defmodule Sequin.Transforms.Message do
   def to_external(%SinkConsumer{transform: %Function{function: %PathFunction{} = function}}, %c{data: data})
       when c in [ConsumerEvent, ConsumerRecord] do
     PathFunction.apply(function, data)
+  end
+
+  def to_external(%SinkConsumer{routing: %Function{function: %RoutingFunction{} = function}}, %ConsumerEvent{} = event) do
+    # TODO Is this the right place???
+    %{
+      record: event.data.record,
+      changes: event.data.changes,
+      action: to_string(event.data.action),
+      metadata: Map.from_struct(event.data.metadata)
+    }
   end
 end

@@ -14,6 +14,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Functions.MiniElixir
   alias Sequin.Metrics
   alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Runtime.RoutingInfo
   alias Sequin.Runtime.Trace
   alias Sequin.Transforms
 
@@ -79,10 +80,10 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     |> HttpClient.put_client()
   end
 
-  # @impl SinkPipeline
-  # def apply_routing(consumer, rinfo) do
-  #   RoutingInfo.apply_routing(consumer.type, rinfo)
-  # end
+  @impl SinkPipeline
+  def apply_routing(consumer, message) do
+    RoutingInfo.prepare_messages(consumer, [message])
+  end
 
   @impl SinkPipeline
   def handle_message(message, context) do

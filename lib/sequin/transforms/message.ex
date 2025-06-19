@@ -58,7 +58,7 @@ defmodule Sequin.Transforms.Message do
     PathFunction.apply(function, data)
   end
 
-  def to_external(%SinkConsumer{routing: %Function{function: %RoutingFunction{} = function}}, %ConsumerEvent{} = event) do
+  def to_external(%SinkConsumer{routing: %Function{function: %RoutingFunction{} = _function}}, %ConsumerEvent{} = event) do
     # TODO Is this the right place???
     %{
       record: event.data.record,

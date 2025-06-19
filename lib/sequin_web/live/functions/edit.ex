@@ -518,7 +518,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
     end
   end
 
-  defp run_function(%SinkConsumer{routing: %Function{} = function} = sink_consumer, message) do
+  defp run_function(%SinkConsumer{routing: %Function{} = _function} = sink_consumer, message) do
     [head | _tail] = SinkPipeline.apply_routing(sink_consumer, message)
     head
   end

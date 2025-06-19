@@ -5,7 +5,6 @@ defmodule Sequin.Runtime.RoutingInfo do
   """
 
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Functions.MiniElixir
 
   defmodule RoutedMessage do
@@ -58,6 +57,8 @@ defmodule Sequin.Runtime.RoutingInfo do
     def route(_action, _record, _changes, _metadata) do
       struct(__MODULE__)
     end
+
+    def encode(message), do: Jason.encode!(message)
   end
 
   defmodule RedisString do
@@ -150,7 +151,7 @@ defmodule Sequin.Runtime.RoutingInfo do
         user_routing = case consumer.routing.id do
                          nil ->
                            MiniElixir.run_interpreted(routing, internal_message.data)
-                         id ->
+                         _id ->
                            MiniElixir.run_compiled(routing, internal_message.data)
                        end
         dbg(user_routing)
@@ -181,7 +182,7 @@ defmodule Sequin.Runtime.RoutingInfo do
     end
   end
 
-  def prepare_message(routing_module, consumer, internal_message) do
+  def prepare_message(_routing_module, consumer, internal_message) do
     case routing_module(consumer.type) do
       nil ->
         raise "The Sink type #{consumer.type} does not yet support the new Routing mechanism"

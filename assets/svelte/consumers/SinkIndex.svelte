@@ -458,14 +458,17 @@
       </DialogDescription>
     </DialogHeader>
     <div class="flex-1 overflow-y-auto">
-      <div class="grid grid-cols-3 gap-4 py-4">
+      <div class="grid grid-cols-4 gap-4 py-4">
         {#each sinks as dest}
           <LinkPatchNavigate href={`/sinks/new?kind=${dest.id}`}>
             <Label
               for={dest.id}
               class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground text-center leading-tight cursor-pointer"
             >
-              <svelte:component this={dest.icon} class="mb-3 h-12 w-12" />
+              <svelte:component
+                this={dest.icon}
+                class="mb-4 h-10 w-10 flex items-center justify-center"
+              />
               {dest.name}
             </Label>
           </LinkPatchNavigate>

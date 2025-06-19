@@ -349,7 +349,8 @@ defmodule Sequin.Runtime.SinkPipeline do
       ],
       filtered_messages: [
         concurrency: 10,
-        batch_size: 100
+        batch_size: 100,
+        batch_timeout: 10
       ]
     ]
 

@@ -374,21 +374,15 @@ defmodule Sequin.Runtime.SinkPipeline do
   end
 
   def apply_routing(consumer, rinfo) do
-    dbg(consumer)
-    dbg(rinfo)
     pipeline_mod = pipeline_mod_for_consumer(consumer)
 
-    dbg(pipeline_mod)
     # Have to ensure module is loaded to trust function_exported?
     Code.ensure_loaded?(pipeline_mod)
 
-    if_result =
-      if function_exported?(pipeline_mod, :apply_routing, 2) do
-        # Have to use apply to avoid warnings from elixir about undefined impls of optional callback
-        apply(pipeline_mod, :apply_routing, [consumer, rinfo])
-      end
-
-    dbg(if_result)
+    if function_exported?(pipeline_mod, :apply_routing, 2) do
+      # Have to use apply to avoid warnings from elixir about undefined impls of optional callback
+      apply(pipeline_mod, :apply_routing, [consumer, rinfo])
+    end
   end
 
   def pipeline_mod_for_consumer(%SinkConsumer{} = consumer) do

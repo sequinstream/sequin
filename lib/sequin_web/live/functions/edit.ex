@@ -42,7 +42,10 @@ defmodule SequinWeb.FunctionsLive.Edit do
   def route(action, record, changes, metadata) do
     %{
       method: "POST",
-      endpoint_path: "/entities/\#{record["id"]}"
+      endpoint_path: "/entities/\#{record["id"]}",
+      headers: %{
+        "Idempotency-Key" => metadata.idempotency_key
+      }
     }
   end
   """

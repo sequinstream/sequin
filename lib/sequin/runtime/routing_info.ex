@@ -46,19 +46,30 @@ defmodule Sequin.Runtime.RoutingInfo do
 
     # TODO Keep the callback spec specific with the module's struct
     @callback route(action :: atom(), record :: struct(), changes :: struct(), metadata :: struct()) :: struct()
+    @callback apply_consumer_config(routing_info :: struct(), consumer :: struct()) :: struct()
     @callback encode(message :: struct()) :: any()
   end
 
   defmodule HttpPush do
     @moduledoc false
-    use RoutedSink, method: "POST", endpoint_path: "/"
+    use RoutedSink, method: "POST", endpoint_path: "/", headers: %{}
 
-    # The default is just a struct with static defaults
-    def route(_action, _record, _changes, _metadata) do
-      struct(__MODULE__)
+    def route(_action, _record, _changes, metadata) do
+      struct(__MODULE__, %{
+        method: "POST",
+        endpoint_path: "/",
+        headers: %{"Idempotency-Key" => metadata.idempotency_key}
+      })
     end
 
-    def encode(message), do: Jason.encode!(message)
+    def apply_consumer_config(routing_info, %{sink: sink}) do
+      # Apply consumer-configured settings like http_endpoint_path
+      %{routing_info | endpoint_path: sink.http_endpoint_path || routing_info.endpoint_path}
+    end
+
+    def encode(message) do
+      Jason.encode!(message)
+    end
   end
 
   defmodule RedisString do
@@ -69,7 +80,6 @@ defmodule Sequin.Runtime.RoutingInfo do
       table_name = metadata.table_name
       pks = Enum.join(metadata.record_pks, "-")
 
-      # TODO Consider having this outside of routing
       redis_action =
         case action do
           :insert -> :set
@@ -79,6 +89,11 @@ defmodule Sequin.Runtime.RoutingInfo do
         end
 
       struct(__MODULE__, %{key: "sequin:#{table_name}:#{pks}", action: redis_action})
+    end
+
+    def apply_consumer_config(routing_info, _consumer) do
+      # RedisString doesn't currently use consumer-specific configuration
+      routing_info
     end
 
     def encode(message) when is_binary(message) or is_number(message), do: message
@@ -97,6 +112,11 @@ defmodule Sequin.Runtime.RoutingInfo do
           headers: %{"Nats-Msg-Id" => metadata.idempotency_key}
         }
       )
+    end
+
+    def apply_consumer_config(routing_info, _consumer) do
+      # Nats doesn't currently use consumer-specific configuration
+      routing_info
     end
 
     def encode(message), do: Jason.encode_to_iodata!(message)
@@ -162,45 +182,35 @@ defmodule Sequin.Runtime.RoutingInfo do
   end
 
   defp inner_route_message(routing_module, consumer, %ConsumerEvent{data: message}) do
-    dbg(message)
-    # TODO Separate calculating routing attributes from encoding
     %{action: action, record: record, metadata: metadata, changes: changes} = message
-    dbg(consumer)
-    dbg(message)
 
     # TODO Memoize default_routing if possible
     default_routing = routing_module.route(action, record, changes, metadata)
-    dbg(default_routing)
 
-    case_result =
-      case consumer.routing do
-        nil ->
-          # Does not have a routing function, apply default routing
-          default_routing
+    case consumer.routing do
+      nil ->
+        # Does not have a routing function, apply default routing with
+        # consumer-configured settings (like http_endpoint_path)
+        routing_module.apply_consumer_config(default_routing, consumer)
 
-        routing ->
-          # Has a routing function, calculate default routing and override with evaluated function
-          dbg(routing)
+      routing ->
+        # Has a routing function, calculate default routing and override with evaluated function
 
-          # TODO Move this check somewhere else
-          # If function is not persisted (via function edit) run interpreted
-          # If function is persisted (during runtime) run compiled
-          user_routing =
-            case consumer.routing.id do
-              nil ->
-                MiniElixir.run_interpreted(routing, message)
+        # TODO Consider moving this check somewhere else
+        # If function is not persisted (via function edit) run interpreted
+        # If function is persisted (during runtime) run compiled
+        user_routing =
+          case consumer.routing.id do
+            nil ->
+              MiniElixir.run_interpreted(routing, message)
 
-              _id ->
-                MiniElixir.run_compiled(routing, message)
-            end
+            _id ->
+              MiniElixir.run_compiled(routing, message)
+          end
 
-          dbg(user_routing)
-
-          # Merge user routing with defaults, user values override defaults
-          merge_with_defaults(default_routing, user_routing)
-      end
-
-    dbg(case_result)
+        # Merge user routing with defaults, user values override defaults
+        merge_with_defaults(default_routing, user_routing)
+    end
 
     # TODO Validate that the default or merged result fits the matched structure and validation constraints
   end

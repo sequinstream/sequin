@@ -1027,11 +1027,11 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     %{
       "type" => "gcp_pubsub",
-      "project_id" => sink["project_id"],
-      "topic_id" => sink["topic_id"],
-      "credentials" => creds,
-      "use_emulator" => sink["use_emulator"],
-      "emulator_base_url" => sink["emulator_base_url"]
+      "project_id" => sink.project_id,
+      "topic_id" => sink.topic_id,
+      "credentials" => Jason.encode!(Sequin.Map.reject_nil_values(creds), pretty: true),
+      "use_emulator" => sink.use_emulator,
+      "emulator_base_url" => sink.emulator_base_url
     }
   end
 

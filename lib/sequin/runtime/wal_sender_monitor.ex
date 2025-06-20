@@ -75,6 +75,10 @@ defmodule Sequin.Runtime.WalSenderMonitor do
         Logger.error("Failed to query WAL sender status: #{inspect(error)}")
         previous_states
     end
+  rescue
+    error ->
+      Logger.error("Failed to query WAL sender status: #{inspect(error)}")
+      previous_states
   end
 
   defp process_results([], _columns, _db, previous_states) do

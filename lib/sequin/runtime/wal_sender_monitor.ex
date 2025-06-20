@@ -47,7 +47,7 @@ defmodule Sequin.Runtime.WalSenderMonitor do
   end
 
   defp maybe_put_db(%{db: nil} = state) do
-    %{state | db: Sequin.Databases.get_db!("05479dda-e45e-4c80-ae83-d8c3390ee97e")}
+    %{state | db: Sequin.Databases.get_db!("be7e144f-b75d-40ec-af1a-efec2f8e37db")}
   end
 
   defp maybe_put_db(state) do

@@ -60,7 +60,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :set_messages, fn _, [%{key: _, value: _, expire_ms: 1000}] -> :ok end)
+      Mox.expect(RedisMock, :set_messages, fn _, [%{routing_info: %{key: _}}] -> :ok end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data
@@ -94,7 +94,9 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :set_messages, fn _, [%{key: _, value: ^column_value}] -> :ok end)
+      # TODO We need to fix executing transform functions
+      encoded_column_value = Jason.encode!(column_value)
+      Mox.expect(RedisMock, :set_messages, fn _, [%{routing_info: %{key: _}, payload: ^encoded_column_value}] -> :ok end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data
@@ -129,7 +131,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :set_messages, fn _, [%{key: ^custom_key, value: _}] -> :ok end)
+      Mox.expect(RedisMock, :set_messages, fn _, [%{routing_info: %{key: ^custom_key, action: "set"}}] -> :ok end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data
@@ -146,7 +148,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :set_messages, fn _, [%{action: :del}] -> :ok end)
+      Mox.expect(RedisMock, :set_messages, fn _, [%{routing_info: %{key: _, action: "del"}}] -> :ok end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data

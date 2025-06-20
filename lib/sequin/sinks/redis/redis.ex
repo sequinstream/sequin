@@ -9,6 +9,7 @@ defmodule Sequin.Sinks.Redis do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
 
+  # TODO Fix these specs expecting ConsumerRecordData.t() | ConsumerEventData.t() -> RoutedMessage.t()
   @callback send_messages(SinkConsumer.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
               :ok | {:error, Error.t()}
   @callback set_messages(RedisStringSink.t(), [%{key: String.t(), value: String.t()}]) :: :ok | {:error, Error.t()}

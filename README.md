@@ -62,17 +62,19 @@ In our production benchmarks with AWS RDS Postgres and MSK Kafka, Sequin maintai
 |-------------|---------|-------------|
 | Azure EventHubs | ✅ Real-time streaming<br />✅ Backfill existing rows | Publish messages to Azure EventHubs |
 | GCP Pub/Sub | ✅ Real-time streaming<br />✅ Backfill existing rows | Publish messages to Google Cloud Pub/Sub topics |
+| Elasticsearch | ✅ Real-time streaming<br />✅ Backfill existing rows | Index database changes with Elasticsearch |
 | HTTP Pull (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Consume changes directly from Sequin with exactly-once processing |
 | Kafka | ✅ Real-time streaming<br />✅ Backfill existing rows | Stream changes to Apache Kafka topics |
+| Kinesis | ✅ Real-time streaming<br />✅ Backfill existing rows | Send messages to Amazon Kinesis streams queues |
 | NATS | ✅ Real-time streaming<br />✅ Backfill existing rows | Stream changes to NATS subjects |
 | Postgres | 🛠️ Coming June 2025 | Replicate changes to another Postgres |
 | RabbitMQ | ✅ Real-time streaming<br />✅ Backfill existing rows | Publish messages to RabbitMQ exchanges |
 | Redis Stream | ✅ Real-time streaming<br />✅ Backfill existing rows | `XADD` to Redis Streams |
 | Redis String | ✅ Real-time streaming<br />✅ Backfill existing rows | `SET` to Redis keys  |
+| S2 | ✅ Real-time streaming<br />✅ Backfill existing rows | Send messages to S2 streams |
 | SQS | ✅ Real-time streaming<br />✅ Backfill existing rows | Send messages to Amazon SQS queues |
-| Kinesis | ✅ Real-time streaming<br />✅ Backfill existing rows | Send messages to Amazon Kinesis streams queues |
+| SNS | ✅ Real-time streaming<br />✅ Backfill existing rows | Send messages to Amazon SNS |
 | Typesense | ✅ Real-time streaming<br />✅ Backfill existing rows | Index database changes with Typesense |
-| Elasticsearch | ✅ Real-time streaming<br />✅ Backfill existing rows | Index database changes with Elasticsearch |
 | Webhook Subscription (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Send changes to any HTTP endpoint |
 
 ## Change data capture use cases
@@ -102,7 +104,7 @@ Sequin works great for change data capture use cases like:
 
 ## How Sequin works
 
-Sequin connects to any Postgres database. Specify the tables you want to stream, as well as optional filters and transformations. Route changes to sinks like Kafka, Google Pub/Sub, Redis, etc.
+Sequin connects to any Postgres database. Specify the schemas and tables you want to stream, as well as optional filters and transformations. Route changes to sinks like Kafka, Google Pub/Sub, Redis, etc.
 
 When you setup a sink, you can opt to backfill data from the source table to the sink.
 

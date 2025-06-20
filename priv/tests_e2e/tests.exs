@@ -91,7 +91,6 @@ defmodule Sequin.E2E.IntegrationTest do
   describe "sqs integration" do
     @tag :sqs
     test "changes are streamed to sqs", %{conn: conn, tid: tid, queue_url: queue_url, aws_client: client} do
-      IO.inspect(queue_url)
       insert_test_data(conn, "sqs_test_table", tid, @expected_count)
       messages = get_sqs_messages_until_complete(@expected_count, :timer.seconds(30), queue_url, client)
       assert_messages(messages, @expected_count, tid)

@@ -11,7 +11,7 @@ The SNS sink publishes messages to an Amazon SNS topic.
 - **Topic ARN**
 
     The ARN of your SNS topic. Must match the pattern `arn:aws:sns:<region>:<account-id>:<topic-name>`.
-    
+
     For FIFO topics the topic name **must** end with `.fifo`.
 
 - **Access Key ID**
@@ -47,7 +47,7 @@ Replace `<your-topic-arn>` with the ARN of your SNS topic (e.g., `arn:aws:sns:us
 
 ## Message format
 
-By default, Sequin publishes JSON‑encoded messages that match the [messages reference](/reference/messages). You can configure [transforms](/reference/transforms) to customize the message format.
+By default, Sequin publishes JSON‑encoded [messages](/reference/messages). You can configure [transforms](/reference/transforms) to customize the message format.
 
 When the topic is FIFO, Sequin additionally sets the following per‑entry attributes:
 
@@ -93,4 +93,4 @@ Common things to check when debugging:
 - Access key and secret are valid and not expired.
 - IAM user/role has the required SNS permissions.
 - Topic ARN is correct and the topic exists.
-- Region in the sink configuration matches the topic's region. 
+- Region in the sink configuration matches the topic's region.

@@ -11,7 +11,7 @@ The SQS sink sends messages to an Amazon SQS queue.
 - **Queue URL**
 
     The URL of your Amazon SQS queue. Must be in the format: `https://sqs.<region>.amazonaws.com/<account-id>/<queue-name>`.
-    
+
     For FIFO queues, the queue name must end with `.fifo`.
 
 - **Access Key ID**
@@ -77,7 +77,7 @@ Sequin will order the delivery of messages with the same group according to thei
 
 ### FIFO vs standard queues
 
-FIFO queues are generally recommended. They ensure that messages pertaining to the same row are processed in order. 
+FIFO queues are generally recommended. They ensure that messages pertaining to the same row are processed in order.
 
 ## Debugging
 

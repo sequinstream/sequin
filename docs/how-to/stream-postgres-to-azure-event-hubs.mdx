@@ -77,16 +77,8 @@ In Sequin, navigate to the "Sinks" tab, click "Create Sink", and select "Azure E
     Under "Source", select the table or schema you want to stream data from.
   </Step>
 
-  <Step title="Choose message type">
-    Specify whether you want to receive [changes or rows](/reference/messages) from the table.
-
-    If you're not sure which to choose, you can leave the default option "Changes" selected.
-  </Step>
-
-  <Step title="Specify filters">
-    If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes.
-
-    You can also specify [SQL filters](/reference/filters) to narrow down the events you want to receive. For example, if you only want to receive events for `subscriptions` that currently have an `mrr` greater than $100, you can add a filter on `mrr > 100`.
+  <Step title="Add filters (optional)">
+    Add [filters](/reference/filters) to the sink to control which database changes are sent to your Event Hub.
   </Step>
 
   <Step title="Specify backfill">

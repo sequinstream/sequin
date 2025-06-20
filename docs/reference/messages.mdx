@@ -1,54 +1,139 @@
 ---
 title: "Messages"
 sidebarTitle: "Messages"
-description: "Reference for Sequin's CDC message formats."
+description: "Reference for Sequin's CDC messages."
 ---
 
-## Message shapes
+Sequin converts Postgres changes into JSON messages that are delivered to your sinks. Each message contains the current record, any previous values, the action that occurred, and metadata about the event.
 
-Sequin converts Postgres changes and rows into JSON messages that are delivered to your sinks.
+<Note>
+You can apply a [transform](/reference/transforms) to the message to modify the data before it is delivered to your sink.
+</Note>
 
-When you setup a sink, you can choose whether the sink should receive [change messages](#change-messages) or [row messages](#row-messages).
+<ResponseExample>
+  ```json Insert Example
+  {
+    "record": {
+      "id": 1234,
+      "customer_id": 789,
+      "product": "Wireless Headphones",
+      "quantity": 1,
+      "price": 199.99,
+      "status": "pending",
+      "created_at": "2024-10-28T21:37:01.127470Z",
+      "updated_at": "2024-10-28T21:37:01.127470Z"
+    },
+    "changes": null,
+    "action": "insert",
+    "metadata": {
+      "table_schema": "public",
+      "table_name": "orders",
+      "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
+      "commit_timestamp": "2024-10-28T21:37:01.127470Z",
+      "sink": {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "name": "orders_kafka"
+      },
+      "transaction_annotations": {
+        "username": "paul.atreides",
+        "source": "web_ui",
+        "request_id": "req_123"
+      }
+    }
+  }
+  ```
 
-### Change messages
+  ```json Update Example
+  {
+    "record": {
+      "id": 1234,
+      "customer_id": 789,
+      "product": "Wireless Headphones",
+      "quantity": 1,
+      "price": 199.99,
+      "status": "shipped",
+      "created_at": "2024-10-28T21:37:01.127470Z",
+      "updated_at": "2024-10-28T21:39:21.127470Z"
+    },
+    "changes": {
+      "status": "pending",
+      "updated_at": "2024-10-28T21:37:01.127470Z"
+    },
+    "action": "update",
+    "metadata": {
+      "table_schema": "public",
+      "table_name": "orders",
+      "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
+      "commit_timestamp": "2024-10-28T21:39:21.127470Z",
+      "sink": {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "name": "orders_kafka"
+      }
+    }
+  }
+  ```
 
-A change message has this shape:
+  ```json Delete Example
+  {
+    "record": {
+      "id": 1234,
+      "customer_id": 789,
+      "product": "Wireless Headphones",
+      "quantity": 1,
+      "price": 199.99,
+      "status": "shipped",
+      "created_at": "2024-10-28T21:37:01.127470Z",
+      "updated_at": "2024-10-28T21:39:21.127470Z"
+    },
+    "changes": null,
+    "action": "delete",
+    "metadata": {
+      "table_schema": "public",
+      "table_name": "orders",
+      "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
+      "commit_timestamp": "2024-10-28T21:40:00.127470Z",
+      "sink": {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "name": "orders_kafka"
+      }
+    }
+  }
+  ```
 
-```js
-{
-  record: {
-    [key: string]: any;  // The row data
-  };
-  changes: null | {
-    [key: string]: any;  // Previous values for changed fields (updates only)
-  };
-  action: "insert" | "update" | "delete" | "read";
-  metadata: {
-    table_schema: string;
-    table_name: string;
-    commit_timestamp: string;  // ISO timestamp
-    commit_lsn: integer;  // Logical replication LSN of the transaction
-    commit_idx: integer;  // The index of the message within the transaction
-    idempotency_key: string; // Opaque token
-    transaction_annotations: null | {
-      [key: string]: any;  // User-provided transaction context
-    };
-    sink: {
-      id: string;
-      name: string;
-    };
-  };
-}
-```
-
-### Change message fields
+  ```json Read Example (Backfill)
+  {
+    "record": {
+      "id": 1234,
+      "customer_id": 789,
+      "product": "Wireless Headphones",
+      "quantity": 1,
+      "price": 199.99,
+      "status": "shipped",
+      "created_at": "2024-10-28T21:37:01.127470Z",
+      "updated_at": "2024-10-28T21:39:21.127470Z"
+    },
+    "changes": null,
+    "action": "read",
+    "metadata": {
+      "table_schema": "public",
+      "table_name": "orders",
+      "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
+      "commit_timestamp": "2024-10-28T21:39:21.127470Z",
+      "sink": {
+        "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        "name": "orders_kafka"
+      }
+    }
+  }
+  ```
+</ResponseExample>
 
 <ResponseField name="record" type="object">
   The current state of the row. Contains all column values.
 </ResponseField>
 
 <ResponseField name="changes" type="object">
-  For update operations, contains the previous values of changed fields. For insert and delete operations, this field is null.
+  For `update` operations, contains the previous values of changed fields. For `insert` and `delete` operations, this field is null.
 </ResponseField>
 
 <ResponseField name="action" type="string">
@@ -56,261 +141,68 @@ A change message has this shape:
   - `insert`: A new row was created
   - `update`: An existing row was modified
   - `delete`: A row was deleted
-  - `read`: A row was read during a [backfill](#backfills)
+  - `read`: A row was read during a [backfill](/reference/backfills)
 </ResponseField>
 
 <ResponseField name="metadata" type="object">
   Additional context about the change.
+  <Expandable title="metadata fields" defaultOpen="true">
+    <ResponseField name="metadata.table_schema" type="string">
+      The Postgres schema containing the table (e.g., "public").
+    </ResponseField>
+
+    <ResponseField name="metadata.table_name" type="string">
+      The name of the table that was changed.
+    </ResponseField>
+
+    <ResponseField name="metadata.commit_timestamp" type="string">
+      ISO 8601 timestamp when the change was committed to the database.
+    </ResponseField>
+
+    <ResponseField name="metadata.idempotency_key" type="string">
+      Opaque string which is [unique to this record/transaction](#idempotency).
+    </ResponseField>
+
+    <ResponseField name="metadata.transaction_annotations" type="object">
+      User-provided context about the transaction. Contains arbitrary JSON data set via `pg_logical_emit_message`. See [Transaction annotations](/reference/annotations) for details.
+    </ResponseField>
+
+    <ResponseField name="metadata.sink" type="object">
+      Information about the sink receiving this message.
+    </ResponseField>
+
+    <ResponseField name="metadata.sink.id" type="string">
+      Unique identifier for the sink.
+    </ResponseField>
+
+    <ResponseField name="metadata.sink.name" type="string">
+      Name of the sink.
+    </ResponseField>
+  </Expandable>
 </ResponseField>
 
-<ResponseField name="metadata.table_schema" type="string">
-  The Postgres schema containing the table (e.g., "public").
-</ResponseField>
+## Idempotency
 
-<ResponseField name="metadata.table_name" type="string">
-  The name of the table that was changed.
-</ResponseField>
-
-<ResponseField name="metadata.commit_timestamp" type="string">
-  ISO 8601 timestamp when the change was committed to the database.
-</ResponseField>
-
-<ResponseField name="metadata.idempotency_key" type="string">
-  Opaque string which is [unique to this record/transaction](#idempotency).
-</ResponseField>
-
-<ResponseField name="metadata.transaction_annotations" type="object">
-  User-provided context about the transaction. Contains arbitrary JSON data set via `pg_logical_emit_message`. See [Transaction annotations](/reference/annotations) for details.
-</ResponseField>
-
-<ResponseField name="metadata.sink" type="object">
-  Information about the sink receiving this message.
-</ResponseField>
-
-<ResponseField name="metadata.sink.id" type="string">
-  Unique identifier for the sink.
-</ResponseField>
-
-<ResponseField name="metadata.sink.name" type="string">
-  Name of the sink.
-</ResponseField>
-
-<AccordionGroup>
-  <Accordion title="Insert Example" defaultOpen>
-    ```json
-    {
-      "record": {
-        "id": 1234,
-        "customer_id": 789,
-        "product": "Wireless Headphones",
-        "quantity": 1,
-        "price": 199.99,
-        "status": "pending",
-        "created_at": "2024-10-28T21:37:01.127470Z",
-        "updated_at": "2024-10-28T21:37:01.127470Z"
-      },
-      "changes": null,
-      "action": "insert",
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "orders",
-        "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
-        "commit_timestamp": "2024-10-28T21:37:01.127470Z",
-        "sink": {
-          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "orders_kafka"
-        },
-        "transaction_annotations": {
-          "username": "paul.atreides",
-          "source": "web_ui",
-          "request_id": "req_123"
-        }
-      }
-    }
-    ```
-  </Accordion>
-
-  <Accordion title="Update Example">
-    ```json
-    {
-      "record": {
-        "id": 1234,
-        "customer_id": 789,
-        "product": "Wireless Headphones",
-        "quantity": 1,
-        "price": 199.99,
-        "status": "shipped",
-        "created_at": "2024-10-28T21:37:01.127470Z",
-        "updated_at": "2024-10-28T21:39:21.127470Z"
-      },
-      "changes": {
-        "status": "pending",
-        "updated_at": "2024-10-28T21:37:01.127470Z"
-      },
-      "action": "update",
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "orders",
-        "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
-        "commit_timestamp": "2024-10-28T21:39:21.127470Z",
-        "sink": {
-          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "orders_kafka"
-        }
-      }
-    }
-    ```
-  </Accordion>
-
-  <Accordion title="Delete Example">
-    ```json
-    {
-      "record": {
-        "id": 1234,
-        "customer_id": 789,
-        "product": "Wireless Headphones",
-        "quantity": 1,
-        "price": 199.99,
-        "status": "shipped",
-        "created_at": "2024-10-28T21:37:01.127470Z",
-        "updated_at": "2024-10-28T21:39:21.127470Z"
-      },
-      "changes": null,
-      "action": "delete",
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "orders",
-        "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
-        "commit_timestamp": "2024-10-28T21:40:00.127470Z",
-        "sink": {
-          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "orders_kafka"
-        }
-      }
-    }
-    ```
-  </Accordion>
-
-  <Accordion title="Read Example (Backfill)">
-    ```json
-    {
-      "record": {
-        "id": 1234,
-        "customer_id": 789,
-        "product": "Wireless Headphones",
-        "quantity": 1,
-        "price": 199.99,
-        "status": "shipped",
-        "created_at": "2024-10-28T21:37:01.127470Z",
-        "updated_at": "2024-10-28T21:39:21.127470Z"
-      },
-      "changes": null,
-      "action": "read",
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "orders",
-        "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
-        "commit_timestamp": "2024-10-28T21:39:21.127470Z",
-        "sink": {
-          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "orders_kafka"
-        }
-      }
-    }
-    ```
-  </Accordion>
-</AccordionGroup>
-
-For update operations, `record` contains the new values and `changes` contains the previous values of only the fields that changed. For all other operations, `changes` is null.
-
-### Row messages
-
-A row message has this shape:
-
-```js
-{
-  record: {
-    [key: string]: any;
-  };
-  metadata: {
-    table_schema: string;
-    table_name: string;
-    idempotency_key: string;
-    sink: {
-      id: string;
-      name: string;
-    };
-  };
-}
-```
-
-### Row message fields
-
-<ResponseField name="record" type="object">
-  The current state of the row. Contains all column values.
-</ResponseField>
-
-<ResponseField name="metadata" type="object">
-  Additional context about the row.
-</ResponseField>
-
-<ResponseField name="metadata.table_schema" type="string">
-  The Postgres schema containing the table (e.g., "public").
-</ResponseField>
-
-<ResponseField name="metadata.table_name" type="string">
-  The name of the table.
-</ResponseField>
-
-<ResponseField name="metadata.sink" type="object">
-  Information about the sink receiving this message.
-</ResponseField>
-
-<ResponseField name="metadata.sink.id" type="string">
-  Unique identifier for the sink.
-</ResponseField>
-
-<ResponseField name="metadata.sink.name" type="string">
-  Name of the sink.
-</ResponseField>
-
-For example:
-
-```json
-{
-  "record": {
-    "id": 1,
-    "name": "Paul Atreides",
-    "title": "Duke of Arrakis",
-    "spice_allocation": 1000,
-    "is_kwisatz_haderach": true
-  },
-  "metadata": {
-    "table_schema": "public", 
-    "table_name": "house_atreides_members",
-    "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
-    "sink": {
-      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      "name": "dune_characters_kafka"
-    }
-  }
-}
-```
-
-<Info>
-  At the moment, row messages only support `insert` and `update` operations. Soon, we'll support `delete` operations by adding a `deleted` boolean column to the message.
-</Info>
-
-### Idempotency
-
-The `metadata` of each message includes an `idempotency_key` which your application can use to reject any [possible duplicate messages](/reference/sinks/overview#guaranteed-delivery).
+The `metadata` of each message includes an `idempotency_key` which your application can use to reject any [possible duplicate messages](/reference/sinks/overview#delivery-guarantees).
 
 For regular changes (non-backfill), the idempotency key is based on the transaction's position in the database log and its position within that transaction.
 
 For backfill messages, the key is based on the backfill's unique identifier and the primary key values of the record being processed.
 
-### Which message shape should you use?
+## Related
 
-Change messages are the best fit for most use cases. They contain more information about discrete changes to a row and include `delete` operations.
+<CardGroup>
+  <Card title="Transforms" icon="pencil" href="/reference/transforms">
+    Learn how to transform payloads before they are sent to your destination.
+  </Card>
+  <Card title="Filters" icon="filter" href="/reference/filters">
+    Learn how to filter messages before they are sent to your destination.
+  </Card>
+  <Card title="Routing" icon="route" href="/reference/routing">
+    Learn how to route messages to different sinks based on their content.
+  </Card>
+  <Card title="Backfills" icon="clock-rotate-left" href="/reference/backfills">
+    Learn how to backfill data from your database to your sinks.
+  </Card>
+</CardGroup>
 
-If you only need the latest version of a row, and either don't need deletes or soft-delete rows, consider using row messages. The nice part about row messages is that every message is the same shape, whether it's an insert, update, or backfill ("read") message.

@@ -11,7 +11,7 @@ import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Google Cloud Pub/Sub topic. You'll:
 
 - Boot Sequin
-- Connect to a sample playground database 
+- Connect to a sample playground database
 - Configure a Pub/Sub topic to receive database changes
 - See your changes flow in real-time
 
@@ -111,7 +111,7 @@ For more information on creating a service account, see the [how-to guide for Pu
         3. Under "Step 2", select a Cloud Pub/Sub subscription
         4. Click "PULL" to see messages in the topic
 
-        You should see a list of messages appear in the table below. The messages are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table.
+        You should see a list of messages appear in the table below. The messages are [`read` events](/reference/messages) from the initial backfill of the `products` table.
 
         <Check>
           Messages are flowing from Sequin to your Pub/Sub topic.

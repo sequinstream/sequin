@@ -47,16 +47,12 @@ First, create a sink to receive database changes. In the Sequin console, navigat
     Alternatively, you can choose a stream or queue destination to send changes to a Kafka topic, Redis stream, or SQS queue. You can then consume from these streams/queues in your workflow processor.
   </Step>
 
-  <Step title="Select the source table or schema">
-    Under "Source", select the table or schema that should trigger your workflows.
-
-    For "Message type", leave the default "Changes" selected.
+  <Step title="Select the source tables">
+    Under "Source", select the schemas and tables that should trigger your workflows.
   </Step>
 
-  <Step title="Specify records to process">
-    Under "Records to process", specify which actions should trigger your workflows (i.e. `insert`, `update`, `delete`).
-
-    You can add filters (`where` clauses) to narrow down the rows that trigger your workflows. For example, you might only want to trigger workflows for changes to rows where `status = 'paid'`.
+  <Step title="Add filters (optional)">
+    Add [filters](/reference/filters) to the sink to control which database changes are sent to your sink.
   </Step>
 
   <Step title='Leave the default for "Message grouping"'>

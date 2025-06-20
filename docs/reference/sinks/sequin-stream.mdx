@@ -78,9 +78,9 @@ curl -X GET https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER
   -H "Authorization: Bearer {your-token}"
 ```
 
-This will return a batch of messages. Each message will contain an `ack_id` and either a row or changes object:
+This will return a batch of messages. Each message will contain an `ack_id` and the default [message payload](/reference/messages):
 
-#### Change Messages
+#### Message
 
 ```typescript
 {
@@ -121,49 +121,6 @@ Example:
         "table_schema": "public",
         "table_name": "orders",
         "commit_timestamp": "2024-03-20T15:30:00Z",
-        "consumer": {
-          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "orders_webhook"
-        }
-      }
-    }
-  ]
-}
-```
-
-#### Row Messages
-
-```typescript
-{
-  data: Array<{
-    ack_id: string;
-    record: Record<string, any>;  // The row data
-    metadata: {
-      table_schema: string;
-      table_name: string;
-      consumer: {
-        id: string;
-        name: string;
-      };
-    };
-  }>;
-}
-```
-
-Example:
-```json
-{
-  "data": [
-    {
-      "ack_id": "MTYyeJ7abUjl1pO",
-      "record": {
-        "id": 1234,
-        "customer_id": 789,
-        "status": "shipped"
-      },
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "orders",
         "consumer": {
           "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "name": "orders_webhook"

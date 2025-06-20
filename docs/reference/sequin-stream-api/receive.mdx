@@ -29,7 +29,7 @@ api: 'POST /api/http_pull_consumers/{consumer_id_or_name}/receive'
 
 ## Response fields
 
-The response is an object with a `data` property that contains a list of messages. Within each message is an `ack_id` and a `data` property that contains the message data.
+The response is an object with a `data` property that contains a list of [messages](/reference/messages). Within each message is an `ack_id` and a `data` property that contains the message data.
 
 <ResponseField name="data" type="list" required>
   <Expandable title="properties">
@@ -40,10 +40,10 @@ The response is an object with a `data` property that contains a list of message
       A [message](/reference/messages) containing the message data with a key for each column in the associated table.
     </ResponseField>
     <ResponseField name="changes" type="object">
-      Only present if the message is a change message. Contains the previous values for changed fields.
+      An object containing the previous values for changed fields.
     </ResponseField>
     <ResponseField name="action" type="string">
-      Only present if the message is a change message.The action that occurred on the message.
+      The action that occurred on the message.
     </ResponseField>
     <ResponseField name="metadata" type="object" required>
       Metadata about the Sequin Stream sink that produced the message.

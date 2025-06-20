@@ -59,16 +59,12 @@ Create a webhook sink that captures changes to your database and sends them to y
         Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
     </Step>
 
-    <Step title="Select source table">
-        Select the table you want to capture changes from (i.e `public.orders`).
+    <Step title="Select source tables">
+        Select the schemas and tables you want to capture changes from (i.e `public.users` or `public`).
     </Step>
 
-    <Step title="Choose message type">
-        Specify whether you want to receive [changes or rows](/reference/messages) from the table.
-
-        <Tip>
-        In this example, you should choose "Rows" since you want to replicate the state of the table to Tinybird.
-        </Tip>
+    <Step title="Add filters (optional)">
+        Add [filters](/reference/filters) to the sink to control which database changes are sent to your webhook endpoint.
     </Step>
 
     <Step title="Configure backfill">

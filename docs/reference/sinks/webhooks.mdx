@@ -65,14 +65,12 @@ The webhook sink sends messages to a webhook endpoint. This can be a webhook end
 The webhook sink sends HTTP POST requests with JSON bodies.
 
 - **When "Batch messages" is disabled (default):**
-    The request body will contain a single message object. The format depends on whether the sink is configured for change messages or row messages (see below). You can also use a [transform](/reference/transforms) to customize the shape of the message.
+    The request body will contain a single [message](/reference/messages) with the default payload shape. You can also use a [transform](/reference/transforms) to customize the payload.
 
 - **When "Batch messages" is enabled:**
-    The request body will contain a JSON object with a `data` field, which is an array of message objects.
+    The request body will contain a JSON object with a `data` field, which is an array of [messages](/reference/messages).
 
-The format of the individual *message objects* depends on whether you've configured the sink for change messages or row messages:
-
-### Change Messages
+### Message
 
 ```typescript
 {
@@ -143,63 +141,6 @@ Example (when batching is enabled):
 }
 ```
 
-### Row Messages
-
-```typescript
-{
-  record: Record<string, any>;  // The row data
-  metadata: {
-    table_schema: string;
-    table_name: string;
-    consumer: {
-      id: string;
-      name: string;
-    };
-  };
-}
-```
-
-Example:
-```json
-{
-  "record": {
-    "id": 1234,
-    "customer_id": 789,
-    "status": "shipped"
-  },
-  "metadata": {
-    "table_schema": "public",
-    "table_name": "orders",
-    "consumer": {
-      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      "name": "orders_webhook"
-    }
-  }
-}
-```
-
-Example (when batching is enabled):
-```json
-{
-  "data": [
-    {
-      "record": {
-        "id": 1234,
-        "customer_id": 789,
-        "status": "shipped"
-      },
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "orders",
-        "consumer": {
-          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "orders_webhook"
-        }
-      }
-    }
-  ]
-}
-```
 
 ## Response format
 

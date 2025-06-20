@@ -177,22 +177,12 @@ Create a webhook sink that captures changes to your database and sends a HTTP PO
         Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
     </Step>
 
-    <Step title="Select source table">
-        Select the table you want to capture changes from (i.e `public.users`).
+    <Step title="Select source tables">
+        Select the schemas and tables you want to capture changes from (i.e `public.users` or `public`).
     </Step>
 
-    <Step title="Choose message type">
-        Specify whether you want to receive [changes or rows](/reference/messages) from the table.
-
-        <Tip>
-        If you're not sure which to choose, leave the default setting of "Changes". So far in this guide, you've been setting up Inngest to handle change payloads from Sequin.
-        </Tip>
-    </Step>
-
-    <Step title="Specify change types">
-        If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes.
-
-        In this example, you want to send welcome emails to new users, so under "Records to process" select only `insert` changes. No need to add a filter.
+    <Step title="Add filters (optional)">
+        Add [filters](/reference/filters) to the sink to control which database changes are sent to your webhook endpoint.
     </Step>
 
     <Step title="Configure backfill">

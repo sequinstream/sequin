@@ -6,13 +6,13 @@ description: "Implement reliable data archiving and event replay capabilities. L
 
 ## About
 
-In Sequin, [change messages](/reference/payloads#change-messages) are ephemeral. Once they're sent to a sink, they're deleted.
+In Sequin, [messages](/reference/messages) are ephemeral. Once they're sent to a sink, they're deleted.
 
-For some sinks and use cases, it can be desirable to retain change messages for some period of time. Then, you can take advantage of Sequin's [backfill](/reference/backfills) feature to replay the changes to the sink.
+For some sinks and use cases, it can be desirable to retain incremental `insert`, `update`, and `delete` messages for some period of time. Then, you can take advantage of Sequin's [backfill](/reference/backfills) feature to replay the changes to the sink.
 
-For example, if your sink is a webhook endpoint, you might deploy a bug that erroneously processes messages. With change retention, you can play back change messages from the last few days to the sink to reprocess the affected messages.
+For example, if your sink is a webhook endpoint, you might deploy a bug that erroneously processes messages. With change retention, you can play back messages from the last few days to the sink to reprocess the affected messages.
 
-With change retention, you store change messages in a Postgres table. You can then use Sequin's standard consumption methods to stream these messages to your sink.
+With change retention, you store `insert`, `update`, and `delete` messages in a Postgres table. You can then use Sequin's standard consumption methods to stream these messages to your sink.
 
 ## Configuration
 

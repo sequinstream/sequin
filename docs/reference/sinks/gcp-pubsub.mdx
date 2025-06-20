@@ -31,19 +31,19 @@ For more information on creating a service account, see the [how-to guide](/how-
 
 ## Message format
 
-Sequin sends messages to Pub/Sub as JSON. The base message format follows the [messages reference](/reference/payloads), with additional Pub/Sub specific attributes.
+Sequin sends messages to Pub/Sub as JSON. The base message format follows the [messages reference](/reference/messages), with additional Pub/Sub specific attributes.
 
 ### Message Structure
 
 Each message published to Pub/Sub contains:
 
-1. **Data** - The main message payload follows the [messages reference](/reference/payloads) structure. The data is encoded as JSON then base64 encoded.
+1. **Data** - The main message payload follows the [messages reference](/reference/messages) structure. The data is encoded as JSON then base64 encoded.
 
 2. **Attributes** - Message attributes that can be used for filtering and routing:
    - `trace_id` - A unique identifier for tracing the message through the system
-   - `type` - Either "event" or "record"
+   - `type` - Always "event"
    - `table_name` - The name of the source table
-   - `action` - (Only for event messages) The type of change: "insert", "update", "delete", or "read"
+   - `action` - The type of change: "insert", "update", "delete", or "read"
 
 3. **Ordering Key** - Used for message ordering when enabled on the subscription. The key is generated based on:
    - By default, the primary key(s) of the source row

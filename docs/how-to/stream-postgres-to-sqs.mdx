@@ -68,9 +68,7 @@ After creating the user, save the Access Key ID and Secret Access Key - you'll n
 
 ### (Optional) Enable retention for changes
 
-You can send either [changes](/reference/payloads) to SQS.
-
-If you're sending changes, note that changes are ephemeral. Sequin stores `insert`, `update`, and `delete` changes in a buffer table until they're delivered to SQS.
+Sequin stores `insert`, `update`, and `delete` changes in a buffer until they're delivered to SQS.
 
 You can use [change retention](reference/change-retention) to persist changes to a table in your database. Then, you can stream _that_ table to SQS. This gives you the power to [run backfills](/reference/backfills)/replays of recent changes at any times.
 
@@ -81,20 +79,16 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "SQS Sink".
 ### Configure the source
 
 <Steps>
-  <Step title="Select source table or schema">
-    Under "Source", select the table or schema you want to stream data from.
+  <Step title="Select source tables">
+    Under "Source", select the schemas and tables you want to stream data from.
   </Step>
 
-  <Step title="Choose message type">
-    Specify whether you want to receive [changes](/reference/payloads) from the table.
-
-    If you're not sure which to choose, you can leave the default option "Changes" selected. Changes are a better fit for event-driven use cases, like triggering workflows, which is usually what you want to do with SQS.
+  <Step title="Add filters (optional)">
+    Add [filters](/reference/filters) to the sink to control which database changes are sent to your SQS queue.
   </Step>
 
-  <Step title="Specify filters">
-    If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes.
-
-    You can also specify [SQL filters](/reference/filters) to narrow down the events you want to receive. For example, if you only want to receive events for `subscriptions` that currently have an `mrr` greater than $100, you can add a filter on `mrr > 100`.
+  <Step title="Add transform (optional)">
+    Add a [transform](/reference/transforms) to the sink to modify the payload before it's sent to SQS.
   </Step>
 
   <Step title="Specify backfill">

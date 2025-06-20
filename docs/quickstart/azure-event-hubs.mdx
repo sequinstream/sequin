@@ -11,7 +11,7 @@ import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to an Azure Event Hub. You'll:
 
 - Boot Sequin
-- Connect to a sample playground database 
+- Connect to a sample playground database
 - Configure an Event Hub to receive database changes
 - See your changes flow in real-time
 
@@ -103,7 +103,7 @@ While it's recommended to create a dedicated Shared Access Policy for Sequin, yo
         3. Select "Data Explorer" in the left sidebar
         4. Click "View events"
 
-        You should see a list of events. Click on any event to view its details, including its body. The messages are [`read` events](/reference/payloads#change-messages) from the initial backfill of the `products` table.
+        You should see a list of events. Click on any event to view its details, including its body. The messages are [`read` events](/reference/messages) from the initial backfill of the `products` table.
 
         <Check>
           Messages are flowing from Sequin to your Event Hub.

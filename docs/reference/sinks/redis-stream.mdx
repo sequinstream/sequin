@@ -44,14 +44,7 @@ The Redis Stream sink sends messages to a Redis stream using the `XADD` command.
 
 ## Message format
 
-Sequin sends messages to Redis streams using the `XADD` command. Each message contains the following fields:
-
-- `record`: The JSON-encoded record data
-- `changes`: JSON-encoded changes to the record
-- `action`: The type of change (e.g., "insert", "update", "delete")
-- `metadata`: JSON-encoded metadata about the event
-
-For the shape of the fields `metadata` and `changes` as well as information about `action`, see the reference for [messages](/reference/payloads).
+Sequin sends messages to Redis streams as JSON using the `XADD` command. You can find the shape of the messages in the [messages reference](/reference/messages).
 
 ## Transforms
 

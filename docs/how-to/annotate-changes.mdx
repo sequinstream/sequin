@@ -18,14 +18,14 @@ Transaction annotations are JSON objects that you attach to a transaction. Any c
 To set annotations:
 
 ```sql
-select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{ 
+select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', '{
   "username": "paul.atreides",
   "source": "web_ui",
   "request_id": "req_123"
 }');
 ```
 
-The annotations will be included in the `metadata.transaction_annotations` field of all [change messages](/reference/payloads#change-messages) in that transaction:
+The annotations will be included in the `metadata.transaction_annotations` field of all [messages](/reference/messages#param-metadata-transaction-annotations) in that transaction:
 
 ```json
 {
@@ -65,11 +65,11 @@ begin;
   }');
 
   -- All changes in this transaction will include the annotations
-  insert into orders (customer_id, product, quantity) 
+  insert into orders (customer_id, product, quantity)
   values (789, 'Wireless Headphones', 1);
 
-  update customers 
-  set last_order_at = now() 
+  update customers
+  set last_order_at = now()
   where id = 789;
 commit;
 ```

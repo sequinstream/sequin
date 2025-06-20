@@ -11,7 +11,7 @@ import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a NATS subject. You'll:
 
 - Boot Sequin
-- Connect to a sample playground database 
+- Connect to a sample playground database
 - Configure a NATS subject to receive database changes
 - See your changes flow in real-time
 
@@ -114,7 +114,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
           <img style={{ maxWidth: '700px' }} src="/images/quickstart/nats/nats-box-messages.png" alt="NATS subscription terminal" />
         </Frame>
 
-        These are [`read` events](/reference/payloads#change-messages) from the initial backfill of the `products` table.
+        These are [`read` events](/reference/messages) from the initial backfill of the `products` table.
 
         <Check>
           Messages are flowing from Sequin to your NATS subject.

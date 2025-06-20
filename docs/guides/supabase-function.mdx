@@ -132,16 +132,12 @@ You'll need the following:
     Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
   </Step>
 
-  <Step title="Select source table">
-    Select your Supabase database and the table you want to capture changes from.
+  <Step title="Select source tables">
+    Select the schemas and tables you want to capture changes from (i.e `public.users` or `public`).
   </Step>
 
-  <Step title="Choose message type">
-    Specify whether you want to receive changes from the table. In this case, you want to receive changes.
-  </Step>
-
-  <Step title="Specify change types">
-    In "Records to process", set which operations (`INSERT`, `UPDATE`, and/or `DELETE`) you want to capture.
+  <Step title="Add filters (optional)">
+    Add [filters](/reference/filters) to the sink to control which database changes are sent to your webhook endpoint.
   </Step>
 
   <Step title="Configure backfill">

@@ -78,9 +78,9 @@ curl -X GET https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER
   -H "Authorization: Bearer {your-token}"
 ```
 
-This will return a batch of messages. Each message will contain an `ack_id` and the default payload:
+This will return a batch of messages. Each message will contain an `ack_id` and the default [message payload](/reference/messages):
 
-#### Payload
+#### Message
 
 ```typescript
 {
@@ -130,6 +130,8 @@ Example:
   ]
 }
 ```
+
+While your consumer is processing this batch of messages, the messages will not be visible to other consumers. The amount of time these messages are not visible (i.e. the visibility timeout) defaults to `30` seconds and is configurable in your sink's settings.
 
 ### Acknowledge messages
 

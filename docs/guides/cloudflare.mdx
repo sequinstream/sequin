@@ -105,19 +105,11 @@ Create a webhook sink that captures changes to your database and sends a HTTP PO
     </Step>
 
     <Step title="Select source table(s)">
-        Select the table or schema you want to capture changes from (i.e `public.users` or `public`).
+        Select the schemas and tables you want to capture changes from (i.e `public.users` or `public`).
     </Step>
 
-    <Step title="Choose message type">
-        Specify whether you want to receive changes from the table. See [payloads](/reference/payloads) for details.
-
-        <Tip>
-        If you're not sure which to choose, leave the default setting of "Changes". Changes are a better fit for event-driven use cases, like triggering workflows, which is usually what you want to do with webhooks.
-        </Tip>
-    </Step>
-
-    <Step title="Specify change types">
-        If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes. Select all three for now. No need to add a filter.
+    <Step title="Add filters (optional)">
+        Add [filters](/reference/filters) to the sink to control which database changes are sent to your webhook endpoint.
     </Step>
 
     <Step title="Configure backfill">

@@ -193,10 +193,7 @@ select pg_drop_replication_slot('sequin_slot');
 
 ## Replica identity
 
-Sequin uses `REPLICA IDENTITY` for two purposes:
-
-1. To determine the old values of an updated row. These values are used to create the `changes` field for [change messages](/reference/payloads).
-2. To load unchanged TOAST columns for updates of both [payloads](/reference/payloads) sink consumers.
+Sequin uses `REPLICA IDENTITY` to determine the old values of an updated row. These values are provided in the `changes` field in [messages](/reference/messages#param-changes).
 
 ### Changes
 

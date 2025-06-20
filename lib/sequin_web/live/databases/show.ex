@@ -382,7 +382,7 @@ defmodule SequinWeb.DatabasesLive.Show do
         alertMessage: """
         The `sequin_logical_messages` table is missing in your database. This table is required for Sequin with PostgreSQL versions older than 14.  <a href="https://docs.sequinstream.com/reference/databases#postgresql-12-and-13">Read more</a> about Sequin's support for PostgreSQL 12 and 13.
 
-        Please create this table using the below SQL. Ensure also that this table is added to your publication.
+        Please create this table using the below SQL. Ensure also that this table is included in your publication.
         """,
         refreshable: true,
         dismissable: false,

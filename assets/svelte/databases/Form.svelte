@@ -513,8 +513,8 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
                   <br />
                   The maximum number of concurrent connections that Sequin will maintain
                   to your PostgreSQL database, aside from the replication slot connection.
-                  Higher values allow for better throughput but consume more database
-                  resources.
+                  Used during backfills. Higher values allow for better throughput
+                  but consume more database resources.
                 </p>
               </Tooltip.Content>
             </Tooltip.Root>

@@ -40,6 +40,8 @@ defmodule Sequin.Application do
 
     Sequin.Sentry.init()
 
+    Sequin.EtsCache.init()
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Sequin.Supervisor]

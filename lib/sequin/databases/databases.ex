@@ -2,7 +2,6 @@ defmodule Sequin.Databases do
   @moduledoc false
   import Ecto.Query, only: [preload: 2]
 
-  alias Sequin.Cache
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
@@ -12,6 +11,7 @@ defmodule Sequin.Databases do
   alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.EtsCache
   alias Sequin.Health.CheckPostgresReplicationSlotWorker
   alias Sequin.NetworkUtils
   alias Sequin.ObanQuery
@@ -23,6 +23,12 @@ defmodule Sequin.Databases do
 
   require Logger
 
+  @db_cache_config %EtsCache.Config{
+    cache_name: :database_cache,
+    ttl: :timer.seconds(30),
+    warm_after: Sequin.Time.with_jitter(:timer.seconds(20)),
+    warmer: {__MODULE__, :warm_cached_db}
+  }
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
 
@@ -88,25 +94,31 @@ defmodule Sequin.Databases do
   @spec get_cached_db(database_id :: PostgresDatabase.id()) ::
           {:ok, database :: PostgresDatabase.t()} | {:error, Error.t()}
   def get_cached_db(database_id) do
-    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+    EtsCache.lookup(database_id, @db_cache_config, fn ->
+      case get_db(database_id) do
+        {:ok, database} ->
+          {:ok, database}
 
-    Cache.get_or_store(
-      database_id,
-      fn ->
-        case get_db(database_id) do
-          {:ok, database} ->
-            {:ok, database}
-
-          {:error, _} = error ->
-            error
-        end
-      end,
-      ttl
-    )
+        {:error, _} = error ->
+          error
+      end
+    end)
   end
 
   def invalidate_cached_db(database_id) do
-    Cache.delete(database_id)
+    EtsCache.delete(database_id, @db_cache_config)
+  end
+
+  def warm_cached_db(database_id) do
+    case get_db(database_id) do
+      {:ok, database} ->
+        EtsCache.insert(database_id, {:ok, database}, @db_cache_config)
+
+      {:error, _} = error ->
+        EtsCache.insert(database_id, error, @db_cache_config)
+    end
+
+    :ok
   end
 
   def create_db(account_id, attrs) do

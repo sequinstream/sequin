@@ -87,7 +87,7 @@ defmodule Sequin.EtsCache do
   provides a `tables/0` function that returns the list of expected table names
   for reference.
   """
-  @tables [:sync_spec_cache, :cache_for_test]
+  @tables [:consumer_cache, :http_endpoint_cache, :database_cache, :cache_for_test]
 
   defmodule Config do
     @moduledoc false
@@ -151,6 +151,12 @@ defmodule Sequin.EtsCache do
     {mod, fun} = config.warmer
     # Proactively warm the cache so that the next lookup call doesn't miss
     :timer.apply_after(config.warm_after, mod, fun, [key])
+    :ok
+  end
+
+  @spec delete(any(), Config.t()) :: :ok
+  def delete(key, %Config{} = config) do
+    :ets.delete(config.cache_name, key)
     :ok
   end
 end

@@ -4,7 +4,6 @@ defmodule Sequin.Consumers do
 
   alias Ecto.Changeset
   alias Sequin.Accounts
-  alias Sequin.Cache
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
@@ -26,6 +25,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Error
+  alias Sequin.EtsCache
   alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.MiniElixir.Validator
   alias Sequin.Health
@@ -44,6 +44,20 @@ defmodule Sequin.Consumers do
   @config_schema Application.compile_env!(:sequin, [Sequin.Repo, :config_schema_prefix])
 
   @type consumer :: SinkConsumer.t()
+
+  @consumer_cache_config %EtsCache.Config{
+    cache_name: :consumer_cache,
+    ttl: :timer.seconds(30),
+    warm_after: Sequin.Time.with_jitter(:timer.seconds(20)),
+    warmer: {__MODULE__, :warm_cached_consumer}
+  }
+
+  @http_endpoint_cache_config %EtsCache.Config{
+    cache_name: :http_endpoint_cache,
+    ttl: :timer.seconds(30),
+    warm_after: Sequin.Time.with_jitter(:timer.seconds(20)),
+    warmer: {__MODULE__, :warm_cached_http_endpoint}
+  }
 
   def posthog_ets_table, do: :consumer_ack_events
 
@@ -102,26 +116,33 @@ defmodule Sequin.Consumers do
   @spec get_cached_consumer(consumer_id :: SinkConsumer.id()) ::
           {:ok, consumer :: SinkConsumer.t()} | {:error, Error.t()}
   def get_cached_consumer(consumer_id) do
-    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+    EtsCache.lookup(consumer_id, @consumer_cache_config, fn ->
+      case get_consumer(consumer_id) do
+        {:ok, consumer} ->
+          consumer = Repo.preload(consumer, [:transform, :routing])
+          {:ok, consumer}
 
-    Cache.get_or_store(
-      consumer_id,
-      fn ->
-        case get_consumer(consumer_id) do
-          {:ok, consumer} ->
-            consumer = Repo.preload(consumer, [:transform, :routing])
-            {:ok, consumer}
-
-          {:error, _} = error ->
-            error
-        end
-      end,
-      ttl
-    )
+        {:error, _} = error ->
+          error
+      end
+    end)
   end
 
   def invalidate_cached_consumer(consumer_id) do
-    Cache.delete(consumer_id)
+    EtsCache.delete(consumer_id, @consumer_cache_config)
+  end
+
+  def warm_cached_consumer(consumer_id) do
+    case get_consumer(consumer_id) do
+      {:ok, consumer} ->
+        consumer = Repo.preload(consumer, [:transform, :routing])
+        EtsCache.insert(consumer_id, {:ok, consumer}, @consumer_cache_config)
+
+      {:error, _} = error ->
+        EtsCache.insert(consumer_id, error, @consumer_cache_config)
+    end
+
+    :ok
   end
 
   def get_consumer_for_account(account_id, consumer_id) do
@@ -1010,21 +1031,15 @@ defmodule Sequin.Consumers do
   @spec get_cached_http_endpoint(endpoint_id :: HttpEndpoint.id()) ::
           {:ok, endpoint :: HttpEndpoint.t()} | {:error, Error.t()}
   def get_cached_http_endpoint(endpoint_id) do
-    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+    EtsCache.lookup(endpoint_id, @http_endpoint_cache_config, fn ->
+      case get_http_endpoint(endpoint_id) do
+        {:ok, endpoint} ->
+          {:ok, endpoint}
 
-    Cache.get_or_store(
-      {:http_endpoint, endpoint_id},
-      fn ->
-        case get_http_endpoint(endpoint_id) do
-          {:ok, endpoint} ->
-            {:ok, endpoint}
-
-          {:error, _} = error ->
-            error
-        end
-      end,
-      ttl
-    )
+        {:error, _} = error ->
+          error
+      end
+    end)
   end
 
   def get_cached_http_endpoint!(endpoint_id) do
@@ -1035,7 +1050,19 @@ defmodule Sequin.Consumers do
   end
 
   def invalidate_cached_http_endpoint(endpoint_id) do
-    Cache.delete({:http_endpoint, endpoint_id})
+    EtsCache.delete(endpoint_id, @http_endpoint_cache_config)
+  end
+
+  def warm_cached_http_endpoint(endpoint_id) do
+    case get_http_endpoint(endpoint_id) do
+      {:ok, endpoint} ->
+        EtsCache.insert(endpoint_id, {:ok, endpoint}, @http_endpoint_cache_config)
+
+      {:error, _} = error ->
+        EtsCache.insert(endpoint_id, error, @http_endpoint_cache_config)
+    end
+
+    :ok
   end
 
   def list_http_endpoints_for_account(account_id, preload \\ []) do

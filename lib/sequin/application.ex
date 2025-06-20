@@ -11,6 +11,7 @@ defmodule Sequin.Application do
   alias Sequin.Health.KickoffCheckSinkConfigurationWorker
   alias Sequin.MutexedSupervisor
   alias Sequin.Runtime.HttpPushSqsPipeline
+  alias Sequin.Runtime.WalSenderMonitor
 
   require Logger
 
@@ -64,11 +65,15 @@ defmodule Sequin.Application do
           Sequin.Telemetry.PosthogReporter
         ]
 
-    if HttpPushSqsPipeline.enabled?() do
-      children ++ [HttpPushSqsPipeline.main_queue_child_spec(), HttpPushSqsPipeline.dlq_child_spec()]
-    else
-      children
-    end
+    children
+    |> then(fn children ->
+      if HttpPushSqsPipeline.enabled?() do
+        children ++ [HttpPushSqsPipeline.main_queue_child_spec(), HttpPushSqsPipeline.dlq_child_spec()]
+      else
+        children
+      end
+    end)
+    |> Sequin.List.maybe_append(WalSenderMonitor.enabled?(), [WalSenderMonitor.child_spec()])
   end
 
   defp base_children do

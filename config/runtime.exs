@@ -99,6 +99,8 @@ config :sequin, Sequin.Runtime.SlotProcessorServer,
   max_accumulated_messages: ConfigParser.replication_flush_max_accumulated_messages(env_vars),
   max_accumulated_messages_time_ms: ConfigParser.replication_flush_max_accumulated_time_ms(env_vars)
 
+config :sequin, Sequin.Runtime.WalSenderMonitor, enabled?: System.get_env("WAL_SENDER_MONITOR_ENABLED") in ~w(true 1)
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server

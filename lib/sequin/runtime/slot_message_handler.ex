@@ -10,13 +10,15 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
   use Sequin.ProcessMetrics,
     metric_prefix: "sequin.slot_message_handler",
-    interval: :timer.seconds(30)
+    interval: :timer.seconds(30),
+    on_log: {__MODULE__, :process_metrics_on_log, []}
 
   use Sequin.ProcessMetrics.Decorator
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Error
   alias Sequin.ProcessMetrics
+  alias Sequin.Prometheus
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Runtime.MessageHandler
@@ -223,20 +225,22 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       setting_retry_deliver_interval: retry_deliver_interval
     }
 
-    # Add dynamic tags for metrics
-    ProcessMetrics.metadata(%{
-      replication_slot_id: replication_slot_id,
-      processor_idx: processor_idx
-    })
-
-    ProcessMetrics.start()
-
     {:ok, state, {:continue, :load_entities}}
   end
 
   @impl GenServer
   def handle_continue(:load_entities, %State{} = state) do
     state = load_entities(state)
+
+    # Add dynamic tags for metrics, once we have slot name etc.
+    ProcessMetrics.metadata(%{
+      replication_id: state.id,
+      slot_name: state.replication_slot.slot_name,
+      processor_idx: state.processor_idx
+    })
+
+    ProcessMetrics.start()
+
     {:noreply, state}
   end
 
@@ -338,5 +342,16 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       replication_slot_id: state.id,
       table_reader_mod: state.table_reader
     }
+  end
+
+  def process_metrics_on_log(%ProcessMetrics.Metrics{busy_percent: nil}), do: :ok
+
+  def process_metrics_on_log(%ProcessMetrics.Metrics{} = metrics) do
+    %{replication_id: replication_id, slot_name: slot_name, processor_idx: processor_idx} = metrics.metadata
+    Prometheus.set_slot_message_handler_busy_percent(replication_id, slot_name, processor_idx, metrics.busy_percent)
+
+    Enum.each(metrics.timing, fn {name, %{percent: percent}} ->
+      Prometheus.set_slot_message_handler_operation_percent(replication_id, slot_name, processor_idx, name, percent)
+    end)
   end
 end

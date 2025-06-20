@@ -3,6 +3,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   import Sequin.Factory.Support
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
@@ -24,6 +25,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Consumers.TypesenseSink
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -35,6 +37,10 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
   alias Sequin.TestSupport.Models.TestEventLog
+
+  def sink_consumer_type do
+    Enum.random(Consumers.SinkConsumer.types())
+  end
 
   def sink_consumer(attrs \\ []) do
     attrs = Map.new(attrs)
@@ -48,23 +54,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     postgres_database = Map.get(attrs, :postgres_database)
 
-    type =
-      attrs[:type] || get_in(attrs, [:sink, :type]) ||
-        Enum.random([
-          :http_push,
-          :redis_stream,
-          :redis_string,
-          :sqs,
-          :kinesis,
-          :s2,
-          :sns,
-          :kafka,
-          :sequin_stream,
-          :gcp_pubsub,
-          :nats,
-          :rabbitmq,
-          :elasticsearch
-        ])
+    type = attrs[:type] || get_in(attrs, [:sink, :type]) || sink_consumer_type()
 
     {sink_attrs, attrs} = Map.pop(attrs, :sink, %{})
     sink = sink(type, account_id, sink_attrs)
@@ -149,6 +139,19 @@ defmodule Sequin.Factory.ConsumersFactory do
       {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
         insert_sink_consumer!(attrs)
     end
+  end
+
+  defp sink(:azure_event_hub, _account_id, attrs) do
+    merge_attributes(
+      %AzureEventHubSink{
+        type: :azure_event_hub,
+        namespace: Factory.word(),
+        event_hub_name: Factory.word(),
+        shared_access_key_name: Factory.word(),
+        shared_access_key: Factory.word()
+      },
+      attrs
+    )
   end
 
   defp sink(:http_push, account_id, attrs) do
@@ -315,6 +318,20 @@ defmodule Sequin.Factory.ConsumersFactory do
         username: Factory.word(),
         password: Factory.word(),
         expire_ms: Enum.random([nil, 1000, 10_000, 100_000])
+      },
+      attrs
+    )
+  end
+
+  defp sink(:typesense, _account_id, attrs) do
+    merge_attributes(
+      %TypesenseSink{
+        type: :typesense,
+        endpoint_url: "https://localhost:8108",
+        collection_name: Factory.word(),
+        api_key: Factory.word(),
+        batch_size: Enum.random(50..500),
+        timeout_seconds: Enum.random(1..30)
       },
       attrs
     )

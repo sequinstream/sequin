@@ -32,7 +32,7 @@ defmodule Sequin.Consumers.Backfill do
     field :initial_min_cursor, Sequin.Ecto.IntegerKeyMap
 
     field :state, Ecto.Enum,
-      values: [:active, :completed, :cancelled],
+      values: [:active, :completed, :cancelled, :failed],
       default: :active
 
     field :rows_initial_count, :integer
@@ -40,8 +40,10 @@ defmodule Sequin.Consumers.Backfill do
     field :rows_ingested_count, :integer, default: 0
     field :completed_at, :utc_datetime_usec, read_after_writes: true
     field :canceled_at, :utc_datetime_usec, read_after_writes: true
+    field :failed_at, :utc_datetime_usec, read_after_writes: true
     field :sort_column_attnum, :integer
     field :table_oid, :integer
+    field :error, Sequin.Ecto.Error
 
     timestamps()
   end
@@ -71,7 +73,8 @@ defmodule Sequin.Consumers.Backfill do
       :state,
       :rows_initial_count,
       :rows_processed_count,
-      :rows_ingested_count
+      :rows_ingested_count,
+      :error
     ])
     |> validate_required([:state])
     |> validate_number(:rows_processed_count, greater_than_or_equal_to: 0)

@@ -94,7 +94,7 @@ For **both** deployment modes:
   </Step>
   <Step title="Add permissions">
     Select "Attach policies directly", then create an inline policy with the following JSON (replace the Resource ARN with your actual queue ARN):
-    
+
     ```json
     {
       "Version": "2012-10-17",
@@ -291,7 +291,7 @@ If you're not seeing logs for your Lambda function in CloudWatch, it means that 
 <Steps>
   <Step title="Add SNS trigger">
     On the Lambda detail page:
-    
+
     1. Click "Add trigger"
     2. Select "SNS" from the trigger dropdown
     3. Select your topic
@@ -314,7 +314,7 @@ If you're not seeing logs for your Lambda function in CloudWatch, it means that 
   </Step>
   <Step title="Add permissions">
     Select "Attach policies directly", then create an inline policy with the following JSON (replace the Resource ARN with your actual topic ARN):
-    
+
     ```json
     {
       "Version": "2012-10-17",

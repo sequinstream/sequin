@@ -1551,8 +1551,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       completed_at: backfill.completed_at,
       canceled_at: backfill.canceled_at,
       inserted_at: backfill.inserted_at,
+      failed_at: backfill.failed_at,
       updated_at: backfill.updated_at,
-      progress: calculate_backfill_progress(backfill)
+      progress: calculate_backfill_progress(backfill),
+      error: if(backfill.error, do: Exception.message(backfill.error))
     }
   end
 

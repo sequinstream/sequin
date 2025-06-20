@@ -11,7 +11,7 @@ import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to RabbitMQ. You'll:
 
 - Boot Sequin
-- Connect to a sample playground database 
+- Connect to a sample playground database
 - Configure RabbitMQ to receive database changes
 - See your changes flow in real-time
 
@@ -75,7 +75,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       </Frame>
     </Step>
 
-   
+
 
     <Step title="Create a binding">
       1. On the "Queues and streams" page, click on your new "products" queue
@@ -171,7 +171,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
         docker exec -it rabbitmq rabbitmqadmin get queue=products count=5 --format=pretty_json
         ```
 
-        You should see the messages that were sent from Sequin. These are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table:
+        You should see the messages that were sent from Sequin. These are [`read` events](/reference/messages) from the initial backfill of the `products` table:
 
         <Frame>
           <img style={{ maxWidth: '700px' }} src="/images/quickstart/rabbitmq/messages-in-queue.png" alt="Messages in the products queue" />

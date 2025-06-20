@@ -10,7 +10,7 @@ Routing functions allow you to dynamically direct messages to different destinat
 - Using different HTTP methods based on the change action
 - Implementing custom routing logic based on record contents
 
-Currently, routing functions are available for HTTP webhook destinations.  Routing for other sinks is planned but not yet generally available. 
+Currently, routing functions are available for HTTP webhook destinations.  Routing for other sinks is planned but not yet generally available.
 
 ## How routing functions work
 
@@ -108,7 +108,7 @@ end
 
 When creating or editing a routing function, you can test it with real data from your database. Sequin will capture recent events and show you the effective routing parameters for each message.
 
-"Effective" means that Sequin will show the routing parameters that will actually be used downstream, inclusive of any defaulting or validation which happens after your routing function runs.   
+"Effective" means that Sequin will show the routing parameters that will actually be used downstream, inclusive of any defaulting or validation which happens after your routing function runs.
 
 ## Limitations and considerations
 
@@ -122,7 +122,7 @@ When creating or editing a routing function, you can test it with real data from
     Learn about function transforms and how to use them to modify your message content.
   </Card>
   <Card title="Messages reference" icon="message-dots" href="/reference/messages">
-    Learn about message shapes and how annotations appear in change messages.
+    Learn about the different fields you can use in routing functions.
   </Card>
   <Card title="Sequin YAML config" icon="pencil" href="/reference/sequin-yaml">
     Learn about configuring functions in your sequin.yaml file.

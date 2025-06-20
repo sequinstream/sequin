@@ -213,6 +213,21 @@ Creates a new sink consumer.
     </ParamField>
   </Expandable>
 
+  <Expandable title="S2 ">
+    <ParamField body="type" type="string" required>
+      Must be "s2"
+    </ParamField>
+    <ParamField body="basin" type="string" required>
+      The name of the S2 basin
+    </ParamField>
+    <ParamField body="stream" type="string" required>
+      The name of the S2 stream
+    </ParamField>
+    <ParamField body="access_token" type="string" required>
+      The access token for the S2 account associated with the basin and stream
+    </ParamField>
+  </Expandable>
+
   <Expandable title="Sequin Stream">
     <ParamField body="type" type="string" required>
       Must be "sequin_stream"
@@ -307,6 +322,6 @@ Creates a new sink consumer.
       "group_column_names": ["id"]
     }'
   ```
-</RequestExample> 
+</RequestExample>
 
 <SinkConsumerResponseExample />

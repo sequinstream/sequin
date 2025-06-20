@@ -97,6 +97,8 @@
         return "bg-green-200 text-green-800";
       case "cancelled":
         return "bg-gray-200 text-gray-800";
+      case "failed":
+        return "bg-red-200 text-red-800";
       default:
         return "bg-gray-200 text-gray-800";
     }
@@ -119,6 +121,11 @@
         ? formatRelativeTimestamp(backfill.canceled_at)
         : "unknown time";
       return `Cancelled ${cancelledAt}`;
+    } else if (backfill.state === "failed") {
+      const failedAt = backfill.failed_at
+        ? formatRelativeTimestamp(backfill.failed_at)
+        : "unknown time";
+      return `Failed ${failedAt}`;
     }
     return "";
   }
@@ -358,6 +365,16 @@
                 </p>
               </div>
             {/if}
+          </div>
+        {/if}
+
+        <!-- Error Section -->
+        {#if selectedBackfill.state === "failed" && selectedBackfill.error}
+          <div class="bg-gray-50 p-4 rounded-lg space-y-4">
+            <h3 class="text-sm font-semibold">Error</h3>
+            <p class="text-sm text-gray-500">
+              {selectedBackfill.error}
+            </p>
           </div>
         {/if}
 

@@ -503,7 +503,7 @@ defmodule Sequin.Runtime.MessageHandler do
   defp get_fields(%Message{action: :delete} = message), do: message.old_fields
 
   defp generate_group_id(consumer, message) do
-    default_group_id = Enum.map_join(message.ids, ":", &to_string/1)
+    default_group_id = if message.ids == [], do: nil, else: Enum.map_join(message.ids, ":", &to_string/1)
 
     case consumer do
       %SinkConsumer{source_tables: nil} ->

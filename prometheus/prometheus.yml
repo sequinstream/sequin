@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'sequin'
+    static_configs:
+      - targets: ['host.docker.internal:4001']
+
+  # Add more scrape configurations for your services here
+  # For example:
+  # - job_name: 'your-service'
+  #   static_configs:
+  #     - targets: ['your-service:port'] 

@@ -12,17 +12,23 @@ To use Sequin, you'll configure [sinks](/reference/sinks/overview) for one or mo
 Sequin works great for CDC use cases like:
 
 <CardGroup cols={3}>
-  <Card title="Triggering workflows" icon="bolt" href="/how-to/trigger-automated-workflows" >
-    Execute custom business logic whenever specific rows are inserted, updated, or deleted in your database.
-  </Card>
   <Card title="Streaming events" icon="arrow-right">
     Make database changes available as events for other services to consume.
   </Card>
-  <Card title="Keeping services in sync" icon="arrows-rotate">
-    Notify dependent services about data changes to keep systems in sync.
-  </Card>
   <Card title="Audit logging" icon="clipboard-list" href="/how-to/create-audit-logs">
     Track and record all changes made to data in your database for compliance or feature development.
+  </Card>
+  <Card title="Search indexing" icon="magnifying-glass" href="/how-to/sync-search-indexes">
+    Keep search indexes fresh by streaming updates from your database.
+  </Card>
+  <Card title="Managing caches" icon="memory" href="/how-to/maintain-caches">
+    Keep application caches up-to-date by streaming database changes.
+  </Card>
+  <Card title="Triggering workflows" icon="bolt" href="/how-to/trigger-automated-workflows" >
+    Execute custom business logic whenever specific rows are inserted, updated, or deleted in your database.
+  </Card>
+  <Card title="Microservice communication" icon="arrows-turn-right">
+    Notify dependent services about data changes to keep systems in sync.
   </Card>
   <Card title="Database syncing" icon="database" href="/how-to/replicate-tables">
     Keep tables synchronized across different database instances in real-time.
@@ -30,14 +36,8 @@ Sequin works great for CDC use cases like:
   <Card title="Deriving tables" icon="table" href="/how-to/replicate-tables">
     Create and maintain derived tables based on changes to source tables.
   </Card>
-  <Card title="Managing caches" icon="memory" href="/how-to/maintain-caches">
-    Keep application caches up-to-date by streaming database changes.
-  </Card>
   <Card title="Updating Redis" icon="server" href="/how-to/stream-postgres-to-redis-stream">
     Automatically update Redis when your Postgres data changes.
-  </Card>
-  <Card title="Search indexing" icon="magnifying-glass">
-    Keep search indexes fresh by streaming updates from your database.
   </Card>
 </CardGroup>
 
@@ -80,6 +80,7 @@ Sequin supports streaming to:
 - RabbitMQ
 - Webhooks (HTTP POST)
 - Sequin Stream (HTTP Pull/GET)
+- S2
 - Azure EventHubs
 - Typesense
 - Elasticsearch

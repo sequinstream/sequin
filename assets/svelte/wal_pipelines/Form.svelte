@@ -160,7 +160,6 @@
               messageKind="event"
               selectedTable={selectedSourceTable}
               bind:form
-              {errors}
               onFilterChange={(filters) => (form.sourceTableFilters = filters)}
             />
           {/if}

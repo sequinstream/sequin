@@ -41,9 +41,9 @@ Each message published to Pub/Sub contains:
 
 2. **Attributes** - Message attributes that can be used for filtering and routing:
    - `trace_id` - A unique identifier for tracing the message through the system
-   - `type` - Either "event" or "record"
+   - `type` - Always "event"
    - `table_name` - The name of the source table
-   - `action` - (Only for event messages) The type of change: "insert", "update", "delete", or "read"
+   - `action` - The type of change: "insert", "update", "delete", or "read"
 
 3. **Ordering Key** - Used for message ordering when enabled on the subscription. The key is generated based on:
    - By default, the primary key(s) of the source row

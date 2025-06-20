@@ -67,7 +67,7 @@ Create an IAM user with permission to publish to the topic:
 
 ### (Optional) Enable retention for changes
 
-You can stream either [changes or rows](/reference/messages) to SNS. Changes are transient; if you need to replay them later consider [change retention](/reference/change-retention) or streaming a retention table instead.
+Changes from your source table are transient; if you need to replay them later consider [change retention](/reference/change-retention) or streaming a retention table instead.
 
 ## Create SNS sink
 
@@ -76,16 +76,12 @@ In Sequin, navigate to the "Sinks" tab, click "Create Sink", and select "SNS Sin
 ### Configure the source
 
 <Steps>
-  <Step title="Select source table or schema">
-    Under **Source**, choose the table or schema you want to stream.
+  <Step title="Select source tables">
+    Under **Source**, select the schemas and tables you want to stream data from.
   </Step>
 
-  <Step title="Choose message type">
-    Decide whether to receive [changes or rows](/reference/messages). If unsure, start with **Changes**.
-  </Step>
-
-  <Step title="Specify filters">
-    For changes you can restrict to `insert`, `update`, and/or `delete` actions and add [SQL filters](/reference/filters) such as `mrr > 100`.
+  <Step title="Add filters (optional)">
+    Add [filters](/reference/filters) to the sink to control which database changes are sent to your SNS topic.
   </Step>
 
   <Step title="Specify transforms">

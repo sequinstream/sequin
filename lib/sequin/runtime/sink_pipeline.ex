@@ -349,7 +349,8 @@ defmodule Sequin.Runtime.SinkPipeline do
       ],
       filtered_messages: [
         concurrency: 10,
-        batch_size: 100
+        batch_size: 100,
+        batch_timeout: 10
       ]
     ]
 
@@ -531,7 +532,6 @@ defmodule Sequin.Runtime.SinkPipeline do
       Logger.info(
         "[SinkPipeline] Rejected messages for idempotency",
         rejected_message_count: length(already_delivered),
-        commits: delivered_wal_cursors,
         message_count: length(already_delivered)
       )
 

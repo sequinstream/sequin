@@ -66,5 +66,5 @@ If a sink's in-memory buffer fills up, the `load_shedding_policy` will be trigge
 `discard_on_full` — Sequin will continue reading messages from the replication slot. However, messages intended for the overloaded sink(s) will be dropped. Other sinks will not be impacted. This limits possibility that your database will run out of disk space but will cause sinks to be inconsistent with the state of the database.
 
 <Warning>
-There is no way to recover dropped messages. You can run a [backfill](/reference/backfills) to replay rows that may have been missed, but those backfill messages will not contain the discrete [change data](/reference/messages#change-messages) that was lost.
+There is no way to recover dropped messages. You can run a [backfill](/reference/backfills) to replay rows that may have been missed, but those backfill messages will not contain the discrete [change data](/reference/messages) that was lost.
 </Warning>

@@ -11,7 +11,7 @@ import QuickstartBackfillStep from '/snippets/quickstart-backfill-step.mdx';
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to an Amazon SQS queue. You'll:
 
 - Boot Sequin
-- Connect to a sample playground database 
+- Connect to a sample playground database
 - Configure an SQS queue to receive database changes
 - See your changes flow in real-time
 
@@ -117,7 +117,7 @@ Replace `<your-queue-arn>` with your queue's ARN (e.g., `arn:aws:sqs:us-east-1:1
           <img style={{ maxWidth: '700px' }} src="/images/quickstart/sqs/poll-for-messages.png" alt="SQS Console showing polling for messages" />
         </Frame>
 
-        Click on a message to view its contents. The messages are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table.
+        Click on a message to view its contents. The messages are [`read` events](/reference/messages) from the initial backfill of the `products` table.
 
         <Check>
           Messages are flowing from Sequin to your SQS queue.

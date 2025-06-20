@@ -170,7 +170,7 @@ defmodule Sequin.Transforms do
   def to_external(%SinkConsumer{sink: sink} = consumer, show_sensitive) do
     consumer =
       consumer
-      |> Repo.preload([:active_backfills, :transform, :postgres_database])
+      |> Repo.preload([:active_backfills, :postgres_database, :transform, :filter, :routing])
       |> SinkConsumer.preload_http_endpoint!()
 
     source_tables =
@@ -187,7 +187,9 @@ defmodule Sequin.Transforms do
         actions: consumer.actions,
         destination: to_external(sink, show_sensitive),
         batch_size: consumer.batch_size,
+        filter: if(consumer.filter, do: consumer.filter.name, else: "none"),
         transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
+        routing: if(consumer.routing, do: consumer.routing.name, else: "none"),
         timestamp_format: consumer.timestamp_format,
         active_backfills: Enum.map(consumer.active_backfills, &to_external(&1, show_sensitive)),
         max_retry_count: consumer.max_retry_count,
@@ -317,21 +319,22 @@ defmodule Sequin.Transforms do
       topic_id: sink.topic_id,
       use_emulator: sink.use_emulator,
       emulator_base_url: sink.emulator_base_url,
-      credentials: %{
-        type: credentials.type,
-        project_id: credentials.project_id,
-        private_key_id: SensitiveValue.new(credentials.private_key_id, show_sensitive),
-        private_key: SensitiveValue.new(credentials.private_key, show_sensitive),
-        client_email: SensitiveValue.new(credentials.client_email, show_sensitive),
-        client_id: SensitiveValue.new(credentials.client_id, show_sensitive),
-        auth_uri: credentials.auth_uri,
-        token_uri: credentials.token_uri,
-        auth_provider_x509_cert_url: credentials.auth_provider_x509_cert_url,
-        client_x509_cert_url: credentials.client_x509_cert_url,
-        universe_domain: SensitiveValue.new(credentials.universe_domain, show_sensitive),
-        client_secret: SensitiveValue.new(credentials.client_secret, show_sensitive),
-        api_key: SensitiveValue.new(credentials.api_key, show_sensitive)
-      }
+      credentials:
+        reject_nil_values(%{
+          type: credentials.type,
+          project_id: credentials.project_id,
+          private_key_id: SensitiveValue.new(credentials.private_key_id, show_sensitive),
+          private_key: SensitiveValue.new(credentials.private_key, show_sensitive),
+          client_email: SensitiveValue.new(credentials.client_email, show_sensitive),
+          client_id: SensitiveValue.new(credentials.client_id, show_sensitive),
+          auth_uri: credentials.auth_uri,
+          token_uri: credentials.token_uri,
+          auth_provider_x509_cert_url: credentials.auth_provider_x509_cert_url,
+          client_x509_cert_url: credentials.client_x509_cert_url,
+          universe_domain: SensitiveValue.new(credentials.universe_domain, show_sensitive),
+          client_secret: SensitiveValue.new(credentials.client_secret, show_sensitive),
+          api_key: SensitiveValue.new(credentials.api_key, show_sensitive)
+        })
     })
   end
 
@@ -513,7 +516,7 @@ defmodule Sequin.Transforms do
     group_column_names = group_column_names(source_table, table)
 
     %{
-      table: table_ref,
+      name: table_ref,
       group_column_names: group_column_names
     }
   end
@@ -837,23 +840,26 @@ defmodule Sequin.Transforms do
           end
 
         "transform" ->
-          case parse_transform_id(account_id, value) do
-            {:ok, transform_id} -> {:cont, {:ok, Map.put(acc, :transform_id, transform_id)}}
+          case parse_function_id(account_id, value) do
+            {:ok, function_id} -> {:cont, {:ok, Map.put(acc, :transform_id, function_id)}}
             {:error, error} -> {:halt, {:error, error}}
           end
 
         "routing" ->
-          case parse_transform_id(account_id, value) do
-            {:ok, transform_id} ->
-              {:cont, {:ok, Map.merge(acc, %{routing_mode: "dynamic", routing_id: transform_id})}}
+          case parse_function_id(account_id, value) do
+            {:ok, nil} ->
+              {:cont, {:ok, Map.put(acc, :routing_id, nil)}}
+
+            {:ok, function_id} ->
+              {:cont, {:ok, Map.merge(acc, %{routing_mode: "dynamic", routing_id: function_id})}}
 
             {:error, error} ->
               {:halt, {:error, error}}
           end
 
         "filter" ->
-          case parse_transform_id(account_id, value) do
-            {:ok, transform_id} -> {:cont, {:ok, Map.put(acc, :filter_id, transform_id)}}
+          case parse_function_id(account_id, value) do
+            {:ok, function_id} -> {:cont, {:ok, Map.put(acc, :filter_id, function_id)}}
             {:error, error} -> {:halt, {:error, error}}
           end
 
@@ -892,24 +898,17 @@ defmodule Sequin.Transforms do
           {:cont, {:ok, acc}}
 
         "table" ->
-          msg = """
-          `table` is deprecated. Use `source.include_tables` instead.
-
-          https://sequinstream.com/docs/reference/sequin-yaml#sink-source
-          """
-
-          error = Error.validation(summary: msg)
-          {:halt, {:error, error}}
+          # Convert deprecated table key to source format
+          with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
+               {:ok, table} <- find_table(database, value) do
+            {:cont, {:ok, Map.put(acc, :source, %{include_table_oids: [table.oid]})}}
+          else
+            {:error, error} -> {:halt, {:error, error}}
+          end
 
         "schema" ->
-          msg = """
-          `schema` is deprecated. Use `source.include_schemas` instead.
-
-          https://sequinstream.com/docs/reference/sequin-yaml#sink-source
-          """
-
-          error = Error.validation(summary: msg)
-          {:halt, {:error, error}}
+          # Convert deprecated schema key to source format
+          {:cont, {:ok, Map.put(acc, :source, %{include_schemas: [value]})}}
 
         # Unknown field
         _ ->
@@ -1234,10 +1233,10 @@ defmodule Sequin.Transforms do
     end
   end
 
-  defp parse_transform_id(_account_id, nil), do: {:ok, nil}
-  defp parse_transform_id(_account_id, "none"), do: {:ok, nil}
+  defp parse_function_id(_account_id, nil), do: {:ok, nil}
+  defp parse_function_id(_account_id, "none"), do: {:ok, nil}
 
-  defp parse_transform_id(account_id, function_name) do
+  defp parse_function_id(account_id, function_name) do
     case Consumers.find_function(account_id, name: function_name) do
       {:ok, function} -> {:ok, function.id}
       {:error, %NotFoundError{}} -> {:error, Error.validation(summary: "Function '#{function_name}' not found.")}

@@ -21,7 +21,8 @@ defmodule Sequin.ProcessMetrics do
     use Sequin.ProcessMetrics,
       interval: :timer.seconds(30),
       metric_prefix: "my_app.my_server",
-      tags: %{component: "my_component"}
+      tags: %{component: "my_component"},
+      on_log: {__MODULE__, :process_metrics_on_log, []}
   end
   ```
 
@@ -67,13 +68,28 @@ defmodule Sequin.ProcessMetrics do
   - The decorator tracks function invocations and runtime in the process dictionary
   - StatsD metrics are sent with the configured prefix and tags
   """
-  alias Sequin.Statsd
-
   require Logger
 
+  @metadata_key :__process_metrics_metadata__
   @metrics_key :__process_metrics__
   @metrics_last_logged_at_key :__process_metrics_last_logged_at__
   @stack_key :__process_metrics_stack__
+
+  defmodule Metrics do
+    @moduledoc false
+    use TypedStruct
+
+    typedstruct do
+      field :interval_ms, :non_neg_integer
+      field :busy_percent, number()
+      field :memory_mb, number()
+      field :message_queue_len, :non_neg_integer
+      field :timing, %{atom => %{count: :non_neg_integer, total_ms: :non_neg_integer, percent: number()}}
+      field :throughput, %{atom => :non_neg_integer}
+      field :gauge, %{atom => :non_neg_integer}
+      field :metadata, %{atom => any()}
+    end
+  end
 
   # ──────────────────────────────────────────────────────────────────────────
   # Per‑process call‑stack for exclusive‑time bookkeeping
@@ -111,8 +127,7 @@ defmodule Sequin.ProcessMetrics do
   @default_state %{
     timing: %{},
     throughput: %{},
-    gauge: %{},
-    metadata: %{}
+    gauge: %{}
   }
 
   @doc """
@@ -123,6 +138,7 @@ defmodule Sequin.ProcessMetrics do
   * `:interval` - The interval in milliseconds between logging process metrics (default: 30 seconds)
   * `:metric_prefix` - The prefix to use for StatsD metrics (default: derived from module name)
   * `:tags` - Additional tags to include in StatsD metrics (default: %{})
+  * `:on_log` - A tuple of {module, function, args} to be called with metrics struct (default: nil)
   """
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
@@ -138,6 +154,10 @@ defmodule Sequin.ProcessMetrics do
 
       defp process_metrics_metric_prefix do
         Keyword.get_lazy(@opts, :metric_prefix, &default_metric_prefix/0)
+      end
+
+      defp process_metrics_on_log do
+        Keyword.get(@opts, :on_log)
       end
 
       defp default_logger_prefix do
@@ -173,9 +193,9 @@ defmodule Sequin.ProcessMetrics do
         tags = Map.merge(process_metrics_tags(), dynamic_tags)
 
         Sequin.ProcessMetrics.handle_process_logging(
-          metric_prefix: process_metrics_metric_prefix(),
           logger_prefix: process_metrics_logger_prefix(),
-          tags: tags
+          tags: tags,
+          on_log: process_metrics_on_log()
         )
       end
     end
@@ -231,7 +251,7 @@ defmodule Sequin.ProcessMetrics do
   * `tags` - A map of tags to include in StatsD metrics
   """
   def metadata(tags) when is_map(tags) do
-    update_metrics(:metadata, &Map.merge(&1, tags))
+    Process.put(@metadata_key, Map.merge(Process.get(@metadata_key, %{}), tags))
   end
 
   @doc """
@@ -242,7 +262,7 @@ defmodule Sequin.ProcessMetrics do
   A map of tags
   """
   def get_metadata do
-    get_metrics().metadata
+    Process.get(@metadata_key, %{})
   end
 
   @doc """
@@ -293,10 +313,11 @@ defmodule Sequin.ProcessMetrics do
   @doc """
   Handles the `:process_logging` tick.
   """
-  def handle_process_logging(metric_prefix: metric_prefix, logger_prefix: logger_prefix, tags: tags) do
+  def handle_process_logging(logger_prefix: logger_prefix, tags: tags, on_log: on_log) do
     now = System.monotonic_time(:millisecond)
     last_logged_at = Process.get(@metrics_last_logged_at_key)
     interval_ms = if last_logged_at, do: now - last_logged_at
+    has_interval = is_integer(interval_ms) and interval_ms > 0
 
     info =
       Process.info(self(), [
@@ -306,145 +327,84 @@ defmodule Sequin.ProcessMetrics do
         :message_queue_len
       ])
 
-    metadata = [
-      memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
-      message_queue_len: info[:message_queue_len]
-    ]
-
     # Get all metrics from the process dictionary
     metrics = get_metrics()
 
-    # Extract timing metrics
-    timing_metrics = metrics.timing
-
-    # Convert timing metrics to format needed for logging and StatsD
-    runtime_metrics =
-      Enum.map(timing_metrics, fn {name, data} ->
-        {name, data.total_ms, data.count}
-      end)
-
-    # Log all timing metrics as histograms with operation tag
-    Enum.each(runtime_metrics, fn {name, total_ms, _count} ->
-      Statsd.histogram("#{metric_prefix}.operation_time_ms", total_ms, tags: Map.put(tags, :operation, name))
-    end)
-
-    # Process throughput metrics
-    throughput_metrics = metrics.throughput
-
-    # Format throughput metrics for logging with per-second rates
-    if_result =
-      if interval_ms && interval_ms > 0 do
-        Enum.map(throughput_metrics, fn {name, count} ->
-          rate = count / (interval_ms / 1000)
-          {:"#{name}_throughput", "#{Float.round(rate, 2)}/s"}
-        end)
-      else
-        Enum.map(throughput_metrics, fn {name, count} ->
-          {:"#{name}_count", count}
-        end)
-      end
-
-    formatted_throughput =
-      Keyword.new(if_result)
-
-    # Log throughput metrics to StatsD
-    if interval_ms && interval_ms > 0 do
-      Enum.each(throughput_metrics, fn {name, count} ->
-        rate = count / (interval_ms / 1000)
-        Statsd.gauge("#{metric_prefix}.#{name}_per_sec", rate, tags: tags)
-      end)
-    end
-
-    # Process gauge metrics
-    gauge_metrics = metrics.gauge
-
-    # Format gauge metrics for logging
-    formatted_gauges =
-      Keyword.new(gauge_metrics, fn {name, value} -> {:"#{name}", value} end)
-
-    # Log gauge metrics to StatsD
-    Enum.each(gauge_metrics, fn {name, value} ->
-      Statsd.gauge("#{metric_prefix}.#{name}", value, tags: tags)
-    end)
-
-    # Calculate unaccounted time
-    total_accounted_ms =
-      Enum.reduce(runtime_metrics, 0, fn {_name, total_ms, _count}, acc ->
-        acc + total_ms
-      end)
-
     unaccounted_ms =
-      if interval_ms do
-        max(0, interval_ms - total_accounted_ms)
+      if has_interval do
+        accounted_ms = Enum.sum_by(metrics.timing, fn {_name, %{total_ms: total_ms}} -> total_ms end)
+        max(0, interval_ms - accounted_ms)
       end
 
-    if unaccounted_ms do
-      # Log unaccounted time with same metric but different operation tag
-      Sequin.Statsd.histogram("#{metric_prefix}.operation_time_ms", unaccounted_ms,
-        tags: Map.put(tags, :operation, "unaccounted")
-      )
-    end
+    busy_percent = if has_interval, do: Float.round(100 - unaccounted_ms / interval_ms * 100, 2)
 
     # Calculate percentages for each operation
-    percentages =
-      if interval_ms && interval_ms > 0 do
-        Keyword.new(runtime_metrics, fn {name, total_ms, _count} ->
-          {:"#{name}_percent", Float.round(total_ms / interval_ms * 100, 2)}
+    timing_with_percentages =
+      if has_interval do
+        Map.new(metrics.timing, fn {name, data} ->
+          percent = Float.round(data.total_ms / interval_ms * 100, 2)
+          {String.to_atom(name), Map.put(data, :percent, percent)}
         end)
       else
-        []
+        %{}
       end
 
-    # Add unaccounted percentage
-    percentages =
-      if interval_ms && interval_ms > 0 && unaccounted_ms do
+    timing_with_percentages =
+      if has_interval do
         unaccounted_percent = Float.round(unaccounted_ms / interval_ms * 100, 2)
-        busy_percent = Float.round(100 - unaccounted_percent, 2)
 
-        percentages
-        |> Keyword.put(:unaccounted_percent, unaccounted_percent)
-        |> Keyword.put(:busy_percent, busy_percent)
+        Map.put(timing_with_percentages, :unaccounted, %{
+          count: 1,
+          total_ms: unaccounted_ms,
+          percent: unaccounted_percent
+        })
       else
-        percentages
+        %{}
       end
 
-    # Format timing metrics for logging
-    formatted_timing =
-      timing_metrics
-      |> Enum.flat_map(fn {name, data} ->
-        [
-          {:"#{name}_count", data.count},
-          {:"#{name}_total_ms", data.total_ms}
-        ]
-      end)
-      |> Keyword.new()
-
-    metadata =
-      metadata
-      |> Keyword.merge(formatted_timing)
-      |> Keyword.merge(percentages)
-      |> Keyword.merge(formatted_throughput)
-      |> Keyword.merge(formatted_gauges)
-      |> Sequin.Keyword.put_if_present(:unaccounted_total_ms, unaccounted_ms)
-      |> Keyword.put(:interval_ms, interval_ms)
-
-    # Add tags to metadata for logging
-    metadata =
-      if map_size(tags) > 0 do
-        Keyword.put(metadata, :tags, tags)
+    throughput_per_sec =
+      if has_interval do
+        Map.new(metrics.throughput, fn {name, count} ->
+          {String.to_atom(name), Float.round(count / (interval_ms / 1000), 2)}
+        end)
       else
-        metadata
+        %{}
       end
 
-    case metadata[:busy_percent] do
-      nil ->
-        Logger.info("#{logger_prefix} Process metrics", metadata)
+    gauge =
+      if has_interval do
+        Map.new(metrics.gauge, fn {name, value} -> {String.to_atom(name), value} end)
+      else
+        %{}
+      end
 
-      busy_percent when busy_percent < 20 ->
-        Logger.info("#{logger_prefix} Process metrics (#{busy_percent}% busy)", metadata)
+    # Create metrics struct for callback
+    metrics = %Metrics{
+      interval_ms: interval_ms,
+      busy_percent: busy_percent,
+      memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
+      message_queue_len: info[:message_queue_len],
+      timing: timing_with_percentages,
+      throughput: throughput_per_sec,
+      gauge: gauge,
+      metadata: Map.merge(get_metadata(), tags)
+    }
 
-      busy_percent ->
-        Logger.warning("#{logger_prefix} Process metrics (#{busy_percent}% busy)", metadata)
+    # Call the on_log callback if configured
+    if on_log do
+      {module, function, args} = on_log
+      apply(module, function, [metrics | args])
+    end
+
+    case metrics do
+      %{busy_percent: nil} ->
+        Logger.info("#{logger_prefix} Process metrics", logger_metadata(metrics))
+
+      %{busy_percent: busy_percent} when busy_percent < 20 ->
+        Logger.info("#{logger_prefix} Process metrics (#{busy_percent}% busy)", logger_metadata(metrics))
+
+      %{busy_percent: busy_percent} ->
+        Logger.warning("#{logger_prefix} Process metrics (#{busy_percent}% busy)", logger_metadata(metrics))
     end
 
     # Clear metrics after logging
@@ -452,6 +412,31 @@ defmodule Sequin.ProcessMetrics do
 
     # Schedule next logging and update last logged time
     Process.put(@metrics_last_logged_at_key, now)
+  end
+
+  defp logger_metadata(%Metrics{} = metrics) do
+    [
+      interval_ms: metrics.interval_ms,
+      busy_percent: metrics.busy_percent,
+      memory_mb: metrics.memory_mb,
+      message_queue_len: metrics.message_queue_len
+    ]
+    |> Keyword.merge(Keyword.new(metrics.metadata))
+    |> Keyword.merge(Keyword.new(metrics.gauge))
+    |> Keyword.merge(Keyword.new(metrics.throughput))
+    |> Keyword.merge(flatten_timing(metrics.timing))
+  end
+
+  defp flatten_timing(timing) do
+    timing
+    |> Enum.flat_map(fn {name, %{count: count, total_ms: total_ms, percent: percent}} ->
+      [
+        {String.to_atom("#{name}_total_ms"), total_ms},
+        {String.to_atom("#{name}_count"), count},
+        {String.to_atom("#{name}_percent"), percent}
+      ]
+    end)
+    |> Keyword.new()
   end
 end
 

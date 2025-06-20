@@ -2,7 +2,7 @@
 
 # Sequin
 
-### Postgres change data capture to streams and queues like Kafka, SQS, HTTP endpoints, and more
+### Postgres change data capture to streams, queues, and search indexes like Kafka, SQS, Elasticsearch, HTTP endpoints, and more
 
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](./LICENSE)
 
@@ -172,7 +172,7 @@ Sequin provides all this functionality out of the box:
 
 ### Prerequisites
 
-- Elixir 1.18+
+- Elixir and Erlang versions specified in [.tool-versions](.tool-versions)
 - PostgreSQL 14+
 - GitHub CLI (`gh`)
 - Node.js (for frontend assets)
@@ -181,22 +181,31 @@ Sequin provides all this functionality out of the box:
 ### Getting started
 
 1. Fork and clone the repository
-2. Install dependencies:
-   ```bash
-   # Install Elixir dependencies
-   mix deps.get
+```bash
+git clone https://github.com/sequinstream/sequin.git
+cd sequin
+```
 
-   # Install frontend dependencies
-   cd assets && npm install
-   ```
+2. Install dependencies:
+```bash
+# Install Elixir and Erlang with asdf
+asdf install
+
+# Install Elixir dependencies
+mix deps.get
+
+# Install frontend dependencies
+cd assets && npm install
+```
 3. Start PostgreSQL and Redis services:
-   ```bash
-   docker-compose up -d
-   ```
+```bash
+# Start PostgreSQL, Redis, Prometheus, and Grafana
+docker-compose --profile databases --profile monitoring up -d
+```
 4. Start the development server from the top-level directory:
-   ```bash
-   make dev
-   ```
+```bash
+make dev
+```
 
 The app will be available at `http://localhost:4000`.
 

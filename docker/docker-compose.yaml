@@ -13,6 +13,8 @@ services:
       - PG_USERNAME=postgres
       - PG_PASSWORD=postgres
       - PG_POOL_SIZE=20
+      # Un-comment for SSL
+      # - PG_SSL=true
       - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
       - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
       - REDIS_URL=redis://sequin_redis:6379

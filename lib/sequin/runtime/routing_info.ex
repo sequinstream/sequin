@@ -66,17 +66,22 @@ defmodule Sequin.Runtime.RoutingInfo do
         end
 
         def changeset(struct, params) do
+          # Cast string-ish values for fields with `type: :string`
+          casted_params = cast_string_fields(params, unquote(schema_definition))
+
           struct
-          |> cast(params, unquote(get_field_names(schema_definition)))
+          |> cast(casted_params, unquote(get_field_names(schema_definition)))
           # TODO Consider setting all fields as required without static defaults
           |> validate_required(unquote(get_required_fields(schema_definition)))
           |> apply_validations()
         end
 
+        # Default implementation of apply_validations is a no-op
         def apply_validations(changeset) do
           changeset
         end
 
+        # Default implementation of route_with_consumer_config is a no-op
         def route_with_consumer_config(routing_info, _consumer) do
           routing_info
         end
@@ -87,6 +92,32 @@ defmodule Sequin.Runtime.RoutingInfo do
           %__MODULE__{}
           |> changeset(attrs)
           |> apply_action(:validate)
+        end
+
+        defp cast_string_fields(params, schema_definition) when is_map(params) do
+          Enum.reduce(params, %{}, fn {key, value}, acc ->
+            field_opts = get_field_opts(schema_definition, key)
+            field_type = Keyword.get(field_opts, :type, :string)
+
+            # Allow integers, atoms, floats, and booleans to be cast to strings
+            casted_value =
+              if field_type == :string and (is_integer(value) or is_atom(value) or is_float(value) or is_boolean(value)) do
+                to_string(value)
+              else
+                value
+              end
+
+            Map.put(acc, key, casted_value)
+          end)
+        end
+
+        defp cast_string_fields(params, _schema_definition), do: params
+
+        defp get_field_opts(schema_definition, field_name) do
+          case Enum.find(schema_definition, fn {name, _opts} -> name == field_name end) do
+            {_name, opts} -> opts
+            nil -> []
+          end
         end
 
         defimpl Jason.Encoder do
@@ -101,7 +132,6 @@ defmodule Sequin.Runtime.RoutingInfo do
 
     @callback route(action :: atom(), record :: struct(), changes :: struct(), metadata :: struct()) :: struct()
     @callback encode(message :: struct()) :: any()
-    @callback validate_attributes(attrs :: map()) :: {:ok, struct()} | {:error, term()}
 
     # Private helper functions for macro expansion
 
@@ -197,7 +227,7 @@ defmodule Sequin.Runtime.RoutingInfo do
       changeset
       |> validate_length(:key, min: 1, max: 512)
       |> validate_format(:key, ~r/^[^\s]+$/, message: "cannot contain whitespace")
-      |> validate_inclusion(:action, ["set", "del", "get"], message: "is invalid, valid values are: set, del, get")
+      |> validate_inclusion(:action, ["set", "del"], message: "is invalid, valid values are: set, del")
     end
 
     def route(action, _record, _changes, metadata) do

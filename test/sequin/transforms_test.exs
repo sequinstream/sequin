@@ -253,7 +253,7 @@ defmodule Sequin.TransformsTest do
                  project_id: project_id,
                  topic_id: topic_id,
                  credentials: %{
-                   api_key: %SensitiveValue{value: nil, show_value: false},
+                   #  api_key: %SensitiveValue{value: nil, show_value: false},
                    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
                    auth_uri: "https://accounts.google.com/o/oauth2/auth",
                    client_email: %SensitiveValue{
@@ -264,7 +264,7 @@ defmodule Sequin.TransformsTest do
                      value: "123456789",
                      show_value: false
                    },
-                   client_secret: %SensitiveValue{value: nil, show_value: false},
+                   #  client_secret: %SensitiveValue{value: nil, show_value: false},
                    client_x509_cert_url:
                      "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com",
                    private_key: %SensitiveValue{
@@ -277,8 +277,8 @@ defmodule Sequin.TransformsTest do
                    },
                    project_id: "my-project",
                    token_uri: "https://oauth2.googleapis.com/token",
-                   type: "service_account",
-                   universe_domain: %SensitiveValue{value: nil, show_value: false}
+                   type: "service_account"
+                   #  universe_domain: %SensitiveValue{value: nil, show_value: false}
                  }
                }
              } = json
@@ -289,7 +289,7 @@ defmodule Sequin.TransformsTest do
       assert database_name == database.name
       assert status == :active
 
-      assert [%{table: table_ref, group_column_names: group_column_names}] = source_tables
+      assert [%{name: table_ref, group_column_names: group_column_names}] = source_tables
       assert table_ref == "#{table.schema}.#{table.name}"
       assert group_column_names == [column.name]
     end

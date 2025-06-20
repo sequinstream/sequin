@@ -34,6 +34,27 @@ defmodule Sequin.Consumers.SinkConsumer do
   @type ack_id :: String.t()
   @type not_visible_until :: DateTime.t()
 
+  @types [
+    :http_push,
+    :sqs,
+    :kinesis,
+    :s2,
+    :redis_stream,
+    :redis_string,
+    :kafka,
+    :sequin_stream,
+    :gcp_pubsub,
+    :nats,
+    :rabbitmq,
+    :azure_event_hub,
+    :typesense,
+    :sns,
+    :elasticsearch
+  ]
+
+  # This is a module attribute to compile the types into the schema
+  def types, do: @types
+
   @derive {Jason.Encoder,
            only: [
              :account_id,
@@ -75,25 +96,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
     field :load_shedding_policy, Ecto.Enum, values: [:pause_on_full, :discard_on_full], default: :pause_on_full
 
-    field :type, Ecto.Enum,
-      values: [
-        :http_push,
-        :sqs,
-        :kinesis,
-        :s2,
-        :redis_stream,
-        :redis_string,
-        :kafka,
-        :sequin_stream,
-        :gcp_pubsub,
-        :nats,
-        :rabbitmq,
-        :azure_event_hub,
-        :typesense,
-        :sns,
-        :elasticsearch
-      ],
-      read_after_writes: true
+    field :type, Ecto.Enum, values: @types, read_after_writes: true
 
     field :health, :map, virtual: true
 

@@ -402,12 +402,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Should raise so SlotProcessorServer cannot continue if this fails.
   """
-  @spec min_unpersisted_wal_cursors(SinkConsumer.t()) :: list(Replication.wal_cursor())
-  def min_unpersisted_wal_cursors(consumer) do
+  @spec min_unpersisted_wal_cursors(SinkConsumer.t(), reference()) :: list(Replication.wal_cursor())
+  def min_unpersisted_wal_cursors(consumer, monitor_ref) do
     consumer
     |> partitions()
     |> Enum.reduce_while([], fn partition, min_wal_cursors ->
-      case GenServer.call(via_tuple(consumer.id, partition), :min_unpersisted_wal_cursor) do
+      case GenServer.call(via_tuple(consumer.id, partition), {:min_unpersisted_wal_cursor, monitor_ref}) do
         {:ok, nil} -> {:cont, min_wal_cursors}
         {:ok, min_wal_cursor} -> {:cont, [min_wal_cursor | min_wal_cursors]}
         error -> {:halt, error}
@@ -495,6 +495,19 @@ defmodule Sequin.Runtime.SlotMessageStore do
         {:error, %NotFoundError{}} -> {:cont, not_found}
         error -> {:halt, error}
       end
+    end)
+  end
+
+  @doc """
+  Set the monitor reference for the SlotMessageStore into State
+  """
+  @decorate track_metrics("set_monitor_ref")
+  @spec set_monitor_ref(SinkConsumer.t(), reference()) :: :ok
+  def set_monitor_ref(consumer, ref) do
+    consumer
+    |> partitions()
+    |> Sequin.Enum.reduce_while_ok(fn partition ->
+      GenServer.call(via_tuple(consumer.id, partition), {:set_monitor_ref, ref}, :timer.seconds(120))
     end)
   end
 
@@ -724,8 +737,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @decorate track_metrics("min_unpersisted_wal_cursor")
-  def handle_call(:min_unpersisted_wal_cursor, _from, state) do
-    {:reply, {:ok, State.min_unpersisted_wal_cursor(state)}, state}
+  def handle_call({:min_unpersisted_wal_cursor, monitor_ref}, _from, state) do
+    if monitor_ref == state.slot_processor_monitor_ref do
+      {:reply, {:ok, State.min_unpersisted_wal_cursor(state)}, state}
+    else
+      raise "Monitor ref mismatch. Expected #{inspect(state.slot_processor_monitor_ref)} but got #{inspect(monitor_ref)}"
+    end
   end
 
   @decorate track_metrics("count_messages")
@@ -748,6 +765,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @decorate track_metrics("peek_message")
   def handle_call({:peek_message, ack_id}, _from, state) do
     {:reply, State.peek_message(state, ack_id), state}
+  end
+
+  @decorate track_metrics("set_monitor_ref")
+  def handle_call({:set_monitor_ref, ref}, _from, state) do
+    {:reply, :ok, %{state | slot_processor_monitor_ref: ref}}
   end
 
   def handle_call(:payload_size_bytes, _from, state) do

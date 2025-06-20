@@ -6,6 +6,7 @@ defmodule Sequin.SlotMessageStoreTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Error
+  alias Sequin.Error.InvariantError
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Runtime.SlotMessageStore
@@ -545,6 +546,17 @@ defmodule Sequin.SlotMessageStoreTest do
 
       %{consumer: consumer}
     end
+
+    test "min_wal_cursor raises on ref mismatch", %{consumer: consumer} do
+      ref = make_ref()
+      :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
+
+      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref) == []
+
+      assert_raise(InvariantError, fn ->
+        SlotMessageStore.min_unpersisted_wal_cursors(consumer, make_ref())
+      end)
+    end
   end
 
   describe "SlotMessageStore flush behavior" do
@@ -562,6 +574,9 @@ defmodule Sequin.SlotMessageStoreTest do
     test "identifies messages for flushing after age threshold", %{consumer: consumer} do
       consumer_id = consumer.id
 
+      ref = make_ref()
+      :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
+
       # Create a message that will be old enough to flush
       message =
         ConsumersFactory.consumer_message(
@@ -573,7 +588,7 @@ defmodule Sequin.SlotMessageStoreTest do
       :ok = SlotMessageStore.put_messages(consumer, [message])
 
       # Initially we have one unpersisted commit tuple
-      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer) == [
+      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref) == [
                %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx}
              ]
 
@@ -584,7 +599,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert length(persisted_messages) == 1
 
       # This is the point- the wal cursor is now persisted!
-      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer) == []
+      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref) == []
     end
 
     test "persisted messages are not identified for flushing regardless of age", %{consumer: consumer} do
@@ -629,6 +644,9 @@ defmodule Sequin.SlotMessageStoreTest do
     end
 
     test "many messages", %{consumer: consumer, slot_message_store_pid: pid} do
+      ref = make_ref()
+      :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
+
       assert 8 == Application.get_env(:sequin, :slot_message_store, [])[:flush_batch_size]
 
       # Create a message that will be old enough to flush
@@ -644,7 +662,8 @@ defmodule Sequin.SlotMessageStoreTest do
       :ok = SlotMessageStore.put_messages(consumer, messages)
 
       # Initially we have one unpersisted commit tuple
-      assert [_] = SlotMessageStore.min_unpersisted_wal_cursors(consumer)
+      assert [_] =
+               SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
 
       send(pid, :flush_messages)
 
@@ -653,7 +672,7 @@ defmodule Sequin.SlotMessageStoreTest do
       assert_receive {:flush_messages_count, 8}, 333
 
       # done
-      assert [] = SlotMessageStore.min_unpersisted_wal_cursors(consumer)
+      assert [] = SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
       # no more
       refute_receive {:flush_messages_count, _}, 111
     end

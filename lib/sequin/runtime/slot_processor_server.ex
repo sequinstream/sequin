@@ -15,7 +15,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias __MODULE__
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Constants
-  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Databases.PostgresDatabase
@@ -173,7 +172,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       # Message handlers
       field :message_handler_ctx, any()
       field :message_handler_module, atom()
-      field :linked_message_stores, MapSet.t(SinkConsumer.id()), default: MapSet.new()
+      field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
 
       # Health and monitoring
       field :check_memory_fn, nil | (-> non_neg_integer())
@@ -278,12 +277,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       {:error, :not_running}
   end
 
-  def link_message_stores(id, consumer) do
-    GenServer.call(via_tuple(id), {:link_message_stores, consumer}, :timer.seconds(120))
+  def monitor_message_store(id, consumer) do
+    GenServer.call(via_tuple(id), {:monitor_message_store, consumer}, :timer.seconds(120))
   end
 
-  def unlink_message_stores(id, consumer_id) do
-    GenServer.call(via_tuple(id), {:unlink_message_stores, consumer_id})
+  def demonitor_message_store(id, consumer_id) do
+    GenServer.call(via_tuple(id), {:demonitor_message_store, consumer_id})
   end
 
   def via_tuple(id) do
@@ -529,33 +528,37 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   @impl ReplicationConnection
-  @decorate track_metrics("link_message_stores")
-  def handle_call({:link_message_stores, consumer}, from, state) do
-    for partition <- SlotMessageStore.partitions(consumer) do
-      true =
-        consumer.id
-        |> SlotMessageStore.via_tuple(partition)
-        |> GenServer.whereis()
-        |> Process.link()
+  @decorate track_metrics("monitor_message_store")
+  def handle_call({:monitor_message_store, consumer}, from, state) do
+    if Map.has_key?(state.message_store_refs, consumer.id) do
+      GenServer.reply(from, :ok)
+      {:keep_state, state}
+    else
+      # Monitor just the first partition (there's always at least one) and if any crash they will all restart
+      # due to supervisor setting of :one_for_all
+      pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer.id, 0))
+      ref = Process.monitor(pid)
+      :ok = SlotMessageStore.set_monitor_ref(consumer, ref)
+      Logger.info("Monitoring message store for consumer #{consumer.id}")
+      GenServer.reply(from, :ok)
+      {:keep_state, %{state | message_store_refs: Map.put(state.message_store_refs, consumer.id, ref)}}
     end
-
-    GenServer.reply(from, :ok)
-
-    Logger.info("Linked message stores for consumer #{consumer.id}")
-    {:keep_state, %{state | linked_message_stores: MapSet.put(state.linked_message_stores, consumer.id)}}
   end
 
   @impl ReplicationConnection
-  @decorate track_metrics("unlink_message_stores")
-  def handle_call({:unlink_message_stores, consumer_id}, from, state) do
-    if MapSet.member?(state.linked_message_stores, consumer_id) do
-      Logger.info("Unlinking message stores for consumer #{consumer_id}")
-      GenServer.reply(from, :ok)
-      {:keep_state, %{state | linked_message_stores: MapSet.delete(state.linked_message_stores, consumer_id)}}
-    else
-      Logger.warning("No linked message stores found for consumer #{consumer_id}")
-      GenServer.reply(from, :ok)
-      {:keep_state, state}
+  @decorate track_metrics("demonitor_message_store")
+  def handle_call({:demonitor_message_store, consumer_id}, from, state) do
+    case state.message_store_refs[consumer_id] do
+      nil ->
+        Logger.warning("No monitor found for consumer #{consumer_id}")
+        GenServer.reply(from, :ok)
+        {:keep_state, state}
+
+      ref ->
+        res = Process.demonitor(ref)
+        Logger.info("Demonitored message store for consumer #{consumer_id}: (res=#{inspect(res)})")
+        GenServer.reply(from, :ok)
+        {:keep_state, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
     end
   end
 
@@ -608,6 +611,23 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   def handle_info({:EXIT, _pid, :shutdown}, %State{} = state) do
     # We'll get this when we disconnect from the replication slot
     {:keep_state, state}
+  end
+
+  @impl ReplicationConnection
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %State{} = state) do
+    if Application.get_env(:sequin, :env) == :test and reason == :shutdown do
+      {:keep_state, state}
+    else
+      {consumer_id, ^ref} = Enum.find(state.message_store_refs, fn {_, r} -> r == ref end)
+
+      Logger.error(
+        "[SlotProcessorServer] SlotMessageStore died. Shutting down.",
+        consumer_id: consumer_id,
+        reason: reason
+      )
+
+      raise "SlotMessageStore died (consumer_id=#{consumer_id}, reason=#{inspect(reason)})"
+    end
   end
 
   @impl ReplicationConnection
@@ -1522,15 +1542,21 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       Repo.preload(state.replication_slot, :not_disabled_sink_consumers, force: true).not_disabled_sink_consumers
 
     with :ok <- verify_messages_flushed(state),
-         :ok <- verify_linked_message_stores(state) do
+         :ok <- verify_monitor_refs(state) do
+      consumers_with_refs =
+        Enum.map(state.message_store_refs, fn {consumer_id, ref} ->
+          consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
+          {consumer, ref}
+        end)
+
       low_for_message_stores =
         Sequin.TaskSupervisor
         |> Task.Supervisor.async_stream(
-          consumers,
-          fn %SinkConsumer{} = consumer ->
-            SlotMessageStore.min_unpersisted_wal_cursors(consumer)
+          consumers_with_refs,
+          fn {consumer, ref} ->
+            SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
           end,
-          max_concurrency: max(length(consumers), 1),
+          max_concurrency: max(map_size(state.message_store_refs), 1),
           timeout: :timer.seconds(15)
         )
         |> Enum.flat_map(fn {:ok, cursors} -> cursors end)
@@ -1583,7 +1609,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     count > 0
   end
 
-  defp verify_linked_message_stores(%State{} = state) do
+  defp verify_monitor_refs(%State{} = state) do
     sink_consumer_ids =
       state.replication_slot
       |> Sequin.Repo.preload(:not_disabled_sink_consumers, force: true)
@@ -1592,34 +1618,28 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       |> Enum.filter(&DateTime.before?(&1.inserted_at, DateTime.add(Sequin.utc_now(), -10, :minute)))
       |> Enum.map(& &1.id)
 
-    linked_message_store_consumer_ids = MapSet.to_list(state.linked_message_stores)
+    monitored_sink_consumer_ids = Map.keys(state.message_store_refs)
 
     %MessageHandler.Context{consumers: message_handler_consumers} = state.message_handler_ctx
     message_handler_sink_consumer_ids = Enum.map(message_handler_consumers, & &1.id)
 
     cond do
       not Enum.all?(sink_consumer_ids, &(&1 in message_handler_sink_consumer_ids)) ->
-        missing_ids = sink_consumer_ids -- message_handler_sink_consumer_ids
-
         msg = """
         Sink consumer IDs do not match message handler sink consumer IDs.
         Sink consumers: #{inspect(sink_consumer_ids)}.
         Message handler: #{inspect(message_handler_sink_consumer_ids)}
-        Missing: #{inspect(missing_ids)}
         """
 
         Logger.error(msg)
 
         {:error, Error.invariant(message: msg)}
 
-      not Enum.all?(sink_consumer_ids, &(&1 in linked_message_store_consumer_ids)) ->
-        missing_ids = sink_consumer_ids -- linked_message_store_consumer_ids
-
+      not Enum.all?(sink_consumer_ids, &(&1 in monitored_sink_consumer_ids)) ->
         msg = """
-        Sink consumer IDs do not match linked message store consumer IDs.
+        Sink consumer IDs do not match monitored sink consumer IDs.
         Sink consumers: #{inspect(sink_consumer_ids)}.
-        Linked: #{inspect(linked_message_store_consumer_ids)}
-        Missing: #{inspect(missing_ids)}
+        Monitored: #{inspect(monitored_sink_consumer_ids)}
         """
 
         Logger.error(msg)

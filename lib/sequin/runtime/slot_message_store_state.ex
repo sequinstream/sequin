@@ -32,6 +32,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :setting_max_memory_check_interval, non_neg_integer(), default: :timer.minutes(5)
     field :max_memory_bytes, non_neg_integer()
     field :payload_size_bytes, non_neg_integer(), default: 0
+    field :slot_processor_monitor_ref, reference() | nil
     field :table_reader_batch_id, String.t() | nil
     field :test_pid, pid() | nil
     field :last_logged_stats_at, non_neg_integer() | nil

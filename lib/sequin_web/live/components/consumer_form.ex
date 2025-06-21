@@ -587,9 +587,8 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     if sink_changeset.valid? do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
-      client = MeilisearchClient.new(MeilisearchSink.client_params(sink))
 
-      case MeilisearchClient.get_index(client, sink.index_name) do
+      case MeilisearchClient.get_index(sink) do
         {:ok, primary_key} ->
           if primary_key == sink.primary_key do
             :ok

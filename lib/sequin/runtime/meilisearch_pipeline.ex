@@ -2,17 +2,15 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   @moduledoc false
   @behaviour Sequin.Runtime.SinkPipeline
 
-  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Runtime.Trace
   alias Sequin.Sinks.Meilisearch.Client
   alias Sequin.Transforms.Message
 
   @impl SinkPipeline
   def init(context, _opts) do
-    %{consumer: consumer} = context
-    meilisearch_client = Client.new(MeilisearchSink.client_params(consumer.sink))
-    Map.put(context, :meilisearch_client, meilisearch_client)
+    context
   end
 
   @impl SinkPipeline
@@ -48,7 +46,6 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   def handle_batch(:default, messages, _batch_info, context) do
     %{
       consumer: %SinkConsumer{sink: sink, transform: transform} = consumer,
-      meilisearch_client: client,
       test_pid: test_pid
     } = context
 
@@ -61,11 +58,21 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
         |> attempt_to_fill_primary_key(transform, sink.primary_key)
       end)
 
-    jsonl = encode_as_jsonl(records)
+    case Client.import_documents(sink, records) do
+      {:ok} ->
+        Trace.info(consumer.id, %Trace.Event{
+          message: "Imported documents to \"#{sink.index_name}\" index"
+        })
 
-    case Client.import_documents(consumer, client, sink.index_name, jsonl) do
-      {:ok} -> {:ok, messages, context}
-      {:error, error} -> {:error, error}
+        {:ok, messages, context}
+
+      {:error, error} ->
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to import to \"#{sink.index_name}\" index",
+          error: error
+        })
+
+        {:error, error}
     end
   end
 
@@ -73,7 +80,6 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   def handle_batch(:delete, messages, _batch_info, context) do
     %{
       consumer: %SinkConsumer{sink: sink} = consumer,
-      meilisearch_client: client,
       test_pid: test_pid
     } = context
 
@@ -82,23 +88,27 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
     document_ids =
       Enum.flat_map(messages, fn %{data: message} -> message.record_pks end)
 
-    case Client.delete_documents(consumer, client, sink.index_name, document_ids) do
-      :ok -> {:ok, messages, context}
-      {:error, error} -> {:error, error}
+    case Client.delete_documents(sink, document_ids) do
+      {:ok} ->
+        Trace.info(consumer.id, %Trace.Event{
+          message: "Deleted documents from \"#{sink.index_name}\" index",
+          extra: %{document_ids: document_ids}
+        })
+
+        {:ok, messages, context}
+
+      {:error, error} ->
+        Trace.error(consumer.id, %Trace.Event{
+          message: "Failed to delete documents from \"#{sink.index_name}\" index",
+          error: error,
+          extra: %{document_ids: document_ids}
+        })
+
+        {:error, error}
     end
   end
 
   # Helper functions
-
-  defp encode_as_jsonl(records) do
-    Enum.map_join(records, "\n", &Jason.encode!/1)
-  end
-
-  defp setup_allowances(nil), do: :ok
-
-  defp setup_allowances(test_pid) do
-    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
-  end
 
   # If the consumer does not have a transform, attempt to fill in missing primary key
   # by extracting it from record, but only for simple (non-dotted) primary keys
@@ -116,4 +126,11 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   end
 
   defp attempt_to_fill_primary_key(message, _transform, _primary_key), do: message
+
+  defp setup_allowances(nil), do: :ok
+
+  defp setup_allowances(test_pid) do
+    Req.Test.allow(Client, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+  end
 end

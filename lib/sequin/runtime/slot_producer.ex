@@ -76,12 +76,13 @@ defmodule Sequin.Runtime.SlotProducer do
     use TypedStruct
 
     typedstruct enforce: true do
-      field :commit_ts, DateTime.t()
-      field :commit_lsn, integer()
-      field :commit_idx, integer()
-      field :transaction_annotations, String.t()
       field :byte_size, integer()
+      field :commit_idx, integer()
+      field :commit_lsn, integer()
+      field :commit_ts, DateTime.t()
+      field :kind, :insert | :update | :delete
       field :payload, binary()
+      field :transaction_annotations, String.t()
     end
   end
 
@@ -332,7 +333,7 @@ defmodule Sequin.Runtime.SlotProducer do
     ProcessMetrics.gauge("accumulated_messages_count", state.accumulated_messages.count)
     ProcessMetrics.gauge("accumulated_messages_bytes", state.accumulated_messages.bytes)
 
-    {:ok, state}
+    {:ok, %{state | commit_idx: state.commit_idx + 1}}
   end
 
   # Primary keepalive message from server:
@@ -392,13 +393,21 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   defp message_from_binary(%State{} = state, binary) do
+    kind =
+      case binary do
+        <<?I, _rest::binary>> -> :insert
+        <<?U, _rest::binary>> -> :update
+        <<?D, _rest::binary>> -> :delete
+      end
+
     %Message{
-      commit_ts: state.commit_ts,
-      commit_lsn: state.commit_lsn,
-      commit_idx: state.commit_idx,
-      transaction_annotations: state.transaction_annotations,
       byte_size: byte_size(binary),
-      payload: binary
+      commit_idx: state.commit_idx,
+      commit_lsn: state.commit_lsn,
+      commit_ts: state.commit_ts,
+      kind: kind,
+      payload: binary,
+      transaction_annotations: state.transaction_annotations
     }
   end
 

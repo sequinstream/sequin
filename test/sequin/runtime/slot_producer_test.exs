@@ -14,7 +14,9 @@ defmodule Sequin.Runtime.SlotProducerTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.SlotProducer
+  alias Sequin.Runtime.SlotProducer.Message
   alias Sequin.Test.UnboxedRepo
+  alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.ReplicationSlots
 
   @moduletag :unboxed
@@ -25,8 +27,6 @@ defmodule Sequin.Runtime.SlotProducerTest do
   setup do
     # Fast-forward the replication slot to the current WAL position
     :ok = ReplicationSlots.reset_slot(UnboxedRepo, replication_slot())
-
-    :ok
   end
 
   defmodule TestConsumer do
@@ -41,13 +41,13 @@ defmodule Sequin.Runtime.SlotProducerTest do
       GenStage.start_link(__MODULE__, opts)
     end
 
-    def init(%{producer: producer, test_pid: test_pid, max_demand: max_demand}) do
+    def init(%{producer: producer, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand}) do
       state = %{
         test_pid: test_pid,
         messages: []
       }
 
-      {:consumer, state, subscribe_to: [{producer, max_demand: max_demand}]}
+      {:consumer, state, subscribe_to: [{producer, max_demand: max_demand, min_demand: min_demand}]}
     end
 
     def handle_events(events, _from, state) do
@@ -83,31 +83,61 @@ defmodule Sequin.Runtime.SlotProducerTest do
           status: :active
         )
 
-      {:ok, %{postgres_database: postgres_database, pg_replication: pg_replication}}
-    end
-
-    test "produces messages when data is inserted", %{postgres_database: postgres_database} do
       test_pid = self()
 
-      connect_opts = db_connect_opts(postgres_database)
-
-      opts = [
-        connect_opts: connect_opts,
-        safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end
-      ]
-
       # Start the SlotProducer
-      producer_pid = start_slot_producer(opts)
+      producer_pid = start_slot_producer(postgres_database)
 
       # Start a test consumer that will collect messages
       start_test_consumer(producer_pid, test_pid)
 
+      {:ok, %{postgres_database: postgres_database, pg_replication: pg_replication}}
+    end
+
+    test "produces messages when data is inserted" do
       # Insert a character record to generate WAL messages
       character_attrs = CharacterFactory.character_attrs()
       CharacterFactory.insert_character!(character_attrs, repo: UnboxedRepo)
 
       # Wait for and assert we receive messages
-      assert_receive_message_kinds(["B", "R", "I", "C"])
+      assert_receive_message_kinds([:insert])
+    end
+
+    test "produces messages in correct order" do
+      # Insert a character record to generate WAL messages
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+      UnboxedRepo.update_all(Character, set: [name: "Updated Name"])
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+      UnboxedRepo.update_all(Character, set: [name: "Updated Namez"])
+      UnboxedRepo.delete_all(Character)
+
+      # Wait for and assert we receive messages
+      assert_receive_message_kinds([:insert, :update, :insert, :update, :update, :delete, :delete])
+    end
+
+    test "respects transaction boundaries" do
+      char1 = CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+
+      UnboxedRepo.transaction(fn ->
+        CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+        CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+      end)
+
+      char1.id
+      |> Character.where_id()
+      |> UnboxedRepo.update_all(set: [name: "Updated Name"])
+
+      messages = receive_messages(4)
+
+      assert [
+               %Message{commit_lsn: lsn1, commit_idx: 0, commit_ts: ts1, kind: :insert},
+               %Message{commit_lsn: lsn2, commit_idx: 0, commit_ts: ts2, kind: :insert},
+               %Message{commit_lsn: lsn2, commit_idx: 1, commit_ts: ts2, kind: :insert},
+               %Message{commit_lsn: lsn3, commit_idx: 0, commit_ts: ts3, kind: :update}
+             ] = messages
+
+      assert Enum.all?([lsn1, lsn2, lsn3], &is_integer/1)
+      assert Enum.all?([ts1, ts2, ts3], &is_struct(&1, DateTime))
     end
 
     # test "handles multiple inserts and produces correct number of messages", %{
@@ -278,24 +308,38 @@ defmodule Sequin.Runtime.SlotProducerTest do
     assert_receive {:messages_received, messages}, 1_000
 
     case count - length(messages) do
-      0 -> acc ++ messages
-      next_count -> receive_messages(next_count, acc ++ messages)
+      0 ->
+        acc ++ messages
+
+      next_count when next_count < 0 ->
+        flunk("Received more messages than expected #{inspect(message_kinds(acc))})")
+
+      next_count ->
+        receive_messages(next_count, acc ++ messages)
     end
+  rescue
+    err ->
+      case err do
+        %ExUnit.AssertionError{message: "Assertion failed, no matching message after" <> _rest} ->
+          flunk("Did not receive remaining #{count} messages (got: #{inspect(message_kinds(acc))})")
+
+        err ->
+          reraise err, __STACKTRACE__
+      end
   end
 
   defp assert_receive_message_kinds(expected_kinds) do
     messages = receive_messages(length(expected_kinds))
 
-    received_kinds =
-      Enum.map(messages, fn <<header::binary-1, _rest::binary>> ->
-        header
-      end)
+    assert_lists_equal(expected_kinds, message_kinds(messages))
+  end
 
-    assert_lists_equal(expected_kinds, received_kinds)
+  defp message_kinds(msgs) do
+    Enum.map(msgs, & &1.kind)
   end
 
   # Helper functions
-  defp start_slot_producer(opts) do
+  defp start_slot_producer(db, opts \\ []) do
     start_query =
       "START_REPLICATION SLOT #{replication_slot()} LOGICAL 0/0 (proto_version '1', publication_names '#{@publication}', messages 'true')"
 
@@ -303,6 +347,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       Keyword.merge(
         [
           id: UUID.uuid4(),
+          connect_opts: db_connect_opts(db),
           start_replication_query: start_query,
           safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end
         ],
@@ -314,8 +359,11 @@ defmodule Sequin.Runtime.SlotProducerTest do
 
   defp start_test_consumer(producer_pid, test_pid, opts \\ []) do
     max_demand = Keyword.get(opts, :max_demand, 10)
+    min_demand = Keyword.get(opts, :min_demand, 5)
 
-    start_supervised!({TestConsumer, %{producer: producer_pid, test_pid: test_pid, max_demand: max_demand}})
+    start_supervised!(
+      {TestConsumer, %{producer: producer_pid, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand}}
+    )
   end
 
   defp db_connect_opts(postgres_database) do

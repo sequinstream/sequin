@@ -13,6 +13,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Postgres
   alias Sequin.Runtime.SlotProducer
   alias Sequin.Runtime.SlotProducer.Message
   alias Sequin.Test.UnboxedRepo
@@ -138,91 +139,46 @@ defmodule Sequin.Runtime.SlotProducerTest do
 
       assert Enum.all?([lsn1, lsn2, lsn3], &is_integer/1)
       assert Enum.all?([ts1, ts2, ts3], &is_struct(&1, DateTime))
+      assert lsn3 > lsn2
+      assert lsn2 > lsn1
     end
 
-    # test "handles multiple inserts and produces correct number of messages", %{
-    #   postgres_database: postgres_database
-    # } do
-    #   test_pid = self()
+    test "add and clears transaction annotations", %{postgres_database: db} do
+      annotation = ~s|{"my": "annotations"}|
 
-    #   connect_opts = db_connect_opts(postgres_database)
-    #   start_query = replication_start_query()
+      UnboxedRepo.transaction(fn ->
+        CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+        write_transaction_annotation(db, annotation)
+        CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+        CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+      end)
 
-    #   opts = [
-    #     connect_opts: connect_opts,
-    #     start_replication_query: start_query,
-    #     safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0} end
-    #   ]
+      messages = receive_messages(3)
 
-    #   # Start the SlotProducer
-    #   {:ok, producer_pid} = GenStage.start_link(SlotProducer, opts)
+      assert [
+               %Message{transaction_annotations: nil, commit_idx: 0},
+               %Message{transaction_annotations: ^annotation, commit_idx: 1},
+               %Message{transaction_annotations: ^annotation, commit_idx: 2}
+             ] = messages
+    end
 
-    #   # Start a test consumer
-    #   {:ok, consumer_pid} = start_test_consumer(producer_pid, test_pid)
+    test "clears transaction annotation when directed", %{postgres_database: db} do
+      annotation = ~s|{"my": "annotations"}|
 
-    #   # Wait for connection
-    #   Process.sleep(200)
+      UnboxedRepo.transaction(fn ->
+        write_transaction_annotation(db, annotation)
+        CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+        clear_transaction_annotation(db)
+        CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+      end)
 
-    #   # Insert multiple character records
-    #   characters =
-    #     Enum.map(1..3, fn _i ->
-    #       character_attrs = CharacterFactory.character_attrs()
-    #       CharacterFactory.insert_character!(character_attrs, repo: UnboxedRepo)
-    #     end)
+      messages = receive_messages(2)
 
-    #   # Wait for messages
-    #   assert_receive {:messages_received, messages}, 5_000
-
-    #   # We should receive at least some messages for our inserts
-    #   assert length(messages) > 0
-
-    #   # Log the messages for debugging
-    #   IO.inspect(length(messages), label: "Total messages received")
-
-    #   # Clean up
-    #   GenStage.stop(consumer_pid)
-    #   GenStage.stop(producer_pid)
-    # end
-
-    # test "handles backpressure correctly with limited demand", %{postgres_database: postgres_database} do
-    #   test_pid = self()
-
-    #   connect_opts = db_connect_opts(postgres_database)
-    #   start_query = replication_start_query()
-
-    #   opts = [
-    #     connect_opts: connect_opts,
-    #     start_replication_query: start_query,
-    #     safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0} end
-    #   ]
-
-    #   # Start the SlotProducer
-    #   {:ok, producer_pid} = GenStage.start_link(SlotProducer, opts)
-
-    #   # Start a test consumer with limited demand (max_demand: 2)
-    #   {:ok, consumer_pid} = start_test_consumer(producer_pid, test_pid, max_demand: 2)
-
-    #   # Wait for connection
-    #   Process.sleep(200)
-
-    #   # Insert several records
-    #   Enum.each(1..5, fn _i ->
-    #     character_attrs = CharacterFactory.character_attrs()
-    #     CharacterFactory.insert_character!(character_attrs, repo: UnboxedRepo)
-    #   end)
-
-    #   # We should receive messages in batches due to backpressure
-    #   assert_receive {:messages_received, first_batch}, 5_000
-    #   assert length(first_batch) <= 2
-
-    #   # Consumer should request more and receive more messages
-    #   assert_receive {:messages_received, second_batch}, 5_000
-    #   assert length(second_batch) <= 2
-
-    #   # Clean up
-    #   GenStage.stop(consumer_pid)
-    #   GenStage.stop(producer_pid)
-    # end
+      assert [
+               %Message{transaction_annotations: ^annotation, commit_idx: 0},
+               %Message{transaction_annotations: nil, commit_idx: 1}
+             ] = messages
+    end
 
     # @tag capture_log: true
     # test "handles connection failures gracefully", %{postgres_database: postgres_database} do
@@ -264,44 +220,6 @@ defmodule Sequin.Runtime.SlotProducerTest do
     #   # Clean up
     #   GenStage.stop(producer_pid)
     # end
-
-    # test "accumulates messages correctly in internal buffer", %{postgres_database: postgres_database} do
-    #   test_pid = self()
-
-    #   connect_opts = db_connect_opts(postgres_database)
-    #   start_query = replication_start_query()
-
-    #   opts = [
-    #     connect_opts: connect_opts,
-    #     start_replication_query: start_query,
-    #     safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0} end
-    #   ]
-
-    #   # Start the SlotProducer
-    #   {:ok, producer_pid} = GenStage.start_link(SlotProducer, opts)
-
-    #   # Don't start consumer immediately - let messages accumulate
-    #   Process.sleep(200)
-
-    #   # Insert records while no consumer is demanding
-    #   Enum.each(1..2, fn _i ->
-    #     character_attrs = CharacterFactory.character_attrs()
-    #     CharacterFactory.insert_character!(character_attrs, repo: UnboxedRepo)
-    #   end)
-
-    #   # Wait for messages to be processed and buffered
-    #   Process.sleep(500)
-
-    #   # Now start consumer and it should receive the accumulated messages
-    #   {:ok, consumer_pid} = start_test_consumer(producer_pid, test_pid)
-
-    #   assert_receive {:messages_received, messages}, 5_000
-    #   assert length(messages) > 0
-
-    #   # Clean up
-    #   GenStage.stop(consumer_pid)
-    #   GenStage.stop(producer_pid)
-    # end
   end
 
   defp receive_messages(count, acc \\ []) do
@@ -332,6 +250,14 @@ defmodule Sequin.Runtime.SlotProducerTest do
     messages = receive_messages(length(expected_kinds))
 
     assert_lists_equal(expected_kinds, message_kinds(messages))
+  end
+
+  defp write_transaction_annotation(db, content) do
+    Postgres.query(db, "select pg_logical_emit_message(true, 'sequin:transaction_annotations.set', $1);", [content])
+  end
+
+  defp clear_transaction_annotation(db) do
+    Postgres.query(db, "select pg_logical_emit_message(true, 'sequin:transaction_annotations.clear', '');")
   end
 
   defp message_kinds(msgs) do

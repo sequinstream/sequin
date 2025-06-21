@@ -17,6 +17,7 @@ defmodule Sequin.Runtime.SlotProducer do
   alias Sequin.Runtime.PostgresAdapter.Decoder
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
+  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
 
   require Logger
 
@@ -266,17 +267,24 @@ defmodule Sequin.Runtime.SlotProducer do
     {:ok, state}
   end
 
-  defp handle_data(<<?w, _header::192, "R", _msg::binary>>, %State{} = state) do
+  defp handle_data(<<?w, _header::192, ?R, _msg::binary>>, %State{} = state) do
     {:ok, state}
   end
 
-  # defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin:transaction_annotations.set", content: content}) do
-  #   %{state | transaction_annotations: content}
-  # end
+  defp handle_data(<<?w, _header::192, ?M, rest::binary>>, %State{} = state) do
+    %LogicalMessage{} = message = Decoder.decode_message(<<?M, rest::binary>>)
+    handle_data(message, state)
+  end
 
-  # defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin:transaction_annotations.clear"}) do
-  #   %{state | transaction_annotations: nil}
-  # end
+  defp handle_data(%LogicalMessage{prefix: "sequin:transaction_annotations.set", content: content}, state) do
+    state = %{state | transaction_annotations: content}
+    {:ok, state}
+  end
+
+  defp handle_data(%LogicalMessage{prefix: "sequin:transaction_annotations.clear"}, state) do
+    state = %{state | transaction_annotations: nil}
+    {:ok, state}
+  end
 
   # defp process_message(%State{} = state, %Message{} = msg) do
   #   state =

@@ -179,8 +179,8 @@ defmodule Sequin.Runtime.SlotProducerTest do
 
     @tag skip_start: true
     test "sends acks to the replication slot on an interval", %{postgres_database: db} do
-      {:ok, cursor} = Postgres.confirmed_flush_lsn(db, replication_slot())
-      {:ok, agent} = Agent.start_link(fn -> %{commit_lsn: cursor, commit_idx: 0} end)
+      {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
+      {:ok, agent} = Agent.start_link(fn -> %{commit_lsn: init_lsn, commit_idx: 0} end)
 
       start_slot_producer(db,
         ack_interval: 1,
@@ -193,7 +193,14 @@ defmodule Sequin.Runtime.SlotProducerTest do
       next_commit_lsn = msg.commit_lsn
       Agent.update(agent, fn _ -> %{commit_lsn: next_commit_lsn, commit_idx: 0} end)
 
+      assert next_commit_lsn > init_lsn
       assert_eventually {:ok, ^next_commit_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot()), 1000
+    end
+
+    test "logical messages flow through", %{postgres_database: db} do
+      Postgres.query!(db, "select pg_logical_emit_message(true, 'my-msg', 'my-data')")
+
+      assert_receive_message_kinds([:logical_message])
     end
 
     # @tag capture_log: true

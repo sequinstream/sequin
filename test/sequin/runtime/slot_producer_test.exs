@@ -6,6 +6,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
   replication slot and testing the GenStage producer/consumer pipeline.
   """
   use Sequin.DataCase, async: false
+  use AssertEventually, interval: 1
 
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
@@ -61,7 +62,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
   end
 
   describe "SlotProducer GenStage pipeline" do
-    setup do
+    setup ctx do
       # Create test database configuration
       account = AccountsFactory.insert_account!()
 
@@ -84,13 +85,9 @@ defmodule Sequin.Runtime.SlotProducerTest do
           status: :active
         )
 
-      test_pid = self()
-
-      # Start the SlotProducer
-      producer_pid = start_slot_producer(postgres_database)
-
-      # Start a test consumer that will collect messages
-      start_test_consumer(producer_pid, test_pid)
+      unless Map.get(ctx, :skip_start) do
+        start_slot_producer(postgres_database)
+      end
 
       {:ok, %{postgres_database: postgres_database, pg_replication: pg_replication}}
     end
@@ -178,6 +175,25 @@ defmodule Sequin.Runtime.SlotProducerTest do
                %Message{transaction_annotations: ^annotation, commit_idx: 0},
                %Message{transaction_annotations: nil, commit_idx: 1}
              ] = messages
+    end
+
+    @tag skip_start: true
+    test "sends acks to the replication slot on an interval", %{postgres_database: db} do
+      {:ok, cursor} = Postgres.confirmed_flush_lsn(db, replication_slot())
+      {:ok, agent} = Agent.start_link(fn -> %{commit_lsn: cursor, commit_idx: 0} end)
+
+      start_slot_producer(db,
+        ack_interval: 1,
+        update_cursor_interval: 1,
+        safe_wal_cursor_fn: fn _ -> Agent.get(agent, & &1) end
+      )
+
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+      [msg] = receive_messages(1)
+      next_commit_lsn = msg.commit_lsn
+      Agent.update(agent, fn _ -> %{commit_lsn: next_commit_lsn, commit_idx: 0} end)
+
+      assert_eventually {:ok, ^next_commit_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot()), 1000
     end
 
     # @tag capture_log: true
@@ -273,6 +289,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       Keyword.merge(
         [
           id: UUID.uuid4(),
+          slot_name: replication_slot(),
           connect_opts: db_connect_opts(db),
           start_replication_query: start_query,
           safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end
@@ -280,7 +297,8 @@ defmodule Sequin.Runtime.SlotProducerTest do
         opts
       )
 
-    start_supervised!({SlotProducer, opts})
+    producer_pid = start_supervised!({SlotProducer, opts})
+    start_test_consumer(producer_pid, self())
   end
 
   defp start_test_consumer(producer_pid, test_pid, opts \\ []) do

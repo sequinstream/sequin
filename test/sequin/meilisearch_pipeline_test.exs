@@ -19,7 +19,7 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
           type: :meilisearch,
           message_kind: :record,
           sink: %{
-            primary_key: "name",
+            primary_key: "id",
             index_name: "test"
           },
           batch_size: 10
@@ -41,6 +41,7 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
 
     test "events are sent (nested pk)", %{consumer: consumer} do
       {ids, events} = generate_events(consumer, 2)
+      consumer = consumer_with_primary_key(consumer, "record.id")
 
       verify_network_request(consumer, events, fn message, i ->
         message["record"]["id"] == Enum.at(ids, i)
@@ -58,7 +59,6 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
 
     test "events are sent (transform + nested pk)", %{consumer: consumer} do
       {ids, events} = generate_events(consumer, 2)
-
       consumer = consumer_with_primary_key(consumer, "test.id")
 
       consumer =

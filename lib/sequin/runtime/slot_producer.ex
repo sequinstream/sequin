@@ -96,15 +96,16 @@ defmodule Sequin.Runtime.SlotProducer do
     typedstruct do
       field :id, String.t()
       field :slot_name, String.t()
+      field :publication_name, String.t()
+      field :pg_major_version, integer()
       # Postgres replication connection
       field :protocol, Postgrex.Protocol.t()
       field :connect_opts, keyword()
-      field :start_replication_query, String.t()
-      field :handle_connect_fail, (any() -> any())
-      field :handle_disconnected, (any() -> any())
+      field :on_connect_fail, (any() -> any())
+      field :on_disconnect, (-> :ok)
       field :ingest_enabled_fn, (-> boolean())
       field :setting_reconnect_interval, non_neg_integer()
-      field :status, :active | :disconnected
+      field :status, :active | :buffering | :disconnected
       field :last_commit_lsn, nil | integer()
 
       # Cursors & aliveness
@@ -123,14 +124,12 @@ defmodule Sequin.Runtime.SlotProducer do
       field :transaction_annotations, nil | String.t()
 
       field :demand, integer(), default: 0
-      field :socket_state, :active | :buffer_once
 
       # Buffers
       field :accumulated_messages, %{count: non_neg_integer(), bytes: non_neg_integer(), messages: [Message.t()]},
         default: %{count: 0, bytes: 0, messages: []}
 
       field :buffered_sock_msg, nil | String.t()
-      field :buffering_sock_msgs?, boolean(), default: false
     end
   end
 
@@ -146,19 +145,19 @@ defmodule Sequin.Runtime.SlotProducer do
   @impl GenStage
   def init(opts) do
     connect_opts = Keyword.fetch!(opts, :connect_opts)
-    start_query = Keyword.fetch!(opts, :start_replication_query)
 
     connect_opts = Keyword.put(connect_opts, :parameters, replication: "database")
 
     state = %State{
       id: Keyword.fetch!(opts, :id),
       slot_name: Keyword.fetch!(opts, :slot_name),
+      publication_name: Keyword.fetch!(opts, :publication_name),
       connect_opts: connect_opts,
-      start_replication_query: start_query,
+      pg_major_version: Keyword.fetch!(opts, :pg_major_version),
       status: :disconnected,
       ingest_enabled_fn: Keyword.get(opts, :ingest_enabled_fn, fn -> true end),
-      handle_connect_fail: Keyword.get(opts, :handle_connect_fail),
-      handle_disconnected: Keyword.get(opts, :handle_disconnected),
+      on_connect_fail: Keyword.get(opts, :on_connect_fail),
+      on_disconnect: Keyword.get(opts, :on_disconnect),
       safe_wal_cursor_fn: Keyword.fetch!(opts, :safe_wal_cursor_fn),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
@@ -176,11 +175,11 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   @impl GenStage
-  def handle_info(:connect, state) do
+  def handle_info(:connect, %State{} = state) do
     with {:ok, protocol} <- Protocol.connect(state.connect_opts),
          Logger.info("[SlotProducer] Connected"),
-         {:ok, state, protocol} <- init_safe_wal_cursor(state, protocol),
-         {:ok, protocol} <- Protocol.handle_streaming(state.start_replication_query, protocol),
+         {:ok, %State{} = state, protocol} <- init_safe_wal_cursor(state, protocol),
+         {:ok, protocol} <- Protocol.handle_streaming(start_replication_query(state), protocol),
          {:ok, protocol} <- Protocol.checkin(protocol) do
       state = %{state | protocol: protocol, status: :active}
       state = schedule_timers(state)
@@ -188,18 +187,18 @@ defmodule Sequin.Runtime.SlotProducer do
     else
       {:error, reason} ->
         Logger.error("[SlotProducer] replication connect failed: #{inspect(reason)}")
-        if fun = state.handle_connect_fail, do: fun.(reason)
+        if fun = state.on_connect_fail, do: fun.(reason)
         Process.send_after(self(), :connect, state.setting_reconnect_interval)
         {:noreply, [], state}
     end
   end
 
   @impl GenStage
-  def handle_info(msg, %State{buffering_sock_msgs?: true, buffered_sock_msg: nil} = s) when is_socket_message(msg) do
-    {:keep_state, %{s | buffered_sock_msg: msg}}
+  def handle_info(msg, %State{status: :buffering, buffered_sock_msg: nil} = s) when is_socket_message(msg) do
+    {:noreply, [], %{s | buffered_sock_msg: msg}}
   end
 
-  def handle_info(msg, %State{buffering_sock_msgs?: true}) when is_socket_message(msg) do
+  def handle_info(msg, %State{status: :buffering}) when is_socket_message(msg) do
     raise "Unexpectedly received a second socket message while buffering sock messages"
   end
 
@@ -541,8 +540,19 @@ defmodule Sequin.Runtime.SlotProducer do
     Logger.error("[SlotProducer] Replication disconnected: #{inspect(reason)}")
     Protocol.disconnect(%RuntimeError{}, state.protocol)
     Process.send_after(self(), :connect, state.setting_reconnect_interval)
-    # todo: reset state
-    state
+
+    state.on_disconnect.()
+
+    close_commit(%State{
+      state
+      | status: :disconnected,
+        accumulated_messages: %{count: 0, bytes: 0, messages: []},
+        buffered_sock_msg: nil
+    })
+  end
+
+  defp close_commit(%State{} = state) do
+    %State{state | commit_ts: nil, commit_lsn: nil, commit_idx: nil, commit_xid: nil, transaction_annotations: nil}
   end
 
   defp schedule_timers(state) do
@@ -567,6 +577,14 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp ack_message(lsn) when is_integer(lsn) do
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
+  end
+
+  defp start_replication_query(%State{} = state) do
+    if state.pg_major_version >= 14 do
+      "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication_name}', messages 'true')"
+    else
+      "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication_name}')"
+    end
   end
 
   @epoch DateTime.to_unix(~U[2000-01-01 00:00:00Z], :microsecond)

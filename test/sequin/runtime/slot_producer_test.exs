@@ -292,16 +292,14 @@ defmodule Sequin.Runtime.SlotProducerTest do
 
   # Helper functions
   defp start_slot_producer(db, opts \\ []) do
-    start_query =
-      "START_REPLICATION SLOT #{replication_slot()} LOGICAL 0/0 (proto_version '1', publication_names '#{@publication}', messages 'true')"
-
     opts =
       Keyword.merge(
         [
           id: UUID.uuid4(),
           slot_name: replication_slot(),
+          publication_name: @publication,
+          pg_major_version: 17,
           connect_opts: db_connect_opts(db),
-          start_replication_query: start_query,
           safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end
         ],
         opts

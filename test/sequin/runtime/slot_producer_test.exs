@@ -98,7 +98,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       CharacterFactory.insert_character!(character_attrs, repo: UnboxedRepo)
 
       # Wait for and assert we receive messages
-      assert_receive_message_kinds([:insert])
+      assert_receive_message_kinds([:relation, :insert])
     end
 
     test "produces messages in correct order" do
@@ -110,7 +110,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       UnboxedRepo.delete_all(Character)
 
       # Wait for and assert we receive messages
-      assert_receive_message_kinds([:insert, :update, :insert, :update, :update, :delete, :delete])
+      assert_receive_message_kinds([:relation, :insert, :update, :insert, :update, :update, :delete, :delete])
     end
 
     test "respects transaction boundaries" do
@@ -125,10 +125,11 @@ defmodule Sequin.Runtime.SlotProducerTest do
       |> Character.where_id()
       |> UnboxedRepo.update_all(set: [name: "Updated Name"])
 
-      messages = receive_messages(4)
+      messages = receive_messages(5)
 
       assert [
-               %Message{commit_lsn: lsn1, commit_idx: 0, commit_ts: ts1, kind: :insert},
+               %Message{kind: :relation},
+               %Message{commit_lsn: lsn1, commit_idx: 1, commit_ts: ts1, kind: :insert},
                %Message{commit_lsn: lsn2, commit_idx: 0, commit_ts: ts2, kind: :insert},
                %Message{commit_lsn: lsn2, commit_idx: 1, commit_ts: ts2, kind: :insert},
                %Message{commit_lsn: lsn3, commit_idx: 0, commit_ts: ts3, kind: :update}
@@ -150,12 +151,13 @@ defmodule Sequin.Runtime.SlotProducerTest do
         CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
       end)
 
-      messages = receive_messages(3)
+      messages = receive_messages(4)
 
       assert [
-               %Message{transaction_annotations: nil, commit_idx: 0},
-               %Message{transaction_annotations: ^annotation, commit_idx: 1},
-               %Message{transaction_annotations: ^annotation, commit_idx: 2}
+               %Message{kind: :relation},
+               %Message{transaction_annotations: nil, commit_idx: 1},
+               %Message{transaction_annotations: ^annotation, commit_idx: 3},
+               %Message{transaction_annotations: ^annotation, commit_idx: 4}
              ] = messages
     end
 
@@ -169,11 +171,12 @@ defmodule Sequin.Runtime.SlotProducerTest do
         CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
       end)
 
-      messages = receive_messages(2)
+      messages = receive_messages(3)
 
       assert [
-               %Message{transaction_annotations: ^annotation, commit_idx: 0},
-               %Message{transaction_annotations: nil, commit_idx: 1}
+               %Message{kind: :relation},
+               %Message{transaction_annotations: ^annotation, commit_idx: 2},
+               %Message{transaction_annotations: nil, commit_idx: 4}
              ] = messages
     end
 
@@ -191,7 +194,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
       [msg] = receive_messages(1)
       next_commit_lsn = msg.commit_lsn
-      Agent.update(agent, fn _ -> %{commit_lsn: next_commit_lsn, commit_idx: 0} end)
+      Agent.update(agent, fn _ -> %{commit_lsn: next_commit_lsn, commit_idx: 1} end)
 
       assert next_commit_lsn > init_lsn
       assert_eventually {:ok, ^next_commit_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot()), 1000
@@ -200,7 +203,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
     test "logical messages flow through", %{postgres_database: db} do
       Postgres.query!(db, "select pg_logical_emit_message(true, 'my-msg', 'my-data')")
 
-      assert_receive_message_kinds([:logical_message])
+      assert_receive_message_kinds([:logical])
     end
 
     # @tag capture_log: true

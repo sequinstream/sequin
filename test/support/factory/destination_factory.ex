@@ -25,6 +25,24 @@ defmodule Sequin.Factory.SinkFactory do
     )
   end
 
+  def meilisearch_record(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %{
+        id: Factory.uuid(),
+        data: %{
+          "event" => Factory.word(),
+          "payload" => %{
+            "id" => Factory.uuid(),
+            Factory.word() => Factory.word()
+          }
+        }
+      },
+      attrs
+    )
+  end
+
   def sns_message(attrs \\ []) do
     attrs = Map.new(attrs)
 

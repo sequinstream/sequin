@@ -1,0 +1,72 @@
+---
+title: "Meilisearch sink"
+sidebarTitle: "Meilisearch sink"
+description: "Stream Postgres changes directly to Meilisearch with Sequin's Meilisearch sink."
+---
+
+The Meilisearch sink indexes documents into a Meilisearch index, using the Meilisearch JSON API.
+
+## Configuration
+
+- **Endpoint URL**
+
+    The URL of your Meilisearch server (e.g., `http://localhost:7700` or `https://your-meilisearch-instance.com`).
+
+- **Index name**
+
+    The name of the Meilisearch index where documents will be indexed. The index must exist before imports can work.
+
+- **Primary key**
+
+    The primary key field for the Meilisearch index. (By default, this is `id`)
+
+- **API key**
+
+    The API key for authenticating with your Meilisearch server.
+
+## Transform requirements
+
+Your [transform](/reference/transforms) must return a document matching the schema of the [Meilisearch index](https://www.meilisearch.com/docs/learn/core_concepts/documents).
+
+For example, the following transform ensures the primary key (`id`) is at the top level of the returned map:
+
+```elixir
+def transform(action, record, changes, metadata) do
+  Map.put(record, "id", Kernel.to_string(record["product"]["id"]))
+end
+```
+
+## Import action
+
+Sequin uses Meilisearch’s [documents API](https://www.meilisearch.com/docs/reference/api/documents#add-or-update-documents) to create or update documents:
+
+- Meilisearch will create a new document or update an existing one based on the `id`.
+
+## API endpoints used by Sequin
+
+Sequin uses the following endpoints of the [Meilisearch Documents API](https://www.meilisearch.com/docs/reference/api/documents):
+
+- `PUT /indexes/{index_uid}/documents`  
+  For indexing batches of documents or single documents. Meilisearch accepts both.
+
+- `POST /indexes/{index_uid}/documents/delete-batch`  
+  For batch deleting documents.
+
+Sequin also uses one method of the [Indexes API](https://www.meilisearch.com/docs/reference/api/indexes#get-an-index):
+
+- `GET /indexes/{index_uid}`  
+  Only called when you click "Test Connection" in the Sequin console.  
+  Successful responses indicate the connection is working and the index exists, but the result is otherwise ignored.
+
+Sequin does not perform any searches.
+
+## Error handling
+
+Common errors that can occur when working with the Meilisearch sink include:
+
+- Connection issues to the Meilisearch server (HTTP vs HTTPS, TCP port, URL typos, etc.)
+- Schema mismatches
+- Missing primary key fields
+
+When errors occur, they will be visible in the "Messages" tab of the Sequin web console. You can click on a message to see details about the error.  
+Error messages from the Meilisearch API are passed through unchanged to the Sequin console, including messages for asynchronous batch imports.

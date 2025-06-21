@@ -14,6 +14,7 @@ defmodule Sequin.Factory.CharacterFactory do
 
     merge_attributes(
       %Character{
+        id: Factory.uuid(),
         name: Faker.Person.name(),
         house: Faker.Team.name(),
         planet: Faker.Airports.name(),
@@ -109,6 +110,7 @@ defmodule Sequin.Factory.CharacterFactory do
 
     merge_attributes(
       %CharacterDetailed{
+        id: Factory.uuid(),
         name: Factory.name(),
         status: Factory.one_of([:active, :inactive, :retired]),
         power_level: Factory.non_neg_integer(),

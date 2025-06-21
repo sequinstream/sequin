@@ -37,6 +37,7 @@ export type BaseConsumer = {
     | "nats"
     | "rabbitmq"
     | "typesense"
+    | "meilisearch"
     | "elasticsearch"
     | "redis_string";
   name: string;
@@ -213,6 +214,19 @@ export type TypesenseConsumer = BaseConsumer & {
     type: "typesense";
     endpoint_url: string;
     collection_name: string;
+    batch_size: number;
+    timeout_seconds: number;
+  };
+};
+
+// Meilisearch specific sink
+export type MeilisearchConsumer = BaseConsumer & {
+  sink: {
+    type: "meilisearch";
+    endpoint_url: string;
+    index_name: string;
+    api_key: string;
+    primary_key: string;
     batch_size: number;
     timeout_seconds: number;
   };

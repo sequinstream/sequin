@@ -31,6 +31,7 @@
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
 
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
+  import MeilisearchIcon from "../sinks/meilisearch/MeilisearchIcon.svelte";
   import ElasticsearchIcon from "../sinks/elasticsearch/ElasticsearchIcon.svelte";
 
   import { Badge } from "$lib/components/ui/badge";
@@ -152,6 +153,11 @@
       id: "typesense",
       name: "Typesense",
       icon: TypesenseIcon,
+    },
+    {
+      id: "meilisearch",
+      name: "Meilisearch",
+      icon: MeilisearchIcon,
     },
     {
       id: "elasticsearch",

@@ -266,6 +266,34 @@ For Postgres 12 and 13, we do not support backfills, which rely heavily on the `
 
 If you require backfills, we recommend upgrading to Postgres 14 or later. If this is not an option, please [contact us](mailto:support@sequinstream.com) to discuss alternative approaches.
 
+## Known issues
+
+### Publication not recognized by replication slot
+
+When a publication is created *after* the replication slot, Postgres may report that the publication does not exist. Sequin will surface this as an “Issue with publication” health check.
+
+This is a [known Postgres issue](https://www.postgresql.org/message-id/18683-a98f79c0673be358%40postgresql.org).
+
+**Fix**: drop and re-create the replication slot *after* the publication exists:
+
+```sql
+-- Drop the slot
+SELECT pg_drop_replication_slot('sequin_slot');
+
+-- Re-create the slot
+SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+```
+
+**Prevention**: always create the publication first. If you need to change a publication later, alter it instead of dropping it:
+
+```sql
+-- Add or remove tables
+ALTER PUBLICATION sequin_publication ADD TABLE new_table;
+ALTER PUBLICATION sequin_publication DROP TABLE old_table;
+```
+
+See the full `ALTER PUBLICATION` documentation [here](https://www.postgresql.org/docs/current/sql-alterpublication.html).
+
 ## Monitoring
 
 Sequin will run health checks against your database connection automatically. You can view the status of the connection at any time in your database's "Overview" page.

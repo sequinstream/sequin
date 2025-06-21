@@ -119,4 +119,10 @@ defmodule Sequin.String do
   def format_bytes(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 2)} KB"
   def format_bytes(bytes) when bytes < 1024 * 1024 * 1024, do: "#{Float.round(bytes / 1024 / 1024, 2)} MB"
   def format_bytes(bytes) when bytes < 1024 * 1024 * 1024 * 1024, do: "#{Float.round(bytes / 1024 / 1024 / 1024, 2)} GB"
+
+  def to_existing_atom_safe(string) do
+    String.to_existing_atom(string)
+  rescue
+    _ -> string
+  end
 end

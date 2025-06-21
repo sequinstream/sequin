@@ -12,7 +12,11 @@ defmodule Sequin.Runtime.SlotProducer do
     metric_prefix: "sequin.slot_producer"
 
   alias Postgrex.Protocol
+  alias Sequin.Postgres
   alias Sequin.ProcessMetrics
+  alias Sequin.Runtime.PostgresAdapter.Decoder
+  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
+  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
 
   require Logger
 
@@ -65,6 +69,21 @@ defmodule Sequin.Runtime.SlotProducer do
   #   updated_config = Keyword.put(current_config, key, value)
   #   Application.put_env(:sequin, __MODULE__, updated_config)
   # end
+  #
+  #
+  defmodule Message do
+    @moduledoc false
+    use TypedStruct
+
+    typedstruct enforce: true do
+      field :commit_ts, DateTime.t()
+      field :commit_lsn, integer()
+      field :commit_idx, integer()
+      field :transaction_annotations, String.t()
+      field :byte_size, integer()
+      field :payload, binary()
+    end
+  end
 
   defmodule State do
     @moduledoc false
@@ -95,15 +114,18 @@ defmodule Sequin.Runtime.SlotProducer do
       field :message_received_since_last_heartbeat, boolean(), default: false
 
       # Current xaction state
+      field :commit_ts, DateTime.t()
       field :commit_lsn, integer()
       field :commit_idx, integer()
+      field :commit_xid, integer()
+      field :transaction_annotations, nil | String.t()
 
       field :demand, integer(), default: 0
       field :socket_state, :active | :buffer_once
 
       # Buffers
-      field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
-        default: %{count: 0, bytes: 0, binaries: []}
+      field :accumulated_messages, %{count: non_neg_integer(), bytes: non_neg_integer(), messages: [Message.t()]},
+        default: %{count: 0, bytes: 0, messages: []}
 
       field :buffered_sock_msg, nil | String.t()
       field :buffering_sock_msgs?, boolean(), default: false
@@ -202,8 +224,94 @@ defmodule Sequin.Runtime.SlotProducer do
     end)
   end
 
+  defp handle_data(<<?w, _header::192, ?B, rest::binary>>, %State{} = state) do
+    %State{last_commit_lsn: last_commit_lsn} = state
+    %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid} = Decoder.decode_message(<<?B, rest::binary>>)
+    begin_lsn = Postgres.lsn_to_int(lsn)
+
+    if not is_nil(last_commit_lsn) and begin_lsn < last_commit_lsn do
+      raise "Received a Begin message with an LSN that is less than the last commit LSN (#{begin_lsn} < #{last_commit_lsn})"
+    end
+
+    state = %State{state | commit_ts: ts, commit_idx: 0, commit_lsn: begin_lsn, commit_xid: xid}
+    {:ok, state}
+  end
+
+  defp handle_data(<<?w, _header::192, ?C, msg::binary>>, %State{} = state) do
+    %State{commit_lsn: commit_lsn, commit_ts: commit_ts} = state
+    %Commit{} = commit = Decoder.decode_message(<<?C, msg::binary>>)
+    recv_lsn = Postgres.lsn_to_int(commit.lsn)
+
+    if commit_lsn != recv_lsn or commit_ts != commit.commit_timestamp do
+      error = """
+      Unexpectedly received a commit that does not match current commit or ts
+      lsn: #{commit_lsn} != #{recv_lsn}
+      ts: #{inspect(commit_ts)} != #{inspect(commit.commit_timestamp)})
+      """
+
+      raise error
+    end
+
+    state = %State{
+      state
+      | last_commit_lsn: commit_lsn,
+        commit_lsn: nil,
+        commit_ts: nil,
+        commit_xid: nil,
+        commit_idx: 0,
+        transaction_annotations: nil
+    }
+
+    {:ok, state}
+  end
+
+  defp handle_data(<<?w, _header::192, "R", _msg::binary>>, %State{} = state) do
+    {:ok, state}
+  end
+
+  # defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin:transaction_annotations.set", content: content}) do
+  #   %{state | transaction_annotations: content}
+  # end
+
+  # defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin:transaction_annotations.clear"}) do
+  #   %{state | transaction_annotations: nil}
+  # end
+
+  # defp process_message(%State{} = state, %Message{} = msg) do
+  #   state =
+  #     if logical_message_table_upsert?(state, msg) do
+  #       content = Enum.find(msg.fields, fn field -> field.column_name == "content" end)
+  #       handle_logical_message_content(state, content.value)
+  #     else
+  #       state
+  #     end
+
+  #   msg = %Message{
+  #     msg
+  #     | commit_lsn: state.current_xaction_lsn,
+  #       commit_idx: state.current_commit_idx,
+  #       commit_timestamp: state.current_commit_ts,
+  #       transaction_annotations: state.transaction_annotations
+  #   }
+
+  #   {%State{state | current_commit_idx: state.current_commit_idx + 1}, msg}
+  # end
+
+  # defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.1", content: content}) do
+  #   handle_logical_message_content(state, content)
+  # end
+
+  # defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
+  #   Logger.info("[SlotProcessorServer] Legacy heartbeat received", emitted_at: emitted_at)
+  #   state
+  # end
+
+  # defp process_message(%State{} = state, %LogicalMessage{prefix: @backfill_batch_high_watermark} = msg) do
+  #   %State{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}
+  # end
+
   defp handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    if is_nil(state.last_commit_lsn) and state.accumulated_msg_binaries.count == 0 do
+    if is_nil(state.last_commit_lsn) and state.accumulated_messages.count == 0 do
       Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
     end
 
@@ -212,15 +320,17 @@ defmodule Sequin.Runtime.SlotProducer do
 
     state = %{state | message_received_since_last_heartbeat: true}
 
+    msg = message_from_binary(state, msg)
+
     state =
-      Map.update!(state, :accumulated_msg_binaries, fn acc ->
-        %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, binaries: [msg | acc.binaries]}
+      Map.update!(state, :accumulated_messages, fn acc ->
+        %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, messages: [msg | acc.messages]}
       end)
 
     # state = maybe_schedule_flush(state)
 
-    ProcessMetrics.gauge("accumulated_msg_binaries_count", state.accumulated_msg_binaries.count)
-    ProcessMetrics.gauge("accumulated_msg_binaries_bytes", state.accumulated_msg_binaries.bytes)
+    ProcessMetrics.gauge("accumulated_messages_count", state.accumulated_messages.count)
+    ProcessMetrics.gauge("accumulated_messages_bytes", state.accumulated_messages.bytes)
 
     {:ok, state}
   end
@@ -281,23 +391,34 @@ defmodule Sequin.Runtime.SlotProducer do
     {:ok, state}
   end
 
+  defp message_from_binary(%State{} = state, binary) do
+    %Message{
+      commit_ts: state.commit_ts,
+      commit_lsn: state.commit_lsn,
+      commit_idx: state.commit_idx,
+      transaction_annotations: state.transaction_annotations,
+      byte_size: byte_size(binary),
+      payload: binary
+    }
+  end
+
   defp maybe_produce(%State{demand: demand} = state) when demand > 0 do
-    {acc_binaries, remaining_binaries} = state.accumulated_msg_binaries.binaries |> Enum.reverse() |> Enum.split(demand)
-    remaining_binaries = Enum.reverse(remaining_binaries)
-    dropped_bytes = Enum.reduce(acc_binaries, 0, fn binary, acc -> acc + byte_size(binary) end)
+    {acc_msgs, remaining_msgs} = state.accumulated_messages.messages |> Enum.reverse() |> Enum.split(demand)
+    remaining_msgs = Enum.reverse(remaining_msgs)
+    dropped_bytes = acc_msgs |> Enum.map(& &1.byte_size) |> Enum.sum()
 
     state = %{
       state
-      | demand: state.demand - length(acc_binaries),
-        accumulated_msg_binaries: %{
-          state.accumulated_msg_binaries
-          | count: state.accumulated_msg_binaries.count - length(acc_binaries),
-            bytes: state.accumulated_msg_binaries.bytes - dropped_bytes,
-            binaries: remaining_binaries
+      | demand: state.demand - length(acc_msgs),
+        accumulated_messages: %{
+          state.accumulated_messages
+          | count: state.accumulated_messages.count - length(acc_msgs),
+            bytes: state.accumulated_messages.bytes - dropped_bytes,
+            messages: remaining_msgs
         }
     }
 
-    {acc_binaries, state}
+    {acc_msgs, state}
   end
 
   defp maybe_produce(state) do

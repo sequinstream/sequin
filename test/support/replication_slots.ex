@@ -21,6 +21,7 @@ defmodule Sequin.TestSupport.ReplicationSlots do
       SequinWeb.PostgresReplicationControllerTest => "__postgres_rep_controller_test_slot__",
       Sequin.YamlLoaderTest => "__yaml_loader_test_slot__",
       SequinWeb.YamlControllerTest => "__yaml_controller_test_slot__",
+      Sequin.Runtime.SlotProducerTest => "__slot_producer_test_slot__",
       # Only reads the replication slot
       Sequin.Factory.ReplicationFactory => "__postgres_replication_test_slot__"
     }

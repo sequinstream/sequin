@@ -14,6 +14,7 @@ defmodule Sequin.Runtime.SlotProducer do
   alias Postgrex.Protocol
   alias Sequin.Postgres
   alias Sequin.ProcessMetrics
+  alias Sequin.Replication
   alias Sequin.Runtime.PostgresAdapter.Decoder
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
@@ -92,6 +93,8 @@ defmodule Sequin.Runtime.SlotProducer do
     use TypedStruct
 
     typedstruct do
+      field :id, String.t()
+      field :slot_name, String.t()
       # Postgres replication connection
       field :protocol, Protocol.t()
       field :connect_opts, keyword()
@@ -104,16 +107,12 @@ defmodule Sequin.Runtime.SlotProducer do
       field :last_commit_lsn, nil | integer()
 
       # Cursors & aliveness
-      field :restart_cursor, Replication.wal_cursor()
       field :safe_wal_cursor, Replication.wal_cursor()
       field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
       field :setting_update_cursor_interval, non_neg_integer()
-      field :setting_heartbeat_interval, non_neg_integer()
-      field :heartbeat_timer, reference()
       field :setting_ack_interval, non_neg_integer()
       field :ack_timer, reference()
-      field :setting_update_cursor_timer, reference()
-      field :message_received_since_last_heartbeat, boolean(), default: false
+      field :update_cursor_timer, reference()
 
       # Current xaction state
       field :commit_ts, DateTime.t()
@@ -151,16 +150,16 @@ defmodule Sequin.Runtime.SlotProducer do
     connect_opts = Keyword.put(connect_opts, :parameters, replication: "database")
 
     state = %State{
+      id: Keyword.fetch!(opts, :id),
+      slot_name: Keyword.fetch!(opts, :slot_name),
       connect_opts: connect_opts,
       start_replication_query: start_query,
       status: :disconnected,
-      restart_cursor: Keyword.get(opts, :restart_cursor),
       ingest_enabled_fn: Keyword.get(opts, :ingest_enabled_fn, fn -> true end),
       handle_connect_fail: Keyword.get(opts, :handle_connect_fail),
       handle_disconnected: Keyword.get(opts, :handle_disconnected),
       safe_wal_cursor_fn: Keyword.fetch!(opts, :safe_wal_cursor_fn),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
-      setting_heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15)),
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
       setting_update_cursor_interval: Keyword.get(opts, :update_cursor_interval, :timer.seconds(30))
     }
@@ -179,11 +178,11 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_info(:connect, state) do
     with {:ok, protocol} <- Protocol.connect(state.connect_opts),
          Logger.info("[SlotProducer] Connected"),
+         {:ok, state, protocol} <- init_safe_wal_cursor(state, protocol),
          {:ok, protocol} <- Protocol.handle_streaming(state.start_replication_query, protocol),
          {:ok, protocol} <- Protocol.checkin(protocol) do
       state = %{state | protocol: protocol, status: :active}
-      # state = schedule_timers(state)
-      # state = maybe_activate_socket(state)
+      state = schedule_timers(state)
       {:noreply, [], state}
     else
       {:error, reason} ->
@@ -199,13 +198,10 @@ defmodule Sequin.Runtime.SlotProducer do
     {:keep_state, %{s | buffered_sock_msg: msg}}
   end
 
-  @impl GenStage
-
   def handle_info(msg, %State{buffering_sock_msgs?: true}) when is_socket_message(msg) do
     raise "Unexpectedly received a second socket message while buffering sock messages"
   end
 
-  @impl GenStage
   def handle_info(msg, %State{protocol: protocol} = s) when is_socket_message(msg) do
     with {:ok, copies, protocol} <- Protocol.handle_copy_recv(msg, @max_messages_per_protocol_read, protocol),
          {:ok, state} <- handle_copies(copies, %{s | protocol: protocol}) do
@@ -215,6 +211,34 @@ defmodule Sequin.Runtime.SlotProducer do
       {error, reason, protocol} ->
         handle_disconnect(error, reason, %{s | protocol: protocol})
     end
+  end
+
+  def handle_info(:send_ack, %State{status: :disconnected} = state) do
+    state = schedule_ack(%{state | ack_timer: nil})
+    {:noreply, [], state}
+  end
+
+  def handle_info(:send_ack, %State{} = state) do
+    Logger.info("[SlotProcessorServer] Sending ack for LSN #{state.safe_wal_cursor.commit_lsn}")
+
+    # TODO: safe_wal_cursor.commit_lsn can be 0 -- bad. Do not want to send in that case
+    msg = ack_message(state.safe_wal_cursor.commit_lsn)
+    state = schedule_ack(%{state | ack_timer: nil})
+
+    case Protocol.handle_copy_send(msg, state.protocol) do
+      :ok ->
+        {:noreply, [], state}
+
+      {error, reason, protocol} ->
+        handle_disconnect(error, reason, %{state | protocol: protocol})
+    end
+  end
+
+  def handle_info(:update_safe_wal_cursor, %State{} = state) do
+    state = update_safe_wal_cursor(state)
+
+    state = schedule_update_cursor(%{state | update_cursor_timer: nil})
+    {:noreply, [], state}
   end
 
   defp handle_copies(copies, state) do
@@ -327,8 +351,6 @@ defmodule Sequin.Runtime.SlotProducer do
     raw_bytes_received = byte_size(msg)
     ProcessMetrics.increment_throughput("raw_bytes_received", raw_bytes_received)
 
-    state = %{state | message_received_since_last_heartbeat: true}
-
     msg = message_from_binary(state, msg)
 
     state =
@@ -352,52 +374,36 @@ defmodule Sequin.Runtime.SlotProducer do
   # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   # The server is not asking for a reply
+  defp handle_data(<<?k, wal_end::64, clock::64, reply_requested>>, %State{} = state) do
+    diff_ms = Sequin.Time.microseconds_since_2000_to_ms_since_now(clock)
 
-  defp handle_data(<<?k, _wal_end::64, _clock::64, _reply_requested>>, %State{} = state) do
-    # Because these are <14 Postgres databases, they will not receive heartbeat messages
-    # temporarily mark them as healthy if we receive a keepalive message
+    Logger.info("Received keepalive message for slot (reply_requested=#{reply_requested}) (clock_diff=#{diff_ms}ms)",
+      clock: clock,
+      wal_end: wal_end,
+      diff_ms: diff_ms
+    )
 
-    # send_ack? =
-    #   cond do
-    #     reply_requested == 1 ->
-    #       true
-
-    #     is_nil(state.last_lsn_acked_at) ->
-    #       true
-
-    #     DateTime.diff(Sequin.utc_now(), state.last_lsn_acked_at, :second) > 60 ->
-    #       true
-
-    #     true ->
-    #       false
-    #   end
-
-    # # Check if we should send an ack even though not requested
-    # if send_ack? do
-    #   safe_wal_cursor = state.safe_wal_cursor
-    #   diff_ms = Time.microseconds_since_2000_to_ms_since_now(clock)
-
-    #   Logger.info("Received keepalive message for slot (reply_requested=#{reply_requested}) (clock_diff=#{diff_ms}ms)",
-    #     clock: clock,
-    #     wal_end: wal_end,
-    #     diff_ms: diff_ms
-    #   )
-
-    #   if safe_wal_cursor.commit_lsn > wal_end do
-    #     Logger.warning("Server LSN #{wal_end} is behind our LSN #{safe_wal_cursor.commit_lsn}")
-    #   end
-
-    #   Logger.info(
-    #     "Acking LSN #{inspect(safe_wal_cursor.commit_lsn)} (current server LSN: #{wal_end}) (last_commit_lsn: #{state.last_commit_lsn})"
-    #   )
-
-    #   reply = ack_message(safe_wal_cursor.commit_lsn)
-    #   state = %{state | last_lsn_acked_at: Sequin.utc_now()}
-    #   {:keep_state_and_ack, reply, state}
-    # else
-    #   {:keep_state, state}
-    # end
     {:ok, state}
+  end
+
+  defp update_safe_wal_cursor(%State{} = state) do
+    safe_wal_cursor =
+      if is_nil(state.last_commit_lsn) do
+        # If we don't have a last_commit_lsn, we're still processing the first xaction
+        # we received on boot. This can happen if we're processing a very large xaction.
+        # It is therefore safe to send an ack with the last LSN we processed.
+        state.safe_wal_cursor
+      else
+        state.safe_wal_cursor_fn.(state)
+      end
+
+    if is_nil(safe_wal_cursor) do
+      Logger.info("[SlotProcessorServer] safe_wal_cursor=nil, skipping put_restart_wal_cursor!")
+    else
+      Replication.put_restart_wal_cursor!(state.id, safe_wal_cursor)
+    end
+
+    %{state | safe_wal_cursor: safe_wal_cursor}
   end
 
   defp message_from_binary(%State{} = state, binary) do
@@ -442,18 +448,25 @@ defmodule Sequin.Runtime.SlotProducer do
     {[], state}
   end
 
-  # def handle_info(:emit_heartbeat, state) do
-  #   state = %{state | heartbeat_timer: nil}
+  defp init_safe_wal_cursor(%State{} = state, protocol) do
+    query = "select restart_lsn from pg_replication_slots where slot_name = '#{state.slot_name}'"
 
-  #   case send_heartbeat(state) do
-  #     {:ok, lsn} ->
-  #       {:noreply, [], schedule_heartbeat(%{state | commit_lsn: lsn})}
+    case Replication.restart_wal_cursor(state.id) do
+      # TODO: Refactor to return not found
+      {:ok, %{commit_lsn: 0}} ->
+        case Protocol.handle_simple(query, [], protocol) do
+          {:ok, [%Postgrex.Result{rows: [[lsn]]}], protocol} ->
+            cursor = %{commit_lsn: Postgres.lsn_to_int(lsn), commit_idx: 0}
+            {:ok, %State{state | safe_wal_cursor: cursor}, protocol}
 
-  #     {:error, reason} ->
-  #       Logger.error("[SlotProducer] heartbeat error: #{inspect(reason)}")
-  #       {:noreply, [], schedule_heartbeat(state)}
-  #   end
-  # end
+          error ->
+            error
+        end
+
+      {:ok, cursor} ->
+        {:ok, %State{state | safe_wal_cursor: cursor}}
+    end
+  end
 
   # def handle_info(:send_ack, state) do
   #   state = %{state | ack_timer: nil}
@@ -484,54 +497,33 @@ defmodule Sequin.Runtime.SlotProducer do
     Protocol.disconnect(%RuntimeError{}, state.protocol)
     Process.send_after(self(), :connect, state.setting_reconnect_interval)
     # todo: reset state
-    # state
+    state
   end
 
-  # defp schedule_timers(state) do
-  #   state
-  #   |> schedule_heartbeat()
-  #   |> schedule_ack()
-  #   |> schedule_update_cursor()
-  # end
+  defp schedule_timers(state) do
+    state
+    |> schedule_ack()
+    |> schedule_update_cursor()
+  end
 
-  # defp schedule_heartbeat(%{heartbeat_timer: nil, heartbeat_interval: int} = state) do
-  #   ref = Process.send_after(self(), :emit_heartbeat, int)
-  #   %{state | heartbeat_timer: ref}
-  # end
+  defp schedule_ack(%State{ack_timer: nil, setting_ack_interval: int} = state) do
+    ref = Process.send_after(self(), :send_ack, int)
+    %{state | ack_timer: ref}
+  end
 
-  # defp schedule_heartbeat(state), do: state
+  defp schedule_ack(state), do: state
 
-  # defp schedule_ack(%{ack_timer: nil, ack_interval: int} = state) do
-  #   ref = Process.send_after(self(), :send_ack, int)
-  #   %{state | ack_timer: ref}
-  # end
+  defp schedule_update_cursor(%State{update_cursor_timer: nil, setting_update_cursor_interval: int} = state) do
+    ref = Process.send_after(self(), :update_safe_wal_cursor, int)
+    %{state | update_cursor_timer: ref}
+  end
 
-  # defp schedule_ack(state), do: state
+  defp schedule_update_cursor(state), do: state
 
-  # defp schedule_update_cursor(%{update_cursor_timer: nil, update_cursor_interval: int} = state) do
-  #   ref = Process.send_after(self(), :update_safe_wal_cursor, int)
-  #   %{state | update_cursor_timer: ref}
-  # end
+  defp ack_message(lsn) when is_integer(lsn) do
+    [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
+  end
 
-  # defp schedule_update_cursor(state), do: state
-
-  # defp send_heartbeat(state) do
-  #   payload = "{}"
-  #   conn = state.protocol
-
-  #   case Protocol.handle_simple("SELECT pg_logical_emit_message(true, 'sequin.heartbeat.1', '#{payload}')", [], conn) do
-  #     {:ok, [%Postgrex.Result{rows: [[lsn]]}], protocol} ->
-  #       {:ok, %{state | protocol: protocol}, lsn}
-
-  #     {:error, reason, protocol} ->
-  #       {:error, reason}
-  #   end
-  # end
-
-  # defp ack_message(lsn) when is_integer(lsn) do
-  #   [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
-  # end
-
-  # @epoch DateTime.to_unix(~U[2000-01-01 00:00:00Z], :microsecond)
-  # defp current_time, do: System.os_time(:microsecond) - @epoch
+  @epoch DateTime.to_unix(~U[2000-01-01 00:00:00Z], :microsecond)
+  defp current_time, do: System.os_time(:microsecond) - @epoch
 end

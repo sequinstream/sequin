@@ -164,8 +164,15 @@ e2e-rebuild: ## Rebuild e2e test environment from scratch (no cache)
 
 e2e-restart: e2e-down e2e-up ## Restart e2e test environment (shortcut for down+up)
 
-e2e-tests: ## Run the e2e test suite
-	cd priv/tests_e2e && elixir tests.exs
+e2e-tests: ## Run the e2e test suite [kafka|sqs] - Run all tests if no tag provided
+	@if [ -n "$(filter kafka sqs,$(MAKECMDGOALS))" ]; then \
+		cd priv/tests_e2e && elixir tests.exs $(filter kafka sqs,$(MAKECMDGOALS)); \
+	else \
+		cd priv/tests_e2e && elixir tests.exs; \
+	fi
+
+kafka sqs: e2e-tests
+	@:
 
 e2e-clean: ## Remove e2e kafka container
 	docker stop sequin-e2e-kafka || true

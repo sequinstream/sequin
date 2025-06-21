@@ -18,7 +18,6 @@ defmodule Sequin.Runtime.SlotProducer do
   alias Sequin.Runtime.PostgresAdapter.Decoder
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
 
   require Logger
 
@@ -96,7 +95,7 @@ defmodule Sequin.Runtime.SlotProducer do
       field :id, String.t()
       field :slot_name, String.t()
       # Postgres replication connection
-      field :protocol, Protocol.t()
+      field :protocol, Postgrex.Protocol.t()
       field :connect_opts, keyword()
       field :start_replication_query, String.t()
       field :handle_connect_fail, (any() -> any())
@@ -241,6 +240,21 @@ defmodule Sequin.Runtime.SlotProducer do
     {:noreply, [], state}
   end
 
+  # @impl GenStage
+  # def handle_call({:send_proto_msg, msg}, _from, %State{connection_state: :disconnected} = s) do
+  #   {:reply, {:error, :disconnected}, s}
+  # end
+
+  # def handle_call({:send_proto_msg, msg}, _from, %State{protocol: protocol} = s) do
+  #   case Protocol.handle_copy_send(msg, protocol) do
+  #     :ok ->
+  #       {:keep_state, s}
+
+  #     {error, reason, protocol} ->
+  #       handle_disconnect(error, reason, %{s | protocol: protocol})
+  #   end
+  # end
+
   defp handle_copies(copies, state) do
     Enum.reduce_while(copies, {:ok, state}, fn copy, {:ok, state} ->
       case handle_data(copy, state) do
@@ -295,20 +309,41 @@ defmodule Sequin.Runtime.SlotProducer do
     {:ok, state}
   end
 
-  defp handle_data(<<?w, _header::192, ?M, rest::binary>>, %State{} = state) do
-    %LogicalMessage{} = message = Decoder.decode_message(<<?M, rest::binary>>)
-    handle_data(message, state)
+  defp handle_data(
+         <<?w, _header::192, ?M, _transactional::binary-1, _lsn::binary-8, "sequin:transaction_annotations."::binary,
+           rest::binary>>,
+         %State{} = state
+       ) do
+    [op, <<_length::integer-32, content::binary>>] = String.split(rest, <<0>>, parts: 2)
+
+    case op do
+      "set" ->
+        state = %{state | transaction_annotations: content}
+        {:ok, state}
+
+      "clear" ->
+        state = %{state | transaction_annotations: nil}
+        {:ok, state}
+
+      unknown ->
+        Logger.warning("Unknown transaction annotation operation: #{unknown}")
+    end
   end
 
-  defp handle_data(%LogicalMessage{prefix: "sequin:transaction_annotations.set", content: content}, state) do
-    state = %{state | transaction_annotations: content}
-    {:ok, state}
-  end
+  # @impl GenStage
+  # def handle_call({:send_proto_msg, msg}, _from, %State{connection_state: :disconnected} = s) do
+  #   {:reply, {:error, :disconnected}, s}
+  # end
 
-  defp handle_data(%LogicalMessage{prefix: "sequin:transaction_annotations.clear"}, state) do
-    state = %{state | transaction_annotations: nil}
-    {:ok, state}
-  end
+  # def handle_call({:send_proto_msg, msg}, _from, %State{protocol: protocol} = s) do
+  #   case Protocol.handle_copy_send(msg, protocol) do
+  #     :ok ->
+  #       {:keep_state, s}
+
+  #     {error, reason, protocol} ->
+  #       handle_disconnect(error, reason, %{s | protocol: protocol})
+  #   end
+  # end
 
   # defp process_message(%State{} = state, %Message{} = msg) do
   #   state =
@@ -412,6 +447,7 @@ defmodule Sequin.Runtime.SlotProducer do
         <<?I, _rest::binary>> -> :insert
         <<?U, _rest::binary>> -> :update
         <<?D, _rest::binary>> -> :delete
+        <<?M, _rest::binary>> -> :logical_message
       end
 
     %Message{

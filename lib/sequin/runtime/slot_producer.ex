@@ -76,12 +76,14 @@ defmodule Sequin.Runtime.SlotProducer do
     @moduledoc false
     use TypedStruct
 
+    @type kind :: :insert | :update | :delete | :logical | :relation
+
     typedstruct enforce: true do
       field :byte_size, integer()
       field :commit_idx, integer()
       field :commit_lsn, integer()
       field :commit_ts, DateTime.t()
-      field :kind, :insert | :update | :delete
+      field :kind, kind()
       field :payload, binary()
       field :transaction_annotations, String.t()
     end
@@ -220,7 +222,6 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_info(:send_ack, %State{} = state) do
     Logger.info("[SlotProcessorServer] Sending ack for LSN #{state.safe_wal_cursor.commit_lsn}")
 
-    # TODO: safe_wal_cursor.commit_lsn can be 0 -- bad. Do not want to send in that case
     msg = ack_message(state.safe_wal_cursor.commit_lsn)
     state = schedule_ack(%{state | ack_timer: nil})
 
@@ -258,8 +259,15 @@ defmodule Sequin.Runtime.SlotProducer do
   defp handle_copies(copies, state) do
     Enum.reduce_while(copies, {:ok, state}, fn copy, {:ok, state} ->
       case handle_data(copy, state) do
-        {:ok, state} -> {:cont, {:ok, state}}
-        error -> {:halt, error}
+        {:ok, next_state} ->
+          if not is_nil(state.commit_lsn) and next_state.commit_lsn == state.commit_lsn do
+            {:cont, {:ok, %{next_state | commit_idx: state.commit_idx + 1}}}
+          else
+            {:cont, {:ok, next_state}}
+          end
+
+        error ->
+          {:halt, error}
       end
     end)
   end
@@ -305,9 +313,9 @@ defmodule Sequin.Runtime.SlotProducer do
     {:ok, state}
   end
 
-  defp handle_data(<<?w, _header::192, ?R, _msg::binary>>, %State{} = state) do
-    {:ok, state}
-  end
+  # defp handle_data(<<?w, _header::192, ?R, _msg::binary>>, %State{} = state) do
+  #   {:ok, state}
+  # end
 
   defp handle_data(
          <<?w, _header::192, ?M, _transactional::binary-1, _lsn::binary-8, "sequin:transaction_annotations."::binary,
@@ -398,7 +406,7 @@ defmodule Sequin.Runtime.SlotProducer do
     ProcessMetrics.gauge("accumulated_messages_count", state.accumulated_messages.count)
     ProcessMetrics.gauge("accumulated_messages_bytes", state.accumulated_messages.bytes)
 
-    {:ok, %{state | commit_idx: state.commit_idx + 1}}
+    {:ok, state}
   end
 
   # Primary keepalive message from server:
@@ -447,7 +455,8 @@ defmodule Sequin.Runtime.SlotProducer do
         <<?I, _rest::binary>> -> :insert
         <<?U, _rest::binary>> -> :update
         <<?D, _rest::binary>> -> :delete
-        <<?M, _rest::binary>> -> :logical_message
+        <<?M, _rest::binary>> -> :logical
+        <<?R, _rest::binary>> -> :relation
       end
 
     %Message{

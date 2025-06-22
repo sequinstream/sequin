@@ -97,9 +97,6 @@ services:
       DATABASE_PASSWORD: postgres
       KAFKA_DEMO_TOPIC: demo-topic
       AWS_ENDPOINT: http://localstack:4566
-      AWS_NO_VERIFY_SSL: "1"
-      AWS_DISABLE_SSL: "1"
-      AWS_SDK_LOAD_CONFIG: "0"
       AWS_ACCESS_KEY_ID: "test"
       AWS_SECRET_ACCESS_KEY: "test"
       AWS_DEFAULT_REGION: "us-east-1"

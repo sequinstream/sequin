@@ -160,9 +160,9 @@ sinks:
         - "public"
       exclude_schemas:             # Optional, schemas to exclude
         - "private"
-      include_table_names:         # Optional, tables to include
-        - "public.users" 
-      exclude_table_names:         # Optional, tables to exclude
+      include_tables:         # Optional, tables to include
+        - "public.users"
+      exclude_tables:         # Optional, tables to exclude
         - "public.background_jobs"
     status: "active"               # Optional: active or disabled, default: active
     transform: "my-transform"      # Optional, reference to a transform function name or "none"

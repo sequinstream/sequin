@@ -86,6 +86,12 @@ sqs_config =
   end
 
 # Enable via_sqs_for_new_sinks? flag for HttpPushSink
+wal_sender_monitor_replication_ids =
+  case System.get_env("WAL_SENDER_MONITOR_REPLICATION_IDS") do
+    nil -> []
+    ids_string -> ids_string |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
 config :sequin, Sequin.Consumers.HttpPushSink,
   via_sqs_for_new_sinks?: System.get_env("HTTP_PUSH_VIA_SQS_NEW_SINKS") in ~w(true 1)
 
@@ -99,7 +105,9 @@ config :sequin, Sequin.Runtime.SlotProcessorServer,
   max_accumulated_messages: ConfigParser.replication_flush_max_accumulated_messages(env_vars),
   max_accumulated_messages_time_ms: ConfigParser.replication_flush_max_accumulated_time_ms(env_vars)
 
-config :sequin, Sequin.Runtime.WalSenderMonitor, enabled?: System.get_env("WAL_SENDER_MONITOR_ENABLED") in ~w(true 1)
+config :sequin, Sequin.Runtime.WalSenderMonitor,
+  enabled?: wal_sender_monitor_replication_ids != [],
+  replication_ids: wal_sender_monitor_replication_ids
 
 # ## Using releases
 #

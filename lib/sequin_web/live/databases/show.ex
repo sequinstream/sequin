@@ -334,17 +334,23 @@ defmodule SequinWeb.DatabasesLive.Show do
   end
 
   defp encode_consumers(consumers, database) do
-    Enum.map(consumers, fn consumer ->
+    Enum.flat_map(consumers, fn consumer ->
       kind = Consumers.kind(consumer)
 
-      %{
-        id: consumer.id,
-        consumer_kind: kind,
-        name: consumer.name,
-        message_kind: consumer.message_kind,
-        source_tables: Consumers.enrich_source_tables(consumer.source_tables, database),
-        href: RouteHelpers.consumer_path(consumer)
-      }
+      try do
+        [
+          %{
+            id: consumer.id,
+            consumer_kind: kind,
+            name: consumer.name,
+            message_kind: consumer.message_kind,
+            source_tables: Consumers.enrich_source_tables(consumer.source_tables, database),
+            href: RouteHelpers.consumer_path(consumer)
+          }
+        ]
+      rescue
+        _ -> []
+      end
     end)
   end
 

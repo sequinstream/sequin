@@ -1187,6 +1187,20 @@ defmodule Sequin.Transforms do
      }}
   end
 
+    # Add parse_sink for meilisearch type
+    defp parse_sink(%{"type" => "meilisearch"} = attrs, _resources) do
+      {:ok,
+       %{
+         type: :meilisearch,
+         endpoint_url: attrs["endpoint_url"],
+         index_name: attrs["index_name"],
+         primary_key: attrs["primary_key"],
+         api_key: attrs["api_key"],
+         batch_size: attrs["batch_size"],
+         timeout_seconds: attrs["timeout_seconds"]
+       }}
+    end
+
   # Add parse_sink for elasticsearch type
   defp parse_sink(%{"type" => "elasticsearch"} = attrs, _resources) do
     {:ok,

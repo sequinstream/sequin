@@ -35,6 +35,7 @@ defmodule Sequin.Factory.CharacterFactory do
     attrs
     |> character()
     |> Sequin.Map.from_ecto()
+    |> Enum.into(%{}, fn {k, v} -> {to_string(k), v} end)
   end
 
   def insert_character!(attrs \\ [], opts \\ []) do

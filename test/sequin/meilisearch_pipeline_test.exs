@@ -32,10 +32,7 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
       {ids, events} = generate_events(consumer, 2)
 
       verify_network_request(consumer, events, fn message, i ->
-        # this works
-        message["record"]["id"] == Enum.at(ids, i)
-        # this does not work, because message["id"] is nil
-        # message["id"] == Enum.at(ids, i)
+        message["id"] == Enum.at(ids, i)
       end)
     end
 
@@ -65,7 +62,7 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
         consumer_with_transform(
           consumer,
           "nested-transform",
-          ~s|(%{"test"=>%{"id"=>Map.get(record,:id)}})|
+          ~s|(%{"test"=>%{"id"=>Map.get(record,"id")}})|
         )
 
       verify_network_request(consumer, events, fn record, i ->
@@ -80,7 +77,7 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
         CharacterFactory.character_attrs()
       end
 
-    ids = Enum.map(records, &Map.get(&1, :id))
+    ids = Enum.map(records, &Map.get(&1, "id"))
 
     events =
       for record <- records do

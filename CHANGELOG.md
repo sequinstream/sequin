@@ -24,6 +24,7 @@ This log is updated every Friday to track our feature releases and updates week 
 * Properly handle situations where a database or publication contain no tables.
 * Handle errors when a deprecated YAML format is applied or planned.
 * Fix an issue where filter and routing functions weren't included in yaml exports.
+* Show a helpful error when attempting to backfill a table with no PKs.
 
 </details>
 

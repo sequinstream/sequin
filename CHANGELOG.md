@@ -6,13 +6,29 @@ This log is updated every Friday to track our feature releases and updates week 
 
 ## June 20, 2025
 
+### S2 Sinks
+
+Sequin now supports [S2](https://s2.dev/blog/sequin) sinks!
+
+<div align="center">
+<img src="https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-20/s2-sink.png" alt="Sequin now natively integrates with S2" width="600" />
+</div>
+
+S2 is fully supported as a new sink in the console, API, and YAML. Read the [quickstart](https://sequinstream.com/docs/how-to/stream-postgres-to-s2#create-a-basin-and-stream) and [reference](https://sequinstream.com/docs/reference/sinks/s2) to learn how to get up and running with an S2 sink today.
+
+#### When should you reach for S2
+
+S2 (a.k.a Stream Storage) is designs to be a cloud native, streaming primitive - like what S3 provides for blob storage, but for data in motion. In fact, S2 builds on this promise by using object storage for durability. This design provides throughput that rivals Kafka (125 MiBps / stream), at a lower cost, and with unlimited streams (no brokers and partitions). It comes with a simple API to append and read records from the stream.
+
+Consider an S2 stream when you'd otherwise reach for any other durable stream like Kafka, Kinesis, GCP Pub/Sub, or Azure Event Hubs.
+
 <details>
 
 <summary>Fixes and improvements</summary>
 
 ### Improved
 
-* The Postgres pool size is now configurable.
+* The pool size for source databases is now configurable.
 * Improvements to Sequin's performance.
 * Improved how Sequin buffers messages when a replication slot is faster than a sink can handle, resulting in much smoother performance under heavy load.
 * Increase the throughput of messages through filter functions.

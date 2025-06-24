@@ -141,33 +141,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive :sent, 1_000
     end
 
-    test "legacy_event_singleton_transform sends unwrapped single messages", %{
-      consumer: consumer,
-      http_endpoint: http_endpoint
-    } do
-      test_pid = self()
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
-
-      adapter = fn %Req.Request{} = req ->
-        assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
-        json = Jason.decode!(req.body)
-
-        # Should NOT be wrapped in a list
-        refute is_list(json)
-        assert json["action"] == "insert"
-
-        send(test_pid, :sent)
-        {req, Req.Response.new(status: 200)}
-      end
-
-      # Start pipeline with legacy_event_singleton_transform enabled
-      start_pipeline!(consumer, adapter, features: [legacy_event_singleton_transform: true])
-
-      ref = send_test_event(consumer, event)
-      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
-      assert_receive :sent, 1_000
-    end
-
     test "when all messages are rejected due to idempotency, the pipeline does not invoke the adapter", %{
       consumer: consumer
     } do
@@ -709,72 +682,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       assert json["name"] == "character_name"
       refute json["metadata"]
-
-      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
-
-      # Verify that the consumer record has been processed (deleted on ack)
-      assert [] == SlotMessageStore.peek_messages(consumer, 10)
-    end
-
-    test "legacy event transform is applied when feature flag is enabled", %{
-      consumer: consumer,
-      http_endpoint: http_endpoint
-    } do
-      test_pid = self()
-
-      # Mock the HTTP adapter
-      adapter = fn %Req.Request{} = req ->
-        send(test_pid, {:http_request, req})
-        {req, Req.Response.new(status: 200)}
-      end
-
-      record =
-        ConsumersFactory.consumer_record(
-          consumer_id: consumer.id,
-          data:
-            ConsumersFactory.consumer_record_data(
-              record: %{
-                "action" => "insert",
-                "changes" => nil,
-                "committed_at" => DateTime.utc_now(),
-                "record" => %{
-                  "id" => "123",
-                  "name" => "John Doe"
-                },
-                "source_table_name" => "characters_detailed",
-                "source_table_schema" => "public"
-              }
-            )
-        )
-
-      start_supervised!(
-        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
-      )
-
-      SlotMessageStore.put_messages(consumer, [record])
-
-      # Start the pipeline with legacy_event_transform feature enabled
-      start_pipeline!(consumer, adapter, features: [legacy_event_transform: true], dummy_producer: false)
-
-      # Wait for the message to be processed
-      assert_receive {:http_request, req}, 5_000
-
-      # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
-      json = Jason.decode!(req.body)
-
-      # Assert the transformed structure
-      assert json["record"] == %{
-               "id" => "123",
-               "name" => "John Doe"
-             }
-
-      assert json["metadata"]["table_name"] == "characters_detailed"
-      assert json["metadata"]["table_schema"] == "public"
-      assert json["metadata"]["consumer"]["id"] == consumer.id
-      assert json["metadata"]["consumer"]["name"] == consumer.name
-      assert json["action"] == "insert"
-      assert json["changes"] == nil
 
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 

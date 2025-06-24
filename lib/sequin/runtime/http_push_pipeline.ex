@@ -5,7 +5,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Aws.HttpClient
   alias Sequin.Aws.SQS
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.SinkConsumer
@@ -138,7 +137,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       consumer: consumer,
       http_endpoint: http_endpoint,
       req_opts: req_opts,
-      features: features,
       test_pid: test_pid
     } = context
 
@@ -147,7 +145,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     message_data =
       messages
       |> Enum.map(& &1.data)
-      |> prepare_message_data(consumer, features)
+      |> prepare_message_data(consumer)
 
     req_opts =
       case batch_info.batch_key do
@@ -170,54 +168,12 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     end
   end
 
-  defp prepare_message_data(messages, consumer, features) do
-    cond do
-      features[:legacy_event_transform] && length(messages) == 1 ->
-        [message] = messages
-        legacy_event_transform_message(consumer, message.data)
-
-      features[:legacy_event_singleton_transform] && length(messages) == 1 ->
-        [message] = messages
-        message.data
-
-      consumer.sink.batch == false ->
-        [message] = messages
-        Transforms.Message.to_external(consumer, message)
-
-      true ->
-        %{data: Enum.map(messages, &Transforms.Message.to_external(consumer, &1))}
-    end
-  end
-
-  defp legacy_event_transform_message(consumer, message_data) do
-    case message_data do
-      %ConsumerRecordData{
-        record: %{
-          "action" => action,
-          "changes" => changes,
-          "committed_at" => committed_at,
-          "record" => record,
-          "source_table_name" => source_table_name,
-          "source_table_schema" => source_table_schema
-        }
-      } ->
-        %{
-          "record" => record,
-          "metadata" => %{
-            "consumer" => %{
-              "id" => consumer.id,
-              "name" => consumer.name
-            },
-            "table_name" => source_table_name,
-            "table_schema" => source_table_schema,
-            "commit_timestamp" => committed_at
-          },
-          "action" => action,
-          "changes" => changes
-        }
-
-      _ ->
-        message_data
+  defp prepare_message_data(messages, consumer) do
+    if consumer.sink.batch == false do
+      [message] = messages
+      Transforms.Message.to_external(consumer, message)
+    else
+      %{data: Enum.map(messages, &Transforms.Message.to_external(consumer, &1))}
     end
   end
 

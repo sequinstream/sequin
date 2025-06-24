@@ -768,7 +768,20 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       {:error, :too_soon} ->
         Logger.info("[SlotProcessorServer] Heartbeat verification indeterminate (outstanding heartbeat recently emitted)",
-          heartbeat_id: state.current_heartbeat_id
+          heartbeat_id: state.current_heartbeat_id,
+          substate:
+            Map.take(state, [
+              :current_commit_idx,
+              :current_commit_ts,
+              :current_xaction_lsn,
+              :current_xid,
+              :last_commit_lsn,
+              :connection_state,
+              :safe_wal_cursor,
+              :last_flushed_wal_cursor,
+              :message_received_since_last_heartbeat,
+              :last_lsn_acked_at
+            ])
         )
 
         {:keep_state, next_state}

@@ -767,8 +767,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         {:stop, :heartbeat_verification_failed, next_state}
 
       {:error, :too_soon} ->
-        Logger.info("[SlotProcessorServer] Heartbeat verification indeterminate (outstanding heartbeat recently emitted)",
+        elapsed_ms = Sequin.Time.ms_since(state.heartbeat_emitted_at)
+
+        Logger.info(
+          "[SlotProcessorServer] Heartbeat verification indeterminate (outstanding heartbeat recently emitted, #{elapsed_ms} ms ago)",
           heartbeat_id: state.current_heartbeat_id,
+          elapsed_ms: elapsed_ms,
           substate:
             Map.take(state, [
               :current_commit_idx,

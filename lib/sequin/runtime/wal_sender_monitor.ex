@@ -68,8 +68,25 @@ defmodule Sequin.Runtime.WalSenderMonitor do
   end
 
   def enabled? do
-    config = Application.get_env(:sequin, __MODULE__, [])
-    Keyword.get(config, :enabled?, false)
+    Keyword.get(config(), :enabled?, false)
+  end
+
+  def reload_configured_replications do
+    GenServer.call(__MODULE__, :reload_configured_replications)
+  end
+
+  def add_replication_id(replication_id) do
+    current_config = config()
+    current_ids = Keyword.get(current_config, :replication_ids, [])
+
+    unless replication_id in current_ids do
+      updated_ids = [replication_id | current_ids]
+      updated_config = Keyword.put(current_config, :replication_ids, updated_ids)
+      Application.put_env(:sequin, __MODULE__, updated_config)
+      GenServer.call(__MODULE__, :reload_configured_replications)
+    end
+
+    :ok
   end
 
   @impl GenServer
@@ -103,6 +120,13 @@ defmodule Sequin.Runtime.WalSenderMonitor do
     {:noreply, %{state | previous_states: new_previous_states}}
   end
 
+  @impl GenServer
+  def handle_call(:reload_configured_replications, _from, state) do
+    Logger.info("Reloading configured replications for WAL sender monitor")
+    replications = load_configured_replications()
+    {:reply, :ok, %{state | replications: replications}}
+  end
+
   defp setup_prometheus do
     Gauge.new(
       name: @gauge_name,
@@ -116,9 +140,8 @@ defmodule Sequin.Runtime.WalSenderMonitor do
   end
 
   defp load_configured_replications do
-    :sequin
-    |> Application.fetch_env!(__MODULE__)
-    |> Keyword.fetch!(:replication_ids)
+    :replication_ids
+    |> config()
     |> Enum.map(&get_replication_with_db/1)
     |> Enum.reject(&is_nil/1)
   end
@@ -230,5 +253,13 @@ defmodule Sequin.Runtime.WalSenderMonitor do
     # Add current state to previous states for this replication
     updated_replication_previous_states = MapSet.put(replication_previous_states, current_state)
     Map.put(previous_states, replication_id, updated_replication_previous_states)
+  end
+
+  defp config do
+    Application.get_env(:sequin, __MODULE__, [])
+  end
+
+  defp config(key) do
+    Keyword.fetch!(config(), key)
   end
 end

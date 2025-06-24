@@ -622,6 +622,7 @@ defmodule Sequin.TransformsTest do
       assert 1 == result
     end
 
+    @tag :capture_log
     test "error reporting line number" do
       account = AccountsFactory.insert_account!()
 

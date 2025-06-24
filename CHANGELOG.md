@@ -13,17 +13,18 @@ This log is updated every Friday to track our feature releases and updates week 
 ### Improved
 
 * The Postgres pool size is now configurable.
-* Improve Sequin's default performance.
+* Improvements to Sequin's performance.
+* Improved how Sequin buffers messages when a replication slot is faster than a sink can handle, resulting in much smoother performance under heavy load.
 * Increase the throughput of messages through filter functions.
 * Increase concurrency on SQS and SNS sinks as well as high availability deployments.
 * Improve experience when running Prometheus / Grafana locally.
-* Added default batch sizes for sinks to optimize performance.
+* Tweaked default batch sizes for sinks to optimize performance.
 
 ### Fixed
 
 * Properly handle situations where a database or publication contain no tables.
 * Handle errors when a deprecated YAML format is applied or planned.
-* Fix an issue where filter and routing functions weren't included in yaml exports.
+* Fix an issue where filter and routing functions weren't included in YAML exports.
 * Show a helpful error when attempting to backfill a table with no PKs.
 
 </details>

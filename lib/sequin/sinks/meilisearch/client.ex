@@ -23,7 +23,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
         {:ok, %{body: body}} ->
           case body do
             %{"status" => status} when status in ["enqueued", "processing"] ->
-              timeout = Sequin.Time.exponential_backoff(50, retries, 10_000)
+              timeout = Sequin.Time.exponential_backoff(200, retries, 10_000)
               Logger.warning("[Meilisearch] Task #{task_id} is still in progress (#{retries}/10)")
               :timer.sleep(timeout)
               verify_task_by_id(sink, task_id, retries + 1)

@@ -3,7 +3,6 @@ defmodule Sequin.Consumers do
   import Ecto.Query
 
   alias Ecto.Changeset
-  alias Sequin.Accounts
   alias Sequin.Cache
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.Backfill
@@ -447,22 +446,6 @@ defmodule Sequin.Consumers do
     |> preload(^preloads)
     |> select([c], c.id)
     |> Repo.all()
-  end
-
-  @legacy_event_singleton_transform_cutoff_date ~D[2024-11-06]
-  def consumer_features(%SinkConsumer{} = consumer) do
-    consumer = Repo.lazy_preload(consumer, [:account])
-
-    cond do
-      Accounts.has_feature?(consumer.account, :legacy_event_transform) ->
-        [legacy_event_transform: true]
-
-      Date.before?(consumer.account.inserted_at, @legacy_event_singleton_transform_cutoff_date) ->
-        [legacy_event_singleton_transform: true]
-
-      true ->
-        []
-    end
   end
 
   # ConsumerEvent

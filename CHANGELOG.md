@@ -4,6 +4,29 @@ Sequin provides fast, real-time Postgres change data capture into streams and qu
 
 This log is updated every Friday to track our feature releases and updates week by week. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
+## June 20, 2025
+
+<details>
+
+<summary>Fixes and improvements</summary>
+
+### Improved
+
+* The Postgres pool size is now configurable.
+* Improve Sequin's default performance.
+* Increase the throughput of messages through filter functions.
+* Increase concurrency on SQS and SNS sinks as well as high availability deployments.
+* Improve experience when running Prometheus / Grafana locally.
+* Added default batch sizes for sinks to optimize performance.
+
+### Fixed
+
+* Properly handle situations where a database or publication contain no tables.
+* Handle errors when a deprecated YAML format is applied or planned.
+* Fix an issue where filter and routing functions weren't included in yaml exports.
+
+</details>
+
 ## June 13, 2025
 
 ### Advanced table and schema inclusion / exclusion

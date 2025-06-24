@@ -104,6 +104,9 @@ config :sequin,
   s2: [
     req_opts: [plug: {Req.Test, Sequin.Sinks.S2.Client}]
   ],
+  meilisearch: [
+    req_opts: [plug: {Req.Test, Sequin.Sinks.Meilisearch.Client}]
+  ],
   redis_module: Sequin.Sinks.RedisMock,
   kafka_module: Sequin.Sinks.KafkaMock,
   nats_module: Sequin.Sinks.NatsMock,

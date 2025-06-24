@@ -12,6 +12,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -39,6 +40,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Sinks.Gcp.Credentials
   alias Sequin.Sinks.Gcp.PubSub
   alias Sequin.Sinks.Kafka
+  alias Sequin.Sinks.Meilisearch.Client, as: MeilisearchClient
   alias Sequin.Sinks.Nats
   alias Sequin.Sinks.RabbitMq
   alias Sequin.Sinks.Redis
@@ -289,6 +291,12 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       :typesense ->
         case test_typesense_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
+
+      :meilisearch ->
+        case test_meilisearch_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
@@ -568,6 +576,34 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp test_meilisearch_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %MeilisearchSink{} = sink -> MeilisearchSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+
+      case MeilisearchClient.get_index(sink) do
+        {:ok, primary_key} ->
+          if primary_key == sink.primary_key do
+            :ok
+          else
+            {:error, "Primary key mismatch: expected \"#{primary_key}\", got \"#{sink.primary_key}\""}
+          end
+
+        {:error, error} ->
+          {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
   defp test_elasticsearch_connection(socket) do
     sink_changeset =
       socket.assigns.changeset
@@ -799,6 +835,18 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "typesense",
       "endpoint_url" => sink["endpoint_url"],
       "collection_name" => sink["collection_name"],
+      "api_key" => sink["api_key"],
+      "batch_size" => sink["batch_size"],
+      "timeout_seconds" => sink["timeout_seconds"]
+    }
+  end
+
+  defp decode_sink(:meilisearch, sink) do
+    %{
+      "type" => "meilisearch",
+      "endpoint_url" => sink["endpoint_url"],
+      "index_name" => sink["index_name"],
+      "primary_key" => sink["primary_key"],
       "api_key" => sink["api_key"],
       "batch_size" => sink["batch_size"],
       "timeout_seconds" => sink["timeout_seconds"]
@@ -1056,6 +1104,18 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp encode_sink(%MeilisearchSink{} = sink) do
+    %{
+      "type" => "meilisearch",
+      "endpoint_url" => sink.endpoint_url,
+      "index_name" => sink.index_name,
+      "primary_key" => sink.primary_key,
+      "api_key" => sink.api_key,
+      "batch_size" => sink.batch_size,
+      "timeout_seconds" => sink.timeout_seconds
+    }
+  end
+
   defp encode_sink(%ElasticsearchSink{} = sink) do
     %{
       "type" => "elasticsearch",
@@ -1307,6 +1367,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :rabbitmq -> "RabbitMQ Sink"
       :azure_event_hub -> "Azure Event Hub Sink"
       :typesense -> "Typesense Sink"
+      :meilisearch -> "Meilisearch Sink"
       :elasticsearch -> "Elasticsearch Sink"
     end
   end
@@ -1346,6 +1407,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         :rabbitmq -> {%RabbitMqSink{virtual_host: "/"}, %{}}
         :azure_event_hub -> {%AzureEventHubSink{}, %{}}
         :typesense -> {%TypesenseSink{}, %{}}
+        :meilisearch -> {%MeilisearchSink{}, %{}}
         :elasticsearch -> {%ElasticsearchSink{}, %{}}
         :redis_string -> {%RedisStringSink{}, %{batch_size: 10}}
       end

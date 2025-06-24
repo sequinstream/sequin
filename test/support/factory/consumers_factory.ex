@@ -16,6 +16,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -178,6 +179,19 @@ defmodule Sequin.Factory.ConsumersFactory do
         access_key_id: Factory.word(),
         secret_access_key: Factory.word(),
         is_fifo: Enum.random([true, false])
+      },
+      attrs
+    )
+  end
+
+  defp sink(:meilisearch, _account_id, attrs) do
+    merge_attributes(
+      %MeilisearchSink{
+        type: :meilisearch,
+        endpoint_url: "http://127.0.0.1:7700",
+        primary_key: "masterKey",
+        index_name: Factory.word(),
+        api_key: Factory.word()
       },
       attrs
     )

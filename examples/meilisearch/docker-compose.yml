@@ -1,0 +1,12 @@
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.15.0
+    environment:
+      - http_proxy
+      - https_proxy
+      - MEILI_MASTER_KEY=masterKey
+      - MEILI_NO_ANALYTICS=false
+    ports:
+      - 127.0.0.1:7700:7700
+    volumes:
+      - ./meilisearch_data:/meili_data

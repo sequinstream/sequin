@@ -17,6 +17,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -48,6 +49,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     :rabbitmq,
     :azure_event_hub,
     :typesense,
+    :meilisearch,
     :sns,
     :elasticsearch
   ]
@@ -130,6 +132,7 @@ defmodule Sequin.Consumers.SinkConsumer do
         rabbitmq: RabbitMqSink,
         azure_event_hub: AzureEventHubSink,
         typesense: TypesenseSink,
+        meilisearch: MeilisearchSink,
         elasticsearch: ElasticsearchSink
       ],
       on_replace: :update,

@@ -13,6 +13,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
@@ -368,6 +369,17 @@ defmodule Sequin.Transforms do
       collection_name: sink.collection_name,
       api_key: SensitiveValue.new(sink.api_key, show_sensitive),
       batch_size: sink.batch_size,
+      timeout_seconds: sink.timeout_seconds
+    })
+  end
+
+  def to_external(%MeilisearchSink{} = sink, show_sensitive) do
+    reject_nil_values(%{
+      type: "meilisearch",
+      endpoint_url: sink.endpoint_url,
+      index_name: sink.index_name,
+      primary_key: sink.primary_key,
+      api_key: SensitiveValue.new(sink.api_key, show_sensitive),
       timeout_seconds: sink.timeout_seconds
     })
   end
@@ -1169,6 +1181,20 @@ defmodule Sequin.Transforms do
        type: :typesense,
        endpoint_url: attrs["endpoint_url"],
        collection_name: attrs["collection_name"],
+       api_key: attrs["api_key"],
+       batch_size: attrs["batch_size"],
+       timeout_seconds: attrs["timeout_seconds"]
+     }}
+  end
+
+  # Add parse_sink for meilisearch type
+  defp parse_sink(%{"type" => "meilisearch"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :meilisearch,
+       endpoint_url: attrs["endpoint_url"],
+       index_name: attrs["index_name"],
+       primary_key: attrs["primary_key"],
        api_key: attrs["api_key"],
        batch_size: attrs["batch_size"],
        timeout_seconds: attrs["timeout_seconds"]

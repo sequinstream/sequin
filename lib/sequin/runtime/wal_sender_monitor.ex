@@ -200,6 +200,13 @@ defmodule Sequin.Runtime.WalSenderMonitor do
     wait_event = row_map["wait_event"] || "unknown"
     pid = to_string(row_map["pid"] || "unknown")
 
+    if wait_event_type == "unknown" or wait_event == "unknown" or pid == "unknown" do
+      Logger.info(
+        "[WalSenderMonitor] wal_sender not waiting: wait_event_type or wait_event or pid for replication_id #{replication_id}",
+        result: Map.drop(row_map, ["backend_start", "client_addr", "query_start"])
+      )
+    end
+
     # Create current state combination
     current_state = {db.id, wait_event_type, wait_event, pid}
 

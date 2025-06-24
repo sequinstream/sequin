@@ -16,8 +16,6 @@ This log is updated every Friday to track our feature releases and updates week 
 * Improvements to Sequin's performance.
 * Improved how Sequin buffers messages when a replication slot is faster than a sink can handle, resulting in much smoother performance under heavy load.
 * Increase the throughput of messages through filter functions.
-* Increase concurrency on SQS and SNS sinks as well as high availability deployments.
-* Improve experience when running Prometheus / Grafana locally.
 * Tweaked default batch sizes for sinks to optimize performance.
 
 ### Fixed

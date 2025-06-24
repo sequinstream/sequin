@@ -6,9 +6,9 @@ This log is updated every Friday to track our feature releases and updates week 
 
 ## June 20, 2025
 
-### S2 Sinks
+### S2 Sink
 
-Sequin now supports [S2](https://s2.dev/blog/sequin) sinks!
+Sequin now supports [S2](https://s2.dev/blog/sequin) as a sink destination!
 
 <div align="center">
 <img src="https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-20/s2-sink.png" alt="Sequin now natively integrates with S2" width="600" />
@@ -18,7 +18,7 @@ S2 is fully supported as a new sink in the console, API, and YAML. Read the [qui
 
 #### When should you reach for S2
 
-S2 (a.k.a Stream Storage) is designs to be a cloud native, streaming primitive - like what S3 provides for blob storage, but for data in motion. In fact, S2 builds on this promise by using object storage for durability. This design provides throughput that rivals Kafka (125 MiBps / stream), at a lower cost, and with unlimited streams (no brokers and partitions). It comes with a simple API to append and read records from the stream.
+S2 (a.k.a. Stream Storage) is a streaming platform - like what S3 provides for blob storage, but for data in motion. Under the hood, S2 uses object storage for durability. This design provides throughput that rivals Kafka (125 MiBps / stream), at a lower cost, and with unlimited streams (no brokers and partitions). It comes with a simple API to append and read records from streams.
 
 Consider an S2 stream when you'd otherwise reach for any other durable stream like Kafka, Kinesis, GCP Pub/Sub, or Azure Event Hubs.
 

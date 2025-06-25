@@ -35,7 +35,7 @@ defmodule Sequin.String do
       len ->
         first_three = String.slice(secret, 0, 3)
         last = String.last(secret)
-        middle = String.duplicate("*", len - 4)
+        middle = String.duplicate("*", min(len - 4, 20))
         first_three <> middle <> last
     end
   end

@@ -6,6 +6,7 @@ defmodule Sequin.Application do
 
   alias Sequin.Accounts
   alias Sequin.CheckSystemHealthWorker
+  alias Sequin.DebouncedLogger
   alias Sequin.Functions.TestMessages
   alias Sequin.Health.KickoffCheckPostgresReplicationSlotWorker
   alias Sequin.Health.KickoffCheckSinkConfigurationWorker
@@ -30,6 +31,7 @@ defmodule Sequin.Application do
     Sequin.Runtime.TableReaderServer.setup_table_oid_to_backfill_id_ets_table()
 
     :ets.new(Sequin.Consumers.posthog_ets_table(), [:set, :public, :named_table])
+    DebouncedLogger.setup_ets()
 
     :syn.add_node_to_scopes([:account, :replication, :consumers])
 

@@ -435,7 +435,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   @decorate track_metrics("handle_data_sequin")
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    if is_nil(state.last_commit_lsn) and state.accumulated_msg_binaries.count == 0 do
+    if is_nil(state.last_commit_lsn) and state.current_commit_idx == 0 and state.accumulated_msg_binaries.count == 0 do
       Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
     end
 

@@ -133,9 +133,20 @@ Now, create an Inngest trigger that invokes the function you created above:
             "table_schema": "public",
             "table_name": "users",
             "commit_timestamp": "2024-02-20T14:30:00.127470Z",
+            "commit_lsn": 123456789,
+            "commit_idx": 1,
+            "database_name": "myapp-prod",
             "consumer": {
               "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
-              "name": "new_user_consumer"
+              "name": "new_user_consumer",
+              "annotations": {}
+            },
+            "database": {
+              "id": "12345678-9abc-def0-1234-56789abcdef0",
+              "name": "myapp-prod",
+              "annotations": {},
+              "database": "myapp-prod",
+              "hostname": "db.example.com"
             }
           }
         }
@@ -257,4 +268,3 @@ From here you can tailor your Sequin webhook sink and Inngest functions to cover
 - Tailor your [Sequin webhook sink](/reference/sinks/webhooks) to your use case.
 - [Deploy](https://www.inngest.com/docs/platform/deployment) your Inngest functions to production.
 - Make your Inngest functions more [robust](https://www.inngest.com/docs/guides/error-handling) with retries, timeouts, and other features.
-

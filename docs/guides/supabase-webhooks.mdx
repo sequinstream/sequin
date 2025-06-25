@@ -124,13 +124,24 @@ Now, when you create a new order in Supabase, Sequin will capture the change and
     "user_id": 5
   },
   "metadata": {
+    "table_schema": "public",
+    "table_name": "orders",
+    "commit_timestamp": "2024-09-03T19:41:17.650384Z",
+    "commit_lsn": 123456789,
+    "commit_idx": 1,
+    "database_name": "myapp-prod",
     "consumer": {
       "id": "107adb3d-76b4-40ba-8e9d-587f9871ab5c",
-      "name": "new_order"
+      "name": "new_order",
+      "annotations": {}
     },
-    "table_name": "orders",
-    "table_schema": "public",
-    "commit_timestamp": "2024-09-03T19:41:17.650384Z"
+    "database": {
+      "id": "12345678-9abc-def0-1234-56789abcdef0",
+      "name": "myapp-prod",
+      "annotations": {},
+      "database": "myapp-prod",
+      "hostname": "db.example.com"
+    }
   },
   "action": "insert",
   "changes": null

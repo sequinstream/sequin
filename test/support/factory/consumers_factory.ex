@@ -496,6 +496,13 @@ defmodule Sequin.Factory.ConsumersFactory do
             annotations: %{
               "test" => true
             }
+          },
+          database: %ConsumerEventData.Metadata.Database{
+            id: Factory.uuid(),
+            name: Factory.word(),
+            database: Factory.postgres_object(),
+            hostname: Factory.hostname(),
+            annotations: %{}
           }
         }
       },
@@ -513,6 +520,9 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> Sequin.Map.from_ecto()
       |> Map.update!(:consumer, fn consumer ->
         Sequin.Map.from_ecto(consumer)
+      end)
+      |> Map.update!(:database, fn database ->
+        Sequin.Map.from_ecto(database)
       end)
     end)
   end
@@ -696,7 +706,8 @@ defmodule Sequin.Factory.ConsumersFactory do
           commit_lsn: Factory.unique_integer(),
           consumer: %ConsumerRecordData.Metadata.Sink{
             id: Factory.uuid(),
-            name: Factory.word()
+            name: Factory.word(),
+            annotations: %{}
           }
         }
       },

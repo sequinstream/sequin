@@ -30,9 +30,20 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
       "table_name": "orders",
       "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
       "commit_timestamp": "2024-10-28T21:37:01.127470Z",
-      "sink": {
+      "commit_lsn": 123456789,
+      "commit_idx": 1,
+      "database_name": "myapp-prod", // deprecated
+      "consumer": {
         "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-        "name": "orders_kafka"
+        "name": "orders_kafka",
+        "annotations": {"my-custom-key": "my-custom-value"}
+      },
+      "database": {
+        "id": "12345678-9abc-def0-1234-56789abcdef0",
+        "name": "myapp-prod",
+        "annotations": {"my-custom-key": "my-custom-value"},
+        "database": "myapp-prod",
+        "hostname": "db.example.com"
       },
       "transaction_annotations": {
         "username": "paul.atreides",
@@ -65,9 +76,20 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
       "table_name": "orders",
       "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
       "commit_timestamp": "2024-10-28T21:39:21.127470Z",
-      "sink": {
+      "commit_lsn": 123456790,
+      "commit_idx": 1,
+      "database_name": "myapp-prod", // deprecated
+      "consumer": {
         "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-        "name": "orders_kafka"
+        "name": "orders_kafka",
+        "annotations": {"my-custom-key": "my-custom-value"}
+      },
+      "database": {
+        "id": "12345678-9abc-def0-1234-56789abcdef0",
+        "name": "myapp-prod",
+        "annotations": {"my-custom-key": "my-custom-value"},
+        "database": "myapp-prod",
+        "hostname": "db.example.com"
       }
     }
   }
@@ -92,9 +114,20 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
       "table_name": "orders",
       "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
       "commit_timestamp": "2024-10-28T21:40:00.127470Z",
-      "sink": {
+      "commit_lsn": 123456791,
+      "commit_idx": 1,
+      "database_name": "myapp-prod", // deprecated
+      "consumer": {
         "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-        "name": "orders_kafka"
+        "name": "orders_kafka",
+        "annotations": {"my-custom-key": "my-custom-value"}
+      },
+      "database": {
+        "id": "12345678-9abc-def0-1234-56789abcdef0",
+        "name": "myapp-prod",
+        "annotations": {"my-custom-key": "my-custom-value"},
+        "database": "myapp-prod",
+        "hostname": "db.example.com"
       }
     }
   }
@@ -119,9 +152,20 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
       "table_name": "orders",
       "idempotency_key": "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz",
       "commit_timestamp": "2024-10-28T21:39:21.127470Z",
-      "sink": {
+      "commit_lsn": 123456792,
+      "commit_idx": 1,
+      "database_name": "myapp-prod", // deprecated
+      "consumer": {
         "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-        "name": "orders_kafka"
+        "name": "orders_kafka",
+        "annotations": {"my-custom-key": "my-custom-value"}
+      },
+      "database": {
+        "id": "12345678-9abc-def0-1234-56789abcdef0",
+        "name": "myapp-prod",
+        "annotations": {"my-custom-key": "my-custom-value"},
+        "database": "myapp-prod",
+        "hostname": "db.example.com"
       }
     }
   }
@@ -163,20 +207,60 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
       Opaque string which is [unique to this record/transaction](#idempotency).
     </ResponseField>
 
+    <ResponseField name="metadata.commit_lsn" type="integer">
+      The log sequence number of the transaction that made this change.
+    </ResponseField>
+
+    <ResponseField name="metadata.commit_idx" type="integer">
+      The index of this change within the transaction.
+    </ResponseField>
+
+    <ResponseField name="metadata.database_name" type="string">
+      _Deprecated_. The name of the database that was changed.
+    </ResponseField>
+
     <ResponseField name="metadata.transaction_annotations" type="object">
       User-provided context about the transaction. Contains arbitrary JSON data set via `pg_logical_emit_message`. See [Transaction annotations](/reference/annotations) for details.
     </ResponseField>
 
-    <ResponseField name="metadata.sink" type="object">
-      Information about the sink receiving this message.
+    <ResponseField name="metadata.consumer" type="object">
+      Information about the consumer receiving this message.
     </ResponseField>
 
-    <ResponseField name="metadata.sink.id" type="string">
-      Unique identifier for the sink.
+    <ResponseField name="metadata.consumer.id" type="string">
+      Unique identifier for the consumer.
     </ResponseField>
 
-    <ResponseField name="metadata.sink.name" type="string">
-      Name of the sink.
+    <ResponseField name="metadata.consumer.name" type="string">
+      Name of the consumer.
+    </ResponseField>
+
+    <ResponseField name="metadata.consumer.annotations" type="object">
+      Additional metadata you attached to the consumer.
+    </ResponseField>
+
+    <ResponseField name="metadata.database" type="object">
+      Information about the database that was changed.
+    </ResponseField>
+
+    <ResponseField name="metadata.database.id" type="string">
+      Unique identifier for the database.
+    </ResponseField>
+
+    <ResponseField name="metadata.database.name" type="string">
+      Name of the database.
+    </ResponseField>
+
+    <ResponseField name="metadata.database.annotations" type="object">
+      Additional metadata you attached to the database.
+    </ResponseField>
+
+    <ResponseField name="metadata.database.database" type="string">
+      The database name.
+    </ResponseField>
+
+    <ResponseField name="metadata.database.hostname" type="string">
+      The hostname of the database server.
     </ResponseField>
   </Expandable>
 </ResponseField>
@@ -205,4 +289,3 @@ For backfill messages, the key is based on the backfill's unique identifier and 
     Learn how to backfill data from your database to your sinks.
   </Card>
 </CardGroup>
-

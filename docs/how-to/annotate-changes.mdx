@@ -36,9 +36,20 @@ The annotations will be included in the `metadata.transaction_annotations` field
     "table_schema": "public",
     "table_name": "orders",
     "commit_timestamp": "2024-10-28T21:37:53Z",
-    "sink": {
+    "commit_lsn": 123456789,
+    "commit_idx": 1,
+    "database_name": "myapp-prod",
+    "consumer": {
       "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      "name": "orders_kafka"
+      "name": "orders_kafka",
+      "annotations": {"my-custom-key": "my-custom-value"}
+    },
+    "database": {
+      "id": "12345678-9abc-def0-1234-56789abcdef0",
+      "name": "myapp-prod",
+      "annotations": {"my-custom-key": "my-custom-value"},
+      "database": "myapp-prod",
+      "hostname": "db.example.com"
     },
     "transaction_annotations": {
       "username": "paul.atreides",

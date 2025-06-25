@@ -558,22 +558,7 @@ defmodule Sequin.ConsumersTest do
       ConsumersFactory.insert_consumer_message!(
         consumer_id: consumer.id,
         message_kind: consumer.message_kind,
-        data: %{
-          record: record_data,
-          action: :insert,
-          metadata: %{
-            database_name: "test_db",
-            table_schema: "public",
-            table_name: "test_table",
-            commit_timestamp: now,
-            commit_lsn: 123_456,
-            commit_idx: 1,
-            consumer: %{
-              id: consumer.id,
-              name: consumer.name
-            }
-          }
-        }
+        data: ConsumersFactory.consumer_event_data_attrs(%{record: record_data, action: :insert})
       )
 
       # Retrieve the message

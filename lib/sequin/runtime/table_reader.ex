@@ -437,16 +437,26 @@ defmodule Sequin.Runtime.TableReader do
   end
 
   defp build_event_data(table, consumer, backfill, record_attnums_to_values, record_pks) do
+    db = consumer.replication_slot.postgres_database
+
     %ConsumerEventData{
       action: :read,
       record: build_record_payload(table, record_attnums_to_values),
       metadata: %ConsumerEventData.Metadata{
-        database_name: consumer.replication_slot.postgres_database.name,
+        database_name: db.name,
         table_name: table.name,
         table_schema: table.schema,
         consumer: %ConsumerEventData.Metadata.Sink{
           id: consumer.id,
-          name: consumer.name
+          name: consumer.name,
+          annotations: consumer.annotations
+        },
+        database: %ConsumerEventData.Metadata.Database{
+          id: db.id,
+          name: db.name,
+          annotations: db.annotations,
+          database: db.database,
+          hostname: db.hostname
         },
         commit_timestamp: DateTime.utc_now(),
         idempotency_key: Base.encode64("#{backfill.id}:#{record_pks}")

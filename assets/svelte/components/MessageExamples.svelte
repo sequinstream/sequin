@@ -18,6 +18,14 @@
       consumer: {
         id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         name: "employee_updates_consumer",
+        annotations: { "my-custom-key": "my-custom-value" },
+      },
+      database: {
+        id: "12345678-9abc-def0-1234-56789abcdef0",
+        name: "myapp-prod",
+        annotations: { "my-custom-key": "my-custom-value" },
+        database: "myapp-prod",
+        hostname: "db.example.com",
       },
     },
   };

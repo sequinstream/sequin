@@ -85,9 +85,20 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
                 "table_schema": "public",
                 "table_name": "products",
                 "commit_timestamp": "2024-03-20T15:30:00Z",
+                "commit_lsn": 123456789,
+                "commit_idx": 1,
+                "database_name": "myapp-prod",
                 "consumer": {
                   "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-                  "name": "products-stream"
+                  "name": "products-stream",
+                  "annotations": {}
+                },
+                "database": {
+                  "id": "12345678-9abc-def0-1234-56789abcdef0",
+                  "name": "myapp-prod",
+                  "annotations": {},
+                  "database": "myapp-prod",
+                  "hostname": "db.example.com"
                 }
               }
             }

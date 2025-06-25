@@ -1497,7 +1497,15 @@ defmodule Sequin.Consumers do
           transaction_annotations: nil,
           consumer: %Metadata.Sink{
             id: Sequin.uuid4(),
-            name: "my-consumer"
+            name: "my-consumer",
+            annotations: %{"my-custom-key" => "my-custom-value"}
+          },
+          database: %Metadata.Database{
+            id: Sequin.uuid4(),
+            name: "dune",
+            annotations: %{"my-custom-key" => "my-custom-value"},
+            database: "dune",
+            hostname: "db.example.com"
           },
           idempotency_key: "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz"
         }

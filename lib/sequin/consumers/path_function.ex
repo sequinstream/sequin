@@ -52,6 +52,7 @@ defmodule Sequin.Consumers.PathFunction do
   defp traverse_path(%ConsumerEventData.Metadata{} = data, keys), do: mapify_struct_and_traverse(data, keys)
   defp traverse_path(%ConsumerRecordData.Metadata{} = data, keys), do: mapify_struct_and_traverse(data, keys)
   defp traverse_path(%ConsumerEventData.Metadata.Sink{} = data, keys), do: mapify_struct_and_traverse(data, keys)
+  defp traverse_path(%ConsumerEventData.Metadata.Database{} = data, keys), do: mapify_struct_and_traverse(data, keys)
   defp traverse_path(%ConsumerRecordData.Metadata.Sink{} = data, keys), do: mapify_struct_and_traverse(data, keys)
 
   # Base case

@@ -715,36 +715,27 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       test_pid = self()
       timestamp = DateTime.from_naive!(~N[2023-01-01 00:00:00], "Etc/UTC")
 
+      data =
+        ConsumersFactory.consumer_event_data_attrs(%{
+          record: %{
+            "id" => "123",
+            "created_at" => timestamp,
+            "nested" => %{
+              "updated_at" => timestamp
+            }
+          },
+          changes: %{
+            "updated_at" => timestamp
+          },
+          action: :insert
+        })
+
       # Use a fixed timestamp for predictable test results
       event =
         ConsumersFactory.insert_consumer_event!(
           consumer_id: consumer.id,
           action: :insert,
-          data: %ConsumerEventData{
-            record: %{
-              "id" => "123",
-              "created_at" => timestamp,
-              "nested" => %{
-                "updated_at" => timestamp
-              }
-            },
-            changes: %{
-              "updated_at" => timestamp
-            },
-            action: :insert,
-            metadata: %{
-              table_name: "users",
-              table_schema: "public",
-              commit_timestamp: timestamp,
-              commit_lsn: 123_456,
-              commit_idx: 0,
-              database_name: "postgres",
-              consumer: %{
-                id: consumer.id,
-                name: consumer.name
-              }
-            }
-          }
+          data: data
         )
 
       expected_unix_timestamp = DateTime.to_unix(timestamp, :microsecond)

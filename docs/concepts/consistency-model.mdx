@@ -80,7 +80,16 @@ However, while Sequin reads from the replication slot in serial, it delivers to 
 
 To achieve high throughput with strict ordering, Sequin partitions messages into **message groups**. Messages that belong to the same group are delivered to the sink in order. By default, the primary key value(s) of the source row are used to group messages. So, a create, update, and delete affecting the same row will be grouped together. And, therefore, delivered in order to the sink.
 
-You can specify how to group messages when setting up a sink. You can, for example, decide to group messages by a single column (e.g. "deliver all messages pertaining to this `account_id` in order").
+### Configuring message grouping
+
+You can control message grouping behavior using the `message_grouping` configuration option when setting up a sink:
+
+- `message_grouping: true` (default): Enable message grouping for ordered delivery within groups
+- `message_grouping: false`: Disable message grouping for maximum throughput without ordering guarantees
+
+When message grouping is enabled, by default the primary keys of each table are used to group messages (e.g. "deliver all messages pertaining to row with `id=1` in order"). You can also specify custom grouping columns at the table level. For example, you can group messages by a single column like `account_id` to ensure all messages pertaining to the same account are delivered in order.
+
+When message grouping is disabled, messages are delivered without considering groups. This may permit higher throughput for some sinks.
 
 <Note>
   Choosing too course-grained of a group can slow throughput, as Sequin will be able to deliver fewer messages in parallel.
@@ -150,6 +159,6 @@ Sequin's backfill worker avoids those traps:
 
 If a message fails to process or deliver to the sink, Debezium will halt the entire pipeline until the issue is cleared.
 
-By contrast, Sequin uses a dead letter queue concept to persist the message to an internal buffer and retry delivery. 
+By contrast, Sequin uses a dead letter queue concept to persist the message to an internal buffer and retry delivery.
 
 This means Sequin is more resilient to outlier and temporary issues, giving your team more time to respond to issues.

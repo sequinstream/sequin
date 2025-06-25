@@ -30,11 +30,35 @@ By default, Sequin retries messages indefinitely. You can configure a maximum nu
 
 Sequin has the ability to group messages by one or more fields. Changes for rows in the same group are guaranteed to arrive in the order they occurred (i.e. the order they were committed in Postgres) to your sink.
 
-By default, Sequin groups messages by the primary key value(s) of the source row. This means that if a row is updated multiple times, each update event will arrive in order to your sink.
+### Enabling/disabling message grouping
 
-You can specify message grouping behavior when configuring a sink. You can group rows by a single field or multiple fields.
+You can control message grouping behavior using the `message_grouping` configuration option:
 
-So, for example, instead of grouping by primary key, you could instead group `orders` by `account_id`. This means that all changes for a given `account_id` will be sent to your sink in the order they were committed in Postgres.
+- `message_grouping: true` (default): Enable message grouping for ordered delivery
+- `message_grouping: false`: Disable message grouping for maximum throughput
+
+When `message_grouping` is enabled, Sequin groups messages by the primary key value(s) of the source row by default. This means that if a row is updated multiple times, each update event will arrive in order to your sink.
+
+When `message_grouping` is disabled, messages are not grouped, allowing for higher throughput batching but without ordering guarantees.
+
+### Custom grouping columns
+
+When message grouping is enabled, you can specify custom grouping behavior by configuring `group_column_names` at the table level. You can group rows by a single field or multiple fields.
+
+For example, instead of grouping by primary key, you could group `orders` by `account_id`. This means that all changes for a given `account_id` will be sent to your sink in the order they were committed in Postgres.
+
+```yaml
+sinks:
+  - name: "ordered-sink"
+    message_grouping: true  # Enable grouping
+    tables:
+      - name: "public.orders"
+        group_column_names: ["account_id"]  # Custom grouping
+
+  - name: "high-throughput-sink"
+    message_grouping: false  # Disable grouping for max throughput
+    batch_size: 300
+```
 
 All this applies to how Sequin _delivers_ messages to your sink. Whether your sink supports ordered/FIFO processing depends on the sink. See the reference page for your sink for details.
 

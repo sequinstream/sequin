@@ -76,7 +76,8 @@ defmodule Sequin.Consumers.SinkConsumer do
              :timestamp_format,
              :batch_timeout_ms,
              :max_retry_count,
-             :load_shedding_policy
+             :load_shedding_policy,
+             :message_grouping
            ]}
   typed_schema "sink_consumers" do
     field :name, :string
@@ -97,6 +98,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601
     field :load_shedding_policy, Ecto.Enum, values: [:pause_on_full, :discard_on_full], default: :pause_on_full
+    field :message_grouping, :boolean, default: true
 
     field :type, Ecto.Enum, values: @types, read_after_writes: true
 
@@ -196,12 +198,14 @@ defmodule Sequin.Consumers.SinkConsumer do
       :filter_id,
       :timestamp_format,
       :batch_timeout_ms,
-      :load_shedding_policy
+      :load_shedding_policy,
+      :message_grouping
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> cast_embed(:source)
     |> cast_embed(:source_tables)
     |> put_defaults()
+    |> validate_message_grouping()
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
@@ -213,6 +217,37 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
     |> validate_routing(attrs)
     |> Sequin.Changeset.annotations_check_constraint()
+  end
+
+  defp validate_message_grouping(changeset) do
+    message_grouping = get_field(changeset, :message_grouping)
+    source_tables = get_field(changeset, :source_tables) || []
+
+    if message_grouping == false do
+      invalid_tables =
+        Enum.filter(source_tables, fn table ->
+          table.group_column_attnums && length(table.group_column_attnums) > 0
+        end)
+
+      if length(invalid_tables) > 0 do
+        table_names =
+          Enum.map(invalid_tables, fn table ->
+            table.table_name || "[oid: #{table.table_oid}]"
+          end)
+
+        add_error(
+          changeset,
+          :source_tables,
+          "Cannot specify group columns when message_grouping is disabled. " <>
+            "Found group columns on: #{Enum.join(table_names, ", ")}. " <>
+            "For more information, see: https://sequinstream.com/docs/reference/sequin-yaml#message-grouping"
+        )
+      else
+        changeset
+      end
+    else
+      changeset
+    end
   end
 
   defp validate_routing(cs, attrs) do
@@ -239,6 +274,12 @@ defmodule Sequin.Consumers.SinkConsumer do
   end
 
   defp put_defaults(changeset) do
+    message_grouping =
+      case get_field(changeset, :message_grouping) do
+        nil -> true
+        bool -> bool
+      end
+
     changeset
     |> put_change(:batch_size, get_field(changeset, :batch_size) || default_batch_size(get_field(changeset, :type)))
     |> put_change(:ack_wait_ms, get_field(changeset, :ack_wait_ms) || 30_000)
@@ -248,6 +289,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> put_change(:partition_count, get_field(changeset, :partition_count) || 1)
     |> put_change(:legacy_transform, get_field(changeset, :legacy_transform) || :none)
     |> put_change(:message_kind, get_field(changeset, :message_kind) || :event)
+    |> put_change(:message_grouping, message_grouping)
   end
 
   defp default_batch_size(type) when is_atom(type) do

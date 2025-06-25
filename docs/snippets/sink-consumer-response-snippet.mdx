@@ -293,3 +293,6 @@
 <ResponseField name="group_column_names" type="array" >
     Column names used for grouping records
 </ResponseField>
+<ResponseField name="message_grouping" type="boolean" >
+    Whether [message grouping](/reference/sinks/overview#message-grouping-and-ordering) is enabled for ordering purposes. When `true` (default), messages are grouped by primary key or custom grouping columns. When `false`, grouping is disabled for higher throughput batching.
+</ResponseField>

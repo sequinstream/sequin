@@ -83,10 +83,15 @@ In Sequin, navigate to the "Sinks" tab, click "Create Sink", and select "Pub/Sub
     You can backfill at any time. If you don't want to backfill, toggle "Backfill" off.
   </Step>
 
-  <Step title="Specify message grouping">
-    Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are sent to Pub/Sub in order.
+  <Step title="Configure message grouping">
+    Under "Message grouping", you can control how messages are grouped for ordering:
 
-    That way, if you're using a Pub/Sub subscription with "message ordering" enabled, your system will receive events for a row in the [same order they occurred in Postgres](reference/sinks/gcp-pubsub#grouping-and-ordering).
+    - **Enable message grouping** (default): Messages are grouped by primary key to ensure ordered delivery within each group. This is recommended if you plan to use Pub/Sub subscriptions with "message ordering" enabled.
+    - **Disable message grouping**: Messages are not grouped, allowing for higher throughput but without ordering guarantees.
+
+    If you enable message grouping, you can also specify custom grouping columns at the table level to group by fields other than the primary key (e.g., group orders by `customer_id`).
+
+    When message grouping is enabled and you use a Pub/Sub subscription with "message ordering" enabled, your system will receive events for each group in the [same order they occurred in Postgres](/reference/sinks/gcp-pubsub#grouping-and-ordering).
   </Step>
 </Steps>
 

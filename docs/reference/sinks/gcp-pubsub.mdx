@@ -77,7 +77,7 @@ By default, Sequin publishes messages to Pub/Sub one at a time (`batch_size=1`).
 
 If you don't need message ordering in Pub/Sub, you can significantly improve throughput by:
 
-1. **Disabling message grouping** - Set `group_column_names` to an empty array in your configuration
+1. **Disabling message grouping** - Set `message_grouping: false` at the sink level
 2. **Increasing batch size** - Set `batch_size` to a higher value (e.g., 100-1000)
 
 Here's an example configuration for high throughput:
@@ -85,16 +85,17 @@ Here's an example configuration for high throughput:
 ```yaml
 sinks:
   - name: my_pubsub_sink
+    message_grouping: false  # Disables message grouping and ordering key
     batch_size: 300
     tables:
       - name: public.my_table
-        group_column_names: []  # Disables ordering key
+        # group_column_names not allowed when message_grouping is false
 ```
 
-When grouping is disabled, Sequin will not set an `ordering_key` on the published messages, allowing Pub/Sub to process them in parallel for maximum throughput.
+When `message_grouping` is disabled, Sequin will not set an `ordering_key` on the published messages, allowing Pub/Sub to process them in parallel for maximum throughput.
 
 <Note>
-  Editing these settings in the Sequin web console is coming soon (July 2025). For now, you can configure batching and grouping using YAML configuration or the Sequin API.
+  Editing message grouping settings in the Sequin web console is coming soon (July 2025). For now, you can configure message grouping using YAML configuration or the Sequin API.
 </Note>
 
 ## Debugging

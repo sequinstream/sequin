@@ -17,11 +17,11 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
   end
 
   @impl SinkPipeline
-  def batchers_config(_consumer) do
+  def batchers_config(consumer) do
     [
       default: [
         concurrency: 400,
-        batch_size: 10,
+        batch_size: consumer.batch_size,
         batch_timeout: 50
       ]
     ]
@@ -35,7 +35,13 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
     record_or_event = message.data
 
     ordering_key = record_or_event.group_id
-    message = Broadway.Message.put_batch_key(message, ordering_key)
+
+    message =
+      if ordering_key do
+        Broadway.Message.put_batch_key(message, ordering_key)
+      else
+        message
+      end
 
     {:ok, message, context}
   end
@@ -60,28 +66,30 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
   end
 
   defp build_pubsub_message(consumer, %Sequin.Consumers.ConsumerRecord{} = record) do
-    %{
+    msg = %{
       data: Message.to_external(consumer, record),
       attributes: %{
         "trace_id" => record.replication_message_trace_id,
         "type" => "record",
         "table_name" => record.data.metadata.table_name
-      },
-      ordering_key: record.group_id
+      }
     }
+
+    Sequin.Map.put_if_present(msg, :ordering_key, record.group_id)
   end
 
   defp build_pubsub_message(consumer, %Sequin.Consumers.ConsumerEvent{} = event) do
-    %{
+    msg = %{
       data: Message.to_external(consumer, event),
       attributes: %{
         "trace_id" => event.replication_message_trace_id,
         "type" => "event",
         "table_name" => event.data.metadata.table_name,
         "action" => to_string(event.data.action)
-      },
-      ordering_key: event.group_id
+      }
     }
+
+    Sequin.Map.put_if_present(msg, :ordering_key, event.group_id)
   end
 
   defp setup_allowances(nil), do: :ok

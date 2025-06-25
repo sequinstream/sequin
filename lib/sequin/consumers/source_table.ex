@@ -15,6 +15,5 @@ defmodule Sequin.Consumers.SourceTable do
     source_table
     |> cast(attrs, [:table_oid, :schema_name, :table_name, :group_column_attnums])
     |> validate_required([:table_oid, :group_column_attnums])
-    |> validate_length(:group_column_attnums, min: 1)
   end
 end

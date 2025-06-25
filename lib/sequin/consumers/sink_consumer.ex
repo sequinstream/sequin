@@ -258,7 +258,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       :s2 -> 10
       :kafka -> 200
       :redis_stream -> 50
-      :gcp_pubsub -> 10
+      :gcp_pubsub -> 1
       :azure_event_hub -> 10
       :redis_string -> 10
       _ -> 1

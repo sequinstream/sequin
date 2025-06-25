@@ -505,22 +505,28 @@ defmodule Sequin.Runtime.MessageHandler do
   defp generate_group_id(consumer, message) do
     default_group_id = if message.ids == [], do: nil, else: Enum.map_join(message.ids, ":", &to_string/1)
 
-    case consumer do
-      %SinkConsumer{source_tables: nil} ->
-        default_group_id
-
-      %SinkConsumer{source_tables: source_tables} ->
-        if source_table = Enum.find(source_tables, &(&1.table_oid == message.table_oid)) do
-          source_table.group_column_attnums
-          |> Enum.map(fn attnum ->
-            fields = if message.action == :delete, do: message.old_fields, else: message.fields
-            Enum.find(fields, &(&1.column_attnum == attnum))
-          end)
-          |> Enum.filter(& &1)
-          |> Enum.map_join(":", &to_string(&1.value))
-        else
+    group_id =
+      case consumer do
+        %SinkConsumer{source_tables: nil} ->
           default_group_id
-        end
+
+        %SinkConsumer{source_tables: source_tables} ->
+          if source_table = Enum.find(source_tables, &(&1.table_oid == message.table_oid)) do
+            source_table.group_column_attnums
+            |> Enum.map(fn attnum ->
+              fields = if message.action == :delete, do: message.old_fields, else: message.fields
+              Enum.find(fields, &(&1.column_attnum == attnum))
+            end)
+            |> Enum.filter(& &1)
+            |> Enum.map_join(":", &to_string(&1.value))
+          else
+            default_group_id
+          end
+      end
+
+    case group_id do
+      "" -> nil
+      group_id -> group_id
     end
   end
 

@@ -1131,22 +1131,6 @@ defmodule Sequin.YamlLoaderTest do
       end
     end
 
-    test "fails when group_column_names is empty" do
-      assert_raise RuntimeError, ~r/Invalid table.group_column_names: should have at least 1 item\(s\)/, fn ->
-        YamlLoader.apply_from_yml!("""
-        #{account_and_db_yml()}
-
-        sinks:
-          - name: "invalid-consumer"
-            database: "test-db"
-            tables:
-              - name: "Characters"
-            destination:
-              type: "sequin_stream"
-        """)
-      end
-    end
-
     test "creates kafka sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""

@@ -71,6 +71,32 @@ The default message group for a message is the source row's primary key(s). You 
 
 Sequin will order the delivery of messages with the same group according to their commit timestamp.
 
+## Throughput and batching
+
+By default, Sequin publishes messages to Pub/Sub one at a time (`batch_size=1`). This is because the default ordering key is set to the primary key(s) of the source row, and Pub/Sub does not allow batching messages with different ordering keys.
+
+If you don't need message ordering in Pub/Sub, you can significantly improve throughput by:
+
+1. **Disabling message grouping** - Set `group_column_names` to an empty array in your configuration
+2. **Increasing batch size** - Set `batch_size` to a higher value (e.g., 100-1000)
+
+Here's an example configuration for high throughput:
+
+```yaml
+sinks:
+  - name: my_pubsub_sink
+    batch_size: 300
+    tables:
+      - name: public.my_table
+        group_column_names: []  # Disables ordering key
+```
+
+When grouping is disabled, Sequin will not set an `ordering_key` on the published messages, allowing Pub/Sub to process them in parallel for maximum throughput.
+
+<Note>
+  Editing these settings in the Sequin web console is coming soon (July 2025). For now, you can configure batching and grouping using YAML configuration or the Sequin API.
+</Note>
+
 ## Debugging
 
 You can view the status of your Pub/Sub sink in the Sequin web console.

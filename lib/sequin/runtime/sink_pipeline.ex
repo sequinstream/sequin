@@ -17,6 +17,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.DebouncedLogger
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -530,11 +531,10 @@ defmodule Sequin.Runtime.SinkPipeline do
     if already_delivered == [] do
       {to_deliver, []}
     else
-      Logger.info(
-        "[SinkPipeline] Rejected messages for idempotency",
-        rejected_message_count: length(already_delivered),
-        message_count: length(already_delivered)
-      )
+      DebouncedLogger.info("[SinkPipeline] Rejected messages for idempotency", %DebouncedLogger.Config{
+        dedupe_key: {:message_idempotency, consumer.id},
+        debounce_interval_ms: :timer.seconds(10)
+      })
 
       slot_message_store_mod.messages_already_succeeded(consumer, Enum.map(already_delivered, & &1.data))
 

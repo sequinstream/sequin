@@ -558,7 +558,12 @@ defmodule Sequin.ConsumersTest do
       ConsumersFactory.insert_consumer_message!(
         consumer_id: consumer.id,
         message_kind: consumer.message_kind,
-        data: ConsumersFactory.consumer_event_data_attrs(%{record: record_data, action: :insert})
+        data:
+          ConsumersFactory.consumer_message_data_attrs(%{
+            message_kind: consumer.message_kind,
+            record: record_data,
+            action: :insert
+          })
       )
 
       # Retrieve the message

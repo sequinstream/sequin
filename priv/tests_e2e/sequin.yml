@@ -56,7 +56,7 @@ sinks:
       type: "sqs"
       queue_url: "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/demo-queue"
       region: "us-east-1"
-      endpoint: "localstack:4566"
-      proto: "http"
+      use_emulator: true
+      emulator_base_url: "http://localstack:4566"      
       access_key_id: "test"
       secret_access_key: "test"

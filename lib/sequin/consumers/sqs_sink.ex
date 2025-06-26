@@ -18,18 +18,38 @@ defmodule Sequin.Consumers.SqsSink do
     field :access_key_id, :string
     field :secret_access_key, Encrypted.Field
     field :is_fifo, :boolean, default: false
-    field :endpoint, :string
-    field :proto, :string
+    field :use_emulator, :boolean, default: false
+    field :emulator_base_url, :string
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:queue_url, :region, :access_key_id, :secret_access_key, :is_fifo, :endpoint, :proto])
+    |> cast(params, [
+      :queue_url,
+      :region,
+      :access_key_id,
+      :secret_access_key,
+      :is_fifo,
+      :use_emulator,
+      :emulator_base_url
+    ])
     |> maybe_put_region()
     |> validate_required([:queue_url, :region, :access_key_id, :secret_access_key])
     |> validate_queue_url()
     |> put_is_fifo()
-    |> validate_inclusion(:proto, ["http", "https"])
+    |> validate_emulator_base_url()
+  end
+
+  defp validate_emulator_base_url(changeset) do
+    use_emulator? = get_field(changeset, :use_emulator)
+
+    if use_emulator? do
+      changeset
+      |> validate_required([:emulator_base_url])
+      |> validate_format(:emulator_base_url, ~r/^https?:\/\//i, message: "must start with http:// or https://")
+    else
+      changeset
+    end
   end
 
   defp validate_queue_url(changeset) do
@@ -68,10 +88,12 @@ defmodule Sequin.Consumers.SqsSink do
     client = AWS.Client.create(sink.access_key_id, sink.secret_access_key, sink.region)
 
     client =
-      if sink.endpoint do
+      if sink.use_emulator do
+        %{scheme: scheme, authority: authority} = URI.parse(sink.emulator_base_url)
+
         client
-        |> Map.put(:endpoint, sink.endpoint)
-        |> Map.put(:proto, sink.proto)
+        |> Map.put(:proto, scheme)
+        |> Map.put(:endpoint, authority)
       else
         client
       end

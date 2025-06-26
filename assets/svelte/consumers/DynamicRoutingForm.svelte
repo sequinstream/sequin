@@ -75,6 +75,7 @@
     </div>
   {:else}
     <div class="p-4 bg-muted/50 rounded-md">
+      <slot name="static-form" />
       <p class="text-sm text-muted-foreground">
         Using the default routing configuration:
       </p>

@@ -92,15 +92,15 @@
       bind:functionRefreshState
       routedSinkType="kafka"
       {errors}
-    />
-
-    <div class="space-y-2">
-      <Label for="topic">Topic</Label>
-      <Input id="topic" bind:value={form.sink.topic} placeholder="my-topic" />
-      {#if errors.sink?.topic}
-        <p class="text-destructive text-sm">{errors.sink.topic}</p>
-      {/if}
-    </div>
+    >
+      <div slot="static-form" class="space-y-2 mb-4">
+        <Label for="topic">Topic</Label>
+        <Input id="topic" bind:value={form.sink.topic} placeholder="my-topic" />
+        {#if errors.sink?.topic}
+          <p class="text-destructive text-sm">{errors.sink.topic}</p>
+        {/if}
+      </div>
+    </DynamicRoutingForm>
 
     <!-- SASL Mechanism Dropdown -->
     <div class="space-y-2">

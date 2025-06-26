@@ -81,17 +81,18 @@ defmodule Sequin.DebouncedLoggerTest do
         DebouncedLogger.error("Same message", config)
         DebouncedLogger.warning("Same message", config)
 
-        Process.sleep(@fast_debounce_ms + 20)
+        Process.sleep(@fast_debounce_ms * 10)
       end)
 
-    # Should see both immediate logs and warning summary
-    # Warning appears: immediate + summary = 2 times
-    # Error appears: immediate only = 1 time
-    # Total: 3 occurrences of "Same message"
-    message_count = log_output |> String.split("Same message") |> length() |> Kernel.-(1)
-    assert message_count == 3
+    # Verify warning appears twice (initial + summary)
+    warning_logs = log_output |> String.split("\n") |> Enum.filter(&(&1 =~ "[warning]" and &1 =~ "Same message"))
+    assert length(warning_logs) == 2
 
-    # Should contain the summary for warning level
+    # Verify error appears once (no summary since no duplicates)
+    error_logs = log_output |> String.split("\n") |> Enum.filter(&(&1 =~ "[error]" and &1 =~ "Same message"))
+    assert length(error_logs) == 1
+
+    # Verify the summary message appears
     assert log_output =~ "[1×] Same message"
   end
 

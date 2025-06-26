@@ -496,6 +496,17 @@
     }
   }
 
+  let functionDocsUrl = null;
+  let functionDocsUrls = {
+    transform: "https://sequinstream.com/docs/reference/transforms",
+    filter: "https://sequinstream.com/docs/reference/filters",
+    routing: "https://sequinstream.com/docs/reference/routing",
+  };
+
+  $: {
+    functionDocsUrl = functionDocsUrls[form.function.type] || null;
+  }
+
   function ignoreEscKeypress(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.stopPropagation();
@@ -703,7 +714,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                   <div class="text-sm space-y-2">
                     <p class="text-slate-500 dark:text-slate-400">
                       Give your function a descriptive name to help identify its
-                      purpose.
+                      purpose. Used in YAML and API as an identifier.
                     </p>
                   </div>
                 </PopoverContent>
@@ -741,22 +752,32 @@ Please help me create or modify the Elixir function transform to achieve the des
                       class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400"
                     >
                       <li>
-                        <code class="font-mono">path</code> - Extract data from a
-                        specific path in the message.
+                        <a
+                          href={functionDocsUrls.filter}
+                          class="text-blue-500 dark:text-blue-400"
+                          target="_blank">filter</a
+                        > - Determine which messages should be delivered to your
+                        sink destination.
                       </li>
                       <li>
-                        <code class="font-mono">function</code> - Transform the message
-                        and other properties of the request with Elixir code.
+                        <a
+                          href={functionDocsUrls.transform}
+                          class="text-blue-500 dark:text-blue-400"
+                          target="_blank">transform</a
+                        > - Transform messages before delivery to your sink destination.
+                      </li>
+                      <li>
+                        <a
+                          href={functionDocsUrls.routing}
+                          class="text-blue-500 dark:text-blue-400"
+                          target="_blank">routing</a
+                        > - Determine the sink delivery configuration for each message.
+                      </li>
+                      <li>
+                        <code class="font-mono">path</code> - A simple way to transform
+                        messages before delivery.
                       </li>
                     </ul>
-
-                    <p class="text-slate-500 dark:text-slate-400">
-                      Read more in our <a
-                        href="https://sequinstream.com/docs/reference/transforms"
-                        class="text-blue-500 dark:text-blue-400"
-                        target="_blank">documentation</a
-                      >.
-                    </p>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -847,8 +868,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                 >
                   <div class="text-sm space-y-2">
                     <p class="text-slate-500 dark:text-slate-400">
-                      Add a description to explain what this transform does and
-                      how it should be used.
+                      Add a description to explain what this function does.
                     </p>
                   </div>
                 </PopoverContent>
@@ -932,7 +952,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                   />
                   <div class="flex flex-col gap-1">
                     <p class="text-sm text-blue-700 dark:text-blue-300">
-                      Transform functions are not enabled in Cloud.
+                      Functions are not enabled in Cloud.
                     </p>
                     <p class="text-sm text-blue-700 dark:text-blue-300">
                       Talk to the Sequin team if you are interested in trying
@@ -947,7 +967,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                     form.function.type === undefined}
                 >
                   <div class="flex items-center gap-2">
-                    <Label for="function">Transform function</Label>
+                    <Label for="function">Code</Label>
                     <Popover>
                       <PopoverTrigger>
                         <Info
@@ -959,21 +979,28 @@ Please help me create or modify the Elixir function transform to achieve the des
                       >
                         <div class="text-sm space-y-2">
                           <p class="text-slate-500 dark:text-slate-400">
-                            Enter Elixir code that defines a function to
-                            transform the message.
-                          </p>
-                          <p class="text-slate-500 dark:text-slate-400">
-                            Read more about the <a
-                              href="https://sequinstream.com/docs/reference/transforms#function-transform"
+                            Enter Elixir code to
+                            <a
+                              href={functionDocsUrls.filter}
                               class="text-blue-500 dark:text-blue-400"
-                              target="_blank">function transform</a
-                            > in our documentation.
+                              target="_blank">filter</a
+                            >,
+                            <a
+                              href={functionDocsUrls.transform}
+                              class="text-blue-500 dark:text-blue-400"
+                              target="_blank">transform</a
+                            >, or
+                            <a
+                              href={functionDocsUrls.routing}
+                              class="text-blue-500 dark:text-blue-400"
+                              target="_blank">route</a
+                            > the message.
                           </p>
                         </div>
                       </PopoverContent>
                     </Popover>
                     <a
-                      href="https://sequinstream.com/docs/reference/transforms#function-transform"
+                      href={functionDocsUrl}
                       target="_blank"
                       class="ml-auto text-sm text-blue-500 dark:text-blue-400 hover:underline"
                     >

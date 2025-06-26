@@ -100,7 +100,7 @@ defmodule Sequin.Consumers.KafkaSinkTest do
       changeset = KafkaSink.changeset(%KafkaSink{}, %{})
       refute changeset.valid?
       assert "can't be blank" in errors_on(changeset).hosts
-      assert "can't be blank" in errors_on(changeset).topic
+      assert "is required" in errors_on(changeset).routing_mode
     end
 
     test "validates SASL credentials when mechanism is set" do
@@ -111,7 +111,8 @@ defmodule Sequin.Consumers.KafkaSinkTest do
             hosts: "localhost:9092",
             topic: "test-topic",
             tls: false,
-            sasl_mechanism: mechanism
+            sasl_mechanism: mechanism,
+            routing_mode: :static
           })
 
         refute changeset.valid?
@@ -126,7 +127,8 @@ defmodule Sequin.Consumers.KafkaSinkTest do
             tls: false,
             sasl_mechanism: mechanism,
             username: "user1",
-            password: "secret"
+            password: "secret",
+            routing_mode: :static
           })
 
         assert changeset.valid?
@@ -138,7 +140,8 @@ defmodule Sequin.Consumers.KafkaSinkTest do
         KafkaSink.changeset(%KafkaSink{}, %{
           hosts: "localhost:9092",
           topic: "test-topic",
-          tls: false
+          tls: false,
+          routing_mode: :static
         })
 
       assert changeset.valid?
@@ -170,7 +173,8 @@ defmodule Sequin.Consumers.KafkaSinkTest do
         changeset =
           KafkaSink.changeset(%KafkaSink{}, %{
             hosts: hosts,
-            topic: "test-topic"
+            topic: "test-topic",
+            routing_mode: :static
           })
 
         refute changeset.valid?, "Expected #{hosts} to be invalid"
@@ -182,7 +186,8 @@ defmodule Sequin.Consumers.KafkaSinkTest do
         changeset =
           KafkaSink.changeset(%KafkaSink{}, %{
             hosts: hosts,
-            topic: "test-topic"
+            topic: "test-topic",
+            routing_mode: :static
           })
 
         assert changeset.valid?, "Expected #{hosts} to be valid"
@@ -198,6 +203,17 @@ defmodule Sequin.Consumers.KafkaSinkTest do
       changeset = KafkaSink.changeset(%KafkaSink{}, params)
       refute changeset.valid?
       assert "should be at most 255 character(s)" in errors_on(changeset).topic
+    end
+
+    test "sets topic to blank when routing_mode is dynamic" do
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          routing_mode: :dynamic
+        })
+
+      refute :topic in changeset.changes
     end
   end
 

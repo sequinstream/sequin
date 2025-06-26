@@ -5,6 +5,7 @@ defmodule Sequin.Runtime.KafkaPipeline do
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Kafka
 
@@ -30,7 +31,8 @@ defmodule Sequin.Runtime.KafkaPipeline do
   def handle_message(message, context) do
     %{consumer: consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
-    context = maybe_put_partition_count(context)
+    %Routing.Consumers.Kafka{topic: topic} = Routing.route_message(consumer, message.data)
+    context = maybe_put_partition_count(topic, context)
 
     # Only prepare the message with its partition information
     msg = message.data
@@ -38,12 +40,12 @@ defmodule Sequin.Runtime.KafkaPipeline do
     encoded_data = Jason.encode!(data)
     msg = %{msg | encoded_data: encoded_data, encoded_data_size_bytes: byte_size(encoded_data)}
 
-    partition = partition_from_message(consumer, msg, context.partition_count)
+    partition = partition_from_message(consumer, msg, context.partition_count[topic])
 
     message =
       message
       |> Broadway.Message.put_data(msg)
-      |> Broadway.Message.put_batch_key(partition)
+      |> Broadway.Message.put_batch_key({topic, partition})
 
     {:ok, message, context}
   catch
@@ -53,13 +55,13 @@ defmodule Sequin.Runtime.KafkaPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, %{batch_key: partition}, context) do
+  def handle_batch(:default, messages, %{batch_key: {topic, partition}}, context) do
     %{consumer: %SinkConsumer{sink: %KafkaSink{}} = consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
     msgs = Enum.map(messages, & &1.data)
 
-    case Kafka.publish(consumer, partition, msgs) do
+    case Kafka.publish(consumer, topic, partition, msgs) do
       :ok ->
         {:ok, messages, context}
 
@@ -72,27 +74,29 @@ defmodule Sequin.Runtime.KafkaPipeline do
       {:error, Error.service(service: :kafka, message: "failed to connect")}
   end
 
-  def maybe_put_partition_count(%{partition_count: partition_count} = context) when is_integer(partition_count) do
-    context
+  def maybe_put_partition_count(topic, %{consumer: consumer, test_pid: test_pid} = context) do
+    if get_in(context, [:partition_count, topic]) do
+      context
+    else
+      setup_allowances(test_pid)
+
+      partition_count = get_partition_count!(consumer, topic)
+
+      context = Map.put_new(context, :partition_count, %{})
+      put_in(context, [:partition_count, topic], partition_count)
+    end
   end
 
-  def maybe_put_partition_count(%{consumer: consumer, test_pid: test_pid} = context) do
-    setup_allowances(test_pid)
-
-    partition_count = get_partition_count!(consumer)
-
-    Map.put(context, :partition_count, partition_count)
-  end
-
-  defp partition_from_message(%SinkConsumer{sink: %KafkaSink{}} = consumer, message, partition_count) do
+  defp partition_from_message(%SinkConsumer{sink: %KafkaSink{}} = consumer, message, partition_count)
+       when is_integer(partition_count) do
     case Kafka.message_key(consumer, message) do
       "" -> Enum.random(1..partition_count)
       group_id when is_binary(group_id) -> :erlang.phash2(group_id, partition_count)
     end
   end
 
-  defp get_partition_count!(%SinkConsumer{sink: %KafkaSink{} = sink}) do
-    case Kafka.get_partition_count(sink) do
+  defp get_partition_count!(%SinkConsumer{sink: %KafkaSink{} = sink}, topic) do
+    case Kafka.get_partition_count(sink, topic) do
       {:ok, partition_count} ->
         partition_count
 

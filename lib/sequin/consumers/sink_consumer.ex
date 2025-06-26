@@ -256,20 +256,14 @@ defmodule Sequin.Consumers.SinkConsumer do
         # Both unchanged, this is fine
         cs
 
-      {"static", {_, nil}} ->
-        cs
+      {"static", {_, _}} ->
+        validate_inclusion(cs, :routing_id, [nil])
 
-      {"static", {_, id}} when not is_nil(id) ->
-        add_error(cs, :routing_id, "static routing cannot have linked router!")
+      {"dynamic", {_, _}} ->
+        validate_required(cs, [:routing_id])
 
-      {"dynamic", {_, id}} when not is_nil(id) ->
-        cs
-
-      {"dynamic", {_, nil}} ->
-        add_error(cs, :routing_id, "dynamic routing requires linked router!")
-
-      zz ->
-        add_error(cs, :routing_id, "unknown routing mode! #{inspect(zz)}")
+      no_match ->
+        add_error(cs, :routing_id, "unknown routing mode: #{inspect(no_match)}")
     end
   end
 

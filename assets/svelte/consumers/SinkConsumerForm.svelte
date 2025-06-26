@@ -531,7 +531,13 @@
         {functionRefreshState}
       />
     {:else if consumer.type === "kafka"}
-      <KafkaSinkForm errors={errors.consumer} bind:form />
+      <KafkaSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {:else if consumer.type === "gcp_pubsub"}
       <GcpPubsubSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "sequin_stream"}

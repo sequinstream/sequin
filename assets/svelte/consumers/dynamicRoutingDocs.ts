@@ -4,9 +4,12 @@ type RoutedSinkDocs = {
   fields: {
     [key: string]: {
       description: string;
-      default: string;
+      // The value of the field when static routing is enabled (staticFormField can override this)
+      staticValue: string;
       // If you set this field it will attempt to sync the field from the sink form
-      formField?: string;
+      staticFormField?: string;
+      // The default value for the field when dynamic routing is enabled
+      dynamicDefault: string;
     };
   };
 };
@@ -16,17 +19,20 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
     fields: {
       method: {
         description: "HTTP method (GET, POST, PUT, etc.)",
-        default: "POST",
+        staticValue: "POST",
+        dynamicDefault: "POST",
       },
       endpoint_path: {
         description: "Path portion of the URL, it is appended to the base URL",
-        default: "<empty>",
-        formField: "httpEndpointPath",
+        staticValue: "<empty>",
+        dynamicDefault: "<empty>",
+        staticFormField: "httpEndpointPath",
       },
       headers: {
         description:
           "Map of key value pairs, including headers and encrypted headers from the HTTP endpoint",
-        default: "<see-http-endpoint>",
+        staticValue: "<see-http-endpoint>",
+        dynamicDefault: "<see-http-endpoint>",
       },
     },
   },
@@ -34,17 +40,20 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
     fields: {
       key: {
         description: "The Redis key to store the message in",
-        default: "sequin:<table-name>:<primary-keys>",
+        staticValue: "sequin:<table-name>:<primary-keys>",
+        dynamicDefault: "sequin:<table-name>:<primary-keys>",
       },
       action: {
         description: "The Redis action to perform",
-        default: "'set' for insert, update, and read, 'del' for delete",
+        staticValue: "'set' for insert, update, and read, 'del' for delete",
+        dynamicDefault: "'set' for insert, update, and read, 'del' for delete",
       },
       expire_ms: {
         description:
           "The expiration time in milliseconds, if nil the key will not expire",
-        default: "nil",
-        formField: "expireMs",
+        staticValue: "nil",
+        dynamicDefault: "nil",
+        staticFormField: "expireMs",
       },
     },
   },
@@ -52,11 +61,25 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
     fields: {
       subject: {
         description: "The NATS subject to publish messages to",
-        default: "sequin.<database_name>.<table_schema>.<table_name>.<action>",
+        staticValue:
+          "sequin.<database_name>.<table_schema>.<table_name>.<action>",
+        dynamicDefault:
+          "sequin.<database_name>.<table_schema>.<table_name>.<action>",
       },
       headers: {
         description: "Map of key value pairs",
-        default: '%{"Idempotency-Key" => <idempotency-key>}',
+        staticValue: '%{"Idempotency-Key" => <idempotency-key>}',
+        dynamicDefault: '%{"Idempotency-Key" => <idempotency-key>}',
+      },
+    },
+  },
+  kafka: {
+    fields: {
+      topic: {
+        description: "The Kafka topic to publish messages to",
+        staticValue: "<empty>",
+        staticFormField: "topic",
+        dynamicDefault: "sequin.<database_name>.<table_schema>.<table_name>",
       },
     },
   },

@@ -24,6 +24,7 @@ defmodule Sequin.Consumers.KafkaSink do
     field :aws_access_key_id, :string
     field :aws_secret_access_key, EncryptedField
     field :connection_id, :string
+    field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
   end
 
   def changeset(struct, params) do
@@ -37,9 +38,11 @@ defmodule Sequin.Consumers.KafkaSink do
       :sasl_mechanism,
       :aws_region,
       :aws_access_key_id,
-      :aws_secret_access_key
+      :aws_secret_access_key,
+      :routing_mode
     ])
-    |> validate_required([:hosts, :topic, :tls])
+    |> validate_required([:hosts, :tls])
+    |> validate_routing()
     |> validate_length(:topic, max: 255)
     |> validate_hosts()
     |> validate_sasl_credentials()
@@ -73,6 +76,21 @@ defmodule Sequin.Consumers.KafkaSink do
       end
     else
       changeset
+    end
+  end
+
+  defp validate_routing(changeset) do
+    routing_mode = get_field(changeset, :routing_mode)
+
+    cond do
+      routing_mode == :dynamic ->
+        put_change(changeset, :topic, nil)
+
+      routing_mode == :static ->
+        validate_required(changeset, [:topic])
+
+      true ->
+        add_error(changeset, :routing_mode, "is required")
     end
   end
 

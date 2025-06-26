@@ -32,6 +32,14 @@ For example, for the HTTP Webhook sink, the base URL is a static property - this
 
 Routing functions are supported by the following sinks:
 
+### Kafka sink
+
+For [Kafka](/reference/sinks/kafka), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `topic` | String | The topic to publish to | `"users.created"` |
+
 ### HTTP Webhook sink
 
 For [HTTP webhooks](/reference/sinks/webhooks), your routing function must return a map with these keys:

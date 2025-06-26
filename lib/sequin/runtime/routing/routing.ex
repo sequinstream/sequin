@@ -75,19 +75,9 @@ defmodule Sequin.Runtime.Routing do
 
       {:error, %Ecto.Changeset{} = changeset} ->
         routing_module = default_routing.__struct__
-
-        errors =
-          Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-            Enum.reduce(opts, msg, fn {key, value}, acc ->
-              String.replace(acc, "%{#{key}}", to_string(value))
-            end)
-          end)
+        errors = Sequin.Error.errors_on(changeset)
 
         raise "Invalid routing attributes for #{inspect(routing_module)}: #{inspect(errors)}"
-
-      {:error, error} ->
-        routing_module = default_routing.__struct__
-        raise "Invalid routing attributes for #{inspect(routing_module)}: #{inspect(error)}"
     end
   end
 
@@ -96,6 +86,7 @@ defmodule Sequin.Runtime.Routing do
       :http_push -> Sequin.Runtime.Routing.Consumers.HttpPush
       :redis_string -> Sequin.Runtime.Routing.Consumers.RedisString
       :nats -> Sequin.Runtime.Routing.Consumers.Nats
+      :kafka -> Sequin.Runtime.Routing.Consumers.Kafka
       _ -> nil
     end
   end

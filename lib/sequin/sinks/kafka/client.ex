@@ -13,7 +13,7 @@ defmodule Sequin.Sinks.Kafka.Client do
   require Logger
 
   @impl Kafka
-  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, message)
+  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, topic, message)
       when is_struct(message, ConsumerRecord) or is_struct(message, ConsumerEvent) do
     message_key = Kafka.message_key(consumer, message)
     encoded_data = message.encoded_data || Jason.encode!(message.data)
@@ -22,19 +22,23 @@ defmodule Sequin.Sinks.Kafka.Client do
          :ok <-
            :brod.produce_sync(
              connection,
-             consumer.sink.topic,
+             topic,
              :hash,
              message_key,
              encoded_data
            ) do
       :ok
     else
-      {:error, reason} -> {:error, to_sequin_error(reason)}
+      {:error, :unknown_topic_or_partition} ->
+        {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{topic}' does not exist")}
+
+      {:error, reason} ->
+        {:error, to_sequin_error(reason)}
     end
   end
 
   @impl Kafka
-  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, partition, messages) when is_list(messages) do
+  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, topic, partition, messages) when is_list(messages) do
     payload =
       Enum.map(messages, fn message ->
         encoded_data = message.encoded_data || Jason.encode!(message.data)
@@ -45,49 +49,30 @@ defmodule Sequin.Sinks.Kafka.Client do
          :ok <-
            :brod.produce_sync(
              connection,
-             consumer.sink.topic,
+             topic,
              partition,
              "unused_key",
              payload
            ) do
       :ok
     else
-      {:error, reason} -> {:error, to_sequin_error(reason)}
+      {:error, :unknown_topic_or_partition} ->
+        {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{topic}' does not exist")}
+
+      {:error, reason} ->
+        {:error, to_sequin_error(reason)}
     end
   end
 
   @impl Kafka
   @doc """
   Test the connection to the Kafka cluster.
-
-  If we receive :leader_not_available, it indicates that the topic does not exist in the cluster.
-
-  This metadata call will cause Kafka to auto-create the topic if Kafka is configured to do so. But
-  this is asynchronous, so we need to retry if the topic is not found.
   """
-  def test_connection(%KafkaSink{} = sink, opts \\ [retry_count: 0, max_retries: 3]) do
+  def test_connection(%KafkaSink{} = sink) do
     with :ok <- test_hosts_reachability(sink),
-         {:ok, metadata} <- get_metadata(sink) do
-      validate_topic_exists(metadata, sink.topic)
+         {:ok, _} <- get_metadata(sink) do
+      :ok
     else
-      {:error, :leader_not_available} ->
-        if opts[:retry_count] < opts[:max_retries] do
-          # Backoff
-          100
-          |> Sequin.Time.exponential_backoff(opts[:retry_count])
-          |> Process.sleep()
-
-          # Retry
-          opts = Keyword.update!(opts, :retry_count, &(&1 + 1))
-          test_connection(sink, opts)
-        else
-          {:error,
-           Sequin.Error.service(
-             service: :kafka,
-             message: "Leader not available. Does the topic #{sink.topic} exist in the cluster?"
-           )}
-        end
-
       {:error, reason} ->
         {:error, to_sequin_error(reason)}
     end
@@ -110,20 +95,45 @@ defmodule Sequin.Sinks.Kafka.Client do
   end
 
   @impl Kafka
-  def get_metadata(%KafkaSink{} = sink) do
+  def get_metadata(%KafkaSink{} = sink, topic \\ nil) do
     hosts = KafkaSink.hosts(sink)
-    topics = [sink.topic]
+    topics = if topic, do: [topic], else: :all
     config = KafkaSink.to_brod_config(sink)
 
     :brod.get_metadata(hosts, topics, config)
   end
 
   @impl Kafka
-  def get_partition_count(%KafkaSink{} = sink) do
-    with {:ok, metadata} <- get_metadata(sink) do
-      case Enum.find(metadata.topics, fn t -> t.name == sink.topic end) do
-        %{error_code: :no_error, partitions: partitions} -> {:ok, length(partitions)}
-        _ -> {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{sink.topic}' does not exist")}
+  @doc """
+  Get the partition count for a topic.
+
+  If we receive :leader_not_available, it indicates that the topic does not exist in the cluster.
+
+  This metadata call will cause Kafka to auto-create the topic if Kafka is configured to do so. But
+  this is asynchronous, so we need to retry if the topic is not found.
+  """
+  def get_partition_count(%KafkaSink{} = sink, topic, opts \\ [retry_count: 0, max_retries: 3]) do
+    with {:ok, metadata} <- get_metadata(sink, topic) do
+      case Enum.find(metadata.topics, fn t -> t.name == topic end) do
+        %{error_code: :no_error, partitions: partitions} ->
+          {:ok, length(partitions)}
+
+        %{error_code: :leader_not_available} ->
+          if opts[:retry_count] < opts[:max_retries] do
+            # Backoff
+            100
+            |> Sequin.Time.exponential_backoff(opts[:retry_count])
+            |> Process.sleep()
+
+            # Retry
+            opts = Keyword.update!(opts, :retry_count, &(&1 + 1))
+            get_partition_count(sink, topic, opts)
+          else
+            {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{topic}' does not exist")}
+          end
+
+        _ ->
+          {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{topic}' does not exist")}
       end
     end
   end
@@ -138,13 +148,6 @@ defmodule Sequin.Sinks.Kafka.Client do
 
       error ->
         Sequin.Error.service(service: :kafka, message: "Kafka error: #{inspect(error)}")
-    end
-  end
-
-  defp validate_topic_exists(%{topics: topics}, topic_name) do
-    case Enum.find(topics, fn t -> t.name == topic_name end) do
-      %{error_code: :no_error} -> :ok
-      _ -> {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{topic_name}' does not exist")}
     end
   end
 

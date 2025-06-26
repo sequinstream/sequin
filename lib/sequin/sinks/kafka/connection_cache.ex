@@ -155,10 +155,8 @@ defmodule Sequin.Sinks.Kafka.ConnectionCache do
       endpoints = KafkaSink.hosts(sink)
       client_config = KafkaSink.to_brod_config(sink)
 
-      with :ok <- :brod.start_client(endpoints, client_id, client_config),
-           :ok <- :brod.start_producer(client_id, sink.topic, []) do
-        {:ok, client_id}
-      else
+      case :brod.start_client(endpoints, client_id, client_config) do
+        :ok -> {:ok, client_id}
         {:error, {:already_started, client_pid}} -> {:ok, client_pid}
         {:error, reason} -> {:error, reason}
       end

@@ -278,7 +278,8 @@ defmodule Sequin.Runtime.MessageHandler do
       commit_idx: message.commit_idx,
       consumer: consumer_metadata(consumer),
       transaction_annotations: nil,
-      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}")
+      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}"),
+      record_pks: Enum.map(message.ids, &to_string/1)
     }
 
     metadata = maybe_put_database_metadata(metadata, consumer.message_kind, database)

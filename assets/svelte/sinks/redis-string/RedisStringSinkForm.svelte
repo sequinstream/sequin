@@ -9,7 +9,7 @@
   import { Label } from "$lib/components/ui/label";
   import { Switch } from "$lib/components/ui/switch";
   import { Eye, EyeOff, Info } from "lucide-svelte";
-  import FunctionPicker from "$lib/consumers/FunctionPicker.svelte";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
 
   export let form;
   export let errors: any = {};
@@ -21,16 +21,6 @@
 
   function togglePasswordVisibility() {
     showPassword = !showPassword;
-  }
-
-  let selectedDynamic = form.routingMode == "dynamic" || false;
-  $: {
-    if (selectedDynamic) {
-      form.routingMode = "dynamic";
-    } else {
-      form.routingMode = "static";
-      form.routingId = "none";
-    }
   }
 </script>
 
@@ -64,59 +54,14 @@
       </div>
     </div>
 
-    <div class="space-y-4">
-      <div class="flex items-center space-x-2">
-        <Switch id="dynamic-routing" bind:checked={selectedDynamic} />
-        <Label for="dynamic-routing">Dynamic routing</Label>
-      </div>
-
-      {#if selectedDynamic}
-        <div class="p-4 bg-muted/50 rounded-md">
-          <FunctionPicker
-            {functions}
-            selectedFunctionId={form.routingId || "none"}
-            title="Redis Key Router"
-            onFunctionChange={(functionId) =>
-              (form.routingId = functionId === "none" ? null : functionId)}
-            {refreshFunctions}
-            functionTypes={["routing"]}
-            typeLabelKey="sink_type"
-            createNewQueryParams="?type=routing&sink_type=redis_string"
-            bind:refreshState={functionRefreshState}
-          >
-            <p class="text-sm text-muted-foreground">
-              Select a routing transform to dynamically set Redis keys:
-            </p>
-          </FunctionPicker>
-
-          {#if errors.routing_id}
-            <p class="text-destructive text-sm">{errors.routing_id}</p>
-          {/if}
-
-          <div class="p-4 bg-muted/50 rounded-md mt-4">
-            <p class="text-sm text-muted-foreground">
-              By default, Redis keys follow the pattern <code
-                >sequin:&lt;table-name&gt;:&lt;primary-keys&gt;</code
-              >.
-            </p>
-            <p class="text-sm text-muted-foreground mt-2">
-              Dynamic routing allows you to customize keys for more flexibility.
-            </p>
-          </div>
-        </div>
-      {:else}
-        <div class="p-4 bg-muted/50 rounded-md">
-          <p class="text-sm text-muted-foreground">
-            Using default Redis keys: <code
-              >sequin:&lt;table-name&gt;:&lt;primary-keys&gt;</code
-            >
-          </p>
-          <p class="text-sm text-muted-foreground mt-2">
-            Use dynamic routing to customize your keys.
-          </p>
-        </div>
-      {/if}
-    </div>
+    <DynamicRoutingForm
+      {form}
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      routedSinkType="redis_string"
+      {errors}
+    />
 
     <div class="space-y-2">
       <Label for="host">Host</Label>

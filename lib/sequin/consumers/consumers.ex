@@ -1495,6 +1495,7 @@ defmodule Sequin.Consumers do
           commit_idx: 0,
           database_name: "dune",
           transaction_annotations: nil,
+          record_pks: ["1"],
           consumer: %Metadata.Sink{
             id: Sequin.uuid4(),
             name: "my-consumer",

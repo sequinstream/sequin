@@ -15,7 +15,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.TestMessages
-  alias Sequin.Runtime.SinkPipeline
+  alias Sequin.Runtime.Routing
   alias SequinWeb.FunctionLive.AutoComplete
 
   require Logger
@@ -41,17 +41,35 @@ defmodule SequinWeb.FunctionsLive.Edit do
   def route(action, record, changes, metadata) do
     %{
       method: "POST",
-      endpoint_path: "/entities/\#{record["id"]}"
+      endpoint_path: "",
+      headers: %{}
     }
   end
   """
 
   @initial_route_redis_string """
   def route(action, record, changes, metadata) do
-    prefix = "sequin:\#{metadata.table_name}"
-    key = "\#{prefix}:\#{record["id"]}"
+    table_name = metadata.table_name
+    pks = Enum.join(metadata.record_pks, "-")
 
-    %{key: key}
+    redis_action =
+      case action do
+        "insert" -> "set"
+        "update" -> "set"
+        "delete" -> "del"
+        "read" -> "set"
+      end
+
+    %{key: "sequin:\#{table_name}:\#{pks}", action: redis_action, expire_ms: nil}
+  end
+  """
+
+  @initial_route_nats """
+  def route(action, record, changes, metadata) do
+    %{
+      subject: "sequin.\#{metadata.database_name}.\#{metadata.table_schema}.\#{metadata.table_name}.\#{action}",
+      headers: %{"Nats-Msg-Id" => metadata.idempotency_key}
+    }
   end
   """
 
@@ -68,7 +86,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "filter" => @initial_filter,
     "routing_undefined" => @initial_route_no_sink_type,
     "routing_http_push" => @initial_route_http,
-    "routing_redis_string" => @initial_route_redis_string
+    "routing_redis_string" => @initial_route_redis_string,
+    "routing_nats" => @initial_route_nats
   }
 
   # We generate the function completions at compile time because
@@ -508,9 +527,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     end
   end
 
-  defp run_function(%SinkConsumer{routing: %Function{} = function} = sink_consumer, message) do
-    result = MiniElixir.run_interpreted(function, message.data)
-    SinkPipeline.apply_routing(sink_consumer, result)
+  defp run_function(%SinkConsumer{routing: %Function{} = _function} = sink_consumer, message) do
+    Map.from_struct(Routing.route_message(sink_consumer, message))
   end
 
   defp run_function(%SinkConsumer{filter: %Function{} = function}, message) do

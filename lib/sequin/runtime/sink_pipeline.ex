@@ -74,9 +74,9 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   Receives the result of running the routing transform.
   Should return the effective values of all relevant keys.
-  It's intended that the return value become the batch key.
+  It is intended that the return value become the batch key.
   """
-  @callback apply_routing(self :: SinkConsumer.t(), rinfo :: map()) :: map()
+  @callback apply_routing(consumer :: SinkConsumer.t(), rinfo :: map()) :: struct()
 
   @optional_callbacks [
     processors_config: 1,
@@ -371,18 +371,6 @@ defmodule Sequin.Runtime.SinkPipeline do
       put_in(config, [:default, :concurrency], default_workers)
     else
       config
-    end
-  end
-
-  def apply_routing(consumer, rinfo) do
-    pipeline_mod = pipeline_mod_for_consumer(consumer)
-
-    # Have to ensure module is loaded to trust function_exported?
-    Code.ensure_loaded?(pipeline_mod)
-
-    if function_exported?(pipeline_mod, :apply_routing, 2) do
-      # Have to use apply to avoid warnings from elixir about undefined impls of optional callback
-      apply(pipeline_mod, :apply_routing, [consumer, rinfo])
     end
   end
 

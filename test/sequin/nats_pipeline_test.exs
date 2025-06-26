@@ -1,8 +1,6 @@
 defmodule Sequin.Runtime.NatsPipelineTest do
   use Sequin.DataCase, async: true
 
-  import Hammox
-
   alias Sequin.Consumers
   alias Sequin.Error
   alias Sequin.Factory.ConsumersFactory
@@ -28,7 +26,8 @@ defmodule Sequin.Runtime.NatsPipelineTest do
       # Expect successful message delivery
       expect(NatsMock, :send_messages, fn _sink, messages ->
         assert length(messages) == 1
-        assert hd(messages).data.action == :insert
+        message = hd(messages)
+        assert String.ends_with?(message.routing_info.subject, "insert")
         :ok
       end)
 
@@ -73,7 +72,11 @@ defmodule Sequin.Runtime.NatsPipelineTest do
 
       expect(NatsMock, :send_messages, fn _sink, messages ->
         assert length(messages) == 2
-        assert Enum.map(messages, & &1.data.action) == [:insert, :update]
+
+        assert Enum.map(messages, fn message ->
+                 message.routing_info.subject |> String.split(".") |> List.last()
+               end) == ["insert", "update"]
+
         :ok
       end)
 

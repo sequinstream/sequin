@@ -14,6 +14,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
@@ -280,6 +281,101 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       assert_receive {:ack, ^ref, [], [_failed]}, 2000
     end
+
+    test "sink default and encrypted headers are merged with routing function headers", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
+      test_pid = self()
+
+      # Create a routing function that returns custom headers
+      account = Repo.get!(Sequin.Accounts.Account, consumer.account_id)
+
+      routing_code = """
+      def route(action, record, changes, metadata) do
+        %{
+          method: "POST",
+          endpoint_path: "/webhook",
+          headers: %{
+            "X-Custom-Header" => "routing-value",
+            "X-Record-ID" => record["id"],
+            "Encrypted-Header" => "routing-user-value",
+            "Normal-Header" => "routing-user-value"
+          }
+        }
+      end
+      """
+
+      {:ok, routing_function} =
+        Consumers.create_function(
+          account.id,
+          %{
+            name: Factory.unique_word(),
+            function: %{
+              type: :routing,
+              sink_type: :http_push,
+              code: routing_code
+            }
+          }
+        )
+
+      {:ok, _} = MiniElixir.create(routing_function.id, routing_function.function.code)
+
+      # Update the HTTP endpoint with encrypted headers
+      encrypted_headers = %{"Authorization" => "Bearer secret-token", "Encrypted-Header" => "Default value"}
+      non_encrypted_headers = %{"Hello" => "World", "Normal-Header" => "Default value"}
+
+      {:ok, http_endpoint} =
+        Consumers.update_http_endpoint(http_endpoint, %{
+          headers: non_encrypted_headers,
+          encrypted_headers: encrypted_headers
+        })
+
+      # Update the consumer to use routing and the updated endpoint
+      {:ok, consumer} =
+        Consumers.update_sink_consumer(consumer, %{
+          routing_id: routing_function.id,
+          routing_mode: "dynamic",
+          sink: consumer.sink |> Map.from_struct() |> Map.put(:http_endpoint_id, http_endpoint.id)
+        })
+
+      event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          action: :insert,
+          data:
+            ConsumersFactory.consumer_event_data(
+              action: :insert,
+              record: %{"id" => "test-record-123"}
+            )
+        )
+
+      adapter = fn %Req.Request{} = req ->
+        # Verify that both encrypted headers and routing headers are present
+        # From encrypted_headers
+        assert req.headers["authorization"] == ["Bearer secret-token"]
+        # From routing function
+        assert req.headers["x-custom-header"] == ["routing-value"]
+        # From routing function - overriding
+        assert req.headers["encrypted-header"] == ["routing-user-value"]
+        # From routing function with record data
+        assert req.headers["x-record-id"] == ["test-record-123"]
+
+        # From non-encrypted headers
+        assert req.headers["hello"] == ["World"]
+        # From routing function - overriding
+        assert req.headers["normal-header"] == ["routing-user-value"]
+
+        send(test_pid, :all_headers_verified)
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
+      assert_receive :all_headers_verified, 1_000
+    end
   end
 
   describe "messages flow from SlotMessageStore to http end-to-end" do
@@ -398,7 +494,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           data:
             ConsumersFactory.consumer_event_data(
               record: record,
-              metadata: %{
+              metadata: %ConsumerEventData.Metadata{
                 database_name: "postgres",
                 table_schema: "public",
                 table_name: "users",
@@ -590,6 +686,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
               table_name: "characters_detailed",
               commit_timestamp: DateTime.utc_now(),
               commit_lsn: Factory.unique_integer(),
+              idempotency_key: Ecto.UUID.generate(),
               consumer: %ConsumerRecordData.Metadata.Sink{
                 id: consumer.id,
                 name: consumer.name
@@ -651,11 +748,12 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           state: :available,
           data: %ConsumerRecordData{
             record: %{name: "character_name"},
-            metadata: %{
+            metadata: %ConsumerRecordData.Metadata{
               database_name: "postgres",
               table_schema: "public",
               table_name: "characters_detailed",
               commit_timestamp: DateTime.utc_now(),
+              idempotency_key: Ecto.UUID.generate(),
               consumer: %{
                 id: consumer.id,
                 name: consumer.name

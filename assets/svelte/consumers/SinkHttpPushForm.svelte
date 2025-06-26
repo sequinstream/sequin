@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import FunctionPicker from "$lib/consumers/FunctionPicker.svelte";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
   import { Input } from "$lib/components/ui/input";
   import { Switch } from "$lib/components/ui/switch";
   import {
@@ -107,15 +107,7 @@
     ? concatenateUrl(selectedHttpEndpoint?.baseUrl, form.sink.httpEndpointPath)
     : "";
 
-  let selectedDynamic = form.routingMode == "dynamic";
-  $: {
-    if (selectedDynamic) {
-      form.routingMode = "dynamic";
-    } else {
-      form.routingMode = "static";
-      form.routingId = "none";
-    }
-  }
+  let isDynamicRouting = form.routingMode === "dynamic";
 </script>
 
 <Card>
@@ -384,125 +376,79 @@
 
     {#if selectedHttpEndpoint?.name}
       <div class="mt-4 space-y-4">
-        <div class="flex items-center space-x-2">
-          <Switch id="dynamic-routing" bind:checked={selectedDynamic} />
-          <Label for="dynamic-routing">Dynamic routing</Label>
-        </div>
+        <DynamicRoutingForm
+          {form}
+          {functions}
+          {refreshFunctions}
+          {functionRefreshState}
+          routedSinkType="http_push"
+          {errors}
+          bind:selectedDynamic={isDynamicRouting}
+        />
 
-        {#if selectedHttpEndpoint}
-          {#if !selectedDynamic}
-            <div class="space-y-2">
-              <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
-              <div class="flex flex-row bg-white">
-                <div
-                  class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
-                >
-                  {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
-                </div>
-                <Input
-                  id="http-endpoint-path"
-                  bind:value={form.sink.httpEndpointPath}
-                  placeholder="/some-path"
-                  class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                  style="border-left: none;"
-                />
-              </div>
-              <p class="text-sm text-muted-foreground">
-                The path to append to the base URL for this consumer's requests.
-              </p>
-              {#if errors.sink?.http_endpoint_path}
-                {#each errors.sink.http_endpoint_path as error}
-                  <p class="text-destructive text-sm">
-                    {error}
-                  </p>
-                {/each}
-              {/if}
-            </div>
-          {:else}
-            <div class="space-y-2">
-              <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
-              <div class="flex flex-row bg-white">
-                <div
-                  class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
-                >
-                  {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
-                </div>
-                <Input
-                  id="http-endpoint-path"
-                  value=""
-                  class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                  style="border-left: none;"
-                  disabled={true}
-                />
-              </div>
-              <p class="text-sm text-muted-foreground">
-                When using dynamic routing, the path will be determined by your
-                routing transform.
-              </p>
-            </div>
-
-            <FunctionPicker
-              {functions}
-              selectedFunctionId={form.routingId || "none"}
-              title="Router"
-              onFunctionChange={(functionId) =>
-                (form.routingId = functionId === "none" ? null : functionId)}
-              {refreshFunctions}
-              functionTypes={["routing"]}
-              typeLabelKey="sink_type"
-              createNewQueryParams="?type=routing&sink_type=http_push"
-              bind:refreshState={functionRefreshState}
-            >
-              <p class="text-sm text-muted-foreground">
-                Select a routing transform to dynamically set request
-                parameters:
-              </p>
-            </FunctionPicker>
-
-            {#if errors.routing_id}
-              <p class="text-destructive text-sm">{errors.routing_id}</p>
-            {/if}
-
-            <div class="p-4 bg-muted/50 rounded-md mt-4">
-              <p class="text-sm text-muted-foreground">
-                HTTP Endpoint routing transform allows you to dynamically set:
-              </p>
-              <ul
-                class="list-disc pl-5 mt-2 space-y-1 text-sm text-muted-foreground"
+        {#if !isDynamicRouting}
+          <div class="space-y-2">
+            <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
+            <div class="flex flex-row bg-white">
+              <div
+                class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
               >
-                <li>
-                  <span class="font-mono text-xs bg-stone-100 px-1 rounded"
-                    >method</span
-                  >
-                  - HTTP method (<code>GET</code>, <code>POST</code>,
-                  <code>PUT</code>, etc.)
-                </li>
-                <li>
-                  <span class="font-mono text-xs bg-stone-100 px-1 rounded"
-                    >endpoint_path</span
-                  >
-                  - Path portion of the URL
-                </li>
-              </ul>
-            </div>
-          {/if}
-
-          {#if !selectedDynamic && form.sink.httpEndpointId && fullUrl && fullUrl !== ""}
-            <div class="mt-4 space-y-2">
-              <Label>Fully qualified URL</Label>
-              <div class="flex items-center space-x-2 overflow-x-auto">
-                <p
-                  class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-                >
-                  {fullUrl}
-                </p>
+                {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
               </div>
-
-              {#if errors.routing_id}
-                <p class="text-destructive text-sm">{errors.routing_id}</p>
-              {/if}
+              <Input
+                id="http-endpoint-path"
+                bind:value={form.sink.httpEndpointPath}
+                placeholder="/some-path"
+                class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                style="border-left: none;"
+              />
             </div>
-          {/if}
+            <p class="text-sm text-muted-foreground">
+              The path to append to the base URL for this consumer's requests.
+            </p>
+            {#if errors.sink?.http_endpoint_path}
+              {#each errors.sink.http_endpoint_path as error}
+                <p class="text-destructive text-sm">
+                  {error}
+                </p>
+              {/each}
+            {/if}
+          </div>
+        {:else}
+          <div class="space-y-2">
+            <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
+            <div class="flex flex-row bg-white">
+              <div
+                class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+              >
+                {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
+              </div>
+              <Input
+                id="http-endpoint-path"
+                value=""
+                class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                style="border-left: none;"
+                disabled={true}
+              />
+            </div>
+            <p class="text-sm text-muted-foreground">
+              When using dynamic routing, the path will be determined by your
+              routing transform.
+            </p>
+          </div>
+        {/if}
+
+        {#if !isDynamicRouting && form.sink.httpEndpointId && fullUrl && fullUrl !== ""}
+          <div class="mt-4 space-y-2">
+            <Label>Fully qualified URL</Label>
+            <div class="flex items-center space-x-2 overflow-x-auto">
+              <p
+                class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+              >
+                {fullUrl}
+              </p>
+            </div>
+          </div>
         {/if}
       </div>
     {/if}

@@ -3,6 +3,7 @@ defmodule Sequin.Runtime.NatsPipeline do
   @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Error
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Nats
 
@@ -31,10 +32,9 @@ defmodule Sequin.Runtime.NatsPipeline do
     %{consumer: consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    # Flatten the messages from each Broadway.Message
-    nats_messages = Enum.map(messages, & &1.data)
+    routed_messages = Routing.route_and_transform_messages(consumer, messages)
 
-    case Nats.send_messages(consumer, nats_messages) do
+    case Nats.send_messages(consumer, routed_messages) do
       :ok ->
         {:ok, messages, context}
 

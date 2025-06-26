@@ -11,7 +11,8 @@ defmodule Sequin.Sinks.Redis do
 
   @callback send_messages(SinkConsumer.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
               :ok | {:error, Error.t()}
-  @callback set_messages(RedisStringSink.t(), [%{key: String.t(), value: String.t()}]) :: :ok | {:error, Error.t()}
+
+  @callback set_messages(RedisStringSink.t(), [RoutedMessage.t()]) :: :ok | {:error, Error.t()}
   @callback message_count(RedisStreamSink.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   @callback client_info(RedisStreamSink.t()) :: {:ok, String.t()} | {:error, Error.t()}
   @callback test_connection(RedisStreamSink.t()) :: :ok | {:error, Error.t()}

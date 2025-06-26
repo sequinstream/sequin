@@ -2,14 +2,11 @@ defmodule Sequin.Sinks.Nats.Client do
   @moduledoc false
   @behaviour Sequin.Sinks.Nats
 
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.NetworkUtils
+  alias Sequin.Runtime.Routing.RoutedMessage
   alias Sequin.Sinks.Nats
   alias Sequin.Sinks.Nats.ConnectionCache
 
@@ -77,27 +74,31 @@ defmodule Sequin.Sinks.Nats.Client do
       {:error, to_sequin_error(error)}
   end
 
-  defp publish_message(%SinkConsumer{} = consumer, message, connection) do
-    opts = [headers: get_headers(message)]
-    payload = Sequin.Transforms.Message.to_external(consumer, message)
-    subject = subject(message)
+  defp publish_message(
+         %SinkConsumer{},
+         %RoutedMessage{routing_info: %{subject: subject, headers: headers}, transformed_message: transformed_message},
+         connection
+       ) do
+    list_headers =
+      case headers do
+        %{} ->
+          Map.to_list(headers)
+
+        headers when is_list(headers) ->
+          headers
+
+        _ ->
+          raise "Invalid headers shape. Only maps and lists of tuples are supported. Got: #{inspect(headers)}"
+      end
+
+    opts = [headers: list_headers]
 
     try do
-      Gnat.pub(connection, subject, Jason.encode_to_iodata!(payload), opts)
+      Gnat.pub(connection, subject, Jason.encode_to_iodata!(transformed_message), opts)
     catch
       error ->
         {:error, to_sequin_error(error)}
     end
-  end
-
-  defp subject(%ConsumerEvent{data: %ConsumerEventData{} = data}) do
-    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
-    "sequin.changes.#{database_name}.#{table_schema}.#{table_name}.#{data.action}"
-  end
-
-  defp subject(%ConsumerRecord{data: %ConsumerRecordData{} = data}) do
-    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
-    "sequin.rows.#{database_name}.#{table_schema}.#{table_name}"
   end
 
   defp to_sequin_error(error) do
@@ -108,15 +109,5 @@ defmodule Sequin.Sinks.Nats.Client do
       _ ->
         Error.service(service: :nats, message: "Unknown NATS error")
     end
-  end
-
-  defp get_headers(%ConsumerEvent{data: %{metadata: %{idempotency_key: idempotency_key}}} = _message)
-       when not is_nil(idempotency_key) do
-    [{"Nats-Msg-Id", idempotency_key}]
-  end
-
-  defp get_headers(%ConsumerRecord{data: %{metadata: %{idempotency_key: idempotency_key}}} = _message)
-       when not is_nil(idempotency_key) do
-    [{"Nats-Msg-Id", idempotency_key}]
   end
 end

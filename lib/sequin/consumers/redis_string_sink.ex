@@ -31,7 +31,7 @@ defmodule Sequin.Consumers.RedisStringSink do
     |> validate_number(:database, greater_than_or_equal_to: 0)
     |> validate_redis_host()
     |> put_new_connection_id()
-    |> validate_number(:expire_ms, greater_than_or_equal_to: 0)
+    |> validate_number(:expire_ms, greater_than: 0)
   end
 
   defp validate_redis_host(changeset) do

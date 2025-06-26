@@ -373,83 +373,73 @@
     {#if errors.sink?.http_endpoint_id}
       <p class="text-destructive text-sm">Please select an HTTP endpoint</p>
     {/if}
+  </CardContent>
+</Card>
 
-    {#if selectedHttpEndpoint?.name}
-      <div class="mt-4 space-y-4">
-        <DynamicRoutingForm
-          {form}
-          {functions}
-          {refreshFunctions}
-          {functionRefreshState}
-          routedSinkType="http_push"
-          {errors}
-          bind:selectedDynamic={isDynamicRouting}
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      {functions}
+      {refreshFunctions}
+      {functionRefreshState}
+      routedSinkType="http_push"
+      {errors}
+      bind:selectedDynamic={isDynamicRouting}
+    />
+
+    <div class="space-y-2">
+      <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
+      <div class="flex flex-row bg-white">
+        <div
+          class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+        >
+          {selectedHttpEndpoint
+            ? truncateMiddle(selectedHttpEndpoint.baseUrl, 50)
+            : "Select endpoint first"}
+        </div>
+        <Input
+          id="http-endpoint-path"
+          bind:value={form.sink.httpEndpointPath}
+          placeholder={isDynamicRouting
+            ? "<determined by your routing transform>"
+            : "/some-path"}
+          class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          style="border-left: none;"
+          disabled={!selectedHttpEndpoint || isDynamicRouting}
         />
-
-        {#if !isDynamicRouting}
-          <div class="space-y-2">
-            <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
-            <div class="flex flex-row bg-white">
-              <div
-                class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
-              >
-                {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
-              </div>
-              <Input
-                id="http-endpoint-path"
-                bind:value={form.sink.httpEndpointPath}
-                placeholder="/some-path"
-                class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                style="border-left: none;"
-              />
-            </div>
-            <p class="text-sm text-muted-foreground">
-              The path to append to the base URL for this consumer's requests.
-            </p>
-            {#if errors.sink?.http_endpoint_path}
-              {#each errors.sink.http_endpoint_path as error}
-                <p class="text-destructive text-sm">
-                  {error}
-                </p>
-              {/each}
-            {/if}
-          </div>
+      </div>
+      <p class="text-sm text-muted-foreground">
+        {#if isDynamicRouting}
+          When using dynamic routing, this will be the default path which can be <i
+            >overriden</i
+          > by your routing transform.
         {:else}
-          <div class="space-y-2">
-            <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
-            <div class="flex flex-row bg-white">
-              <div
-                class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
-              >
-                {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
-              </div>
-              <Input
-                id="http-endpoint-path"
-                value=""
-                class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                style="border-left: none;"
-                disabled={true}
-              />
-            </div>
-            <p class="text-sm text-muted-foreground">
-              When using dynamic routing, the path will be determined by your
-              routing transform.
-            </p>
-          </div>
+          The path to append to the base URL for this consumer's requests.
         {/if}
+      </p>
+      {#if errors.sink?.http_endpoint_path}
+        {#each errors.sink.http_endpoint_path as error}
+          <p class="text-destructive text-sm">
+            {error}
+          </p>
+        {/each}
+      {/if}
+    </div>
 
-        {#if !isDynamicRouting && form.sink.httpEndpointId && fullUrl && fullUrl !== ""}
-          <div class="mt-4 space-y-2">
-            <Label>Fully qualified URL</Label>
-            <div class="flex items-center space-x-2 overflow-x-auto">
-              <p
-                class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-              >
-                {fullUrl}
-              </p>
-            </div>
-          </div>
-        {/if}
+    {#if !isDynamicRouting && selectedHttpEndpoint && fullUrl && fullUrl !== ""}
+      <div class="space-y-2">
+        <Label>Fully qualified URL</Label>
+        <div class="flex items-center space-x-2 overflow-x-auto">
+          <p
+            class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+          >
+            {fullUrl}
+          </p>
+        </div>
       </div>
     {/if}
   </CardContent>

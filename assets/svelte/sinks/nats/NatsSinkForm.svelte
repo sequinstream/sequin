@@ -29,7 +29,10 @@
 </script>
 
 <Card>
-  <CardContent class="flex flex-col gap-4 pt-6">
+  <CardHeader>
+    <CardTitle>NATS Configuration</CardTitle>
+  </CardHeader>
+  <CardContent class="flex flex-col gap-4">
     <FormItem>
       <Label for="host">Host</Label>
       <Input id="host" bind:value={form.sink.host} placeholder="localhost" />
@@ -144,9 +147,16 @@
         <FormErrorMessage>{errors.sink.nkey_seed}</FormErrorMessage>
       {/if}
     </FormItem>
+  </CardContent>
+</Card>
 
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent>
     <DynamicRoutingForm
-      {form}
+      bind:form
       {functions}
       {refreshFunctions}
       bind:functionRefreshState

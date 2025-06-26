@@ -54,7 +54,7 @@ defmodule Sequin.Runtime.Routing.RoutedConsumer do
 
   A struct of the implementing module's type with routing information.
   """
-  @callback route(action :: atom(), record :: struct(), changes :: struct(), metadata :: struct()) :: struct()
+  @callback route(action :: atom(), record :: struct(), changes :: struct(), metadata :: struct()) :: map()
 
   @doc """
   Apply consumer-specific configuration to routing info.

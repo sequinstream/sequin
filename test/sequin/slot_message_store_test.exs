@@ -64,10 +64,14 @@ defmodule Sequin.SlotMessageStoreTest do
           consumer_id: consumer.id
         )
 
-      :ok = SlotMessageStore.put_messages(consumer, [new_message])
+      message_batch = ConsumersFactory.consumer_message_batch([new_message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       consumer_id = consumer.id
-      assert_receive {:put_messages_done, ^consumer_id}, 1000
+
+      for _n <- 1..consumer.partition_count do
+        assert_receive {:put_messages_done, ^consumer_id}, 1000
+      end
 
       persisted_messages = Consumers.list_consumer_messages_for_consumer(consumer)
       assert length(persisted_messages) == 3
@@ -129,7 +133,8 @@ defmodule Sequin.SlotMessageStoreTest do
       ]
 
       # Put messages in store
-      :ok = SlotMessageStore.put_messages(consumer, messages)
+      message_batch = ConsumersFactory.consumer_message_batch(messages)
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Retrieve messages
       {:ok, delivered} = SlotMessageStore.produce(consumer, 2, self())
@@ -154,7 +159,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message in store (starts unpersisted)
-      :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Deliver message
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
@@ -193,7 +199,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message in store (starts unpersisted)
-      :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Deliver message
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
@@ -227,7 +234,8 @@ defmodule Sequin.SlotMessageStoreTest do
       ]
 
       # Put messages in store
-      :ok = SlotMessageStore.put_messages(consumer, messages)
+      message_batch = ConsumersFactory.consumer_message_batch(messages)
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Produce messages
       {:ok, delivered} = SlotMessageStore.produce(consumer, 2, self())
@@ -267,7 +275,8 @@ defmodule Sequin.SlotMessageStoreTest do
       ]
 
       # Put messages in store
-      :ok = SlotMessageStore.put_messages(consumer, messages)
+      message_batch = ConsumersFactory.consumer_message_batch(messages)
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Produce messages, none should be delivered
       {:ok, delivered} = SlotMessageStore.produce(consumer, 2, self())
@@ -301,7 +310,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put first message and fail it to persist it
-      :ok = SlotMessageStore.put_messages(consumer, [message1])
+      message_batch = ConsumersFactory.consumer_message_batch([message1])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
 
       meta = %{
@@ -315,7 +325,8 @@ defmodule Sequin.SlotMessageStoreTest do
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
       # Put second message - it should not be blocked or persisted
-      :ok = SlotMessageStore.put_messages(consumer, [message2])
+      message_batch = ConsumersFactory.consumer_message_batch([message2])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
       [persisted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
       assert persisted_msg.commit_lsn == message1.commit_lsn
       {:ok, [message]} = SlotMessageStore.produce(consumer, 1, self())
@@ -331,7 +342,8 @@ defmodule Sequin.SlotMessageStoreTest do
           consumer_id: consumer.id
         )
 
-      :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
 
       meta = %{
@@ -367,7 +379,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put and fail first message to persist it
-      :ok = SlotMessageStore.put_messages(consumer, [message1])
+      message_batch = ConsumersFactory.consumer_message_batch([message1])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
 
       meta = %{
@@ -381,7 +394,8 @@ defmodule Sequin.SlotMessageStoreTest do
       :ok = SlotMessageStore.messages_failed(consumer, [meta])
 
       # Put second message (nil group_id)
-      :ok = SlotMessageStore.put_messages(consumer, [message2])
+      message_batch = ConsumersFactory.consumer_message_batch([message2])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
     end
 
     test "duplicate messages don't accumulate payload size", %{consumer: consumer} do
@@ -395,9 +409,12 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put the same message multiple times
-      :ok = SlotMessageStore.put_messages(consumer, [message])
-      :ok = SlotMessageStore.put_messages(consumer, [message])
-      :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Verify we can only produce it once
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 2, self())
@@ -422,7 +439,8 @@ defmodule Sequin.SlotMessageStoreTest do
       ]
 
       # Put messages in store
-      :ok = SlotMessageStore.put_messages(consumer, messages)
+      message_batch = ConsumersFactory.consumer_message_batch(messages)
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Retrieve messages
       {:ok, delivered} = SlotMessageStore.produce(consumer, 2, self())
@@ -472,7 +490,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put both messages in the store
-      :ok = SlotMessageStore.put_messages(consumer, [message1, message2])
+      message_batch = ConsumersFactory.consumer_message_batch([message1, message2])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Both messages should be available for delivery simultaneously
       # This tests that messages with the same group_id from different tables don't block each other
@@ -565,7 +584,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       start_supervised!(
         {SlotMessageStoreSupervisor,
-         consumer_id: consumer.id, test_pid: self(), flush_interval: 100, message_age_before_flush_ms: 100}
+         consumer_id: consumer.id, test_pid: self(), flush_interval: 200, message_age_before_flush_ms: 100}
       )
 
       %{consumer: consumer}
@@ -585,21 +604,34 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message in store
-      :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
-      # Initially we have one unpersisted commit tuple
-      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref) == [
-               %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx}
-             ]
+      # Initially we have unpersisted commit tuples (one per partition)
+      unpersisted_cursors = SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+      assert length(unpersisted_cursors) == consumer.partition_count
+      assert %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} in unpersisted_cursors
 
-      # Verify we receive flush_messages_done
+      # The rest of the min unpersisted wal cursors should be the high watermark for the whole epoch
+      high_watermark_cursors =
+        Enum.filter(unpersisted_cursors, fn cursor ->
+          cursor == message_batch.high_watermark_wal_cursor
+        end)
+
+      assert length(high_watermark_cursors) == consumer.partition_count - 1
+
       assert_receive {:flush_messages_done, ^consumer_id}, 1000
 
       persisted_messages = Consumers.list_consumer_messages_for_consumer(consumer)
       assert length(persisted_messages) == 1
 
-      # This is the point- the wal cursor is now persisted!
-      assert SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref) == []
+      # The wal cursor is now persisted!
+      # After flushing, the specific message should no longer be unpersisted
+      final_cursors = SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+
+      assert Enum.all?(final_cursors, fn cursor ->
+               cursor == message_batch.high_watermark_wal_cursor
+             end)
     end
 
     test "persisted messages are not identified for flushing regardless of age", %{consumer: consumer} do
@@ -611,7 +643,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message and fail it to persist it
-      :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
 
       meta = %{
@@ -659,11 +692,12 @@ defmodule Sequin.SlotMessageStoreTest do
         end
 
       # Put message in store
-      :ok = SlotMessageStore.put_messages(consumer, messages)
+      message_batch = ConsumersFactory.consumer_message_batch(messages)
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
-      # Initially we have one unpersisted commit tuple
-      assert [_] =
-               SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+      # Initially we have unpersisted commit tuples (one per partition)
+      unpersisted_cursors = SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+      assert length(unpersisted_cursors) == consumer.partition_count
 
       send(pid, :flush_messages)
 
@@ -671,8 +705,13 @@ defmodule Sequin.SlotMessageStoreTest do
       assert_receive {:flush_messages_count, 8}, 333
       assert_receive {:flush_messages_count, 8}, 333
 
-      # done
-      assert [] = SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+      # Wait for final completion message
+      consumer_id = consumer.id
+      assert_receive {:flush_messages_done, ^consumer_id}, 1000
+
+      # The consumer has partition_count: 1, so all messages go to partition 0
+      cursor = message_batch.high_watermark_wal_cursor
+      assert [^cursor] = SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
       # no more
       refute_receive {:flush_messages_count, _}, 111
     end
@@ -701,7 +740,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message in store and produce it
-      :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
 
       # Wait for visibility check
@@ -721,7 +761,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message in store and produce it
-      :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
       {:ok, [_delivered]} = SlotMessageStore.produce(consumer, 1, self())
 
       # Wait for visibility check
@@ -756,8 +797,12 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message in store
-      :ok = SlotMessageStore.put_messages(consumer, [message])
-      assert_receive {:put_messages_done, ^consumer_id}, 1000
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
+
+      for _n <- 1..consumer.partition_count do
+        assert_receive {:put_messages_done, ^consumer_id}, 1000
+      end
 
       # First delivery and failure
       {:ok, [delivered]} = SlotMessageStore.produce(consumer, 1, self())
@@ -805,7 +850,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message in store
-      :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Deliver and fail the message multiple times
       for i <- 1..5 do
@@ -850,7 +896,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message in store
-      assert {:error, %Error.InvariantError{}} = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      assert {:error, %Error.InvariantError{}} = SlotMessageStore.put_message_batch(consumer, message_batch)
     end
 
     test "returns ok when load_shedding_policy=discard_on_full" do
@@ -869,7 +916,8 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Put message in store
-      assert :ok = SlotMessageStore.put_messages(consumer, [message])
+      message_batch = ConsumersFactory.consumer_message_batch([message])
+      assert :ok = SlotMessageStore.put_message_batch(consumer, message_batch)
     end
   end
 end

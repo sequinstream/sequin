@@ -49,6 +49,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   alias Sequin.ProcessMetrics
   alias Sequin.Prometheus
   alias Sequin.Replication
+  alias Sequin.Runtime.ConsumerMessageBatch
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotMessageStore.State
   alias Sequin.Runtime.SlotMessageStoreBehaviour
@@ -161,16 +162,16 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @doc """
-  Stores new messages in the message store.
+  Stores new message batch in the message store.
 
   Should raise so SlotProcessorServer cannot continue if this fails.
   """
-  @spec put_messages(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok | {:error, Error.t()}
-  def put_messages(consumer, messages) do
-    messages
-    |> Enum.group_by(&message_partition(&1, consumer.partition_count))
-    |> Sequin.Enum.reduce_while_ok(fn {partition, messages} ->
-      GenServer.call(via_tuple(consumer.id, partition), {:put_messages, messages})
+  @spec put_message_batch(SinkConsumer.t(), ConsumerMessageBatch.t()) :: :ok | {:error, Error.t()}
+  def put_message_batch(consumer, message_batch_to_ingest) do
+    message_batch_to_ingest
+    |> message_batches_by_partition(consumer)
+    |> Sequin.Enum.reduce_while_ok(fn {partition, message_batch} ->
+      GenServer.call(via_tuple(consumer.id, partition), {:put_message_batch, message_batch})
     end)
   catch
     :exit, e ->
@@ -524,15 +525,15 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   @impl GenServer
   @decorate track_metrics("put_messages")
-  def handle_call({:put_messages, messages}, from, %State{} = state) do
+  def handle_call({:put_message_batch, message_batch}, from, %State{} = state) do
     # Validate first
-    case State.validate_put_messages(state, messages) do
+    case State.validate_put_messages(state, message_batch.messages) do
       {:ok, _incoming_payload_size_bytes} ->
         # Reply early since validation passed. This frees up the SlotProcessorServer to continue
         # calling other SMSs, accumulating messages, etc.
         GenServer.reply(from, :ok)
 
-        {:noreply, put_messages_after_reply(state, messages)}
+        {:noreply, put_messages_after_reply(state, message_batch)}
 
       {:error, %InvariantError{code: :payload_size_limit_exceeded} = error} ->
         # Reply with error if validation fails
@@ -874,7 +875,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @decorate track_metrics("put_messages_after_reply")
-  defp put_messages_after_reply(%State{} = state, messages) do
+  defp put_messages_after_reply(%State{} = state, message_batch) do
+    %ConsumerMessageBatch{messages: messages, high_watermark_wal_cursor: high_watermark_wal_cursor} = message_batch
     now = Sequin.utc_now()
 
     messages =
@@ -902,7 +904,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
       send(state.test_pid, {:put_messages_done, state.consumer.id})
     end
 
-    state
+    %{state | high_watermark_wal_cursor: high_watermark_wal_cursor}
   end
 
   defp schedule_max_memory_check(interval \\ :timer.minutes(5)) do
@@ -1036,6 +1038,15 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   defp message_partition(message, partition_count) do
     :erlang.phash2(message.group_id, partition_count)
+  end
+
+  defp message_batches_by_partition(message_batch, %SinkConsumer{} = consumer) do
+    message_batch_per_partition =
+      Enum.group_by(message_batch.messages, &message_partition(&1, consumer.partition_count))
+
+    Enum.map(partitions(consumer), fn idx ->
+      {idx, %ConsumerMessageBatch{message_batch | messages: Map.get(message_batch_per_partition, idx, [])}}
+    end)
   end
 
   @spec maybe_discard_messages([State.message()], non_neg_integer()) :: {[State.message()], [State.message()]}

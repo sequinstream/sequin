@@ -162,7 +162,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       )
 
       event = %ConsumerEvent{event | payload_size_bytes: 1000}
-      SlotMessageStore.put_messages(consumer, [event])
+      message_batch = ConsumersFactory.consumer_message_batch([event])
+      SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Start the pipeline
       start_supervised!({SinkPipeline, [consumer_id: consumer.id, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -205,7 +206,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       event1 = %ConsumerEvent{event1 | payload_size_bytes: 1000}
       event2 = %ConsumerEvent{event2 | payload_size_bytes: 1000}
-      SlotMessageStore.put_messages(consumer, [event1, event2])
+      message_batch = ConsumersFactory.consumer_message_batch([event1, event2])
+      SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Start the pipeline
       start_pipeline!(consumer, adapter, dummy_producer: false)
@@ -445,7 +447,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         )
 
       start_supervised({SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer, [consumer_event])
+      message_batch = ConsumersFactory.consumer_message_batch([consumer_event])
+      SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Start the pipeline
       start_pipeline!(consumer, adapter, dummy_producer: false)
@@ -508,7 +511,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         )
 
       start_supervised({SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer, [consumer_event])
+      message_batch = ConsumersFactory.consumer_message_batch([consumer_event])
+      SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Start the pipeline
       start_pipeline!(consumer, adapter, dummy_producer: false)
@@ -566,7 +570,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       expect_uuid4(fn -> event1.ack_id end)
       expect_uuid4(fn -> event2.ack_id end)
 
-      SlotMessageStore.put_messages(consumer, [event1, event2])
+      message_batch = ConsumersFactory.consumer_message_batch([event1, event2])
+      SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Start the pipeline with the failing adapter
       start_pipeline!(consumer, adapter, dummy_producer: false)
@@ -618,7 +623,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
       )
 
-      SlotMessageStore.put_messages(consumer, [event])
+      message_batch = ConsumersFactory.consumer_message_batch([event])
+      SlotMessageStore.put_message_batch(consumer, message_batch)
 
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
       start_pipeline!(consumer, adapter, dummy_producer: false)
@@ -699,7 +705,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
       )
 
-      SlotMessageStore.put_messages(consumer, [consumer_record])
+      message_batch = ConsumersFactory.consumer_message_batch([consumer_record])
+      SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Start the pipeline
       start_pipeline!(consumer, adapter, dummy_producer: false)
@@ -766,7 +773,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
       )
 
-      SlotMessageStore.put_messages(consumer, [consumer_record])
+      message_batch = ConsumersFactory.consumer_message_batch([consumer_record])
+      SlotMessageStore.put_message_batch(consumer, message_batch)
 
       # Start the pipeline
       start_pipeline!(consumer, adapter, dummy_producer: false)

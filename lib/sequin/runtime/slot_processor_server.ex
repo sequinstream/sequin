@@ -1585,38 +1585,35 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           cursors -> Enum.min_by(cursors, &{&1.commit_lsn, &1.commit_idx})
         end
 
+      unless is_nil(state.last_flushed_wal_cursor) == is_nil(low_for_message_stores) do
+        raise "Invariant error: Expected low_for_message_stores to be set after a flush"
+      end
+
+      never_flushed? = is_nil(state.last_flushed_wal_cursor)
+      flushed? = not never_flushed?
+      buffer_empty? = not accumulated_messages?(state)
+
+      flushed_and_caught_up? = flushed? and buffer_empty? and low_for_message_stores == state.last_flushed_wal_cursor
+      empty_state? = buffer_empty? and never_flushed?
+
       cond do
-        not is_nil(low_for_message_stores) ->
-          # Use the minimum unpersisted WAL cursor from the message stores.
+        flushed_and_caught_up? or empty_state? ->
+          %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
+
+        flushed? ->
           Logger.info(
             "[SlotProcessorServer] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}"
           )
 
           low_for_message_stores
 
-        accumulated_messages?(state) ->
-          # When there are messages that the SlotProcessorServer has not flushed yet,
-          # we need to fallback on the last safe_wal_cursor (not safe to use
-          # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
+        never_flushed? and accumulated_messages?(state) ->
+          # We just recently started up, and have accumulated some messages, but haven't flushed them yet (i.e. there have been no flushes in the system).
           Logger.info(
             "[SlotProcessorServer] no unpersisted messages in stores, using last_flushed_wal_cursor=#{inspect(state.last_flushed_wal_cursor)}"
           )
 
-          # We want to update to the last flushed wal cursor which is furthest ahead
-          # But this can be nil if no messages have been flushed yet, ie. on a dormant slot
-          state.last_flushed_wal_cursor || state.safe_wal_cursor
-
-        true ->
-          # The SlotProcessorServer has processed messages beyond what the message stores have.
-          # This might be due to health messages or messages for tables that do not belong
-          # to any sinks.
-          # We want to advance the slot to the last_commit_lsn in that case because:
-          # 1. It's safe to do.
-          # 2. If the tables in this slot are dormant, the slot will continue to accumulate
-          # WAL unless we advance it. (This is the secondary purpose of the health message,
-          # to allow us to advance the slot even if tables are dormant.)
-          Logger.info("[SlotProcessorServer] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
-          %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
+          state.safe_wal_cursor
       end
     else
       {:error, error} ->

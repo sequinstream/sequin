@@ -48,7 +48,7 @@ defmodule Sequin.MessageHandlerTest do
       context = context(consumers: [consumer], postgres_database: database)
 
       now = DateTime.utc_now()
-      TestSupport.expect_utc_now(3, fn -> now end)
+      TestSupport.stub_utc_now(fn -> now end)
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -101,7 +101,7 @@ defmodule Sequin.MessageHandlerTest do
       context = context(consumers: [consumer], postgres_database: database)
 
       now = DateTime.utc_now()
-      TestSupport.expect_utc_now(3, fn -> now end)
+      TestSupport.stub_utc_now(fn -> now end)
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 

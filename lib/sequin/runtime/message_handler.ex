@@ -63,7 +63,8 @@ defmodule Sequin.Runtime.MessageHandler do
       wal_pipelines: pr.wal_pipelines,
       postgres_database: pr.postgres_database,
       replication_slot_id: pr.id,
-      partition_count: pr.partition_count
+      # Fixed to 1 for now
+      partition_count: 1
     }
   end
 

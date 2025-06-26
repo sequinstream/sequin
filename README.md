@@ -20,6 +20,8 @@
 
 </div>
 
+<img src="https://readme-pixel.eric-65f.workers.dev/?page=readme" width="1" height="1" alt="" />
+
 ## What is Sequin?
 
 Sequin is the [fastest](#performance) change data capture (CDC) platform for Postgres. Sequin makes it easy to stream Postgres to streaming platforms, queues, search indexes, and more (e.g. Kafka, GCP Pub/Sub, another Postgres, etc.). You can backfill existing rows and stream new changes in real-time.

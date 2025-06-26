@@ -4,6 +4,8 @@ Sequin provides fast, real-time Postgres change data capture into streams and qu
 
 This log is updated every Friday to track our feature releases and updates week by week. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
+<img src="https://readme-pixel.eric-65f.workers.dev/?page=changelog" width="1" height="1" alt="" />
+
 ## June 27, 2025
 
 ### Enhanced Routing Sink Types

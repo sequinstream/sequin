@@ -1114,6 +1114,42 @@ defmodule Sequin.YamlLoaderTest do
       assert [%ConsumersSourceTable{group_column_attnums: [1]}] = consumer.source_tables
     end
 
+    test "sets message_grouping field" do
+      YamlLoader.apply_from_yml!("""
+      #{account_and_db_yml()}
+
+      sinks:
+        - name: "message-grouping-consumer"
+          database: "test-db"
+          message_grouping: false
+          tables:
+            - name: "Characters"
+          destination:
+            type: "sequin_stream"
+      """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.message_grouping == false
+    end
+
+    test "fails when message_grouping is false but group_column_names are specified" do
+      assert_raise RuntimeError, ~r/Cannot specify group columns when message_grouping is disabled/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_and_db_yml()}
+
+        sinks:
+          - name: "invalid-grouping-consumer"
+            database: "test-db"
+            message_grouping: false
+            tables:
+              - name: "Characters"
+                group_column_names: ["id"]
+            destination:
+              type: "sequin_stream"
+        """)
+      end
+    end
+
     test "fails when group_column_names contains non-existent column" do
       assert_raise RuntimeError, ~r/Failed to parse tables.*No `postgres column` found.*non_existent_column/, fn ->
         YamlLoader.apply_from_yml!("""
@@ -1125,22 +1161,6 @@ defmodule Sequin.YamlLoaderTest do
             tables:
               - name: "Characters"
                 group_column_names: ["id", "non_existent_column"]
-            destination:
-              type: "sequin_stream"
-        """)
-      end
-    end
-
-    test "fails when group_column_names is empty" do
-      assert_raise RuntimeError, ~r/Invalid table.group_column_names: should have at least 1 item\(s\)/, fn ->
-        YamlLoader.apply_from_yml!("""
-        #{account_and_db_yml()}
-
-        sinks:
-          - name: "invalid-consumer"
-            database: "test-db"
-            tables:
-              - name: "Characters"
             destination:
               type: "sequin_stream"
         """)

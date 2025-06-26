@@ -438,36 +438,6 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
-  describe "consumer_features/1" do
-    test "returns legacy_event_transform feature when conditions are met" do
-      account = AccountsFactory.account(features: ["legacy_event_transform"])
-
-      consumer = ConsumersFactory.sink_consumer(account: account, type: :http_push)
-
-      assert Consumers.consumer_features(consumer) == [legacy_event_transform: true]
-    end
-
-    test "does not return legacy_event_transform feature when account doesn't have the feature" do
-      account = AccountsFactory.account(features: [], inserted_at: DateTime.utc_now())
-
-      consumer = ConsumersFactory.sink_consumer(account: account, type: :http_push)
-
-      assert Consumers.consumer_features(consumer) == []
-    end
-
-    test "returns legacy_event_singleton_transform when account is old enough" do
-      account = AccountsFactory.account(features: [], inserted_at: ~D[2024-11-01])
-
-      consumer =
-        ConsumersFactory.sink_consumer(
-          account: account,
-          type: :http_push
-        )
-
-      assert Consumers.consumer_features(consumer) == [{:legacy_event_singleton_transform, true}]
-    end
-  end
-
   describe "upsert_consumer_messages/1" do
     test "inserts a new message" do
       consumer = ConsumersFactory.insert_sink_consumer!()
@@ -588,22 +558,12 @@ defmodule Sequin.ConsumersTest do
       ConsumersFactory.insert_consumer_message!(
         consumer_id: consumer.id,
         message_kind: consumer.message_kind,
-        data: %{
-          record: record_data,
-          action: :insert,
-          metadata: %{
-            database_name: "test_db",
-            table_schema: "public",
-            table_name: "test_table",
-            commit_timestamp: now,
-            commit_lsn: 123_456,
-            commit_idx: 1,
-            consumer: %{
-              id: consumer.id,
-              name: consumer.name
-            }
-          }
-        }
+        data:
+          ConsumersFactory.consumer_message_data_attrs(%{
+            message_kind: consumer.message_kind,
+            record: record_data,
+            action: :insert
+          })
       )
 
       # Retrieve the message

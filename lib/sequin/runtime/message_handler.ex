@@ -9,7 +9,6 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.ConsumerRecordData.Metadata.Sink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -203,7 +202,6 @@ defmodule Sequin.Runtime.MessageHandler do
 
   defp event_data_from_message(%Message{action: :insert} = message, consumer, database) do
     metadata = metadata(message, consumer, database)
-    metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
     %ConsumerEventData{
@@ -225,7 +223,6 @@ defmodule Sequin.Runtime.MessageHandler do
       end
 
     metadata = metadata(message, consumer, database)
-    metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
     %ConsumerEventData{
@@ -238,7 +235,6 @@ defmodule Sequin.Runtime.MessageHandler do
 
   defp event_data_from_message(%Message{action: :delete} = message, consumer, database) do
     metadata = metadata(message, consumer, database)
-    metadata = Map.update!(metadata, :consumer, &struct(ConsumerEventData.Metadata.Sink, &1))
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
     %ConsumerEventData{
@@ -252,7 +248,6 @@ defmodule Sequin.Runtime.MessageHandler do
   defp record_data_from_message(%Message{action: action} = message, consumer, database)
        when action in [:insert, :update] do
     metadata = metadata(message, consumer, database)
-    metadata = Map.update!(metadata, :consumer, &struct(Sink, &1))
     metadata = struct(ConsumerRecordData.Metadata, metadata)
 
     %ConsumerRecordData{
@@ -264,7 +259,6 @@ defmodule Sequin.Runtime.MessageHandler do
 
   defp record_data_from_message(%Message{action: :delete} = message, consumer, database) do
     metadata = metadata(message, consumer, database)
-    metadata = Map.update!(metadata, :consumer, &struct(Sink, &1))
     metadata = struct(ConsumerRecordData.Metadata, metadata)
 
     %ConsumerRecordData{
@@ -282,14 +276,13 @@ defmodule Sequin.Runtime.MessageHandler do
       commit_timestamp: message.commit_timestamp,
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,
-      consumer: %{
-        id: consumer.id,
-        name: consumer.name,
-        annotations: consumer.annotations
-      },
+      consumer: consumer_metadata(consumer),
       transaction_annotations: nil,
-      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}")
+      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}"),
+      record_pks: Enum.map(message.ids, &to_string/1)
     }
+
+    metadata = maybe_put_database_metadata(metadata, consumer.message_kind, database)
 
     if consumer.message_kind == :event do
       case decode_transaction_annotations(message.transaction_annotations) do
@@ -310,6 +303,34 @@ defmodule Sequin.Runtime.MessageHandler do
     else
       metadata
     end
+  end
+
+  defp consumer_metadata(%SinkConsumer{message_kind: :event} = consumer) do
+    %ConsumerEventData.Metadata.Sink{
+      id: consumer.id,
+      name: consumer.name,
+      annotations: consumer.annotations
+    }
+  end
+
+  defp consumer_metadata(%SinkConsumer{message_kind: :record} = consumer) do
+    %ConsumerRecordData.Metadata.Sink{
+      id: consumer.id,
+      name: consumer.name,
+      annotations: consumer.annotations
+    }
+  end
+
+  defp maybe_put_database_metadata(metadata, :record, _db), do: metadata
+
+  defp maybe_put_database_metadata(metadata, :event, %PostgresDatabase{} = database) do
+    Map.put(metadata, :database, %ConsumerEventData.Metadata.Database{
+      id: database.id,
+      name: database.name,
+      annotations: database.annotations,
+      database: database.database,
+      hostname: database.hostname
+    })
   end
 
   defp fields_to_map(fields) do
@@ -505,22 +526,31 @@ defmodule Sequin.Runtime.MessageHandler do
   defp generate_group_id(consumer, message) do
     default_group_id = if message.ids == [], do: nil, else: Enum.map_join(message.ids, ":", &to_string/1)
 
-    case consumer do
-      %SinkConsumer{source_tables: nil} ->
-        default_group_id
+    group_id =
+      case consumer do
+        %SinkConsumer{message_grouping: false} ->
+          nil
 
-      %SinkConsumer{source_tables: source_tables} ->
-        if source_table = Enum.find(source_tables, &(&1.table_oid == message.table_oid)) do
-          source_table.group_column_attnums
-          |> Enum.map(fn attnum ->
-            fields = if message.action == :delete, do: message.old_fields, else: message.fields
-            Enum.find(fields, &(&1.column_attnum == attnum))
-          end)
-          |> Enum.filter(& &1)
-          |> Enum.map_join(":", &to_string(&1.value))
-        else
+        %SinkConsumer{source_tables: nil} ->
           default_group_id
-        end
+
+        %SinkConsumer{source_tables: source_tables} ->
+          if source_table = Enum.find(source_tables, &(&1.table_oid == message.table_oid)) do
+            source_table.group_column_attnums
+            |> Enum.map(fn attnum ->
+              fields = if message.action == :delete, do: message.old_fields, else: message.fields
+              Enum.find(fields, &(&1.column_attnum == attnum))
+            end)
+            |> Enum.filter(& &1)
+            |> Enum.map_join(":", &to_string(&1.value))
+          else
+            default_group_id
+          end
+      end
+
+    case group_id do
+      "" -> nil
+      group_id -> group_id
     end
   end
 

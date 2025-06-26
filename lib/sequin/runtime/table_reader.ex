@@ -381,16 +381,17 @@ defmodule Sequin.Runtime.TableReader do
 
   defp message_from_row(
          %SinkConsumer{message_kind: :record} = consumer,
-         %Backfill{},
+         %Backfill{} = backfill,
          %PostgresDatabaseTable{} = table,
          record
        ) do
-    data = build_record_data(table, consumer, record)
+    record_pks = record_pks(table, record)
+    data = build_record_data(table, consumer, backfill, record, record_pks)
 
     %ConsumerRecord{
       consumer_id: consumer.id,
       table_oid: table.oid,
-      record_pks: record_pks(table, record),
+      record_pks: record_pks,
       group_id: generate_group_id(consumer, table, record),
       replication_message_trace_id: UUID.uuid4(),
       data: data,
@@ -419,7 +420,7 @@ defmodule Sequin.Runtime.TableReader do
     }
   end
 
-  defp build_record_data(table, consumer, record_attnums_to_values) do
+  defp build_record_data(table, consumer, backfill, record_attnums_to_values, record_pks) do
     %ConsumerRecordData{
       action: :read,
       record: build_record_payload(table, record_attnums_to_values),
@@ -429,27 +430,41 @@ defmodule Sequin.Runtime.TableReader do
         table_schema: table.schema,
         consumer: %ConsumerRecordData.Metadata.Sink{
           id: consumer.id,
-          name: consumer.name
+          name: consumer.name,
+          annotations: consumer.annotations
         },
-        commit_timestamp: DateTime.utc_now()
+        commit_timestamp: DateTime.utc_now(),
+        idempotency_key: Base.encode64("#{backfill.id}:#{record_pks}"),
+        record_pks: record_pks
       }
     }
   end
 
   defp build_event_data(table, consumer, backfill, record_attnums_to_values, record_pks) do
+    db = consumer.replication_slot.postgres_database
+
     %ConsumerEventData{
       action: :read,
       record: build_record_payload(table, record_attnums_to_values),
       metadata: %ConsumerEventData.Metadata{
-        database_name: consumer.replication_slot.postgres_database.name,
+        database_name: db.name,
         table_name: table.name,
         table_schema: table.schema,
         consumer: %ConsumerEventData.Metadata.Sink{
           id: consumer.id,
-          name: consumer.name
+          name: consumer.name,
+          annotations: consumer.annotations
+        },
+        database: %ConsumerEventData.Metadata.Database{
+          id: db.id,
+          name: db.name,
+          annotations: db.annotations,
+          database: db.database,
+          hostname: db.hostname
         },
         commit_timestamp: DateTime.utc_now(),
-        idempotency_key: Base.encode64("#{backfill.id}:#{record_pks}")
+        idempotency_key: Base.encode64("#{backfill.id}:#{record_pks}"),
+        record_pks: record_pks
       }
     }
   end

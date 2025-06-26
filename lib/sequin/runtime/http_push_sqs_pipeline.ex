@@ -286,6 +286,8 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
     # Transform the message data
     transformed_data = Transforms.Message.to_external(consumer, consumer_event)
 
+    # TODO Migrate to new routing mechanism
+
     # Prepare HTTP request
     headers =
       (http_endpoint.headers || %{})

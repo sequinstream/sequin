@@ -14,6 +14,7 @@ defmodule Sequin.Factory.CharacterFactory do
 
     merge_attributes(
       %Character{
+        id: Factory.uuid(),
         name: Faker.Person.name(),
         house: Faker.Team.name(),
         planet: Faker.Airports.name(),
@@ -34,6 +35,7 @@ defmodule Sequin.Factory.CharacterFactory do
     attrs
     |> character()
     |> Sequin.Map.from_ecto()
+    |> Map.new(fn {k, v} -> {to_string(k), v} end)
   end
 
   def insert_character!(attrs \\ [], opts \\ []) do
@@ -109,6 +111,7 @@ defmodule Sequin.Factory.CharacterFactory do
 
     merge_attributes(
       %CharacterDetailed{
+        id: Factory.uuid(),
         name: Factory.name(),
         status: Factory.one_of([:active, :inactive, :retired]),
         power_level: Factory.non_neg_integer(),

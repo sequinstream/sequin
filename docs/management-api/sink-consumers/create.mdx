@@ -270,6 +270,12 @@ Creates a new sink consumer.
   Column names used for grouping records
 </ParamField>
 
+<ParamField body="message_grouping" type="boolean">
+  Whether to enable message grouping for ordering purposes. When `true` (default), messages are grouped by primary key or custom grouping columns. When `false`, grouping is disabled for higher throughput batching.
+  
+  Cannot be used with `group_column_names` when set to `false`.
+</ParamField>
+
 <ParamField body="max_retry_count" type="integer">
   The maximum number of times a message will be retried if delivery fails. Once this limit is reached, the message will be discarded.
 

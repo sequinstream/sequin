@@ -13,9 +13,13 @@
   import FormErrorMessage from "$lib/components/ui/form-error-message.svelte";
   import FormToggleVisibilityButton from "$lib/components/ui/form-toggle-visibility-button.svelte";
   import { Switch } from "$lib/components/ui/switch";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
 
   export let form: NatsConsumer;
   export let errors: any = {};
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   let showPassword = false;
 
@@ -140,5 +144,14 @@
         <FormErrorMessage>{errors.sink.nkey_seed}</FormErrorMessage>
       {/if}
     </FormItem>
+
+    <DynamicRoutingForm
+      {form}
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      routedSinkType="nats"
+      {errors}
+    />
   </CardContent>
 </Card>

@@ -69,11 +69,36 @@ If SQS rejects a message, Sequin will cancel the message's delivery.
 
 ## Grouping and ordering
 
-When you configure an SQS sink, you can specify message grouping behavior. This will be used to set the `MessageGroupId` on the SQS message if you're using a FIFO queue.
+You can control message grouping behavior using the `message_grouping` configuration option:
 
-The default message group for a message is the source row's primary key(s). You can override this by specifying one or more columns to use for message grouping.
+- `message_grouping: true` (default): Enable message grouping for ordered delivery
+- `message_grouping: false`: Disable message grouping for maximum throughput
+
+When `message_grouping` is enabled, Sequin will set the `MessageGroupId` on SQS messages if you're using a FIFO queue. The default message group for a message is the source row's primary key(s). You can override this by specifying one or more columns to use for message grouping at the table level.
+
+When `message_grouping` is disabled, no `MessageGroupId` is set, allowing for higher throughput but without ordering guarantees.
 
 Sequin will order the delivery of messages with the same group according to their commit timestamp.
+
+```yaml
+sinks:
+  - name: "sqs-ordered"
+    message_grouping: true  # Enable grouping
+    batch_size: 10
+    tables:
+      - name: "public.orders"
+        group_column_names: ["customer_id"]  # Group by customer instead of PK
+    destination:
+      type: "sqs"
+      queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/orders.fifo"
+
+  - name: "sqs-high-throughput"
+    message_grouping: false  # Disable grouping for max throughput
+    batch_size: 10
+    destination:
+      type: "sqs"
+      queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/events"
+```
 
 ### FIFO vs standard queues
 

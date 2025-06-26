@@ -1,12 +1,13 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import { Plus, RotateCwIcon, CheckIcon, AlertCircle } from "lucide-svelte";
+  import { Plus, RotateCwIcon, CheckIcon } from "lucide-svelte";
   import {
     Table,
     TableBody,
     TableCell,
     TableRow,
   } from "$lib/components/ui/table";
+  import type { RoutedSinkType } from "./types";
 
   export let functions: Array<{
     id: string;
@@ -19,15 +20,21 @@
   export let title: string = "Function";
   export let onFunctionChange: (functionId: string) => void;
   export let refreshFunctions: () => void;
-  export let functionTypes: string[] = ["function", "path"];
+  export let allowedFunctionTypes: string[] = ["function", "path"];
   export let showTypeLabel: boolean = true;
   export let typeLabelKey: string = "type";
   export let refreshState: "idle" | "refreshing" | "done" = "idle";
-  export let createNewQueryParams: string = "";
+  export let newFunctionType: string =
+    allowedFunctionTypes.length === 1 ? allowedFunctionTypes[0] : undefined;
+  export let routedSinkType: RoutedSinkType | null = null;
 
-  $: createNewLink = `/functions/new${createNewQueryParams}`;
-  $: filteredFunctions = functions.filter((t) =>
-    functionTypes.includes(t.type),
+  $: createNewLink = routedSinkType
+    ? `/functions/new?type=${newFunctionType}&sink_type=${routedSinkType}`
+    : `/functions/new?type=${newFunctionType}`;
+  $: filteredFunctions = functions.filter(
+    (t) =>
+      allowedFunctionTypes.includes(t.type) &&
+      (t.type !== "routing" || t.sink_type === routedSinkType),
   );
   $: hasNoneOption = $$slots["none-option"] !== undefined;
   $: hasValidOptions = filteredFunctions.length > 0 || hasNoneOption;
@@ -55,7 +62,7 @@
             class="whitespace-nowrap"
             on:click={refreshFunctions}
             disabled={refreshState === "refreshing"}
-            aria-label="Refresh {title}s"
+            aria-label="Refresh functions"
           >
             {#if refreshState === "refreshing"}
               <RotateCwIcon class="h-4 w-4 animate-spin" />
@@ -71,7 +78,7 @@
             on:click={() => window.open(createNewLink, "_blank")}
           >
             <Plus class="h-4 w-4 mr-2" />
-            Create new {title.toLowerCase()}
+            Create new function
           </Button>
         </div>
       </div>
@@ -143,7 +150,7 @@
           class="whitespace-nowrap"
           on:click={refreshFunctions}
           disabled={refreshState === "refreshing"}
-          aria-label="Refresh {title}s"
+          aria-label="Refresh functions"
         >
           {#if refreshState === "refreshing"}
             <RotateCwIcon class="h-4 w-4 animate-spin mr-2" />
@@ -153,7 +160,7 @@
             Refreshed
           {:else}
             <RotateCwIcon class="h-4 w-4 mr-2" />
-            Refresh {title}s
+            Refresh functions
           {/if}
         </Button>
         <Button
@@ -162,7 +169,7 @@
           on:click={() => window.open(createNewLink, "_blank")}
         >
           <Plus class="h-4 w-4 mr-2" />
-          Create new {title.toLowerCase()}
+          Create new function
         </Button>
       </div>
     </div>

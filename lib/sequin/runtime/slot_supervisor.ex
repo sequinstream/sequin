@@ -3,7 +3,6 @@ defmodule Sequin.Runtime.SlotSupervisor do
   use DynamicSupervisor
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
@@ -148,10 +147,8 @@ defmodule Sequin.Runtime.SlotSupervisor do
       :ok
     else
       default_opts = [consumer_id: sink_consumer.id]
-      consumer_features = Consumers.consumer_features(sink_consumer)
 
       {features, opts} = Keyword.pop(opts, :features, [])
-      features = Keyword.merge(consumer_features, features)
 
       opts =
         default_opts

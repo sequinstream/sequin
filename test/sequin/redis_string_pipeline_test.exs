@@ -25,7 +25,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
     end
 
     test "sends message to redis", %{consumer: consumer} do
-      message = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      message = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
 
       start_pipeline!(consumer)
 
@@ -38,8 +38,8 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
     end
 
     test "sends messages to redis", %{consumer: consumer} do
-      message1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
-      message2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      message1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+      message2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
 
       start_pipeline!(consumer)
 
@@ -54,13 +54,18 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
 
     test "sends message with expire ms set with px", %{consumer: consumer} do
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{sink: %{expire_ms: 1000}})
-      message = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      message = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
 
       start_pipeline!(consumer)
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :set_messages, fn _, [%{key: _, value: _, expire_ms: 1000}] -> :ok end)
+      Mox.expect(RedisMock, :set_messages, fn _, [message] ->
+        assert match?(%{routing_info: %{key: _, action: "set", expire_ms: 1000}}, message),
+               "Expected message with routing_info containing action: 'set' and expire_ms: 1000, got: #{inspect(message)}"
+
+        :ok
+      end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data
@@ -86,7 +91,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{transform_id: transform.id})
 
       message =
-        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
 
       column_value = message.data.record["column"]
 
@@ -94,7 +99,12 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :set_messages, fn _, [%{key: _, value: ^column_value}] -> :ok end)
+      Mox.expect(RedisMock, :set_messages, fn _, [message] ->
+        assert match?(%{routing_info: %{key: _, action: "set"}, transformed_message: ^column_value}, message),
+               "Expected message with routing_info containing action: 'set' and transformed_message: '#{column_value}', got: #{inspect(message)}"
+
+        :ok
+      end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data
@@ -103,7 +113,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
     test "routes messages with routing transforms", %{consumer: consumer} do
       routing_code = """
       def transform(action, record, changes, metadata) do
-        %{key: "custom:\#{metadata.table_name}:\#{record["id"]}"}
+        %{key: "custom:\#{metadata.table_name}:\#{record["column"]}"}
       end
       """
 
@@ -121,15 +131,20 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{routing_id: routing.id, routing_mode: "dynamic"})
 
       message =
-        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
 
-      custom_key = "custom:#{message.data.metadata.table_name}:#{message.data.record["id"]}"
+      custom_key = "custom:#{message.data.metadata.table_name}:#{message.data.record["column"]}"
 
       start_pipeline!(consumer)
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :set_messages, fn _, [%{key: ^custom_key, value: _}] -> :ok end)
+      Mox.expect(RedisMock, :set_messages, fn _, [message] ->
+        assert match?(%{routing_info: %{key: ^custom_key, action: "set"}}, message),
+               "Expected message with routing_info containing key: '#{custom_key}' and action: 'set', got: #{inspect(message)}"
+
+        :ok
+      end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data
@@ -137,16 +152,18 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
 
     test "handles delete actions by sending del command to redis", %{consumer: consumer} do
       message =
-        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
-
-      # Delete message
-      message = put_in(message.data.action, :delete)
+        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :delete)
 
       start_pipeline!(consumer)
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :set_messages, fn _, [%{action: :del}] -> :ok end)
+      Mox.expect(RedisMock, :set_messages, fn _, [message] ->
+        assert match?(%{routing_info: %{key: _, action: "del"}}, message),
+               "Expected message with routing_info containing action: 'del', got: #{inspect(message)}"
+
+        :ok
+      end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data

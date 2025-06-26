@@ -435,7 +435,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   @decorate track_metrics("handle_data_sequin")
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    if is_nil(state.last_commit_lsn) and state.accumulated_msg_binaries.count == 0 do
+    if is_nil(state.last_commit_lsn) and state.current_commit_idx == 0 and state.accumulated_msg_binaries.count == 0 do
       Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
     end
 
@@ -907,19 +907,31 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   defp on_connect_failure(%State{} = state, error) do
     conn = get_cached_conn(state)
 
-    error_msg =
-      case Postgres.fetch_replication_slot(conn, state.slot_name) do
-        {:ok, %{"active" => false}} ->
-          if is_exception(error) do
-            Exception.message(error)
-          else
-            inspect(error)
-          end
+    error_or_error_msg =
+      with {:ok, %{"active" => false}} <- Postgres.get_replication_slot(conn, state.slot_name),
+           {:ok, _pub} <- Postgres.get_publication(conn, state.publication) do
+        cond do
+          match?(%Postgrex.Error{postgres: %{code: :undefined_object, routine: "get_publication_oid"}}, error) ->
+            # Related to this: https://www.postgresql.org/message-id/18683-a98f79c0673be358%40postgresql.org
+            # Helpful error message shown in front-end.
+            Error.service(
+              service: :replication,
+              code: :publication_not_recognized,
+              message:
+                "Publication '#{state.publication}' is in an invalid state. You must drop and re-create the slot to use this publication with this slot."
+            )
 
-        {:ok, %{"active" => true}} ->
+          is_exception(error) ->
+            Exception.message(error)
+
+          true ->
+            inspect(error)
+        end
+      else
+        {:ok, %{"active" => true} = _slot} ->
           "Replication slot '#{state.slot_name}' is currently in use by another connection"
 
-        {:error, %Error.NotFoundError{}} ->
+        {:error, %Error.NotFoundError{entity: :replication_slot}} ->
           maybe_recreate_slot(state)
           "Replication slot '#{state.slot_name}' does not exist"
 
@@ -927,9 +939,16 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           Exception.message(error)
       end
 
+    error =
+      if is_binary(error_or_error_msg) do
+        Error.service(service: :replication, message: error_or_error_msg)
+      else
+        error_or_error_msg
+      end
+
     Health.put_event(
       state.replication_slot,
-      %Event{slug: :replication_connected, status: :fail, error: Error.service(service: :replication, message: error_msg)}
+      %Event{slug: :replication_connected, status: :fail, error: error}
     )
 
     :ok

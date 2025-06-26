@@ -64,10 +64,11 @@
     <FunctionPicker
       {functions}
       selectedFunctionId={form.filterId || "none"}
-      title="Filter"
+      title="Filter function"
       onFunctionChange={handleFilterFunctionChange}
       {refreshFunctions}
-      functionTypes={["filter"]}
+      allowedFunctionTypes={["filter"]}
+      newFunctionType="filter"
       createNewQueryParams="?type=filter"
       bind:refreshState={functionRefreshState}
     >

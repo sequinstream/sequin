@@ -16,6 +16,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -178,6 +179,19 @@ defmodule Sequin.Factory.ConsumersFactory do
         access_key_id: Factory.word(),
         secret_access_key: Factory.word(),
         is_fifo: Enum.random([true, false])
+      },
+      attrs
+    )
+  end
+
+  defp sink(:meilisearch, _account_id, attrs) do
+    merge_attributes(
+      %MeilisearchSink{
+        type: :meilisearch,
+        endpoint_url: "http://127.0.0.1:7700",
+        primary_key: "masterKey",
+        index_name: Factory.word(),
+        api_key: Factory.word()
       },
       attrs
     )
@@ -476,12 +490,21 @@ defmodule Sequin.Factory.ConsumersFactory do
           commit_timestamp: Factory.timestamp(),
           commit_lsn: Factory.unique_integer(),
           commit_idx: Factory.unique_integer(),
+          idempotency_key: Factory.uuid(),
+          record_pks: [Factory.uuid()],
           consumer: %ConsumerEventData.Metadata.Sink{
             id: Factory.uuid(),
             name: Factory.word(),
             annotations: %{
               "test" => true
             }
+          },
+          database: %ConsumerEventData.Metadata.Database{
+            id: Factory.uuid(),
+            name: Factory.word(),
+            database: Factory.postgres_object(),
+            hostname: Factory.hostname(),
+            annotations: %{}
           }
         }
       },
@@ -499,6 +522,9 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> Sequin.Map.from_ecto()
       |> Map.update!(:consumer, fn consumer ->
         Sequin.Map.from_ecto(consumer)
+      end)
+      |> Map.update!(:database, fn database ->
+        Sequin.Map.from_ecto(database)
       end)
     end)
   end
@@ -680,9 +706,11 @@ defmodule Sequin.Factory.ConsumersFactory do
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
           commit_lsn: Factory.unique_integer(),
+          record_pks: [Factory.uuid()],
           consumer: %ConsumerRecordData.Metadata.Sink{
             id: Factory.uuid(),
-            name: Factory.word()
+            name: Factory.word(),
+            annotations: %{}
           }
         }
       },

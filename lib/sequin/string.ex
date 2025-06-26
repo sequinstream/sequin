@@ -1,5 +1,7 @@
 defmodule Sequin.String do
   @moduledoc false
+  alias Sequin.Error
+
   @doc """
   Obfuscates a secret based on its length.
 
@@ -33,7 +35,7 @@ defmodule Sequin.String do
       len ->
         first_three = String.slice(secret, 0, 3)
         last = String.last(secret)
-        middle = String.duplicate("*", len - 4)
+        middle = String.duplicate("*", min(len - 4, 20))
         first_three <> middle <> last
     end
   end
@@ -119,4 +121,10 @@ defmodule Sequin.String do
   def format_bytes(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 2)} KB"
   def format_bytes(bytes) when bytes < 1024 * 1024 * 1024, do: "#{Float.round(bytes / 1024 / 1024, 2)} MB"
   def format_bytes(bytes) when bytes < 1024 * 1024 * 1024 * 1024, do: "#{Float.round(bytes / 1024 / 1024 / 1024, 2)} GB"
+
+  def to_existing_atom_safe(string) do
+    {:ok, String.to_existing_atom(string)}
+  rescue
+    _ -> {:error, Error.invariant(message: "Not an existing atom: #{string}", code: :not_existing_atom)}
+  end
 end

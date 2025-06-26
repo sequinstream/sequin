@@ -14,6 +14,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
@@ -138,33 +139,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         assert a.data.data.action == b.data.data.action
       end)
 
-      assert_receive :sent, 1_000
-    end
-
-    test "legacy_event_singleton_transform sends unwrapped single messages", %{
-      consumer: consumer,
-      http_endpoint: http_endpoint
-    } do
-      test_pid = self()
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
-
-      adapter = fn %Req.Request{} = req ->
-        assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
-        json = Jason.decode!(req.body)
-
-        # Should NOT be wrapped in a list
-        refute is_list(json)
-        assert json["action"] == "insert"
-
-        send(test_pid, :sent)
-        {req, Req.Response.new(status: 200)}
-      end
-
-      # Start pipeline with legacy_event_singleton_transform enabled
-      start_pipeline!(consumer, adapter, features: [legacy_event_singleton_transform: true])
-
-      ref = send_test_event(consumer, event)
-      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
       assert_receive :sent, 1_000
     end
 
@@ -307,6 +281,101 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       assert_receive {:ack, ^ref, [], [_failed]}, 2000
     end
+
+    test "sink default and encrypted headers are merged with routing function headers", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
+      test_pid = self()
+
+      # Create a routing function that returns custom headers
+      account = Repo.get!(Sequin.Accounts.Account, consumer.account_id)
+
+      routing_code = """
+      def route(action, record, changes, metadata) do
+        %{
+          method: "POST",
+          endpoint_path: "/webhook",
+          headers: %{
+            "X-Custom-Header" => "routing-value",
+            "X-Record-ID" => record["id"],
+            "Encrypted-Header" => "routing-user-value",
+            "Normal-Header" => "routing-user-value"
+          }
+        }
+      end
+      """
+
+      {:ok, routing_function} =
+        Consumers.create_function(
+          account.id,
+          %{
+            name: Factory.unique_word(),
+            function: %{
+              type: :routing,
+              sink_type: :http_push,
+              code: routing_code
+            }
+          }
+        )
+
+      {:ok, _} = MiniElixir.create(routing_function.id, routing_function.function.code)
+
+      # Update the HTTP endpoint with encrypted headers
+      encrypted_headers = %{"Authorization" => "Bearer secret-token", "Encrypted-Header" => "Default value"}
+      non_encrypted_headers = %{"Hello" => "World", "Normal-Header" => "Default value"}
+
+      {:ok, http_endpoint} =
+        Consumers.update_http_endpoint(http_endpoint, %{
+          headers: non_encrypted_headers,
+          encrypted_headers: encrypted_headers
+        })
+
+      # Update the consumer to use routing and the updated endpoint
+      {:ok, consumer} =
+        Consumers.update_sink_consumer(consumer, %{
+          routing_id: routing_function.id,
+          routing_mode: "dynamic",
+          sink: consumer.sink |> Map.from_struct() |> Map.put(:http_endpoint_id, http_endpoint.id)
+        })
+
+      event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          action: :insert,
+          data:
+            ConsumersFactory.consumer_event_data(
+              action: :insert,
+              record: %{"id" => "test-record-123"}
+            )
+        )
+
+      adapter = fn %Req.Request{} = req ->
+        # Verify that both encrypted headers and routing headers are present
+        # From encrypted_headers
+        assert req.headers["authorization"] == ["Bearer secret-token"]
+        # From routing function
+        assert req.headers["x-custom-header"] == ["routing-value"]
+        # From routing function - overriding
+        assert req.headers["encrypted-header"] == ["routing-user-value"]
+        # From routing function with record data
+        assert req.headers["x-record-id"] == ["test-record-123"]
+
+        # From non-encrypted headers
+        assert req.headers["hello"] == ["World"]
+        # From routing function - overriding
+        assert req.headers["normal-header"] == ["routing-user-value"]
+
+        send(test_pid, :all_headers_verified)
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
+      assert_receive :all_headers_verified, 1_000
+    end
   end
 
   describe "messages flow from SlotMessageStore to http end-to-end" do
@@ -425,7 +494,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           data:
             ConsumersFactory.consumer_event_data(
               record: record,
-              metadata: %{
+              metadata: %ConsumerEventData.Metadata{
                 database_name: "postgres",
                 table_schema: "public",
                 table_name: "users",
@@ -617,6 +686,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
               table_name: "characters_detailed",
               commit_timestamp: DateTime.utc_now(),
               commit_lsn: Factory.unique_integer(),
+              idempotency_key: Ecto.UUID.generate(),
               consumer: %ConsumerRecordData.Metadata.Sink{
                 id: consumer.id,
                 name: consumer.name
@@ -678,11 +748,12 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           state: :available,
           data: %ConsumerRecordData{
             record: %{name: "character_name"},
-            metadata: %{
+            metadata: %ConsumerRecordData.Metadata{
               database_name: "postgres",
               table_schema: "public",
               table_name: "characters_detailed",
               commit_timestamp: DateTime.utc_now(),
+              idempotency_key: Ecto.UUID.generate(),
               consumer: %{
                 id: consumer.id,
                 name: consumer.name
@@ -709,72 +780,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       assert json["name"] == "character_name"
       refute json["metadata"]
-
-      assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
-
-      # Verify that the consumer record has been processed (deleted on ack)
-      assert [] == SlotMessageStore.peek_messages(consumer, 10)
-    end
-
-    test "legacy event transform is applied when feature flag is enabled", %{
-      consumer: consumer,
-      http_endpoint: http_endpoint
-    } do
-      test_pid = self()
-
-      # Mock the HTTP adapter
-      adapter = fn %Req.Request{} = req ->
-        send(test_pid, {:http_request, req})
-        {req, Req.Response.new(status: 200)}
-      end
-
-      record =
-        ConsumersFactory.consumer_record(
-          consumer_id: consumer.id,
-          data:
-            ConsumersFactory.consumer_record_data(
-              record: %{
-                "action" => "insert",
-                "changes" => nil,
-                "committed_at" => DateTime.utc_now(),
-                "record" => %{
-                  "id" => "123",
-                  "name" => "John Doe"
-                },
-                "source_table_name" => "characters_detailed",
-                "source_table_schema" => "public"
-              }
-            )
-        )
-
-      start_supervised!(
-        {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
-      )
-
-      SlotMessageStore.put_messages(consumer, [record])
-
-      # Start the pipeline with legacy_event_transform feature enabled
-      start_pipeline!(consumer, adapter, features: [legacy_event_transform: true], dummy_producer: false)
-
-      # Wait for the message to be processed
-      assert_receive {:http_request, req}, 5_000
-
-      # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
-      json = Jason.decode!(req.body)
-
-      # Assert the transformed structure
-      assert json["record"] == %{
-               "id" => "123",
-               "name" => "John Doe"
-             }
-
-      assert json["metadata"]["table_name"] == "characters_detailed"
-      assert json["metadata"]["table_schema"] == "public"
-      assert json["metadata"]["consumer"]["id"] == consumer.id
-      assert json["metadata"]["consumer"]["name"] == consumer.name
-      assert json["action"] == "insert"
-      assert json["changes"] == nil
 
       assert_receive {SinkPipeline, :ack_finished, [_successful], []}, 5_000
 
@@ -808,36 +813,27 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       test_pid = self()
       timestamp = DateTime.from_naive!(~N[2023-01-01 00:00:00], "Etc/UTC")
 
+      data =
+        ConsumersFactory.consumer_event_data_attrs(%{
+          record: %{
+            "id" => "123",
+            "created_at" => timestamp,
+            "nested" => %{
+              "updated_at" => timestamp
+            }
+          },
+          changes: %{
+            "updated_at" => timestamp
+          },
+          action: :insert
+        })
+
       # Use a fixed timestamp for predictable test results
       event =
         ConsumersFactory.insert_consumer_event!(
           consumer_id: consumer.id,
           action: :insert,
-          data: %ConsumerEventData{
-            record: %{
-              "id" => "123",
-              "created_at" => timestamp,
-              "nested" => %{
-                "updated_at" => timestamp
-              }
-            },
-            changes: %{
-              "updated_at" => timestamp
-            },
-            action: :insert,
-            metadata: %{
-              table_name: "users",
-              table_schema: "public",
-              commit_timestamp: timestamp,
-              commit_lsn: 123_456,
-              commit_idx: 0,
-              database_name: "postgres",
-              consumer: %{
-                id: consumer.id,
-                name: consumer.name
-              }
-            }
-          }
+          data: data
         )
 
       expected_unix_timestamp = DateTime.to_unix(timestamp, :microsecond)

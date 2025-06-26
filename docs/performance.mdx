@@ -1,36 +1,95 @@
 ---
 title: "Performance"
-description: "Explore how Sequin outperforms Debezium by 6.8x in throughput and 4.7x in latency. See why Sequin is the fastest Postgres CDC tool available."
+description: "Explore how Sequin out‑performs every Debezium deployment mode by up to 6.8× in throughput and 4.7× in latency. See why Sequin is the fastest Postgres CDC tool available."
 icon: "gauge-high"
 iconType: "solid"
 ---
 
-Sequin delivers industry-leading performance for change data capture (CDC), sustaining **40k operations per second (40 MB/s)** with **55ms** average latency. 
+Sequin delivers **industry‑leading** change‑data‑capture (CDC) performance, sustaining **50k ops/s (or up to 40 MB/s)** at a **55 ms** average end‑to‑end latency. That makes Sequin the fastest Postgres CDC solution available today.
 
 <Frame>
   <img src="/images/performance/sequin-throughput-and-latency.png" alt="Sequin throughput and latency" />
 </Frame>
 
-This performance is achieved with Sequin streaming changes from a single Postgres replication slot to Kafka. If configured with multiple replication slots, Sequin can stream low latency change-data-capture from the highest throughput Postgres databases without falling behind.
+This performance is achieved with Sequin streaming changes from a single Postgres replication slot to Kafka. If configured with multiple replication slots, Sequin can stream low latency change-data-capture from very high throughput Postgres databases without falling behind.
 
-## Sequin vs Debezium
+In the sections below, we document how Sequin performs on different instance sizes. We also compare Sequin to different Debezium runtimes (Debezium has [several runtimes](https://blog.sequinstream.com/the-debezium-trio-comparing-kafka-connect-server-and-engine-run-times/).)
 
-Sequin beats Debezium in a head-to-head comparison on messages per second by **6.8x** and on average latency by **4.7x**.
-<Frame>
-  <img src="/images/performance/sequin-vs-debezium-throughput.png" alt="Sequin vs Debezium throughput" />
-</Frame>
- 
-The highest throughput we were able to consistently achieve with Debezium deployed on AWS MSK Connect was 6k ops/sec. At 10k ops/sec, [Debezium's latency grew unbounded](/performance#debezium).
+# Sequin performance
 
-<Note>
-  We initially aimed to bench Sequin and Debezium latency at the same throughput. However, Debezium was unable to sustain 40k operations per second so we instead tested Sequin at 40k ops/sec and Debezium at 6k ops/sec. Sequin latency at 6k ops is less than or equal to Sequin latency at 40k ops.
-</Note>
+## Single‑slot peak throughput & latency
 
-Even with the throughput discrepancy, Sequin's latency is still significantly lower than Debezium's.
+Sequin streams from a single Postgres replication slot to Kafka at:
+
+* **50k ops/s** or **40 MB/s** (whichever comes first), sustained
+* **55ms** average latency
+* **253ms** 99th‑percentile latency
+
+If you need more headroom, you can enable additional slots; Sequin scales linearly without falling behind.
+
+## Sequin on different instance sizes
+
+Here's a sampling of throughput Sequin can handle on different instance types:
+
+| AWS Graviton EC2 | vCPU / GiB | Avg row size | Sustained throughput | Bandwidth |
+|------------------|------------|------------|----------------------|-----------|
+| c8g.4xlarge | 16 / 32 | 100B | **60k ops/s** | **5.53 MB/s** |
+| c8g.4xlarge | 16 / 32 | 200B | **58k ops/s** | **10.64 MB/s** |
+| c8g.4xlarge | 16 / 32 | 400B | **52k ops/s** | **19.92 MB/s** |
+| c8g.4xlarge | 16 / 32 | 1.6kb | **23k ops/s** | **36.06 MB/s** |
+| c8g.2xlarge | 8 / 16 | 200B | **26k ops/s** | **5.16 MB/s** |
+| c8g.xlarge  | 4 / 8  | 200B | **20k ops/s** | **3.81 MB/s** |
+
+# Debezium on MSK Connect (AWS)
+
+**Best if:** you already run Amazon MSK and want a managed Kafka Connect runtime.
+
+The highest throughput we were able to consistently achieve with Debezium deployed on AWS MSK Connect was 6k ops/sec.
+
+| Metric | 8 MCUs (max available on AWS MSK Connect) |
+|--------|-----------------------------|
+| *Sustained throughput* | **6k ops/s** |
+| *Average latency* | **≈ 258ms** |
+| *99th‑percentile latency* | **≈ 499ms** |
+
+At this throughput, Sequin in a comparable setup has a latency that is significantly lower:
 
 <Frame>
   <img src="/images/performance/sequin-vs-debezium-latency.png" alt="Sequin vs Debezium latency" />
 </Frame>
+
+### Scaling limits
+
+* **8 MCUs** (8 vCPU / 32 GiB RAM) is the *hard* ceiling MSK Connect exposes for a single connector.
+* The connector is single‑threaded for snapshotting and heavily synchronized during streaming, so adding more MCUs has diminishing returns past ~4 MCUs.
+
+
+# Debezium Server (stand‑alone)
+
+**Best if:** you need a minimal footprint and do **not** want to run full Kafka Connect.
+
+| Hardware | Row size | Debezium Server | Sequin |
+|----------|----------|-----------------|--------|
+| **16 vCPU / 32 GiB** | 200 B | **20k ops/s** (4 MB/s) | **58k ops/s** (10.64 MB/s) |
+| **16 vCPU / 32 GiB** | 400 B | **20.3k ops/s** (7.73 MB/s) | **52k ops/s** (19.92 MB/s) |
+| **8 vCPU / 16 GiB** | 100 B | **20k ops/s** (2 MB/s) | **30k ops/s** (3 MB/s) |
+| **4 vCPU / 8 GiB** | 100 B | **20k ops/s** (2 MB/s) | **29k ops/s** (2.9 MB/s) |
+
+# Debezium on Confluent Cloud
+
+*(Coming soon)*
+
+<Note>
+    Comparative benchmarks coming soon. [Upvote the issue](https://github.com/sequinstream/sequin/issues/1857) if you want to see them.
+</Note>
+
+# Debezium on self‑hosted Kafka Connect
+
+*(Coming soon)*
+
+<Note>
+    Comparative benchmarks coming soon. [Upvote the issue](https://github.com/sequinstream/sequin/issues/1857) if you want to see them.
+</Note>
 
 ## Benchmark methodology
 
@@ -81,65 +140,29 @@ Similarly, the `cdc_stats.py` script is deployed to a separate EC2 instance and 
 
 Sequin, Debezium, and the rest of the infrastructure are deployed to AWS in the following configuration:
 
-- AWS RDS Postgres `db.r6g.2xlarge` instance (8 vCPUs, 32GB RAM)
-- AWS MSK Kafka provisioned with 6 brokers
-- Sequin running via ECS on an `m8g.12xlarge` instance (48 vCPUs, 192GB RAM)
-- Debezium deployed on MSK Connect with 8 [MCUs](https://docs.aws.amazon.com/msk/latest/developerguide/msk-connect-capacity.html) (the maximum number of MCUs provisionable through AWS MSK Connect).
+- AWS RDS Postgres `db.m5.8xlarge` instance (32 vCPUs, 128GB RAM)
+- AWS MSK Kafka provisioned with 4 brokers
+- AWS EC2 instances with Sequin running in Docker.
 
-## Results
+---
 
-### Sequin
+## Summary
 
-The primary benchmark test for Sequin is **40k** operations per second for 60 minutes with an average row size of 1KB. The total bandwidth throughput was **40MB/s**. These are throughput values for which Sequin had stable latency figures, though we observed Sequin burst above **50k ops/sec** (**50MB/s**) during our testing.
+| Tool / Deployment | Sustained throughput | Avg latency | 99p latency |
+|-------------------|----------------------|-------------|-------------|
+| **Sequin** | **>50 k ops / s** | **55 ms** | **253 ms** |
+| Debezium · MSK | 6 k ops / s | 258 ms | 499 ms |
+| Debezium · Server | 23 k ops / s | 210 ms  | 440 ms 
+| Fivetran | 5+ minutes | - | - | - |
+| Airbyte | 1+ hours | - | - | - |
 
-At this throughput, Sequin achieved **55ms average latency** and **253ms 99th percentile latency**.
+<small>† Numbers vary by row size; see Section 2 for details.</small>
 
-<Frame>
-  <img src="/images/performance/sequin-latency.png" alt="Sequin latency" />
-</Frame>
+Sequin sustains **6 × – 8 ×** more throughput than Debezium’s on MSK, and over **2x** the throughput of Debezium Server.
 
-### Debezium
+---
 
-We then tested Debezium at **10k** ops/sec but unfortunately observed latency grow unbounded as Debezium fell behind:
-
-<Frame>
-  <img src="/images/performance/debezium-falls-behind.png" alt="Debezium falls behind" />
-</Frame>
- 
-<Note>
-  Debezium was deployed with 8 MCUs which is equivalent to 8 vCPUs and 32 GB of memory. This is the maxiumum number of MCUs provisionable through AWS MSK Connect. Additionally, Debezium was deployed with all configurations recommended in the AWS Debezium deployment guide. However, additional tuning was not performed by the Sequin team, so let us know if you have suggestions for improving Debezium's performance.
-</Note>
-
-Therefore we retested Debezium at **6k** ops/sec. At this throughput, Debezium had incredibly stable latency figures of **258.4 ms average latency** and **498.7 ms 99th percentile latency**. 
-
-<Frame>
-  <img src="/images/performance/debezium-latency.png" alt="Debezium latency" />
-</Frame>
-
-### Comparison
-
-Head-to-head, Sequin sustains **6.8x** more throughput than Debezium while maintaining **4.7x** lower average latency.
-
-<Frame>
-  <img src="/images/performance/sequin-vs-debezium-throughput.png" alt="Sequin vs Debezium throughput" />
-</Frame>
-
-In term of latency, Sequin consistently beats Debezium, Fivetran, and Airbyte. In a [head-to-head comparison](https://github.com/sequinstream/sequin-vs-debezium-benchmark), Sequin sustains **6.8x** more throughput than Debezium at **4.7x** lower 99th percentile latency.
-
-<Frame>
-  <img src="/images/performance/sequin-vs-debezium-latency.png" alt="Sequin vs Debezium latency" />
-</Frame>
-
-The table below summarizes these results and also includes figures for Airbyte and Fivetran. Those two services offer batch syncs only, so their latency figures are only roughly comparable.
-
-| Tool | Avg Latency | 99%ile Latency |
-|------|-------------|----------------|
-| **Sequin** | **55ms** | **253ms** |
-| Debezium | 258.4ms (4.7x slower) | 498.7ms (1.97x slower) |
-| Fivetran | 5+ minutes | - |
-| Airbyte | 1+ hours | - |
-
-## Next Steps
+## Next steps
 
 Ready to see Sequin's performance for yourself?
 
@@ -157,4 +180,3 @@ Ready to see Sequin's performance for yourself?
     Learn how to deploy Sequin in your production environment.
   </Card>
 </CardGroup>
-

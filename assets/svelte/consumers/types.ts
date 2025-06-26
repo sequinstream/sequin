@@ -25,20 +25,7 @@ export type Backfill = {
 // Base consumer type with shared properties
 export type BaseConsumer = {
   id: string;
-  type:
-    | "http_push"
-    | "sqs"
-    | "sns"
-    | "kinesis"
-    | "redis_stream"
-    | "kafka"
-    | "sequin_stream"
-    | "gcp_pubsub"
-    | "nats"
-    | "rabbitmq"
-    | "typesense"
-    | "elasticsearch"
-    | "redis_string";
+  type: SinkType;
   name: string;
   annotations: Record<string, boolean>;
   status: "active" | "paused" | "disabled";
@@ -53,6 +40,7 @@ export type BaseConsumer = {
   tables_included_in_source: Table[];
   routing_id: string | null;
   routing: Function | null;
+  routing_mode?: "static" | "dynamic";
   filter_id: string | null;
   filter: Function | null;
   database: Database;
@@ -218,6 +206,19 @@ export type TypesenseConsumer = BaseConsumer & {
   };
 };
 
+// Meilisearch specific sink
+export type MeilisearchConsumer = BaseConsumer & {
+  sink: {
+    type: "meilisearch";
+    endpoint_url: string;
+    index_name: string;
+    api_key: string;
+    primary_key: string;
+    batch_size: number;
+    timeout_seconds: number;
+  };
+};
+
 // SNS specific sink
 export type SnsConsumer = BaseConsumer & {
   sink: {
@@ -258,3 +259,41 @@ export type Consumer =
   | SnsConsumer
   | ElasticsearchConsumer
   | RedisStringConsumer;
+
+export const SinkTypeValues = [
+  "http_push",
+  "sqs",
+  "sns",
+  "kinesis",
+  "redis_stream",
+  "kafka",
+  "sequin_stream",
+  "gcp_pubsub",
+  "nats",
+  "rabbitmq",
+  "typesense",
+  "meilisearch",
+  "elasticsearch",
+  "redis_string",
+] as const;
+
+export type SinkType = (typeof SinkTypeValues)[number];
+
+export const RoutedSinkTypeValues = [
+  "http_push",
+  // "sqs",
+  // "sns",
+  // "kinesis",
+  // "redis_stream",
+  // "kafka",
+  // "sequin_stream",
+  // "gcp_pubsub",
+  "nats",
+  // "rabbitmq",
+  // "typesense",
+  // "meilisearch",
+  // "elasticsearch",
+  "redis_string",
+] as const;
+
+export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

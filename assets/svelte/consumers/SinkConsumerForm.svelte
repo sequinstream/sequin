@@ -34,6 +34,7 @@
   import AzureEventHubSinkForm from "$lib/sinks/azure_event_hub/AzureEventHubSinkForm.svelte";
   import { CircleAlert, Info, Plus } from "lucide-svelte";
   import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
+  import MeilisearchSinkForm from "$lib/sinks/meilisearch/MeilisearchSinkForm.svelte";
   import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import SchemaTableSelector from "../components/SchemaTableSelector.svelte";
@@ -427,11 +428,11 @@
         <FunctionPicker
           {functions}
           selectedFunctionId={form.transform}
-          title="Transform"
+          title="Transform function"
           onFunctionChange={(functionId) => (form.transform = functionId)}
           {refreshFunctions}
-          functionTypes={["transform", "path"]}
-          createNewQueryParams="?type=transform"
+          allowedFunctionTypes={["transform", "path"]}
+          newFunctionType="transform"
           bind:refreshState={functionRefreshState}
         >
           <svelte:fragment slot="none-option">
@@ -536,13 +537,21 @@
     {:else if consumer.type === "sequin_stream"}
       <SequinStreamSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "nats"}
-      <NatsSinkForm errors={errors.consumer} bind:form />
+      <NatsSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {:else if consumer.type === "rabbitmq"}
       <RabbitMqSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "azure_event_hub"}
       <AzureEventHubSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "typesense"}
       <TypesenseSinkForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "meilisearch"}
+      <MeilisearchSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "elasticsearch"}
       <ElasticsearchSinkForm errors={errors.consumer} bind:form />
     {/if}

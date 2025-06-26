@@ -160,9 +160,9 @@ sinks:
         - "public"
       exclude_schemas:             # Optional, schemas to exclude
         - "private"
-      include_table_names:         # Optional, tables to include
-        - "public.users" 
-      exclude_table_names:         # Optional, tables to exclude
+      include_tables:         # Optional, tables to include
+        - "public.users"
+      exclude_tables:         # Optional, tables to exclude
         - "public.background_jobs"
     status: "active"               # Optional: active or disabled, default: active
     transform: "my-transform"      # Optional, reference to a transform function name or "none"
@@ -174,6 +174,7 @@ sinks:
       - insert
       - update
       - delete
+    message_grouping: true         # Optional, enable message grouping, default: true
     tables:                        # Optional, table specific configuration
       - name: "public.users"
         group_column_names:        # Optional, custom group column names
@@ -200,6 +201,28 @@ You can also specify schemas and tables to include or exclude from the stream.
 #### Sink actions
 
 Additionally, you can specify `actions` to stream. By default, all actions (`insert`, `update`, `delete`) are included.  `read` events are emitted during backfills and are always included.
+
+#### Message grouping
+
+The `message_grouping` field controls whether messages are grouped for ordering purposes. When enabled (default), messages are grouped by primary key or custom grouping columns, ensuring ordered delivery within each group. When disabled, messages are not grouped, which may allow for higher throughput for some sinks.
+
+- `true` (default): Enable message grouping. Messages are grouped by primary key unless overridden by table-level `group_column_names`
+- `false`: Disable message grouping. Cannot be used with table-level `group_column_names`
+
+```yaml
+sinks:
+  - name: "ordered-sink"
+    message_grouping: true  # Default, enables ordering
+    tables:
+      - name: "public.users"
+        group_column_names: ["account_id"]  # Custom grouping
+
+  - name: "high-throughput-sink"
+    message_grouping: false
+    tables:
+      - name: "public.events"
+        # group_column_names not allowed when message_grouping is false
+```
 
 #### Sink functions
 
@@ -250,6 +273,19 @@ destination:
   type: "typesense"                # Required
   endpoint_url: "https://your-typesense-server:8108"  # Required
   collection_name: "products"      # Required
+  api_key: "your-api-key"          # Required
+  batch_size: 40                   # Optional, messages per batch, default: 40, max: 10000
+  timeout_seconds: 5               # Optional, seconds to wait for response, default: 5, max: 300
+```
+
+#### Meilisearch sink
+For indexing documents into a Meilisearch index:
+```yaml
+destination:
+  type: "meilisearch"              # Required
+  endpoint_url: "http://your-meilisearch-server:7700"  # Required
+  index_name: "products"           # Required
+  primary_key: "id"                # Optional, primary key for the index, default: "id"
   api_key: "your-api-key"          # Required
   batch_size: 40                   # Optional, messages per batch, default: 40, max: 10000
   timeout_seconds: 5               # Optional, seconds to wait for response, default: 5, max: 300

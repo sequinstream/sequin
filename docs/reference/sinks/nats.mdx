@@ -38,31 +38,23 @@ The NATS sink publishes messages to NATS subjects.
 
 ## Message format
 
-Sequin sends messages to SQS as JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
+Sequin sends messages to NATS as JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
 
 ## Subject naming
 
-Messages are published to subjects using the following patterns:
+By default, messages are published to subjects using the following pattern:
 
-For change events:
 ```
-sequin.changes.<database_name>.<schema_name>.<table_name>.<action>
-```
-
-For record events:
-```
-sequin.rows.<database_name>.<schema_name>.<table_name>
+sequin.<database_name>.<schema_name>.<table_name>.<action>
 ```
 
-For example, if you're streaming changes from a table called `products` in the `public` schema of a database called `shop`, you would see routing keys like:
+For example, if you're streaming changes from a table called `products` in the `public` schema of a database called `shop`, you would see subjects like:
 
-- `sequin.changes.shop_prod.public.products.insert`
-- `sequin.changes.shop_prod.public.products.update`
-- `sequin.changes.shop_prod.public.products.delete`
+- `sequin.shop_prod.public.products.insert`
+- `sequin.shop_prod.public.products.update`
+- `sequin.shop_prod.public.products.delete`
 
-<Info>
-  Support for subject prefixes is on our radar. Upvote or comment on [this issue](https://github.com/sequinstream/sequin/issues/732) and we'll prioritize it.
-</Info>
+You can use a [routing function](/reference/routing) to generate your own dynamic subjects.
 
 ## Message headers
 

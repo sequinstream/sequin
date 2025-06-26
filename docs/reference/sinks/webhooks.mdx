@@ -81,9 +81,20 @@ The webhook sink sends HTTP POST requests with JSON bodies.
     table_schema: string;
     table_name: string;
     commit_timestamp: string;  // ISO timestamp
+    commit_lsn: number;
+    commit_idx: number;
+    database_name: string; // deprecated
     consumer: {
       id: string;
       name: string;
+      annotations: Record<string, any>;
+    };
+    database: {
+      id: string;
+      name: string;
+      annotations: Record<string, any>;
+      database: string;
+      hostname: string;
     };
   };
 }
@@ -105,9 +116,20 @@ Example:
     "table_schema": "public",
     "table_name": "orders",
     "commit_timestamp": "2024-03-20T15:30:00Z",
+    "commit_lsn": 123456789,
+    "commit_idx": 1,
+    "database_name": "myapp-prod", // deprecated
     "consumer": {
       "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      "name": "orders_webhook"
+      "name": "orders_webhook",
+      "annotations": {"my-custom-key": "my-custom-value"}
+    },
+    "database": {
+      "id": "12345678-9abc-def0-1234-56789abcdef0",
+      "name": "myapp-prod",
+      "annotations": {"my-custom-key": "my-custom-value"},
+      "database": "myapp-prod",
+      "hostname": "db.example.com"
     }
   }
 }
@@ -131,9 +153,20 @@ Example (when batching is enabled):
         "table_schema": "public",
         "table_name": "orders",
         "commit_timestamp": "2024-03-20T15:30:00Z",
+        "commit_lsn": 123456789,
+        "commit_idx": 1,
+        "database_name": "myapp-prod", // deprecated
         "consumer": {
           "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "orders_webhook"
+          "name": "orders_webhook",
+          "annotations": {"my-custom-key": "my-custom-value"}
+        },
+        "database": {
+          "id": "12345678-9abc-def0-1234-56789abcdef0",
+          "name": "myapp-prod",
+          "annotations": {"my-custom-key": "my-custom-value"},
+          "database": "myapp-prod",
+          "hostname": "db.example.com"
         }
       }
     }

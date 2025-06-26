@@ -72,7 +72,7 @@ defmodule SequinWeb.TransformEditTest do
       render_hook(lv, "validate", %{"function" => p1})
 
       assert [test_message] = assigns(lv).encoded_synthetic_test_message
-      assert %Sequin.Runtime.RedisStringPipeline.RoutingInfo{key: key} = test_message.transformed
+      assert %{key: key} = test_message.transformed
       assert key
       refute test_message[:error]
     end

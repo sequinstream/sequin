@@ -55,14 +55,7 @@
     loadSinkTypeFromStorage,
     clearFunctionTypeStorage,
   } from "./functionTypeStorage";
-  import type {
-    FormData,
-    FormErrors,
-    TestMessage,
-    Consumer,
-    FieldType,
-    ActionType,
-  } from "./types";
+  import type { FormData, FormErrors, TestMessage, Consumer } from "./types";
   import { FieldValues } from "./types";
 
   // CodeMirror imports
@@ -107,6 +100,7 @@
   let sinkTypeInternalToExternal = {
     http_push: "Webhook sink",
     redis_string: "Redis string sink",
+    nats: "NATS sink",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];
@@ -197,6 +191,16 @@
         label: "metadata.transaction_annotations",
         type: "property",
         info: "A user-specified map of key-value pairs that are used to store additional information about the transaction.",
+      },
+      {
+        label: "metadata.idempotency_key",
+        type: "property",
+        info: "An idempotency key that describes a unique event.",
+      },
+      {
+        label: "metadata.record_pks",
+        type: "property",
+        info: "An array of all the primary key composite fragments",
       },
     ];
 
@@ -816,6 +820,10 @@ Please help me create or modify the Elixir function transform to achieve the des
                   <SelectItem
                     value="redis_string"
                     label={sinkTypeInternalToExternal.redis_string}
+                  />
+                  <SelectItem
+                    value="nats"
+                    label={sinkTypeInternalToExternal.nats}
                   />
                 </SelectContent>
               </Select>

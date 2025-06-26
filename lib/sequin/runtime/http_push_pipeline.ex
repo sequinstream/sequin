@@ -5,25 +5,18 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   alias Sequin.Aws.HttpClient
   alias Sequin.Aws.SQS
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Error.ServiceError
-  alias Sequin.Functions.MiniElixir
   alias Sequin.Metrics
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.Trace
   alias Sequin.Transforms
 
   require Logger
-
-  defmodule RoutingInfo do
-    @moduledoc false
-    @derive Jason.Encoder
-    defstruct method: "POST", endpoint_path: ""
-  end
 
   @impl SinkPipeline
   def init(context, opts) do
@@ -86,34 +79,12 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   end
 
   @impl SinkPipeline
-  def apply_routing(_consumer, rinfo) when is_map(rinfo) do
-    struct!(RoutingInfo, rinfo)
-  rescue
-    KeyError ->
-      expected_keys =
-        RoutingInfo.__struct__()
-        |> Map.keys()
-        |> Enum.reject(&(&1 == :__struct__))
-        |> Enum.join(", ")
-
-      raise Error.invariant(
-              message: "Invalid routing response. Expected a map with keys: #{expected_keys}, got: #{inspect(rinfo)}"
-            )
-  end
-
-  def apply_routing(_, v), do: raise("Routing function must return a map! Got: #{inspect(v)}")
-
-  @impl SinkPipeline
   def handle_message(message, context) do
-    routing = context.consumer.routing
+    consumer = context.consumer
+    routing_info = Routing.route_message(consumer, message)
+    message = Broadway.Message.put_batch_key(message, routing_info)
 
-    if is_nil(routing) do
-      {:ok, message, context}
-    else
-      res = MiniElixir.run_compiled(routing, message.data.data)
-      message = Broadway.Message.put_batch_key(message, apply_routing(context.consumer, res))
-      {:ok, message, context}
-    end
+    {:ok, message, context}
   end
 
   defguardp uses_via_sqs?(context) when context.consumer.sink.via_sqs == true
@@ -138,29 +109,20 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       consumer: consumer,
       http_endpoint: http_endpoint,
       req_opts: req_opts,
-      features: features,
       test_pid: test_pid
     } = context
 
     setup_allowances(test_pid)
 
-    message_data =
-      messages
-      |> Enum.map(& &1.data)
-      |> prepare_message_data(consumer, features)
+    consumer_messages = Enum.map(messages, & &1.data)
 
-    req_opts =
-      case batch_info.batch_key do
-        :default ->
-          req_opts
+    routed_message =
+      %Routing.RoutedMessage{
+        routing_info: batch_info.batch_key,
+        transformed_message: prepare_message_data(consumer_messages, consumer)
+      }
 
-        m when is_map(m) ->
-          req_opts
-          |> Keyword.put(:url, m.endpoint_path)
-          |> Keyword.put(:method, m.method)
-      end
-
-    case push_message(http_endpoint, consumer, message_data, req_opts) do
+    case push_message(http_endpoint, consumer, routed_message, req_opts) do
       :ok ->
         Metrics.incr_http_endpoint_throughput(http_endpoint)
         {:ok, messages, context}
@@ -170,73 +132,34 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     end
   end
 
-  defp prepare_message_data(messages, consumer, features) do
-    cond do
-      features[:legacy_event_transform] && length(messages) == 1 ->
-        [message] = messages
-        legacy_event_transform_message(consumer, message.data)
-
-      features[:legacy_event_singleton_transform] && length(messages) == 1 ->
-        [message] = messages
-        message.data
-
-      consumer.sink.batch == false ->
-        [message] = messages
-        Transforms.Message.to_external(consumer, message)
-
-      true ->
-        %{data: Enum.map(messages, &Transforms.Message.to_external(consumer, &1))}
+  defp prepare_message_data(messages, consumer) do
+    if consumer.sink.batch == false do
+      [message] = messages
+      Transforms.Message.to_external(consumer, message)
+    else
+      %{data: Enum.map(messages, &Transforms.Message.to_external(consumer, &1))}
     end
   end
 
-  defp legacy_event_transform_message(consumer, message_data) do
-    case message_data do
-      %ConsumerRecordData{
-        record: %{
-          "action" => action,
-          "changes" => changes,
-          "committed_at" => committed_at,
-          "record" => record,
-          "source_table_name" => source_table_name,
-          "source_table_schema" => source_table_schema
-        }
-      } ->
-        %{
-          "record" => record,
-          "metadata" => %{
-            "consumer" => %{
-              "id" => consumer.id,
-              "name" => consumer.name
-            },
-            "table_name" => source_table_name,
-            "table_schema" => source_table_schema,
-            "commit_timestamp" => committed_at
-          },
-          "action" => action,
-          "changes" => changes
-        }
-
-      _ ->
-        message_data
-    end
-  end
-
-  defp push_message(%HttpEndpoint{} = http_endpoint, %SinkConsumer{} = consumer, message_data, req_opts) do
+  defp push_message(%HttpEndpoint{} = http_endpoint, %SinkConsumer{} = consumer, routed_message, req_opts) do
+    # TODO Consider moving all header merging into HttpPush routing
     headers = http_endpoint.headers
     encrypted_headers = http_endpoint.encrypted_headers || %{}
     headers = Map.merge(headers, encrypted_headers)
+    headers = Map.merge(headers, routed_message.routing_info.headers)
+    headers = Map.merge(headers, Map.new(Keyword.get(req_opts, :headers, [])))
 
     req =
       [
-        method: "POST",
+        method: routed_message.routing_info.method,
         base_url: HttpEndpoint.url(http_endpoint),
-        url: consumer.sink.http_endpoint_path || "",
+        url: routed_message.routing_info.endpoint_path,
         headers: headers,
-        json: message_data,
+        json: routed_message.transformed_message,
         receive_timeout: consumer.ack_wait_ms,
         finch: Sequin.Finch
       ]
-      |> Keyword.merge(req_opts)
+      |> Keyword.merge(Keyword.drop(req_opts, [:method, :base_url, :url, :headers, :json, :receive_timeout, :finch]))
       |> Req.new()
 
     with {:ok, resp} <- Req.request(req),
@@ -252,7 +175,8 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       {:error, %ServiceError{} = error} ->
         Trace.error(consumer.id, %Trace.Event{
           message: "Failed to deliver messages to HTTP endpoint",
-          error: error
+          error: error,
+          req_request: req
         })
 
         {:error, error}
@@ -260,12 +184,14 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       {:error, %Mint.TransportError{reason: reason} = error} ->
         Logger.error(
           "[HttpPushPipeline] #{req.method} to webhook endpoint failed with Mint.TransportError: #{Exception.message(error)}",
-          error: error
+          error: error,
+          req_request: req
         )
 
         Trace.error(consumer.id, %Trace.Event{
           message: "Failed to deliver messages to HTTP endpoint [transport error]",
-          error: error
+          error: error,
+          req_request: req
         })
 
         {:error,
@@ -284,7 +210,8 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
         Trace.error(consumer.id, %Trace.Event{
           message: "Failed to deliver messages to HTTP endpoint [transport error]",
-          error: error
+          error: error,
+          req_request: req
         })
 
         {:error,
@@ -300,7 +227,8 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
         Trace.error(consumer.id, %Trace.Event{
           message: "Failed to deliver messages to HTTP endpoint",
-          error: error
+          error: error,
+          req_request: req
         })
 
         {:error, error}
@@ -391,7 +319,10 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
         Trace.error(consumer.id, %Trace.Event{
           message: "Failed to send messages to SQS",
-          error: error
+          error: error,
+          extra: %{
+            sqs_messages: sqs_messages
+          }
         })
 
         {:error, Error.service(service: :sqs, message: "Failed to send to SQS", details: error)}

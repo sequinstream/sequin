@@ -34,6 +34,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
       field :database_name, :string
       field :transaction_annotations, :map
       field :idempotency_key, :string
+      field :record_pks, {:array, :string}
 
       embeds_one :consumer, Sink, primary_key: false, on_replace: :update do
         @derive Jason.Encoder
@@ -41,6 +42,16 @@ defmodule Sequin.Consumers.ConsumerEventData do
         field :id, :string
         field :name, :string
         field :annotations, :map
+      end
+
+      embeds_one :database, Database, primary_key: false, on_replace: :update do
+        @derive Jason.Encoder
+
+        field :id, :string
+        field :name, :string
+        field :annotations, :map
+        field :database, :string
+        field :hostname, :string
       end
     end
   end
@@ -63,16 +74,33 @@ defmodule Sequin.Consumers.ConsumerEventData do
       :commit_lsn,
       :commit_idx,
       :database_name,
-      :transaction_annotations
+      :transaction_annotations,
+      :idempotency_key,
+      :record_pks
     ])
-    |> validate_required([:table_schema, :table_name, :commit_timestamp, :commit_lsn, :commit_idx])
+    |> validate_required([
+      :table_schema,
+      :table_name,
+      :commit_timestamp,
+      :commit_lsn,
+      :commit_idx,
+      :database_name,
+      :idempotency_key
+    ])
     |> cast_embed(:consumer, required: true, with: &consumer_changeset/2)
+    |> cast_embed(:database, required: true, with: &database_changeset/2)
   end
 
   def consumer_changeset(consumer, attrs) do
     consumer
     |> cast(attrs, [:id, :name, :annotations])
     |> validate_required([:id, :name])
+  end
+
+  def database_changeset(database, attrs) do
+    database
+    |> cast(attrs, [:id, :name, :annotations, :database, :hostname])
+    |> validate_required([:id, :name, :annotations, :database, :hostname])
   end
 
   def deserialize(%ConsumerEventData{} = data) do
@@ -88,6 +116,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
     |> Sequin.Map.from_ecto()
     |> update_in([:metadata], &Sequin.Map.from_ecto/1)
     |> update_in([:metadata, :consumer], &Sequin.Map.from_ecto/1)
+    |> update_in([:metadata, :database], &Sequin.Map.from_ecto/1)
   end
 
   def struct_from_map(map) do
@@ -102,6 +131,10 @@ defmodule Sequin.Consumers.ConsumerEventData do
     |> update_in([Access.key(:metadata), Access.key(:consumer)], fn consumer ->
       map = Sequin.Map.atomize_keys(consumer)
       struct!(ConsumerEventData.Metadata.Sink, map)
+    end)
+    |> update_in([Access.key(:metadata), Access.key(:database)], fn database ->
+      map = Sequin.Map.atomize_keys(database)
+      struct!(ConsumerEventData.Metadata.Database, map)
     end)
   end
 end

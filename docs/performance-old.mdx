@@ -1,0 +1,159 @@
+---
+title: "Performance"
+description: "Explore how Sequin outperforms Debezium by 6.8x in throughput and 4.7x in latency. See why Sequin is the fastest Postgres CDC tool available."
+icon: "gauge-high"
+iconType: "solid"
+---
+
+Sequin delivers industry-leading performance for change data capture (CDC), sustaining **40k operations per second (40 MB/s)** with **55ms** average latency.
+
+<Frame>
+  <img src="/images/performance/sequin-throughput-and-latency.png" alt="Sequin throughput and latency" />
+</Frame>
+
+This performance is achieved with Sequin streaming changes from a single Postgres replication slot to Kafka. If configured with multiple replication slots, Sequin can stream low latency change-data-capture from the highest throughput Postgres databases without falling behind.
+
+## Sequin vs Debezium
+
+Sequin beats Debezium in a head-to-head comparison on messages per second by **6.8x** and on average latency by **4.7x**.
+<Frame>
+  <img src="/images/performance/sequin-vs-debezium-throughput.png" alt="Sequin vs Debezium throughput" />
+</Frame>
+
+The highest throughput we were able to consistently achieve with Debezium deployed on AWS MSK Connect was 6k ops/sec. At 10k ops/sec, [Debezium's latency grew unbounded](/performance#debezium).
+
+<Note>
+  We initially aimed to bench Sequin and Debezium latency at the same throughput. However, Debezium was unable to sustain 40k operations per second so we instead tested Sequin at 40k ops/sec and Debezium at 6k ops/sec. Sequin latency at 6k ops is less than or equal to Sequin latency at 40k ops.
+</Note>
+
+Even with the throughput discrepancy, Sequin's latency is still significantly lower than Debezium's.
+
+<Frame>
+  <img src="/images/performance/sequin-vs-debezium-latency.png" alt="Sequin vs Debezium latency" />
+</Frame>
+
+## Benchmark methodology
+
+<Info>
+  All of our benchmarks are open source and available on [GitHub](https://github.com/sequinstream/sequin-vs-debezium-benchmark).
+</Info>
+
+Our benchmarks are conducted in a production-like environment. Sequin and Debezium are compared head-to-head capturing changes from [AWS RDS](https://aws.amazon.com/rds/) and delivering to [AWS MSK Kafka](https://aws.amazon.com/msk/).
+
+Load is applied to a single Postgres table using [`workload_generator.py`](https://github.com/sequinstream/sequin-vs-debezium-benchmark/blob/main/workload_generator.py) deployed to a dedicated EC2 instance.
+
+Throughput and end-to-end latency are measured with a [Kafka consumer](https://github.com/sequinstream/sequin-vs-debezium-benchmark/blob/main/cdc_stats.py) deployed to a separate EC2 instance. The stats are calculated as:
+* **Throughput**: the number of records delivered to Kafka per second.
+* **Latency**: the time between a change occuring in Postgres (`updated_at` timestamp) and it's delivery to AWS MSK Kafka (Kafka `creation` timestamp).
+
+### Workload
+
+`workload_generator.py` applies a mixed workload of `INSERT`, `UPDATE`, and `DELETE` operations to the `benchmark_records` table.
+
+<Frame>
+  <img src="/images/performance/workload-generation.png" alt="Workload generation" />
+</Frame>
+
+The `benchmark_records` Postgres table has the following schema:
+
+```
+                                           Table "public.benchmark_records"
+     Column      |            Type             | Collation | Nullable |                    Default
+-----------------+-----------------------------+-----------+----------+-----------------------------------------------
+ id              | integer                     |           | not null | nextval('benchmark_records_id_seq'::regclass)
+ string_field    | text                        |           |          |
+ numeric_field   | numeric                     |           |          |
+ timestamp_field | timestamp with time zone    |           |          |
+ json_field      | jsonb                       |           |          |
+ inserted_at     | timestamp without time zone |           |          | now()
+ updated_at      | timestamp without time zone |           |          | now()
+```
+
+### Stats collection
+
+Similarly, the `cdc_stats.py` script is deployed to a separate EC2 instance and reads from AWS MSK Kafka. Stats are bucketed and saved to a CSV file for analysis.
+
+<Frame>
+  <img src="/images/performance/cdc-stats.png" alt="Stats collection" />
+</Frame>
+
+### Infrastructure
+
+Sequin, Debezium, and the rest of the infrastructure are deployed to AWS in the following configuration:
+
+- AWS RDS Postgres `db.r6g.2xlarge` instance (8 vCPUs, 32GB RAM)
+- AWS MSK Kafka provisioned with 6 brokers
+- Sequin running via ECS on an `m8g.12xlarge` instance (48 vCPUs, 192GB RAM)
+- Debezium deployed on MSK Connect with 8 [MCUs](https://docs.aws.amazon.com/msk/latest/developerguide/msk-connect-capacity.html) (the maximum number of MCUs provisionable through AWS MSK Connect).
+
+## Results
+
+### Sequin
+
+The primary benchmark test for Sequin is **40k** operations per second for 60 minutes with an average row size of 1KB. The total bandwidth throughput was **40MB/s**. These are throughput values for which Sequin had stable latency figures, though we observed Sequin burst above **50k ops/sec** (**50MB/s**) during our testing.
+
+At this throughput, Sequin achieved **55ms average latency** and **253ms 99th percentile latency**.
+
+<Frame>
+  <img src="/images/performance/sequin-latency.png" alt="Sequin latency" />
+</Frame>
+
+### Debezium
+
+We then tested Debezium at **10k** ops/sec but unfortunately observed latency grow unbounded as Debezium fell behind:
+
+<Frame>
+  <img src="/images/performance/debezium-falls-behind.png" alt="Debezium falls behind" />
+</Frame>
+
+<Note>
+  Debezium was deployed with 8 MCUs which is equivalent to 8 vCPUs and 32 GB of memory. This is the maxiumum number of MCUs provisionable through AWS MSK Connect. Additionally, Debezium was deployed with all configurations recommended in the AWS Debezium deployment guide. However, additional tuning was not performed by the Sequin team, so let us know if you have suggestions for improving Debezium's performance.
+</Note>
+
+Therefore we retested Debezium at **6k** ops/sec. At this throughput, Debezium had incredibly stable latency figures of **258.4 ms average latency** and **498.7 ms 99th percentile latency**.
+
+<Frame>
+  <img src="/images/performance/debezium-latency.png" alt="Debezium latency" />
+</Frame>
+
+### Comparison
+
+Head-to-head, Sequin sustains **6.8x** more throughput than Debezium while maintaining **4.7x** lower average latency.
+
+<Frame>
+  <img src="/images/performance/sequin-vs-debezium-throughput.png" alt="Sequin vs Debezium throughput" />
+</Frame>
+
+In term of latency, Sequin consistently beats Debezium, Fivetran, and Airbyte. In a [head-to-head comparison](https://github.com/sequinstream/sequin-vs-debezium-benchmark), Sequin sustains **6.8x** more throughput than Debezium at **4.7x** lower 99th percentile latency.
+
+<Frame>
+  <img src="/images/performance/sequin-vs-debezium-latency.png" alt="Sequin vs Debezium latency" />
+</Frame>
+
+The table below summarizes these results and also includes figures for Airbyte and Fivetran. Those two services offer batch syncs only, so their latency figures are only roughly comparable.
+
+| Tool | Avg Latency | 99%ile Latency |
+|------|-------------|----------------|
+| **Sequin** | **55ms** | **253ms** |
+| Debezium | 258.4ms (4.7x slower) | 498.7ms (1.97x slower) |
+| Fivetran | 5+ minutes | - |
+| Airbyte | 1+ hours | - |
+
+## Next Steps
+
+Ready to see Sequin's performance for yourself?
+
+<CardGroup cols={2}>
+  <Card title="What is Sequin?" icon="elephant" href="/introduction">
+    Learn about Sequin's architecture and how it works.
+  </Card>
+  <Card title="Quickstart with Kafka" icon="bolt" href="/quickstart/kafka">
+    Get started with Sequin CDC and Kafka in minutes.
+  </Card>
+  <Card title="Compare CDC Tools" icon="scale-balanced" href="/compare">
+    See how Sequin stacks up against other CDC solutions.
+  </Card>
+  <Card title="Deploy to Production" icon="rocket" href="/how-to/deploy-to-production">
+    Learn how to deploy Sequin in your production environment.
+  </Card>
+</CardGroup>

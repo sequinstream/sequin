@@ -13,6 +13,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
@@ -194,6 +195,7 @@ defmodule Sequin.Transforms do
         active_backfills: Enum.map(consumer.active_backfills, &to_external(&1, show_sensitive)),
         max_retry_count: consumer.max_retry_count,
         load_shedding_policy: consumer.load_shedding_policy,
+        message_grouping: consumer.message_grouping,
         annotations: consumer.annotations,
         source: to_external_source(consumer.source, consumer.postgres_database, show_sensitive),
         tables: source_tables
@@ -368,6 +370,17 @@ defmodule Sequin.Transforms do
       collection_name: sink.collection_name,
       api_key: SensitiveValue.new(sink.api_key, show_sensitive),
       batch_size: sink.batch_size,
+      timeout_seconds: sink.timeout_seconds
+    })
+  end
+
+  def to_external(%MeilisearchSink{} = sink, show_sensitive) do
+    reject_nil_values(%{
+      type: "meilisearch",
+      endpoint_url: sink.endpoint_url,
+      index_name: sink.index_name,
+      primary_key: sink.primary_key,
+      api_key: SensitiveValue.new(sink.api_key, show_sensitive),
       timeout_seconds: sink.timeout_seconds
     })
   end
@@ -882,6 +895,15 @@ defmodule Sequin.Transforms do
           {:halt,
            {:error, Error.validation(summary: "load_shedding_policy must be one of: 'pause_on_full', 'discard_on_full'")}}
 
+        "message_grouping" when is_boolean(value) ->
+          {:cont, {:ok, Map.put(acc, :message_grouping, value)}}
+
+        "message_grouping" when value in ~w(true false) ->
+          {:cont, {:ok, Map.put(acc, :message_grouping, value == "true")}}
+
+        "message_grouping" ->
+          {:halt, {:error, Error.validation(summary: "message_grouping must be a boolean")}}
+
         # temporary for backwards compatibility
         "consumer_start" ->
           {:cont, {:ok, acc}}
@@ -963,15 +985,31 @@ defmodule Sequin.Transforms do
 
   defp parse_source_tables(source_tables, database) when is_list(source_tables) do
     Enum.reduce_while(source_tables, {:ok, []}, fn source_table, {:ok, acc} ->
-      with {:ok, table} <- find_table(database, source_table["name"]),
+      with :ok <- validate_source_table(source_table),
+           {:ok, table} <- find_table(database, source_table["name"]),
            {:ok, column_attnums} <- parse_column_attnums(source_table["group_column_names"], table) do
         {:cont, {:ok, [%{table_oid: table.oid, group_column_attnums: column_attnums} | acc]}}
       else
+        {:error, %Error.ValidationError{} = error} ->
+          {:halt, {:error, error}}
+
         {:error, error} ->
           error = Error.validation(summary: "Failed to parse tables: #{Exception.message(error)}")
           {:halt, {:error, error}}
       end
     end)
+  end
+
+  defp parse_source_tables(_, _) do
+    {:error, Error.validation(summary: "Invalid `tables` attribute: must be a list of maps.")}
+  end
+
+  defp validate_source_table(source_table) do
+    if source_table |> Map.get("name") |> is_binary() do
+      :ok
+    else
+      {:error, Error.validation(summary: "Invalid `tables` attribute: missing required `name` key.")}
+    end
   end
 
   defp parse_column_attnums(nil, _table), do: {:ok, []}
@@ -1177,6 +1215,20 @@ defmodule Sequin.Transforms do
      }}
   end
 
+  # Add parse_sink for meilisearch type
+  defp parse_sink(%{"type" => "meilisearch"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :meilisearch,
+       endpoint_url: attrs["endpoint_url"],
+       index_name: attrs["index_name"],
+       primary_key: attrs["primary_key"],
+       api_key: attrs["api_key"],
+       batch_size: attrs["batch_size"],
+       timeout_seconds: attrs["timeout_seconds"]
+     }}
+  end
+
   # Add parse_sink for elasticsearch type
   defp parse_sink(%{"type" => "elasticsearch"} = attrs, _resources) do
     {:ok,
@@ -1191,7 +1243,7 @@ defmodule Sequin.Transforms do
   end
 
   # Helper to parse table reference into schema and name
-  def parse_table_reference(table_ref) do
+  def parse_table_reference(table_ref) when is_binary(table_ref) do
     case String.split(table_ref, ".", parts: 2) do
       [table_name] -> {"public", table_name}
       [schema, table_name] -> {schema, table_name}

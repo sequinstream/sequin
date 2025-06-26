@@ -17,6 +17,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.DebouncedLogger
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -73,9 +74,9 @@ defmodule Sequin.Runtime.SinkPipeline do
 
   Receives the result of running the routing transform.
   Should return the effective values of all relevant keys.
-  It's intended that the return value become the batch key.
+  It is intended that the return value become the batch key.
   """
-  @callback apply_routing(self :: SinkConsumer.t(), rinfo :: map()) :: map()
+  @callback apply_routing(consumer :: SinkConsumer.t(), rinfo :: map()) :: struct()
 
   @optional_callbacks [
     processors_config: 1,
@@ -373,18 +374,6 @@ defmodule Sequin.Runtime.SinkPipeline do
     end
   end
 
-  def apply_routing(consumer, rinfo) do
-    pipeline_mod = pipeline_mod_for_consumer(consumer)
-
-    # Have to ensure module is loaded to trust function_exported?
-    Code.ensure_loaded?(pipeline_mod)
-
-    if function_exported?(pipeline_mod, :apply_routing, 2) do
-      # Have to use apply to avoid warnings from elixir about undefined impls of optional callback
-      apply(pipeline_mod, :apply_routing, [consumer, rinfo])
-    end
-  end
-
   def pipeline_mod_for_consumer(%SinkConsumer{} = consumer) do
     case consumer.type do
       :azure_event_hub -> Sequin.Runtime.AzureEventHubPipeline
@@ -401,6 +390,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       :sqs -> Sequin.Runtime.SqsPipeline
       :s2 -> Sequin.Runtime.S2Pipeline
       :typesense -> Sequin.Runtime.TypesensePipeline
+      :meilisearch -> Sequin.Runtime.MeilisearchPipeline
       :sns -> Sequin.Runtime.SnsPipeline
     end
   end
@@ -529,11 +519,10 @@ defmodule Sequin.Runtime.SinkPipeline do
     if already_delivered == [] do
       {to_deliver, []}
     else
-      Logger.info(
-        "[SinkPipeline] Rejected messages for idempotency",
-        rejected_message_count: length(already_delivered),
-        message_count: length(already_delivered)
-      )
+      DebouncedLogger.info("[SinkPipeline] Rejected messages for idempotency", %DebouncedLogger.Config{
+        dedupe_key: {:message_idempotency, consumer.id},
+        debounce_interval_ms: :timer.seconds(10)
+      })
 
       slot_message_store_mod.messages_already_succeeded(consumer, Enum.map(already_delivered, & &1.data))
 

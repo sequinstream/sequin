@@ -9,8 +9,7 @@ Routing functions allow you to dynamically direct messages to different destinat
 - Interacting with REST APIs which assign each record its own resource path
 - Using different HTTP methods based on the change action
 - Implementing custom routing logic based on record contents
-
-Currently, routing functions are available for HTTP webhook destinations.  Routing for other sinks is planned but not yet generally available.
+- Customizing message routing for various messaging systems
 
 ## How routing functions work
 
@@ -20,19 +19,18 @@ For each message, your routing function receives the same parameters as a [trans
 
 ```elixir
 def route(action, record, changes, metadata) do
+  # Return a map with sink-specific routing parameters
   %{
-    method: "POST",  # HTTP method to use
-    endpoint_path: "/api/users/#{record["id"]}"  # appended to base URL
+    # Sink-specific routing parameters
   }
 end
 ```
-
 In general, some details of how the message is processed will be static and fixed by the sink.  Routing functions enable you to customize the behavior of a sink, but they are not intended to replace the idea of multiple sinks where necessary.
 For example, for the HTTP Webhook sink, the base URL is a static property - this improves batching and enables other performance optimizations such as connection pooling and request pipelining.
 
 ## Supported sinks
 
-Currently, routing functions are supported by the following sinks:
+Routing functions are supported by the following sinks:
 
 ### HTTP Webhook sink
 
@@ -58,6 +56,14 @@ The `key` is used to determine the key in Redis where the message will be stored
 ```redis
 SET key value
 ```
+
+### NATS sink
+
+For [NATS](/reference/sinks/nats), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `subject` | String | The subject to publish to | `"users.created"` |
 
 ## Common routing patterns
 

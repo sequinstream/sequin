@@ -459,8 +459,8 @@ defmodule Sequin.Postgres do
         "active" => active
       }
   """
-  @spec fetch_replication_slot(db_conn(), String.t()) :: {:ok, map()} | {:error, Error.t()}
-  def fetch_replication_slot(conn, slot_name) do
+  @spec get_replication_slot(db_conn(), String.t()) :: {:ok, map()} | {:error, Error.t()}
+  def get_replication_slot(conn, slot_name) do
     query = """
     select slot_name, active, database, slot_type
     from pg_replication_slots

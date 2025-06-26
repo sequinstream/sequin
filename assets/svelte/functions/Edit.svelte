@@ -101,6 +101,7 @@
     http_push: "Webhook sink",
     redis_string: "Redis string sink",
     nats: "NATS sink",
+    kafka: "Kafka sink",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];

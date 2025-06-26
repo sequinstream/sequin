@@ -8,17 +8,15 @@
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import { Switch } from "$lib/components/ui/switch";
-  import {
-    Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger,
-  } from "$lib/components/ui/accordion";
   import { Eye, EyeOff, Info } from "lucide-svelte";
-  import * as Tooltip from "$lib/components/ui/tooltip";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
 
   export let form;
   export let errors: any = {};
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
+
   let showPassword = false;
 
   // Internal state for SASL credentials
@@ -86,6 +84,15 @@
         <p class="text-destructive text-sm">{errors.sink.hosts}</p>
       {/if}
     </div>
+
+    <DynamicRoutingForm
+      {form}
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      routedSinkType="kafka"
+      {errors}
+    />
 
     <div class="space-y-2">
       <Label for="topic">Topic</Label>

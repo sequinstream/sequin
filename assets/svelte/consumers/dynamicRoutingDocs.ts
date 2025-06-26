@@ -53,4 +53,12 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  kafka: {
+    fields: {
+      topic: {
+        description: "The Kafka topic to publish messages to",
+        default: "The topic set in the sink configuration",
+      },
+    },
+  },
 };

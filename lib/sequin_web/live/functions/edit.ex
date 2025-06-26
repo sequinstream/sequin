@@ -73,6 +73,12 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_kafka """
+  def route(action, record, changes, metadata) do
+    %{topic: "sequin:\#{metadata.database.name}.\#{metadata.table_schema}.\#{metadata.table_name}"}
+  end
+  """
+
   @initial_filter """
   def filter(action, record, changes, metadata) do
     # Must return true or false!
@@ -87,7 +93,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_undefined" => @initial_route_no_sink_type,
     "routing_http_push" => @initial_route_http,
     "routing_redis_string" => @initial_route_redis_string,
-    "routing_nats" => @initial_route_nats
+    "routing_nats" => @initial_route_nats,
+    "routing_kafka" => @initial_route_kafka
   }
 
   # We generate the function completions at compile time because

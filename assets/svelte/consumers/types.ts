@@ -285,7 +285,7 @@ export const RoutedSinkTypeValues = [
   // "sns",
   // "kinesis",
   // "redis_stream",
-  // "kafka",
+  "kafka",
   // "sequin_stream",
   // "gcp_pubsub",
   "nats",

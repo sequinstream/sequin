@@ -6,7 +6,7 @@ defmodule Sequin.Repo.Migrations.AddRecordPksToMetadata do
   def change do
     # Update consumer_records table
     execute """
-    UPDATE sequin_streams.consumer_records
+    UPDATE #{@stream_schema}.consumer_records
     SET data = jsonb_set(
       data,
       '{metadata,record_pks}',
@@ -18,7 +18,7 @@ defmodule Sequin.Repo.Migrations.AddRecordPksToMetadata do
 
     # Update consumer_events table
     execute """
-    UPDATE sequin_streams.consumer_events
+    UPDATE #{@stream_schema}.consumer_events
     SET data = jsonb_set(
       data,
       '{metadata,record_pks}',

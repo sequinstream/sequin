@@ -26,7 +26,7 @@
 <div class="space-y-4">
   <div class="flex items-center space-x-2">
     <Switch id="dynamic-routing" bind:checked={selectedDynamic} />
-    <Label for="dynamic-routing">Dynamic routing</Label>
+    <Label for="dynamic-routing">Routing function</Label>
   </div>
 
   {#if selectedDynamic}
@@ -34,7 +34,7 @@
       <FunctionPicker
         {functions}
         selectedFunctionId={form.routingId || "none"}
-        title="Router"
+        title="Routing function"
         onFunctionChange={(functionId) =>
           (form.routingId = functionId === "none" ? null : functionId)}
         {refreshFunctions}

@@ -64,7 +64,7 @@
     <FunctionPicker
       {functions}
       selectedFunctionId={form.filterId || "none"}
-      title="Filter"
+      title="Filter function"
       onFunctionChange={handleFilterFunctionChange}
       {refreshFunctions}
       allowedFunctionTypes={["filter"]}

@@ -1,12 +1,13 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import { Plus, RotateCwIcon, CheckIcon, AlertCircle } from "lucide-svelte";
+  import { Plus, RotateCwIcon, CheckIcon } from "lucide-svelte";
   import {
     Table,
     TableBody,
     TableCell,
     TableRow,
   } from "$lib/components/ui/table";
+  import type { RoutedSinkType } from "./types";
 
   export let functions: Array<{
     id: string;
@@ -25,7 +26,7 @@
   export let refreshState: "idle" | "refreshing" | "done" = "idle";
   export let newFunctionType: string =
     allowedFunctionTypes.length === 1 ? allowedFunctionTypes[0] : undefined;
-  export let routedSinkType: RoutedSinkType | undefined;
+  export let routedSinkType: RoutedSinkType | null = null;
 
   $: createNewLink = routedSinkType
     ? `/functions/new?type=${newFunctionType}&sink_type=${routedSinkType}`
@@ -61,7 +62,7 @@
             class="whitespace-nowrap"
             on:click={refreshFunctions}
             disabled={refreshState === "refreshing"}
-            aria-label="Refresh {title}s"
+            aria-label="Refresh functions"
           >
             {#if refreshState === "refreshing"}
               <RotateCwIcon class="h-4 w-4 animate-spin" />
@@ -77,7 +78,7 @@
             on:click={() => window.open(createNewLink, "_blank")}
           >
             <Plus class="h-4 w-4 mr-2" />
-            Create new {title.toLowerCase()}
+            Create new function
           </Button>
         </div>
       </div>
@@ -149,7 +150,7 @@
           class="whitespace-nowrap"
           on:click={refreshFunctions}
           disabled={refreshState === "refreshing"}
-          aria-label="Refresh {title}s"
+          aria-label="Refresh functions"
         >
           {#if refreshState === "refreshing"}
             <RotateCwIcon class="h-4 w-4 animate-spin mr-2" />
@@ -159,7 +160,7 @@
             Refreshed
           {:else}
             <RotateCwIcon class="h-4 w-4 mr-2" />
-            Refresh {title}s
+            Refresh functions
           {/if}
         </Button>
         <Button
@@ -168,7 +169,7 @@
           on:click={() => window.open(createNewLink, "_blank")}
         >
           <Plus class="h-4 w-4 mr-2" />
-          Create new {title.toLowerCase()}
+          Create new function
         </Button>
       </div>
     </div>

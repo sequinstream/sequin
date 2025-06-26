@@ -55,14 +55,7 @@
     loadSinkTypeFromStorage,
     clearFunctionTypeStorage,
   } from "./functionTypeStorage";
-  import type {
-    FormData,
-    FormErrors,
-    TestMessage,
-    Consumer,
-    FieldType,
-    ActionType,
-  } from "./types";
+  import type { FormData, FormErrors, TestMessage, Consumer } from "./types";
   import { FieldValues } from "./types";
 
   // CodeMirror imports

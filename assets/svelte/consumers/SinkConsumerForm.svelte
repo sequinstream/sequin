@@ -428,7 +428,7 @@
         <FunctionPicker
           {functions}
           selectedFunctionId={form.transform}
-          title="Transform"
+          title="Transform function"
           onFunctionChange={(functionId) => (form.transform = functionId)}
           {refreshFunctions}
           allowedFunctionTypes={["transform", "path"]}

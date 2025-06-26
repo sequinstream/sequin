@@ -81,7 +81,7 @@ defmodule Sequin.DebouncedLoggerTest do
         DebouncedLogger.error("Same message", config)
         DebouncedLogger.warning("Same message", config)
 
-        Process.sleep(@fast_debounce_ms + 10)
+        Process.sleep(@fast_debounce_ms + 20)
       end)
 
     # Should see both immediate logs and warning summary

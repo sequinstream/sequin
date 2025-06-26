@@ -528,6 +528,9 @@ defmodule Sequin.Runtime.MessageHandler do
 
     group_id =
       case consumer do
+        %SinkConsumer{message_grouping: false} ->
+          nil
+
         %SinkConsumer{source_tables: nil} ->
           default_group_id
 

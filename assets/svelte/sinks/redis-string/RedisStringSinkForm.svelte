@@ -17,6 +17,8 @@
   export let refreshFunctions: () => void;
   export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
 
+  let isDynamicRouting = form.routingMode === "dynamic";
+
   let showPassword = false;
 
   function togglePasswordVisibility() {
@@ -53,15 +55,6 @@
         </p>
       </div>
     </div>
-
-    <DynamicRoutingForm
-      {form}
-      {functions}
-      {refreshFunctions}
-      bind:functionRefreshState
-      routedSinkType="redis_string"
-      {errors}
-    />
 
     <div class="space-y-2">
       <Label for="host">Host</Label>
@@ -136,24 +129,6 @@
     </div>
 
     <div class="space-y-2">
-      <Label for="expireMs">Expiration (ms)</Label>
-      <Input
-        id="expireMs"
-        type="number"
-        min="0"
-        bind:value={form.sink.expireMs}
-        placeholder="0"
-      />
-      {#if errors.sink?.expire_ms}
-        <p class="text-destructive text-sm">{errors.sink.expire_ms}</p>
-      {/if}
-      <p class="text-xs">
-        Time in milliseconds after which keys will expire. Set to 0 for no
-        expiration.
-      </p>
-    </div>
-
-    <div class="space-y-2">
       <Label for="batchSize">Batch Size</Label>
       <Input
         id="batchSize"
@@ -184,6 +159,49 @@
       {#if errors.sink?.tls}
         <p class="text-destructive text-sm">{errors.sink.tls}</p>
       {/if}
+    </div>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      routedSinkType="redis_string"
+      {errors}
+      bind:selectedDynamic={isDynamicRouting}
+    />
+
+    <div class="space-y-2">
+      <Label for="expireMs">Expiration (ms)</Label>
+      <Input
+        id="expireMs"
+        type="number"
+        min="1"
+        bind:value={form.sink.expireMs}
+        placeholder={isDynamicRouting
+          ? "<determined by your routing transform>"
+          : "1000"}
+        disabled={isDynamicRouting}
+      />
+      {#if errors.sink?.expire_ms}
+        <p class="text-destructive text-sm">{errors.sink.expire_ms}</p>
+      {/if}
+      <p class="text-sm text-muted-foreground">
+        {#if isDynamicRouting}
+          When using dynamic routing, this will be the default value which can
+          be <i>overriden</i> by your routing transform.
+        {:else}
+          Time in milliseconds after which keys will expire. Leave blank for no
+          expiration.
+        {/if}
+      </p>
     </div>
   </CardContent>
 </Card>

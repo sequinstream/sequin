@@ -2,7 +2,12 @@ import type { RoutedSinkType } from "./types";
 
 type RoutedSinkDocs = {
   fields: {
-    [key: string]: { description: string; default: string };
+    [key: string]: {
+      description: string;
+      default: string;
+      // If you set this field it will attempt to sync the field from the sink form
+      formField?: string;
+    };
   };
 };
 
@@ -15,12 +20,13 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
       endpoint_path: {
         description: "Path portion of the URL, it is appended to the base URL",
-        default: "",
+        default: "<empty>",
+        formField: "httpEndpointPath",
       },
       headers: {
         description:
-          "Map of key value pairs, the values configured in the HTTP endpoint are included",
-        default: "%{}",
+          "Map of key value pairs, including headers and encrypted headers from the HTTP endpoint",
+        default: "<see-http-endpoint>",
       },
     },
   },
@@ -38,6 +44,7 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
         description:
           "The expiration time in milliseconds, if nil the key will not expire",
         default: "nil",
+        formField: "expireMs",
       },
     },
   },

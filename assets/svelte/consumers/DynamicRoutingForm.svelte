@@ -13,9 +13,27 @@
   export let errors: any = {};
   export let selectedDynamic = form.routingMode === "dynamic";
   let routingConfig = routedSinkDocs[routedSinkType];
+
+  // Reactive function to get sink values
+  $: getSinkValue = (param: string) => {
+    const field = routingConfig.fields[param];
+    const formFieldName = field.formField || param;
+    const value = form.sink?.[formFieldName];
+
+    return value !== undefined && value !== null && value !== ""
+      ? value
+      : field.default;
+  };
+
   $: {
     if (selectedDynamic) {
       form.routingMode = "dynamic";
+      // Clear routing config fields that have formFieldName when dynamic routing is enabled
+      Object.entries(routingConfig.fields).forEach(([param, field]) => {
+        if (field.formField && form.sink) {
+          form.sink[field.formField] = undefined;
+        }
+      });
     } else {
       form.routingMode = "static";
       form.routingId = "none";
@@ -52,22 +70,19 @@
         <p class="text-destructive text-sm">{errors.routing_id}</p>
       {/if}
 
-      <div class="p-4 bg-muted/50 rounded-md mt-4">
+      <div class="p-4 bg-muted/50 rounded-md mt-2">
         <p class="text-sm text-muted-foreground">
-          Using dynamic routing allows you to customize the routing
-          configuration for more flexibility.
-        </p>
-
-        <p class="text-sm text-muted-foreground mt-3">
-          You can dynamically set these fields:
+          Using dynamic routing configuration which can <i>override</i> defaults:
         </p>
         <ul class="list-disc pl-5 mt-2 space-y-1 text-sm text-muted-foreground">
           {#each Object.entries(routingConfig.fields) as [param, field]}
             <li>
-              <span class="font-mono text-xs bg-stone-100 px-1 rounded"
-                >{param}</span
+              <span class="font-mono text-xs px-1 rounded"><b>{param}</b>:</span
+              ><span class="text-xs px-1 rounded">{field.description}</span>
+              <br />
+              <span class="font-mono text-xs px-1 rounded"
+                >default: {field.default}</span
               >
-              - {field.description}
             </li>
           {/each}
         </ul>
@@ -81,12 +96,13 @@
       <ul class="list-disc pl-5 mt-2 space-y-1 text-sm text-muted-foreground">
         {#each Object.entries(routingConfig.fields) as [param, field]}
           <li>
-            <span class="font-mono text-xs bg-stone-100 px-1 rounded"
-              >{param}</span
-            >
-            -
-            <span class="font-mono text-xs bg-stone-100 px-1 rounded"
-              >{field.default}</span
+            <span class="font-mono text-xs px-1 rounded"><b>{param}</b>:</span
+            ><span class="text-xs px-1 rounded">{field.description}</span>
+            <br />
+            <span class="font-mono text-xs px-1 rounded"
+              >value: {field.formField
+                ? getSinkValue(param)
+                : field.default}</span
             >
           </li>
         {/each}

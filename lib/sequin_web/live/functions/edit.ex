@@ -101,6 +101,13 @@ defmodule SequinWeb.FunctionsLive.Edit do
         topic_id: "sequin.\#{metadata.database_name}.\#{metadata.table_schema}.\#{metadata.table_name}"
       }
     end
+    """,
+    "routing_sqs" => """
+    def route(action, record, changes, metadata) do
+      %{
+        queue_url: "https://sqs.us-east-1.amazonaws.com/<account_id>/sequin-queue"
+      }
+    end
     """
   }
 

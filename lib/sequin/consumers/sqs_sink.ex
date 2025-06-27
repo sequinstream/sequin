@@ -20,6 +20,7 @@ defmodule Sequin.Consumers.SqsSink do
     field :is_fifo, :boolean, default: false
     field :use_emulator, :boolean, default: false
     field :emulator_base_url, :string
+    field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
   end
 
   def changeset(struct, params) do
@@ -31,13 +32,15 @@ defmodule Sequin.Consumers.SqsSink do
       :secret_access_key,
       :is_fifo,
       :use_emulator,
-      :emulator_base_url
+      :emulator_base_url,
+      :routing_mode
     ])
     |> maybe_put_region()
-    |> validate_required([:queue_url, :region, :access_key_id, :secret_access_key])
+    |> validate_required([:region, :access_key_id, :secret_access_key])
     |> validate_queue_url()
     |> put_is_fifo()
     |> validate_emulator_base_url()
+    |> validate_routing()
   end
 
   defp validate_emulator_base_url(changeset) do
@@ -79,6 +82,21 @@ defmodule Sequin.Consumers.SqsSink do
   defp put_is_fifo(changeset) do
     is_fifo = changeset |> get_field(:queue_url) |> ends_with_fifo?()
     put_change(changeset, :is_fifo, is_fifo)
+  end
+
+  defp validate_routing(changeset) do
+    routing_mode = get_field(changeset, :routing_mode)
+
+    cond do
+      routing_mode == :dynamic ->
+        put_change(changeset, :queue_url, nil)
+
+      routing_mode == :static ->
+        validate_required(changeset, [:queue_url])
+
+      true ->
+        add_error(changeset, :routing_mode, "is required")
+    end
   end
 
   defp ends_with_fifo?(nil), do: false

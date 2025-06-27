@@ -93,4 +93,14 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  sqs: {
+    fields: {
+      queue_url: {
+        description: "AWS SQS queue URL",
+        staticValue: "<empty>",
+        staticFormField: "queue_url",
+        dynamicDefault: "https://sqs.<region>.amazonaws.com/<account-id>/<table_name>",
+      },
+    },
+  },
 };

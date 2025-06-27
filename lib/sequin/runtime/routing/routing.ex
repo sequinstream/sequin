@@ -88,6 +88,7 @@ defmodule Sequin.Runtime.Routing do
       :nats -> Sequin.Runtime.Routing.Consumers.Nats
       :kafka -> Sequin.Runtime.Routing.Consumers.Kafka
       :gcp_pubsub -> Sequin.Runtime.Routing.Consumers.GcpPubsub
+      :sqs -> Sequin.Runtime.Routing.Consumers.Sqs
       _ -> nil
     end
   end

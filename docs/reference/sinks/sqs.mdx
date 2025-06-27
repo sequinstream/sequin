@@ -104,6 +104,22 @@ sinks:
 
 FIFO queues are generally recommended. They ensure that messages pertaining to the same row are processed in order.
 
+## Routing
+
+The AWS SQS sink supports dynamic routing of the `queue_url` with [routing functions](/reference/routing).
+
+Example routing function:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{
+    queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/#{metadata.table_name}"
+  }
+end
+```
+
+When not using a routing function, messages will be published to the queue specified in the sink configuration.
+
 ## Debugging
 
 You can view the status of your SQS sink in the Sequin web console.

@@ -608,7 +608,7 @@ defmodule Sequin.YamlLoaderTest do
                        end
                """)
 
-      assert [function1, function2] = Repo.all(Function)
+      assert [function1, function2] = Repo.all(Function, order_by: :name)
       assert function1.name == "my-path-transform"
       assert function1.type == "path"
       assert function1.function.path == "record"

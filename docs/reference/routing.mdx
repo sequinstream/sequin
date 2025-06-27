@@ -37,6 +37,7 @@ The following sinks support dynamic routing:
 - NATS
 - Kafka
 - GCP PubSub
+- Typesense
 
 Each sink type has different fields that can be routed:
 
@@ -88,6 +89,14 @@ For [GCP PubSub](/reference/sinks/gcp-pubsub), your routing function must return
 | Key | Type | Description | Example |
 |-----|------|-------------|---------|
 | `topic_id` | String | The topic ID to publish to | `"users.created"` |
+
+### Typesense sink
+
+For [Typesense](/reference/sinks/typesense), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `collection_name` | String | The collection name to index into | `"users"` |
 
 
 

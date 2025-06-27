@@ -93,4 +93,14 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  typesense: {
+    fields: {
+      collection_name: {
+        description: "Typesense collection name",
+        staticValue: "<empty>",
+        staticFormField: "collection_name",
+        dynamicDefault: "sequin.<database_name>.<table_schema>.<table_name>",
+      },
+    },
+  },
 };

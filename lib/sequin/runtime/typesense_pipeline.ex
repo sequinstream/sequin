@@ -4,6 +4,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
 
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.TypesenseSink
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Typesense.Client
   alias Sequin.Transforms.Message
@@ -47,19 +48,26 @@ defmodule Sequin.Runtime.TypesensePipeline do
         _ -> :default
       end
 
+    %Routing.Consumers.Typesense{collection_name: collection_name} =
+      Routing.route_message(context.consumer, message.data)
+
     message =
-      Broadway.Message.put_batcher(message, batcher)
+      message
+      |> Broadway.Message.put_batcher(batcher)
+      |> Broadway.Message.put_batch_key(collection_name)
 
     {:ok, message, context}
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_batch(:default, messages, batch_info, context) do
     %{
-      consumer: consumer = %SinkConsumer{sink: sink},
+      consumer: consumer = %SinkConsumer{sink: _sink},
       typesense_client: client,
       test_pid: test_pid
     } = context
+
+    collection_name = batch_info.batch_key
 
     setup_allowances(test_pid)
 
@@ -75,7 +83,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
         {:ok, messages, context}
 
       [message] ->
-        case Client.index_document(consumer, client, sink.collection_name, message) do
+        case Client.index_document(consumer, client, collection_name, message) do
           {:ok, _response} ->
             {:ok, messages, context}
 
@@ -86,7 +94,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
       _ ->
         jsonl = encode_as_jsonl(external_messages)
 
-        case Client.import_documents(consumer, client, sink.collection_name, jsonl) do
+        case Client.import_documents(consumer, client, collection_name, jsonl) do
           {:ok, results} ->
             messages =
               Enum.zip_with(messages, results, fn message, result ->
@@ -105,12 +113,14 @@ defmodule Sequin.Runtime.TypesensePipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:delete, messages, _batch_info, context) do
+  def handle_batch(:delete, messages, batch_info, context) do
     %{
-      consumer: %SinkConsumer{sink: sink} = consumer,
+      consumer: %SinkConsumer{sink: _sink} = consumer,
       typesense_client: client,
       test_pid: test_pid
     } = context
+
+    collection_name = batch_info.batch_key
 
     setup_allowances(test_pid)
 
@@ -124,7 +134,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
     case external_messages do
       [external_message] ->
         if document_id = external_message["id"] do
-          case Client.delete_document(consumer, client, sink.collection_name, document_id) do
+          case Client.delete_document(consumer, client, collection_name, document_id) do
             {:ok, _response} ->
               {:ok, messages, context}
 

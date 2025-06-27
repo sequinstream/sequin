@@ -84,3 +84,19 @@ Common errors that can occur when working with the Typesense sink include:
 When errors occur, they will be visible in the "Messages" tab of the Sequin web console. You can click on a message to see details about the error.
 Error messages from the Typesense API are passed through unchanged to the Sequin console, except in case of batch imports, where they are aggregated into one error report for the whole batch.
 
+## Routing
+
+The Typesense sink supports dynamic routing of the `collection_name` with [routing functions](/reference/routing).
+
+Example routing function:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{
+    collection_name: "sequin.#{metadata.database_name}.#{metadata.table_schema}.#{metadata.table_name}"
+  }
+end
+```
+
+When not using a routing function, documents will be indexed into the collection specified in the sink configuration.
+

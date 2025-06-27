@@ -284,6 +284,7 @@ export const RoutedSinkTypeValues = [
   "nats",
   "kafka",
   "gcp_pubsub",
+  "typesense",
 ] as const;
 
 export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

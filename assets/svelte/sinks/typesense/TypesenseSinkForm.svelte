@@ -10,9 +10,15 @@
   import type { TypesenseConsumer } from "$lib/consumers/types";
   import { Label } from "$lib/components/ui/label";
   import { Eye, EyeOff, Info } from "lucide-svelte";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
 
   export let form: TypesenseConsumer;
   export let errors: any = {};
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
+
+  let isDynamicRouting = form.routingMode === "dynamic";
   let showPassword = false;
 
   // Import action options based on the typesense_sink.ex Elixir module
@@ -117,5 +123,36 @@
         <p class="text-destructive text-sm">{errors.sink.api_key}</p>
       {/if}
     </div>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      routedSinkType="typesense"
+      {errors}
+      bind:selectedDynamic={isDynamicRouting}
+    />
+
+    {#if !isDynamicRouting}
+      <div class="space-y-2">
+        <Label for="collection_name">Collection name</Label>
+        <Input
+          id="collection_name"
+          bind:value={form.sink.collection_name}
+          placeholder="my-collection"
+        />
+        {#if errors.sink?.collection_name}
+          <p class="text-destructive text-sm">{errors.sink.collection_name}</p>
+        {/if}
+      </div>
+    {/if}
   </CardContent>
 </Card>

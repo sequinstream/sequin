@@ -19,7 +19,8 @@ defmodule Sequin.Consumers.RoutingFunction do
         :redis_string,
         :nats,
         :kafka,
-        :gcp_pubsub
+        :gcp_pubsub,
+        :typesense
       ]
 
     field :code, :string

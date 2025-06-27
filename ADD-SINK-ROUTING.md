@@ -12,6 +12,14 @@ Sinks can process records from many tables. They process inserts, updates, delet
 
 So Kafka topics are routable but not the Kafka host. Redis String keys are routable but not the redis database number. HTTP method, path, and headers are routable but not the HTTP host.
 
+### [Plan] Review the commit of the last routing we added
+
+Run the following git command to view relevant files and changes:
+
+```
+git show 3724ffc1b6cb8763747355316051c504a4808f81
+```
+
 ### [Backend] Modify changeset
 
 Based on which keys are routable, we may want to modify the sink changeset to enforce certain keys being required or nil etc. based on routing_mode.

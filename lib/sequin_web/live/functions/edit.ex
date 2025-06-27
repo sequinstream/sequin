@@ -82,7 +82,15 @@ defmodule SequinWeb.FunctionsLive.Edit do
   @initial_route_typesense """
   def route(action, record, changes, metadata) do
     %{
-      collection_name: "sequin.\#{metadata.database_name}.\#{metadata.table_schema}.\#{metadata.table_name}"
+      collection_name: "\#{metadata.table_schema}.\#{metadata.table_name}"
+    }
+  end
+  """
+
+  @initial_route_meilisearch """
+  def route(action, record, changes, metadata) do
+    %{
+      index_name: "\#{metadata.table_schema}.\#{metadata.table_name}"
     }
   end
   """
@@ -112,7 +120,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_nats" => @initial_route_nats,
     "routing_kafka" => @initial_route_kafka,
     "routing_gcp_pubsub" => @initial_route_gcp_pubsub,
-    "routing_typesense" => @initial_route_typesense
+    "routing_typesense" => @initial_route_typesense,
+    "routing_meilisearch" => @initial_route_meilisearch
   }
 
   # We generate the function completions at compile time because

@@ -20,7 +20,8 @@ defmodule Sequin.Consumers.RoutingFunction do
         :nats,
         :kafka,
         :gcp_pubsub,
-        :typesense
+        :typesense,
+        :meilisearch
       ]
 
     field :code, :string

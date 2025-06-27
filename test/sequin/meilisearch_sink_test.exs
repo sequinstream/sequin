@@ -9,7 +9,8 @@ defmodule Sequin.Consumers.MeilisearchSinkTest do
         valid_params: %{
           endpoint_url: "https://meilisearch.com",
           index_name: "test",
-          api_key: "test"
+          api_key: "test",
+          routing_mode: :static
         }
       }
     end
@@ -46,6 +47,13 @@ defmodule Sequin.Consumers.MeilisearchSinkTest do
         MeilisearchSink.changeset(%MeilisearchSink{}, %{params | endpoint_url: "https://meilisearch.com#fragment"})
 
       assert Sequin.Error.errors_on(changeset)[:endpoint_url] == ["must not include a fragment, found: fragment"]
+    end
+
+    test "sets index_name to blank when routing_mode is dynamic", %{valid_params: params} do
+      changeset =
+        MeilisearchSink.changeset(%MeilisearchSink{}, %{params | routing_mode: :dynamic})
+
+      refute :index_name in changeset.changes
     end
   end
 end

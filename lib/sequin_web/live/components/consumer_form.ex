@@ -2,6 +2,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   @moduledoc false
   use SequinWeb, :live_component
 
+  alias Sequin.Aws.SQS
   alias Sequin.Consumers
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
@@ -328,9 +329,24 @@ defmodule SequinWeb.Components.ConsumerForm do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
       client = SqsSink.aws_client(sink)
 
-      case Sequin.Aws.SQS.queue_meta(client, sink.queue_url) do
-        {:ok, _} -> :ok
-        {:error, error} -> {:error, Exception.message(error)}
+      # Check routing mode to determine which test to perform
+      case sink.routing_mode do
+        :dynamic ->
+          # Dynamic routing mode - test credentials and basic SQS permissions
+          case SQS.test_credentials_and_permissions(client) do
+            :ok -> :ok
+            {:error, error} -> {:error, Exception.message(error)}
+          end
+
+        :static ->
+          # Static routing mode - test specific queue access
+          case SQS.queue_meta(client, sink.queue_url) do
+            {:ok, _} -> :ok
+            {:error, error} -> {:error, Exception.message(error)}
+          end
+
+        _ ->
+          {:error, "Invalid routing mode"}
       end
     else
       {:error, encode_errors(sink_changeset)}
@@ -686,10 +702,12 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp decode_sink(:sqs, sink) do
+    region = sink["region"] || aws_region_from_queue_url(sink["queue_url"])
+
     %{
       "type" => "sqs",
       "queue_url" => sink["queue_url"],
-      "region" => aws_region_from_queue_url(sink["queue_url"]),
+      "region" => region,
       "access_key_id" => sink["access_key_id"],
       "secret_access_key" => sink["secret_access_key"]
     }

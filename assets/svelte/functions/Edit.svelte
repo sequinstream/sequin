@@ -106,6 +106,7 @@
     typesense: "Typesense",
     meilisearch: "Meilisearch",
     elasticsearch: "Elasticsearch",
+    sqs: "SQS",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];

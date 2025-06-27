@@ -40,6 +40,7 @@ The following sinks support dynamic routing:
 - Typesense
 - Meilisearch
 - Elasticsearch
+- AWS SQS
 
 Each sink type has different fields that can be routed:
 
@@ -115,6 +116,14 @@ For [Meilisearch](/reference/sinks/meilisearch), your routing function must retu
 | Key | Type | Description | Example |
 |-----|------|-------------|---------|
 | `index_name` | String | The index to publish to | `"users"` |
+
+### AWS SQS sink
+
+For [AWS SQS](/reference/sinks/sqs), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `queue_url` | String | The queue URL to publish to | `"https://sqs.us-east-1.amazonaws.com/123456789012/users"` |
 
 ## Common routing patterns
 

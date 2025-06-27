@@ -178,7 +178,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         region: Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
         access_key_id: Factory.word(),
         secret_access_key: Factory.word(),
-        is_fifo: Enum.random([true, false])
+        is_fifo: Enum.random([true, false]),
+        routing_mode: :static
       },
       attrs
     )

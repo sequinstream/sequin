@@ -22,7 +22,8 @@ defmodule Sequin.Consumers.RoutingFunction do
         :gcp_pubsub,
         :typesense,
         :meilisearch,
-        :elasticsearch
+        :elasticsearch,
+        :sqs
       ]
 
     field :code, :string

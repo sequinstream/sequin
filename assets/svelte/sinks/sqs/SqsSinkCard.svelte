@@ -1,16 +1,17 @@
 <script lang="ts">
   import { ExternalLink } from "lucide-svelte";
-  import { Card, CardContent } from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
+  import CardHeader from "$lib/components/ui/card/card-header.svelte";
+  import { Card, CardContent, CardTitle } from "$lib/components/ui/card";
   import type { SqsConsumer } from "../../consumers/types";
 
   export let consumer: SqsConsumer;
 </script>
 
 <Card>
-  <CardContent class="p-6">
-    <div class="flex justify-between items-center mb-4">
-      <h2 class="text-lg font-semibold">SQS Configuration</h2>
+  <CardHeader>
+    <div class="flex justify-between items-center">
+      <CardTitle>SQS Configuration</CardTitle>
       <div class="flex space-x-2">
         <a
           href={`https://${consumer.sink.region}.console.aws.amazon.com/sqs/v3/home?region=${consumer.sink.region}#/queues/${encodeURIComponent(consumer.sink.queue_url)}`}
@@ -24,7 +25,8 @@
         </a>
       </div>
     </div>
-
+  </CardHeader>
+  <CardContent class="p-6">
     <div class="space-y-4">
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -46,10 +48,32 @@
         <div class="mt-2">
           <span
             class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-            >{consumer.sink.queue_url}</span
           >
+            {#if consumer.routing_id}
+              Determined by <a
+                href={`/functions/${consumer.routing_id}`}
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+                class="underline">router</a
+              >
+              <ExternalLink class="h-4 w-4 inline" />
+            {:else}
+              {consumer.sink.queue_url}
+            {/if}
+          </span>
         </div>
       </div>
+      {#if consumer.routing}
+        <div class="mt-2">
+          <span class="text-sm text-gray-500">Router</span>
+          <div class="mt-2">
+            <pre
+              class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
+                >{consumer.routing.function.code}</code
+              ></pre>
+          </div>
+        </div>
+      {/if}
     </div>
   </CardContent>
 </Card>

@@ -24,43 +24,59 @@ The request body can include any of the following fields:
   The current status of the sink consumer (active, disabled, paused)
 </ParamField>
 
-<ParamField body="filters" type="array">
-  Array of filters to apply to the source data
-</ParamField>
+<ParamField body="source" type="object">
+  The source configuration for the sink consumer
+  <Expandable title="source properties">
+    <ParamField body="include_schemas" type="array">
+      List of schemas to include, or null to include all
+    </ParamField>
+    <ParamField body="exclude_schemas" type="array">
+      List of schemas to exclude, or null to exclude none
+    </ParamField>
+    <ParamField body="include_tables" type="array">
+      List of tables to include, or null to include all
 
-<ParamField body="transform" type="string">
-  The transform to apply to messages.
+      A table name can be specified with schema (e.g. `my-schema.my-table`) or without (e.g. `my-table`) which defaults to schema `public`.
+    </ParamField>
+    <ParamField body="exclude_tables" type="array">
+      List of tables to exclude, or null to exclude none
 
-  This is the name of the transform that you created in the Sequin console.
-</ParamField>
-
-<ParamField body="batch_size" type="integer">
-  Number of records to batch together (1-1000)
-
-  This is the number of records that will be sent in a single message to the destination.
+      A table name can be specified with schema (e.g. `my-schema.my-table`) or without (e.g. `my-table`) which defaults to schema `public`.
+    </ParamField>
+  </Expandable>
 </ParamField>
 
 <ParamField body="actions" type="array">
-  The database actions to include in the sink.
+  The database actions to include in the sink (insert, update, delete)
+</ParamField>
 
-  Possible values include `insert`, `update`, `delete`.
+<ParamField body="filter" type="string">
+  The [filter function](/reference/filters) for the sink consumer
+</ParamField>
+
+<ParamField body="transform" type="string">
+  The [transform function](/reference/transforms) for the sink consumer
+</ParamField>
+
+<ParamField body="routing" type="string">
+  The [routing function](/reference/routing) for the sink consumer
 </ParamField>
 
 <ParamField body="message_grouping" type="boolean">
   Whether to enable [message grouping](/reference/sinks/overview#message-grouping-and-ordering) for ordering purposes. When `true` (default), messages are grouped by primary key or custom grouping columns. When `false`, grouping is disabled for higher throughput batching.
+</ParamField>
 
-  Cannot be used with `group_column_names` when set to `false`.
+<ParamField body="batch_size" type="integer">
+  Number of records to batch together (1-1000)
 </ParamField>
 
 <ParamField body="max_retry_count" type="integer">
   The maximum number of times a message will be retried if delivery fails. Once this limit is reached, the message will be discarded.
-
   Defaults to `null`, meaning messages are retried indefinitely.
 </ParamField>
 
 <ParamField body="load_shedding_policy" type="string">
   Determines how Sequin handles overload when sink consumers can't keep up with incoming messages.
-
   Options are:
   - `pause_on_full` (default) — pauses replication until the buffer has room again
   - `discard_on_full` — drops messages for overloaded consumers to avoid pausing replication
@@ -70,13 +86,13 @@ The request body can include any of the following fields:
 
 <ParamField body="timestamp_format" type="string">
   The format of the timestamp in the source data.
-
   Possible values include `iso8601` and `unix_microsecond`.
 </ParamField>
 
 <ParamField body="annotations" type="object">
   Additional metadata you can attach to this sink consumer. Annotations can be any JSON object (not a list or a scalar).
-  You can use annotations in your [transform](/reference/transforms), to attach additional information about the sink to each message.
+
+  Annotations are passed in the default message shape to your destination. They are also available in filter, transform, and routing functions.
 </ParamField>
 
 <ParamField body="destination" type="object">
@@ -101,7 +117,16 @@ The request body can include any of the following fields:
       Optional password for authentication
     </ParamField>
     <ParamField body="sasl_mechanism" type="string">
-      Optional SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
+      Optional SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512, AWS_MSK_IAM)
+    </ParamField>
+    <ParamField body="aws_region" type="string">
+      AWS region (required for AWS_MSK_IAM)
+    </ParamField>
+    <ParamField body="aws_access_key_id" type="string">
+      AWS access key ID (required for AWS_MSK_IAM)
+    </ParamField>
+    <ParamField body="aws_secret_access_key" type="string">
+      AWS secret access key (required for AWS_MSK_IAM)
     </ParamField>
   </Expandable>
 
@@ -114,6 +139,24 @@ The request body can include any of the following fields:
     </ParamField>
     <ParamField body="region" type="string">
       AWS region
+    </ParamField>
+    <ParamField body="access_key_id" type="string">
+      AWS access key ID
+    </ParamField>
+    <ParamField body="secret_access_key" type="string">
+      AWS secret access key
+    </ParamField>
+    <ParamField body="is_fifo" type="boolean">
+      Whether the queue is a FIFO queue
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Kinesis">
+    <ParamField body="type" type="string">
+      Must be "kinesis"
+    </ParamField>
+    <ParamField body="stream_arn" type="string">
+      Kinesis stream ARN
     </ParamField>
     <ParamField body="access_key_id" type="string">
       AWS access key ID
@@ -140,7 +183,7 @@ The request body can include any of the following fields:
       Password for authentication
     </ParamField>
     <ParamField body="virtual_host" type="string">
-      Virtual host name
+      Virtual host name (default: "/")
     </ParamField>
     <ParamField body="tls" type="boolean">
       Whether to use TLS
@@ -164,7 +207,7 @@ The request body can include any of the following fields:
       Redis stream key
     </ParamField>
     <ParamField body="database" type="integer">
-      Redis database number
+      Redis database number (default: 0)
     </ParamField>
     <ParamField body="tls" type="boolean">
       Whether to use TLS
@@ -174,6 +217,36 @@ The request body can include any of the following fields:
     </ParamField>
     <ParamField body="password" type="string">
       Optional password for authentication
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Redis String">
+    <ParamField body="type" type="string">
+      Must be "redis_string"
+    </ParamField>
+    <ParamField body="host" type="string">
+      Redis host
+    </ParamField>
+    <ParamField body="port" type="integer">
+      Redis port
+    </ParamField>
+    <ParamField body="database" type="integer">
+      Redis database number (default: 0)
+    </ParamField>
+    <ParamField body="tls" type="boolean">
+      Whether to use TLS
+    </ParamField>
+    <ParamField body="username" type="string">
+      Optional username for authentication
+    </ParamField>
+    <ParamField body="password" type="string">
+      Optional password for authentication
+    </ParamField>
+    <ParamField body="expire_ms" type="integer">
+      Optional TTL in milliseconds for the keys
+    </ParamField>
+    <ParamField body="mode" type="string">
+      Mode of operation (static or dynamic, default: static)
     </ParamField>
   </Expandable>
 
@@ -243,9 +316,111 @@ The request body can include any of the following fields:
     </ParamField>
   </Expandable>
 
+  <Expandable title="Elasticsearch">
+    <ParamField body="type" type="string">
+      Must be "elasticsearch"
+    </ParamField>
+    <ParamField body="endpoint_url" type="string">
+      Elasticsearch endpoint URL
+    </ParamField>
+    <ParamField body="index_name" type="string">
+      Elasticsearch index name
+    </ParamField>
+    <ParamField body="auth_type" type="string">
+      Authentication type (api_key, basic, bearer)
+    </ParamField>
+    <ParamField body="auth_value" type="string">
+      Authentication value, either an API key or a base64-encoded string of a username and password
+    </ParamField>
+    <ParamField body="batch_size" type="integer">
+      Number of documents to batch together (default: 100)
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Meilisearch">
+    <ParamField body="type" type="string">
+      Must be "meilisearch"
+    </ParamField>
+    <ParamField body="endpoint_url" type="string">
+      Meilisearch endpoint URL
+    </ParamField>
+    <ParamField body="index_name" type="string">
+      Meilisearch index name
+    </ParamField>
+    <ParamField body="primary_key" type="string">
+      Primary key field name (default: "id")
+    </ParamField>
+    <ParamField body="api_key" type="string">
+      Meilisearch API key
+    </ParamField>
+    <ParamField body="batch_size" type="integer">
+      Number of documents to batch together (default: 100)
+    </ParamField>
+    <ParamField body="timeout_seconds" type="integer">
+      Request timeout in seconds (default: 5)
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="S2">
+    <ParamField body="type" type="string">
+      Must be "s2"
+    </ParamField>
+    <ParamField body="basin" type="string">
+      The name of the S2 basin
+    </ParamField>
+    <ParamField body="stream" type="string">
+      The name of the S2 stream
+    </ParamField>
+    <ParamField body="access_token" type="string">
+      The access token for the S2 account associated with the basin and stream
+    </ParamField>
+  </Expandable>
+
   <Expandable title="Sequin Stream">
     <ParamField body="type" type="string">
       Must be "sequin_stream"
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="SNS">
+    <ParamField body="type" type="string">
+      Must be "sns"
+    </ParamField>
+    <ParamField body="topic_arn" type="string">
+      SNS topic ARN
+    </ParamField>
+    <ParamField body="region" type="string">
+      AWS region
+    </ParamField>
+    <ParamField body="access_key_id" type="string">
+      AWS access key ID
+    </ParamField>
+    <ParamField body="secret_access_key" type="string">
+      AWS secret access key
+    </ParamField>
+    <ParamField body="is_fifo" type="boolean">
+      Whether the topic is a FIFO topic
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Typesense">
+    <ParamField body="type" type="string">
+      Must be "typesense"
+    </ParamField>
+    <ParamField body="endpoint_url" type="string">
+      Typesense endpoint URL
+    </ParamField>
+    <ParamField body="collection_name" type="string">
+      Typesense collection name
+    </ParamField>
+    <ParamField body="api_key" type="string">
+      Typesense API key
+    </ParamField>
+    <ParamField body="batch_size" type="integer">
+      Number of documents to batch together (default: 100)
+    </ParamField>
+    <ParamField body="timeout_seconds" type="integer">
+      Request timeout in seconds (default: 5)
     </ParamField>
   </Expandable>
 
@@ -258,6 +433,9 @@ The request body can include any of the following fields:
     </ParamField>
     <ParamField body="http_endpoint_path" type="string">
       HTTP endpoint path
+    </ParamField>
+    <ParamField body="batch" type="boolean">
+      Whether the webhook body [should be wrapped in a list](/reference/sinks/webhooks#request-format) to support batching. Defaults to `true`.
     </ParamField>
   </Expandable>
 </ParamField>
@@ -273,7 +451,9 @@ The request body can include any of the following fields:
     -H "Content-Type: application/json" \
     -d '{
       "status": "disabled",
-      "batch_size": 50
+      "batch_size": 50,
+      "message_grouping": true,
+      "load_shedding_policy": "pause_on_full"
     }'
   ```
 </RequestExample>

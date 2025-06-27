@@ -18,20 +18,30 @@ Creates a new sink consumer.
   The initial status of the sink consumer (active, disabled, paused)
 </ParamField>
 
-<ParamField body="table" type="string" >
-  The source table for the sink consumer in the format `schema.table` or `table` (schema defaults to `public`)
+<ParamField body="source" type="object" required>
+  The source configuration for the sink consumer
+  <Expandable title="source properties">
+    <ParamField body="include_schemas" type="array">
+      List of schemas to include, or null to include all
+    </ParamField>
+    <ParamField body="exclude_schemas" type="array">
+      List of schemas to exclude, or null to exclude none
+    </ParamField>
+    <ParamField body="include_tables" type="array">
+      List of tables to include, or null to include all
 
-  Must specify either this parameter or `schema`.
+      A table name can be specified with schema (e.g. `my-schema.my-table`) or without (e.g. `my-table`) which defaults to schema `public`.
+    </ParamField>
+    <ParamField body="exclude_tables" type="array">
+      List of tables to exclude, or null to exclude none
+
+      A table name can be specified with schema (e.g. `my-schema.my-table`) or without (e.g. `my-table`) which defaults to schema `public`.
+    </ParamField>
+  </Expandable>
 </ParamField>
 
-<ParamField body="schema" type="string" >
-  The source schema for the sink consumer. If this is specified, the sink consumer will stream changes from all tables in this schema.
-
-  Must specify either this parameter or `table`.
-</ParamField>
-
-<ParamField body="filters" type="array">
-  Array of filters to apply to the source data
+<ParamField body="actions" type="array" required>
+  The database actions to include in the sink (insert, update, delete)
 </ParamField>
 
 <ParamField body="destination" type="object" required>
@@ -56,7 +66,16 @@ Creates a new sink consumer.
       Optional password for authentication
     </ParamField>
     <ParamField body="sasl_mechanism" type="string">
-      Optional SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
+      Optional SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512, AWS_MSK_IAM)
+    </ParamField>
+    <ParamField body="aws_region" type="string">
+      AWS region (required for AWS_MSK_IAM)
+    </ParamField>
+    <ParamField body="aws_access_key_id" type="string">
+      AWS access key ID (required for AWS_MSK_IAM)
+    </ParamField>
+    <ParamField body="aws_secret_access_key" type="string">
+      AWS secret access key (required for AWS_MSK_IAM)
     </ParamField>
   </Expandable>
 
@@ -76,13 +95,16 @@ Creates a new sink consumer.
     <ParamField body="secret_access_key" type="string" required>
       AWS secret access key
     </ParamField>
+    <ParamField body="is_fifo" type="boolean">
+      Whether the queue is a FIFO queue
+    </ParamField>
   </Expandable>
 
   <Expandable title="Kinesis">
     <ParamField body="type" type="string" required>
       Must be "kinesis"
     </ParamField>
-    <ParamField body="stream_arm" type="string" required>
+    <ParamField body="stream_arn" type="string" required>
       Kinesis stream ARN
     </ParamField>
     <ParamField body="access_key_id" type="string" required>
@@ -110,7 +132,7 @@ Creates a new sink consumer.
       Password for authentication
     </ParamField>
     <ParamField body="virtual_host" type="string" required>
-      Virtual host name
+      Virtual host name (default: "/")
     </ParamField>
     <ParamField body="tls" type="boolean">
       Whether to use TLS
@@ -134,7 +156,7 @@ Creates a new sink consumer.
       Redis stream key
     </ParamField>
     <ParamField body="database" type="integer">
-      Redis database number
+      Redis database number (default: 0)
     </ParamField>
     <ParamField body="tls" type="boolean">
       Whether to use TLS
@@ -144,6 +166,36 @@ Creates a new sink consumer.
     </ParamField>
     <ParamField body="password" type="string">
       Optional password for authentication
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Redis String">
+    <ParamField body="type" type="string" required>
+      Must be "redis_string"
+    </ParamField>
+    <ParamField body="host" type="string" required>
+      Redis host
+    </ParamField>
+    <ParamField body="port" type="integer" required>
+      Redis port
+    </ParamField>
+    <ParamField body="database" type="integer">
+      Redis database number (default: 0)
+    </ParamField>
+    <ParamField body="tls" type="boolean">
+      Whether to use TLS
+    </ParamField>
+    <ParamField body="username" type="string">
+      Optional username for authentication
+    </ParamField>
+    <ParamField body="password" type="string">
+      Optional password for authentication
+    </ParamField>
+    <ParamField body="expire_ms" type="integer">
+      Optional TTL in milliseconds for the keys
+    </ParamField>
+    <ParamField body="mode" type="string">
+      Mode of operation (static or dynamic, default: static)
     </ParamField>
   </Expandable>
 
@@ -213,7 +265,52 @@ Creates a new sink consumer.
     </ParamField>
   </Expandable>
 
-  <Expandable title="S2 ">
+  <Expandable title="Elasticsearch">
+    <ParamField body="type" type="string" required>
+      Must be "elasticsearch"
+    </ParamField>
+    <ParamField body="endpoint_url" type="string" required>
+      Elasticsearch endpoint URL
+    </ParamField>
+    <ParamField body="index_name" type="string" required>
+      Elasticsearch index name
+    </ParamField>
+    <ParamField body="auth_type" type="string" required>
+      Authentication type (api_key, basic, bearer)
+    </ParamField>
+    <ParamField body="auth_value" type="string" required>
+      Authentication value, either an API key or a base64-encoded string of a username and password
+    </ParamField>
+    <ParamField body="batch_size" type="integer">
+      Number of documents to batch together (default: 100)
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Meilisearch">
+    <ParamField body="type" type="string" required>
+      Must be "meilisearch"
+    </ParamField>
+    <ParamField body="endpoint_url" type="string" required>
+      Meilisearch endpoint URL
+    </ParamField>
+    <ParamField body="index_name" type="string" required>
+      Meilisearch index name
+    </ParamField>
+    <ParamField body="primary_key" type="string">
+      Primary key field name (default: "id")
+    </ParamField>
+    <ParamField body="api_key" type="string" required>
+      Meilisearch API key
+    </ParamField>
+    <ParamField body="batch_size" type="integer">
+      Number of documents to batch together (default: 100)
+    </ParamField>
+    <ParamField body="timeout_seconds" type="integer">
+      Request timeout in seconds (default: 5)
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="S2">
     <ParamField body="type" type="string" required>
       Must be "s2"
     </ParamField>
@@ -231,6 +328,48 @@ Creates a new sink consumer.
   <Expandable title="Sequin Stream">
     <ParamField body="type" type="string" required>
       Must be "sequin_stream"
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="SNS">
+    <ParamField body="type" type="string" required>
+      Must be "sns"
+    </ParamField>
+    <ParamField body="topic_arn" type="string" required>
+      SNS topic ARN
+    </ParamField>
+    <ParamField body="region" type="string" required>
+      AWS region
+    </ParamField>
+    <ParamField body="access_key_id" type="string" required>
+      AWS access key ID
+    </ParamField>
+    <ParamField body="secret_access_key" type="string" required>
+      AWS secret access key
+    </ParamField>
+    <ParamField body="is_fifo" type="boolean">
+      Whether the topic is a FIFO topic
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Typesense">
+    <ParamField body="type" type="string" required>
+      Must be "typesense"
+    </ParamField>
+    <ParamField body="endpoint_url" type="string" required>
+      Typesense endpoint URL
+    </ParamField>
+    <ParamField body="collection_name" type="string" required>
+      Typesense collection name
+    </ParamField>
+    <ParamField body="api_key" type="string" required>
+      Typesense API key
+    </ParamField>
+    <ParamField body="batch_size" type="integer">
+      Number of documents to batch together (default: 100)
+    </ParamField>
+    <ParamField body="timeout_seconds" type="integer">
+      Request timeout in seconds (default: 5)
     </ParamField>
   </Expandable>
 
@@ -254,37 +393,33 @@ Creates a new sink consumer.
   The source database for the sink consumer
 </ParamField>
 
+<ParamField body="filter" type="string">
+  The [filter function](/reference/filters) for the sink consumer
+</ParamField>
+
 <ParamField body="transform" type="string">
-  The transform to apply to messages
+  The [transform function](/reference/transforms) for the sink consumer
+</ParamField>
+
+<ParamField body="routing" type="string">
+  The [routing function](/reference/routing) for the sink consumer
+</ParamField>
+
+<ParamField body="message_grouping" type="boolean">
+  Whether message grouping is enabled for ordering purposes. When `true` (default), messages are grouped by primary key. When `false`, grouping is disabled for higher throughput batching.
 </ParamField>
 
 <ParamField body="batch_size" type="integer">
   Number of records to batch together (1-1000)
 </ParamField>
 
-<ParamField body="actions" type="array" required>
-  The actions to perform on the records (insert, update, delete)
-</ParamField>
-
-<ParamField body="group_column_names" type="array">
-  Column names used for grouping records
-</ParamField>
-
-<ParamField body="message_grouping" type="boolean">
-  Whether to enable message grouping for ordering purposes. When `true` (default), messages are grouped by primary key or custom grouping columns. When `false`, grouping is disabled for higher throughput batching.
-  
-  Cannot be used with `group_column_names` when set to `false`.
-</ParamField>
-
 <ParamField body="max_retry_count" type="integer">
   The maximum number of times a message will be retried if delivery fails. Once this limit is reached, the message will be discarded.
-
   Defaults to `null`, meaning messages are retried indefinitely.
 </ParamField>
 
 <ParamField body="load_shedding_policy" type="string">
   Determines how Sequin handles overload when sink consumers can't keep up with incoming messages.
-
   Options are:
   - `pause_on_full` (default) — pauses replication until the buffer has room again
   - `discard_on_full` — drops messages for overloaded consumers to avoid pausing replication
@@ -292,13 +427,13 @@ Creates a new sink consumer.
   For more details, see [load shedding policy](/reference/sinks/overview#load_shedding_policy).
 </ParamField>
 
-<ParamField body="ack_wait_ms" type="integer">
-  Acknowledgement timeout in milliseconds (minimum 500ms)
+<ParamField body="timestamp_format" type="string">
+  The format of the timestamp in the source data.
+  Possible values include `iso8601` and `unix_microsecond`.
 </ParamField>
 
 <ParamField body="annotations" type="object">
-  Additional metadata you can attach to this sink consumer. Annotations can be any JSON object (not a list or a scalar).
-  You can use annotations in your [transform](/reference/transforms), to attach additional information about the sink to each message.
+  Additional metadata you can attach to this sink consumer. Annotations can be any JSON object.
 </ParamField>
 
 ## Response fields
@@ -313,8 +448,13 @@ Creates a new sink consumer.
     -d '{
       "name": "kafka-ids",
       "status": "active",
-      "table": "public.records",
-      "filters": [],
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "kafka",
         "hosts": "localhost:9092",
@@ -322,10 +462,15 @@ Creates a new sink consumer.
         "topic": "records"
       },
       "database": "dune",
+      "filter": "",
       "transform": "id-transform",
+      "routing": "",
+      "message_grouping": true,
       "batch_size": 100,
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "max_retry_count": null,
+      "load_shedding_policy": "pause_on_full",
+      "timestamp_format": "iso8601",
+      "annotations": {}
     }'
   ```
 </RequestExample>

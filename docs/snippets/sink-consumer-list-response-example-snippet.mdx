@@ -7,7 +7,14 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-kafka-sink",
       "status": "active",
-      "filters": [],
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "kafka",
         "hosts": "localhost:9092",
@@ -17,17 +24,27 @@
         "password": "kafka_password",
         "sasl_mechanism": "PLAIN"
       },
-      "database": "dune",
+      "filter": "none",
       "transform": "id-transform",
-      "schema": "public",
+      "routing": "none",
+      "message_grouping": true,
       "max_retry_count": null,
       "annotations": {},
       "active_backfills": [],
       "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
       "timestamp_format": "iso8601",
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
     }
   ]
 }
@@ -40,7 +57,14 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-sqs-sink",
       "status": "active",
-      "filters": [],
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "sqs",
         "queue_url": "https://sqs.us-east-1.amazonaws.com/123456789012/MyQueue",
@@ -48,17 +72,27 @@
         "access_key_id": "AKIAIOSFODNN7EXAMPLE",
         "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
       },
-      "database": "dune",
+      "filter": "none",
       "transform": "id-transform",
-      "schema": "public",
+      "routing": "none",
+      "message_grouping": true,
       "max_retry_count": null,
       "annotations": {},
       "active_backfills": [],
       "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
       "timestamp_format": "iso8601",
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
     }
   ]
 }
@@ -71,7 +105,14 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-rabbitmq-sink",
       "status": "active",
-      "filters": [],
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "rabbitmq",
         "host": "localhost",
@@ -82,17 +123,27 @@
         "tls": false,
         "exchange": "records"
       },
-      "database": "dune",
+      "filter": "none",
       "transform": "id-transform",
-      "schema": "public",
+      "routing": "none",
+      "message_grouping": true,
       "max_retry_count": null,
       "annotations": {},
       "active_backfills": [],
       "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
       "timestamp_format": "iso8601",
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
     }
   ]
 }
@@ -105,7 +156,14 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-redis-sink",
       "status": "active",
-      "filters": [],
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "redis_stream",
         "host": "localhost",
@@ -116,17 +174,27 @@
         "username": "redis_user",
         "password": "redis_password"
       },
-      "database": "dune",
+      "filter": "none",
       "transform": "id-transform",
-      "schema": "public",
+      "routing": "none",
+      "message_grouping": true,
       "max_retry_count": null,
       "annotations": {},
       "active_backfills": [],
       "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
       "timestamp_format": "iso8601",
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
     }
   ]
 }
@@ -139,7 +207,14 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-azure-event-hub-sink",
       "status": "active",
-      "filters": [],
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "azure_event_hub",
         "namespace": "my-namespace",
@@ -147,17 +222,27 @@
         "shared_access_key_name": "RootManageSharedAccessKey",
         "shared_access_key": "your-shared-access-key"
       },
-      "database": "dune",
+      "filter": "none",
       "transform": "id-transform",
-      "schema": "public",
+      "routing": "none",
+      "message_grouping": true,
       "max_retry_count": null,
       "annotations": {},
       "active_backfills": [],
       "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
       "timestamp_format": "iso8601",
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
     }
   ]
 }
@@ -170,7 +255,14 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-nats-sink",
       "status": "active",
-      "filters": [],
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "nats",
         "host": "localhost",
@@ -181,17 +273,27 @@
         "nkey_seed": "your-nkey-seed",
         "tls": false
       },
-      "database": "dune",
+      "filter": "none",
       "transform": "id-transform",
-      "schema": "public",
+      "routing": "none",
+      "message_grouping": true,
       "max_retry_count": null,
       "annotations": {},
       "active_backfills": [],
       "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
       "timestamp_format": "iso8601",
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
     }
   ]
 }
@@ -204,7 +306,14 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-gcp-pubsub-sink",
       "status": "active",
-      "filters": [],
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "gcp_pubsub",
         "project_id": "my-project",
@@ -213,17 +322,27 @@
         "use_emulator": false,
         "emulator_base_url": "http://localhost:8085"
       },
-      "database": "dune",
+      "filter": "none",
       "transform": "id-transform",
-      "schema": "public",
+      "routing": "none",
+      "message_grouping": true,
       "max_retry_count": null,
       "annotations": {},
       "active_backfills": [],
       "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
       "timestamp_format": "iso8601",
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
     }
   ]
 }
@@ -236,21 +355,38 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-sequin-stream-sink",
       "status": "active",
-      "filters": [],
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "sequin_stream"
       },
-      "database": "dune",
+      "filter": "none",
       "transform": "id-transform",
-      "schema": "public",
+      "routing": "none",
+      "message_grouping": true,
       "max_retry_count": null,
       "annotations": {},
       "active_backfills": [],
       "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
       "timestamp_format": "iso8601",
-      "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
     }
   ]
 }
@@ -263,24 +399,337 @@
       "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
       "name": "my-webhook-sink",
       "status": "active",
-      "filters": [],
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
       "destination": {
         "type": "webhook",
         "http_endpoint": "my-endpoint",
         "http_endpoint_path": "/webhook",
         "batch": true
       },
-      "database": "dune",
+      "filter": "none",
       "transform": "id-transform",
-      "schema": "public",
+      "routing": "none",
+      "message_grouping": true,
       "max_retry_count": null,
       "annotations": {},
       "active_backfills": [],
       "batch_size": 50,
       "load_shedding_policy": "pause_on_full",
       "timestamp_format": "iso8601",
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
+    }
+  ]
+}
+```
+
+```json Elasticsearch
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-elasticsearch-sink",
+      "status": "active",
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
       "actions": ["insert", "update", "delete"],
-      "group_column_names": ["id"]
+      "destination": {
+        "type": "elasticsearch",
+        "endpoint_url": "http://localhost:9200",
+        "index_name": "records",
+        "auth_type": "basic",
+        "auth_value": "base64-encoded-credentials",
+        "batch_size": 100
+      },
+      "filter": "none",
+      "transform": "id-transform",
+      "routing": "none",
+      "message_grouping": true,
+      "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
+      "load_shedding_policy": "pause_on_full",
+      "timestamp_format": "iso8601",
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
+    }
+  ]
+}
+```
+
+```json Kinesis
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-kinesis-sink",
+      "status": "active",
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
+      "destination": {
+        "type": "kinesis",
+        "stream_arn": "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream",
+        "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+        "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+      },
+      "filter": "none",
+      "transform": "id-transform",
+      "routing": "none",
+      "message_grouping": true,
+      "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
+      "load_shedding_policy": "pause_on_full",
+      "timestamp_format": "iso8601",
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
+    }
+  ]
+}
+```
+
+```json Meilisearch
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-meilisearch-sink",
+      "status": "active",
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
+      "destination": {
+        "type": "meilisearch",
+        "endpoint_url": "http://localhost:7700",
+        "index_name": "records",
+        "primary_key": "id",
+        "api_key": "your-api-key",
+        "batch_size": 100,
+        "timeout_seconds": 5
+      },
+      "filter": "none",
+      "transform": "id-transform",
+      "routing": "none",
+      "message_grouping": true,
+      "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
+      "load_shedding_policy": "pause_on_full",
+      "timestamp_format": "iso8601",
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
+    }
+  ]
+}
+```
+
+```json Redis String
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-redis-string-sink",
+      "status": "active",
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
+      "destination": {
+        "type": "redis_string",
+        "host": "localhost",
+        "port": 6379,
+        "database": 0,
+        "tls": false,
+        "username": "redis_user",
+        "password": "redis_password",
+        "expire_ms": 3600000,
+        "mode": "static"
+      },
+      "filter": "none",
+      "transform": "id-transform",
+      "routing": "none",
+      "message_grouping": true,
+      "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
+      "load_shedding_policy": "pause_on_full",
+      "timestamp_format": "iso8601",
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
+    }
+  ]
+}
+```
+
+```json SNS
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-sns-sink",
+      "status": "active",
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
+      "destination": {
+        "type": "sns",
+        "topic_arn": "arn:aws:sns:us-east-1:123456789012:MyTopic",
+        "region": "us-east-1",
+        "access_key_id": "AKIAIOSFODNN7EXAMPLE",
+        "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "is_fifo": false
+      },
+      "filter": "none",
+      "transform": "id-transform",
+      "routing": "none",
+      "message_grouping": true,
+      "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
+      "load_shedding_policy": "pause_on_full",
+      "timestamp_format": "iso8601",
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
+    }
+  ]
+}
+```
+
+```json Typesense
+{
+  "data": [
+    {
+      "id": "4ed2a8e5-47a7-4b51-9270-d2f4fdcb94fb",
+      "name": "my-typesense-sink",
+      "status": "active",
+      "database": "my-database",
+      "source": {
+        "include_schemas": null,
+        "exclude_schemas": null,
+        "include_tables": null,
+        "exclude_tables": null
+      },
+      "actions": ["insert", "update", "delete"],
+      "destination": {
+        "type": "typesense",
+        "endpoint_url": "http://localhost:8108",
+        "collection_name": "records",
+        "api_key": "your-api-key",
+        "batch_size": 100,
+        "timeout_seconds": 5
+      },
+      "filter": "none",
+      "transform": "id-transform",
+      "routing": "none",
+      "message_grouping": true,
+      "max_retry_count": null,
+      "annotations": {},
+      "active_backfills": [],
+      "batch_size": 50,
+      "load_shedding_policy": "pause_on_full",
+      "timestamp_format": "iso8601",
+      "health": {
+        "name": "Consumer health",
+        "status": "healthy",
+        "checks": [
+          {
+            "name": "Sink configuration",
+            "status": "healthy"
+          },
+          ...
+        ]
+      }
     }
   ]
 }

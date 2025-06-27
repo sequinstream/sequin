@@ -98,10 +98,11 @@
   };
 
   let sinkTypeInternalToExternal = {
-    http_push: "Webhook sink",
-    redis_string: "Redis string sink",
-    nats: "NATS sink",
-    kafka: "Kafka sink",
+    http_push: "HTTP Push",
+    redis_string: "Redis String",
+    nats: "NATS",
+    kafka: "Kafka",
+    gcp_pubsub: "GCP PubSub",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];

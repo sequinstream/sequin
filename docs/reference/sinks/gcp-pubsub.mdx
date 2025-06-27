@@ -133,3 +133,19 @@ curl -X PUT \
 ```
 
 When setting up the sink in the Sequin console, toggle on "Use emulator" to use the emulator. For the host, use the fully-qualified URL of the emulator, e.g. `http://localhost:8085`.
+
+## Routing
+
+The GCP PubSub sink supports dynamic routing of the `topic_id` with [routing functions](/reference/routing).
+
+Example routing function:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{
+    topic_id: "#{metadata.database_name}-#{metadata.table_schema}-#{metadata.table_name}"
+  }
+end
+```
+
+When not using a routing function, messages will be published to the topic specified in the sink configuration.

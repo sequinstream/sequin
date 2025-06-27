@@ -96,6 +96,10 @@ services:
       DATABASE_USER: postgres
       DATABASE_PASSWORD: postgres
       KAFKA_DEMO_TOPIC: demo-topic
+      AWS_ENDPOINT: http://localstack:4566
+      AWS_ACCESS_KEY_ID: "test"
+      AWS_SECRET_ACCESS_KEY: "test"
+      AWS_DEFAULT_REGION: "us-east-1"
     volumes:
       - ./sequin.yml:/app/sequin.yml:ro
     depends_on:
@@ -105,12 +109,35 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      localstack:
+        condition: service_healthy
     networks:
       - sequin-e2e
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:7376/health || exit 1"]
       interval: 30s
       timeout: 10s
+      retries: 5
+
+  localstack:
+    image: localstack/localstack:3.0
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      - SERVICES=sqs
+      - DEBUG=1
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - sequin-e2e
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
       retries: 5
 
 volumes:

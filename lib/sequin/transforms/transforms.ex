@@ -861,7 +861,7 @@ defmodule Sequin.Transforms do
         "routing" ->
           case parse_function_id(account_id, value) do
             {:ok, nil} ->
-              {:cont, {:ok, Map.put(acc, :routing_id, nil)}}
+              {:cont, {:ok, Map.merge(acc, %{routing_mode: "static", routing_id: nil})}}
 
             {:ok, function_id} ->
               {:cont, {:ok, Map.merge(acc, %{routing_mode: "dynamic", routing_id: function_id})}}
@@ -1081,7 +1081,9 @@ defmodule Sequin.Transforms do
        queue_url: attrs["queue_url"],
        region: attrs["region"],
        access_key_id: attrs["access_key_id"],
-       secret_access_key: attrs["secret_access_key"]
+       secret_access_key: attrs["secret_access_key"],
+       use_emulator: attrs["use_emulator"] || false,
+       emulator_base_url: attrs["emulator_base_url"]
      }}
   end
 

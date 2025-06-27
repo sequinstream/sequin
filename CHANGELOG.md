@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://sqn-img-svr.eric-65f.workers.dev/?page=readme" alt="Sequin" height="80" />
+<img src="https://sqn-img-svr.eric-65f.workers.dev/?page=changelog" alt="Sequin" height="80" />
 
 </div>
 

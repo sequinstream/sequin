@@ -17,12 +17,12 @@
   // Reactive function to get sink values
   $: getSinkValue = (param: string) => {
     const field = routingConfig.fields[param];
-    const formFieldName = field.formField || param;
+    const formFieldName = field.staticFormField || param;
     const value = form.sink?.[formFieldName];
 
     return value !== undefined && value !== null && value !== ""
       ? value
-      : field.default;
+      : field.staticValue;
   };
 
   $: {
@@ -30,8 +30,8 @@
       form.routingMode = "dynamic";
       // Clear routing config fields that have formFieldName when dynamic routing is enabled
       Object.entries(routingConfig.fields).forEach(([param, field]) => {
-        if (field.formField && form.sink) {
-          form.sink[field.formField] = undefined;
+        if (field.staticFormField && form.sink) {
+          form.sink[field.staticFormField] = undefined;
         }
       });
     } else {
@@ -81,7 +81,7 @@
               ><span class="text-xs px-1 rounded">{field.description}</span>
               <br />
               <span class="font-mono text-xs px-1 rounded"
-                >default: {field.default}</span
+                >default: {field.dynamicDefault}</span
               >
             </li>
           {/each}
@@ -100,9 +100,9 @@
             ><span class="text-xs px-1 rounded">{field.description}</span>
             <br />
             <span class="font-mono text-xs px-1 rounded"
-              >value: {field.formField
+              >value: {field.staticFormField
                 ? getSinkValue(param)
-                : field.default}</span
+                : field.staticValue}</span
             >
           </li>
         {/each}

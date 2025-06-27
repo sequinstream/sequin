@@ -177,6 +177,8 @@ defmodule Sequin.Consumers.SinkConsumer do
   end
 
   def changeset(consumer, attrs) do
+    attrs = put_sink_routing_mode(attrs)
+
     consumer
     |> cast(attrs, [
       :name,
@@ -256,20 +258,31 @@ defmodule Sequin.Consumers.SinkConsumer do
         # Both unchanged, this is fine
         cs
 
-      {"static", {_, nil}} ->
-        cs
+      {"static", {_, _}} ->
+        validate_inclusion(cs, :routing_id, [nil])
 
-      {"static", {_, id}} when not is_nil(id) ->
-        add_error(cs, :routing_id, "static routing cannot have linked router!")
+      {"dynamic", {_, _}} ->
+        validate_required(cs, [:routing_id])
 
-      {"dynamic", {_, id}} when not is_nil(id) ->
-        cs
+      no_match ->
+        add_error(cs, :routing_id, "unknown routing mode: #{inspect(no_match)}")
+    end
+  end
 
-      {"dynamic", {_, nil}} ->
-        add_error(cs, :routing_id, "dynamic routing requires linked router!")
+  defp put_sink_routing_mode(attrs) do
+    routing_mode = attrs["routing_mode"] || attrs[:routing_mode]
+    sink = attrs["sink"] || attrs[:sink]
 
-      zz ->
-        add_error(cs, :routing_id, "unknown routing mode! #{inspect(zz)}")
+    if not is_nil(routing_mode) and not is_nil(sink) do
+      binary_keys? = Enum.any?(sink, fn {key, _} -> is_binary(key) end)
+
+      if binary_keys? do
+        put_in(attrs, ["sink", "routing_mode"], routing_mode)
+      else
+        put_in(attrs, [:sink, :routing_mode], routing_mode)
+      end
+    else
+      attrs
     end
   end
 

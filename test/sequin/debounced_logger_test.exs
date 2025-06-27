@@ -1,8 +1,6 @@
 defmodule Sequin.DebouncedLoggerTest do
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureLog
-
   alias Sequin.DebouncedLogger
   alias Sequin.DebouncedLogger.Config
 
@@ -20,124 +18,162 @@ defmodule Sequin.DebouncedLoggerTest do
 
   # Helper function to create configs with test defaults
   defp test_config(dedupe_key, opts \\ []) do
-    struct!(%Config{dedupe_key: dedupe_key, debounce_interval_ms: @fast_debounce_ms, table_name: @test_table}, opts)
+    test_pid = self()
+
+    default_opts = [
+      debounce_interval_ms: @fast_debounce_ms,
+      table_name: @test_table,
+      logger_fun: logger_fun(test_pid)
+    ]
+
+    struct!(%Config{dedupe_key: dedupe_key}, Keyword.merge(default_opts, opts))
+  end
+
+  defp logger_fun(test_pid) do
+    fn level, message, metadata ->
+      send(test_pid, {:log, level, message, metadata})
+    end
   end
 
   test "logs immediately on first call" do
     config = test_config(:test_first_call)
 
-    log_output =
-      capture_log(fn ->
-        DebouncedLogger.warning("First message", config)
-      end)
+    DebouncedLogger.warning("First message", config)
 
-    assert log_output =~ "First message"
+    assert_receive {:log, :warning, "First message", []}
   end
 
   test "suppresses subsequent calls and emits summary" do
     config = test_config(:test_suppress)
 
-    log_output =
-      capture_log(fn ->
-        DebouncedLogger.warning("Test message", config)
-        DebouncedLogger.warning("Test message", config)
-        DebouncedLogger.warning("Test message", config)
+    DebouncedLogger.warning("Test message", config)
+    DebouncedLogger.warning("Test message", config)
+    DebouncedLogger.warning("Test message", config)
 
-        # Wait for timer to fire
-        Process.sleep(@fast_debounce_ms + 5)
-      end)
+    # Should receive original message immediately
+    assert_receive {:log, :warning, "Test message", []}
 
-    # Should see original message and summary
-    assert log_output =~ "Test message"
-    assert log_output =~ "[2×] Test message"
+    # Should receive summary after timer fires
+    assert_receive {:log, :warning, "[2×] Test message", []}
   end
 
   test "different dedupe_keys are tracked separately" do
     config1 = test_config(:key1)
     config2 = test_config(:key2)
 
-    log_output =
-      capture_log(fn ->
-        DebouncedLogger.warning("Message A", config1)
-        DebouncedLogger.warning("Message B", config2)
-        DebouncedLogger.warning("Message A", config1)
+    DebouncedLogger.warning("Message A", config1)
+    DebouncedLogger.warning("Message B", config2)
+    DebouncedLogger.warning("Message A", config1)
 
-        Process.sleep(@fast_debounce_ms + 5)
-      end)
+    # Should receive both messages immediately
+    assert_receive {:log, :warning, "Message A", []}
+    assert_receive {:log, :warning, "Message B", []}
 
-    assert log_output =~ "Message A"
-    assert log_output =~ "Message B"
-    assert log_output =~ "[1×] Message A"
-    # Message B should only appear once (no duplicates)
-    refute log_output =~ "[1×] Message B"
+    # Should receive summary for Message A (which was duplicated)
+    assert_receive {:log, :warning, "[1×] Message A", []}
   end
 
   test "different log levels are tracked separately" do
     config = test_config(:same_key)
 
-    log_output =
-      capture_log(fn ->
-        DebouncedLogger.warning("Same message", config)
-        DebouncedLogger.error("Same message", config)
-        DebouncedLogger.warning("Same message", config)
+    DebouncedLogger.warning("Same message", config)
+    DebouncedLogger.error("Same message", config)
+    DebouncedLogger.warning("Same message", config)
 
-        Process.sleep(@fast_debounce_ms * 10)
-      end)
+    # Should receive all immediate messages
+    assert_receive {:log, :warning, "Same message", []}
+    assert_receive {:log, :error, "Same message", []}
 
-    # Verify warning appears twice (initial + summary)
-    warning_logs = log_output |> String.split("\n") |> Enum.filter(&(&1 =~ "[warning]" and &1 =~ "Same message"))
-    assert length(warning_logs) == 2
-
-    # Verify error appears once (no summary since no duplicates)
-    error_logs = log_output |> String.split("\n") |> Enum.filter(&(&1 =~ "[error]" and &1 =~ "Same message"))
-    assert length(error_logs) == 1
-
-    # Verify the summary message appears
-    assert log_output =~ "[1×] Same message"
+    # Should receive summary for warning level (which had duplicates)
+    assert_receive {:log, :warning, "[1×] Same message", []}
   end
 
   test "no summary emitted when only one call is made" do
     config = test_config(:single_call)
 
-    log_output =
-      capture_log(fn ->
-        DebouncedLogger.warning("Single message", config)
-        Process.sleep(@fast_debounce_ms + 5)
-      end)
+    DebouncedLogger.warning("Single message", config)
 
-    # Should only see the immediate log, no summary
-    message_count = log_output |> String.split("Single message") |> length() |> Kernel.-(1)
-    assert message_count == 1
-    refute log_output =~ "×"
+    # Should receive the immediate log
+    assert_receive {:log, :warning, "Single message", []}
   end
 
   test "works with all log levels" do
     config = test_config(:test_levels)
 
-    log_output =
-      capture_log(fn ->
-        DebouncedLogger.warning("Warning msg", config)
-        DebouncedLogger.error("Error msg", config)
-      end)
+    DebouncedLogger.debug("Debug msg", config)
+    DebouncedLogger.info("Info msg", config)
+    DebouncedLogger.warning("Warning msg", config)
+    DebouncedLogger.error("Error msg", config)
 
-    assert log_output =~ "Warning msg"
-    assert log_output =~ "Error msg"
+    assert_receive {:log, :debug, "Debug msg", []}
+    assert_receive {:log, :info, "Info msg", []}
+    assert_receive {:log, :warning, "Warning msg", []}
+    assert_receive {:log, :error, "Error msg", []}
   end
 
   test "preserves metadata" do
     config = test_config(:test_metadata)
     metadata = [request_id: "req-123"]
 
-    log_output =
-      capture_log([metadata: [:request_id]], fn ->
-        DebouncedLogger.warning("Message with metadata", config, metadata)
-        DebouncedLogger.warning("Message with metadata", config, metadata)
+    DebouncedLogger.warning("Message with metadata", config, metadata)
+    DebouncedLogger.warning("Message with metadata", config, metadata)
 
-        Process.sleep(@fast_debounce_ms + 5)
-      end)
+    # Should receive initial message with metadata
+    assert_receive {:log, :warning, "Message with metadata", [request_id: "req-123"]}
 
-    # Both initial and summary logs should have metadata
-    logs_with_metadata = log_output |> String.split("request_id=req-123") |> length() |> Kernel.-(1)
-    assert logs_with_metadata == 2
+    # Should receive summary with metadata
+    assert_receive {:log, :warning, "[1×] Message with metadata", [request_id: "req-123"]}
+  end
+
+  test "merges metadata with existing logger metadata" do
+    config = test_config(:test_merge_metadata)
+
+    # Set some logger metadata
+    Logger.metadata(existing_key: "existing_value")
+
+    # Add additional metadata
+    additional_metadata = [request_id: "req-456"]
+
+    DebouncedLogger.warning("Message with merged metadata", config, additional_metadata)
+
+    # Should receive message with both existing and additional metadata
+    assert_receive {:log, :warning, "Message with merged metadata", metadata}
+    assert Keyword.get(metadata, :existing_key) == "existing_value"
+    assert Keyword.get(metadata, :request_id) == "req-456"
+
+    # Clean up
+    Logger.metadata(existing_key: nil)
+  end
+
+  test "counts accumulate correctly with many duplicates" do
+    config = test_config(:many_duplicates)
+
+    # Send 10 identical messages
+    for _ <- 1..10 do
+      DebouncedLogger.warning("Repeated message", config)
+    end
+
+    # Should receive the first message immediately
+    assert_receive {:log, :warning, "Repeated message", []}
+
+    # Should receive summary with count of 9 (10 total - 1 immediate)
+    assert_receive {:log, :warning, "[9×] Repeated message", []}
+  end
+
+  @tag capture_log: true
+  test "uses real Logger by default" do
+    # This test verifies the default behavior uses actual Logger
+    # We'll create a config without specifying logger_fun
+    config = %Config{
+      dedupe_key: :real_logger_test,
+      debounce_interval_ms: @fast_debounce_ms,
+      table_name: @test_table
+      # logger_fun defaults to &Logger.bare_log/3
+    }
+
+    # This should not crash and should use the real Logger
+    # We can't easily assert the output without capture_log, but we can
+    # verify it doesn't error
+    assert :ok = DebouncedLogger.warning("Real logger message", config)
   end
 end

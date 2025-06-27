@@ -31,6 +31,7 @@ databases:
 sinks:
   - name: "demo-to-kafka"
     database: "e2e-database"
+    table: "public.kafka_test_table"
     batch_size: 10
     status: "active"
     actions:
@@ -42,3 +43,20 @@ sinks:
       hosts: "${KAFKA_BROKERS:-kafka:29092}"
       topic: "demo-topic"
       tls: false
+  - name: "demo-to-sqs"
+    database: "e2e-database"
+    table: "public.sqs_test_table"
+    batch_size: 10
+    status: "active"
+    actions:
+      - insert
+      - update
+      - delete
+    destination:
+      type: "sqs"
+      queue_url: "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/demo-queue"
+      region: "us-east-1"
+      use_emulator: true
+      emulator_base_url: "http://localstack:4566"      
+      access_key_id: "test"
+      secret_access_key: "test"

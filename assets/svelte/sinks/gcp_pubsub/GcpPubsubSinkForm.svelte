@@ -1,19 +1,27 @@
+<!-- GCP PubSub Sink Form -->
 <script lang="ts">
   import { Input } from "$lib/components/ui/input";
   import { Switch } from "$lib/components/ui/switch";
+  import { Label } from "$lib/components/ui/label";
+  import * as Tooltip from "$lib/components/ui/tooltip";
+  import { Info, ExternalLink } from "lucide-svelte";
   import {
     Card,
     CardContent,
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
-  import { Label } from "$lib/components/ui/label";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
+  import type { GcpPubsubConsumer } from "$lib/consumers/types";
   import { Textarea } from "$lib/components/ui/textarea";
-  import { Info, ExternalLink } from "lucide-svelte";
-  import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let form;
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
   export let errors: any = {};
+
+  let selectedDynamic = form.routingMode === "dynamic";
 </script>
 
 <Card>
@@ -50,11 +58,13 @@
   </CardHeader>
   <CardContent class="space-y-4">
     <div class="space-y-2">
-      <Label for="project-id">Project ID</Label>
+      <Label for="project_id">Project ID</Label>
       <Input
-        id="project-id"
+        type="text"
+        id="project_id"
+        name="sink[project_id]"
         bind:value={form.sink.project_id}
-        placeholder="my-project-id"
+        placeholder="my-gcp-project"
       />
       <p class="text-sm text-muted-foreground">
         Your Google Cloud project ID (e.g., my-project-123)
@@ -65,9 +75,11 @@
     </div>
     {#if form.sink.use_emulator}
       <div class="space-y-2">
-        <Label for="emulator-url">Emulator connection URL</Label>
+        <Label for="emulator_base_url">Emulator Base URL</Label>
         <Input
-          id="emulator-url"
+          type="text"
+          id="emulator_base_url"
+          name="sink[emulator_base_url]"
           bind:value={form.sink.emulator_base_url}
           placeholder="http://localhost:8085"
         />
@@ -78,18 +90,6 @@
         {/if}
       </div>
     {/if}
-    <div class="space-y-2">
-      <Label for="topic-id">Topic ID</Label>
-      <Input
-        id="topic-id"
-        bind:value={form.sink.topic_id}
-        placeholder="my-topic"
-      />
-      <p class="text-sm text-muted-foreground">The ID of the Pub/Sub topic</p>
-      {#if errors.sink?.topic_id}
-        <p class="text-destructive text-sm">{errors.sink.topic_id}</p>
-      {/if}
-    </div>
 
     {#if !form.sink.use_emulator}
       <div class="space-y-2">
@@ -107,6 +107,39 @@
         </p>
         {#if errors.sink?.credentials}
           <p class="text-destructive text-sm">{errors.sink.credentials}</p>
+        {/if}
+      </div>
+    {/if}
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      bind:selectedDynamic
+      {functions}
+      {refreshFunctions}
+      {functionRefreshState}
+      {errors}
+      routedSinkType="gcp_pubsub"
+    />
+
+    {#if !selectedDynamic}
+      <div>
+        <Label for="topic_id">Topic ID</Label>
+        <Input
+          type="text"
+          id="topic_id"
+          name="sink[topic_id]"
+          bind:value={form.sink.topic_id}
+          placeholder="my-topic"
+        />
+        {#if errors.sink?.topic_id}
+          <p class="text-destructive text-sm">{errors.sink.topic_id}</p>
         {/if}
       </div>
     {/if}

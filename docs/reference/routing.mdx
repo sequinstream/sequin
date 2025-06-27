@@ -30,7 +30,15 @@ For example, for the HTTP Webhook sink, the base URL is a static property - this
 
 ## Supported sinks
 
-Routing functions are supported by the following sinks:
+The following sinks support dynamic routing:
+
+- HTTP Push
+- Redis String
+- NATS
+- Kafka
+- GCP PubSub
+
+Each sink type has different fields that can be routed:
 
 ### Kafka sink
 
@@ -72,6 +80,16 @@ For [NATS](/reference/sinks/nats), your routing function must return a map with 
 | Key | Type | Description | Example |
 |-----|------|-------------|---------|
 | `subject` | String | The subject to publish to | `"users.created"` |
+
+### GCP PubSub sink
+
+For [GCP PubSub](/reference/sinks/gcp-pubsub), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `topic_id` | String | The topic ID to publish to | `"users.created"` |
+
+
 
 ## Common routing patterns
 

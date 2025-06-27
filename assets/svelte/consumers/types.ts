@@ -189,9 +189,8 @@ export type GcpPubsubConsumer = BaseConsumer & {
     type: "gcp_pubsub";
     project_id: string;
     topic_id: string;
-    connection_id: string;
     use_emulator: boolean;
-    emulator_base_url: string;
+    emulator_base_url?: string;
   };
 };
 
@@ -281,19 +280,10 @@ export type SinkType = (typeof SinkTypeValues)[number];
 
 export const RoutedSinkTypeValues = [
   "http_push",
-  // "sqs",
-  // "sns",
-  // "kinesis",
-  // "redis_stream",
-  "kafka",
-  // "sequin_stream",
-  // "gcp_pubsub",
-  "nats",
-  // "rabbitmq",
-  // "typesense",
-  // "meilisearch",
-  // "elasticsearch",
   "redis_string",
+  "nats",
+  "kafka",
+  "gcp_pubsub",
 ] as const;
 
 export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

@@ -539,7 +539,13 @@
         bind:functionRefreshState
       />
     {:else if consumer.type === "gcp_pubsub"}
-      <GcpPubsubSinkForm errors={errors.consumer} bind:form />
+      <GcpPubsubSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {:else if consumer.type === "sequin_stream"}
       <SequinStreamSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "nats"}

@@ -76,9 +76,19 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
   kafka: {
     fields: {
       topic: {
-        description: "The Kafka topic to publish messages to",
+        description: "Kafka topic to publish to",
         staticValue: "<empty>",
         staticFormField: "topic",
+        dynamicDefault: "sequin.<database_name>.<table_schema>.<table_name>",
+      },
+    },
+  },
+  gcp_pubsub: {
+    fields: {
+      topic_id: {
+        description: "GCP PubSub topic ID to publish to",
+        staticValue: "<empty>",
+        staticFormField: "topic_id",
         dynamicDefault: "sequin.<database_name>.<table_schema>.<table_name>",
       },
     },

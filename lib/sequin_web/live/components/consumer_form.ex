@@ -278,7 +278,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         end
 
       :gcp_pubsub ->
-        case test_pubsub_connection(socket) do
+        case test_gcp_pubsub_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
@@ -465,7 +465,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp test_pubsub_connection(socket) do
+  defp test_gcp_pubsub_connection(socket) do
     sink_changeset =
       socket.assigns.changeset
       |> Ecto.Changeset.get_field(:sink)
@@ -479,7 +479,7 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       client = GcpPubsubSink.pubsub_client(sink)
 
-      case PubSub.test_connection(client, sink.topic_id) do
+      case PubSub.test_connection(client) do
         :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end

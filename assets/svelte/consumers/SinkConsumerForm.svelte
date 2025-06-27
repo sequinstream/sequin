@@ -561,7 +561,13 @@
     {:else if consumer.type === "azure_event_hub"}
       <AzureEventHubSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "typesense"}
-      <TypesenseSinkForm errors={errors.consumer} bind:form />
+      <TypesenseSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {:else if consumer.type === "meilisearch"}
       <MeilisearchSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "elasticsearch"}

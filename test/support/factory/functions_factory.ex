@@ -148,7 +148,9 @@ defmodule Sequin.Factory.FunctionsFactory do
   # Routing Function
   def routing_function(attrs \\ []) do
     {sink_type, attrs} =
-      Map.pop_lazy(Map.new(attrs), :sink_type, fn -> Enum.random([:http_push, :redis_string, :kafka, :gcp_pubsub]) end)
+      Map.pop_lazy(Map.new(attrs), :sink_type, fn ->
+        Enum.random([:http_push, :redis_string, :kafka, :gcp_pubsub, :typesense])
+      end)
 
     {body, attrs} =
       Map.pop_lazy(attrs, :body, fn ->
@@ -180,6 +182,13 @@ defmodule Sequin.Factory.FunctionsFactory do
             """
             %{
               topic_id: metadata.table_name
+            }
+            """
+
+          :typesense ->
+            """
+            %{
+              collection_name: metadata.table_name
             }
             """
         end

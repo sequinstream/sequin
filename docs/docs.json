@@ -261,8 +261,70 @@
       "linkedin": "https://www.linkedin.com/company/sequinstream/",
       "x": "https://x.com/sequinstream",
       "youtube": "https://www.youtube.com/@SequinStream",
-      "discord": "https://discord.gg/BV8wFXvNtY"
-    }
+      "discord": "https://discord.gg/BV8wFXvNtY",
+      "slack": "https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA"
+    },
+    "links": [
+      {
+        "header": "Developers",
+        "items": [
+          {
+            "label": "Changelog",
+            "href": "https://github.com/sequinstream/sequin/blob/main/CHANGELOG.md"
+          },
+          {
+            "label": "Open Source (MIT)",
+            "href": "https://github.com/sequinstream/sequin?tab=MIT-1-ov-file#readme"
+          },
+          {
+            "label": "GitHub",
+            "href": "https://github.com/sequinstream/sequin"
+          },
+          {
+            "label": "Contributing",
+            "href": "https://github.com/sequinstream/sequin/blob/main/CONTRIBUTING.md"
+          }
+        ]
+      },
+      {
+        "header": "Product",
+        "items": [
+          {
+            "label": "Pricing",
+            "href": "https://sequinstream.com/#pricing"
+          },
+          {
+            "label": "Features",
+            "href": "https://sequinstream.com/#features"
+          },
+          {
+            "label": "Compare Sequin",
+            "href": "https://sequinstream.com/docs/compare"
+          },
+          {
+            "label": "Sequin Managed",
+            "href": "https://sequinstream.com/docs/sequin-managed/overview"
+          }
+        ]
+      },
+      {
+        "header": "Company",
+        "items": [
+          {
+            "label": "Blog",
+            "href": "https://blog.sequinstream.com/"
+          },
+          {
+            "label": "Careers",
+            "href": "https://sequin.notion.site/"
+          },
+          {
+            "label": "Contact",
+            "href": "mailto:support@sequinstream.com"
+          }
+        ]
+      }
+    ]
   },
   "contextual": {
     "options": [

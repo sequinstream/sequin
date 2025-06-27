@@ -11,7 +11,8 @@
     The source database for the sink consumer
 </ResponseField>
 <ResponseField name="source" type="object" >
-    The source configuration for the sink consumer
+    The source configuration for the sink consumer. This determines which tables are consumed.
+
     <Expandable title="source properties">
         <ResponseField name="include_schemas" type="array">
             List of schemas to include, or null to include all
@@ -28,6 +29,22 @@
             List of tables to exclude, or null to exclude none
 
             A table name can be specified with schema (e.g. `my-schema.my-table`) or without (e.g. `my-table`) which defaults to schema `public`.
+        </ResponseField>
+    </Expandable>
+</ResponseField>
+<ResponseField name="tables" type="array" >
+    Additional configuration for individual tables.
+
+    To configure which tables are consumed, see the `source` field.
+
+    <Expandable title="tables properties">
+        <ResponseField name="name" type="string" >
+            The name of the table.
+
+            A table name can be specified with schema (e.g. `my-schema.my-table`) or without (e.g. `my-table`) which defaults to schema `public`.
+        </ResponseField>
+        <ResponseField name="group_column_names" type="array" >
+            The column names to group by or `null` to disable grouping
         </ResponseField>
     </Expandable>
 </ResponseField>

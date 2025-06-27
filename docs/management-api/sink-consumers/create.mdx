@@ -40,6 +40,23 @@ Creates a new sink consumer.
   </Expandable>
 </ParamField>
 
+<ParamField body="tables" type="array">
+  Additional configuration for individual tables.
+
+  To configure which tables are consumed, see the `source` field.
+
+  <Expandable title="tables properties">
+    <ParamField body="name" type="string" required>
+      The name of the table.
+
+      A table name can be specified with schema (e.g. `my-schema.my-table`) or without (e.g. `my-table`) which defaults to schema `public`.
+    </ParamField>
+    <ParamField body="group_column_names" type="array">
+      The column names to group by or `null` to disable grouping
+    </ParamField>
+  </Expandable>
+</ParamField>
+
 <ParamField body="actions" type="array" required>
   The database actions to include in the sink (insert, update, delete)
 </ParamField>

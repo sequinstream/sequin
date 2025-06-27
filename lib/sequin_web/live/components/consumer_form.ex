@@ -626,12 +626,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp decode_params(form, socket) do
-    routing_mode = form["routingMode"]
-
-    sink =
-      socket.assigns.consumer.type
-      |> decode_sink(form["sink"])
-      |> Map.put("routing_mode", routing_mode)
+    sink = decode_sink(socket.assigns.consumer.type, form["sink"])
 
     params =
       %{
@@ -652,7 +647,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
         "routing_id" => if(form["routingId"] === "none", do: nil, else: form["routingId"]),
         "filter_id" => if(form["filterId"] === "none", do: nil, else: form["filterId"]),
-        "routing_mode" => routing_mode,
+        "routing_mode" => form["routingMode"],
         "timestamp_format" => form["timestampFormat"],
         "source" => decode_source(form["source"])
       }

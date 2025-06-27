@@ -861,7 +861,7 @@ defmodule Sequin.Transforms do
         "routing" ->
           case parse_function_id(account_id, value) do
             {:ok, nil} ->
-              {:cont, {:ok, Map.put(acc, :routing_id, nil)}}
+              {:cont, {:ok, Map.merge(acc, %{routing_mode: "static", routing_id: nil})}}
 
             {:ok, function_id} ->
               {:cont, {:ok, Map.merge(acc, %{routing_mode: "dynamic", routing_id: function_id})}}

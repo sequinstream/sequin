@@ -1,3 +1,9 @@
+<div align="center">
+
+<img src="https://sqn-img-svr.eric-65f.workers.dev/?page=readme" alt="Sequin" height="80" />
+
+</div>
+
 # Changelog
 
 Sequin provides fast, real-time Postgres change data capture into streams and queues.

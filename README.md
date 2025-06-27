@@ -1,6 +1,6 @@
 <div align="center">
 
-# Sequin
+<img src="https://sqn-img-svr.eric-65f.workers.dev/?page=readme" alt="Sequin" height="80" />
 
 ### Postgres change data capture to streams, queues, and search indexes like Kafka, SQS, Elasticsearch, HTTP endpoints, and more
 

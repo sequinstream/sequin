@@ -99,18 +99,66 @@ func PrettyPrintServerError(errorBody string) string {
 
 	var result strings.Builder
 
-	// Process the summary field if it exists
-	if summary, ok := errorData["summary"].(string); ok {
+	// Process the summary field first if it exists and is not nil
+	if summary, ok := errorData["summary"].(string); ok && summary != "" {
 		result.WriteString(summary)
 		delete(errorData, "summary")
 	}
 
 	// Process any additional fields
 	for key, value := range errorData {
-		result.WriteString(fmt.Sprintf("\n%s: %v", key, value))
+		// Skip nil values
+		if value == nil {
+			continue
+		}
+
+		// Add newline if we already have content
+		if result.Len() > 0 {
+			result.WriteString("\n")
+		}
+
+		// Format the value based on its type
+		switch v := value.(type) {
+		case map[string]interface{}:
+			result.WriteString(fmt.Sprintf("%s:", key))
+			formatMap(&result, v, 1)
+		case []interface{}:
+			result.WriteString(fmt.Sprintf("%s:", key))
+			formatSlice(&result, v, 1)
+		default:
+			result.WriteString(fmt.Sprintf("%s: %v", key, value))
+		}
 	}
 
 	return result.String()
+}
+
+// formatMap formats a map with proper indentation
+func formatMap(sb *strings.Builder, m map[string]interface{}, indent int) {
+	for key, value := range m {
+		sb.WriteString(fmt.Sprintf("\n%s%s:", strings.Repeat("  ", indent), key))
+		switch v := value.(type) {
+		case map[string]interface{}:
+			formatMap(sb, v, indent+1)
+		case []interface{}:
+			formatSlice(sb, v, indent+1)
+		default:
+			sb.WriteString(fmt.Sprintf(" %v", value))
+		}
+	}
+}
+
+// formatSlice formats a slice with proper indentation
+func formatSlice(sb *strings.Builder, s []interface{}, indent int) {
+	for _, value := range s {
+		switch v := value.(type) {
+		case map[string]interface{}:
+			sb.WriteString("\n" + strings.Repeat("  ", indent))
+			formatMap(sb, v, indent+1)
+		default:
+			sb.WriteString(fmt.Sprintf("\n%s- %v", strings.Repeat("  ", indent), value))
+		}
+	}
 }
 
 func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {

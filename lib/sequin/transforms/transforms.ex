@@ -1081,7 +1081,9 @@ defmodule Sequin.Transforms do
        queue_url: attrs["queue_url"],
        region: attrs["region"],
        access_key_id: attrs["access_key_id"],
-       secret_access_key: attrs["secret_access_key"]
+       secret_access_key: attrs["secret_access_key"],
+       use_emulator: attrs["use_emulator"] || false,
+       emulator_base_url: attrs["emulator_base_url"]
      }}
   end
 

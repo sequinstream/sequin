@@ -179,6 +179,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
       raise error
   end
 
+  @spec put_high_watermark_wal_cursor(SinkConsumer.t(), Replication.wal_cursor()) :: :ok
+  def put_high_watermark_wal_cursor(consumer, high_watermark_wal_cursor) do
+    Enum.each(partitions(consumer), fn partition ->
+      :ok = GenServer.cast(via_tuple(consumer.id, partition), {:put_high_watermark_wal_cursor, high_watermark_wal_cursor})
+    end)
+  end
+
   @doc """
   Similar to `put_messages/2` but for a batch of messages that state will track
   as a single unit. Used for TableReaderServer.
@@ -774,6 +781,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   def handle_call(:payload_size_bytes, _from, state) do
     {:reply, {:ok, state.payload_size_bytes}, state}
+  end
+
+  @impl GenServer
+  def handle_cast({:put_high_watermark_wal_cursor, high_watermark_wal_cursor}, %State{} = state) do
+    state = %State{state | high_watermark_wal_cursor: high_watermark_wal_cursor}
+    {:noreply, state}
   end
 
   @impl GenServer

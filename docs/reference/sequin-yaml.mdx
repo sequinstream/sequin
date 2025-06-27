@@ -324,6 +324,7 @@ destination:
   username: "kafka-user"        # Optional, for SASL authentication
   password: "kafka-pass"        # Optional, for SASL authentication
   sasl_mechanism: "plain"       # Optional: plain, scram_sha_256, scram_sha_512
+  batch_size: 50                # Optional, messages per batch
 ```
 
 #### SQS sink
@@ -332,6 +333,7 @@ For sending changes to Amazon SQS queues:
 destination:
   type: "sqs"                   # Required
   queue_url: "https://sqs.us-west-2.amazonaws.com/123/MyQueue.fifo" # Required
+  region: "us-west-2"          # Optional, inferred from queue_url if omitted
   access_key_id: "AKIAXXXX"    # Required
   secret_access_key: "secret"   # Required
 ```
@@ -345,15 +347,14 @@ destination:
   region: "us-west-2"          # Optional, inferred from topic_arn if omitted
   access_key_id: "AKIAXXXX"    # Required
   secret_access_key: "secret"   # Required
+  is_fifo: false               # Optional, automatically detected from topic_arn
 ```
-
-The `region` field is optional. If not provided, Sequin will automatically infer the region from the `topic_arn`. FIFO topics are supported—Sequin will detect a FIFO topic automatically when the `topic_arn` ends with `.fifo`.
 
 #### Redis sink
 For publishing changes to Redis streams:
 ```yaml
 destination:
-  type: "redis_stream"                 # Required
+  type: "redis_stream"          # Required
   host: "localhost"             # Required
   port: 6379                    # Required
   stream_key: "my-stream"       # Required
@@ -368,12 +369,12 @@ For publishing changes to RabbitMQ exchanges:
 ```yaml
 destination:
   type: "rabbitmq"              # Required
-  host: "localhost"              # Required
+  host: "localhost"             # Required
   port: 5672                    # Required
-  exchange: "my-exchange"        # Required
-  username: "guest"              # Optional, default: guest
-  password: "guest"              # Optional, default: guest
-  virtual_host: "/"              # Optional, default: /
+  exchange: "my-exchange"       # Required
+  username: "guest"             # Optional, default: guest
+  password: "guest"             # Optional, default: guest
+  virtual_host: "/"             # Optional, default: /
   tls: false                    # Optional, enable TLS, default: false
 ```
 
@@ -381,10 +382,10 @@ destination:
 For publishing changes to Google Cloud Pub/Sub topics:
 ```yaml
 destination:
-  type: "gcp_pubsub"                # Required
-  project_id: "my-project"          # Required
-  topic_id: "my-topic"             # Required
-  credentials:                      # Required, GCP service account credentials
+  type: "gcp_pubsub"           # Required
+  project_id: "my-project"     # Required
+  topic_id: "my-topic"         # Required
+  credentials:                 # Required, GCP service account credentials
     type: "service_account"
     project_id: "my-project"
     private_key_id: "key123"
@@ -395,11 +396,73 @@ destination:
     token_uri: "https://oauth2.googleapis.com/token"
     auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs"
     client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com"
+  use_emulator: false         # Optional, for local development
+  emulator_base_url: "http://localhost:8085"  # Optional, required if use_emulator is true
 ```
 
 The GCP PubSub sink requires a service account with permissions to publish to the specified topic. The `credentials` field should contain the JSON key file contents for a service account with the `roles/pubsub.publisher` role.
 
 Project ID must be between 6 and 30 characters, start with a letter, and contain only lowercase letters, numbers, and hyphens. Topic ID must be between 3 and 255 characters and match the pattern: `[a-zA-Z][a-zA-Z0-9-_.~+%]*`.
+
+#### Azure Event Hub sink
+For publishing changes to Azure Event Hubs:
+```yaml
+destination:
+  type: "azure_event_hub"          # Required
+  namespace: "my-namespace"        # Required
+  event_hub_name: "records"       # Required
+  shared_access_key_name: "RootManageSharedAccessKey"  # Required
+  shared_access_key: "your-shared-access-key"          # Required
+```
+
+#### NATS sink
+For publishing changes to NATS:
+```yaml
+destination:
+  type: "nats"                    # Required
+  host: "localhost"               # Required
+  port: 4222                      # Required
+  username: "nats_user"           # Optional
+  password: "nats_password"       # Optional
+  jwt: "your-jwt-token"          # Optional
+  nkey_seed: "your-nkey-seed"    # Optional
+  tls: false                     # Optional, enable TLS, default: false
+```
+
+#### S2 sink
+For publishing changes to S2:
+```yaml
+destination:
+  type: "s2"                     # Required
+  basin: "my-basin"              # Required
+  stream: "my-stream"            # Required
+  access_token: "my-access-token" # Required
+```
+
+#### Redis String sink
+For storing changes as Redis strings:
+```yaml
+destination:
+  type: "redis_string"           # Required
+  host: "localhost"              # Required
+  port: 6379                     # Required
+  database: 0                    # Optional, Redis database number, default: 0
+  tls: false                     # Optional, enable TLS, default: false
+  username: "redis_user"         # Optional, for authentication
+  password: "redis_password"     # Optional, for authentication
+  expire_ms: 3600000            # Optional, key expiration time in milliseconds
+  mode: "static"                # Optional, key generation mode
+```
+
+#### Kinesis sink
+For publishing changes to AWS Kinesis streams:
+```yaml
+destination:
+  type: "kinesis"                # Required
+  stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"  # Required
+  access_key_id: "AKIAXXXX"     # Required
+  secret_access_key: "secret"    # Required
+```
 
 ### Function configuration
 

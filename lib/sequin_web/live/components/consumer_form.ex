@@ -588,15 +588,11 @@ defmodule SequinWeb.Components.ConsumerForm do
     if sink_changeset.valid? do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
 
-      case MeilisearchClient.get_index(sink) do
-        {:ok, primary_key} ->
-          if primary_key == sink.primary_key do
-            :ok
-          else
-            {:error, "Primary key mismatch: expected \"#{primary_key}\", got \"#{sink.primary_key}\""}
-          end
-
-        {:error, error} ->
+      with :ok <- MeilisearchClient.test_connection(sink),
+           :ok <- MeilisearchClient.maybe_verify_index(sink, sink.index_name, sink.primary_key) do
+        :ok
+      else
+        {:error, error} when is_exception(error) ->
           {:error, Exception.message(error)}
       end
     else

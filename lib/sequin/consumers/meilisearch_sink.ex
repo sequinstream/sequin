@@ -17,12 +17,22 @@ defmodule Sequin.Consumers.MeilisearchSink do
     field(:api_key, Sequin.Encrypted.Binary)
     field(:batch_size, :integer, default: 100)
     field(:timeout_seconds, :integer, default: 5)
+    field(:routing_mode, Ecto.Enum, values: [:dynamic, :static])
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:endpoint_url, :index_name, :primary_key, :api_key, :batch_size, :timeout_seconds])
-    |> validate_required([:endpoint_url, :index_name, :api_key])
+    |> cast(params, [
+      :endpoint_url,
+      :index_name,
+      :primary_key,
+      :api_key,
+      :batch_size,
+      :timeout_seconds,
+      :routing_mode
+    ])
+    |> validate_required([:endpoint_url, :api_key])
+    |> validate_routing()
     |> validate_endpoint_url()
     |> validate_length(:index_name, max: 1024)
     |> validate_number(:batch_size, greater_than: 0, less_than_or_equal_to: 10_000)
@@ -53,6 +63,21 @@ defmodule Sequin.Consumers.MeilisearchSink do
       end
     end)
     |> validate_length(:endpoint_url, max: 4096)
+  end
+
+  defp validate_routing(changeset) do
+    routing_mode = get_field(changeset, :routing_mode)
+
+    cond do
+      routing_mode == :dynamic ->
+        put_change(changeset, :index_name, nil)
+
+      routing_mode == :static ->
+        validate_required(changeset, [:index_name])
+
+      true ->
+        add_error(changeset, :routing_mode, "is required")
+    end
   end
 
   def client_params(%__MODULE__{} = me) do

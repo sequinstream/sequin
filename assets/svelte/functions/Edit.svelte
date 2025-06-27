@@ -104,6 +104,7 @@
     kafka: "Kafka",
     gcp_pubsub: "GCP PubSub",
     typesense: "Typesense",
+    meilisearch: "Meilisearch",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];

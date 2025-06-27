@@ -51,14 +51,14 @@ defmodule Sequin.Sinks.Meilisearch.Client do
   @doc """
   Import multiple documents in JSONL format.
   """
-  def import_documents(%MeilisearchSink{} = sink, records) do
+  def import_documents(%MeilisearchSink{} = sink, index_name, records) do
     jsonl = Enum.map_join(records, "\n", &Jason.encode!/1)
 
     req =
       sink
       |> base_request()
       |> Req.merge(
-        url: "/indexes/#{sink.index_name}/documents",
+        url: "/indexes/#{index_name}/documents",
         headers: [{"Content-Type", "application/x-ndjson"}],
         body: jsonl
       )
@@ -82,12 +82,12 @@ defmodule Sequin.Sinks.Meilisearch.Client do
   @doc """
   Delete documents from an index.
   """
-  def delete_documents(%MeilisearchSink{} = sink, document_ids) do
+  def delete_documents(%MeilisearchSink{} = sink, index_name, document_ids) do
     req =
       sink
       |> base_request()
       |> Req.merge(
-        url: "/indexes/#{sink.index_name}/documents/delete-batch",
+        url: "/indexes/#{index_name}/documents/delete-batch",
         body: Jason.encode!(document_ids),
         headers: [{"Content-Type", "application/json"}]
       )
@@ -111,10 +111,10 @@ defmodule Sequin.Sinks.Meilisearch.Client do
   @doc """
   Get information about an index.
   """
-  def get_index(%MeilisearchSink{} = sink) do
+  def get_index(%MeilisearchSink{} = sink, index_name) do
     req = base_request(sink)
 
-    case Req.get(req, url: "/indexes/#{sink.index_name}") do
+    case Req.get(req, url: "/indexes/#{index_name}") do
       {:ok, %{status: status, body: body}} when status == 200 ->
         {:ok, body["primaryKey"]}
 
@@ -144,6 +144,27 @@ defmodule Sequin.Sinks.Meilisearch.Client do
            message: "Cannot connect to Meilisearch",
            details: reason
          )}
+    end
+  end
+
+  def maybe_verify_index(%MeilisearchSink{index_name: nil}, _index_name, _primary_key) do
+    :ok
+  end
+
+  def maybe_verify_index(%MeilisearchSink{} = sink, index_name, primary_key) do
+    case get_index(sink, index_name) do
+      {:ok, ^primary_key} ->
+        :ok
+
+      {:ok, other_primary_key} ->
+        {:error,
+         Error.service(
+           service: :meilisearch,
+           message: ~s(Index verification failed. Expected primary key "#{primary_key}", got "#{other_primary_key}")
+         )}
+
+      {:error, error} ->
+        {:error, Error.service(service: :meilisearch, message: "Index verification failed", details: error)}
     end
   end
 

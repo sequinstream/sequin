@@ -3,6 +3,7 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.Trace
   alias Sequin.Sinks.Meilisearch.Client
@@ -39,15 +40,25 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
         _ -> :default
       end
 
-    {:ok, Broadway.Message.put_batcher(message, batcher), context}
+    %Routing.Consumers.Meilisearch{index_name: index_name} =
+      Routing.route_message(context.consumer, message.data)
+
+    message =
+      message
+      |> Broadway.Message.put_batcher(batcher)
+      |> Broadway.Message.put_batch_key(index_name)
+
+    {:ok, message, context}
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_batch(:default, messages, batch_info, context) do
     %{
       consumer: %SinkConsumer{sink: sink, transform: transform} = consumer,
       test_pid: test_pid
     } = context
+
+    index_name = batch_info.batch_key
 
     setup_allowances(test_pid)
 
@@ -58,17 +69,17 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
         |> attempt_to_fill_primary_key(transform, sink.primary_key)
       end)
 
-    case Client.import_documents(sink, records) do
+    case Client.import_documents(sink, index_name, records) do
       {:ok} ->
         Trace.info(consumer.id, %Trace.Event{
-          message: "Imported documents to \"#{sink.index_name}\" index"
+          message: "Imported documents to \"#{index_name}\" index"
         })
 
         {:ok, messages, context}
 
       {:error, error} ->
         Trace.error(consumer.id, %Trace.Event{
-          message: "Failed to import to \"#{sink.index_name}\" index",
+          message: "Failed to import to \"#{index_name}\" index",
           error: error
         })
 
@@ -77,21 +88,23 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:delete, messages, _batch_info, context) do
+  def handle_batch(:delete, messages, batch_info, context) do
     %{
       consumer: %SinkConsumer{sink: sink} = consumer,
       test_pid: test_pid
     } = context
+
+    index_name = batch_info.batch_key
 
     setup_allowances(test_pid)
 
     document_ids =
       Enum.flat_map(messages, fn %{data: message} -> message.record_pks end)
 
-    case Client.delete_documents(sink, document_ids) do
+    case Client.delete_documents(sink, index_name, document_ids) do
       {:ok} ->
         Trace.info(consumer.id, %Trace.Event{
-          message: "Deleted documents from \"#{sink.index_name}\" index",
+          message: "Deleted documents from \"#{index_name}\" index",
           extra: %{document_ids: document_ids}
         })
 
@@ -99,7 +112,7 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
 
       {:error, error} ->
         Trace.error(consumer.id, %Trace.Event{
-          message: "Failed to delete documents from \"#{sink.index_name}\" index",
+          message: "Failed to delete documents from \"#{index_name}\" index",
           error: error,
           extra: %{document_ids: document_ids}
         })

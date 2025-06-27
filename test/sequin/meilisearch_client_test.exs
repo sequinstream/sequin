@@ -57,7 +57,7 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         })
       end)
 
-      assert {:ok} = Client.import_documents(@sink, records)
+      assert {:ok} = Client.import_documents(@sink, "test", records)
     end
   end
 
@@ -84,7 +84,50 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
       end)
 
       ids = Enum.map(records, & &1["id"])
-      assert {:ok} = Client.delete_documents(@sink, ids)
+      assert {:ok} = Client.delete_documents(@sink, "test", ids)
+    end
+  end
+
+  describe "maybe_verify_index/3" do
+    test "returns :ok when index exists with matching primary key" do
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/indexes/test"
+
+        Req.Test.json(conn, %{
+          "primaryKey" => "id"
+        })
+      end)
+
+      assert :ok = Client.maybe_verify_index(@sink, "test", "id")
+    end
+
+    test "returns error when index exists with different primary key" do
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/indexes/test"
+
+        Req.Test.json(conn, %{
+          "primaryKey" => "different_id"
+        })
+      end)
+
+      assert {:error, error} = Client.maybe_verify_index(@sink, "test", "id")
+      assert error.message =~ ~s(Expected primary key "id", got "different_id")
+    end
+
+    test "returns error when index verification fails" do
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/indexes/test"
+
+        conn
+        |> Plug.Conn.put_status(404)
+        |> Req.Test.json(%{"message" => "Index not found"})
+      end)
+
+      assert {:error, error} = Client.maybe_verify_index(@sink, "test", "id")
+      assert error.message == "[meilisearch]: Index verification failed"
     end
   end
 end

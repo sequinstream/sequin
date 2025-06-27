@@ -60,6 +60,22 @@ Sequin also uses one method of the [Indexes API](https://www.meilisearch.com/doc
 
 Sequin does not perform any searches.
 
+## Routing
+
+The Meilisearch sink supports dynamic routing of the `index_name` with [routing functions](/reference/routing).
+
+Example routing function:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{
+    index_name: metadata.table_name
+  }
+end
+```
+
+When not using a routing function, documents will be written to the index specified in the sink configuration.
+
 ## Error handling
 
 Common errors that can occur when working with the Meilisearch sink include:

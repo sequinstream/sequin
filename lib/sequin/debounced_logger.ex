@@ -50,6 +50,7 @@ defmodule Sequin.DebouncedLogger do
       field :dedupe_key, term(), enforce: true
       field :debounce_interval_ms, pos_integer(), default: 60_000
       field :table_name, atom()
+      field :logger_fun, function(), default: &Logger.bare_log/3
     end
   end
 
@@ -118,13 +119,18 @@ defmodule Sequin.DebouncedLogger do
     case :ets.lookup(table_name, key) do
       [] ->
         # First event - log immediately and start timer.
-        Logger.bare_log(level, message, merged_meta)
+        cfg.logger_fun.(level, message, merged_meta)
 
         :ets.insert(table_name, {key, 0, IO.iodata_to_binary(message), merged_meta})
 
         # schedule flush; ignore returned tref (we don't cancel)
         _ =
-          :timer.apply_after(cfg.debounce_interval_ms, __MODULE__, :flush_bucket, [level, cfg.dedupe_key, table_name])
+          :timer.apply_after(cfg.debounce_interval_ms, __MODULE__, :flush_bucket, [
+            level,
+            cfg.dedupe_key,
+            table_name,
+            cfg.logger_fun
+          ])
 
         :ok
 
@@ -136,8 +142,9 @@ defmodule Sequin.DebouncedLogger do
   end
 
   # Called by :timer.apply_after/4
-  @spec flush_bucket(atom(), term(), atom()) :: :ok
-  def flush_bucket(level, dedupe_key, table_name \\ @default_table) when level in @levels do
+  @spec flush_bucket(atom(), term(), atom(), function()) :: :ok
+  def flush_bucket(level, dedupe_key, table_name \\ @default_table, logger_fun \\ &Logger.bare_log/3)
+      when level in @levels do
     key = {level, dedupe_key}
 
     case :ets.take(table_name, key) do
@@ -147,7 +154,7 @@ defmodule Sequin.DebouncedLogger do
 
       [{^key, count, base_msg, meta}] when count > 0 ->
         summary = "[#{count}×] " <> base_msg
-        Logger.bare_log(level, summary, meta)
+        logger_fun.(level, summary, meta)
         :ok
 
       _ ->

@@ -59,7 +59,6 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     typedstruct do
       field :id, PostgresReplicationSlot.id()
       field :processor_idx, non_neg_integer()
-      field :partition_count, non_neg_integer()
       field :outbox_messages, [Message.t()], default: nil
 
       # Entities
@@ -127,9 +126,9 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   end
 
   def handle_messages(%Context{} = ctx, messages) do
-    %{replication_slot_id: slot_id, partition_count: partition_count} = ctx
+    %{replication_slot_id: slot_id} = ctx
     # Determine which partition to send to based on a hash of the message
-    messages_by_partition = partition_messages(messages, partition_count)
+    messages_by_partition = partition_messages(messages, 1)
 
     # Send messages to each partition
     Sequin.Enum.reduce_while_ok(messages_by_partition, fn {processor_idx, partition_messages} ->
@@ -139,12 +138,10 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   end
 
   def reload_entities(%Context{} = ctx) do
-    %{replication_slot_id: slot_id, partition_count: partition_count} = ctx
+    %{replication_slot_id: slot_id} = ctx
 
-    Sequin.Enum.reduce_while_ok(0..(partition_count - 1), fn processor_idx ->
-      name = via_tuple(slot_id, processor_idx)
-      GenServer.call(name, :load_entities)
-    end)
+    name = via_tuple(slot_id, 0)
+    GenServer.call(name, :load_entities)
   end
 
   @doc """
@@ -154,22 +151,10 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   Upstream callers can use this to ensure all handlers are done processing.
   """
   def flush_messages(%Context{} = ctx) do
-    %{replication_slot_id: slot_id, partition_count: partition_count} = ctx
+    %{replication_slot_id: slot_id} = ctx
 
-    Sequin.TaskSupervisor
-    |> Task.Supervisor.async_stream(
-      0..(partition_count - 1),
-      fn processor_idx ->
-        name = via_tuple(slot_id, processor_idx)
-        GenServer.call(name, :flush)
-      end,
-      max_concurrency: partition_count,
-      timeout: :timer.seconds(10)
-    )
-    |> Sequin.Enum.reduce_while_ok(fn
-      {:ok, :ok} -> :ok
-      error -> error
-    end)
+    name = via_tuple(slot_id, 0)
+    GenServer.call(name, :flush)
   end
 
   @doc """
@@ -315,7 +300,6 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   @decorate track_metrics("load_entities")
   defp load_entities(%State{} = state) do
     slot = Replication.get_pg_replication!(state.id)
-    Logger.metadata(partition_count: slot.partition_count)
 
     %{postgres_database: db, not_disabled_sink_consumers: consumers, wal_pipelines: pipelines} =
       Repo.preload(slot, [
@@ -329,7 +313,6 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       | postgres_database: db,
         consumers: consumers,
         wal_pipelines: pipelines,
-        partition_count: slot.partition_count,
         replication_slot: slot
     }
   end

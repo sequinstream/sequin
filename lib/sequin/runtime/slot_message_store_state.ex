@@ -38,6 +38,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :last_logged_stats_at, non_neg_integer() | nil
     field :flush_interval, non_neg_integer()
     field :message_age_before_flush_ms, non_neg_integer()
+    field :high_watermark_wal_cursor, Replication.wal_cursor()
 
     # Rescue messages stuck in produced state
     field :visibility_check_interval, non_neg_integer()
@@ -334,9 +335,18 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       |> Stream.map(fn {_k, msg} -> {msg.commit_lsn, msg.commit_idx} end)
       |> Enum.min(fn -> nil end)
 
-    case min_messages_wal_cursor do
-      nil -> nil
-      {commit_lsn, commit_idx} -> %{commit_lsn: commit_lsn, commit_idx: commit_idx}
+    case {min_messages_wal_cursor, state.high_watermark_wal_cursor} do
+      # No unpersisted messages and no epoch cursor
+      {nil, nil} ->
+        nil
+
+      # No unpersisted messages, use epoch cursor
+      {nil, epoch_cursor} ->
+        epoch_cursor
+
+      # Has unpersisted messages regardless of epoch cursor, be conservative
+      {{commit_lsn, commit_idx}, _} ->
+        %{commit_lsn: commit_lsn, commit_idx: commit_idx}
     end
   end
 

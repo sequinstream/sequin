@@ -21,6 +21,7 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
+  alias Sequin.Runtime.ConsumerMessageBatch
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.SlotMessageStore
@@ -63,7 +64,8 @@ defmodule Sequin.Runtime.MessageHandler do
       wal_pipelines: pr.wal_pipelines,
       postgres_database: pr.postgres_database,
       replication_slot_id: pr.id,
-      partition_count: pr.partition_count
+      # Fixed to 1 for now
+      partition_count: 1
     }
   end
 
@@ -111,14 +113,14 @@ defmodule Sequin.Runtime.MessageHandler do
 
     save_test_messages(ctx, messages)
 
-    messages_by_consumer = messages_by_consumer(ctx, messages)
+    message_batches_by_consumer = message_batches_by_consumer(ctx, messages)
 
     wal_events = wal_events(ctx, messages)
 
     matching_pipeline_ids = wal_events |> Enum.map(& &1.wal_pipeline_id) |> Enum.uniq()
 
     res =
-      with {:ok, count} <- call_consumer_message_stores(messages_by_consumer) do
+      with {:ok, count} <- call_consumer_message_stores(message_batches_by_consumer) do
         {:ok, wal_event_count} = insert_wal_events(ctx, wal_events, matching_pipeline_ids)
 
         {:ok, count + wal_event_count}
@@ -350,31 +352,34 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   @decorate track_metrics("call_consumer_message_stores")
-  defp call_consumer_message_stores(messages_by_consumer) do
+  defp call_consumer_message_stores(message_batches_by_consumer) do
     res =
-      Enum.reduce_while(messages_by_consumer, :ok, fn {consumer, messages}, :ok ->
-        message_ledgers(consumer, messages)
+      Enum.reduce_while(message_batches_by_consumer, :ok, fn {consumer, consumer_message_batch}, :ok ->
+        message_ledgers(consumer, consumer_message_batch.messages)
 
-        case put_messages(consumer, messages) do
+        case put_messages(consumer, consumer_message_batch) do
           :ok -> {:cont, :ok}
           {:error, _} = error -> {:halt, error}
         end
       end)
 
     with :ok <- res do
-      {:ok, Enum.sum_by(messages_by_consumer, fn {_, messages} -> length(messages) end)}
+      {:ok,
+       Enum.sum_by(message_batches_by_consumer, fn {_, consumer_message_batch} ->
+         length(consumer_message_batch.messages)
+       end)}
     end
   end
 
   @max_backoff_ms 100
   @max_attempts 15
   @decorate track_metrics("put_messages")
-  defp put_messages(consumer, messages_to_ingest) do
-    do_put_messages(consumer, messages_to_ingest)
+  defp put_messages(consumer, message_batch_to_ingest) do
+    do_put_messages(consumer, message_batch_to_ingest)
   end
 
-  defp do_put_messages(consumer, messages_to_ingest, attempt \\ 1) do
-    case SlotMessageStore.put_messages(consumer, messages_to_ingest) do
+  defp do_put_messages(consumer, message_batch_to_ingest, attempt \\ 1) do
+    case SlotMessageStore.put_message_batch(consumer, message_batch_to_ingest) do
       :ok ->
         Health.put_event(:sink_consumer, consumer.id, %Event{slug: :messages_ingested, status: :success})
         :ok
@@ -388,7 +393,7 @@ defmodule Sequin.Runtime.MessageHandler do
         )
 
         Process.sleep(backoff)
-        do_put_messages(consumer, messages_to_ingest, attempt + 1)
+        do_put_messages(consumer, message_batch_to_ingest, attempt + 1)
 
       {:error, error} ->
         Health.put_event(:sink_consumer, consumer.id, %Event{slug: :messages_ingested, status: :fail, error: error})
@@ -396,11 +401,16 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
-  @decorate track_metrics("messages_by_consumer")
-  defp messages_by_consumer(%Context{} = ctx, messages) do
+  @decorate track_metrics("message_batches_by_consumer")
+  defp message_batches_by_consumer(%Context{} = ctx, messages) do
     # We group_by consumer_id throughput because consumer as a key is slow!
     # So we need to do fast lookups by consumer_id
     consumers_by_id = Map.new(ctx.consumers, fn consumer -> {consumer.id, consumer} end)
+    messages_by_consumer_id = Enum.map(ctx.consumers, fn consumer -> {consumer.id, []} end)
+
+    # NOTE We rely on the ascending chronological order of messages
+    last_message = List.last(messages)
+    %Message{commit_lsn: max_commit_lsn, commit_idx: max_commit_idx} = last_message
 
     messages
     # First we get a list of consumer_ids that match the SlotProcessor.Message
@@ -432,8 +442,15 @@ defmodule Sequin.Runtime.MessageHandler do
       fn {consumer_id, _consumer_message} -> consumer_id end,
       fn {_, consumer_message} -> consumer_message end
     )
+    |> Enum.reduce(messages_by_consumer_id, fn {consumer_id, messages}, acc ->
+      List.keyreplace(acc, consumer_id, 0, {consumer_id, messages})
+    end)
     |> Enum.map(fn {consumer_id, messages} ->
-      {Map.fetch!(consumers_by_id, consumer_id), messages}
+      {Map.fetch!(consumers_by_id, consumer_id),
+       %ConsumerMessageBatch{
+         messages: messages,
+         high_watermark_wal_cursor: %{commit_lsn: max_commit_lsn, commit_idx: max_commit_idx}
+       }}
     end)
   end
 

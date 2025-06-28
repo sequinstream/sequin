@@ -34,6 +34,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
+  alias Sequin.Runtime.ConsumerMessageBatch
   alias Sequin.Sinks.Gcp
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
@@ -921,5 +922,38 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> path_transform()
     |> Sequin.Map.from_ecto()
+  end
+
+  def consumer_message_batch(messages, attrs \\ []) do
+    high_watermark_wal_cursor =
+      case attrs[:high_watermark_wal_cursor] do
+        nil ->
+          # Extract the highest commit_lsn and commit_idx from the messages
+          case messages do
+            [] ->
+              %{commit_lsn: 0, commit_idx: 0}
+
+            _ ->
+              max_lsn = Enum.max_by(messages, & &1.commit_lsn).commit_lsn
+              filtered_messages = Enum.filter(messages, &(&1.commit_lsn == max_lsn))
+
+              max_idx =
+                case filtered_messages do
+                  [] -> 0
+                  _ -> Enum.max_by(filtered_messages, & &1.commit_idx).commit_idx
+                end
+
+              random_offset = Enum.random(0..100)
+              %{commit_lsn: max_lsn + random_offset, commit_idx: max_idx + random_offset}
+          end
+
+        cursor ->
+          cursor
+      end
+
+    %ConsumerMessageBatch{
+      messages: messages,
+      high_watermark_wal_cursor: high_watermark_wal_cursor
+    }
   end
 end

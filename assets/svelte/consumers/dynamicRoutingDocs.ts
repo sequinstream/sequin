@@ -103,4 +103,14 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  meilisearch: {
+    fields: {
+      index_name: {
+        description: "Meilisearch index name to publish to",
+        staticValue: "<empty>",
+        staticFormField: "index_name",
+        dynamicDefault: "sequin.<table_schema>.<table_name>",
+      },
+    },
+  },
 };

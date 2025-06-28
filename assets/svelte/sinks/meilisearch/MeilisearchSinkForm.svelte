@@ -10,10 +10,15 @@
   import type { MeilisearchConsumer } from "$lib/consumers/types";
   import { Label } from "$lib/components/ui/label";
   import { Eye, EyeOff, Info } from "lucide-svelte";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
 
   export let form: MeilisearchConsumer;
   export let errors: any = {};
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
   let showPassword = false;
+  let isDynamicRouting = form.routingMode === "dynamic";
 
   // Import action options based on the meilisearch_sink.ex Elixir module
 
@@ -78,18 +83,6 @@
     </div>
 
     <div class="space-y-2">
-      <Label for="index_name">Index name</Label>
-      <Input
-        id="index_name"
-        bind:value={form.sink.index_name}
-        placeholder="my-index"
-      />
-      {#if errors.sink?.index_name}
-        <p class="text-destructive text-sm">{errors.sink.index_name}</p>
-      {/if}
-    </div>
-
-    <div class="space-y-2">
       <Label for="primary_key">Primary key</Label>
       <Input
         id="primary_key"
@@ -144,5 +137,36 @@
         Number of documents to send in each batch (default: 100)
       </p>
     </div>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      routedSinkType="meilisearch"
+      bind:selectedDynamic={isDynamicRouting}
+      {errors}
+    />
+
+    {#if !isDynamicRouting}
+      <div class="space-y-2">
+        <Label for="index_name">Index name</Label>
+        <Input
+          id="index_name"
+          bind:value={form.sink.index_name}
+          placeholder="my-index"
+        />
+        {#if errors.sink?.index_name}
+          <p class="text-destructive text-sm">{errors.sink.index_name}</p>
+        {/if}
+      </div>
+    {/if}
   </CardContent>
 </Card>

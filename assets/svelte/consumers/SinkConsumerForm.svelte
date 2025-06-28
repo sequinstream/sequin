@@ -569,7 +569,13 @@
         bind:functionRefreshState
       />
     {:else if consumer.type === "meilisearch"}
-      <MeilisearchSinkForm errors={errors.consumer} bind:form />
+      <MeilisearchSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {:else if consumer.type === "elasticsearch"}
       <ElasticsearchSinkForm errors={errors.consumer} bind:form />
     {/if}

@@ -285,6 +285,7 @@ export const RoutedSinkTypeValues = [
   "kafka",
   "gcp_pubsub",
   "typesense",
+  "meilisearch",
 ] as const;
 
 export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

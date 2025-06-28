@@ -34,7 +34,7 @@ defmodule Sequin.Runtime.SlotProducer.Relation do
     end
   end
 
-  @spec parse_relation(binary(), db_id :: String.t(), Postgres.db_conn()) :: {:ok, map()} | {:error, String.t()}
+  @spec parse_relation(binary(), db_id :: String.t(), Postgres.db_conn()) :: map()
   def parse_relation(msg, db_id, conn) do
     %RawRelation{id: id, columns: columns, namespace: schema, name: table} = raw_relation = Decoder.decode_message(msg)
 

@@ -47,6 +47,10 @@ defmodule Sequin.TestSupport.Models.TestEventLogPartitioned do
     Map.fetch!(column_attnums(), column_name)
   end
 
+  def pk_attnums do
+    Enum.map(["id", "committed_at"], &column_attnum/1)
+  end
+
   def table_oid do
     Postgres.ecto_model_oid(__MODULE__)
   end

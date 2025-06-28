@@ -18,6 +18,7 @@ defmodule Sequin.Runtime.SlotProducer do
   alias Sequin.Runtime.PostgresAdapter.Decoder
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
+  alias Sequin.Runtime.SlotProducer.Relation
 
   require Logger
 
@@ -93,11 +94,15 @@ defmodule Sequin.Runtime.SlotProducer do
     @moduledoc false
     use TypedStruct
 
+    alias Sequin.Postgres
+
     typedstruct do
       field :id, String.t()
+      field :database_id, String.t()
       field :slot_name, String.t()
       field :publication_name, String.t()
       field :pg_major_version, integer()
+      field :conn, (-> Postgres.db_conn())
       # Postgres replication connection
       field :protocol, Postgrex.Protocol.state()
       field :connect_opts, keyword()
@@ -125,6 +130,8 @@ defmodule Sequin.Runtime.SlotProducer do
       field :last_commit_idx, nil | integer()
 
       field :demand, integer(), default: 0
+      field :consumers, [pid()], default: []
+      field :processor_mod, module()
 
       # Buffers
       field :accumulated_messages, %{count: non_neg_integer(), bytes: non_neg_integer(), messages: [Message.t()]},
@@ -151,6 +158,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
     state = %State{
       id: Keyword.fetch!(opts, :id),
+      database_id: Keyword.fetch!(opts, :database_id),
       slot_name: Keyword.fetch!(opts, :slot_name),
       publication_name: Keyword.fetch!(opts, :publication_name),
       connect_opts: connect_opts,
@@ -162,7 +170,9 @@ defmodule Sequin.Runtime.SlotProducer do
       safe_wal_cursor_fn: Keyword.fetch!(opts, :safe_wal_cursor_fn),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
-      setting_update_cursor_interval: Keyword.get(opts, :update_cursor_interval, :timer.seconds(30))
+      setting_update_cursor_interval: Keyword.get(opts, :update_cursor_interval, :timer.seconds(30)),
+      processor_mod: Keyword.get(opts, :processor_mod),
+      conn: Keyword.fetch!(opts, :conn)
     }
 
     Process.send_after(self(), :connect, 0)
@@ -173,6 +183,11 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_demand(incoming, %{demand: demand} = state) do
     {messages, state} = maybe_produce(%{state | demand: demand + incoming})
     {:noreply, messages, state}
+  end
+
+  @impl GenStage
+  def handle_subscribe(:consumer, _opts, {pid, _ref}, state) do
+    {:automatic, %{state | consumers: [pid | state.consumers]}}
   end
 
   @impl GenStage
@@ -322,9 +337,15 @@ defmodule Sequin.Runtime.SlotProducer do
     {:ok, state}
   end
 
-  # defp handle_data(<<?w, _header::192, ?R, _msg::binary>>, %State{} = state) do
-  #   {:ok, state}
-  # end
+  defp handle_data(<<?w, _header::192, ?R, msg::binary>>, %State{} = state) do
+    relation = Relation.parse_relation(<<?R, msg::binary>>, state.database_id, state.conn.())
+
+    Enum.each(state.consumers, fn consumer ->
+      state.processor_mod.handle_relation(consumer, relation)
+    end)
+
+    {:ok, state}
+  end
 
   defp handle_data(
          <<?w, _header::192, ?M, _transactional::binary-1, _lsn::binary-8, "sequin:transaction_annotations."::binary,

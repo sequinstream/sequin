@@ -41,9 +41,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Truncate
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
-  alias Sequin.Runtime.PostgresRelationHashCache
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.Runtime.SlotProducer.PostgresRelationHashCache
   alias Sequin.Time
   alias Sequin.Workers.CreateReplicationSlotWorker
 

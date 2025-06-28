@@ -14,12 +14,14 @@ defmodule Sequin.Runtime.SlotProducerTest do
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Factory.TestEventLogFactory
   alias Sequin.Postgres
   alias Sequin.Runtime.SlotProducer
   alias Sequin.Runtime.SlotProducer.Message
   alias Sequin.Runtime.SlotProducer.Relation
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.Models.TestEventLogPartitioned
   alias Sequin.TestSupport.ReplicationSlots
 
   @moduletag :unboxed
@@ -218,10 +220,53 @@ defmodule Sequin.Runtime.SlotProducerTest do
     test "receives relation messages" do
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
 
-      assert_receive {:relation_received, %Relation{} = _relation}
+      assert_receive {:relation_received, %Relation{} = relation}
+
+      assert relation.schema == "public"
+      assert relation.table == Character.table_name()
+      assert relation.parent_table_id == Character.table_oid()
+
+      # Assert pk column is valid
+      assert %Relation.Column{} = id_col = Enum.find(relation.columns, &(&1.name == "id"))
+      assert id_col.type == "int8"
+      assert id_col.pk?
+      assert [id_col.attnum] == Character.pk_attnums()
+
+      # Assert another column
+      assert %Relation.Column{} = name_col = Enum.find(relation.columns, &(&1.name == "name"))
+      refute name_col.pk?
     end
 
-    # @tag capture_log: true
+    test "receives relation messages for partitioned table" do
+      TestEventLogFactory.insert_test_event_log_partitioned!(%{}, repo: UnboxedRepo)
+
+      assert_receive {:relation_received, %Relation{} = relation}
+
+      assert relation.schema == "public"
+      assert relation.table == TestEventLogPartitioned.table_name()
+      # For partitioned tables, parent_table_id should be the parent table's OID
+      assert relation.parent_table_id == TestEventLogPartitioned.table_oid()
+
+      # Assert pk columns are valid - partitioned table has composite PK (id, committed_at)
+      assert %Relation.Column{} = id_col = Enum.find(relation.columns, &(&1.name == "id"))
+      assert id_col.type == "int8"
+      assert id_col.pk?
+
+      assert %Relation.Column{} = committed_at_col = Enum.find(relation.columns, &(&1.name == "committed_at"))
+      assert committed_at_col.type == "timestamp"
+      assert committed_at_col.pk?
+
+      # Verify the pk_attnums match
+      pk_columns = Enum.filter(relation.columns, & &1.pk?)
+      pk_attnums = pk_columns |> Enum.map(& &1.attnum) |> Enum.sort()
+      expected_pk_attnums = Enum.sort(TestEventLogPartitioned.pk_attnums())
+      assert pk_attnums == expected_pk_attnums
+
+      # Assert a non-pk column
+      assert %Relation.Column{} = seq_col = Enum.find(relation.columns, &(&1.name == "seq"))
+      refute seq_col.pk?
+    end
+
     # test "handles connection failures gracefully", %{postgres_database: postgres_database} do
     #   # Use invalid connection options to trigger failure
     #   invalid_connect_opts =

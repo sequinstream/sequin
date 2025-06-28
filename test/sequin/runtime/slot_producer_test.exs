@@ -299,8 +299,10 @@ defmodule Sequin.Runtime.SlotProducerTest do
           slot_name: replication_slot(),
           publication_name: @publication,
           pg_major_version: 17,
+          postgres_database: db,
           connect_opts: db_connect_opts(db),
-          safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end
+          safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end,
+          test_pid: self()
         ],
         opts
       )
@@ -322,5 +324,25 @@ defmodule Sequin.Runtime.SlotProducerTest do
     postgres_database
     |> PostgresDatabase.to_postgrex_opts()
     |> Keyword.drop([:socket, :socket_dir, :endpoints])
+  end
+
+  defp assert_lsn_progress(init_lsn, db) do
+    # Verify LSN progressed after heartbeats
+    assert_eventually(
+      (fn ->
+         case Postgres.confirmed_flush_lsn(db, replication_slot()) do
+           {:ok, current_lsn} ->
+             if current_lsn > init_lsn do
+               current_lsn
+             else
+               false
+             end
+
+           error ->
+             false
+         end
+       end).(),
+      1000
+    )
   end
 end

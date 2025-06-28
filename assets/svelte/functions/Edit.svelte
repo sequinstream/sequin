@@ -103,6 +103,7 @@
     nats: "NATS",
     kafka: "Kafka",
     gcp_pubsub: "GCP PubSub",
+    sqs: "SQS",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];

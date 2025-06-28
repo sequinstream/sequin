@@ -71,6 +71,7 @@ export type SqsConsumer = BaseConsumer & {
     region: string;
     is_fifo: boolean;
   };
+  routing_mode?: "static" | "dynamic";
 };
 
 // Kinesis specific sink
@@ -284,6 +285,7 @@ export const RoutedSinkTypeValues = [
   "nats",
   "kafka",
   "gcp_pubsub",
+  "sqs",
 ] as const;
 
 export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

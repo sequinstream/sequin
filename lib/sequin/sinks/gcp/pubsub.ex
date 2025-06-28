@@ -177,27 +177,17 @@ defmodule Sequin.Sinks.Gcp.PubSub do
 
   This request is supported on both GCP Cloud and the emulator.
   """
-  @spec test_connection(Client.t(), String.t()) :: :ok | {:error, Error.t()}
-  def test_connection(%Client{} = client, topic_id) do
+  @spec test_connection(Client.t()) :: :ok | {:error, Error.t()}
+  def test_connection(%Client{} = client) do
     test_sub_id = "sequin-test-#{UUID.uuid4()}"
     path = "projects/#{client.project_id}/subscriptions/#{test_sub_id}"
 
-    with {:ok, %{status: 404, body: %{"error" => %{"status" => "NOT_FOUND"}}}} <-
-           authenticated_request(client, :delete, path),
-         :ok <- maybe_test_topic(client, topic_id) do
-      :ok
-    else
+    case authenticated_request(client, :delete, path) do
+      {:ok, %{status: 404, body: %{"error" => %{"status" => "NOT_FOUND"}}}} ->
+        :ok
+
       error ->
         handle_error(error, "test connection")
-    end
-  end
-
-  # Emulator does not support topic metadata. Does not seem like a clean way to check topic existence.
-  defp maybe_test_topic(%Client{use_emulator: true}, _topic_id), do: :ok
-
-  defp maybe_test_topic(%Client{} = client, topic_id) do
-    with {:ok, _} <- topic_metadata(client, topic_id) do
-      :ok
     end
   end
 
@@ -205,6 +195,9 @@ defmodule Sequin.Sinks.Gcp.PubSub do
 
   defp handle_error(error, req_desc) do
     case error do
+      {:ok, %{status: 404, body: %{"error" => %{"message" => message}}}} ->
+        {:error, Error.invariant(code: :not_found, message: "#{req_desc} failed: #{message}")}
+
       {:ok, %{status: 404}} ->
         {:error, Error.not_found(entity: :pubsub_topic)}
 

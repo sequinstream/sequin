@@ -94,7 +94,14 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_http_push" => @initial_route_http,
     "routing_redis_string" => @initial_route_redis_string,
     "routing_nats" => @initial_route_nats,
-    "routing_kafka" => @initial_route_kafka
+    "routing_kafka" => @initial_route_kafka,
+    "routing_gcp_pubsub" => """
+    def route(action, record, changes, metadata) do
+      %{
+        topic_id: "sequin.\#{metadata.database_name}.\#{metadata.table_schema}.\#{metadata.table_name}"
+      }
+    end
+    """
   }
 
   # We generate the function completions at compile time because

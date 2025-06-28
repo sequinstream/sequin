@@ -4,6 +4,7 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
 
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Gcp.PubSub
   alias Sequin.Transforms.Message
@@ -32,23 +33,21 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
     %{test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    record_or_event = message.data
+    %Routing.Consumers.GcpPubsub{topic_id: topic_id} = Routing.route_message(context.consumer, message.data)
 
-    ordering_key = record_or_event.group_id
+    group_id = message.data.group_id
+    ordering_key = {topic_id, group_id}
 
-    message =
-      if ordering_key do
-        Broadway.Message.put_batch_key(message, ordering_key)
-      else
-        message
-      end
+    message = Broadway.Message.put_batch_key(message, ordering_key)
 
     {:ok, message, context}
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_batch(:default, messages, batch_info, context) do
     %{consumer: consumer, pubsub_client: pubsub_client, test_pid: test_pid} = context
+    {topic_id, _group_id} = batch_info.batch_key
+
     setup_allowances(test_pid)
 
     pubsub_messages =
@@ -56,7 +55,7 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
         build_pubsub_message(consumer, data)
       end)
 
-    case PubSub.publish_messages(pubsub_client, consumer.sink.topic_id, pubsub_messages) do
+    case PubSub.publish_messages(pubsub_client, topic_id, pubsub_messages) do
       :ok ->
         {:ok, messages, context}
 

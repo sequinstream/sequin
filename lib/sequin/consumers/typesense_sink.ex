@@ -54,7 +54,7 @@ defmodule Sequin.Consumers.TypesenseSink do
     |> validate_length(:endpoint_url, max: 4096)
   end
 
-  def client_params(%__MODULE__{} = me) do
-    [url: me.endpoint_url, api_key: me.api_key, timeout_seconds: me.timeout_seconds]
+  def client_params(%__MODULE__{} = sink) do
+    [url: sink.endpoint_url, api_key: sink.api_key, timeout_seconds: sink.timeout_seconds]
   end
 end

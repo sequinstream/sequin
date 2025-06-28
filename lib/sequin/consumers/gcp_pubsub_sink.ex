@@ -17,6 +17,7 @@ defmodule Sequin.Consumers.GcpPubsubSink do
     field :connection_id, :string
     field :use_emulator, :boolean, default: false
     field :emulator_base_url, :string
+    field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
 
     embeds_one :credentials, Credentials, on_replace: :delete
   end
@@ -27,9 +28,10 @@ defmodule Sequin.Consumers.GcpPubsubSink do
       :project_id,
       :topic_id,
       :use_emulator,
-      :emulator_base_url
+      :emulator_base_url,
+      :routing_mode
     ])
-    |> validate_required([:project_id, :topic_id, :use_emulator])
+    |> validate_required([:project_id, :use_emulator])
     |> validate_credential_param(params)
     |> validate_emulator_base_url()
     |> cast_credentials()
@@ -42,7 +44,23 @@ defmodule Sequin.Consumers.GcpPubsubSink do
     |> validate_format(:topic_id, ~r/^[a-zA-Z][a-zA-Z0-9-_.~+%]{2,254}$/,
       message: "must be between 3 and 255 characters and match the pattern: [a-zA-Z][a-zA-Z0-9-_.~+%]*"
     )
+    |> validate_routing()
     |> put_new_connection_id()
+  end
+
+  defp validate_routing(changeset) do
+    routing_mode = get_field(changeset, :routing_mode)
+
+    cond do
+      routing_mode == :dynamic ->
+        put_change(changeset, :topic_id, nil)
+
+      routing_mode == :static ->
+        validate_required(changeset, [:topic_id])
+
+      true ->
+        add_error(changeset, :routing_mode, "is required")
+    end
   end
 
   defp validate_emulator_base_url(changeset) do

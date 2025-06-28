@@ -11,10 +11,14 @@ defmodule Sequin.Runtime.TypesensePipeline do
   require Logger
 
   @impl SinkPipeline
-  def init(context, _opts) do
+  def init(context, opts) do
     %{consumer: consumer} = context
-    typesense_client = Client.new(TypesenseSink.client_params(consumer.sink))
-    Map.put(context, :typesense_client, typesense_client)
+
+    req_opts = Keyword.get(opts, :req_opts, [])
+    client_params = TypesenseSink.client_params(consumer.sink)
+    client_opts = Keyword.put(client_params, :req_opts, req_opts)
+
+    Map.put(context, :typesense_client, Client.new(client_opts))
   end
 
   @impl SinkPipeline
@@ -25,12 +29,12 @@ defmodule Sequin.Runtime.TypesensePipeline do
       default: [
         concurrency: concurrency,
         batch_size: consumer.sink.batch_size,
-        batch_timeout: 1000
+        batch_timeout: 10
       ],
       delete: [
         concurrency: concurrency,
         batch_size: 1,
-        batch_timeout: 1000
+        batch_timeout: 10
       ]
     ]
   end
@@ -83,9 +87,6 @@ defmodule Sequin.Runtime.TypesensePipeline do
         jsonl = encode_as_jsonl(external_messages)
 
         case Client.import_documents(consumer, client, sink.collection_name, jsonl) do
-          {:error, error} ->
-            {:error, error}
-
           {:ok, results} ->
             messages =
               Enum.zip_with(messages, results, fn message, result ->
@@ -96,6 +97,9 @@ defmodule Sequin.Runtime.TypesensePipeline do
               end)
 
             {:ok, messages, context}
+
+          {:error, error} ->
+            {:error, error}
         end
     end
   end

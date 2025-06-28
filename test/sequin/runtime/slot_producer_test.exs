@@ -17,6 +17,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
   alias Sequin.Factory.TestEventLogFactory
   alias Sequin.Postgres
   alias Sequin.Runtime.SlotProducer
+  alias Sequin.Runtime.SlotProducer.BatchMarker
   alias Sequin.Runtime.SlotProducer.Message
   alias Sequin.Runtime.SlotProducer.Relation
   alias Sequin.Test.UnboxedRepo
@@ -52,6 +53,10 @@ defmodule Sequin.Runtime.SlotProducerTest do
       GenStage.call(server, {:handle_relation, relation})
     end
 
+    def handle_batch_marker(server, batch_marker) do
+      GenStage.call(server, {:handle_batch_marker, batch_marker})
+    end
+
     def init(%{producer: producer, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand}) do
       state = %{
         test_pid: test_pid,
@@ -71,6 +76,12 @@ defmodule Sequin.Runtime.SlotProducerTest do
 
     def handle_call({:handle_relation, relation}, _from, state) do
       send(state.test_pid, {:relation_received, relation})
+
+      {:reply, :ok, [], state}
+    end
+
+    def handle_call({:handle_batch_marker, batch_marker}, _from, state) do
+      send(state.test_pid, {:batch_marker_received, batch_marker})
 
       {:reply, :ok, [], state}
     end
@@ -101,7 +112,8 @@ defmodule Sequin.Runtime.SlotProducerTest do
         )
 
       unless Map.get(ctx, :skip_start) do
-        start_slot_producer(postgres_database)
+        start_opts = Map.get(ctx, :start_opts, [])
+        start_slot_producer(postgres_database, start_opts)
       end
 
       {:ok, %{postgres_database: postgres_database, pg_replication: pg_replication}}
@@ -267,6 +279,44 @@ defmodule Sequin.Runtime.SlotProducerTest do
       refute seq_col.pk?
     end
 
+    @tag start_opts: [batch_flush_interval: [max_messages: 100, max_bytes: 1024 * 1024 * 1024, max_age: 1]]
+    test "receives a batch flush marker after batch timer expires" do
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+
+      [msg] = receive_messages(1)
+      assert_receive {:batch_marker_received, %BatchMarker{} = marker}
+
+      assert marker.epoch == 0
+      assert marker.high_watermark_wal_cursor.commit_lsn == msg.commit_lsn
+
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+
+      [msg] = receive_messages(1)
+      assert_receive {:batch_marker_received, %BatchMarker{} = marker}
+
+      assert marker.epoch == 1
+      assert marker.high_watermark_wal_cursor.commit_lsn == msg.commit_lsn
+
+      refute_receive {:batch_marker_received, _marker}, 50
+    end
+
+    @tag start_opts: [batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 1024, max_age: 60_000]]
+    test "receives a batch flush marker after batch messages threshold crossed" do
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+
+      [msg1, msg2] = receive_messages(2)
+      assert_receive {:batch_marker_received, %BatchMarker{} = marker}
+
+      max_lsn = max(msg1.commit_lsn, msg2.commit_lsn)
+
+      assert marker.epoch == 0
+      assert marker.high_watermark_wal_cursor.commit_lsn == max_lsn
+
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+      refute_receive {:batch_marker_received, _marker}, 50
+    end
+
     # test "handles connection failures gracefully", %{postgres_database: postgres_database} do
     #   # Use invalid connection options to trigger failure
     #   invalid_connect_opts =
@@ -351,7 +401,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
   end
 
   # Helper functions
-  defp start_slot_producer(db, opts \\ []) do
+  defp start_slot_producer(db, opts) do
     opts =
       Keyword.merge(
         [

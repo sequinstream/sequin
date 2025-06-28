@@ -27,52 +27,45 @@ defmodule Sequin.Runtime.SlotProducer do
 
   @max_messages_per_protocol_read 500
 
-  # 100 MB
-  # @max_accumulated_bytes 100 * 1024 * 1024
-  # @max_accumulated_messages 2500
-  # @backfill_batch_high_watermark Constants.backfill_batch_high_watermark()
+  @type batch_flush_interval :: %{
+          max_messages: non_neg_integer(),
+          max_bytes: non_neg_integer(),
+          max_age_ms: non_neg_integer()
+        }
 
-  # @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
-  # @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
+  def batch_flush_interval do
+    get_config!(:batch_flush_interval)
+  end
 
-  # @logical_message_table_name Constants.logical_messages_table_name()
+  def merge_batch_flush_interval(partial) do
+    config = batch_flush_interval()
+    put_config(:batch_flush_interval, Keyword.merge(config, partial))
+  end
 
-  # def max_accumulated_bytes do
-  #   get_config(:max_accumulated_bytes) || @max_accumulated_bytes
-  # end
+  defp get_config!(key) do
+    config = Application.fetch_env!(:sequin, __MODULE__)
+    Keyword.fetch!(config, key)
+  end
 
-  # def max_accumulated_messages do
-  #   get_config(:max_accumulated_messages) || @max_accumulated_messages
-  # end
+  defp put_config(key, value) do
+    current_config = Application.get_env(:sequin, __MODULE__, [])
+    updated_config = Keyword.put(current_config, key, value)
+    Application.put_env(:sequin, __MODULE__, updated_config)
+  end
 
-  # def set_max_accumulated_messages(value) do
-  #   put_config(:max_accumulated_messages, value)
-  # end
+  defmodule BatchMarker do
+    @moduledoc false
+    use TypedStruct
 
-  # def set_max_accumulated_bytes(value) do
-  #   put_config(:max_accumulated_bytes, value)
-  # end
+    alias Sequin.Replication
 
-  # def set_max_accumulated_messages_time_ms(value) do
-  #   put_config(:max_accumulated_messages_time_ms, value)
-  # end
+    @type epoch :: non_neg_integer()
+    typedstruct enforce: true do
+      field :high_watermark_wal_cursor, Replication.wal_cursor()
+      field :epoch, epoch()
+    end
+  end
 
-  # def set_retry_flush_after_ms(value) do
-  #   put_config(:retry_flush_after_ms, value)
-  # end
-
-  # defp get_config(key) do
-  #   config = Application.get_env(:sequin, __MODULE__, [])
-  #   Keyword.get(config, key)
-  # end
-
-  # defp put_config(key, value) do
-  #   current_config = Application.get_env(:sequin, __MODULE__, [])
-  #   updated_config = Keyword.put(current_config, key, value)
-  #   Application.put_env(:sequin, __MODULE__, updated_config)
-  # end
-  #
-  #
   defmodule Message do
     @moduledoc false
     use TypedStruct
@@ -87,6 +80,7 @@ defmodule Sequin.Runtime.SlotProducer do
       field :kind, kind()
       field :payload, binary()
       field :transaction_annotations, String.t()
+      field :batch_epoch, non_neg_integer()
     end
   end
 
@@ -95,6 +89,8 @@ defmodule Sequin.Runtime.SlotProducer do
     use TypedStruct
 
     alias Sequin.Postgres
+    alias Sequin.Runtime.SlotProducer
+    alias Sequin.Runtime.SlotProducer.BatchMarker
 
     typedstruct do
       field :id, String.t()
@@ -119,6 +115,17 @@ defmodule Sequin.Runtime.SlotProducer do
       field :setting_ack_interval, non_neg_integer()
       field :ack_timer, reference()
       field :update_cursor_timer, reference()
+      field :flushed_high_watermark_wal_cursor, Replication.wal_cursor()
+
+      # Batches
+      field :batch_epoch, BatchMarker.epoch(), default: 0
+      field :last_flushed_batch_at, DateTime.t()
+
+      field :processed_messages_since_last_flush_stats, %{count: non_neg_integer(), bytes: non_neg_integer()},
+        default: %{count: 0, bytes: 0}
+
+      field :batch_flush_timer, {reference(), non_neg_integer()}
+      field :setting_batch_flush_interval, SlotProducer.batch_flush_interval()
 
       # Current xaction state
       field :commit_ts, DateTime.t()
@@ -172,7 +179,8 @@ defmodule Sequin.Runtime.SlotProducer do
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
       setting_update_cursor_interval: Keyword.get(opts, :update_cursor_interval, :timer.seconds(30)),
       processor_mod: Keyword.get(opts, :processor_mod),
-      conn: Keyword.fetch!(opts, :conn)
+      conn: Keyword.fetch!(opts, :conn),
+      setting_batch_flush_interval: Keyword.get(opts, :batch_flush_interval)
     }
 
     Process.send_after(self(), :connect, 0)
@@ -223,6 +231,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
     with {:ok, copies, protocol} <- Protocol.handle_copy_recv(msg, @max_messages_per_protocol_read, protocol),
          {:ok, state} <- handle_copies(copies, %{state | protocol: protocol}) do
+      state = maybe_flush(state)
       {messages, state} = maybe_produce(state)
       {:noreply, messages, state}
     else
@@ -255,6 +264,39 @@ defmodule Sequin.Runtime.SlotProducer do
     state = update_restart_wal_cursor(state)
 
     state = schedule_update_cursor(%{state | update_cursor_timer: nil})
+    {:noreply, [], state}
+  end
+
+  def handle_info(:flush_batch_timer, %State{} = state) do
+    GenStage.async_info(self(), :flush_batch)
+
+    {:noreply, [], state}
+  end
+
+  def handle_info(:flush_batch, %State{} = state) do
+    high_watermark_cursor =
+      if state.commit_lsn do
+        %{commit_lsn: state.commit_lsn, commit_idx: state.commit_idx}
+      else
+        %{commit_lsn: state.last_commit_lsn, commit_idx: state.last_commit_idx}
+      end
+
+    Enum.each(state.consumers, fn consumer ->
+      state.processor_mod.handle_batch_marker(consumer, %BatchMarker{
+        high_watermark_wal_cursor: high_watermark_cursor,
+        epoch: state.batch_epoch
+      })
+    end)
+
+    state = %{
+      state
+      | flushed_high_watermark_wal_cursor: high_watermark_cursor,
+        processed_messages_since_last_flush_stats: %{count: 0, bytes: 0},
+        batch_epoch: state.batch_epoch + 1,
+        batch_flush_timer: nil,
+        last_flushed_batch_at: DateTime.utc_now()
+    }
+
     {:noreply, [], state}
   end
 
@@ -427,11 +469,13 @@ defmodule Sequin.Runtime.SlotProducer do
     msg = message_from_binary(state, msg)
 
     state =
-      Map.update!(state, :accumulated_messages, fn acc ->
+      state
+      |> Map.update!(:accumulated_messages, fn acc ->
         %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, messages: [msg | acc.messages]}
       end)
-
-    # state = maybe_schedule_flush(state)
+      |> Map.update!(:processed_messages_since_last_flush_stats, fn stats ->
+        %{stats | count: stats.count + 1, bytes: stats.bytes + raw_bytes_received}
+      end)
 
     ProcessMetrics.gauge("accumulated_messages_count", state.accumulated_messages.count)
     ProcessMetrics.gauge("accumulated_messages_bytes", state.accumulated_messages.bytes)
@@ -496,7 +540,8 @@ defmodule Sequin.Runtime.SlotProducer do
       commit_ts: state.commit_ts,
       kind: kind,
       payload: binary,
-      transaction_annotations: state.transaction_annotations
+      transaction_annotations: state.transaction_annotations,
+      batch_epoch: state.batch_epoch
     }
   end
 
@@ -605,6 +650,59 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   defp schedule_update_cursor(state), do: state
+
+  defp maybe_flush(%State{} = state) do
+    interval = state.setting_batch_flush_interval || batch_flush_interval()
+    %{count: count, bytes: bytes} = state.processed_messages_since_last_flush_stats
+    max_count = Keyword.fetch!(interval, :max_messages)
+    max_bytes = Keyword.fetch!(interval, :max_bytes)
+    flush_now? = bytes >= max_bytes or count >= max_count
+
+    imminent_timer =
+      case state.batch_flush_timer do
+        {_ref, time} ->
+          :os.system_time(:millisecond) > time
+
+        _ ->
+          false
+      end
+
+    cond do
+      flush_now? and not imminent_timer ->
+        maybe_cancel_flush_timer(state.batch_flush_timer)
+        schedule_flush(%{state | batch_flush_timer: nil}, 0)
+
+      is_nil(state.batch_flush_timer) ->
+        schedule_flush(state)
+
+      true ->
+        state
+    end
+  end
+
+  defp schedule_flush(%State{batch_flush_timer: nil} = state, delay \\ nil) do
+    interval = state.setting_batch_flush_interval || batch_flush_interval()
+    delay = delay || Keyword.fetch!(interval, :max_age)
+    ref = Process.send_after(self(), :flush_batch_timer, delay)
+    time = :os.system_time(:millisecond) + delay
+    %{state | batch_flush_timer: {ref, time}}
+  end
+
+  defp maybe_cancel_flush_timer({timer, _}) when is_reference(timer) do
+    case Process.cancel_timer(timer) do
+      false ->
+        receive do
+          :flush_batch_timer -> :ok
+        after
+          0 -> :ok
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp maybe_cancel_flush_timer(_), do: :ok
 
   defp ack_message(lsn) when is_integer(lsn) do
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]

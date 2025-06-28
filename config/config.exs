@@ -95,6 +95,13 @@ config :sequin, Sequin.Repo,
   migration_lock: :pg_advisory_lock,
   log: false
 
+config :sequin, Sequin.Runtime.SlotProducer,
+  batch_flush_interval: [
+    max_messages: 500,
+    max_bytes: 1024 * 1024 * 10,
+    max_age: 50
+  ]
+
 # Configures the endpoint
 config :sequin, SequinWeb.Endpoint,
   url: [host: "localhost"],

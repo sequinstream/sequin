@@ -113,8 +113,8 @@ defmodule Sequin.Runtime.SlotProducer do
       field :status, :active | :buffering | :disconnected
 
       # Cursors & aliveness
-      field :safe_wal_cursor, Replication.wal_cursor()
-      field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
+      field :restart_wal_cursor, Replication.wal_cursor()
+      field :restart_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
       field :setting_update_cursor_interval, non_neg_integer()
       field :setting_ack_interval, non_neg_integer()
       field :ack_timer, reference()
@@ -167,7 +167,7 @@ defmodule Sequin.Runtime.SlotProducer do
       ingest_enabled_fn: Keyword.get(opts, :ingest_enabled_fn, fn -> true end),
       on_connect_fail: Keyword.get(opts, :on_connect_fail),
       on_disconnect: Keyword.get(opts, :on_disconnect),
-      safe_wal_cursor_fn: Keyword.fetch!(opts, :safe_wal_cursor_fn),
+      restart_wal_cursor_fn: Keyword.fetch!(opts, :restart_wal_cursor_fn),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
       setting_update_cursor_interval: Keyword.get(opts, :update_cursor_interval, :timer.seconds(30)),
@@ -194,7 +194,7 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_info(:connect, %State{} = state) do
     with {:ok, protocol} <- Protocol.connect(state.connect_opts),
          Logger.info("[SlotProducer] Connected"),
-         {:ok, %State{} = state, protocol} <- init_safe_wal_cursor(state, protocol),
+         {:ok, %State{} = state, protocol} <- init_restart_wal_cursor(state, protocol),
          {:ok, protocol} <- Protocol.handle_streaming(start_replication_query(state), protocol),
          {:ok, protocol} <- Protocol.checkin(protocol) do
       state = %{state | protocol: protocol, status: :active}
@@ -237,9 +237,9 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   def handle_info(:send_ack, %State{} = state) do
-    Logger.info("[SlotProcessorServer] Sending ack for LSN #{state.safe_wal_cursor.commit_lsn}")
+    Logger.info("[SlotProcessorServer] Sending ack for LSN #{state.restart_wal_cursor.commit_lsn}")
 
-    msg = ack_message(state.safe_wal_cursor.commit_lsn)
+    msg = ack_message(state.restart_wal_cursor.commit_lsn)
     state = schedule_ack(%{state | ack_timer: nil})
 
     case Protocol.handle_copy_send(msg, state.protocol) do
@@ -251,8 +251,8 @@ defmodule Sequin.Runtime.SlotProducer do
     end
   end
 
-  def handle_info(:update_safe_wal_cursor, %State{} = state) do
-    state = update_safe_wal_cursor(state)
+  def handle_info(:update_restart_wal_cursor, %State{} = state) do
+    state = update_restart_wal_cursor(state)
 
     state = schedule_update_cursor(%{state | update_cursor_timer: nil})
     {:noreply, [], state}
@@ -459,24 +459,24 @@ defmodule Sequin.Runtime.SlotProducer do
     {:ok, state}
   end
 
-  defp update_safe_wal_cursor(%State{} = state) do
-    safe_wal_cursor =
+  defp update_restart_wal_cursor(%State{} = state) do
+    restart_wal_cursor =
       if is_nil(state.last_commit_lsn) do
         # If we don't have a last_commit_lsn, we're still processing the first xaction
         # we received on boot. This can happen if we're processing a very large xaction.
         # It is therefore safe to send an ack with the last LSN we processed.
-        state.safe_wal_cursor
+        state.restart_wal_cursor
       else
-        state.safe_wal_cursor_fn.(state)
+        state.restart_wal_cursor_fn.(state)
       end
 
-    if is_nil(safe_wal_cursor) do
-      Logger.info("[SlotProcessorServer] safe_wal_cursor=nil, skipping put_restart_wal_cursor!")
+    if is_nil(restart_wal_cursor) do
+      Logger.info("[SlotProcessorServer] restart_wal_cursor=nil, skipping put_restart_wal_cursor!")
     else
-      Replication.put_restart_wal_cursor!(state.id, safe_wal_cursor)
+      Replication.put_restart_wal_cursor!(state.id, restart_wal_cursor)
     end
 
-    %{state | safe_wal_cursor: safe_wal_cursor}
+    %{state | restart_wal_cursor: restart_wal_cursor}
   end
 
   defp message_from_binary(%State{} = state, binary) do
@@ -523,7 +523,7 @@ defmodule Sequin.Runtime.SlotProducer do
     {[], state}
   end
 
-  defp init_safe_wal_cursor(%State{} = state, protocol) do
+  defp init_restart_wal_cursor(%State{} = state, protocol) do
     query = "select restart_lsn from pg_replication_slots where slot_name = '#{state.slot_name}'"
 
     case Replication.restart_wal_cursor(state.id) do
@@ -532,14 +532,14 @@ defmodule Sequin.Runtime.SlotProducer do
         case Protocol.handle_simple(query, [], protocol) do
           {:ok, [%Postgrex.Result{rows: [[lsn]]}], protocol} ->
             cursor = %{commit_lsn: Postgres.lsn_to_int(lsn), commit_idx: 0}
-            {:ok, %State{state | safe_wal_cursor: cursor}, protocol}
+            {:ok, %State{state | restart_wal_cursor: cursor}, protocol}
 
           error ->
             error
         end
 
       {:ok, cursor} ->
-        {:ok, %State{state | safe_wal_cursor: cursor}}
+        {:ok, %State{state | restart_wal_cursor: cursor}}
     end
   end
 
@@ -547,7 +547,7 @@ defmodule Sequin.Runtime.SlotProducer do
   #   state = %{state | ack_timer: nil}
 
   #   if state.protocol do
-  #     reply = ack_message(state.safe_wal_cursor.commit_lsn)
+  #     reply = ack_message(state.restart_wal_cursor.commit_lsn)
 
   #     case Protocol.handle_copy_send(reply, state.protocol) do
   #       :ok -> :ok
@@ -558,10 +558,10 @@ defmodule Sequin.Runtime.SlotProducer do
   #   {:noreply, [], schedule_ack(state)}
   # end
 
-  # def handle_info(:update_safe_wal_cursor, state) do
+  # def handle_info(:update_restart_wal_cursor, state) do
   #   state = %{state | update_cursor_timer: nil}
-  #   cursor = state.safe_wal_cursor_fn.(state)
-  #   state = %{state | safe_wal_cursor: cursor}
+  #   cursor = state.restart_wal_cursor_fn.(state)
+  #   state = %{state | restart_wal_cursor: cursor}
   #   {:noreply, [], schedule_update_cursor(state)}
   # end
 
@@ -600,7 +600,7 @@ defmodule Sequin.Runtime.SlotProducer do
   defp schedule_ack(state), do: state
 
   defp schedule_update_cursor(%State{update_cursor_timer: nil, setting_update_cursor_interval: int} = state) do
-    ref = Process.send_after(self(), :update_safe_wal_cursor, int)
+    ref = Process.send_after(self(), :update_restart_wal_cursor, int)
     %{state | update_cursor_timer: ref}
   end
 

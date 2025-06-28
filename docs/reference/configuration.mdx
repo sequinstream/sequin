@@ -78,11 +78,11 @@ The `PG_POOL_SIZE` variable controls the maximum number of concurrent connection
 
 - `REDIS_URL`: Redis connection URL (required)
   - Format: `redis://localhost:6379` or `rediss://localhost:6379`
-  - Using `rediss://` automatically enables SSL
+  - Using `rediss://` automatically enables SSL/TLS
   - Using `redis://localhost:6379/1` will connect to Redis database 1
   - Using `redis://username:password@localhost:6379` will authenticate as `username`
     - Username is required - use `default` if you are not using redis users
-- `REDIS_SSL`: Enable SSL for Redis connection (optional)
+- `REDIS_TLS`: Enable SSL/TLS for Redis connection (optional)
   - Valid values: `"true"`, `"1"`
   - Default: disabled
 - `REDIS_IPV6`: Enable IPv6 support (optional)
@@ -91,13 +91,58 @@ The `PG_POOL_SIZE` variable controls the maximum number of concurrent connection
 - `REDIS_POOL_SIZE`: Number of Redis connections in the pool (optional)
   - Must be a positive integer
   - Default: 5
+- `REDIS_TLS_CA_CERT_FILE`: Path to CA certificate file for server verification
+- `REDIS_TLS_CLIENT_CERT_FILE`: Path to client certificate file (for mTLS)
+  - Required for mutual TLS authentication
+  - Must be used together with `REDIS_TLS_CLIENT_KEY_FILE`
+- `REDIS_TLS_CLIENT_KEY_FILE`: Path to client private key file (for mTLS)
+  - Required for mutual TLS authentication
+  - Must be used together with `REDIS_TLS_CLIENT_CERT_FILE`
+- `REDIS_TLS_VERIFY`: Certificate verification mode (optional)
+  - Valid values: `"verify_peer"`, `"verify_none"`
+  - Defaults: `"verify_peer"` when certificate files are provided, `"verify_none"` otherwise
 
-#### SSL Configuration
+#### SSL/TLS Configuration Examples
 
-SSL can be enabled in two ways:
+**Basic TLS without peer verification:**
 
-1. Using a `rediss://` URL scheme in `REDIS_URL`
-2. Setting `REDIS_SSL` to one of the enabling values
+```bash
+REDIS_URL=rediss://username:password@redis.example.com:6380
+# or
+REDIS_URL=redis://username:password@redis.example.com:6379
+REDIS_SSL=true
+```
+
+**TLS with implicit CA certificate verification:**
+
+```bash
+REDIS_URL=redis://username:password@redis.example.com:6379
+REDIS_SSL=true
+REDIS_TLS_VERIFY=verify_peer
+```
+
+**TLS with CA certificate validation:**
+```bash
+REDIS_URL=rediss://username:password@redis.example.com:6380
+REDIS_TLS_CA_CERT_FILE=/path/to/ca.crt
+```
+
+**Full mTLS authentication:**
+```bash
+REDIS_URL=rediss://username:password@redis.example.com:6380
+REDIS_TLS_CA_CERT_FILE=/path/to/ca.crt
+REDIS_TLS_CLIENT_CERT_FILE=/path/to/client.crt
+REDIS_TLS_CLIENT_KEY_FILE=/path/to/client.key
+```
+
+**mTLS with explicit verification mode:**
+```bash
+REDIS_URL=rediss://username:password@redis.example.com:6380
+REDIS_TLS_CA_CERT_FILE=/path/to/ca.crt
+REDIS_TLS_CLIENT_CERT_FILE=/path/to/client.crt
+REDIS_TLS_CLIENT_KEY_FILE=/path/to/client.key
+REDIS_TLS_VERIFY=verify_peer # already defaults to verify_peer when certs are specified
+```
 
 ### Security configuration
 

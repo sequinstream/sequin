@@ -23,7 +23,7 @@ defmodule Sequin.ConfigParser do
   def redis_config(env) do
     [socket_options: [], pool_size: parse_pool_size(env)]
     |> put_redis_url(env)
-    |> put_redis_opts_ssl(env)
+    |> put_redis_opts_tls(env)
     |> put_redis_opts_ipv6(env)
   end
 
@@ -124,28 +124,112 @@ defmodule Sequin.ConfigParser do
     end
   end
 
-  defp put_redis_opts_ssl(opts, %{"REDIS_SSL" => ssl}) do
-    cond do
-      ssl in ~w(true 1 verify-none) ->
-        Keyword.put(opts, :tls, verify: :verify_none)
+  defp put_redis_opts_tls(opts, env) do
+    cert_files = parse_tls_cert_opts(env)
+    tls_opts = redis_tls_opts(cert_files, env)
 
-      ssl in ~w(false 0) ->
-        # `nil` is important to override any settings set in config.exs
-        Keyword.put(opts, :tls, nil)
+    Keyword.put(opts, :tls, tls_opts)
+  end
+
+  @tls_cert_env_var_to_key %{
+    "REDIS_TLS_CA_CERT_FILE" => :cacertfile,
+    "REDIS_TLS_CLIENT_CERT_FILE" => :certfile,
+    "REDIS_TLS_CLIENT_KEY_FILE" => :keyfile
+  }
+
+  defp parse_tls_cert_opts(env) do
+    cert_files =
+      ["REDIS_TLS_CA_CERT_FILE", "REDIS_TLS_CLIENT_CERT_FILE", "REDIS_TLS_CLIENT_KEY_FILE"]
+      |> Enum.map(fn key -> {key, Map.get(env, key)} end)
+      |> Enum.filter(fn {_, path} -> is_binary(path) end)
+      |> Map.new(fn {env_key, path} ->
+        unless File.exists?(path) do
+          raise ArgumentError, "No file exists for path provided for `#{env_key}`: #{path}"
+        end
+
+        key = @tls_cert_env_var_to_key[env_key]
+
+        {key, path}
+      end)
+
+    cert_files
+  end
+
+  defp redis_tls_opts(cert_files, env) do
+    explicit_verify = parse_explicit_verify(env)
+    redis_ssl = parse_redis_tls(env)
+    redis_ssl_disabled? = redis_ssl in ~w(false 0)
+    redis_ssl_enabled? = redis_ssl in ~w(true 1 verify-none) or String.starts_with?(env["REDIS_URL"], "rediss://")
+    has_cert_files? = map_size(cert_files) > 0
+
+    tls_opts =
+      Enum.reduce(cert_files, [], fn {key, file_path}, acc ->
+        [{key, file_path} | acc]
+      end)
+
+    cond do
+      Map.has_key?(cert_files, :certfile) and !Map.has_key?(cert_files, :keyfile) ->
+        raise ArgumentError,
+              "REDIS_TLS_CLIENT_KEY_FILE must be set when REDIS_TLS_CLIENT_CERT_FILE is provided. Docs: #{doc_link(:redis)}"
+
+      !Map.has_key?(cert_files, :certfile) and Map.has_key?(cert_files, :keyfile) ->
+        raise ArgumentError,
+              "REDIS_TLS_CLIENT_CERT_FILE must be set when REDIS_TLS_CLIENT_KEY_FILE is provided. Docs: #{doc_link(:redis)}"
+
+      redis_ssl_disabled? and has_cert_files? ->
+        raise ArgumentError,
+              "REDIS_TLS must be set to true when REDIS_TLS_CA_CERT_FILE or REDIS_TLS_CLIENT_CERT_FILE and REDIS_TLS_CLIENT_KEY_FILE are provided. Docs: #{doc_link(:redis)}"
+
+      redis_ssl_disabled? ->
+        nil
+
+      not is_nil(explicit_verify) ->
+        Keyword.put(tls_opts, :verify, explicit_verify)
+
+      has_cert_files? ->
+        Keyword.put(tls_opts, :verify, :verify_peer)
+
+      redis_ssl_enabled? ->
+        Keyword.put(tls_opts, :verify, :verify_none)
 
       true ->
-        raise ArgumentError, "REDIS_SSL must be true, 1, verify-none, false, or 0. Docs: #{doc_link(:redis)}"
+        nil
     end
   end
 
-  defp put_redis_opts_ssl(opts, _env) do
-    url = Keyword.fetch!(opts, :url)
+  defp parse_explicit_verify(env) do
+    case env["REDIS_TLS_VERIFY"] do
+      nil ->
+        nil
 
-    if String.starts_with?(url, "rediss://") do
-      Keyword.put(opts, :tls, verify: :verify_none)
-    else
-      # `nil` is important to override any settings set in config.exs
-      Keyword.put(opts, :tls, nil)
+      "verify-peer" ->
+        :verify_peer
+
+      "verify-none" ->
+        :verify_none
+
+      explicit_verify ->
+        raise ArgumentError,
+              "REDIS_TLS_VERIFY must be either 'verify-peer' or 'verify-none'. Got: #{inspect(explicit_verify)}. Docs: #{doc_link(:redis)}"
+    end
+  end
+
+  @valid_tls_values ~w(true 1 verify-none false 0)
+  defp parse_redis_tls(env) do
+    ssl =
+      case Map.get(env, "REDIS_TLS") do
+        nil ->
+          # Legacy fallback
+          Map.get(env, "REDIS_SSL")
+
+        val ->
+          val
+      end
+
+    case ssl do
+      ssl when ssl in @valid_tls_values -> ssl
+      nil -> nil
+      _invalid -> raise ArgumentError, "REDIS_TLS must be true, 1, verify-none, false, or 0. Docs: #{doc_link(:redis)}"
     end
   end
 

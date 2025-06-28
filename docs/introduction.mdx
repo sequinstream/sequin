@@ -45,14 +45,14 @@ Connect to your database and start streaming changes in just a few minutes. Sequ
   <Card title="AWS Kinesis" img="/images/introduction/kinesis.png" href="/quickstart/kinesis" />
   <Card title="Elasticsearch" img="/images/introduction/elastic.png" href="/quickstart/elasticsearch" />
   <Card title="GCP Pub/Sub" img="/images/introduction/pub-sub.png" href="/quickstart/gcp-pubsub" />
-  <Card title="Kafka" img="/images/introduction/kafka.png" href="/quickstart/kafka" />
+  <Card title="Kafka" img="/images/introduction/kafka.svg" href="/quickstart/kafka" />
   <Card title="Meilisearch" img="/images/introduction/meilisearch.png" href="/quickstart/meilisearch" />
   <Card title="NATS" img="/images/introduction/nats.png" href="/quickstart/nats" />
   <Card title="RabbitMQ" img="/images/introduction/rabbit.png" href="/quickstart/rabbitmq" />
   <Card title="Redis Streams" img="/images/introduction/redis-1.png" href="/quickstart/redis-stream" />
   <Card title="Redis Strings" img="/images/introduction/redis-2.png" href="/quickstart/redis-stream" />
   <Card title="S2" img="/images/introduction/s2.png" href="/quickstart/s2" />
-  <Card title="Sequin Stream" img="/images/introduction/sequin-stream.png" href="/quickstart/sequin-stream" />
+  <Card title="Sequin Stream" img="/images/introduction/sequin-stream.svg" href="/quickstart/sequin-stream" />
   <Card title="Typesense" img="/images/introduction/typesense.png" href="/quickstart/typesense" />
   <Card title="Webhooks" img="/images/introduction/webhook.png" href="/quickstart/webhooks" />
 </CardGroup>
@@ -65,11 +65,13 @@ Connect to your database and start streaming changes in just a few minutes. Sequ
 
 - **Bring your database:** Sequin is not an extension. It works with any Postgres database version 14+.
 - **Never miss a change:** Sequin ensures [100% delivery of database changes to sinks](/concepts/consistency-model) with strict ordering.
-- **SQL-based routing:** [Filter](/reference/filters) and [route](/reference/routing) messages to sinks using SQL `where` conditions.
+- **Filters:** Write custom [filters](/reference/filters) to exclude or include changes to sink.
 - **Transforms**: [Transform](/reference/transforms) message payloads by writing functions in low-latency Elixir.
-- **Backfills:** Easily [backfill](/reference/backfills) existing rows from your tables to sinks.
+- **Routing:** [Route](/reference/routing) messages to specific topics, endpoints, or indexes.
+- **Exactly-once processing:** Sequin ensures exactly-once processing of database changes using [idempotency keys](/reference/messages#idempotency).
+- **Backfills:** [Backfill](/reference/backfills) sinks at any point in time. Run partial backfills to only replay specific rows.
 - **Observability:** Sequin exposes a [metrics endpoint](/reference/metrics) using Prometheus and comes with a Grafana dashboard.
-- **End-to-end Tooling:** Start with the Sequin console, then use the [CLI](/reference/cli), [sequin.yml](/reference/sequin-yaml) and [API](/management-api/introduction) to manage your sinks.
+- **End-to-end tooling:** Start with the Sequin console, then use the [CLI](/reference/cli), [sequin.yml](/reference/sequin-yaml) and [API](/management-api/introduction) to manage your sinks.
 
 ## Why Sequin?
 
@@ -77,11 +79,9 @@ We all know Postgres is great for storing and querying data. But what about when
 
 **Postgres has limited support for change streaming.** While Postgres supports logical replication, it's ephemeral and doesn't support features developers need like exactly-once processing, backfills, or delivery tracking.
 
-Debezium is a popular change data capture tool, but is complicated to setup and requires Kafka and Zookeeper to operate. Adding to the complexity, Debezium doesn't have native sinks, instead relying on Kafka Connect.
+Existing tools aren't much better. Debezium is complicated to setup, requires Kafka to scale, and caps out at 20,000 changes per second. Other options like Airbyte and Decodable simply wrap Debezium. While ETL tools like Fivetran have limited support for operational destinations and write changes in batches, not in real-time.
 
-ETL tools like Fivetran and Airbyte have limited support for operational destinations. And they write changes in batches, not in real-time.
-
-Sequin is a fast, simple alternative to Debezium. It's built on Postgres, streams changes in real-time, and doesn't require Kafka or Zookeeper to operate. Sequin also has native sinks for Kafka, SQS, Redis, and HTTP endpoints. So it's easy to get started.
+Sequin provides the fastest, simplest experience for streaming data from Postgres. It streams changes in real-time and doesn't require complex infrastructure to operate.
 
 ## Getting help
 

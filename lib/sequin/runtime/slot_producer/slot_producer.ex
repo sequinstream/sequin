@@ -99,14 +99,13 @@ defmodule Sequin.Runtime.SlotProducer do
       field :publication_name, String.t()
       field :pg_major_version, integer()
       # Postgres replication connection
-      field :protocol, Postgrex.Protocol.t()
+      field :protocol, Postgrex.Protocol.state()
       field :connect_opts, keyword()
       field :on_connect_fail, (any() -> any())
       field :on_disconnect, (-> :ok)
       field :ingest_enabled_fn, (-> boolean())
       field :setting_reconnect_interval, non_neg_integer()
       field :status, :active | :buffering | :disconnected
-      field :last_commit_lsn, nil | integer()
 
       # Cursors & aliveness
       field :safe_wal_cursor, Replication.wal_cursor()
@@ -122,6 +121,8 @@ defmodule Sequin.Runtime.SlotProducer do
       field :commit_idx, integer()
       field :commit_xid, integer()
       field :transaction_annotations, nil | String.t()
+      field :last_commit_lsn, nil | integer()
+      field :last_commit_idx, nil | integer()
 
       field :demand, integer(), default: 0
 
@@ -186,14 +187,14 @@ defmodule Sequin.Runtime.SlotProducer do
       {:noreply, [], state}
     else
       {:error, reason} ->
-        Logger.error("[SlotProducer] replication connect failed: #{inspect(reason)}")
+        error_msg = if is_exception(reason), do: Exception.message(reason), else: inspect(reason)
+        Logger.error("[SlotProducer] replication connect failed: #{error_msg}")
         if fun = state.on_connect_fail, do: fun.(reason)
         Process.send_after(self(), :connect, state.setting_reconnect_interval)
         {:noreply, [], state}
     end
   end
 
-  @impl GenStage
   def handle_info(msg, %State{status: :buffering, buffered_sock_msg: nil} = s) when is_socket_message(msg) do
     {:noreply, [], %{s | buffered_sock_msg: msg}}
   end
@@ -202,14 +203,16 @@ defmodule Sequin.Runtime.SlotProducer do
     raise "Unexpectedly received a second socket message while buffering sock messages"
   end
 
-  def handle_info(msg, %State{protocol: protocol} = s) when is_socket_message(msg) do
+  def handle_info(msg, %State{protocol: protocol} = state) when is_socket_message(msg) do
+    maybe_log_message(state)
+
     with {:ok, copies, protocol} <- Protocol.handle_copy_recv(msg, @max_messages_per_protocol_read, protocol),
-         {:ok, state} <- handle_copies(copies, %{s | protocol: protocol}) do
+         {:ok, state} <- handle_copies(copies, %{state | protocol: protocol}) do
       {messages, state} = maybe_produce(state)
       {:noreply, messages, state}
     else
       {error, reason, protocol} ->
-        handle_disconnect(error, reason, %{s | protocol: protocol})
+        handle_disconnect(error, reason, %{state | protocol: protocol})
     end
   end
 
@@ -254,6 +257,12 @@ defmodule Sequin.Runtime.SlotProducer do
   #       handle_disconnect(error, reason, %{s | protocol: protocol})
   #   end
   # end
+
+  defp maybe_log_message(%State{} = state) do
+    if is_nil(state.last_commit_lsn) and state.commit_idx == 0 and state.accumulated_messages.count == 0 do
+      Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
+    end
+  end
 
   defp handle_copies(copies, state) do
     Enum.reduce_while(copies, {:ok, state}, fn copy, {:ok, state} ->
@@ -302,6 +311,7 @@ defmodule Sequin.Runtime.SlotProducer do
     state = %State{
       state
       | last_commit_lsn: commit_lsn,
+        last_commit_idx: state.commit_idx,
         commit_lsn: nil,
         commit_ts: nil,
         commit_xid: nil,

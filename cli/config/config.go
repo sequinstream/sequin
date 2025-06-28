@@ -7,9 +7,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/a8m/envsubst"
+	"github.com/goccy/go-yaml"
 	"github.com/sequinstream/sequin/cli/context"
 )
 
@@ -37,13 +40,216 @@ type ExportResponse struct {
 	YAML string `json:"yaml"`
 }
 
-// processEnvVars replaces environment variables in the YAML content using envsubst library
-func processEnvVars(yamlContent []byte) ([]byte, error) {
-	processed, err := envsubst.Bytes(yamlContent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to process environment variables: %w", err)
+type ProcessingContext struct {
+	YamlPath    string
+	SearchPaths []string
+}
+
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		DisableKeepAlives:     false,
+	},
+}
+
+// NewProcessingContext creates a new processing context with search paths set up
+func NewProcessingContext(yamlPath string) (*ProcessingContext, error) {
+	if yamlPath == "" {
+		return nil, fmt.Errorf("yaml path cannot be empty")
 	}
+
+	// Handle stdin case
+	if yamlPath == "-" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current directory: %w", err)
+		}
+		return &ProcessingContext{
+			YamlPath:    yamlPath,
+			SearchPaths: []string{cwd},
+		}, nil
+	}
+
+	// Clean the path
+	yamlPath = filepath.Clean(yamlPath)
+
+	// For non-stdin input, only use the directory of the YAML file as the search path
+	yamlDir := filepath.Dir(yamlPath)
+	absYamlDir, err := filepath.Abs(yamlDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve yaml directory: %w", err)
+	}
+
+	return &ProcessingContext{
+		YamlPath:    yamlPath,
+		SearchPaths: []string{absYamlDir},
+	}, nil
+}
+
+// resolveFilePath resolves a file path by trying each search path in order
+func resolveFilePath(pctx *ProcessingContext, filePath string) (string, error) {
+	// If it's already an absolute path, use it as-is
+	if filepath.IsAbs(filePath) {
+		if _, err := os.Stat(filePath); err != nil {
+			return "", fmt.Errorf("file not found: %s", filePath)
+		}
+		return filePath, nil
+	}
+
+	// Try each search path in order
+	var triedPaths []string
+	for _, searchPath := range pctx.SearchPaths {
+		candidatePath := filepath.Join(searchPath, filePath)
+		triedPaths = append(triedPaths, candidatePath)
+
+		if _, err := os.Stat(candidatePath); err == nil {
+			return filepath.Abs(candidatePath)
+		}
+	}
+
+	// All attempts failed
+	return "", fmt.Errorf("file not found: tried %s", strings.Join(triedPaths, ", "))
+}
+
+// Apply envsubst to all string values everywhere
+func applyEnvSubst(node interface{}) (interface{}, error) {
+	switch v := node.(type) {
+	case map[string]interface{}:
+		result := make(map[string]interface{})
+		for key, value := range v {
+			processed, err := applyEnvSubst(value)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = processed
+		}
+		return result, nil
+
+	case []interface{}:
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			processed, err := applyEnvSubst(item)
+			if err != nil {
+				return nil, err
+			}
+			result[i] = processed
+		}
+		return result, nil
+
+	case string:
+		substituted, err := envsubst.String(v)
+		if err != nil {
+			return nil, fmt.Errorf("environment variable substitution failed for '%s': %w", v, err)
+		}
+		return substituted, nil
+
+	default:
+		return v, nil
+	}
+}
+
+func processYAML(pctx *ProcessingContext, yamlContent []byte) ([]byte, error) {
+	var yamlData interface{}
+	if err := yaml.Unmarshal(yamlContent, &yamlData); err != nil {
+		return nil, fmt.Errorf("Failed to parse YAML content: %w", err)
+	}
+
+	with_subst, err := applyEnvSubst(yamlData)
+	if err != nil {
+		return nil, err
+	}
+
+	with_files, err := processFunctions(pctx, with_subst)
+	if err != nil {
+		return nil, err
+	}
+
+	processed, err := yaml.Marshal(with_files)
+	if err != nil {
+		return nil, fmt.Errorf("failed to re-encode YAML: %w", err)
+	}
+
 	return processed, nil
+}
+
+func processFunctions(pctx *ProcessingContext, node interface{}) (interface{}, error) {
+	topLevel, ok := node.(map[string]interface{})
+	if !ok {
+		return node, nil
+	}
+
+	result := make(map[string]interface{})
+
+	for key, value := range topLevel {
+		if key == "functions" {
+			processed, err := processFunctionsList(pctx, value)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = processed
+		} else {
+			result[key] = value
+		}
+	}
+
+	return result, nil
+}
+
+func processFunctionsList(pctx *ProcessingContext, node interface{}) (interface{}, error) {
+	switch v := node.(type) {
+	case map[string]interface{}:
+		return processFileInFunction(pctx, v)
+
+	case []interface{}:
+		result := make([]interface{}, len(v))
+		for i, item := range v {
+			if funcObj, ok := item.(map[string]interface{}); ok {
+				processed, err := processFileInFunction(pctx, funcObj)
+				if err != nil {
+					return nil, err
+				}
+				result[i] = processed
+			} else {
+				result[i] = item
+			}
+		}
+		return result, nil
+
+	default:
+		return v, nil
+	}
+}
+
+func processFileInFunction(pctx *ProcessingContext, funcObj map[string]interface{}) (map[string]interface{}, error) {
+	if filePathRaw, hasFile := funcObj["file"]; hasFile {
+		if filePath, ok := filePathRaw.(string); ok {
+			fmt.Printf("Processing file reference: %s\n", filePath)
+
+			resolvedPath, err := resolveFilePath(pctx, filePath)
+			if err != nil {
+				return nil, fmt.Errorf("error resolving file path %s: %w", filePath, err)
+			}
+
+			content, err := os.ReadFile(resolvedPath)
+			if err != nil {
+				return nil, fmt.Errorf("error reading file %s: %w", resolvedPath, err)
+			}
+
+			result := make(map[string]interface{})
+			for k, val := range funcObj {
+				if k != "file" {
+					result[k] = val
+				}
+			}
+			result["code"] = string(content)
+			return result, nil
+		}
+	}
+
+	return funcObj, nil
 }
 
 // Interpolate reads a YAML file, processes environment variables, and outputs the result
@@ -66,8 +272,11 @@ func Interpolate(inputPath, outputPath string) error {
 		}
 	}
 
-	// Process environment variables
-	processed, err := processEnvVars(yamlContent)
+	pctx, err := NewProcessingContext(inputPath)
+	if err != nil {
+		return err
+	}
+	processed, err := processYAML(pctx, yamlContent)
 	if err != nil {
 		return err
 	}
@@ -168,8 +377,12 @@ func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 		return nil, fmt.Errorf("failed to read YAML file: %w", err)
 	}
 
-	// Process environment variables
-	yamlContent, err = processEnvVars(yamlContent)
+	// Process YAML content
+	pctx, err := NewProcessingContext(yamlPath)
+	if err != nil {
+		return nil, err
+	}
+	yamlContent, err = processYAML(pctx, yamlContent)
 	if err != nil {
 		return nil, err
 	}
@@ -202,8 +415,7 @@ func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ctx.ApiToken))
 
 	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -237,8 +449,12 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 		return nil, fmt.Errorf("failed to read YAML file: %w", err)
 	}
 
-	// Process environment variables
-	yamlContent, err = processEnvVars(yamlContent)
+	// Process YAML content
+	pctx, err := NewProcessingContext(yamlPath)
+	if err != nil {
+		return nil, err
+	}
+	yamlContent, err = processYAML(pctx, yamlContent)
 	if err != nil {
 		return nil, err
 	}
@@ -271,8 +487,7 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ctx.ApiToken))
 
 	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -315,8 +530,7 @@ func Export(ctx *context.Context, showSensitive bool) (*ExportResponse, error) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ctx.ApiToken))
 
 	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}

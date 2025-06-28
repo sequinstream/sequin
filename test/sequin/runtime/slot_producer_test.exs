@@ -199,7 +199,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       start_slot_producer(db,
         ack_interval: 1,
         update_cursor_interval: 1,
-        safe_wal_cursor_fn: fn _ -> Agent.get(agent, & &1) end
+        restart_wal_cursor_fn: fn _ -> Agent.get(agent, & &1) end
       )
 
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
@@ -282,7 +282,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
     #   opts = [
     #     connect_opts: invalid_connect_opts,
     #     start_replication_query: start_query,
-    #     safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0} end,
+    #     restart_wal_cursor_fn: fn _state -> %{commit_lsn: 0} end,
     #     handle_connect_fail: fn _reason ->
     #       :counters.add(connection_failures, 1, 1)
     #     end,
@@ -362,7 +362,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
           pg_major_version: 17,
           postgres_database: db,
           connect_opts: db_connect_opts(db),
-          safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end,
+          restart_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end,
           test_pid: self(),
           conn: fn -> db end,
           processor_mod: TestProcessor

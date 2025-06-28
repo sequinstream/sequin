@@ -23,7 +23,7 @@ defmodule Sequin.Runtime.Routing.Consumers.GcpPubsub do
 
   def route(_action, _record, _changes, metadata) do
     %{
-      topic_id: "sequin.#{metadata.database.name}.#{metadata.table_schema}.#{metadata.table_name}"
+      topic_id: "sequin.#{metadata.table_schema}.#{metadata.table_name}"
     }
   end
 

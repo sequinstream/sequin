@@ -20,7 +20,7 @@ defmodule Sequin.Runtime.Routing.Consumers.Typesense do
 
   def route(_action, _record, _changes, metadata) do
     %{
-      collection_name: "#{metadata.table_schema}.#{metadata.table_name}"
+      collection_name: "sequin.#{metadata.table_schema}.#{metadata.table_name}"
     }
   end
 

@@ -9,13 +9,14 @@ defmodule Sequin.Sinks.Typesense.Client do
 
   require Logger
 
-  defstruct [:api_key, :url, :timeout_seconds, req_client: Req]
+  defstruct [:api_key, :url, :timeout_seconds, :req_opts]
 
   def new(opts) do
     %__MODULE__{
       url: opts |> Keyword.fetch!(:url) |> String.trim_trailing("/"),
       api_key: Keyword.fetch!(opts, :api_key),
-      timeout_seconds: Keyword.fetch!(opts, :timeout_seconds)
+      timeout_seconds: Keyword.fetch!(opts, :timeout_seconds),
+      req_opts: Keyword.get(opts, :req_opts, [])
     }
   end
 
@@ -33,7 +34,7 @@ defmodule Sequin.Sinks.Typesense.Client do
       )
 
     case Req.post(req) do
-      {:ok, %{status: st, body: body} = resp} when st in 200..299 ->
+      {:ok, %{status: status, body: body} = resp} when status in 200..299 ->
         Trace.info(consumer.id, %Trace.Event{
           message: "Indexed document to #{collection_name}",
           req_request: req,
@@ -317,14 +318,16 @@ defmodule Sequin.Sinks.Typesense.Client do
   # Private helpers
 
   defp base_request(%__MODULE__{} = client) do
-    Req.new(
+    [
       base_url: client.url,
       headers: [
         {"X-TYPESENSE-API-KEY", client.api_key}
       ],
       receive_timeout: :timer.seconds(client.timeout_seconds),
       retry: false
-    )
+    ]
+    |> Keyword.merge(client.req_opts)
+    |> Req.new()
   end
 
   defp extract_error_message(body) when is_map(body) do

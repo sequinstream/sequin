@@ -1,4 +1,4 @@
-defmodule Sequin.Runtime.PostgresRelationHashCache do
+defmodule Sequin.Runtime.SlotProducer.PostgresRelationHashCache do
   @moduledoc """
   Handles computing, and caching schema hashes for PostgreSQL relations.
 

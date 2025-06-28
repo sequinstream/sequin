@@ -17,6 +17,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
   alias Sequin.Postgres
   alias Sequin.Runtime.SlotProducer
   alias Sequin.Runtime.SlotProducer.Message
+  alias Sequin.Runtime.SlotProducer.Relation
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.ReplicationSlots
@@ -31,16 +32,22 @@ defmodule Sequin.Runtime.SlotProducerTest do
     :ok = ReplicationSlots.reset_slot(UnboxedRepo, replication_slot())
   end
 
-  defmodule TestConsumer do
+  defmodule TestProcessor do
     @moduledoc """
     A simple GenStage consumer for testing SlotProducer.
 
     Collects messages and sends them to the test process.
     """
+    @behaviour Sequin.Runtime.SlotProducer.ProcessorBehaviour
+
     use GenStage
 
     def start_link(opts) do
       GenStage.start_link(__MODULE__, opts)
+    end
+
+    def handle_relation(server, relation) do
+      GenStage.call(server, {:handle_relation, relation})
     end
 
     def init(%{producer: producer, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand}) do
@@ -58,6 +65,12 @@ defmodule Sequin.Runtime.SlotProducerTest do
 
       new_messages = state.messages ++ events
       {:noreply, [], %{state | messages: new_messages}}
+    end
+
+    def handle_call({:handle_relation, relation}, _from, state) do
+      send(state.test_pid, {:relation_received, relation})
+
+      {:reply, :ok, [], state}
     end
   end
 
@@ -94,11 +107,10 @@ defmodule Sequin.Runtime.SlotProducerTest do
 
     test "produces messages when data is inserted" do
       # Insert a character record to generate WAL messages
-      character_attrs = CharacterFactory.character_attrs()
-      CharacterFactory.insert_character!(character_attrs, repo: UnboxedRepo)
+      CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for and assert we receive messages
-      assert_receive_message_kinds([:relation, :insert])
+      assert_receive_message_kinds([:insert])
     end
 
     test "produces messages in correct order" do
@@ -110,7 +122,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       UnboxedRepo.delete_all(Character)
 
       # Wait for and assert we receive messages
-      assert_receive_message_kinds([:relation, :insert, :update, :insert, :update, :update, :delete, :delete])
+      assert_receive_message_kinds([:insert, :update, :insert, :update, :update, :delete, :delete])
     end
 
     test "respects transaction boundaries" do
@@ -125,10 +137,9 @@ defmodule Sequin.Runtime.SlotProducerTest do
       |> Character.where_id()
       |> UnboxedRepo.update_all(set: [name: "Updated Name"])
 
-      messages = receive_messages(5)
+      messages = receive_messages(4)
 
       assert [
-               %Message{kind: :relation},
                %Message{commit_lsn: lsn1, commit_idx: 1, commit_ts: ts1, kind: :insert},
                %Message{commit_lsn: lsn2, commit_idx: 0, commit_ts: ts2, kind: :insert},
                %Message{commit_lsn: lsn2, commit_idx: 1, commit_ts: ts2, kind: :insert},
@@ -151,10 +162,9 @@ defmodule Sequin.Runtime.SlotProducerTest do
         CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
       end)
 
-      messages = receive_messages(4)
+      messages = receive_messages(3)
 
       assert [
-               %Message{kind: :relation},
                %Message{transaction_annotations: nil, commit_idx: 1},
                %Message{transaction_annotations: ^annotation, commit_idx: 3},
                %Message{transaction_annotations: ^annotation, commit_idx: 4}
@@ -171,10 +181,9 @@ defmodule Sequin.Runtime.SlotProducerTest do
         CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
       end)
 
-      messages = receive_messages(3)
+      messages = receive_messages(2)
 
       assert [
-               %Message{kind: :relation},
                %Message{transaction_annotations: ^annotation, commit_idx: 2},
                %Message{transaction_annotations: nil, commit_idx: 4}
              ] = messages
@@ -204,6 +213,12 @@ defmodule Sequin.Runtime.SlotProducerTest do
       Postgres.query!(db, "select pg_logical_emit_message(true, 'my-msg', 'my-data')")
 
       assert_receive_message_kinds([:logical])
+    end
+
+    test "receives relation messages" do
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+
+      assert_receive {:relation_received, %Relation{} = _relation}
     end
 
     # @tag capture_log: true
@@ -296,13 +311,16 @@ defmodule Sequin.Runtime.SlotProducerTest do
       Keyword.merge(
         [
           id: UUID.uuid4(),
+          database_id: db.id,
           slot_name: replication_slot(),
           publication_name: @publication,
           pg_major_version: 17,
           postgres_database: db,
           connect_opts: db_connect_opts(db),
           safe_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end,
-          test_pid: self()
+          test_pid: self(),
+          conn: fn -> db end,
+          processor_mod: TestProcessor
         ],
         opts
       )
@@ -316,7 +334,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
     min_demand = Keyword.get(opts, :min_demand, 5)
 
     start_supervised!(
-      {TestConsumer, %{producer: producer_pid, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand}}
+      {TestProcessor, %{producer: producer_pid, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand}}
     )
   end
 
@@ -326,23 +344,23 @@ defmodule Sequin.Runtime.SlotProducerTest do
     |> Keyword.drop([:socket, :socket_dir, :endpoints])
   end
 
-  defp assert_lsn_progress(init_lsn, db) do
-    # Verify LSN progressed after heartbeats
-    assert_eventually(
-      (fn ->
-         case Postgres.confirmed_flush_lsn(db, replication_slot()) do
-           {:ok, current_lsn} ->
-             if current_lsn > init_lsn do
-               current_lsn
-             else
-               false
-             end
+  # defp assert_lsn_progress(init_lsn, db) do
+  #   # Verify LSN progressed after heartbeats
+  #   assert_eventually(
+  #     (fn ->
+  #        case Postgres.confirmed_flush_lsn(db, replication_slot()) do
+  #          {:ok, current_lsn} ->
+  #            if current_lsn > init_lsn do
+  #              current_lsn
+  #            else
+  #              false
+  #            end
 
-           error ->
-             false
-         end
-       end).(),
-      1000
-    )
-  end
+  #          error ->
+  #            false
+  #        end
+  #      end).(),
+  #     1000
+  #   )
+  # end
 end

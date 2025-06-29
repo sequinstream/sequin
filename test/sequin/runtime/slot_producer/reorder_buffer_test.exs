@@ -71,8 +71,9 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
     def handle_call({:send_batch_marker, batch_marker, partition_idx}, from, state) do
       # Next call might blow up
       GenServer.reply(from, :ok)
-      # Send batch marker to ReorderBuffer directly
-      :ok = ReorderBuffer.handle_batch_marker(ReorderBufferTest.reorder_buffer_id(), {batch_marker, partition_idx})
+      # Send batch marker to ReorderBuffer directly with processor_partition_idx set
+      marker_with_partition = %{batch_marker | processor_partition_idx: partition_idx}
+      :ok = ReorderBuffer.handle_batch_marker(ReorderBufferTest.reorder_buffer_id(), marker_with_partition)
 
       {:noreply, [], state}
     end
@@ -126,17 +127,23 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       end
 
       # Should not receive batch_ready yet
-      refute_receive {:batch_ready, _, _}, 50
+      refute_receive {:batch_ready, _, _, _}, 50
 
       # Send batch marker from the last partition
       :ok = TestProducer.send_batch_marker(first_producer_pid, batch_marker, first_partition_idx)
 
-      # Now should receive batch_ready
-      assert_receive {:batch_ready, received_marker, received_messages}, 1000
+      # Should receive batch_ready
+      assert_receive {:batch_ready,
+                      %{
+                        epoch: received_epoch,
+                        high_watermark_wal_cursor: received_high_watermark,
+                        messages: received_messages
+                      }},
+                     1000
 
       # Verify the batch marker
-      assert received_marker.epoch == 0
-      assert received_marker.high_watermark_wal_cursor.commit_lsn == 1000
+      assert received_epoch == 0
+      assert received_high_watermark.commit_lsn == 1000
 
       # Verify all messages are included
       all_expected_messages = messages_by_partition |> Map.values() |> List.flatten()
@@ -146,7 +153,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       assert Enum.all?(received_messages, fn %Message{batch_epoch: epoch} -> epoch == 0 end)
 
       # Should not receive another batch_ready message
-      refute_receive {:batch_ready, _, _}, 50
+      refute_receive {:batch_ready, _}, 50
     end
 
     test "orders messages by {commit_lsn, commit_idx} ascending", %{
@@ -181,7 +188,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       end
 
       # Should receive batch_ready
-      assert_receive {:batch_ready, _received_marker, received_messages}, 1000
+      assert_receive {:batch_ready, %{messages: received_messages}}, 1000
 
       # Verify messages are ordered by {commit_lsn, commit_idx} ascending
       ordered_tuples =
@@ -280,7 +287,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       end
 
       # Should receive batch_ready with all messages from the first partition
-      assert_receive {:batch_ready, _received_marker, received_messages}, 1000
+      assert_receive {:batch_ready, %{messages: received_messages}}, 1000
 
       assert length(received_messages) >= length(test_messages) + length(additional_messages)
     end
@@ -293,13 +300,13 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       # Use an agent as a global to control batch flushing
       {:ok, flush_control} = Agent.start_link(fn -> :fail end)
 
-      on_batch_ready = fn batch_marker, messages ->
+      on_batch_ready = fn batch ->
         case Agent.get(flush_control, & &1) do
           :fail ->
             {:error, :simulated_failure}
 
           :succeed ->
-            send(test_pid, {:batch_ready, batch_marker, messages})
+            send(test_pid, {:batch_ready, batch})
             :ok
         end
       end
@@ -333,7 +340,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       Agent.update(flush_control, fn _ -> :succeed end)
 
       # Should receive batch and demand should recover
-      assert_receive {:batch_ready, _, _}
+      assert_receive {:batch_ready, _}
 
       assert_eventually Enum.all?(producers, fn {_idx, producer} -> TestProducer.get_demand(producer) >= 50 end)
     end
@@ -344,8 +351,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
 
     test_pid = self()
 
-    default_on_batch_ready = fn batch_marker, messages ->
-      send(test_pid, {:batch_ready, batch_marker, messages})
+    default_on_batch_ready = fn batch ->
+      send(test_pid, {:batch_ready, batch})
       :ok
     end
 

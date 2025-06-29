@@ -122,11 +122,8 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       events
       |> Enum.map(fn %Message{} = msg ->
         case Decoder.decode_message(msg.payload) do
-          %type{} = payload when type in [Insert, Update, Delete] ->
-            cast_message(payload, msg, state.relations)
-
-          %LogicalMessage{} = payload ->
-            payload
+          %type{} = payload when type in [Insert, Update, Delete, LogicalMessage] ->
+            %{msg | message: cast_message(payload, msg, state.relations)}
 
           %type{} = _msg when type in [Origin, Truncate, Type] ->
             nil
@@ -137,7 +134,7 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
         end
       end)
       |> Enum.reject(&is_nil/1)
-      |> Enum.reject(&internal_message?/1)
+      |> Enum.reject(&internal_change?/1)
 
     {:noreply, messages, state}
   end
@@ -243,9 +240,15 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
     }
   end
 
-  defp internal_message?(msg) do
+  defp cast_message(%LogicalMessage{} = payload, _envelope, _relations) do
+    payload
+  end
+
+  defp internal_change?(%struct{} = msg) when struct in [Insert, Update, Delete] do
     msg.table_schema in [@config_schema, @stream_schema] and msg.table_schema != "public"
   end
+
+  defp internal_change?(_msg), do: false
 
   def data_tuple_to_ids(columns, tuple_data) do
     columns

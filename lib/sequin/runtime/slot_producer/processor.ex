@@ -83,12 +83,12 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
 
   @impl ProcessorBehaviour
   def handle_batch_marker(pid, batch) when is_pid(pid) do
-    GenStage.cast(pid, {:batch_marker, batch})
+    GenStage.async_info(pid, {:batch_marker, batch})
   end
 
   def handle_batch_marker(id, batch) do
     Enum.each(partitions(), fn partition_idx ->
-      GenStage.cast(via_tuple(id, partition_idx), {:batch_marker, batch})
+      GenStage.async_info(via_tuple(id, partition_idx), {:batch_marker, batch})
     end)
   end
 
@@ -144,12 +144,13 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
     {:noreply, [], %{state | relations: Map.put(state.relations, relation.id, relation)}}
   end
 
-  def handle_cast({:batch_marker, %BatchMarker{} = marker}, state) do
+  @impl GenStage
+  def handle_info({:batch_marker, %BatchMarker{} = marker}, state) do
     if is_nil(state.reorder_buffer) do
       raise "Received batch marker without a reorder buffer"
     end
 
-    ReorderBuffer.handle_batch_marker(state.id, {marker, state.partition_idx})
+    ReorderBuffer.handle_batch_marker(state.id, %{marker | processor_partition_idx: state.partition_idx})
 
     {:noreply, [], state}
   end

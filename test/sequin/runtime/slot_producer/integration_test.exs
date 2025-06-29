@@ -17,7 +17,6 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProducer
-  alias Sequin.Runtime.SlotProducer.BatchMarker
   alias Sequin.Runtime.SlotProducer.Processor
   alias Sequin.Runtime.SlotProducer.Supervisor
   alias Sequin.Test.UnboxedRepo
@@ -77,7 +76,8 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       CharacterFactory.insert_character!(%{name: "Zed"}, repo: UnboxedRepo)
 
       # Wait for messages to flow through the complete pipeline
-      {[%BatchMarker{} = marker], messages} = receive_messages(3)
+      [batch1] = receive_messages_batched(3)
+      messages = batch1.messages
 
       # Messages should be properly wrapped SlotProcessor.Messages
       assert Enum.all?(messages, fn %SlotProducer.Message{} = msg ->
@@ -96,23 +96,24 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       assert {lsn2, idx2} <= {lsn3, idx3}
 
       # Verify batch marker has correct epoch and high watermark
-      assert marker.epoch == 0
-      assert is_integer(marker.high_watermark_wal_cursor.commit_lsn)
-      assert marker.high_watermark_wal_cursor.commit_lsn == lsn3
-      assert marker.high_watermark_wal_cursor.commit_idx == idx3
+      assert batch1.epoch == 0
+      assert is_integer(batch1.high_watermark_wal_cursor.commit_lsn)
+      assert batch1.high_watermark_wal_cursor.commit_lsn == lsn3
+      assert batch1.high_watermark_wal_cursor.commit_idx == idx3
 
       # Insert more data to test second batch
       UnboxedRepo.update_all(Character, set: [name: "Updated"])
 
       # Wait for messages to flow through the complete pipeline
-      {[%BatchMarker{} = marker2], messages} = receive_messages(3)
+      [batch2] = receive_messages_batched(3)
+      messages = batch2.messages
 
-      assert marker2.epoch == 1
+      assert batch2.epoch == 1
       # Two update messages
       assert Enum.all?(messages, fn msg -> msg.message.action == :update end)
 
       # Second batch LSN should be higher than first
-      assert marker2.high_watermark_wal_cursor.commit_lsn > marker.high_watermark_wal_cursor.commit_lsn
+      assert batch2.high_watermark_wal_cursor.commit_lsn > batch1.high_watermark_wal_cursor.commit_lsn
     end
 
     @tag skip_start: true
@@ -153,7 +154,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       end
 
       # Wait for all messages - should work fine because late joiners got relations
-      {_markers, messages} = receive_messages(12)
+      messages = receive_messages(12)
 
       # All messages should be properly processed (proving relations were sent to late joiners)
       assert Enum.all?(messages, fn %SlotProducer.Message{} = msg ->
@@ -172,7 +173,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       CharacterFactory.insert_character!(%{name: "Solo"}, repo: UnboxedRepo)
 
       # Wait for first message
-      {_markers, [solo_msg]} = receive_messages(1)
+      [solo_msg] = receive_messages(1)
       assert solo_msg.message.action == :insert
       # First message in its transaction
       assert solo_msg.commit_idx == 1
@@ -186,7 +187,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       end)
 
       # Wait for transaction messages - should come in separate batches due to low batch size
-      {_markers, [txn_msg1, txn_msg2]} = receive_messages(2)
+      [txn_msg1, txn_msg2] = receive_messages(2)
 
       # Sort by commit_idx to ensure proper order
       [first_txn_msg, second_txn_msg] = Enum.sort_by([txn_msg1, txn_msg2], & &1.commit_idx)
@@ -205,7 +206,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       CharacterFactory.insert_character!(%{name: "Post Txn"}, repo: UnboxedRepo)
 
       # Wait for post-transaction message
-      {_markers, [post_txn_msg]} = receive_messages(1)
+      [post_txn_msg] = receive_messages(1)
 
       # Post-transaction message should have different (higher) LSN
       assert post_txn_msg.commit_lsn > first_txn_msg.commit_lsn
@@ -221,7 +222,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       Postgres.query!(slot.postgres_database, "SELECT pg_logical_emit_message(true, $1, $2)", [subject, content])
 
       # Wait for the logical message to flow through the pipeline
-      {_markers, [msg]} = receive_messages(1)
+      [msg] = receive_messages(1)
 
       # Verify it's a LogicalMessage struct
       assert %LogicalMessage{} = logical_msg = msg.message
@@ -232,21 +233,25 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
     end
   end
 
-  defp receive_messages(count, {acc_markers, acc_messages} \\ {[], []}) do
-    assert_receive {:batch, batch_marker, messages}, 1_000
-    acc_messages = acc_messages ++ messages
-    acc_markers = [batch_marker | acc_markers]
-    acc = {acc_markers, acc_messages}
+  defp receive_messages(count) do
+    batches = receive_messages_batched(count)
+    Enum.flat_map(batches, & &1.messages)
+  end
+
+  defp receive_messages_batched(count, acc_messages \\ [], acc_batches \\ []) do
+    assert_receive {:batch, batch}, 1_000
+    new_messages = acc_messages ++ batch.messages
+    new_batches = [batch | acc_batches]
 
     cond do
-      length(acc_messages) == count ->
-        acc
+      length(new_messages) == count ->
+        Enum.reverse(new_batches)
 
-      length(acc_messages) > count ->
-        flunk("Received more messages than expected #{inspect(message_actions(acc))})")
+      length(new_messages) > count ->
+        flunk("Received more messages than expected #{inspect(message_actions(new_messages))})")
 
       true ->
-        receive_messages(count, acc)
+        receive_messages_batched(count, new_messages, new_batches)
     end
   rescue
     err ->
@@ -262,7 +267,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
   end
 
   defp message_actions(msgs) do
-    Enum.map(msgs, & &1.action)
+    Enum.map(msgs, & &1.message.action)
   end
 
   defp start_pipeline(postgres_replication, opts) do
@@ -270,8 +275,8 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
 
     # Start ReorderBuffer first
     reorder_buffer_opts = [
-      on_batch_ready: fn batch_marker, messages ->
-        send(test_pid, {:batch, batch_marker, messages})
+      on_batch_ready: fn batch ->
+        send(test_pid, {:batch, batch})
         :ok
       end
     ]

@@ -2,6 +2,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   @moduledoc false
   use GenStage
 
+  alias Sequin.Runtime.SlotProducer.Batch
   alias Sequin.Runtime.SlotProducer.BatchMarker
   alias Sequin.Runtime.SlotProducer.Message
 
@@ -16,8 +17,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     {:via, :syn, {:replication, {__MODULE__, id}}}
   end
 
-  def handle_batch_marker(id, {marker, from_idx}) do
-    GenStage.sync_info(via_tuple(id), {:batch_marker, {marker, from_idx}})
+  def handle_batch_marker(id, %BatchMarker{} = marker) do
+    GenStage.async_info(via_tuple(id), {:batch_marker, marker})
   end
 
   def config(key) do
@@ -28,20 +29,6 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     Application.fetch_env!(:sequin, __MODULE__)
   end
 
-  defmodule Batch do
-    @moduledoc false
-    use TypedStruct
-
-    alias Sequin.Runtime.SlotProducer.BatchMarker
-
-    typedstruct do
-      field :marker, BatchMarker.t()
-      field :epoch, non_neg_integer()
-      field :messages, list(), default: []
-      field :markers_received, MapSet.t(), default: MapSet.new()
-    end
-  end
-
   defmodule State do
     @moduledoc false
     use TypedStruct
@@ -49,7 +36,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     typedstruct do
       field :pending_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
       field :ready_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
-      field :on_batch_ready, (BatchMarker.t(), [Message.t()] -> :ok | {:error, any()})
+      field :on_batch_ready, (Batch.t() -> :ok | {:error, any()})
       field :producer_partition_count, non_neg_integer()
       field :producer_subscriptions, [%{producer: pid(), demand: integer()}], default: []
       field :flush_batch_timer_ref, reference() | nil
@@ -100,9 +87,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   @impl GenStage
-
-  def handle_info({:batch_marker, {%BatchMarker{} = marker, from_idx}}, %State{} = state) do
-    state = put_batch_marker(state, marker, from_idx)
+  def handle_info({:batch_marker, %BatchMarker{} = marker}, %State{} = state) do
+    state = put_batch_marker(state, marker)
     {:noreply, [], state}
   end
 
@@ -113,7 +99,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
     state = maybe_cancel_flush_batch_timer(state)
 
-    case state.on_batch_ready.(batch.marker, batch.messages) do
+    case state.on_batch_ready.(batch) do
       :ok ->
         state = %{state | ready_batches_by_epoch: ready_batches}
 
@@ -131,7 +117,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
         {:noreply, [], state}
 
       {:error, reason} ->
-        Logger.warning("[ReorderBuffer] Error pushing batch #{inspect(batch.marker)}: #{inspect(reason)}")
+        Logger.warning("[ReorderBuffer] Error pushing batch #{inspect(batch)}: #{inspect(reason)}")
         state = schedule_flush_timer_retry(state)
         {:noreply, [], state}
     end
@@ -183,16 +169,20 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     %{state | pending_batches_by_epoch: pending_batches}
   end
 
-  defp put_batch_marker(%State{} = state, %BatchMarker{epoch: epoch} = marker, from_idx) when is_integer(epoch) do
+  defp put_batch_marker(%State{} = state, %BatchMarker{epoch: epoch} = marker) when is_integer(epoch) do
     # Validate that we don't receive markers for epochs that are already ready
     if Map.has_key?(state.ready_batches_by_epoch, epoch) do
       raise "Received batch marker for epoch #{epoch} that is already ready"
     end
 
-    batch = Map.get_lazy(state.pending_batches_by_epoch, epoch, fn -> %Batch{epoch: epoch} end)
-    # Set the marker if it hasn't been set yet
-    batch = if batch.marker == nil, do: %{batch | marker: marker}, else: batch
-    batch = Map.update!(batch, :markers_received, &MapSet.put(&1, from_idx))
+    batch =
+      case Map.fetch(state.pending_batches_by_epoch, epoch) do
+        {:ok, batch} ->
+          Batch.put_marker(batch, marker)
+
+        _ ->
+          Batch.init_from_marker(marker)
+      end
 
     if MapSet.size(batch.markers_received) == state.producer_partition_count do
       # Batch is ready - move from pending to ready

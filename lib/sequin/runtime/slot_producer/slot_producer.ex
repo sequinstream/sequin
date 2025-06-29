@@ -70,6 +70,9 @@ defmodule Sequin.Runtime.SlotProducer do
     @moduledoc false
     use TypedStruct
 
+    alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
+    alias Sequin.Runtime.SlotProcessor.Message
+
     @type kind :: :insert | :update | :delete | :logical | :relation
 
     typedstruct enforce: true do
@@ -79,6 +82,8 @@ defmodule Sequin.Runtime.SlotProducer do
       field :commit_ts, DateTime.t()
       field :kind, kind()
       field :payload, binary()
+      # Temp: This wraps the current Message/LogicalMessage payload for compatibility
+      field :message, Message.t() | LogicalMessage.t()
       field :transaction_annotations, String.t()
       field :batch_epoch, non_neg_integer()
     end
@@ -565,7 +570,8 @@ defmodule Sequin.Runtime.SlotProducer do
       kind: kind,
       payload: binary,
       transaction_annotations: state.transaction_annotations,
-      batch_epoch: state.batch_epoch
+      batch_epoch: state.batch_epoch,
+      message: nil
     }
   end
 

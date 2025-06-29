@@ -13,7 +13,9 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.Postgres
+  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
+  alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProducer
   alias Sequin.Runtime.SlotProducer.BatchMarker
   alias Sequin.Runtime.SlotProducer.Processor
@@ -77,10 +79,13 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       # Wait for messages to flow through the complete pipeline
       {[%BatchMarker{} = marker], messages} = receive_messages(3)
 
-      # Messages should be properly processed SlotProcessor.Messages
-      assert Enum.all?(messages, fn msg ->
-               is_struct(msg, Message) and
-                 msg.action == :insert and msg.table_name == Character.table_name()
+      # Messages should be properly wrapped SlotProcessor.Messages
+      assert Enum.all?(messages, fn %SlotProducer.Message{} = msg ->
+               inner_msg = %SlotProcessor.Message{} = msg.message
+
+               inner_msg.action == :insert and inner_msg.table_name == Character.table_name() and
+                 msg.commit_lsn == inner_msg.commit_lsn and
+                 msg.commit_idx == inner_msg.commit_idx
              end)
 
       # Verify messages are ordered by commit_lsn/commit_idx
@@ -104,7 +109,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
 
       assert marker2.epoch == 1
       # Two update messages
-      assert Enum.all?(messages, fn msg -> msg.action == :update end)
+      assert Enum.all?(messages, fn msg -> msg.message.action == :update end)
 
       # Second batch LSN should be higher than first
       assert marker2.high_watermark_wal_cursor.commit_lsn > marker.high_watermark_wal_cursor.commit_lsn
@@ -151,9 +156,11 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       {_markers, messages} = receive_messages(12)
 
       # All messages should be properly processed (proving relations were sent to late joiners)
-      assert Enum.all?(messages, fn msg ->
-               is_struct(msg, Message) and
-                 msg.action == :insert and msg.table_name == Character.table_name()
+      assert Enum.all?(messages, fn %SlotProducer.Message{} = msg ->
+               inner_msg = msg.message
+
+               is_struct(inner_msg, SlotProcessor.Message) and
+                 inner_msg.action == :insert and inner_msg.table_name == Character.table_name()
              end)
     end
 
@@ -166,7 +173,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
 
       # Wait for first message
       {_markers, [solo_msg]} = receive_messages(1)
-      assert solo_msg.action == :insert
+      assert solo_msg.message.action == :insert
       # First message in its transaction
       assert solo_msg.commit_idx == 1
 
@@ -204,6 +211,24 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       assert post_txn_msg.commit_lsn > first_txn_msg.commit_lsn
       # First message in its transaction
       assert post_txn_msg.commit_idx == 0
+    end
+
+    test "logical messages flow through complete pipeline", %{postgres_replication: slot} do
+      # Emit a logical message using pg_logical_emit_message
+      subject = "test-subject"
+      content = ~s|{"event": "test", "data": "logical message content"}|
+
+      Postgres.query!(slot.postgres_database, "SELECT pg_logical_emit_message(true, $1, $2)", [subject, content])
+
+      # Wait for the logical message to flow through the pipeline
+      {_markers, [msg]} = receive_messages(1)
+
+      # Verify it's a LogicalMessage struct
+      assert %LogicalMessage{} = logical_msg = msg.message
+
+      # Verify the content matches what we sent
+      assert logical_msg.prefix == subject
+      assert logical_msg.content == content
     end
   end
 

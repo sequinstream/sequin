@@ -2,8 +2,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   @moduledoc false
   use GenStage
 
-  alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.SlotProducer.BatchMarker
+  alias Sequin.Runtime.SlotProducer.Message
 
   require Logger
 

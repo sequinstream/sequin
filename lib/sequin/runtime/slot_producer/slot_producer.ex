@@ -337,6 +337,11 @@ defmodule Sequin.Runtime.SlotProducer do
     end)
   end
 
+  @ignoreable_messages [?Y, ?T, ?O]
+  defp handle_data(<<?w, _header::192, type, _rest::binary>>, %State{} = state) when type in @ignoreable_messages do
+    {:ok, state}
+  end
+
   defp handle_data(<<?w, _header::192, ?B, rest::binary>>, %State{} = state) do
     %State{last_commit_lsn: last_commit_lsn} = state
     %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid} = Decoder.decode_message(<<?B, rest::binary>>)

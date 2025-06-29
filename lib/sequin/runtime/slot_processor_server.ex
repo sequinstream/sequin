@@ -49,38 +49,17 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     typedstruct do
       # Replication slot info
-      field :connection, map()
       field :id, String.t()
       field :postgres_database, PostgresDatabase.t()
-      field :publication, String.t()
       field :replication_slot, PostgresReplicationSlot.t()
-      field :schemas, %{}, default: %{}
       field :slot_name, String.t()
       field :test_pid, pid()
 
       # Current state tracking
-      field :current_commit_idx, nil | integer()
-      field :current_commit_ts, nil | integer()
-      field :current_xaction_lsn, nil | integer()
-      field :current_xid, nil | integer()
       field :last_commit_lsn, integer()
-      field :connection_state, :disconnected | :streaming
-      field :transaction_annotations, nil | String.t()
-
-      # Wal cursors
-      field :safe_wal_cursor, Replication.wal_cursor()
-      field :safe_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
-      field :last_flushed_wal_cursor, Replication.wal_cursor()
-      field :update_safe_wal_cursor_timer_ref, nil | reference()
-      field :setting_update_safe_wal_cursor_interval, non_neg_integer()
 
       # Buffers
-      field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
-        default: %{count: 0, bytes: 0, binaries: []}
-
       field :backfill_watermark_messages, [LogicalMessage.t()], default: []
-      field :flush_timer, nil | reference()
-      field :flush_imminent?, boolean(), default: false
 
       # Message handlers
       field :message_handler_ctx, any()
@@ -89,13 +68,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       # Health and monitoring
       field :check_memory_fn, nil | (-> non_neg_integer())
-      field :dirty, boolean(), default: false
 
       # Settings
-      field :bytes_between_limit_checks, non_neg_integer()
       field :heartbeat_interval, non_neg_integer()
       field :max_memory_bytes, non_neg_integer()
-      field :setting_reconnect_interval, non_neg_integer()
 
       # Heartbeats
       field :current_heartbeat_id, nil | String.t()
@@ -105,11 +81,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :heartbeat_verification_timer, nil | reference()
       field :message_received_since_last_heartbeat, boolean(), default: false
 
-      # Acks
-      field :last_lsn_acked_at, DateTime.t() | nil
-      field :ack_timer_ref, nil | reference()
-      field :setting_ack_interval, non_neg_integer()
-
       # Reference to primary in case slot lives on replica
       field :primary_database, nil | PostgresDatabase.t()
     end
@@ -117,8 +88,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   def start_link(opts) do
     id = Keyword.fetch!(opts, :id)
-    connection = Keyword.fetch!(opts, :connection)
-    publication = Keyword.fetch!(opts, :publication)
     slot_name = Keyword.fetch!(opts, :slot_name)
     postgres_database = Keyword.fetch!(opts, :postgres_database)
 
@@ -128,17 +97,15 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         Map.put(PostgresDatabase.from_primary(postgres_database.primary), :id, "primaryof-#{postgres_database.id}")
       end
 
-    replication_slot = Keyword.fetch!(opts, :replication_slot)
     test_pid = Keyword.get(opts, :test_pid)
+    replication_slot = Keyword.fetch!(opts, :replication_slot)
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
     message_handler_ctx_fn = Keyword.fetch!(opts, :message_handler_ctx_fn)
     message_handler_ctx = message_handler_ctx_fn.(replication_slot)
     max_memory_bytes = Keyword.get_lazy(opts, :max_memory_bytes, &default_max_memory_bytes/0)
-    bytes_between_limit_checks = Keyword.get(opts, :bytes_between_limit_checks, div(max_memory_bytes, 100))
 
     init = %State{
       id: id,
-      publication: publication,
       slot_name: slot_name,
       postgres_database: postgres_database,
       primary_database: primary_database,
@@ -146,15 +113,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
       message_handler_module: message_handler_module,
-      connection: connection,
       last_commit_lsn: nil,
       heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15)),
       max_memory_bytes: max_memory_bytes,
-      bytes_between_limit_checks: bytes_between_limit_checks,
-      check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
-      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
-      setting_update_safe_wal_cursor_interval: Keyword.get(opts, :update_safe_wal_cursor_interval, :timer.seconds(30)),
-      setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10))
+      check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0)
     }
 
     GenServer.start_link(__MODULE__, init, name: via_tuple(id))
@@ -214,11 +176,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     ProcessMetrics.metadata(%{replication_id: state.id, slot_name: state.slot_name})
 
-    Logger.info(
-      "[SlotProcessorServer] Initialized with opts: #{inspect(Keyword.delete(state.connection, :password), pretty: true)}"
-    )
+    Logger.info("[SlotProcessorServer] Initialized")
 
     if state.test_pid do
+      Mox.allow(Sequin.Runtime.MessageHandlerMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.EnumMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
@@ -235,7 +196,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   @impl GenServer
   @decorate track_metrics("update_message_handler_ctx")
   def handle_call({:update_message_handler_ctx, ctx}, _from, %State{} = state) do
-    :ok = state.message_handler_module.reload_entities(ctx)
     state = %{state | message_handler_ctx: ctx}
     {:reply, :ok, state}
   end
@@ -275,12 +235,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
          {:ok, state} <- flush_messages(state, batch) do
       {:reply, :ok, state}
     else
-      {:error, %InvariantError{code: :payload_size_limit_exceeded}} ->
+      {:error, %InvariantError{code: :payload_size_limit_exceeded} = error} ->
         Logger.warning("Hit payload size limit for one or more slot message stores. Backing off.")
 
-        {:reply, :error, state}
+        {:reply, {:error, error}, state}
 
-      {:error, %InvariantError{code: :over_system_memory_limit}} ->
+      {:error, %InvariantError{code: :over_system_memory_limit} = error} ->
         Health.put_event(
           state.replication_slot,
           %Event{slug: :replication_memory_limit_exceeded, status: :info}
@@ -291,9 +251,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           current_memory: state.check_memory_fn.()
         )
 
-        {:reply, :error, state}
+        {:reply, {:error, error}, state}
 
       {:error, error} ->
+        dbg("here")
         raise error
     end
   end
@@ -737,7 +698,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
 
     case res do
-      :ok ->
+      {:ok, _count} ->
         ProcessMetrics.increment_throughput("messages_ingested", count)
         Prometheus.increment_messages_ingested(state.replication_slot.id, state.replication_slot.slot_name, count)
 
@@ -869,9 +830,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           # We just recently started up, and may have accumulated some messages, and may have even flushed them.
           # But our highwatermark wal cursor has not made it to all SlotMessageStores yet.
           # So, it is not safe to advance the slot.
-          Logger.info(
-            "[SlotProcessorServer] no unpersisted messages in stores, using last_flushed_wal_cursor=#{inspect(state.last_flushed_wal_cursor)}"
-          )
+          Logger.info("[SlotProcessorServer] no unpersisted messages in stores")
 
           nil
         else

@@ -5,7 +5,6 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
 
   use Supervisor
 
-  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime.MessageHandler
@@ -42,12 +41,10 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
       [
         id: slot.id,
         slot_name: slot.slot_name,
-        publication: slot.publication_name,
         postgres_database: slot.postgres_database,
         replication_slot: slot,
         message_handler_ctx_fn: &MessageHandler.context/1,
         message_handler_module: message_handler_module,
-        connection: PostgresDatabase.to_postgrex_opts(slot.postgres_database),
         ipv6: slot.postgres_database.ipv6
       ]
 

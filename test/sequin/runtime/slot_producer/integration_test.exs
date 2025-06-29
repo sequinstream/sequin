@@ -9,7 +9,6 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
   use AssertEventually, interval: 1
 
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
@@ -18,7 +17,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
   alias Sequin.Runtime.SlotProducer
   alias Sequin.Runtime.SlotProducer.BatchMarker
   alias Sequin.Runtime.SlotProducer.Processor
-  alias Sequin.Runtime.SlotProducer.ReorderBuffer
+  alias Sequin.Runtime.SlotProducer.Supervisor
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.ReplicationSlots
@@ -57,11 +56,13 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
           status: :active
         )
 
+      pg_replication = %{pg_replication | postgres_database: postgres_database}
+
       unless ctx[:skip_start] do
-        start_pipeline(postgres_database, Map.get(ctx, :start_opts, []))
+        start_pipeline(pg_replication, Map.get(ctx, :start_opts, []))
       end
 
-      {:ok, %{postgres_database: postgres_database, pg_replication: pg_replication}}
+      {:ok, %{postgres_replication: pg_replication}}
     end
 
     @tag start_opts: [
@@ -111,22 +112,24 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
 
     @tag skip_start: true
     test "relations are properly synchronized to processors that subscribe after relations are received", %{
-      postgres_database: postgres_database
+      postgres_replication: slot
     } do
       # A message will be waiting
       CharacterFactory.insert_character!(%{name: "Super Early Bird"}, repo: UnboxedRepo)
 
-      opts = [slot_producer: [batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 10, max_age: 5_000]]]
+      opts = [
+        slot_producer: [batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 10, max_age: 5_000]],
+        processor_opts: [subscribe_to: []]
+      ]
 
       # Start pipeline but don't subscribe processors yet
-      {slot_producer_pid, processor_pids, _reorder_buffer_pid} =
-        start_pipeline(postgres_database, opts, subscribe_processors?: false)
+      start_pipeline(slot, opts)
 
-      # Subscribe only the first processor partition
-      [{_first_partition_idx, first_processor_pid} | remaining_processors] = processor_pids
+      producer = SlotProducer.via_tuple(slot.id)
+      first_processor = Processor.via_tuple(slot.id, 0)
 
-      # Subscribe first processor to SlotProducer
-      {:ok, _subscription_tag} = GenStage.sync_subscribe(first_processor_pid, to: slot_producer_pid)
+      # Subscribe first processor to SlotProducer and ReorderBuffer
+      {:ok, _subscription_tag} = GenStage.sync_subscribe(first_processor, to: producer)
 
       # Insert a character to generate a relation message
       CharacterFactory.insert_character!(%{name: "Early Bird"}, repo: UnboxedRepo)
@@ -135,8 +138,8 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       refute_receive {:batch, _, _}, 50
 
       # Now subscribe the remaining processors (late joiners)
-      for {_partition_idx, processor_pid} <- remaining_processors do
-        {:ok, _subscription_tag} = GenStage.sync_subscribe(processor_pid, to: slot_producer_pid)
+      for partition_idx <- 1..(Processor.partition_count() - 1) do
+        {:ok, _subscription_tag} = GenStage.sync_subscribe(Processor.via_tuple(slot.id, partition_idx), to: producer)
       end
 
       # Insert many more characters to ensure messages flow through all partitions
@@ -237,75 +240,35 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
     Enum.map(msgs, & &1.action)
   end
 
-  defp start_pipeline(postgres_database, opts, pipeline_opts \\ []) do
+  defp start_pipeline(postgres_replication, opts) do
     test_pid = self()
-    pipeline_id = UUID.uuid4()
-    subscribe_processors? = Keyword.get(pipeline_opts, :subscribe_processors?, true)
 
     # Start ReorderBuffer first
     reorder_buffer_opts = [
-      id: pipeline_id,
-      producer_partitions: Processor.partition_count(),
       on_batch_ready: fn batch_marker, messages ->
         send(test_pid, {:batch, batch_marker, messages})
         :ok
       end
     ]
 
-    {:ok, reorder_buffer_pid} = start_supervised({ReorderBuffer, reorder_buffer_opts})
+    processor_opts = Keyword.get(opts, :processor_opts, [])
 
-    # Start Processor partitions
-    processor_pids =
-      for partition_idx <- Processor.partitions() do
-        processor_opts = [
-          id: pipeline_id,
-          partition_idx: partition_idx
-        ]
-
-        {:ok, processor_pid} =
-          start_supervised({Processor, processor_opts}, id: {:processor, partition_idx})
-
-        # Subscribe ReorderBuffer to this Processor partition
-        {:ok, _subscription_tag} = GenStage.sync_subscribe(reorder_buffer_pid, to: processor_pid)
-
-        {partition_idx, processor_pid}
-      end
-
-    # Start SlotProducer
     slot_producer_opts =
       Keyword.merge(
         [
-          id: pipeline_id,
-          database_id: postgres_database.id,
-          slot_name: replication_slot(),
-          publication_name: @publication,
-          pg_major_version: 17,
-          postgres_database: postgres_database,
-          connect_opts: db_connect_opts(postgres_database),
           restart_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end,
-          conn: fn -> postgres_database end,
-          processor_mod: Processor,
-          # Fast batch flush for testing
-          batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 1024, max_age: 100]
+          batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 1024, max_age: 10]
         ],
-        opts
+        Keyword.get(opts, :slot_producer_opts, [])
       )
 
-    {:ok, slot_producer_pid} = start_supervised({SlotProducer, slot_producer_opts})
+    opts = [
+      replication_slot: postgres_replication,
+      reorder_buffer_opts: reorder_buffer_opts,
+      processor_opts: processor_opts,
+      slot_producer_opts: slot_producer_opts
+    ]
 
-    # Conditionally subscribe Processor partitions to SlotProducer
-    if subscribe_processors? do
-      for {_partition_idx, processor_pid} <- processor_pids do
-        {:ok, _subscription_tag} = GenStage.sync_subscribe(processor_pid, to: slot_producer_pid)
-      end
-    end
-
-    {slot_producer_pid, processor_pids, reorder_buffer_pid}
-  end
-
-  defp db_connect_opts(postgres_database) do
-    postgres_database
-    |> PostgresDatabase.to_postgrex_opts()
-    |> Keyword.drop([:socket, :socket_dir, :endpoints])
+    start_supervised!({Supervisor, opts})
   end
 end

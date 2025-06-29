@@ -421,6 +421,18 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @doc """
+  Updates the high watermark WAL cursor across all partitions.
+  """
+  @spec put_high_watermark_wal_cursor(SinkConsumer.t(), Replication.wal_cursor()) :: :ok | {:error, Exception.t()}
+  def put_high_watermark_wal_cursor(consumer, wal_cursor) do
+    consumer
+    |> partitions()
+    |> Sequin.Enum.reduce_while_ok(fn partition ->
+      GenServer.cast(via_tuple(consumer.id, partition), {:put_high_watermark_wal_cursor, wal_cursor})
+    end)
+  end
+
+  @doc """
   Counts the number of messages in the message store.
   """
   @spec count_messages(SinkConsumer.t()) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
@@ -774,6 +786,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   def handle_call(:payload_size_bytes, _from, state) do
     {:reply, {:ok, state.payload_size_bytes}, state}
+  end
+
+  @impl GenServer
+  def handle_cast({:put_high_watermark_wal_cursor, high_watermark_wal_cursor}, %State{} = state) do
+    state = %State{state | high_watermark_wal_cursor: high_watermark_wal_cursor}
+    {:noreply, state}
   end
 
   @impl GenServer

@@ -28,8 +28,8 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime
   alias Sequin.Runtime.MessageHandler
+  alias Sequin.Runtime.MessageHandlerMock
   alias Sequin.Runtime.SinkPipeline
-  alias Sequin.Runtime.SlotMessageHandlerMock
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.SlotProcessorServer
@@ -53,7 +53,6 @@ defmodule Sequin.PostgresReplicationTest do
     # Fast-forward the replication slot to the current WAL position
     :ok = ReplicationSlots.reset_slot(UnboxedRepo, replication_slot())
     TestMessages.create_ets_table()
-    stub(SlotMessageHandlerMock, :flush_messages, fn _ctx -> :ok end)
 
     :ok
   end
@@ -931,14 +930,14 @@ defmodule Sequin.PostgresReplicationTest do
 
       test_pid = self()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
         :ok
       end)
 
-      start_replication!(message_handler_module: SlotMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
       assert_receive {:change, [change]}, :timer.seconds(5)
 
       assert action?(change, :insert), "Expected change to be an insert, got: #{inspect(change)}"
@@ -952,14 +951,14 @@ defmodule Sequin.PostgresReplicationTest do
     test "changes in a transaction are buffered then delivered to message handler in order" do
       test_pid = self()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:changes, msgs})
         :ok
       end)
 
-      start_replication!(message_handler_module: SlotMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       # Create three characters in sequence
       UnboxedRepo.transaction(fn ->
@@ -1001,14 +1000,14 @@ defmodule Sequin.PostgresReplicationTest do
       test_pid = self()
 
       # simulate a message mis-handle/crash
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
         raise "Simulated crash"
       end)
 
-      start_replication!(message_handler_module: SlotMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       record =
         []
@@ -1020,14 +1019,14 @@ defmodule Sequin.PostgresReplicationTest do
 
       stop_replication!()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
         :ok
       end)
 
-      start_replication!(message_handler_module: SlotMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       assert_receive {:change, [change]}, :timer.seconds(1)
       assert action?(change, :insert)
@@ -1039,14 +1038,14 @@ defmodule Sequin.PostgresReplicationTest do
     test "creates, updates, and deletes are captured" do
       test_pid = self()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
         :ok
       end)
 
-      start_replication!(message_handler_module: SlotMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       # Test create
       character = CharacterFactory.insert_character_ident_full!([planet: "Caladan"], repo: UnboxedRepo)
@@ -1090,14 +1089,14 @@ defmodule Sequin.PostgresReplicationTest do
     test "messages are processed exactly once, even after crash and reboot" do
       test_pid = self()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:changes, msgs})
         :ok
       end)
 
-      start_replication!(message_handler_module: SlotMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       # Insert a record
       character1 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
@@ -1125,7 +1124,7 @@ defmodule Sequin.PostgresReplicationTest do
       stop_replication!()
 
       # Restart the replication
-      start_replication!(message_handler_module: SlotMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       # Insert another record to verify replication is working
       character3 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
@@ -1143,23 +1142,22 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag capture_log: true
     test "disconnects and reconnects when payload size limit exceeded" do
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
-      stub(SlotMessageHandlerMock, :flush_messages, fn _ctx -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
       test_pid = self()
       # First call succeeds, updating the last_flushed_wal_cursor
-      expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
+      expect(MessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
         :ok
       end)
 
       # Second call will fail with payload_size_limit_exceeded
-      expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
+      expect(MessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
         # Return the error that should trigger disconnection
         {:error, Sequin.Error.invariant(code: :payload_size_limit_exceeded, message: "Payload size limit exceeded")}
       end)
 
       # Last call succeeds
-      expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, messages ->
+      expect(MessageHandlerMock, :handle_messages, fn _ctx, messages ->
         assert length(messages) == 1
         message = List.first(messages)
         send(test_pid, {:changes, [message]})
@@ -1169,7 +1167,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Start replication with our custom reconnect interval
       pid =
         start_replication!(
-          message_handler_module: SlotMessageHandlerMock,
+          message_handler_module: MessageHandlerMock,
           reconnect_interval: 5
         )
 
@@ -1217,9 +1215,9 @@ defmodule Sequin.PostgresReplicationTest do
       id = Faker.UUID.v4()
       start_replication!(heartbeat_interval: 5, id: id, pg_major_version: 17)
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, [] ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, [] ->
         :ok
       end)
 
@@ -1238,9 +1236,9 @@ defmodule Sequin.PostgresReplicationTest do
       id = Faker.UUID.v4()
       start_replication!(heartbeat_interval: 5, id: id, pg_major_version: 13)
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_heartbeat_msg] ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, [_heartbeat_msg] ->
         :ok
       end)
 
@@ -1264,9 +1262,9 @@ defmodule Sequin.PostgresReplicationTest do
         :atomics.get(memory_counter, 1)
       end
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
         :ok
       end)
 
@@ -1274,7 +1272,7 @@ defmodule Sequin.PostgresReplicationTest do
       log =
         capture_log(fn ->
           start_replication!(
-            message_handler_module: SlotMessageHandlerMock,
+            message_handler_module: MessageHandlerMock,
             max_memory_bytes: 1000,
             bytes_between_limit_checks: 100,
             test_pid: test_pid,
@@ -1637,12 +1635,12 @@ defmodule Sequin.PostgresReplicationTest do
         )
       end)
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, _msgs -> :ok end)
 
       # Start replication
       start_replication!(
-        message_handler_module: SlotMessageHandlerMock,
+        message_handler_module: MessageHandlerMock,
         test_pid: test_pid
       )
 
@@ -1779,7 +1777,7 @@ defmodule Sequin.PostgresReplicationTest do
           slot_name: replication_slot(),
           test_pid: self(),
           id: server_id(),
-          message_handler_module: SlotMessageHandlerMock,
+          message_handler_module: MessageHandlerMock,
           message_handler_ctx_fn: fn _ ->
             %MessageHandler.Context{
               consumers: [],

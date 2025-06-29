@@ -16,7 +16,9 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
 
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Repo
+  alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.SlotProducer
+  alias Sequin.Runtime.SlotProducer.Batch
   alias Sequin.Runtime.SlotProducer.Processor
   alias Sequin.Runtime.SlotProducer.ReorderBuffer
 
@@ -39,8 +41,6 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
     partition_count = Processor.partition_count()
 
     postgres_database = Map.put(replication_slot.postgres_database, :tables, nil)
-    # on_batch_ready = Keyword.fetch!(opts, :on_batch_ready)
-    on_batch_ready = fn _ -> :ok end
     slot_producer_opts = Keyword.get(opts, :slot_producer_opts, [])
     processor_opts = Keyword.get(opts, :processor_opts, [])
     reorder_buffer_opts = Keyword.get(opts, :reorder_buffer_opts, [])
@@ -57,8 +57,7 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
           postgres_database: postgres_database,
           connect_opts: PostgresDatabase.to_protocol_opts(postgres_database),
           restart_wal_cursor_fn: fn state ->
-            # TODO: Implement proper WAL cursor persistence
-            %{commit_lsn: state.last_commit_lsn, commit_idx: state.last_commit_idx}
+            SlotProcessorServer.safe_wal_cursor(state.id)
           end,
           conn: fn -> postgres_database end,
           processor_mod: Processor
@@ -90,7 +89,9 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
         [
           id: pipeline_id,
           producer_partitions: partition_count,
-          on_batch_ready: on_batch_ready,
+          on_batch_ready: fn id, %Batch{} = batch ->
+            SlotProcessorServer.handle_batch(id, batch)
+          end,
           # Subscribe to all Processor partitions via subscribe_to in init
           subscribe_to:
             Enum.map(0..(partition_count - 1), fn partition_idx ->

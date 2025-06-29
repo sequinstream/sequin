@@ -275,7 +275,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
 
     # Start ReorderBuffer first
     reorder_buffer_opts = [
-      on_batch_ready: fn batch ->
+      on_batch_ready: fn _id, batch ->
         send(test_pid, {:batch, batch})
         :ok
       end

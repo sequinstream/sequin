@@ -7,12 +7,6 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
   require Logger
 
-  @min_demand 500
-  @max_demand 1000
-  @bytes_between_limit_checks 1024 * 1024 * 10
-  @check_system_for_recover_interval :timer.seconds(1)
-  @retry_batch_interval 250
-
   def start_link(opts \\ []) do
     id = Keyword.fetch!(opts, :id)
     GenStage.start_link(__MODULE__, opts, name: via_tuple(id))
@@ -23,7 +17,15 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   def handle_batch_marker(id, {marker, from_idx}) do
-    GenStage.call(via_tuple(id), {:handle_batch_marker, {marker, from_idx}})
+    GenStage.sync_info(via_tuple(id), {:batch_marker, {marker, from_idx}})
+  end
+
+  def config(key) do
+    Keyword.fetch!(config(), key)
+  end
+
+  def config do
+    Application.fetch_env!(:sequin, __MODULE__)
   end
 
   defmodule Batch do
@@ -47,34 +49,33 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
     typedstruct do
       field :batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
-      field :producer_partition_count, non_neg_integer()
-      field :setting_min_demand, non_neg_integer()
-      field :setting_max_demand, non_neg_integer()
-      field :producer_subscriptions, [%{producer: pid(), demand: integer()}], default: []
-      field :status, :active | :inactive, default: :active
-      field :setting_bytes_between_limit_checks, non_neg_integer()
-      field :setting_check_system_for_recover_interval, non_neg_integer()
-      field :setting_retry_batch_interval, non_neg_integer()
-      field :retry_batch_timer_ref, reference() | nil
       field :bytes_since_last_limit_check, non_neg_integer(), default: 0
       field :check_system_fn, (-> :ok | {:error, any()})
       field :check_system_timer_ref, reference() | nil
       field :on_batch_ready, (BatchMarker.t(), [Message.t()] -> :ok | {:error, any()})
+      field :producer_partition_count, non_neg_integer()
+      field :producer_subscriptions, [%{producer: pid(), demand: integer()}], default: []
+      field :retry_batch_timer_ref, reference() | nil
+      field :setting_bytes_between_limit_checks, non_neg_integer()
+      field :setting_check_system_for_recover_interval, non_neg_integer()
+      field :setting_max_demand, non_neg_integer()
+      field :setting_min_demand, non_neg_integer()
+      field :setting_retry_batch_interval, non_neg_integer()
+      field :status, :active | :inactive, default: :active
     end
   end
 
   @impl GenStage
   def init(opts) do
     state = %State{
-      producer_partition_count: Keyword.fetch!(opts, :producer_partitions),
-      setting_min_demand: Keyword.get(opts, :setting_min_demand, @min_demand),
-      setting_max_demand: Keyword.get(opts, :setting_max_demand, @max_demand),
-      setting_bytes_between_limit_checks: Keyword.get(opts, :bytes_between_limit_checks, @bytes_between_limit_checks),
-      setting_check_system_for_recover_interval:
-        Keyword.get(opts, :check_system_for_recover_interval, @check_system_for_recover_interval),
-      setting_retry_batch_interval: Keyword.get(opts, :retry_batch_interval, @retry_batch_interval),
       check_system_fn: Keyword.get(opts, :check_system_fn, &default_check_system_fn/1),
-      on_batch_ready: Keyword.fetch!(opts, :on_batch_ready)
+      on_batch_ready: Keyword.fetch!(opts, :on_batch_ready),
+      producer_partition_count: Keyword.fetch!(opts, :producer_partitions),
+      setting_bytes_between_limit_checks: Keyword.get(opts, :bytes_between_limit_checks),
+      setting_check_system_for_recover_interval: Keyword.get(opts, :check_system_for_recover_interval),
+      setting_max_demand: Keyword.get(opts, :setting_max_demand),
+      setting_min_demand: Keyword.get(opts, :setting_min_demand),
+      setting_retry_batch_interval: Keyword.get(opts, :retry_batch_interval)
     }
 
     {:consumer, state}
@@ -96,24 +97,6 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   @impl GenStage
-  def handle_call({:handle_batch_marker, {%BatchMarker{} = marker, from_idx}}, _from, %State{} = state) do
-    %Batch{} = batch = Map.get_lazy(state.batches_by_epoch, marker.epoch, fn -> %Batch{epoch: marker.epoch} end)
-    # Set the marker if it hasn't been set yet
-    batch = if batch.marker == nil, do: %{batch | marker: marker}, else: batch
-    batch = Map.update!(batch, :markers_received, &MapSet.put(&1, from_idx))
-
-    batch =
-      if MapSet.size(batch.markers_received) == state.producer_partition_count and not batch.ready? do
-        Process.send_after(self(), :batch_ready, 0)
-        %{batch | ready?: true}
-      else
-        batch
-      end
-
-    {:reply, :ok, [], %{state | batches_by_epoch: Map.put(state.batches_by_epoch, marker.epoch, batch)}}
-  end
-
-  @impl GenStage
   def handle_events(events, from, %State{} = state) do
     # Update the demand for the producer that sent these events
     state =
@@ -127,6 +110,24 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   @impl GenStage
+
+  def handle_info({:batch_marker, {%BatchMarker{} = marker, from_idx}}, %State{} = state) do
+    %Batch{} = batch = Map.get_lazy(state.batches_by_epoch, marker.epoch, fn -> %Batch{epoch: marker.epoch} end)
+    # Set the marker if it hasn't been set yet
+    batch = if batch.marker == nil, do: %{batch | marker: marker}, else: batch
+    batch = Map.update!(batch, :markers_received, &MapSet.put(&1, from_idx))
+
+    batch =
+      if MapSet.size(batch.markers_received) == state.producer_partition_count and not batch.ready? do
+        Process.send_after(self(), :batch_ready, 0)
+        %{batch | ready?: true}
+      else
+        batch
+      end
+
+    {:noreply, [], %{state | batches_by_epoch: Map.put(state.batches_by_epoch, marker.epoch, batch)}}
+  end
+
   def handle_info(:batch_ready, %State{} = state) do
     # Find the lowest epoch that is ready and complete
     batches = Map.values(state.batches_by_epoch)
@@ -155,7 +156,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
         {:error, reason} ->
           Logger.warning("[ReorderBuffer] Error pushing batch #{inspect(batch.marker)}: #{inspect(reason)}")
-          Process.send_after(self(), :batch_ready, state.setting_retry_batch_interval)
+          Process.send_after(self(), :batch_ready, setting(state, :setting_retry_batch_interval))
           {:noreply, [], state}
       end
     end
@@ -172,7 +173,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
       {:error, reason} ->
         Logger.warning("[ReorderBuffer] Pausing pipeline: #{inspect(reason)}")
-        schedule_check_limit(state, state.setting_check_system_for_recover_interval)
+        schedule_check_limit(state, setting(state, :setting_check_system_for_recover_interval))
         {:noreply, [], %{state | status: :inactive}}
     end
 
@@ -181,8 +182,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
   defp ask_demand(%State{} = state) do
     Enum.reduce(state.producer_subscriptions, state, fn sub, acc_state ->
-      if sub.demand < state.setting_min_demand do
-        demand_to_ask = state.setting_max_demand - sub.demand
+      if sub.demand < setting(state, :setting_min_demand) do
+        demand_to_ask = setting(state, :setting_max_demand) - sub.demand
         GenStage.ask(sub.producer, demand_to_ask)
 
         # Update the subscription with the new demand
@@ -213,6 +214,10 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     Enum.reduce(events, state, fn %Message{} = event, acc_state ->
       epoch = event.batch_epoch
 
+      if is_nil(epoch) do
+        raise "Received a message without an epoch"
+      end
+
       batch =
         Map.get_lazy(acc_state.batches_by_epoch, epoch, fn ->
           # Create a batch without a marker initially - the marker will be set via handle_batch_marker
@@ -225,7 +230,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   defp maybe_schedule_limit_check(%State{} = state) do
-    if state.bytes_since_last_limit_check > state.setting_bytes_between_limit_checks do
+    if state.bytes_since_last_limit_check > setting(state, :setting_bytes_between_limit_checks) do
       state = schedule_check_limit(state, 0)
       %{state | bytes_since_last_limit_check: 0}
     else
@@ -241,4 +246,23 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   defp schedule_check_limit(%State{} = state, _interval), do: state
 
   defp default_check_system_fn(_state), do: :ok
+
+  def setting(%State{} = state, setting) do
+    case Map.fetch!(state, setting) do
+      nil ->
+        key =
+          case setting do
+            :setting_bytes_between_limit_checks -> :bytes_between_limit_checks
+            :setting_check_system_for_recover_interval -> :check_system_for_recover_interval
+            :setting_max_demand -> :max_demand
+            :setting_min_demand -> :min_demand
+            :setting_retry_batch_interval -> :batch_interval
+          end
+
+        config(key)
+
+      setting ->
+        setting
+    end
+  end
 end

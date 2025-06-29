@@ -91,6 +91,7 @@ defmodule Sequin.Runtime.SlotProducer do
     alias Sequin.Postgres
     alias Sequin.Runtime.SlotProducer
     alias Sequin.Runtime.SlotProducer.BatchMarker
+    alias Sequin.Runtime.SlotProducer.Relation
 
     typedstruct do
       field :id, String.t()
@@ -139,6 +140,12 @@ defmodule Sequin.Runtime.SlotProducer do
       field :demand, integer(), default: 0
       field :consumers, [pid()], default: []
       field :processor_mod, module()
+
+      # Relations
+      field :relations, %{required(table_oid :: String.t()) => Relation.t()}, default: %{}
+
+      # Last batch marker for new subscribers
+      field :last_batch_marker, BatchMarker.t() | nil
 
       # Buffers
       field :accumulated_messages, %{count: non_neg_integer(), bytes: non_neg_integer(), messages: [Message.t()]},
@@ -195,6 +202,16 @@ defmodule Sequin.Runtime.SlotProducer do
 
   @impl GenStage
   def handle_subscribe(:consumer, _opts, {pid, _ref}, state) do
+    # Send all stored relations to the new consumer
+    Enum.each(state.relations, fn {_table_oid, relation} ->
+      state.processor_mod.handle_relation(pid, relation)
+    end)
+
+    # Send last batch marker to the new consumer if we have one
+    if state.last_batch_marker do
+      state.processor_mod.handle_batch_marker(pid, state.last_batch_marker)
+    end
+
     {:automatic, %{state | consumers: [pid | state.consumers]}}
   end
 
@@ -276,16 +293,19 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_info(:flush_batch, %State{} = state) do
     high_watermark_cursor =
       if state.commit_lsn do
-        %{commit_lsn: state.commit_lsn, commit_idx: state.commit_idx}
+        # This number starts at 0, and is incremented *after* each assignment. So the last assignment is -1
+        %{commit_lsn: state.commit_lsn, commit_idx: state.commit_idx - 1}
       else
         %{commit_lsn: state.last_commit_lsn, commit_idx: state.last_commit_idx}
       end
 
+    batch_marker = %BatchMarker{
+      high_watermark_wal_cursor: high_watermark_cursor,
+      epoch: state.batch_epoch
+    }
+
     Enum.each(state.consumers, fn consumer ->
-      state.processor_mod.handle_batch_marker(consumer, %BatchMarker{
-        high_watermark_wal_cursor: high_watermark_cursor,
-        epoch: state.batch_epoch
-      })
+      state.processor_mod.handle_batch_marker(consumer, batch_marker)
     end)
 
     state = %{
@@ -294,7 +314,8 @@ defmodule Sequin.Runtime.SlotProducer do
         processed_messages_since_last_flush_stats: %{count: 0, bytes: 0},
         batch_epoch: state.batch_epoch + 1,
         batch_flush_timer: nil,
-        last_flushed_batch_at: DateTime.utc_now()
+        last_flushed_batch_at: DateTime.utc_now(),
+        last_batch_marker: batch_marker
     }
 
     {:noreply, [], state}
@@ -368,7 +389,8 @@ defmodule Sequin.Runtime.SlotProducer do
     state = %State{
       state
       | last_commit_lsn: commit_lsn,
-        last_commit_idx: state.commit_idx,
+        # This number starts at 0, and is incremented *after* each assignment. So the last assignment is -1
+        last_commit_idx: state.commit_idx - 1,
         commit_lsn: nil,
         commit_ts: nil,
         commit_xid: nil,
@@ -381,6 +403,8 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp handle_data(<<?w, _header::192, ?R, msg::binary>>, %State{} = state) do
     relation = Relation.parse_relation(<<?R, msg::binary>>, state.database_id, state.conn.())
+
+    state = %{state | relations: Map.put(state.relations, relation.id, relation)}
 
     Enum.each(state.consumers, fn consumer ->
       state.processor_mod.handle_relation(consumer, relation)

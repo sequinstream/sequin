@@ -98,9 +98,7 @@ config :sequin, Sequin.Runtime.SlotProducer,
 config :sequin, Sequin.Runtime.SlotProducer.ReorderBuffer,
   min_demand: 500,
   max_demand: 1000,
-  bytes_between_limit_checks: 1024 * 1024 * 10,
-  check_system_for_recover_interval: :timer.seconds(1),
-  retry_batch_interval: 250
+  retry_flush_batch_interval: 250
 
 # Configures the endpoint
 config :sequin, SequinWeb.Endpoint,

@@ -434,9 +434,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
   end
 
   defp db_connect_opts(postgres_database) do
-    postgres_database
-    |> PostgresDatabase.to_postgrex_opts()
-    |> Keyword.drop([:socket, :socket_dir, :endpoints])
+    PostgresDatabase.to_protocol_opts(postgres_database)
   end
 
   # defp assert_lsn_progress(init_lsn, db) do

@@ -78,7 +78,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       setting_retry_batch_interval: Keyword.get(opts, :retry_batch_interval)
     }
 
-    {:consumer, state}
+    {:consumer, state, subscribe_to: Keyword.get(opts, :subscribe_to, [])}
   end
 
   @impl GenStage

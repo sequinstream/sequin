@@ -7,9 +7,10 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
   all partitions complete their batches.
   """
   use Sequin.DataCase, async: true
+  use AssertEventually, interval: 1
 
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.Runtime.SlotProducer.Message
   alias Sequin.Runtime.SlotProducer.ReorderBuffer
 
   @reorder_buffer_id Module.concat(__MODULE__, ReorderBuffer)
@@ -35,6 +36,10 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
 
     def send_batch_marker(producer, batch_marker, partition_idx) do
       GenStage.call(producer, {:send_batch_marker, batch_marker, partition_idx})
+    end
+
+    def get_demand(producer) do
+      GenStage.call(producer, :get_demand)
     end
 
     def init(opts) do
@@ -71,13 +76,20 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
 
       {:noreply, [], state}
     end
+
+    def handle_call(:get_demand, _from, state) do
+      {:reply, state.demand, [], state}
+    end
   end
 
   describe "ReorderBuffer with multiple producer partitions" do
     setup ctx do
-      producers = start_buffer(Map.get(ctx, :buffer_opts, []))
+      producers =
+        unless ctx[:skip_start] do
+          ctx |> Map.get(:buffer_opts, []) |> start_buffer() |> Map.new()
+        end
 
-      {:ok, %{producers: Map.new(producers)}}
+      {:ok, %{producers: producers}}
     end
 
     test "flushes messages when all partitions send batch markers", %{
@@ -227,8 +239,9 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
 
       # The ReorderBuffer process should crash with our specific error
       assert_receive {:DOWN, _ref, :process, _pid,
-                      {%RuntimeError{message: "Batch epochs completed out-of-order: min_epoch=0, min_ready_epoch=1"},
-                       _stacktrace}}
+                      {%RuntimeError{
+                         message: "Batch epochs completed out-of-order: other_epoch=0 min_ready_epoch=1"
+                       }, _stacktrace}}
     end
 
     @tag buffer_opts: [setting_min_demand: 2, setting_max_demand: 5]
@@ -270,6 +283,59 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       assert_receive {:batch_ready, _received_marker, received_messages}, 1000
 
       assert length(received_messages) >= length(test_messages) + length(additional_messages)
+    end
+
+    @tag skip_start: true
+    @tag capture_log: true
+    test "implements back pressure when batch flushing fails" do
+      test_pid = self()
+      max_demand = 100
+      # Use an agent as a global to control batch flushing
+      {:ok, flush_control} = Agent.start_link(fn -> :fail end)
+
+      on_batch_ready = fn batch_marker, messages ->
+        case Agent.get(flush_control, & &1) do
+          :fail ->
+            {:error, :simulated_failure}
+
+          :succeed ->
+            send(test_pid, {:batch_ready, batch_marker, messages})
+            :ok
+        end
+      end
+
+      opts = [
+        min_demand: 50,
+        max_demand: max_demand,
+        retry_flush_batch_interval: 10,
+        on_batch_ready: on_batch_ready
+      ]
+
+      producers = start_buffer(opts)
+
+      # Complete first batch (will fail to flush)
+      batch_marker = ReplicationFactory.batch_marker(epoch: 0)
+
+      for {idx, producer_pid} <- producers do
+        :ok = TestProducer.send_message(producer_pid, ReplicationFactory.message(batch_epoch: 0))
+        :ok = TestProducer.send_batch_marker(producer_pid, batch_marker, idx)
+      end
+
+      # Now, completely drain demand
+      for _j <- 0..(max_demand * 2), {_idx, producer_pid} <- producers do
+        :ok = TestProducer.send_message(producer_pid, ReplicationFactory.message(batch_epoch: 1))
+      end
+
+      # Wait for back pressure - demand drains to 0
+      assert_eventually Enum.all?(producers, fn {_idx, producer} -> TestProducer.get_demand(producer) == 0 end)
+
+      # Allow flush to succeed
+      Agent.update(flush_control, fn _ -> :succeed end)
+
+      # Should receive batch and demand should recover
+      assert_receive {:batch_ready, _, _}
+
+      assert_eventually Enum.all?(producers, fn {_idx, producer} -> TestProducer.get_demand(producer) >= 50 end)
     end
   end
 

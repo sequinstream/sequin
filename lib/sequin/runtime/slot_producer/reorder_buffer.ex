@@ -39,7 +39,6 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       field :epoch, non_neg_integer()
       field :messages, list(), default: []
       field :markers_received, MapSet.t(), default: MapSet.new()
-      field :ready?, boolean(), default: false
     end
   end
 
@@ -48,34 +47,26 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     use TypedStruct
 
     typedstruct do
-      field :batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
-      field :bytes_since_last_limit_check, non_neg_integer(), default: 0
-      field :check_system_fn, (-> :ok | {:error, any()})
-      field :check_system_timer_ref, reference() | nil
+      field :pending_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
+      field :ready_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
       field :on_batch_ready, (BatchMarker.t(), [Message.t()] -> :ok | {:error, any()})
       field :producer_partition_count, non_neg_integer()
       field :producer_subscriptions, [%{producer: pid(), demand: integer()}], default: []
-      field :retry_batch_timer_ref, reference() | nil
-      field :setting_bytes_between_limit_checks, non_neg_integer()
-      field :setting_check_system_for_recover_interval, non_neg_integer()
+      field :flush_batch_timer_ref, reference() | nil
       field :setting_max_demand, non_neg_integer()
       field :setting_min_demand, non_neg_integer()
-      field :setting_retry_batch_interval, non_neg_integer()
-      field :status, :active | :inactive, default: :active
+      field :setting_retry_flush_batch_interval, non_neg_integer()
     end
   end
 
   @impl GenStage
   def init(opts) do
     state = %State{
-      check_system_fn: Keyword.get(opts, :check_system_fn, &default_check_system_fn/1),
       on_batch_ready: Keyword.fetch!(opts, :on_batch_ready),
       producer_partition_count: Keyword.fetch!(opts, :producer_partitions),
-      setting_bytes_between_limit_checks: Keyword.get(opts, :bytes_between_limit_checks),
-      setting_check_system_for_recover_interval: Keyword.get(opts, :check_system_for_recover_interval),
-      setting_max_demand: Keyword.get(opts, :setting_max_demand),
-      setting_min_demand: Keyword.get(opts, :setting_min_demand),
-      setting_retry_batch_interval: Keyword.get(opts, :retry_batch_interval)
+      setting_max_demand: Keyword.get(opts, :max_demand),
+      setting_min_demand: Keyword.get(opts, :min_demand),
+      setting_retry_flush_batch_interval: Keyword.get(opts, :retry_flush_batch_interval)
     }
 
     {:consumer, state, subscribe_to: Keyword.get(opts, :subscribe_to, [])}
@@ -98,13 +89,12 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
   @impl GenStage
   def handle_events(events, from, %State{} = state) do
-    # Update the demand for the producer that sent these events
+    state = Enum.reduce(events, state, &add_event_to_state/2)
+
     state =
       state
       |> update_subscription_demand(from, -length(events))
-      |> add_events_to_batches(events)
-      |> ask_demand()
-      |> maybe_schedule_limit_check()
+      |> maybe_ask_demand()
 
     {:noreply, [], state}
   end
@@ -112,73 +102,46 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   @impl GenStage
 
   def handle_info({:batch_marker, {%BatchMarker{} = marker, from_idx}}, %State{} = state) do
-    %Batch{} = batch = Map.get_lazy(state.batches_by_epoch, marker.epoch, fn -> %Batch{epoch: marker.epoch} end)
-    # Set the marker if it hasn't been set yet
-    batch = if batch.marker == nil, do: %{batch | marker: marker}, else: batch
-    batch = Map.update!(batch, :markers_received, &MapSet.put(&1, from_idx))
-
-    batch =
-      if MapSet.size(batch.markers_received) == state.producer_partition_count and not batch.ready? do
-        Process.send_after(self(), :batch_ready, 0)
-        %{batch | ready?: true}
-      else
-        batch
-      end
-
-    {:noreply, [], %{state | batches_by_epoch: Map.put(state.batches_by_epoch, marker.epoch, batch)}}
-  end
-
-  def handle_info(:batch_ready, %State{} = state) do
-    # Find the lowest epoch that is ready and complete
-    batches = Map.values(state.batches_by_epoch)
-    min_epoch = batches |> Enum.min_by(& &1.epoch) |> Map.fetch!(:epoch)
-    [batch | other_ready_batches] = Enum.filter(batches, & &1.ready?)
-
-    unless batch.epoch == min_epoch do
-      raise "Batch epochs completed out-of-order: min_epoch=#{min_epoch}, min_ready_epoch=#{batch.epoch}"
-    end
-
-    # Can be nil, as this is called on a retry timer as well as when a batch is completed
-    if is_nil(batch) do
-      {:noreply, [], state}
-    else
-      messages = Enum.sort_by(batch.messages, fn %Message{} = msg -> {msg.commit_lsn, msg.commit_idx} end)
-
-      case state.on_batch_ready.(batch.marker, messages) do
-        :ok ->
-          updated_batches = Map.delete(state.batches_by_epoch, batch.epoch)
-
-          unless other_ready_batches == [] do
-            Process.send_after(self(), :batch_ready, 0)
-          end
-
-          {:noreply, [], %{state | batches_by_epoch: updated_batches}}
-
-        {:error, reason} ->
-          Logger.warning("[ReorderBuffer] Error pushing batch #{inspect(batch.marker)}: #{inspect(reason)}")
-          Process.send_after(self(), :batch_ready, setting(state, :setting_retry_batch_interval))
-          {:noreply, [], state}
-      end
-    end
-  end
-
-  def handle_info(:check_limit, %State{} = state) do
-    case state.check_system_fn.() do
-      :ok ->
-        if state.status == :inactive do
-          Logger.info("[ReorderBuffer] Resuming pipeline")
-        end
-
-        {:noreply, [], %{state | status: :active}}
-
-      {:error, reason} ->
-        Logger.warning("[ReorderBuffer] Pausing pipeline: #{inspect(reason)}")
-        schedule_check_limit(state, setting(state, :setting_check_system_for_recover_interval))
-        {:noreply, [], %{state | status: :inactive}}
-    end
-
+    state = put_batch_marker(state, marker, from_idx)
     {:noreply, [], state}
   end
+
+  def handle_info(:flush_batch, %State{} = state) do
+    # Order ready batches by epoch and ensure epoch ordering
+    ready_epoch = state.ready_batches_by_epoch |> Map.keys() |> Enum.min()
+    {batch, ready_batches} = Map.pop(state.ready_batches_by_epoch, ready_epoch)
+
+    state = maybe_cancel_flush_batch_timer(state)
+
+    case state.on_batch_ready.(batch.marker, batch.messages) do
+      :ok ->
+        state = %{state | ready_batches_by_epoch: ready_batches}
+
+        # Ask for demand now that we've successfully flushed a batch
+        state = ask_demand(state)
+
+        # Schedule immediate flush if more ready batches exist
+        state =
+          if map_size(ready_batches) > 0 do
+            schedule_flush_timer(state)
+          else
+            state
+          end
+
+        {:noreply, [], state}
+
+      {:error, reason} ->
+        Logger.warning("[ReorderBuffer] Error pushing batch #{inspect(batch.marker)}: #{inspect(reason)}")
+        state = schedule_flush_timer_retry(state)
+        {:noreply, [], state}
+    end
+  end
+
+  defp maybe_ask_demand(%State{ready_batches_by_epoch: batches} = state) when map_size(batches) == 0 do
+    ask_demand(state)
+  end
+
+  defp maybe_ask_demand(%State{} = state), do: state
 
   defp ask_demand(%State{} = state) do
     Enum.reduce(state.producer_subscriptions, state, fn sub, acc_state ->
@@ -207,56 +170,96 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     %{state | producer_subscriptions: updated_subs}
   end
 
-  defp add_events_to_batches(%State{} = state, events) do
-    bytes_received = Enum.reduce(events, 0, fn %Message{} = msg, acc -> msg.byte_size + acc end)
-    state = %{state | bytes_since_last_limit_check: state.bytes_since_last_limit_check + bytes_received}
+  defp add_event_to_state(%Message{batch_epoch: epoch} = event, %State{} = state) when is_integer(epoch) do
+    if Map.get(state.ready_batches_by_epoch, epoch) do
+      raise "Received a message for a completed batch"
+    end
 
-    Enum.reduce(events, state, fn %Message{} = event, acc_state ->
-      epoch = event.batch_epoch
+    pending_batches =
+      Map.update(state.pending_batches_by_epoch, epoch, %Batch{epoch: epoch, messages: [event]}, fn %Batch{} = batch ->
+        %{batch | messages: [event | batch.messages]}
+      end)
 
-      if is_nil(epoch) do
-        raise "Received a message without an epoch"
-      end
-
-      batch =
-        Map.get_lazy(acc_state.batches_by_epoch, epoch, fn ->
-          # Create a batch without a marker initially - the marker will be set via handle_batch_marker
-          %Batch{epoch: epoch}
-        end)
-
-      updated_batch = %{batch | messages: [event | batch.messages]}
-      %{acc_state | batches_by_epoch: Map.put(acc_state.batches_by_epoch, epoch, updated_batch)}
-    end)
+    %{state | pending_batches_by_epoch: pending_batches}
   end
 
-  defp maybe_schedule_limit_check(%State{} = state) do
-    if state.bytes_since_last_limit_check > setting(state, :setting_bytes_between_limit_checks) do
-      state = schedule_check_limit(state, 0)
-      %{state | bytes_since_last_limit_check: 0}
-    else
+  defp put_batch_marker(%State{} = state, %BatchMarker{epoch: epoch} = marker, from_idx) when is_integer(epoch) do
+    # Validate that we don't receive markers for epochs that are already ready
+    if Map.has_key?(state.ready_batches_by_epoch, epoch) do
+      raise "Received batch marker for epoch #{epoch} that is already ready"
+    end
+
+    batch = Map.get_lazy(state.pending_batches_by_epoch, epoch, fn -> %Batch{epoch: epoch} end)
+    # Set the marker if it hasn't been set yet
+    batch = if batch.marker == nil, do: %{batch | marker: marker}, else: batch
+    batch = Map.update!(batch, :markers_received, &MapSet.put(&1, from_idx))
+
+    if MapSet.size(batch.markers_received) == state.producer_partition_count do
+      # Batch is ready - move from pending to ready
+      # First, verify state
+      lower_pending_epoch =
+        Enum.find(Map.keys(state.pending_batches_by_epoch), fn other_epoch -> other_epoch < epoch end)
+
+      unless is_nil(lower_pending_epoch) do
+        raise "Batch epochs completed out-of-order: other_epoch=#{lower_pending_epoch} min_ready_epoch=#{epoch}"
+      end
+
+      # Then, sort messages
+      messages = Enum.sort_by(batch.messages, fn %Message{} = msg -> {msg.commit_lsn, msg.commit_idx} end)
+
+      was_empty = map_size(state.ready_batches_by_epoch) == 0
+      pending_batches = Map.delete(state.pending_batches_by_epoch, epoch)
+      ready_batches = Map.put(state.ready_batches_by_epoch, epoch, %{batch | messages: messages})
+
+      state = %{state | pending_batches_by_epoch: pending_batches, ready_batches_by_epoch: ready_batches}
+
+      # If this was the first ready batch, trigger flush
+      state = if was_empty, do: schedule_flush_timer(state), else: state
+
       state
+    else
+      # Still waiting for more markers - keep in pending
+      %{state | pending_batches_by_epoch: Map.put(state.pending_batches_by_epoch, epoch, batch)}
     end
   end
 
-  defp schedule_check_limit(%State{check_system_timer_ref: nil} = state, interval) do
-    ref = Process.send_after(self(), :check_limit, interval)
-    %{state | check_system_timer_ref: ref}
+  defp schedule_flush_timer(%State{flush_batch_timer_ref: nil} = state) do
+    ref = Process.send_after(self(), :flush_batch, 0)
+    %{state | flush_batch_timer_ref: ref}
   end
 
-  defp schedule_check_limit(%State{} = state, _interval), do: state
+  defp schedule_flush_timer_retry(%State{flush_batch_timer_ref: nil} = state) do
+    interval = setting(state, :setting_retry_flush_batch_interval)
+    ref = Process.send_after(self(), :flush_batch, interval)
+    %{state | flush_batch_timer_ref: ref}
+  end
 
-  defp default_check_system_fn(_state), do: :ok
+  defp maybe_cancel_flush_batch_timer(%State{flush_batch_timer_ref: nil} = state), do: state
+
+  defp maybe_cancel_flush_batch_timer(%State{flush_batch_timer_ref: timer} = state) do
+    case Process.cancel_timer(timer) do
+      false ->
+        receive do
+          :flush_batch -> :ok
+        after
+          0 -> :ok
+        end
+
+      _ ->
+        :ok
+    end
+
+    %{state | flush_batch_timer_ref: nil}
+  end
 
   def setting(%State{} = state, setting) do
     case Map.fetch!(state, setting) do
       nil ->
         key =
           case setting do
-            :setting_bytes_between_limit_checks -> :bytes_between_limit_checks
-            :setting_check_system_for_recover_interval -> :check_system_for_recover_interval
             :setting_max_demand -> :max_demand
             :setting_min_demand -> :min_demand
-            :setting_retry_batch_interval -> :batch_interval
+            :setting_retry_flush_batch_interval -> :retry_flush_batch_interval
           end
 
         config(key)

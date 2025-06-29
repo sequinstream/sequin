@@ -11,7 +11,8 @@ defmodule Sequin.Factory.ReplicationFactory do
   alias Sequin.Repo
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation
-  alias Sequin.Runtime.SlotProcessor.Message
+  alias Sequin.Runtime.SlotProcessor
+  alias Sequin.Runtime.SlotProducer
   alias Sequin.WalPipeline.SourceTable.ColumnFilter
 
   def commit_lsn, do: Factory.unique_integer()
@@ -110,7 +111,7 @@ defmodule Sequin.Factory.ReplicationFactory do
     attrs = Map.new(attrs)
 
     merge_attributes(
-      %Message.Field{
+      %SlotProcessor.Message.Field{
         column_name: Factory.postgres_object(),
         column_attnum: Factory.unique_integer(),
         value: Factory.name()
@@ -123,7 +124,7 @@ defmodule Sequin.Factory.ReplicationFactory do
     attrs = Map.new(attrs)
 
     merge_attributes(
-      %Message{
+      %SlotProcessor.Message{
         action: :insert,
         commit_timestamp: Factory.timestamp(),
         commit_lsn: Factory.unique_integer(),
@@ -149,7 +150,7 @@ defmodule Sequin.Factory.ReplicationFactory do
     attrs = Map.new(attrs)
 
     merge_attributes(
-      %Message{
+      %SlotProcessor.Message{
         action: :update,
         commit_timestamp: Factory.timestamp(),
         commit_lsn: Factory.unique_integer(),
@@ -178,7 +179,7 @@ defmodule Sequin.Factory.ReplicationFactory do
     attrs = Map.new(attrs)
 
     merge_attributes(
-      %Message{
+      %SlotProcessor.Message{
         action: :delete,
         commit_timestamp: Factory.timestamp(),
         commit_lsn: Factory.unique_integer(),
@@ -413,26 +414,39 @@ defmodule Sequin.Factory.ReplicationFactory do
 
   def message(attrs \\ []) do
     attrs = Map.new(attrs)
+    action = Map.get(attrs, :action, Factory.one_of([:insert, :update, :delete]))
+
+    slot_processor_message = %SlotProcessor.Message{
+      action: action,
+      columns: [],
+      commit_timestamp: Factory.timestamp(),
+      commit_lsn: Factory.unique_integer(),
+      commit_idx: Faker.random_between(0, 100),
+      transaction_annotations: Factory.word(),
+      errors: nil,
+      ids: [Factory.unique_integer()],
+      table_schema: Factory.postgres_object(),
+      table_name: Factory.postgres_object(),
+      table_oid: Factory.unique_integer(),
+      trace_id: Factory.uuid(),
+      old_fields: [],
+      fields: [],
+      subscription_ids: [],
+      byte_size: Faker.random_between(100, 10_000),
+      batch_epoch: Faker.random_between(0, 10)
+    }
 
     merge_attributes(
-      %Sequin.Runtime.SlotProcessor.Message{
-        action: Factory.one_of([:insert, :update, :delete]),
-        columns: [],
-        commit_timestamp: Factory.timestamp(),
-        commit_lsn: Factory.unique_integer(),
-        commit_idx: Faker.random_between(0, 100),
-        transaction_annotations: Factory.word(),
-        errors: nil,
-        ids: [Factory.unique_integer()],
-        table_schema: Factory.postgres_object(),
-        table_name: Factory.postgres_object(),
-        table_oid: Factory.unique_integer(),
-        trace_id: Factory.uuid(),
-        old_fields: [],
-        fields: [],
-        subscription_ids: [],
-        byte_size: Faker.random_between(100, 10_000),
-        batch_epoch: Faker.random_between(0, 10)
+      %SlotProducer.Message{
+        byte_size: slot_processor_message.byte_size,
+        commit_idx: slot_processor_message.commit_idx,
+        commit_lsn: slot_processor_message.commit_lsn,
+        commit_ts: slot_processor_message.commit_timestamp,
+        kind: action,
+        payload: "",
+        message: slot_processor_message,
+        transaction_annotations: slot_processor_message.transaction_annotations,
+        batch_epoch: slot_processor_message.batch_epoch
       },
       attrs
     )

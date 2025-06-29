@@ -608,7 +608,7 @@ defmodule Sequin.Runtime.SlotProducer do
         end
 
       {:ok, cursor} ->
-        {:ok, %State{state | restart_wal_cursor: cursor}}
+        {:ok, %State{state | restart_wal_cursor: cursor}, protocol}
     end
   end
 

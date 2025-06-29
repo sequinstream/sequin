@@ -30,6 +30,14 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
 
+  def config(key) do
+    Keyword.fetch!(config(), key)
+  end
+
+  def config do
+    Application.fetch_env!(:sequin, __MODULE__)
+  end
+
   defmodule State do
     @moduledoc false
     use TypedStruct
@@ -86,20 +94,25 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
 
   @impl GenStage
   def init(opts) do
+    id = Keyword.fetch!(opts, :id)
+
     state = %State{
-      id: Keyword.fetch!(opts, :id),
+      id: id,
       partition_idx: Keyword.fetch!(opts, :partition_idx)
     }
 
-    {:producer_consumer, state}
+    # Get subscription configuration - default to empty for manual subscriptions
+    {:producer_consumer, state, subscribe_to: Keyword.get(opts, :subscribe_to, [])}
   end
 
   @impl GenStage
   def handle_subscribe(:consumer, _opts, {pid, _ref}, state) do
+    # ReorderBuffer subscribing to us
     {:automatic, %{state | reorder_buffer: pid}}
   end
 
   def handle_subscribe(:producer, _opts, _producer, state) do
+    # We're subscribing to SlotProducer - automatic subscription
     {:automatic, state}
   end
 

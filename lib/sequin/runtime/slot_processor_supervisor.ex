@@ -9,8 +9,8 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime.MessageHandler
-  alias Sequin.Runtime.SlotMessageHandler
   alias Sequin.Runtime.SlotProcessorServer
+  alias Sequin.Runtime.SlotProducer
 
   def child_spec(opts) do
     replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
@@ -53,20 +53,9 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
 
     slot_opts = Keyword.merge(default_opts, opts)
 
-    message_handlers =
-      Enum.map(0..(slot.partition_count - 1), fn idx ->
-        opts = [
-          replication_slot_id: slot.id,
-          processor_idx: idx,
-          test_pid: opts[:test_pid]
-        ]
-
-        SlotMessageHandler.child_spec(opts)
-      end)
-
     children = [
-      {SlotProcessorServer, slot_opts}
-      | message_handlers
+      {SlotProcessorServer, slot_opts},
+      {SlotProducer.Supervisor, [replication_slot: slot]}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)

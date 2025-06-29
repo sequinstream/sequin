@@ -98,7 +98,6 @@ defmodule Sequin.Runtime.SlotProducer do
       field :connect_opts, keyword()
       field :on_connect_fail, (any() -> any())
       field :on_disconnect, (-> :ok)
-      field :ingest_enabled_fn, (-> boolean())
       field :setting_reconnect_interval, non_neg_integer()
       field :status, :active | :buffering | :disconnected
 
@@ -170,14 +169,16 @@ defmodule Sequin.Runtime.SlotProducer do
       publication_name: Keyword.fetch!(opts, :publication_name),
       connect_opts: connect_opts,
       pg_major_version: Keyword.fetch!(opts, :pg_major_version),
+      # TODO: What happens when we're disconnected?
       status: :disconnected,
-      ingest_enabled_fn: Keyword.get(opts, :ingest_enabled_fn, fn -> true end),
+      # TODO: On connect fail, log, put health, and retry if Neon
       on_connect_fail: Keyword.get(opts, :on_connect_fail),
+      # TODO: On disconnect, does anyone else in the pipeline care?
       on_disconnect: Keyword.get(opts, :on_disconnect),
       restart_wal_cursor_fn: Keyword.fetch!(opts, :restart_wal_cursor_fn),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
-      setting_update_cursor_interval: Keyword.get(opts, :update_cursor_interval, :timer.seconds(30)),
+      setting_update_cursor_interval: Keyword.get(opts, :update_cursor_interval, :timer.seconds(10)),
       processor_mod: Keyword.get(opts, :processor_mod),
       conn: Keyword.fetch!(opts, :conn),
       setting_batch_flush_interval: Keyword.get(opts, :batch_flush_interval)
@@ -314,21 +315,6 @@ defmodule Sequin.Runtime.SlotProducer do
     {:noreply, [], state}
   end
 
-  # @impl GenStage
-  # def handle_call({:send_proto_msg, msg}, _from, %State{connection_state: :disconnected} = s) do
-  #   {:reply, {:error, :disconnected}, s}
-  # end
-
-  # def handle_call({:send_proto_msg, msg}, _from, %State{protocol: protocol} = s) do
-  #   case Protocol.handle_copy_send(msg, protocol) do
-  #     :ok ->
-  #       {:keep_state, s}
-
-  #     {error, reason, protocol} ->
-  #       handle_disconnect(error, reason, %{s | protocol: protocol})
-  #   end
-  # end
-
   defp maybe_log_message(%State{} = state) do
     if is_nil(state.last_commit_lsn) and state.commit_idx == 0 and state.accumulated_messages.count == 0 do
       Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
@@ -427,54 +413,6 @@ defmodule Sequin.Runtime.SlotProducer do
     end
   end
 
-  # @impl GenStage
-  # def handle_call({:send_proto_msg, msg}, _from, %State{connection_state: :disconnected} = s) do
-  #   {:reply, {:error, :disconnected}, s}
-  # end
-
-  # def handle_call({:send_proto_msg, msg}, _from, %State{protocol: protocol} = s) do
-  #   case Protocol.handle_copy_send(msg, protocol) do
-  #     :ok ->
-  #       {:keep_state, s}
-
-  #     {error, reason, protocol} ->
-  #       handle_disconnect(error, reason, %{s | protocol: protocol})
-  #   end
-  # end
-
-  # defp process_message(%State{} = state, %Message{} = msg) do
-  #   state =
-  #     if logical_message_table_upsert?(state, msg) do
-  #       content = Enum.find(msg.fields, fn field -> field.column_name == "content" end)
-  #       handle_logical_message_content(state, content.value)
-  #     else
-  #       state
-  #     end
-
-  #   msg = %Message{
-  #     msg
-  #     | commit_lsn: state.current_xaction_lsn,
-  #       commit_idx: state.current_commit_idx,
-  #       commit_timestamp: state.current_commit_ts,
-  #       transaction_annotations: state.transaction_annotations
-  #   }
-
-  #   {%State{state | current_commit_idx: state.current_commit_idx + 1}, msg}
-  # end
-
-  # defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.1", content: content}) do
-  #   handle_logical_message_content(state, content)
-  # end
-
-  # defp process_message(%State{} = state, %LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}) do
-  #   Logger.info("[SlotProcessorServer] Legacy heartbeat received", emitted_at: emitted_at)
-  #   state
-  # end
-
-  # defp process_message(%State{} = state, %LogicalMessage{prefix: @backfill_batch_high_watermark} = msg) do
-  #   %State{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}
-  # end
-
   defp handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
     if is_nil(state.last_commit_lsn) and state.accumulated_messages.count == 0 do
       Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
@@ -522,20 +460,12 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp update_restart_wal_cursor(%State{} = state) do
     restart_wal_cursor =
-      if is_nil(state.last_commit_lsn) do
-        # If we don't have a last_commit_lsn, we're still processing the first xaction
-        # we received on boot. This can happen if we're processing a very large xaction.
-        # It is therefore safe to send an ack with the last LSN we processed.
-        state.restart_wal_cursor
-      else
-        state.restart_wal_cursor_fn.(state)
+      case state.restart_wal_cursor_fn.(state) do
+        nil -> state.restart_wal_cursor
+        next_cursor -> next_cursor
       end
 
-    if is_nil(restart_wal_cursor) do
-      Logger.info("[SlotProcessorServer] restart_wal_cursor=nil, skipping put_restart_wal_cursor!")
-    else
-      Replication.put_restart_wal_cursor!(state.id, restart_wal_cursor)
-    end
+    Replication.put_restart_wal_cursor!(state.id, restart_wal_cursor)
 
     %{state | restart_wal_cursor: restart_wal_cursor}
   end
@@ -606,28 +536,6 @@ defmodule Sequin.Runtime.SlotProducer do
     end
   end
 
-  # def handle_info(:send_ack, state) do
-  #   state = %{state | ack_timer: nil}
-
-  #   if state.protocol do
-  #     reply = ack_message(state.restart_wal_cursor.commit_lsn)
-
-  #     case Protocol.handle_copy_send(reply, state.protocol) do
-  #       :ok -> :ok
-  #       {_, reason, _} -> Logger.error("ack failed: #{inspect(reason)}")
-  #     end
-  #   end
-
-  #   {:noreply, [], schedule_ack(state)}
-  # end
-
-  # def handle_info(:update_restart_wal_cursor, state) do
-  #   state = %{state | update_cursor_timer: nil}
-  #   cursor = state.restart_wal_cursor_fn.(state)
-  #   state = %{state | restart_wal_cursor: cursor}
-  #   {:noreply, [], schedule_update_cursor(state)}
-  # end
-
   ## Helpers
 
   defp handle_disconnect(error, reason, %State{} = state) when error in [:error, :disconnect] do
@@ -640,6 +548,8 @@ defmodule Sequin.Runtime.SlotProducer do
     close_commit(%State{
       state
       | status: :disconnected,
+        last_commit_lsn: nil,
+        last_commit_idx: nil,
         accumulated_messages: %{count: 0, bytes: 0, messages: []},
         buffered_sock_msg: nil
     })

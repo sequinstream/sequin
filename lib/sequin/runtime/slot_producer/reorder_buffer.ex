@@ -34,9 +34,10 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     use TypedStruct
 
     typedstruct do
+      field :id, String.t()
       field :pending_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
       field :ready_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
-      field :on_batch_ready, (Batch.t() -> :ok | {:error, any()})
+      field :on_batch_ready, (String.t(), Batch.t() -> :ok | {:error, any()})
       field :producer_partition_count, non_neg_integer()
       field :producer_subscriptions, [%{producer: pid(), demand: integer()}], default: []
       field :flush_batch_timer_ref, reference() | nil
@@ -49,6 +50,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   @impl GenStage
   def init(opts) do
     state = %State{
+      id: Keyword.fetch!(opts, :id),
       on_batch_ready: Keyword.fetch!(opts, :on_batch_ready),
       producer_partition_count: Keyword.fetch!(opts, :producer_partitions),
       setting_max_demand: Keyword.get(opts, :max_demand),
@@ -99,7 +101,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
     state = maybe_cancel_flush_batch_timer(state)
 
-    case state.on_batch_ready.(batch) do
+    case state.on_batch_ready.(state.id, batch) do
       :ok ->
         state = %{state | ready_batches_by_epoch: ready_batches}
 

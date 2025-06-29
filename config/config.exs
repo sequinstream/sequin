@@ -128,7 +128,7 @@ config :sequin,
   datadog_req_opts: [],
   datadog: [configured: false],
   api_base_url: "http://localhost:4000",
-  message_handler_module: Sequin.Runtime.SlotMessageHandler
+  message_handler_module: Sequin.Runtime.MessageHandler
 
 # Configure tailwind (the version is required)
 config :tailwind,

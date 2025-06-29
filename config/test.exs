@@ -64,6 +64,10 @@ config :sequin, Sequin.Runtime.SlotProducer,
     max_age: 5
   ]
 
+config :sequin, Sequin.Runtime.SlotProducer.ReorderBuffer,
+  min_demand: 1,
+  max_demand: 3
+
 config :sequin, Sequin.Sinks.AzureEventHub.Client, req_opts: [plug: {Req.Test, Sequin.Sinks.Azure.EventHub}]
 
 config :sequin, Sequin.Vault,

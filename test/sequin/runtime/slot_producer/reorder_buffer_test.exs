@@ -300,7 +300,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       # Use an agent as a global to control batch flushing
       {:ok, flush_control} = Agent.start_link(fn -> :fail end)
 
-      on_batch_ready = fn batch ->
+      on_batch_ready = fn _id, batch ->
         case Agent.get(flush_control, & &1) do
           :fail ->
             {:error, :simulated_failure}
@@ -351,7 +351,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
 
     test_pid = self()
 
-    default_on_batch_ready = fn batch ->
+    default_on_batch_ready = fn _id, batch ->
       send(test_pid, {:batch_ready, batch})
       :ok
     end

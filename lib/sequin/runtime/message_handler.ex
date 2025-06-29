@@ -41,11 +41,11 @@ defmodule Sequin.Runtime.MessageHandler do
       field :replication_slot_id, String.t()
       field :postgres_database, PostgresDatabase.t()
       field :table_reader_mod, module(), default: TableReaderServer
-      field :partition_count, non_neg_integer()
     end
   end
 
   @callback handle_messages(Context.t(), [Message.t()]) :: {:ok, non_neg_integer()} | {:error, Sequin.Error.t()}
+  @callback put_high_watermark_wal_cursor(Context.t(), Replication.wal_cursor()) :: :ok | {:error, Sequin.Error.t()}
 
   def context(%PostgresReplicationSlot{} = pr) do
     pr =
@@ -59,8 +59,7 @@ defmodule Sequin.Runtime.MessageHandler do
       consumers: pr.not_disabled_sink_consumers,
       wal_pipelines: pr.wal_pipelines,
       postgres_database: pr.postgres_database,
-      replication_slot_id: pr.id,
-      partition_count: pr.partition_count
+      replication_slot_id: pr.id
     }
   end
 
@@ -146,6 +145,16 @@ defmodule Sequin.Runtime.MessageHandler do
       # we may receive low watermark messages for other replication slots.
       :ok
     end
+  end
+
+  @doc """
+  Updates the high watermark WAL cursor for all sink consumers.
+  """
+  @spec put_high_watermark_wal_cursor(Context.t(), Replication.wal_cursor()) :: :ok | {:error, Sequin.Error.t()}
+  def put_high_watermark_wal_cursor(%Context{} = ctx, wal_cursor) do
+    Sequin.Enum.reduce_while_ok(ctx.consumers, fn consumer ->
+      SlotMessageStore.put_high_watermark_wal_cursor(consumer, wal_cursor)
+    end)
   end
 
   defp violates_payload_size?(replication_slot_id, event_or_record) do

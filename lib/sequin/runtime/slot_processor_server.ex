@@ -151,6 +151,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :current_xaction_lsn, nil | integer()
       field :current_xid, nil | integer()
       field :last_commit_lsn, integer()
+      field :last_commit_idx, integer()
       field :connection_state, :disconnected | :streaming
       field :transaction_annotations, nil | String.t()
 
@@ -160,6 +161,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :last_flushed_wal_cursor, Replication.wal_cursor()
       field :update_safe_wal_cursor_timer_ref, nil | reference()
       field :setting_update_safe_wal_cursor_interval, non_neg_integer()
+      field :high_watermark_wal_cursor_flush_timer_ref, nil | reference()
+      field :setting_flush_high_watermark_wal_cursor_interval, non_neg_integer()
 
       # Buffers
       field :accumulated_msg_binaries, %{count: non_neg_integer(), bytes: non_neg_integer(), binaries: [binary()]},
@@ -248,7 +251,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
       safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
-      setting_update_safe_wal_cursor_interval: Keyword.get(opts, :update_safe_wal_cursor_interval, :timer.seconds(30)),
+      setting_update_safe_wal_cursor_interval: Keyword.get(opts, :update_safe_wal_cursor_interval, :timer.seconds(10)),
+      setting_flush_high_watermark_wal_cursor_interval:
+        Keyword.get(opts, :setting_flush_high_watermark_wal_cursor_interval, :timer.seconds(1)),
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10))
     }
 
@@ -314,6 +319,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     state = schedule_heartbeat_verification(state)
     state = schedule_update_safe_wal_cursor(state)
     state = schedule_ack(state)
+    state = schedule_flush_high_watermark_wal_cursor(state)
     Process.send_after(self(), :process_logging, 0)
     schedule_observe_ingestion_latency()
 
@@ -829,6 +835,29 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     {:keep_state, state}
   end
 
+  def handle_info(:flush_high_watermark_wal_cursor, %State{last_flushed_wal_cursor: nil} = state) do
+    schedule_flush_high_watermark_wal_cursor(%{state | high_watermark_wal_cursor_flush_timer_ref: nil})
+    {:keep_state, state}
+  end
+
+  def handle_info(:flush_high_watermark_wal_cursor, %State{} = state) do
+    high_watermark_wal_cursor =
+      if state.last_flushed_wal_cursor.commit_lsn >= state.last_commit_lsn do
+        state.last_flushed_wal_cursor
+      else
+        %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
+      end
+
+    :ok =
+      state.message_handler_module.flush_high_watermark_wal_cursor(
+        state.message_handler_ctx,
+        high_watermark_wal_cursor
+      )
+
+    schedule_flush_high_watermark_wal_cursor(%{state | high_watermark_wal_cursor_flush_timer_ref: nil})
+    {:keep_state, state}
+  end
+
   def handle_info(:send_ack, %State{connection_state: :disconnected} = state) do
     state = schedule_ack(%{state | ack_timer_ref: nil})
     {:keep_state, state}
@@ -1042,6 +1071,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     %{state | update_safe_wal_cursor_timer_ref: ref}
   end
 
+  defp schedule_flush_high_watermark_wal_cursor(%State{high_watermark_wal_cursor_flush_timer_ref: nil} = state) do
+    ref =
+      Process.send_after(self(), :flush_high_watermark_wal_cursor, state.setting_flush_high_watermark_wal_cursor_interval)
+
+    %{state | high_watermark_wal_cursor_flush_timer_ref: ref}
+  end
+
   defp schedule_ack(%State{ack_timer_ref: nil} = state) do
     ref = Process.send_after(self(), :send_ack, state.setting_ack_interval)
     %{state | ack_timer_ref: ref}
@@ -1232,6 +1268,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     %State{
       state
       | last_commit_lsn: lsn,
+        last_commit_idx: state.current_commit_idx,
         current_xaction_lsn: nil,
         current_xid: nil,
         current_commit_ts: nil,
@@ -1490,7 +1527,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         end
       end)
 
-    last_message = List.first(messages)
+    last_flushed_wal_cursor =
+      if state.current_xaction_lsn do
+        %{commit_lsn: state.current_xaction_lsn, commit_idx: state.last_commit_idx}
+      else
+        %{commit_lsn: state.last_commit_lsn, commit_idx: state.last_commit_idx}
+      end
+
     messages = Enum.reverse(messages)
 
     count = length(messages)
@@ -1527,15 +1570,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
           send(state.test_pid, {__MODULE__, :flush_messages})
         end
 
-        last_flushed_wal_cursor =
-          if last_message do
-            %Message{commit_lsn: commit_lsn, commit_idx: commit_idx} = last_message
-
-            %{commit_lsn: commit_lsn, commit_idx: commit_idx}
-          else
-            state.last_flushed_wal_cursor
-          end
-
         state = %{
           state
           | accumulated_msg_binaries: %{count: 0, bytes: 0, binaries: []},
@@ -1560,72 +1594,50 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     consumers =
       Repo.preload(state.replication_slot, :not_disabled_sink_consumers, force: true).not_disabled_sink_consumers
 
-    with :ok <- verify_messages_flushed(state),
-         :ok <- verify_monitor_refs(state) do
-      consumers_with_refs =
-        Enum.map(state.message_store_refs, fn {consumer_id, ref} ->
-          consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
-          {consumer, ref}
-        end)
+    case verify_monitor_refs(state) do
+      :ok ->
+        consumers_with_refs =
+          Enum.map(state.message_store_refs, fn {consumer_id, ref} ->
+            consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
+            {consumer, ref}
+          end)
 
-      low_for_message_stores =
-        Sequin.TaskSupervisor
-        |> Task.Supervisor.async_stream(
-          consumers_with_refs,
-          fn {consumer, ref} ->
-            SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
-          end,
-          max_concurrency: max(map_size(state.message_store_refs), 1),
-          timeout: :timer.seconds(15)
-        )
-        |> Enum.flat_map(fn {:ok, cursors} -> cursors end)
-        |> Enum.filter(& &1)
-        |> case do
-          [] -> nil
-          cursors -> Enum.min_by(cursors, &{&1.commit_lsn, &1.commit_idx})
-        end
-
-      cond do
-        not is_nil(low_for_message_stores) ->
-          # Use the minimum unpersisted WAL cursor from the message stores.
-          Logger.info(
-            "[SlotProcessorServer] safe_wal_cursor/1: low_for_message_stores=#{inspect(low_for_message_stores)}"
+        lows_for_message_stores =
+          Sequin.TaskSupervisor
+          |> Task.Supervisor.async_stream(
+            consumers_with_refs,
+            fn {consumer, ref} ->
+              SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+            end,
+            max_concurrency: max(map_size(state.message_store_refs), 1),
+            timeout: :timer.seconds(15)
           )
+          |> Enum.flat_map(fn {:ok, cursors} -> cursors end)
+          |> Enum.reject(&is_nil/1)
 
-          low_for_message_stores
+        low_for_message_stores =
+          if map_size(state.message_store_refs) == length(lows_for_message_stores) do
+            Enum.min_by(lows_for_message_stores, &{&1.commit_lsn, &1.commit_idx})
+          end
 
-        accumulated_messages?(state) ->
-          # When there are messages that the SlotProcessorServer has not flushed yet,
-          # we need to fallback on the last safe_wal_cursor (not safe to use
-          # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
+        if is_nil(low_for_message_stores) do
+          # We just recently started up, and may have accumulated some messages, and may have even flushed them.
+          # But our highwatermark wal cursor has not made it to all SlotMessageStores yet.
+          # So, it is not safe to advance the slot.
           Logger.info(
             "[SlotProcessorServer] no unpersisted messages in stores, using last_flushed_wal_cursor=#{inspect(state.last_flushed_wal_cursor)}"
           )
 
-          # We want to update to the last flushed wal cursor which is furthest ahead
-          # But this can be nil if no messages have been flushed yet, ie. on a dormant slot
-          state.last_flushed_wal_cursor || state.safe_wal_cursor
+          state.safe_wal_cursor
+        else
+          # We have flushed our highwatermark wal cursor to all SlotMessageStores at least once
+          # So it's safe to use the low among all stores.
+          low_for_message_stores
+        end
 
-        true ->
-          # The SlotProcessorServer has processed messages beyond what the message stores have.
-          # This might be due to health messages or messages for tables that do not belong
-          # to any sinks.
-          # We want to advance the slot to the last_commit_lsn in that case because:
-          # 1. It's safe to do.
-          # 2. If the tables in this slot are dormant, the slot will continue to accumulate
-          # WAL unless we advance it. (This is the secondary purpose of the health message,
-          # to allow us to advance the slot even if tables are dormant.)
-          Logger.info("[SlotProcessorServer] safe_wal_cursor/1: state.last_commit_lsn=#{inspect(state.last_commit_lsn)}")
-          %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
-      end
-    else
       {:error, error} ->
         raise error
     end
-  end
-
-  defp accumulated_messages?(%State{accumulated_msg_binaries: %{count: count}}) when is_integer(count) do
-    count > 0
   end
 
   defp verify_monitor_refs(%State{} = state) do
@@ -1668,10 +1680,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       true ->
         :ok
     end
-  end
-
-  defp verify_messages_flushed(%State{} = state) do
-    state.message_handler_module.flush_messages(state.message_handler_ctx)
   end
 
   def data_tuple_to_ids(columns, tuple_data) do

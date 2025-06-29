@@ -67,6 +67,7 @@ defmodule Sequin.SlotMessageStoreTest do
       :ok = SlotMessageStore.put_messages(consumer, [new_message])
 
       consumer_id = consumer.id
+
       assert_receive {:put_messages_done, ^consumer_id}, 1000
 
       persisted_messages = Consumers.list_consumer_messages_for_consumer(consumer)
@@ -757,6 +758,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Put message in store
       :ok = SlotMessageStore.put_messages(consumer, [message])
+
       assert_receive {:put_messages_done, ^consumer_id}, 1000
 
       # First delivery and failure

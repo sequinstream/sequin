@@ -91,15 +91,12 @@
                 class="underline">router</a
               >
               <ExternalLink class="h-4 w-4 inline" />
-            {:else if consumer.sequence.table_name}
-              {#if consumer.message_kind === "event"}
-                sequin.changes.{consumer.postgres_database.name}.{consumer
-                  .sequence.table_schema}.{consumer.sequence
-                  .table_name}.{"{action}"}
-              {:else}
-                sequin.rows.{consumer.postgres_database.name}.{consumer.sequence
-                  .table_schema}.{consumer.sequence.table_name}
-              {/if}
+            {:else if consumer.message_kind === "event"}
+              sequin.changes.{consumer.database
+                .name}.&lt;table_schema&gt;.&lt;table_name&gt;.&lt;action&gt;
+            {:else}
+              sequin.rows.{consumer.database
+                .name}.&lt;table_schema&gt;.&lt;table_name&gt;
             {/if}
           </span>
         </div>

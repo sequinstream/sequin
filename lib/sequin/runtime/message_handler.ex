@@ -45,6 +45,7 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   @callback handle_messages(Context.t(), [Message.t()]) :: {:ok, non_neg_integer()} | {:error, Sequin.Error.t()}
+  @callback before_handle_messages(Context.t(), [Message.t()]) :: :ok
   @callback put_high_watermark_wal_cursor(Context.t(), Replication.wal_cursor()) :: :ok | {:error, Sequin.Error.t()}
 
   def context(%PostgresReplicationSlot{} = pr) do

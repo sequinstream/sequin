@@ -39,6 +39,8 @@ defmodule Sequin.Runtime.SlotProcessor.Message do
     field :old_fields, list(Field.t())
     field :fields, list(Field.t())
     field :subscription_ids, list(String.t())
+    field :byte_size, non_neg_integer()
+    field :batch_epoch, non_neg_integer()
   end
 
   def message_fields(%Message{action: :insert} = message), do: message.fields

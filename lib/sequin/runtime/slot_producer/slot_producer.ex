@@ -18,6 +18,7 @@ defmodule Sequin.Runtime.SlotProducer do
   alias Sequin.Runtime.PostgresAdapter.Decoder
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
+  alias Sequin.Runtime.SlotProducer.BatchMarker
   alias Sequin.Runtime.SlotProducer.Relation
 
   require Logger
@@ -51,19 +52,6 @@ defmodule Sequin.Runtime.SlotProducer do
     current_config = Application.get_env(:sequin, __MODULE__, [])
     updated_config = Keyword.put(current_config, key, value)
     Application.put_env(:sequin, __MODULE__, updated_config)
-  end
-
-  defmodule BatchMarker do
-    @moduledoc false
-    use TypedStruct
-
-    alias Sequin.Replication
-
-    @type epoch :: non_neg_integer()
-    typedstruct enforce: true do
-      field :high_watermark_wal_cursor, Replication.wal_cursor()
-      field :epoch, epoch()
-    end
   end
 
   defmodule Message do

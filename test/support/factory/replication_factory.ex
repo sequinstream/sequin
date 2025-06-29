@@ -411,6 +411,48 @@ defmodule Sequin.Factory.ReplicationFactory do
     |> Sequin.Map.from_ecto()
   end
 
+  def message(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Sequin.Runtime.SlotProcessor.Message{
+        action: Factory.one_of([:insert, :update, :delete]),
+        columns: [],
+        commit_timestamp: Factory.timestamp(),
+        commit_lsn: Factory.unique_integer(),
+        commit_idx: Faker.random_between(0, 100),
+        transaction_annotations: Factory.word(),
+        errors: nil,
+        ids: [Factory.unique_integer()],
+        table_schema: Factory.postgres_object(),
+        table_name: Factory.postgres_object(),
+        table_oid: Factory.unique_integer(),
+        trace_id: Factory.uuid(),
+        old_fields: [],
+        fields: [],
+        subscription_ids: [],
+        byte_size: Faker.random_between(100, 10_000),
+        batch_epoch: Faker.random_between(0, 10)
+      },
+      attrs
+    )
+  end
+
+  def batch_marker(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Sequin.Runtime.SlotProducer.BatchMarker{
+        epoch: Faker.random_between(0, 10),
+        high_watermark_wal_cursor: %{
+          commit_lsn: Factory.unique_integer(),
+          commit_idx: Faker.random_between(0, 100)
+        }
+      },
+      attrs
+    )
+  end
+
   defp generate_value(:string), do: Faker.Lorem.sentence()
   defp generate_value(:cistring), do: Faker.Internet.email()
   defp generate_value(:number), do: Enum.random([Factory.integer(), Factory.float()])

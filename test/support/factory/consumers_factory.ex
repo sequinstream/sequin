@@ -285,7 +285,8 @@ defmodule Sequin.Factory.ConsumersFactory do
       %KafkaSink{
         type: :kafka,
         hosts: "localhost:9092",
-        topic: Factory.word()
+        topic: Factory.word(),
+        routing_mode: "static"
       },
       attrs
     )
@@ -301,7 +302,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         type: :gcp_pubsub,
         project_id: "test-project-123",
         topic_id: "test-topic-#{Factory.word()}",
-        credentials: gcp_credential()
+        credentials: gcp_credential(),
+        routing_mode: "static"
       },
       attrs
     )
@@ -345,7 +347,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         collection_name: Factory.word(),
         api_key: Factory.word(),
         batch_size: Enum.random(50..500),
-        timeout_seconds: Enum.random(1..30)
+        timeout_seconds: Enum.random(1..30),
+        routing_mode: "static"
       },
       attrs
     )

@@ -14,6 +14,7 @@ defmodule Sequin.Runtime.SlotProducer do
   use Sequin.GenerateBehaviour
 
   alias Postgrex.Protocol
+  alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Postgres
   alias Sequin.ProcessMetrics
@@ -243,7 +244,7 @@ defmodule Sequin.Runtime.SlotProducer do
       {:error, reason} ->
         error_msg = if is_exception(reason), do: Exception.message(reason), else: inspect(reason)
         Logger.error("[SlotProducer] replication connect failed: #{error_msg}")
-        if fun = state.on_connect_fail, do: fun.(reason)
+        if fun = state.on_connect_fail, do: fun.(state, reason)
         Process.send_after(self(), :connect, state.setting_reconnect_interval)
         {:noreply, [], state}
     end
@@ -591,8 +592,19 @@ defmodule Sequin.Runtime.SlotProducer do
             cursor = %{commit_lsn: Postgres.lsn_to_int(lsn), commit_idx: 0}
             {:ok, %State{state | restart_wal_cursor: cursor}, protocol}
 
+          {:ok, _res} ->
+            {:error,
+             Error.not_found(
+               entity: :source_replication_slot,
+               message: "Error fetching metadata about the replication slot from Postgres"
+             )}
+
           error ->
-            error
+            {:error,
+             Error.service(
+               service: :source_postgres,
+               message: "Error fetching metadata about the replication slot from Postgres (#{inspect(error)})"
+             )}
         end
 
       {:ok, cursor} ->
@@ -644,7 +656,7 @@ defmodule Sequin.Runtime.SlotProducer do
   defp schedule_update_cursor(state), do: state
 
   defp maybe_flush(%State{} = state) do
-    interval = state.setting_batch_flush_interval || batch_flush_interval()
+    interval = batch_flush_interval(state)
     %{count: count, bytes: bytes} = state.processed_messages_since_last_flush_stats
     max_count = Keyword.fetch!(interval, :max_messages)
     max_bytes = Keyword.fetch!(interval, :max_bytes)
@@ -673,11 +685,15 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   defp schedule_flush(%State{batch_flush_timer: nil} = state, delay \\ nil) do
-    interval = state.setting_batch_flush_interval || batch_flush_interval()
-    delay = delay || Keyword.fetch!(interval, :max_age)
+    delay = delay || Keyword.fetch!(batch_flush_interval(state), :max_age)
     ref = Process.send_after(self(), :flush_batch_timer, delay)
     time = :os.system_time(:millisecond) + delay
     %{state | batch_flush_timer: {ref, time}}
+  end
+
+  defp batch_flush_interval(%State{} = state) do
+    interval = state.setting_batch_flush_interval || []
+    Keyword.merge(batch_flush_interval(), interval)
   end
 
   defp maybe_cancel_flush_timer({timer, _}) when is_reference(timer) do

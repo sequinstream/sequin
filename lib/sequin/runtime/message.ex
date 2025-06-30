@@ -7,6 +7,8 @@ defmodule Sequin.Runtime.SlotProcessor.Message do
   """
   use TypedStruct
 
+  alias __MODULE__
+
   require Protocol
 
   defmodule Field do
@@ -37,5 +39,13 @@ defmodule Sequin.Runtime.SlotProcessor.Message do
     field :old_fields, list(Field.t())
     field :fields, list(Field.t())
     field :subscription_ids, list(String.t())
+  end
+
+  def message_fields(%Message{action: :insert} = message), do: message.fields
+  def message_fields(%Message{action: :update} = message), do: message.fields
+  def message_fields(%Message{action: :delete} = message), do: message.old_fields
+
+  def fields_to_map(fields) do
+    Map.new(fields, fn %{column_name: name, value: value} -> {name, value} end)
   end
 end

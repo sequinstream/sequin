@@ -10,6 +10,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
@@ -27,6 +28,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Repo
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
   alias Sequin.Runtime.SlotProcessor
+  alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.Trace
   alias Sequin.Time
   alias Sequin.WalPipeline.SourceTable
@@ -702,6 +704,248 @@ defmodule Sequin.Consumers do
       )
 
     {:ok, count}
+  end
+
+  # ConsumerMessage
+
+  def consumer_message(
+        %SinkConsumer{message_kind: :event} = consumer,
+        %PostgresDatabase{} = database,
+        %Message{} = message
+      ) do
+    data = event_data_from_message(message, consumer, database)
+    payload_size = :erlang.external_size(data)
+
+    %ConsumerEvent{
+      consumer_id: consumer.id,
+      commit_lsn: message.commit_lsn,
+      commit_idx: message.commit_idx,
+      commit_timestamp: message.commit_timestamp,
+      record_pks: message_pks(message),
+      group_id: generate_group_id(consumer, message),
+      table_oid: message.table_oid,
+      deliver_count: 0,
+      data: data,
+      replication_message_trace_id: message.trace_id,
+      payload_size_bytes: payload_size
+    }
+  end
+
+  def consumer_message(
+        %SinkConsumer{message_kind: :record} = consumer,
+        %PostgresDatabase{} = database,
+        %Message{} = message
+      ) do
+    data = record_data_from_message(message, consumer, database)
+    payload_size = :erlang.external_size(data)
+
+    %ConsumerRecord{
+      consumer_id: consumer.id,
+      commit_lsn: message.commit_lsn,
+      commit_idx: message.commit_idx,
+      commit_timestamp: message.commit_timestamp,
+      deleted: message.action == :delete,
+      record_pks: message_pks(message),
+      group_id: generate_group_id(consumer, message),
+      table_oid: message.table_oid,
+      deliver_count: 0,
+      data: data,
+      replication_message_trace_id: message.trace_id,
+      payload_size_bytes: payload_size
+    }
+  end
+
+  defp event_data_from_message(%Message{action: :insert} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
+    metadata = struct(ConsumerEventData.Metadata, metadata)
+
+    %ConsumerEventData{
+      record: message_record(message),
+      changes: nil,
+      action: :insert,
+      metadata: metadata
+    }
+  end
+
+  defp event_data_from_message(%Message{action: :update} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
+    metadata = struct(ConsumerEventData.Metadata, metadata)
+
+    %ConsumerEventData{
+      record: message_record(message),
+      changes: message_changes(message),
+      action: :update,
+      metadata: metadata
+    }
+  end
+
+  defp event_data_from_message(%Message{action: :delete} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
+    metadata = struct(ConsumerEventData.Metadata, metadata)
+
+    %ConsumerEventData{
+      record: message_record(message),
+      changes: nil,
+      action: :delete,
+      metadata: metadata
+    }
+  end
+
+  defp record_data_from_message(%Message{action: action} = message, consumer, database)
+       when action in [:insert, :update] do
+    metadata = metadata(message, consumer, database)
+    metadata = struct(ConsumerRecordData.Metadata, metadata)
+
+    %ConsumerRecordData{
+      record: message_record(message),
+      action: action,
+      metadata: metadata
+    }
+  end
+
+  defp record_data_from_message(%Message{action: :delete} = message, consumer, database) do
+    metadata = metadata(message, consumer, database)
+    metadata = struct(ConsumerRecordData.Metadata, metadata)
+
+    %ConsumerRecordData{
+      record: message_record(message),
+      action: :delete,
+      metadata: metadata
+    }
+  end
+
+  def message_pks(%Message{} = message), do: Enum.map(message.ids, &to_string/1)
+
+  def message_record(%Message{} = message) do
+    message
+    |> Message.message_fields()
+    |> Message.fields_to_map()
+  end
+
+  def message_changes(%Message{action: :insert}), do: nil
+  def message_changes(%Message{action: :delete}), do: nil
+  def message_changes(%Message{action: :update, old_fields: nil}), do: %{}
+
+  def message_changes(%Message{action: :update} = message) do
+    old_fields = Message.fields_to_map(message.old_fields)
+    new_fields = Message.fields_to_map(message.fields)
+
+    Enum.reduce(old_fields, %{}, fn {k, v}, acc ->
+      if Map.get(new_fields, k) in [:unchanged_toast, v] do
+        acc
+      else
+        Map.put(acc, k, v)
+      end
+    end)
+  end
+
+  defp metadata(%Message{} = message, consumer, %PostgresDatabase{} = database) do
+    metadata = %{
+      database_name: database.name,
+      table_name: message.table_name,
+      table_schema: message.table_schema,
+      commit_timestamp: message.commit_timestamp,
+      commit_lsn: message.commit_lsn,
+      commit_idx: message.commit_idx,
+      consumer: consumer_metadata(consumer),
+      transaction_annotations: nil,
+      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}"),
+      record_pks: message_pks(message)
+    }
+
+    metadata = maybe_put_database_metadata(metadata, consumer.message_kind, database)
+
+    if consumer.message_kind == :event do
+      case decode_transaction_annotations(message.transaction_annotations) do
+        {:ok, annotations} ->
+          Map.put(metadata, :transaction_annotations, annotations)
+
+        _ ->
+          error = Error.invariant(message: "Invalid JSON given to `transaction_annotations.set`")
+
+          Health.put_event(:sink_consumer, consumer.id, %Event{
+            slug: :invalid_transaction_annotation_received,
+            status: :warning,
+            error: error
+          })
+
+          metadata
+      end
+    else
+      metadata
+    end
+  end
+
+  defp consumer_metadata(%SinkConsumer{message_kind: :event} = consumer) do
+    %ConsumerEventData.Metadata.Sink{
+      id: consumer.id,
+      name: consumer.name,
+      annotations: consumer.annotations
+    }
+  end
+
+  defp consumer_metadata(%SinkConsumer{message_kind: :record} = consumer) do
+    %ConsumerRecordData.Metadata.Sink{
+      id: consumer.id,
+      name: consumer.name,
+      annotations: consumer.annotations
+    }
+  end
+
+  defp maybe_put_database_metadata(metadata, :record, _db), do: metadata
+
+  defp maybe_put_database_metadata(metadata, :event, %PostgresDatabase{} = database) do
+    Map.put(metadata, :database, %ConsumerEventData.Metadata.Database{
+      id: database.id,
+      name: database.name,
+      annotations: database.annotations,
+      database: database.database,
+      hostname: database.hostname
+    })
+  end
+
+  def generate_group_id(%SinkConsumer{} = consumer, %Message{} = message) do
+    default_group_id = if message.ids == [], do: nil, else: Enum.map_join(message.ids, ":", &to_string/1)
+
+    group_id =
+      case consumer do
+        %SinkConsumer{message_grouping: false} ->
+          nil
+
+        %SinkConsumer{source_tables: nil} ->
+          default_group_id
+
+        %SinkConsumer{source_tables: source_tables} ->
+          if source_table = Enum.find(source_tables, &(&1.table_oid == message.table_oid)) do
+            source_table.group_column_attnums
+            |> Enum.map(fn attnum ->
+              fields = if message.action == :delete, do: message.old_fields, else: message.fields
+              Enum.find(fields, &(&1.column_attnum == attnum))
+            end)
+            |> Enum.filter(& &1)
+            |> Enum.map_join(":", &to_string(&1.value))
+          else
+            default_group_id
+          end
+      end
+
+    case group_id do
+      "" -> nil
+      group_id -> group_id
+    end
+  end
+
+  def decode_transaction_annotations(nil), do: {:ok, nil}
+
+  def decode_transaction_annotations(annotations) when is_binary(annotations) do
+    case Jason.decode(annotations) do
+      {:ok, json} ->
+        {:ok, json}
+
+      {:error, error} ->
+        Logger.error("Error parsing transaction annotations: #{inspect(error)}", error: error)
+        {:error, error}
+    end
   end
 
   # Consumer Lifecycle

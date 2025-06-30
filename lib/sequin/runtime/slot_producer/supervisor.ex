@@ -16,9 +16,8 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
 
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Repo
-  alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.SlotProducer
-  alias Sequin.Runtime.SlotProducer.Batch
+  alias Sequin.Runtime.SlotProducer.PipelineDefaults
   alias Sequin.Runtime.SlotProducer.Processor
   alias Sequin.Runtime.SlotProducer.ReorderBuffer
 
@@ -56,9 +55,8 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
           pg_major_version: postgres_database.pg_major_version,
           postgres_database: postgres_database,
           connect_opts: PostgresDatabase.to_protocol_opts(postgres_database),
-          restart_wal_cursor_fn: fn state ->
-            SlotProcessorServer.safe_wal_cursor(state.id)
-          end,
+          restart_wal_cursor_fn: &PipelineDefaults.restart_wal_cursor/2,
+          on_connect_fail_fn: &PipelineDefaults.on_connect_fail/2,
           conn: fn -> postgres_database end,
           processor_mod: Processor
         ],
@@ -89,9 +87,7 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
         [
           id: pipeline_id,
           producer_partitions: partition_count,
-          on_batch_ready: fn id, %Batch{} = batch ->
-            SlotProcessorServer.handle_batch(id, batch)
-          end,
+          flush_batch_fn: &PipelineDefaults.flush_batch/2,
           # Subscribe to all Processor partitions via subscribe_to in init
           subscribe_to:
             Enum.map(0..(partition_count - 1), fn partition_idx ->
@@ -124,7 +120,7 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
   ## Options
 
   - `:replication_slot` - Required. The PostgresReplicationSlot record with preloaded postgres_database
-  - `:on_batch_ready` - Required. Function called when ReorderBuffer has a complete batch ready
+  - `:flush_batch_fn` - Required. Function called when ReorderBuffer has a complete batch ready
   - `:slot_producer_opts` - Optional. Additional options for SlotProducer
   - `:reorder_buffer_opts` - Optional. Additional options for ReorderBuffer
 
@@ -136,7 +132,7 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
 
       {:ok, _pid} = SlotProducer.Supervisor.start_link(
         replication_slot: replication_slot,
-        on_batch_ready: fn batch_marker, messages ->
+        flush_batch_fn: fn batch_marker, messages ->
           # Process the batch
           :ok
         end,

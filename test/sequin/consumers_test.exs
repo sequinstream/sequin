@@ -709,4 +709,101 @@ defmodule Sequin.ConsumersTest do
       assert {:error, %Postgrex.Error{}} = Consumers.consumer_partition_size_bytes(nonexistent_consumer)
     end
   end
+
+  describe "generate_group_id/2 and generate_group_id/3" do
+    test "generates consistent group IDs between Message and ConsumerEvent" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+      database = DatabasesFactory.insert_postgres_database!()
+
+      # Case 1: Simple primary key
+      message = ReplicationFactory.postgres_message(action: :insert, ids: ["123"])
+      event = ConsumersFactory.consumer_event(record_pks: ["123"])
+
+      assert Consumers.generate_group_id(consumer, message) ==
+               Consumers.generate_group_id(consumer, event, database)
+
+      # Case 2: Multiple primary keys
+      message_multi = ReplicationFactory.postgres_message(action: :insert, ids: ["123", "456"])
+      event_multi = ConsumersFactory.consumer_event(record_pks: ["123", "456"])
+
+      assert Consumers.generate_group_id(consumer, message_multi) ==
+               Consumers.generate_group_id(consumer, event_multi, database)
+
+      # Case 3: Empty primary keys
+      message_empty = ReplicationFactory.postgres_message(action: :insert, ids: [])
+      event_empty = ConsumersFactory.consumer_event(record_pks: [])
+
+      assert Consumers.generate_group_id(consumer, message_empty) ==
+               Consumers.generate_group_id(consumer, event_empty, database)
+
+      # Case 4: With message grouping disabled
+      consumer_no_grouping = ConsumersFactory.insert_sink_consumer!(message_grouping: false)
+
+      assert Consumers.generate_group_id(consumer_no_grouping, message_empty) == nil
+      assert Consumers.generate_group_id(consumer_no_grouping, event_empty, database) == nil
+    end
+
+    test "generates consistent group IDs with source tables and group columns" do
+      table =
+        DatabasesFactory.table(
+          oid: 12_345,
+          columns: [
+            DatabasesFactory.column(attnum: 1, name: "col1"),
+            DatabasesFactory.column(attnum: 2, name: "col2"),
+            DatabasesFactory.column(attnum: 3, name: "col3")
+          ]
+        )
+
+      consumer = ConsumersFactory.sink_consumer()
+      database = DatabasesFactory.postgres_database(tables: [table])
+
+      # Create source table with group column configuration
+      source_table = %Sequin.Consumers.SourceTable{
+        table_oid: 12_345,
+        # Assuming column numbers 1 and 2 are used for grouping
+        group_column_attnums: [1, 2]
+      }
+
+      consumer = %{consumer | source_tables: [source_table]}
+
+      # Create message with matching fields
+      fields = [
+        %{column_attnum: 1, value: "user_1"},
+        %{column_attnum: 2, value: "group_A"},
+        %{column_attnum: 3, value: "other"}
+      ]
+
+      message =
+        ReplicationFactory.postgres_message(
+          action: :insert,
+          table_oid: 12_345,
+          fields: fields
+        )
+
+      # Create equivalent consumer event with matching record data
+      event =
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data: %Sequin.Consumers.ConsumerEventData{
+            record: %{
+              "col1" => "user_1",
+              "col2" => "group_A",
+              "col3" => "other"
+            },
+            action: :insert,
+            metadata: %Sequin.Consumers.ConsumerEventData.Metadata{
+              table_name: "test_table",
+              table_schema: "public"
+            }
+          }
+        )
+
+      # Both should generate the same group ID based on the specified columns
+      group_id_from_message = Consumers.generate_group_id(consumer, message)
+      group_id_from_event = Consumers.generate_group_id(consumer, event, database)
+
+      assert group_id_from_message == group_id_from_event
+      assert group_id_from_message == "user_1:group_A"
+    end
+  end
 end

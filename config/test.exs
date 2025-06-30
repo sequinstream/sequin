@@ -67,7 +67,7 @@ config :sequin, Sequin.Runtime.SlotProducer,
 config :sequin, Sequin.Runtime.SlotProducer.ReorderBuffer,
   min_demand: 1,
   max_demand: 3,
-  retry_flush_batch_interval: 50
+  retry_flush_batch_interval: 5
 
 config :sequin, Sequin.Sinks.AzureEventHub.Client, req_opts: [plug: {Req.Test, Sequin.Sinks.Azure.EventHub}]
 

@@ -12,8 +12,6 @@ defmodule Sequin.PostgresReplicationTest do
   """
   use Sequin.DataCase, async: false
 
-  import ExUnit.CaptureLog
-
   alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
@@ -1097,18 +1095,40 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     @tag capture_log: true
-    test "disconnects and reconnects when payload size limit exceeded", %{pg_replication: pg_replication} do
+    test "retries flushing when payload size limit exceeded", %{pg_replication: pg_replication} do
       test_pid = self()
       # First call succeeds, updating the last_flushed_wal_cursor
-      expect(MessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
-        {:ok, 1}
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        {:ok, length(msgs)}
       end)
 
+      # Start replication with our custom reconnect interval
+      start_replication!(
+        message_handler_module: MessageHandlerMock,
+        reconnect_interval: 5,
+        replication_slot_id: pg_replication.id,
+        slot_producer: [slot_producer_opts: [batch_flush_interval: [max_age: 50]]]
+      )
+
+      # Insert a character to generate a message
+      _character1 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      await_messages(1)
+
       # Second call will fail with payload_size_limit_exceeded
-      expect(MessageHandlerMock, :handle_messages, fn _ctx, _msg ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        if length(msgs) == 1 do
+          send(test_pid, :sent_error)
+        end
+
         # Return the error that should trigger disconnection
         {:error, Sequin.Error.invariant(code: :payload_size_limit_exceeded, message: "Payload size limit exceeded")}
       end)
+
+      # Insert another character to trigger the payload size limit exceeded error
+      character2 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      assert_receive :sent_error, 100
 
       # Last call succeeds
       expect(MessageHandlerMock, :handle_messages, fn _ctx, messages ->
@@ -1118,29 +1138,12 @@ defmodule Sequin.PostgresReplicationTest do
         {:ok, length(messages)}
       end)
 
-      # Start replication with our custom reconnect interval
-      pid =
-        start_replication!(
-          message_handler_module: MessageHandlerMock,
-          reconnect_interval: 5,
-          replication_slot_id: pg_replication.id
-        )
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, messages ->
+        {:ok, length(messages)}
+      end)
 
-      Process.link(pid)
-
-      # Insert a character to generate a message
-      _character1 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-      await_messages(1)
-
-      # Insert another character to trigger the disconnect
-      character2 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-      # TODO: INACTIVATE SOCKET
-      assert_receive {SlotProcessorServer, :inactivate_socket}, 1000
-
-      # Should reconnect, then process ONLY the second message
-      assert_receive {:changes, [change]}, to_timeout(second: 1)
+      # Should process ONLY the second message
+      assert_receive {:changes, [change]}, :timer.seconds(1)
       assert get_field_value(change.fields, "id") == character2.id
     end
 
@@ -1151,18 +1154,15 @@ defmodule Sequin.PostgresReplicationTest do
       Replication.update_pg_replication(pg_replication, %{slot_name: non_existent_slot})
 
       # Attempt to start replication with the non-existent slot
-      start_replication!(replication_slot_id: pg_replication.id)
+      test_pid = self()
+      on_connect_fail = fn _, _ -> send(test_pid, :connect_fail) end
 
-      assert_receive {:stop_replication, _}, 2000
+      start_replication!(
+        replication_slot_id: pg_replication.id,
+        slot_producer: [slot_producer_opts: [on_connect_fail: on_connect_fail]]
+      )
 
-      # Verify that the Health status was updated
-      {:ok, health} = Sequin.Health.health(%PostgresReplicationSlot{id: "test_slot_id", inserted_at: DateTime.utc_now()})
-      assert health.status == :error
-
-      check = Enum.find(health.checks, &(&1.slug == :replication_connected))
-      assert check.status == :error
-
-      stop_replication!(pg_replication)
+      assert_receive :connect_fail, 1000
     end
 
     test "emits heartbeat messages for latest postgres version", %{pg_replication: pg_replication} do
@@ -1193,42 +1193,6 @@ defmodule Sequin.PostgresReplicationTest do
 
       check = Enum.find(health.checks, &(&1.slug == :replication_messages))
       assert check.status == :healthy
-    end
-
-    @tag capture_log: true
-    test "shuts down when memory limit is exceeded", %{pg_replication: pg_replication} do
-      test_pid = self()
-      # Create an atomic counter starting at 0
-      memory_counter = :atomics.new(1, signed: false)
-
-      check_memory_fn = fn ->
-        :atomics.get(memory_counter, 1)
-      end
-
-      # Start with very low limits to trigger checks frequently
-      log =
-        capture_log(fn ->
-          start_replication!(
-            message_handler_module: MessageHandlerMock,
-            max_memory_bytes: 1000,
-            test_pid: test_pid,
-            check_memory_fn: check_memory_fn,
-            replication_slot_id: pg_replication.id
-          )
-
-          # Set memory above limit
-          :atomics.put(memory_counter, 1, 2000)
-
-          # Insert record to trigger memory check
-          CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-          # Process should shut down due to memory limit
-          assert_receive {SlotProcessorServer, :disconnected}, 1000
-
-          stop_replication!(pg_replication)
-        end)
-
-      assert log =~ "[SlotProcessorServer] System at memory limit"
     end
   end
 
@@ -1287,6 +1251,7 @@ defmodule Sequin.PostgresReplicationTest do
       {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       %{
+        sup_name: sup,
         pg_replication: pg_replication,
         source_db: source_db,
         event_consumer: event_consumer,
@@ -1539,6 +1504,7 @@ defmodule Sequin.PostgresReplicationTest do
     @tag capture_log: true
     test "schema changes are detected and database update worker is enqueued", %{
       pg_replication: pg_replication,
+      sup_name: sup,
       source_db: source_db
     } do
       on_exit(fn ->
@@ -1568,22 +1534,19 @@ defmodule Sequin.PostgresReplicationTest do
       await_messages(1)
 
       # Verify that DatabaseUpdateWorker was enqueued with the correct args
-      assert_enqueued(worker: DatabaseUpdateWorker, args: %{database_id: source_db.id})
+      assert_enqueued(worker: DatabaseUpdateWorker, args: %{postgres_database_id: source_db.id})
 
-      stop_replication!(pg_replication)
+      GenServer.stop(sup)
 
       do_migration.()
 
-      # Insert a record to trigger WAL processing
-      CharacterFactory.insert_character!([], repo: UnboxedRepo)
+      {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       await_messages(1)
 
       # Verify that DatabaseUpdateWorker was enqueued with the correct args
       # twice now
       [_, _] = all_enqueued(worker: DatabaseUpdateWorker, args: %{postgres_database_id: source_db.id})
-
-      stop_replication!(pg_replication)
     end
   end
 

@@ -41,6 +41,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Error.NotFoundError
@@ -49,6 +50,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   alias Sequin.ProcessMetrics
   alias Sequin.Prometheus
   alias Sequin.Replication
+  alias Sequin.Repo
   alias Sequin.Runtime.MessageLedgers
   alias Sequin.Runtime.SlotMessageStore.State
   alias Sequin.Runtime.SlotMessageStoreBehaviour
@@ -84,14 +86,10 @@ defmodule Sequin.Runtime.SlotMessageStore do
       Sandbox.allow(Sequin.Repo, test_pid, self())
     end
 
-    %SinkConsumer{} = consumer = Consumers.get_sink_consumer!(consumer_id)
-
     Logger.metadata(consumer_id: consumer_id)
-    ProcessMetrics.metadata(%{consumer_id: consumer_id, consumer_name: consumer.name, partition: partition})
     Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
 
     state = %State{
-      consumer: consumer,
       consumer_id: consumer_id,
       test_pid: Keyword.get(opts, :test_pid),
       setting_system_max_memory_bytes:
@@ -103,9 +101,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
       visibility_check_interval: Keyword.get(opts, :visibility_check_interval, :timer.minutes(5)),
       max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2))
     }
-
-    Sequin.ProcessMetrics.start()
-    Sequin.ProcessMetrics.metadata(%{consumer_id: consumer_id, partition: partition})
 
     {:ok, state, {:continue, :init}}
   end
@@ -125,12 +120,10 @@ defmodule Sequin.Runtime.SlotMessageStore do
       Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
     end
 
-    consumer =
-      if state.consumer do
-        state.consumer
-      else
-        Consumers.get_sink_consumer!(state.consumer_id)
-      end
+    consumer = Consumers.get_sink_consumer!(state.consumer_id)
+
+    Sequin.ProcessMetrics.start()
+    ProcessMetrics.metadata(%{consumer_id: consumer.id, consumer_name: consumer.name, partition: state.partition})
 
     state = %State{state | consumer: consumer}
 
@@ -143,6 +136,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
     case stream_messages_into_state(state) do
       {:ok, state} ->
+        # Reclaim memory after using the database struct
+        :erlang.garbage_collect()
+
         Sequin.ProcessMetrics.gauge("payload_size_bytes", state.payload_size_bytes)
 
         schedule_max_memory_check()
@@ -972,11 +968,15 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   defp stream_messages_into_state(%State{} = state) do
+    %SinkConsumer{} = consumer = Repo.preload(state.consumer, :postgres_database)
+    %PostgresDatabase{} = database = consumer.postgres_database
+
     # Stream messages and stop when we reach max_memory_bytes
     {time, persisted_messages} =
       :timer.tc(fn ->
-        state.consumer
+        consumer
         |> Consumers.stream_consumer_messages_for_consumer()
+        |> Stream.map(&Consumers.put_dynamic_fields(&1, consumer, database))
         |> Stream.filter(&(message_partition(&1, state.consumer.partition_count) == state.partition))
         |> Stream.reject(&State.message_exists?(state, &1))
         |> Enum.map(fn msg ->

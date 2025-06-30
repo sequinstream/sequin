@@ -17,6 +17,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.Source
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Error
   alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.MiniElixir.Validator
@@ -853,7 +854,8 @@ defmodule Sequin.Consumers do
       record_pks: message_pks(message)
     }
 
-    metadata = maybe_put_database_metadata(metadata, consumer.message_kind, database)
+    database_metadata = database_metadata(consumer, database)
+    metadata = Sequin.Map.put_if_present(metadata, :database, database_metadata)
 
     if consumer.message_kind == :event do
       case decode_transaction_annotations(message.transaction_annotations) do
@@ -876,7 +878,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp consumer_metadata(%SinkConsumer{message_kind: :event} = consumer) do
+  def consumer_metadata(%SinkConsumer{message_kind: :event} = consumer) do
     %ConsumerEventData.Metadata.Sink{
       id: consumer.id,
       name: consumer.name,
@@ -884,7 +886,7 @@ defmodule Sequin.Consumers do
     }
   end
 
-  defp consumer_metadata(%SinkConsumer{message_kind: :record} = consumer) do
+  def consumer_metadata(%SinkConsumer{message_kind: :record} = consumer) do
     %ConsumerRecordData.Metadata.Sink{
       id: consumer.id,
       name: consumer.name,
@@ -892,21 +894,57 @@ defmodule Sequin.Consumers do
     }
   end
 
-  defp maybe_put_database_metadata(metadata, :record, _db), do: metadata
-
-  defp maybe_put_database_metadata(metadata, :event, %PostgresDatabase{} = database) do
-    Map.put(metadata, :database, %ConsumerEventData.Metadata.Database{
+  def database_metadata(%SinkConsumer{message_kind: :event}, %PostgresDatabase{} = database) do
+    %ConsumerEventData.Metadata.Database{
       id: database.id,
       name: database.name,
       annotations: database.annotations,
       database: database.database,
       hostname: database.hostname
-    })
+    }
+  end
+
+  def database_metadata(%SinkConsumer{message_kind: :record}, %PostgresDatabase{}), do: nil
+
+  def generate_group_id(%SinkConsumer{} = consumer, message, %PostgresDatabase{} = database)
+      when is_struct(message, ConsumerEvent) or is_struct(message, ConsumerRecord) do
+    default_group_id = if message.record_pks == [], do: nil, else: Enum.map_join(message.record_pks, ":", &to_string/1)
+
+    do_generate_group_id(consumer, message, default_group_id, fn source_table, message ->
+      table = Enum.find(database.tables, &(&1.oid == message.table_oid))
+
+      unless is_nil(table) do
+        %PostgresDatabaseTable{columns: columns} = table
+
+        source_table.group_column_attnums
+        |> Enum.map(fn attnum ->
+          Enum.find(columns, &(&1.attnum == attnum))
+        end)
+        |> Enum.map(fn %PostgresDatabaseTable.Column{name: name} ->
+          message.data.record[name]
+        end)
+        |> Enum.filter(& &1)
+        |> Enum.map_join(":", &to_string(&1))
+      end
+    end)
   end
 
   def generate_group_id(%SinkConsumer{} = consumer, %Message{} = message) do
     default_group_id = if message.ids == [], do: nil, else: Enum.map_join(message.ids, ":", &to_string/1)
 
+    do_generate_group_id(consumer, message, default_group_id, fn source_table, message ->
+      source_table.group_column_attnums
+      |> Enum.map(fn attnum ->
+        fields = if message.action == :delete, do: message.old_fields, else: message.fields
+        Enum.find(fields, &(&1.column_attnum == attnum))
+      end)
+      |> Enum.filter(& &1)
+      |> Enum.map_join(":", &to_string(&1.value))
+    end)
+  end
+
+  # Private helper that handles the common group ID generation logic
+  defp do_generate_group_id(consumer, message, default_group_id, group_id_fn) do
     group_id =
       case consumer do
         %SinkConsumer{message_grouping: false} ->
@@ -917,13 +955,10 @@ defmodule Sequin.Consumers do
 
         %SinkConsumer{source_tables: source_tables} ->
           if source_table = Enum.find(source_tables, &(&1.table_oid == message.table_oid)) do
-            source_table.group_column_attnums
-            |> Enum.map(fn attnum ->
-              fields = if message.action == :delete, do: message.old_fields, else: message.fields
-              Enum.find(fields, &(&1.column_attnum == attnum))
-            end)
-            |> Enum.filter(& &1)
-            |> Enum.map_join(":", &to_string(&1.value))
+            case group_id_fn.(source_table, message) do
+              nil -> default_group_id
+              value -> value
+            end
           else
             default_group_id
           end
@@ -933,6 +968,25 @@ defmodule Sequin.Consumers do
       "" -> nil
       group_id -> group_id
     end
+  end
+
+  def put_dynamic_fields(%ConsumerEvent{} = event, %SinkConsumer{} = consumer, %PostgresDatabase{} = database) do
+    metadata = %{
+      event.data.metadata
+      | consumer: consumer_metadata(consumer),
+        database_name: database.name,
+        database: database_metadata(consumer, database)
+    }
+
+    data = %{event.data | metadata: metadata}
+    %ConsumerEvent{event | group_id: generate_group_id(consumer, event, database), data: data}
+  end
+
+  def put_dynamic_fields(%ConsumerRecord{} = record, %SinkConsumer{} = consumer, %PostgresDatabase{} = database) do
+    # Records don't have a database metadata
+    metadata = %{record.data.metadata | consumer: consumer_metadata(consumer), database_name: database.name}
+    data = %{record.data | metadata: metadata}
+    %ConsumerRecord{record | group_id: generate_group_id(consumer, record, database), data: data}
   end
 
   def decode_transaction_annotations(nil), do: {:ok, nil}

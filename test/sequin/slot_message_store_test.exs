@@ -5,10 +5,13 @@ defmodule Sequin.SlotMessageStoreTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Factory
+  alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotMessageStore.State
   alias Sequin.Runtime.SlotMessageStoreSupervisor
@@ -17,10 +20,24 @@ defmodule Sequin.SlotMessageStoreTest do
 
   describe "SlotMessageStore with persisted messages" do
     setup do
-      consumer = ConsumersFactory.insert_sink_consumer!()
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [])
 
-      msg1 = ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
-      msg2 = ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
+      msg1 =
+        ConsumersFactory.insert_consumer_message!(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          record_pks: ["test-pk-1"],
+          group_id: "test-pk-1"
+        )
+
+      msg2 =
+        ConsumersFactory.insert_consumer_message!(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          table_oid: msg1.table_oid,
+          record_pks: ["test-pk-2"],
+          group_id: "test-pk-2"
+        )
 
       start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
@@ -41,6 +58,170 @@ defmodule Sequin.SlotMessageStoreTest do
              end)
     end
 
+    test "consumer events loaded from disk get dynamic fields updated" do
+      account = AccountsFactory.insert_account!()
+
+      # Create a database with specific name and annotations
+      database =
+        DatabasesFactory.insert_postgres_database!(
+          name: "test-db",
+          annotations: %{"db_key" => "db_value"},
+          account_id: account.id,
+          table_count: 1
+        )
+
+      [%PostgresDatabaseTable{} = table] = database.tables
+      %PostgresDatabaseTable.Column{} = column = Enum.random(table.columns)
+
+      # Create a source table with a group column
+      source_table_attrs =
+        ConsumersFactory.source_table_attrs(
+          table_oid: table.oid,
+          group_column_attnums: [column.attnum]
+        )
+
+      # Create a consumer with specific name and annotations
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          message_kind: :event,
+          name: "test-consumer",
+          annotations: %{"key" => "value"},
+          postgres_database: database,
+          source_tables: [source_table_attrs],
+          # Set to 1 to ensure all messages go to partition 0
+          partition_count: 1
+        )
+
+      # Create a message that will be persisted to disk
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        table_oid: table.oid,
+        group_id: "old-group-id",
+        data:
+          ConsumersFactory.consumer_event_data(
+            record: %{column.name => "group-value"},
+            metadata: %{
+              database_name: "old-db",
+              record_pks: ["test-pk"],
+              table_schema: table.schema,
+              table_name: table.name,
+              commit_timestamp: DateTime.utc_now(),
+              commit_lsn: 1234,
+              commit_idx: 1,
+              idempotency_key: "test-key",
+              consumer: %{
+                id: consumer.id,
+                name: "old-name",
+                annotations: %{"old" => "value"}
+              },
+              database: %{
+                id: database.id,
+                name: "old-db",
+                annotations: %{"old" => "value"},
+                database: database.database,
+                hostname: database.hostname
+              }
+            }
+          )
+      )
+
+      # Start SMS
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+
+      # Get the message from state
+      [message_from_state] = SlotMessageStore.peek_messages(consumer, 1)
+
+      # Verify consumer name and annotations are updated
+      assert message_from_state.data.metadata.consumer.name == "test-consumer"
+      assert message_from_state.data.metadata.consumer.annotations == %{"key" => "value"}
+
+      # Verify database name and annotations are updated
+      assert message_from_state.data.metadata.database_name == "test-db"
+      assert message_from_state.data.metadata.database.name == "test-db"
+      assert message_from_state.data.metadata.database.annotations == %{"db_key" => "db_value"}
+
+      # Verify group ID is computed based on source table group columns
+      assert message_from_state.group_id == "group-value"
+    end
+
+    test "consumer records loaded from disk get dynamic fields updated" do
+      account = AccountsFactory.insert_account!()
+
+      # Create a database with specific name and annotations
+      database =
+        DatabasesFactory.insert_postgres_database!(
+          name: "test-db",
+          annotations: %{"db_key" => "db_value"},
+          account_id: account.id,
+          table_count: 1
+        )
+
+      [%PostgresDatabaseTable{} = table] = database.tables
+      %PostgresDatabaseTable.Column{} = column = Enum.random(table.columns)
+
+      # Create a source table with a group column
+      source_table_attrs =
+        ConsumersFactory.source_table_attrs(
+          table_oid: table.oid,
+          group_column_attnums: [column.attnum]
+        )
+
+      # Create a consumer with specific name and annotations
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          message_kind: :record,
+          name: "test-consumer",
+          annotations: %{"key" => "value"},
+          postgres_database: database,
+          source_tables: [source_table_attrs],
+          # Set to 1 to ensure all messages go to partition 0
+          partition_count: 1
+        )
+
+      # Create a message that will be persisted to disk
+      ConsumersFactory.insert_consumer_record!(
+        consumer_id: consumer.id,
+        table_oid: table.oid,
+        group_id: "old-group-id",
+        data:
+          ConsumersFactory.consumer_record_data(
+            record: %{column.name => "group-value"},
+            metadata: %{
+              database_name: "old-db",
+              record_pks: ["test-pk"],
+              table_schema: table.schema,
+              table_name: table.name,
+              commit_timestamp: DateTime.utc_now(),
+              commit_lsn: 1234,
+              commit_idx: 1,
+              idempotency_key: "test-key",
+              consumer: %{
+                id: consumer.id,
+                name: "old-name",
+                annotations: %{"old" => "value"}
+              }
+            }
+          )
+      )
+
+      # Start SMS
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+
+      # Get the message from state
+      [message_from_state] = SlotMessageStore.peek_messages(consumer, 1)
+
+      # Verify consumer name and annotations are updated
+      assert message_from_state.data.metadata.consumer.name == "test-consumer"
+      assert message_from_state.data.metadata.consumer.annotations == %{"key" => "value"}
+
+      assert message_from_state.data.metadata.database_name == "test-db"
+
+      # Verify group ID is computed based on source table group columns
+      assert message_from_state.group_id == "group-value"
+    end
+
     test "producing and acking persisted messages deletes them from disk", %{consumer: consumer} do
       refute [] == Consumers.list_consumer_messages_for_consumer(consumer)
 
@@ -59,6 +240,7 @@ defmodule Sequin.SlotMessageStoreTest do
       new_message =
         ConsumersFactory.consumer_message(
           table_oid: msg1.table_oid,
+          record_pks: msg1.record_pks,
           group_id: msg1.group_id,
           message_kind: consumer.message_kind,
           consumer_id: consumer.id

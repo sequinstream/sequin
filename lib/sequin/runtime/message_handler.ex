@@ -6,12 +6,9 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Constants
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Functions.TestMessages
   alias Sequin.Health
@@ -161,194 +158,6 @@ defmodule Sequin.Runtime.MessageHandler do
     end
   end
 
-  defp consumer_event(consumer, database, message) do
-    data = event_data_from_message(message, consumer, database)
-    payload_size = :erlang.external_size(data)
-
-    %ConsumerEvent{
-      consumer_id: consumer.id,
-      commit_lsn: message.commit_lsn,
-      commit_idx: message.commit_idx,
-      commit_timestamp: message.commit_timestamp,
-      record_pks: Enum.map(message.ids, &to_string/1),
-      group_id: generate_group_id(consumer, message),
-      table_oid: message.table_oid,
-      deliver_count: 0,
-      data: data,
-      replication_message_trace_id: message.trace_id,
-      payload_size_bytes: payload_size
-    }
-  end
-
-  defp consumer_record(consumer, database, message) do
-    data = record_data_from_message(message, consumer, database)
-    payload_size = :erlang.external_size(data)
-
-    %ConsumerRecord{
-      consumer_id: consumer.id,
-      commit_lsn: message.commit_lsn,
-      commit_idx: message.commit_idx,
-      commit_timestamp: message.commit_timestamp,
-      deleted: message.action == :delete,
-      record_pks: Enum.map(message.ids, &to_string/1),
-      group_id: generate_group_id(consumer, message),
-      table_oid: message.table_oid,
-      deliver_count: 0,
-      data: data,
-      replication_message_trace_id: message.trace_id,
-      payload_size_bytes: payload_size
-    }
-  end
-
-  defp event_data_from_message(%Message{action: :insert} = message, consumer, database) do
-    metadata = metadata(message, consumer, database)
-    metadata = struct(ConsumerEventData.Metadata, metadata)
-
-    %ConsumerEventData{
-      record: fields_to_map(message.fields),
-      changes: nil,
-      action: :insert,
-      metadata: metadata
-    }
-  end
-
-  defp event_data_from_message(%Message{action: :update} = message, consumer, database) do
-    new_fields = fields_to_map(message.fields)
-
-    changes =
-      if message.old_fields do
-        filter_changes(fields_to_map(message.old_fields), new_fields)
-      else
-        %{}
-      end
-
-    metadata = metadata(message, consumer, database)
-    metadata = struct(ConsumerEventData.Metadata, metadata)
-
-    %ConsumerEventData{
-      record: new_fields,
-      changes: changes,
-      action: :update,
-      metadata: metadata
-    }
-  end
-
-  defp event_data_from_message(%Message{action: :delete} = message, consumer, database) do
-    metadata = metadata(message, consumer, database)
-    metadata = struct(ConsumerEventData.Metadata, metadata)
-
-    %ConsumerEventData{
-      record: fields_to_map(message.old_fields),
-      changes: nil,
-      action: :delete,
-      metadata: metadata
-    }
-  end
-
-  defp record_data_from_message(%Message{action: action} = message, consumer, database)
-       when action in [:insert, :update] do
-    metadata = metadata(message, consumer, database)
-    metadata = struct(ConsumerRecordData.Metadata, metadata)
-
-    %ConsumerRecordData{
-      record: fields_to_map(message.fields),
-      action: action,
-      metadata: metadata
-    }
-  end
-
-  defp record_data_from_message(%Message{action: :delete} = message, consumer, database) do
-    metadata = metadata(message, consumer, database)
-    metadata = struct(ConsumerRecordData.Metadata, metadata)
-
-    %ConsumerRecordData{
-      record: fields_to_map(message.old_fields),
-      action: :delete,
-      metadata: metadata
-    }
-  end
-
-  defp metadata(%Message{} = message, consumer, %PostgresDatabase{} = database) do
-    metadata = %{
-      database_name: database.name,
-      table_name: message.table_name,
-      table_schema: message.table_schema,
-      commit_timestamp: message.commit_timestamp,
-      commit_lsn: message.commit_lsn,
-      commit_idx: message.commit_idx,
-      consumer: consumer_metadata(consumer),
-      transaction_annotations: nil,
-      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}"),
-      record_pks: Enum.map(message.ids, &to_string/1)
-    }
-
-    metadata = maybe_put_database_metadata(metadata, consumer.message_kind, database)
-
-    if consumer.message_kind == :event do
-      case decode_transaction_annotations(message.transaction_annotations) do
-        {:ok, annotations} ->
-          Map.put(metadata, :transaction_annotations, annotations)
-
-        _ ->
-          error = Error.invariant(message: "Invalid JSON given to `transaction_annotations.set`")
-
-          Health.put_event(:sink_consumer, consumer.id, %Event{
-            slug: :invalid_transaction_annotation_received,
-            status: :warning,
-            error: error
-          })
-
-          metadata
-      end
-    else
-      metadata
-    end
-  end
-
-  defp consumer_metadata(%SinkConsumer{message_kind: :event} = consumer) do
-    %ConsumerEventData.Metadata.Sink{
-      id: consumer.id,
-      name: consumer.name,
-      annotations: consumer.annotations
-    }
-  end
-
-  defp consumer_metadata(%SinkConsumer{message_kind: :record} = consumer) do
-    %ConsumerRecordData.Metadata.Sink{
-      id: consumer.id,
-      name: consumer.name,
-      annotations: consumer.annotations
-    }
-  end
-
-  defp maybe_put_database_metadata(metadata, :record, _db), do: metadata
-
-  defp maybe_put_database_metadata(metadata, :event, %PostgresDatabase{} = database) do
-    Map.put(metadata, :database, %ConsumerEventData.Metadata.Database{
-      id: database.id,
-      name: database.name,
-      annotations: database.annotations,
-      database: database.database,
-      hostname: database.hostname
-    })
-  end
-
-  defp fields_to_map(fields) do
-    Map.new(fields, fn %{column_name: name, value: value} -> {name, value} end)
-  end
-
-  defp filter_changes(old_map, new_map) do
-    old_map
-    |> Enum.reduce(%{}, fn {k, v}, acc ->
-      if Map.get(new_map, k) in [:unchanged_toast, v] do
-        acc
-      else
-        Map.put(acc, k, v)
-      end
-    end)
-    |> Map.new()
-  end
-
   @decorate track_metrics("call_consumer_message_stores")
   defp call_consumer_message_stores(messages_by_consumer) do
     res =
@@ -439,10 +248,7 @@ defmodule Sequin.Runtime.MessageHandler do
 
   @decorate track_metrics("map_to_consumer_message")
   defp consumer_message(%SinkConsumer{} = consumer, %PostgresDatabase{} = database, %SlotProcessor.Message{} = message) do
-    case consumer.message_kind do
-      :event -> consumer_event(consumer, database, message)
-      :record -> consumer_record(consumer, database, message)
-    end
+    Consumers.consumer_message(consumer, database, message)
   end
 
   @decorate track_metrics("insert_wal_events")
@@ -478,9 +284,9 @@ defmodule Sequin.Runtime.MessageHandler do
       wal_pipeline_id: pipeline.id,
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,
-      record_pks: Enum.map(message.ids, &to_string/1),
-      record: fields_to_map(get_fields(message)),
-      changes: get_changes(message),
+      record_pks: Consumers.message_pks(message),
+      record: Consumers.message_record(message),
+      changes: Consumers.message_changes(message),
       action: message.action,
       committed_at: message.commit_timestamp,
       replication_message_trace_id: message.trace_id,
@@ -490,67 +296,9 @@ defmodule Sequin.Runtime.MessageHandler do
       transaction_annotations: nil
     }
 
-    case decode_transaction_annotations(message.transaction_annotations) do
+    case Consumers.decode_transaction_annotations(message.transaction_annotations) do
       {:ok, annotations} -> Map.put(wal_event, :transaction_annotations, annotations)
       _ -> wal_event
-    end
-  end
-
-  defp decode_transaction_annotations(nil), do: {:ok, nil}
-
-  defp decode_transaction_annotations(annotations) when is_binary(annotations) do
-    case Jason.decode(annotations) do
-      {:ok, json} ->
-        {:ok, json}
-
-      {:error, error} ->
-        Logger.error("Error parsing transaction annotations: #{inspect(error)}", error: error)
-        {:error, error}
-    end
-  end
-
-  defp get_changes(%Message{action: :update} = message) do
-    if message.old_fields do
-      filter_changes(fields_to_map(message.old_fields), fields_to_map(message.fields))
-    else
-      %{}
-    end
-  end
-
-  defp get_changes(_), do: nil
-
-  defp get_fields(%Message{action: :insert} = message), do: message.fields
-  defp get_fields(%Message{action: :update} = message), do: message.fields
-  defp get_fields(%Message{action: :delete} = message), do: message.old_fields
-
-  defp generate_group_id(consumer, message) do
-    default_group_id = if message.ids == [], do: nil, else: Enum.map_join(message.ids, ":", &to_string/1)
-
-    group_id =
-      case consumer do
-        %SinkConsumer{message_grouping: false} ->
-          nil
-
-        %SinkConsumer{source_tables: nil} ->
-          default_group_id
-
-        %SinkConsumer{source_tables: source_tables} ->
-          if source_table = Enum.find(source_tables, &(&1.table_oid == message.table_oid)) do
-            source_table.group_column_attnums
-            |> Enum.map(fn attnum ->
-              fields = if message.action == :delete, do: message.old_fields, else: message.fields
-              Enum.find(fields, &(&1.column_attnum == attnum))
-            end)
-            |> Enum.filter(& &1)
-            |> Enum.map_join(":", &to_string(&1.value))
-          else
-            default_group_id
-          end
-      end
-
-    case group_id do
-      "" -> nil
-      group_id -> group_id
     end
   end
 
@@ -625,7 +373,7 @@ defmodule Sequin.Runtime.MessageHandler do
           annotations: %{"test_message" => true, "info" => "Test messages are not associated with any sink"}
         }
 
-        message = consumer_event(test_consumer, ctx.postgres_database, message)
+        message = Consumers.consumer_message(test_consumer, ctx.postgres_database, message)
         TestMessages.add_test_message(ctx.postgres_database.id, message.table_oid, message)
       end)
     end

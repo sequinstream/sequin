@@ -35,7 +35,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   require Logger
 
-  # 100 MB
   @backfill_batch_high_watermark Constants.backfill_batch_high_watermark()
 
   @logical_message_table_name Constants.logical_messages_table_name()
@@ -254,7 +253,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         {:reply, {:error, error}, state}
 
       {:error, error} ->
-        dbg("here")
         raise error
     end
   end
@@ -523,56 +521,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  # defp on_connect_failure(%State{} = state, error) do
-  #   conn = get_cached_conn(state)
-
-  #   error_or_error_msg =
-  #     with {:ok, %{"active" => false}} <- Postgres.get_replication_slot(conn, state.slot_name),
-  #          {:ok, _pub} <- Postgres.get_publication(conn, state.publication) do
-  #       cond do
-  #         match?(%Postgrex.Error{postgres: %{code: :undefined_object, routine: "get_publication_oid"}}, error) ->
-  #           # Related to this: https://www.postgresql.org/message-id/18683-a98f79c0673be358%40postgresql.org
-  #           # Helpful error message shown in front-end.
-  #           Error.service(
-  #             service: :replication,
-  #             code: :publication_not_recognized,
-  #             message:
-  #               "Publication '#{state.publication}' is in an invalid state. You must drop and re-create the slot to use this publication with this slot."
-  #           )
-
-  #         is_exception(error) ->
-  #           Exception.message(error)
-
-  #         true ->
-  #           inspect(error)
-  #       end
-  #     else
-  #       {:ok, %{"active" => true} = _slot} ->
-  #         "Replication slot '#{state.slot_name}' is currently in use by another connection"
-
-  #       {:error, %Error.NotFoundError{entity: :replication_slot}} ->
-  #         maybe_recreate_slot(state)
-  #         "Replication slot '#{state.slot_name}' does not exist"
-
-  #       {:error, error} ->
-  #         Exception.message(error)
-  #     end
-
-  #   error =
-  #     if is_binary(error_or_error_msg) do
-  #       Error.service(service: :replication, message: error_or_error_msg)
-  #     else
-  #       error_or_error_msg
-  #     end
-
-  #   Health.put_event(
-  #     state.replication_slot,
-  #     %Event{slug: :replication_connected, status: :fail, error: error}
-  #   )
-
-  #   :ok
-  # end
-
   @heartbeat_message_prefix "sequin.heartbeat.1"
   defp send_heartbeat(%State{} = state, payload) do
     conn = get_primary_conn(state)
@@ -609,36 +557,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     verification_ref = Process.send_after(self(), :verify_heartbeat, :timer.seconds(30))
     %{state | heartbeat_verification_timer: verification_ref}
   end
-
-  # defp maybe_recreate_slot(%State{connection: connection} = state) do
-  #   # Neon databases have ephemeral replication slots. At time of writing, this
-  #   # happens after 45min of inactivity.
-  #   # In the future, we will want to "rewind" the slot on create to last known good LSN
-  #   if String.ends_with?(connection[:hostname], ".aws.neon.tech") do
-  #     CreateReplicationSlotWorker.enqueue(state.id)
-  #   end
-  # end
-
-  # defp skip_message?(%Message{} = msg, %State{} = state) do
-  #   %{commit_lsn: safe_wal_cursor_lsn, commit_idx: safe_wal_cursor_idx} = state.safe_wal_cursor
-  #   {message_lsn, message_idx} = {msg.commit_lsn, msg.commit_idx}
-
-  #   lte_safe_wal_cursor? =
-  #     message_lsn < safe_wal_cursor_lsn or
-  #       (message_lsn == safe_wal_cursor_lsn and message_idx < safe_wal_cursor_idx)
-
-  #   # We'll re-receive already-flushed messages if we reconnect to the replication slot (without killing the GenServer) but haven't advanced the slot's cursor yet
-  #   lte_flushed? =
-  #     if state.last_flushed_wal_cursor do
-  #       %{commit_lsn: last_flushed_lsn, commit_idx: last_flushed_idx} = state.last_flushed_wal_cursor
-  #       message_lsn < last_flushed_lsn or (message_lsn == last_flushed_lsn and message_idx <= last_flushed_idx)
-  #     else
-  #       false
-  #     end
-
-  #   lte_safe_wal_cursor? or lte_flushed? or
-  #     (msg.table_schema in [@config_schema, @stream_schema] and msg.table_schema != "public")
-  # end
 
   @spec flush_messages(State.t(), Batch.t()) :: {:ok, State.t()} | {:error, Error.t()}
   @decorate track_metrics("flush_messages")

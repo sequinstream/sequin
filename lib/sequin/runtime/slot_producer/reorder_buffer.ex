@@ -1,12 +1,16 @@
 defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   @moduledoc false
   use GenStage
+  use Sequin.GenerateBehaviour
 
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime.SlotProducer.Batch
   alias Sequin.Runtime.SlotProducer.BatchMarker
   alias Sequin.Runtime.SlotProducer.Message
 
   require Logger
+
+  @callback flush_batch(id :: PostgresReplicationSlot.id(), batch :: Batch.t()) :: :ok
 
   def start_link(opts \\ []) do
     id = Keyword.fetch!(opts, :id)
@@ -37,7 +41,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       field :id, String.t()
       field :pending_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
       field :ready_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
-      field :on_batch_ready, (String.t(), Batch.t() -> :ok | {:error, any()})
+      field :flush_batch_fn, (PostgresReplicationSlot.id(), Batch.t() -> :ok)
       field :producer_partition_count, non_neg_integer()
       field :producer_subscriptions, [%{producer: pid(), demand: integer()}], default: []
       field :flush_batch_timer_ref, reference() | nil
@@ -51,7 +55,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   def init(opts) do
     state = %State{
       id: Keyword.fetch!(opts, :id),
-      on_batch_ready: Keyword.fetch!(opts, :on_batch_ready),
+      flush_batch_fn: Keyword.fetch!(opts, :flush_batch_fn),
       producer_partition_count: Keyword.fetch!(opts, :producer_partitions),
       setting_max_demand: Keyword.get(opts, :max_demand),
       setting_min_demand: Keyword.get(opts, :min_demand),
@@ -101,7 +105,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
     state = maybe_cancel_flush_batch_timer(state)
 
-    case state.on_batch_ready.(state.id, batch) do
+    case state.flush_batch_fn.(state.id, batch) do
       :ok ->
         state = %{state | ready_batches_by_epoch: ready_batches}
 

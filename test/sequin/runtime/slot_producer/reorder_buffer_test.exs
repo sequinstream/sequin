@@ -35,7 +35,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
     end
 
     def send_batch_marker(producer, batch_marker, partition_idx) do
-      GenStage.call(producer, {:send_batch_marker, batch_marker, partition_idx})
+      GenStage.sync_info(producer, {:send_batch_marker, batch_marker, partition_idx})
     end
 
     def get_demand(producer) do
@@ -47,6 +47,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
        %{
          demand: 0,
          pending_events: [],
+         pending_markers: [],
          partition_idx: Keyword.fetch!(opts, :partition_idx)
        }}
     end
@@ -55,9 +56,11 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       new_demand = demand + incoming_demand
       {events, remaining_events} = Enum.split(state.pending_events, new_demand)
 
-      new_state = %{state | demand: new_demand - length(events), pending_events: remaining_events}
+      state = %{state | demand: new_demand - length(events), pending_events: remaining_events}
 
-      {:noreply, events, new_state}
+      state = maybe_send_markers(state)
+
+      {:noreply, events, state}
     end
 
     def handle_call({:send_message, message}, _from, state) do
@@ -68,18 +71,29 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       end
     end
 
-    def handle_call({:send_batch_marker, batch_marker, partition_idx}, from, state) do
-      # Next call might blow up
-      GenServer.reply(from, :ok)
+    def handle_call(:get_demand, _from, state) do
+      {:reply, state.demand, [], state}
+    end
+
+    def handle_info({:send_batch_marker, batch_marker, partition_idx}, state) do
       # Send batch marker to ReorderBuffer directly with processor_partition_idx set
       marker_with_partition = %{batch_marker | processor_partition_idx: partition_idx}
-      :ok = ReorderBuffer.handle_batch_marker(ReorderBufferTest.reorder_buffer_id(), marker_with_partition)
+      state = %{state | pending_markers: [marker_with_partition | state.pending_markers]}
+      state = maybe_send_markers(state)
 
       {:noreply, [], state}
     end
 
-    def handle_call(:get_demand, _from, state) do
-      {:reply, state.demand, [], state}
+    defp maybe_send_markers(state) do
+      if state.pending_events == [] do
+        Enum.each(Enum.reverse(state.pending_markers), fn marker ->
+          :ok = ReorderBuffer.handle_batch_marker(ReorderBufferTest.reorder_buffer_id(), marker)
+        end)
+
+        %{state | pending_markers: []}
+      else
+        state
+      end
     end
   end
 
@@ -300,7 +314,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       # Use an agent as a global to control batch flushing
       {:ok, flush_control} = Agent.start_link(fn -> :fail end)
 
-      on_batch_ready = fn _id, batch ->
+      flush_batch_fn = fn _id, batch ->
         case Agent.get(flush_control, & &1) do
           :fail ->
             {:error, :simulated_failure}
@@ -315,7 +329,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
         min_demand: 50,
         max_demand: max_demand,
         retry_flush_batch_interval: 10,
-        on_batch_ready: on_batch_ready
+        flush_batch_fn: flush_batch_fn
       ]
 
       producers = start_buffer(opts)
@@ -351,7 +365,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
 
     test_pid = self()
 
-    default_on_batch_ready = fn _id, batch ->
+    default_flush_batch_fn = fn _id, batch ->
       send(test_pid, {:batch_ready, batch})
       :ok
     end
@@ -361,7 +375,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
         [
           id: @reorder_buffer_id,
           producer_partitions: producer_partitions,
-          on_batch_ready: default_on_batch_ready
+          flush_batch_fn: default_flush_batch_fn
         ],
         opts
       )

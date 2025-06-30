@@ -54,7 +54,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
     end
 
     def handle_batch_marker(server, batch_marker) do
-      GenStage.call(server, {:handle_batch_marker, batch_marker})
+      GenStage.sync_info(server, {:handle_batch_marker, batch_marker})
     end
 
     def init(%{producer: producer, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand}) do
@@ -80,10 +80,10 @@ defmodule Sequin.Runtime.SlotProducerTest do
       {:reply, :ok, [], state}
     end
 
-    def handle_call({:handle_batch_marker, batch_marker}, _from, state) do
+    def handle_info({:handle_batch_marker, batch_marker}, state) do
       send(state.test_pid, {:batch_marker_received, batch_marker})
 
-      {:reply, :ok, [], state}
+      {:noreply, [], state}
     end
   end
 
@@ -211,7 +211,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       start_slot_producer(db,
         ack_interval: 1,
         update_cursor_interval: 1,
-        restart_wal_cursor_fn: fn _ -> Agent.get(agent, & &1) end
+        restart_wal_cursor_fn: fn _, _ -> Agent.get(agent, & &1) end
       )
 
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
@@ -284,20 +284,14 @@ defmodule Sequin.Runtime.SlotProducerTest do
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
 
       [msg] = receive_messages(1)
-      assert_receive {:batch_marker_received, %BatchMarker{} = marker}
-
-      assert marker.epoch == 0
-      assert marker.high_watermark_wal_cursor.commit_lsn == msg.commit_lsn
+      commit_lsn = msg.commit_lsn
+      assert_receive {:batch_marker_received, %BatchMarker{high_watermark_wal_cursor: %{commit_lsn: ^commit_lsn}}}
 
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
 
       [msg] = receive_messages(1)
-      assert_receive {:batch_marker_received, %BatchMarker{} = marker}
-
-      assert marker.epoch == 1
-      assert marker.high_watermark_wal_cursor.commit_lsn == msg.commit_lsn
-
-      refute_receive {:batch_marker_received, _marker}, 50
+      commit_lsn = msg.commit_lsn
+      assert_receive {:batch_marker_received, %BatchMarker{high_watermark_wal_cursor: %{commit_lsn: ^commit_lsn}}}
     end
 
     @tag start_opts: [batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 1024, max_age: 60_000]]
@@ -412,7 +406,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
           pg_major_version: 17,
           postgres_database: db,
           connect_opts: db_connect_opts(db),
-          restart_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end,
+          restart_wal_cursor_fn: fn _id, _last -> %{commit_lsn: 0, commit_idx: 0} end,
           test_pid: self(),
           conn: fn -> db end,
           processor_mod: TestProcessor

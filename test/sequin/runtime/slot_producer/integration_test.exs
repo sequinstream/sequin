@@ -275,7 +275,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
 
     # Start ReorderBuffer first
     reorder_buffer_opts = [
-      on_batch_ready: fn _id, batch ->
+      flush_batch_fn: fn _id, batch ->
         send(test_pid, {:batch, batch})
         :ok
       end
@@ -286,7 +286,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
     slot_producer_opts =
       Keyword.merge(
         [
-          restart_wal_cursor_fn: fn _state -> %{commit_lsn: 0, commit_idx: 0} end,
+          restart_wal_cursor_fn: fn _id, _last -> %{commit_lsn: 0, commit_idx: 0} end,
           batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 1024, max_age: 10]
         ],
         Keyword.get(opts, :slot_producer_opts, [])

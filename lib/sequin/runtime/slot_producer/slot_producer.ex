@@ -11,7 +11,10 @@ defmodule Sequin.Runtime.SlotProducer do
   use Sequin.ProcessMetrics,
     metric_prefix: "sequin.slot_producer"
 
+  use Sequin.GenerateBehaviour
+
   alias Postgrex.Protocol
+  alias Sequin.Error.NotFoundError
   alias Sequin.Postgres
   alias Sequin.ProcessMetrics
   alias Sequin.Replication
@@ -26,6 +29,10 @@ defmodule Sequin.Runtime.SlotProducer do
   defguardp is_socket_message(message)
             when elem(message, 0) in [:tcp, :tcp_closed, :tcp_error, :ssl, :ssl_closed, :ssl_error]
 
+  defguardp below_restart_wal_cursor?(state)
+            when {state.commit_lsn, state.commit_idx} <
+                   {state.restart_wal_cursor.commit_lsn, state.restart_wal_cursor.commit_idx}
+
   @max_messages_per_protocol_read 500
 
   @type batch_flush_interval :: %{
@@ -33,6 +40,8 @@ defmodule Sequin.Runtime.SlotProducer do
           max_bytes: non_neg_integer(),
           max_age_ms: non_neg_integer()
         }
+
+  @type status :: :active | :buffering | :disconnected
 
   def batch_flush_interval do
     get_config!(:batch_flush_interval)
@@ -52,6 +61,10 @@ defmodule Sequin.Runtime.SlotProducer do
     current_config = Application.get_env(:sequin, __MODULE__, [])
     updated_config = Keyword.put(current_config, key, value)
     Application.put_env(:sequin, __MODULE__, updated_config)
+  end
+
+  def status(id) do
+    GenStage.call(via_tuple(id), :status)
   end
 
   defmodule Message do
@@ -82,6 +95,7 @@ defmodule Sequin.Runtime.SlotProducer do
     use TypedStruct
 
     alias Sequin.Postgres
+    alias Sequin.Replication.PostgresReplicationSlot
     alias Sequin.Runtime.SlotProducer
     alias Sequin.Runtime.SlotProducer.BatchMarker
     alias Sequin.Runtime.SlotProducer.Relation
@@ -99,11 +113,11 @@ defmodule Sequin.Runtime.SlotProducer do
       field :on_connect_fail, (any() -> any())
       field :on_disconnect, (-> :ok)
       field :setting_reconnect_interval, non_neg_integer()
-      field :status, :active | :buffering | :disconnected
+      field :status, SlotProducer.status()
 
       # Cursors & aliveness
       field :restart_wal_cursor, Replication.wal_cursor()
-      field :restart_wal_cursor_fn, (State.t() -> Replication.wal_cursor())
+      field :restart_wal_cursor_fn, (PostgresReplicationSlot.id(), Postgres.wal_cursor() -> Postgres.wal_cursor())
       field :setting_update_cursor_interval, non_neg_integer()
       field :setting_ack_interval, non_neg_integer()
       field :ack_timer, reference()
@@ -146,6 +160,11 @@ defmodule Sequin.Runtime.SlotProducer do
       field :buffered_sock_msg, nil | String.t()
     end
   end
+
+  @callback restart_wal_cursor(id :: PostgresReplicationSlot.id(), current_cursor :: Postgres.wal_cursor()) ::
+              Postgres.wal_cursor()
+
+  @callback on_connect_fail(state :: State.t(), error :: any()) :: :ok
 
   def start_link(opts) do
     id = Keyword.fetch!(opts, :id)
@@ -191,6 +210,7 @@ defmodule Sequin.Runtime.SlotProducer do
   @impl GenStage
   def handle_demand(incoming, %{demand: demand} = state) do
     {messages, state} = maybe_produce(%{state | demand: demand + incoming})
+    state = maybe_toggle_buffering(state)
     {:noreply, messages, state}
   end
 
@@ -244,6 +264,7 @@ defmodule Sequin.Runtime.SlotProducer do
          {:ok, state} <- handle_copies(copies, %{state | protocol: protocol}) do
       state = maybe_flush(state)
       {messages, state} = maybe_produce(state)
+      state = maybe_toggle_buffering(state)
       {:noreply, messages, state}
     else
       {error, reason, protocol} ->
@@ -281,13 +302,19 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_info(:flush_batch_timer, %State{} = state) do
     GenStage.async_info(self(), :flush_batch)
 
+    {:noreply, [], %{state | batch_flush_timer: nil}}
+  end
+
+  def handle_info(:flush_batch, %State{commit_lsn: nil, last_commit_lsn: nil} = state) do
+    Logger.info("[SlotProducer] Skipping flush_batch, no commits seen or processed yet.")
+
     {:noreply, [], state}
   end
 
   def handle_info(:flush_batch, %State{} = state) do
     high_watermark_cursor =
       if state.commit_lsn do
-        # This number starts at 0, and is incremented *after* each assignment. So the last assignment is -1
+        # commit_idx starts at 0, and is incremented *after* each assignment. So the last assignment is -1
         %{commit_lsn: state.commit_lsn, commit_idx: state.commit_idx - 1}
       else
         %{commit_lsn: state.last_commit_lsn, commit_idx: state.last_commit_idx}
@@ -307,12 +334,16 @@ defmodule Sequin.Runtime.SlotProducer do
       | flushed_high_watermark_wal_cursor: high_watermark_cursor,
         processed_messages_since_last_flush_stats: %{count: 0, bytes: 0},
         batch_epoch: state.batch_epoch + 1,
-        batch_flush_timer: nil,
         last_flushed_batch_at: DateTime.utc_now(),
         last_batch_marker: batch_marker
     }
 
     {:noreply, [], state}
+  end
+
+  @impl GenStage
+  def handle_call(:status, _from, %State{} = state) do
+    {:reply, state.status, state}
   end
 
   defp maybe_log_message(%State{} = state) do
@@ -418,6 +449,17 @@ defmodule Sequin.Runtime.SlotProducer do
     end
   end
 
+  defp handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) when below_restart_wal_cursor?(state) do
+    if is_nil(state.last_commit_lsn) and state.accumulated_messages.count == 0 do
+      Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
+    end
+
+    raw_bytes_received = byte_size(msg)
+    ProcessMetrics.increment_throughput("raw_bytes_received", raw_bytes_received)
+
+    {:ok, state}
+  end
+
   defp handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
     if is_nil(state.last_commit_lsn) and state.accumulated_messages.count == 0 do
       Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
@@ -465,7 +507,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp update_restart_wal_cursor(%State{} = state) do
     restart_wal_cursor =
-      case state.restart_wal_cursor_fn.(state) do
+      case state.restart_wal_cursor_fn.(state.id, state.restart_wal_cursor) do
         nil -> state.restart_wal_cursor
         next_cursor -> next_cursor
       end
@@ -521,12 +563,29 @@ defmodule Sequin.Runtime.SlotProducer do
     {[], state}
   end
 
+  defp maybe_toggle_buffering(%State{status: :disconnected} = state), do: state
+
+  defp maybe_toggle_buffering(%State{status: :buffering, demand: demand} = state) when demand > 0 do
+    if state.buffered_sock_msg do
+      send(self(), state.buffered_sock_msg)
+    end
+
+    %{state | status: :active, buffered_sock_msg: nil}
+  end
+
+  defp maybe_toggle_buffering(%State{status: :buffering} = state), do: state
+
+  defp maybe_toggle_buffering(%State{status: :active, demand: 0} = state) do
+    %{state | status: :buffering}
+  end
+
+  defp maybe_toggle_buffering(%State{status: :active} = state), do: state
+
   defp init_restart_wal_cursor(%State{} = state, protocol) do
     query = "select restart_lsn from pg_replication_slots where slot_name = '#{state.slot_name}'"
 
     case Replication.restart_wal_cursor(state.id) do
-      # TODO: Refactor to return not found
-      {:ok, %{commit_lsn: 0}} ->
+      {:error, %NotFoundError{}} ->
         case Protocol.handle_simple(query, [], protocol) do
           {:ok, [%Postgrex.Result{rows: [[lsn]]}], protocol} ->
             cursor = %{commit_lsn: Postgres.lsn_to_int(lsn), commit_idx: 0}

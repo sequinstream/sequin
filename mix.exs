@@ -112,6 +112,7 @@ defmodule Sequin.MixProject do
       {:typed_struct, "~> 0.3.0"},
       {:yaml_elixir, "~> 2.11"},
       {:ymlr, "~> 5.0"},
+      {:gen_stage, "~> 1.0"},
       {:broadway, "~> 1.0"},
       {:broadway_dashboard, "~> 0.4.0"},
       {:broadway_sqs, github: "dashbitco/broadway_sqs", ref: "94ccc7e"},

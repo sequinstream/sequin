@@ -19,7 +19,7 @@ defmodule Sequin.Replication do
 
   require Logger
 
-  @type wal_cursor :: %{commit_lsn: integer(), commit_idx: integer()}
+  @type wal_cursor :: Postgres.wal_cursor()
 
   # PostgresReplicationSlot
 
@@ -177,7 +177,7 @@ defmodule Sequin.Replication do
   def restart_wal_cursor(replication_slot_id) do
     case Redis.command(["GET", restart_wal_cursor_key(replication_slot_id)]) do
       {:ok, nil} ->
-        {:ok, %{commit_lsn: 0, commit_idx: 0}}
+        {:error, Error.not_found(entity: :restart_wal_cursor)}
 
       {:ok, commit_tuple} ->
         [lsn, idx] = String.split(commit_tuple, ":")

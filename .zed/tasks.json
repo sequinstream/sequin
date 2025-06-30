@@ -1,0 +1,24 @@
+[
+  {
+    "label": "Test current line",
+    "command": "mix",
+    "args": ["test.interactive", "$ZED_RELATIVE_FILE:$ZED_ROW"],
+    "use_new_terminal": false,
+    "reveal": "no_focus",
+    "allow_concurrent_runs": true
+  },
+  {
+    "label": "Test current file",
+    "command": "p",
+    "args": ["$ZED_RELATIVE_FILE"],
+    "use_new_terminal": false,
+    "reveal": "no_focus"
+  },
+  {
+    "label": "Interactive test file",
+    "command": "mix",
+    "args": ["test.interactive", "$ZED_RELATIVE_FILE"],
+    "use_new_terminal": true,
+    "reveal": "no_focus"
+  }
+]

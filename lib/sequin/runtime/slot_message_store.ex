@@ -87,6 +87,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end
 
     Logger.metadata(consumer_id: consumer_id)
+    Sequin.name_process({__MODULE__, {consumer_id, partition}})
     Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
 
     state = %State{

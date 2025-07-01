@@ -58,6 +58,13 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
   @impl GenStage
   def init(opts) do
+    id = Keyword.fetch!(opts, :id)
+    account_id = Keyword.fetch!(opts, :account_id)
+
+    Logger.metadata(replication_id: id, account_id: account_id)
+
+    Sequin.name_process({__MODULE__, id})
+
     state = %State{
       id: Keyword.fetch!(opts, :id),
       flush_batch_fn: Keyword.fetch!(opts, :flush_batch_fn),

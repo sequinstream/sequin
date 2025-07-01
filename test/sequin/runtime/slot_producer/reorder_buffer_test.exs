@@ -374,6 +374,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       Keyword.merge(
         [
           id: @reorder_buffer_id,
+          account_id: UUID.uuid4(),
           producer_partitions: producer_partitions,
           flush_batch_fn: default_flush_batch_fn
         ],

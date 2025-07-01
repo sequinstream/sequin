@@ -65,12 +65,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :message_handler_module, atom()
       field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
 
-      # Health and monitoring
-      field :check_memory_fn, nil | (-> non_neg_integer())
-
       # Settings
       field :heartbeat_interval, non_neg_integer()
-      field :max_memory_bytes, non_neg_integer()
 
       # Heartbeats
       field :current_heartbeat_id, nil | String.t()
@@ -82,6 +78,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
       # Reference to primary in case slot lives on replica
       field :primary_database, nil | PostgresDatabase.t()
+
+      # Current batch tracking
+      field :last_flushed_high_watermark, nil | Replication.wal_cursor()
     end
   end
 
@@ -101,7 +100,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
     message_handler_ctx_fn = Keyword.fetch!(opts, :message_handler_ctx_fn)
     message_handler_ctx = message_handler_ctx_fn.(replication_slot)
-    max_memory_bytes = Keyword.get_lazy(opts, :max_memory_bytes, &default_max_memory_bytes/0)
 
     init = %State{
       id: id,
@@ -113,9 +111,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       message_handler_ctx: message_handler_ctx,
       message_handler_module: message_handler_module,
       last_commit_lsn: nil,
-      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, to_timeout(second: 15)),
-      max_memory_bytes: max_memory_bytes,
-      check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0)
+      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15))
     }
 
     GenServer.start_link(__MODULE__, init, name: via_tuple(id))
@@ -143,9 +139,9 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       {:error, :not_running}
   end
 
-  @spec safe_wal_cursor(id :: String.t()) :: Replication.wal_cursor()
-  def safe_wal_cursor(id) do
-    GenServer.call(via_tuple(id), :safe_wal_cursor)
+  @spec restart_wal_cursor(id :: String.t()) :: Replication.wal_cursor()
+  def restart_wal_cursor(id) do
+    GenServer.call(via_tuple(id), :restart_wal_cursor)
   end
 
   @spec handle_batch(id :: String.t(), batch :: Batch.t()) :: :ok | :error
@@ -230,25 +226,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   @decorate track_metrics("handle_batch")
   def handle_call({:handle_batch, %Batch{} = batch}, _from, %State{} = state) do
-    with :ok <- check_limit(state),
-         {:ok, state} <- flush_messages(state, batch) do
-      {:reply, :ok, state}
-    else
+    case flush_messages(state, batch) do
+      {:ok, state} ->
+        {:reply, :ok, state}
+
       {:error, %InvariantError{code: :payload_size_limit_exceeded} = error} ->
         Logger.warning("Hit payload size limit for one or more slot message stores. Backing off.")
-
-        {:reply, {:error, error}, state}
-
-      {:error, %InvariantError{code: :over_system_memory_limit} = error} ->
-        Health.put_event(
-          state.replication_slot,
-          %Event{slug: :replication_memory_limit_exceeded, status: :info}
-        )
-
-        Logger.warning("[SlotProcessorServer] System hit memory limit, backing off",
-          limit: state.max_memory_bytes,
-          current_memory: state.check_memory_fn.()
-        )
 
         {:reply, {:error, error}, state}
 
@@ -257,17 +240,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  def handle_call(:safe_wal_cursor, _from, %State{} = state) do
-    safe_wal_cursor =
-      if is_nil(state.last_commit_lsn) do
-        nil
-      else
-        safe_wal_cursor!(state)
-      end
-
-    Logger.info("[SlotProcessorServer] safe_wal_cursor=nil, skipping put_restart_wal_cursor!")
-
-    {:reply, safe_wal_cursor, state}
+  def handle_call(:restart_wal_cursor, _from, %State{} = state) do
+    {:reply, restart_wal_cursor!(state), state}
   end
 
   @impl GenServer
@@ -620,7 +594,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         ProcessMetrics.increment_throughput("messages_ingested", count)
         Prometheus.increment_messages_ingested(state.replication_slot.id, state.replication_slot.slot_name, count)
 
-        state = %{state | backfill_watermark_messages: []}
+        state =
+          %{state | backfill_watermark_messages: [], last_flushed_high_watermark: batch.high_watermark_wal_cursor}
 
         {:ok, state}
 
@@ -709,56 +684,58 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     end
   end
 
-  defp safe_wal_cursor!(%State{last_commit_lsn: nil}),
-    do: raise("Unsafe to call safe_wal_cursor when last_commit_lsn is nil")
-
-  defp safe_wal_cursor!(%State{} = state) do
+  defp restart_wal_cursor!(%State{} = state) do
     consumers =
       Repo.preload(state.replication_slot, :not_disabled_sink_consumers, force: true).not_disabled_sink_consumers
 
-    case verify_monitor_refs(state) do
-      :ok ->
-        consumers_with_refs =
-          Enum.map(state.message_store_refs, fn {consumer_id, ref} ->
-            consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
-            {consumer, ref}
-          end)
+    # Early return with current batch high watermark if no consumers
+    if Enum.empty?(consumers) do
+      state.last_flushed_high_watermark
+    else
+      case verify_monitor_refs(state) do
+        :ok ->
+          consumers_with_refs =
+            Enum.map(state.message_store_refs, fn {consumer_id, ref} ->
+              consumer = Sequin.Enum.find!(consumers, &(&1.id == consumer_id))
+              {consumer, ref}
+            end)
 
-        lows_for_message_stores =
-          Sequin.TaskSupervisor
-          |> Task.Supervisor.async_stream(
-            consumers_with_refs,
-            fn {consumer, ref} ->
-              SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
-            end,
-            max_concurrency: max(map_size(state.message_store_refs), 1),
-            timeout: :timer.seconds(15)
-          )
-          |> Enum.flat_map(fn {:ok, cursors} -> cursors end)
-          |> Enum.reject(&is_nil/1)
+          lows_for_message_stores =
+            Sequin.TaskSupervisor
+            |> Task.Supervisor.async_stream(
+              consumers_with_refs,
+              fn {consumer, ref} ->
+                SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
+              end,
+              max_concurrency: max(map_size(state.message_store_refs), 1),
+              timeout: :timer.seconds(15)
+            )
+            |> Enum.flat_map(fn {:ok, cursors} -> cursors end)
+            |> Enum.reject(&is_nil/1)
 
-        count_stores = Enum.reduce(consumers, 0, fn %SinkConsumer{} = con, acc -> con.partition_count + acc end)
+          count_stores = Enum.reduce(consumers, 0, fn %SinkConsumer{} = con, acc -> con.partition_count + acc end)
 
-        low_for_message_stores =
-          if count_stores == length(lows_for_message_stores) do
-            Enum.min_by(lows_for_message_stores, &{&1.commit_lsn, &1.commit_idx})
+          low_for_message_stores =
+            if count_stores == length(lows_for_message_stores) do
+              Enum.min_by(lows_for_message_stores, &{&1.commit_lsn, &1.commit_idx})
+            end
+
+          if is_nil(low_for_message_stores) do
+            # We just recently started up, and may have accumulated some messages, and may have even flushed them.
+            # But our highwatermark wal cursor has not made it to all SlotMessageStores yet.
+            # So, it is not safe to advance the slot.
+            Logger.info("[SlotProcessorServer] no unpersisted messages in stores")
+
+            nil
+          else
+            # We have flushed our highwatermark wal cursor to all SlotMessageStores at least once
+            # So it's safe to use the low among all stores.
+            low_for_message_stores
           end
 
-        if is_nil(low_for_message_stores) do
-          # We just recently started up, and may have accumulated some messages, and may have even flushed them.
-          # But our highwatermark wal cursor has not made it to all SlotMessageStores yet.
-          # So, it is not safe to advance the slot.
-          Logger.info("[SlotProcessorServer] no unpersisted messages in stores")
-
-          nil
-        else
-          # We have flushed our highwatermark wal cursor to all SlotMessageStores at least once
-          # So it's safe to use the low among all stores.
-          low_for_message_stores
-        end
-
-      {:error, error} ->
-        raise error
+        {:error, error} ->
+          raise error
+      end
     end
   end
 
@@ -812,34 +789,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       {:ok, conn} = ConnectionCache.connection(state.primary_database)
       conn
     end
-  end
-
-  # Give the system 3 seconds to lower memory
-  @check_limit_attempts 30
-  @check_limit_interval 100
-  defp check_limit(state, attempt \\ 1)
-
-  defp check_limit(_state, attempt) when attempt > @check_limit_attempts do
-    {:error, Error.invariant(message: "Memory limit exceeded", code: :over_system_memory_limit)}
-  end
-
-  defp check_limit(%State{} = state, attempt) do
-    current_memory = state.check_memory_fn.()
-
-    if current_memory >= state.max_memory_bytes do
-      Process.sleep(@check_limit_interval)
-      check_limit(state, attempt + 1)
-    else
-      :ok
-    end
-  end
-
-  defp default_check_memory_fn do
-    :erlang.memory(:total)
-  end
-
-  defp default_max_memory_bytes do
-    Application.get_env(:sequin, :max_memory_bytes)
   end
 
   defp schedule_observe_ingestion_latency do

@@ -25,7 +25,7 @@ defmodule Sequin.Runtime.SlotProducer.PipelineDefaults do
   @doc "Default implementation for SlotProducer's restart_wal_cursor_fn callback"
   @impl SlotProducer
   def restart_wal_cursor(id, _current_cursor) do
-    SlotProcessorServer.safe_wal_cursor(id)
+    SlotProcessorServer.restart_wal_cursor(id)
   end
 
   @impl SlotProducer

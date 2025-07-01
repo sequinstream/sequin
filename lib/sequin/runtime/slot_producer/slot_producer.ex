@@ -16,6 +16,8 @@ defmodule Sequin.Runtime.SlotProducer do
   alias Postgrex.Protocol
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Postgres
   alias Sequin.ProcessMetrics
   alias Sequin.Replication
@@ -191,7 +193,6 @@ defmodule Sequin.Runtime.SlotProducer do
       pg_major_version: Keyword.fetch!(opts, :pg_major_version),
       # TODO: What happens when we're disconnected?
       status: :disconnected,
-      # TODO: On connect fail, log, put health, and retry if Neon
       on_connect_fail: Keyword.get(opts, :on_connect_fail),
       # TODO: On disconnect, does anyone else in the pipeline care?
       on_disconnect: Keyword.get(opts, :on_disconnect),
@@ -203,6 +204,10 @@ defmodule Sequin.Runtime.SlotProducer do
       conn: Keyword.fetch!(opts, :conn),
       setting_batch_flush_interval: Keyword.get(opts, :batch_flush_interval)
     }
+
+    if test_pid = opts[:test_pid] do
+      Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    end
 
     Process.send_after(self(), :connect, 0)
     {:producer, state}
@@ -234,6 +239,7 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_info(:connect, %State{} = state) do
     with {:ok, protocol} <- Protocol.connect(state.connect_opts),
          Logger.info("[SlotProducer] Connected"),
+         :ok <- put_connected_health(state.id),
          {:ok, %State{} = state, protocol} <- init_restart_wal_cursor(state, protocol),
          {:ok, protocol} <- Protocol.handle_streaming(start_replication_query(state), protocol),
          {:ok, protocol} <- Protocol.checkin(protocol) do
@@ -301,7 +307,7 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   def handle_info(:flush_batch_timer, %State{} = state) do
-    GenStage.async_info(self(), :flush_batch)
+    send(self(), :flush_batch)
 
     {:noreply, [], %{state | batch_flush_timer: nil}}
   end
@@ -462,7 +468,7 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   defp handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    if is_nil(state.last_commit_lsn) and state.accumulated_messages.count == 0 do
+    if is_nil(state.last_commit_lsn) and state.commit_idx > 0 and state.accumulated_messages.count == 0 do
       Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
     end
 
@@ -496,12 +502,14 @@ defmodule Sequin.Runtime.SlotProducer do
   # The server is not asking for a reply
   defp handle_data(<<?k, wal_end::64, clock::64, reply_requested>>, %State{} = state) do
     diff_ms = Sequin.Time.microseconds_since_2000_to_ms_since_now(clock)
+    log = "Received keepalive message for slot (reply_requested=#{reply_requested}) (clock_diff=#{diff_ms}ms)"
+    log_meta = [clock: clock, wal_end: wal_end, diff_ms: diff_ms]
 
-    Logger.info("Received keepalive message for slot (reply_requested=#{reply_requested}) (clock_diff=#{diff_ms}ms)",
-      clock: clock,
-      wal_end: wal_end,
-      diff_ms: diff_ms
-    )
+    if reply_requested == 1 do
+      Logger.info(log, log_meta)
+    else
+      Logger.debug(log, log_meta)
+    end
 
     {:ok, state}
   end
@@ -714,6 +722,14 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp ack_message(lsn) when is_integer(lsn) do
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
+  end
+
+  defp put_connected_health(id) do
+    Health.put_event(
+      :postgres_replication_slot,
+      id,
+      %Event{slug: :replication_connected, status: :success}
+    )
   end
 
   defp start_replication_query(%State{} = state) do

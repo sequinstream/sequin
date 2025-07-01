@@ -287,7 +287,8 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       Keyword.merge(
         [
           restart_wal_cursor_fn: fn _id, _last -> %{commit_lsn: 0, commit_idx: 0} end,
-          batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 1024, max_age: 10]
+          batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 1024, max_age: 10],
+          test_pid: self()
         ],
         Keyword.get(opts, :slot_producer_opts, [])
       )

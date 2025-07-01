@@ -232,7 +232,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
     test "receives relation messages" do
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
 
-      assert_receive {:relation_received, %Relation{} = relation}
+      assert_receive {:relation_received, %Relation{} = relation}, 1000
 
       assert relation.schema == "public"
       assert relation.table == Character.table_name()
@@ -252,7 +252,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
     test "receives relation messages for partitioned table" do
       TestEventLogFactory.insert_test_event_log_partitioned!(%{}, repo: UnboxedRepo)
 
-      assert_receive {:relation_received, %Relation{} = relation}
+      assert_receive {:relation_received, %Relation{} = relation}, 1000
 
       assert relation.schema == "public"
       assert relation.table == TestEventLogPartitioned.table_name()

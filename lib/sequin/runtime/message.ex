@@ -21,6 +21,7 @@ defmodule Sequin.Runtime.SlotProcessor.Message do
   end
 
   @derive {Jason.Encoder, except: [:subscription_ids]}
+  @derive {Inspect, except: [:fields]}
   typedstruct do
     field :action, :insert | :update | :delete
     field :columns, list(map())

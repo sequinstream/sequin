@@ -58,7 +58,8 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
           restart_wal_cursor_fn: &PipelineDefaults.restart_wal_cursor/2,
           on_connect_fail_fn: &PipelineDefaults.on_connect_fail/2,
           conn: fn -> postgres_database end,
-          processor_mod: Processor
+          processor_mod: Processor,
+          test_pid: opts[:test_pid]
         ],
         slot_producer_opts
       )

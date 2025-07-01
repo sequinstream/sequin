@@ -5,6 +5,7 @@ defmodule Sequin.Runtime.ElasticsearchPipeline do
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Elasticsearch.Client
   alias Sequin.Transforms
@@ -30,9 +31,23 @@ defmodule Sequin.Runtime.ElasticsearchPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_message(message, context) do
     %{consumer: consumer, test_pid: test_pid} = context
-    %ElasticsearchSink{index_name: index_name} = sink = consumer.sink
+    setup_allowances(test_pid)
+
+    %Routing.Consumers.Elasticsearch{index_name: index_name} =
+      Routing.route_message(consumer, message.data)
+
+    message = Broadway.Message.put_batch_key(message, index_name)
+
+    {:ok, message, context}
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, batch_info, context) do
+    %{consumer: consumer, test_pid: test_pid} = context
+    index_name = batch_info.batch_key
+    sink = consumer.sink
 
     setup_allowances(test_pid)
 

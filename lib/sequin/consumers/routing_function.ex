@@ -21,7 +21,8 @@ defmodule Sequin.Consumers.RoutingFunction do
         :kafka,
         :gcp_pubsub,
         :typesense,
-        :meilisearch
+        :meilisearch,
+        :elasticsearch
       ]
 
     field :code, :string

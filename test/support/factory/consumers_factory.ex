@@ -318,7 +318,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         index_name: "test-index-#{Factory.word()}",
         auth_type: Enum.random([:api_key, :basic, :bearer]),
         auth_value: Factory.word(),
-        batch_size: Enum.random(50..500)
+        batch_size: Enum.random(50..500),
+        routing_mode: "static"
       },
       attrs
     )

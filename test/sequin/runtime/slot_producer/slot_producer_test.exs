@@ -16,6 +16,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.TestEventLogFactory
   alias Sequin.Postgres
+  alias Sequin.Replication
   alias Sequin.Runtime.SlotProducer
   alias Sequin.Runtime.SlotProducer.BatchMarker
   alias Sequin.Runtime.SlotProducer.Message
@@ -49,6 +50,10 @@ defmodule Sequin.Runtime.SlotProducerTest do
       GenStage.start_link(__MODULE__, opts)
     end
 
+    def ask(server, n) do
+      GenStage.call(server, {:ask, n})
+    end
+
     def handle_relation(server, relation) do
       GenStage.call(server, {:handle_relation, relation})
     end
@@ -57,10 +62,14 @@ defmodule Sequin.Runtime.SlotProducerTest do
       GenStage.sync_info(server, {:handle_batch_marker, batch_marker})
     end
 
-    def init(%{producer: producer, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand}) do
+    def init(opts) do
+      %{producer: producer, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand} = opts
+
       state = %{
         test_pid: test_pid,
-        messages: []
+        messages: [],
+        consumer_demand: Map.get(opts, :consumer_demand, :automatic),
+        producer: nil
       }
 
       {:consumer, state, subscribe_to: [{producer, max_demand: max_demand, min_demand: min_demand}]}
@@ -74,10 +83,19 @@ defmodule Sequin.Runtime.SlotProducerTest do
       {:noreply, [], %{state | messages: new_messages}}
     end
 
+    def handle_call({:ask, n}, _from, state) do
+      GenStage.ask(state.producer, n)
+      {:reply, :ok, [], state}
+    end
+
     def handle_call({:handle_relation, relation}, _from, state) do
       send(state.test_pid, {:relation_received, relation})
 
       {:reply, :ok, [], state}
+    end
+
+    def handle_subscribe(:producer, _opts, producer, state) do
+      {state.consumer_demand, %{state | producer: producer}}
     end
 
     def handle_info({:handle_batch_marker, batch_marker}, state) do
@@ -111,12 +129,17 @@ defmodule Sequin.Runtime.SlotProducerTest do
           status: :active
         )
 
-      unless Map.get(ctx, :skip_start) do
-        start_opts = Map.get(ctx, :start_opts, [])
-        start_slot_producer(postgres_database, start_opts)
-      end
+      pg_replication = %{pg_replication | postgres_database: postgres_database}
 
-      {:ok, %{postgres_database: postgres_database, pg_replication: pg_replication}}
+      {producer_pid, consumer_pid} =
+        if Map.get(ctx, :skip_start) do
+          {nil, nil}
+        else
+          start_opts = Map.get(ctx, :start_opts, [])
+          start_slot_producer(pg_replication, start_opts)
+        end
+
+      {:ok, %{slot: pg_replication, db: postgres_database, consumer_pid: consumer_pid, producer_pid: producer_pid}}
     end
 
     test "produces messages when data is inserted" do
@@ -166,7 +189,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       assert lsn2 > lsn1
     end
 
-    test "add and clears transaction annotations", %{postgres_database: db} do
+    test "add and clears transaction annotations", %{db: db} do
       annotation = ~s|{"my": "annotations"}|
 
       UnboxedRepo.transaction(fn ->
@@ -185,7 +208,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
              ] = messages
     end
 
-    test "clears transaction annotation when directed", %{postgres_database: db} do
+    test "clears transaction annotation when directed", %{db: db} do
       annotation = ~s|{"my": "annotations"}|
 
       UnboxedRepo.transaction(fn ->
@@ -204,11 +227,11 @@ defmodule Sequin.Runtime.SlotProducerTest do
     end
 
     @tag skip_start: true
-    test "sends acks to the replication slot on an interval", %{postgres_database: db} do
+    test "sends acks to the replication slot on an interval", %{db: db, slot: slot} do
       {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
       {:ok, agent} = Agent.start_link(fn -> %{commit_lsn: init_lsn, commit_idx: 0} end)
 
-      start_slot_producer(db,
+      start_slot_producer(slot,
         ack_interval: 1,
         update_cursor_interval: 1,
         restart_wal_cursor_fn: fn _, _ -> Agent.get(agent, & &1) end
@@ -223,7 +246,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       assert_eventually {:ok, ^next_commit_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot()), 1000
     end
 
-    test "logical messages flow through", %{postgres_database: db} do
+    test "logical messages flow through", %{db: db} do
       Postgres.query!(db, "select pg_logical_emit_message(true, 'my-msg', 'my-data')")
 
       assert_receive_message_kinds([:logical])
@@ -311,6 +334,55 @@ defmodule Sequin.Runtime.SlotProducerTest do
       refute_receive {:batch_marker_received, _marker}, 50
     end
 
+    @tag skip_start: true
+    test "skips messages below restart WAL cursor", %{slot: slot, db: db} do
+      # Insert first character
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+
+      # Get current WAL position after first insert
+      {:ok, current_lsn} = Postgres.current_wal_lsn(db)
+
+      # Set restart cursor to current position (this will skip the first message)
+      Replication.put_restart_wal_cursor!(slot.id, %{commit_lsn: current_lsn, commit_idx: 0})
+
+      # Insert second character (this will be after the restart cursor)
+      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+
+      start_slot_producer(slot)
+
+      messages = receive_messages(1)
+
+      assert length(messages) == 1, "Expected 1 message but got #{length(messages)}"
+      assert hd(messages).kind == :insert
+    end
+
+    @tag start_opts: [processor_opts: [consumer_demand: :manual]]
+    test "buffers messages when no demand, then delivers all when demand is restored", %{
+      slot: slot,
+      consumer_pid: consumer_pid
+    } do
+      # Insert a lot of data to generate many WAL messages
+      for i <- 1..20 do
+        CharacterFactory.insert_character!(%{name: "Character #{i}"}, repo: UnboxedRepo)
+      end
+
+      # Verify the producer switches to buffering status
+      assert_eventually SlotProducer.status(slot.id) == :buffering, 1000
+
+      # Now ask for demand to trigger message delivery
+      TestProcessor.ask(consumer_pid, 21)
+
+      # Verify we receive all the expected messages
+      messages = receive_messages(20)
+
+      # Verify all messages are insert messages and we got the right count
+      assert length(messages) == 20
+      assert Enum.all?(messages, &(&1.kind == :insert))
+
+      # Verify the producer is back to active status
+      assert SlotProducer.status(slot.id) == :active
+    end
+
     # test "handles connection failures gracefully", %{postgres_database: postgres_database} do
     #   # Use invalid connection options to trigger failure
     #   invalid_connect_opts =
@@ -360,7 +432,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
         acc ++ messages
 
       next_count when next_count < 0 ->
-        flunk("Received more messages than expected #{inspect(message_kinds(acc))})")
+        flunk("Received more messages than expected #{inspect(message_kinds(acc ++ messages))}")
 
       next_count ->
         receive_messages(next_count, acc ++ messages)
@@ -395,11 +467,14 @@ defmodule Sequin.Runtime.SlotProducerTest do
   end
 
   # Helper functions
-  defp start_slot_producer(db, opts) do
+  defp start_slot_producer(pg_replication, opts \\ []) do
+    db = pg_replication.postgres_database
+    {processor_opts, opts} = Keyword.pop(opts, :processor_opts, [])
+
     opts =
       Keyword.merge(
         [
-          id: UUID.uuid4(),
+          id: pg_replication.id,
           database_id: db.id,
           account_id: db.account_id,
           slot_name: replication_slot(),
@@ -416,15 +491,25 @@ defmodule Sequin.Runtime.SlotProducerTest do
       )
 
     producer_pid = start_supervised!({SlotProducer, opts})
-    start_test_consumer(producer_pid, self())
+    consumer_pid = start_test_consumer(producer_pid, self(), processor_opts)
+
+    {producer_pid, consumer_pid}
   end
 
-  defp start_test_consumer(producer_pid, test_pid, opts \\ []) do
+  defp start_test_consumer(producer_pid, test_pid, opts) do
     max_demand = Keyword.get(opts, :max_demand, 10)
     min_demand = Keyword.get(opts, :min_demand, 5)
+    consumer_demand = Keyword.get(opts, :consumer_demand, :automatic)
 
     start_supervised!(
-      {TestProcessor, %{producer: producer_pid, test_pid: test_pid, max_demand: max_demand, min_demand: min_demand}}
+      {TestProcessor,
+       %{
+         producer: producer_pid,
+         test_pid: test_pid,
+         max_demand: max_demand,
+         min_demand: min_demand,
+         consumer_demand: consumer_demand
+       }}
     )
   end
 

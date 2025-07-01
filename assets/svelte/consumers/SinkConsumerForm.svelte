@@ -577,7 +577,13 @@
         bind:functionRefreshState
       />
     {:else if consumer.type === "elasticsearch"}
-      <ElasticsearchSinkForm errors={errors.consumer} bind:form />
+      <ElasticsearchSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {/if}
 
     <Card>

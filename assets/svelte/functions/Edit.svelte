@@ -105,6 +105,7 @@
     gcp_pubsub: "GCP PubSub",
     typesense: "Typesense",
     meilisearch: "Meilisearch",
+    elasticsearch: "Elasticsearch",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];

@@ -113,4 +113,14 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  elasticsearch: {
+    fields: {
+      index_name: {
+        description: "Elasticsearch index name to publish to",
+        staticValue: "<empty>",
+        staticFormField: "index_name",
+        dynamicDefault: "sequin.<database_name>.<table_schema>.<table_name>",
+      },
+    },
+  },
 };

@@ -104,3 +104,19 @@ Errors from Elasticsearch are shown verbatim in the **Messages** tab. For bulk r
 - One sink targets one index; multiple indices require multiple sinks.
 - Only `index` and `delete` bulk operations are issued. Other operations (`update`, `create`, etc.) are not used.
 
+## Routing
+
+The Elasticsearch sink supports dynamic routing of the `index_name` with [routing functions](/reference/routing).
+
+Example routing function:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{
+    index_name: metadata.table_name
+  }
+end
+```
+
+When not using a routing function, messages will be indexed into the statically configured index.
+

@@ -103,6 +103,12 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_elasticsearch """
+  def route(action, record, changes, metadata) do
+    %{index_name: "sequin.\#{metadata.database_name}.\#{metadata.table_schema}.\#{metadata.table_name}"}
+  end
+  """
+
   @initial_filter """
   def filter(action, record, changes, metadata) do
     # Must return true or false!
@@ -121,7 +127,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_kafka" => @initial_route_kafka,
     "routing_gcp_pubsub" => @initial_route_gcp_pubsub,
     "routing_typesense" => @initial_route_typesense,
-    "routing_meilisearch" => @initial_route_meilisearch
+    "routing_meilisearch" => @initial_route_meilisearch,
+    "routing_elasticsearch" => @initial_route_elasticsearch
   }
 
   # We generate the function completions at compile time because

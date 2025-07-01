@@ -187,6 +187,7 @@ export type SequinStreamConsumer = BaseConsumer & {
 export type GcpPubsubConsumer = BaseConsumer & {
   sink: {
     type: "gcp_pubsub";
+    elasticsearch;
     project_id: string;
     topic_id: string;
     use_emulator: boolean;
@@ -234,7 +235,7 @@ export type ElasticsearchConsumer = BaseConsumer & {
     type: "elasticsearch";
     endpoint_url: string;
     index_name: string;
-    auth_type: "api_key" | "basic" | "bearer";
+    auth_type: "none" | "api_key" | "basic" | "bearer";
     auth_value: string;
     batch_size: number;
     timeout_seconds: number;
@@ -268,6 +269,7 @@ export const SinkTypeValues = [
   "kafka",
   "sequin_stream",
   "gcp_pubsub",
+  "elasticsearch",
   "nats",
   "rabbitmq",
   "typesense",
@@ -286,6 +288,7 @@ export const RoutedSinkTypeValues = [
   "gcp_pubsub",
   "typesense",
   "meilisearch",
+  "elasticsearch",
 ] as const;
 
 export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

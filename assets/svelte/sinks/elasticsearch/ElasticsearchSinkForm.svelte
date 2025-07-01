@@ -10,6 +10,7 @@
   import type { ElasticsearchConsumer } from "$lib/consumers/types";
   import { Label } from "$lib/components/ui/label";
   import { Eye, EyeOff, Info } from "lucide-svelte";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
   import {
     Select,
     SelectContent,
@@ -19,10 +20,15 @@
   } from "$lib/components/ui/select";
 
   export let form: ElasticsearchConsumer;
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
+  let selectedDynamic = form.routingMode === "dynamic";
   export let errors: any = {};
   let showPassword = false;
 
   const authTypeOptions = [
+    { value: "none", label: "None" },
     { value: "api_key", label: "API Key" },
     { value: "basic", label: "Basic Auth" },
     { value: "bearer", label: "Bearer Token" },
@@ -72,18 +78,6 @@
     </div>
 
     <div class="space-y-2">
-      <Label for="index_name">Index name</Label>
-      <Input
-        id="index_name"
-        bind:value={form.sink.index_name}
-        placeholder="my-index"
-      />
-      {#if errors.sink?.index_name}
-        <p class="text-destructive text-sm">{errors.sink.index_name}</p>
-      {/if}
-    </div>
-
-    <div class="space-y-2">
       <Label for="auth_type">Authentication type</Label>
       <Select
         selected={{
@@ -126,11 +120,14 @@
           id="auth_value"
           type={showPassword ? "text" : "password"}
           bind:value={form.sink.auth_value}
-          placeholder={form.sink.auth_type === "api_key"
-            ? "API Key"
-            : form.sink.auth_type === "basic"
-              ? "username:password"
-              : "Bearer Token"}
+          disabled={form.sink.auth_type === "none"}
+          placeholder={form.sink.auth_type === "none"
+            ? "N/A"
+            : form.sink.auth_type === "api_key"
+              ? "API Key"
+              : form.sink.auth_type === "basic"
+                ? "username:password"
+                : "Bearer Token"}
           data-1p-ignore
           autocomplete="off"
         />
@@ -150,7 +147,9 @@
         <p class="text-destructive text-sm">{errors.sink.auth_value}</p>
       {/if}
       <p class="text-sm text-muted-foreground">
-        {#if form.sink.auth_type === "api_key"}
+        {#if form.sink.auth_type === "none"}
+          No authentication required
+        {:else if form.sink.auth_type === "api_key"}
           Your Elasticsearch API key
         {:else if form.sink.auth_type === "basic"}
           Basic auth credentials in format username:password
@@ -177,5 +176,37 @@
         Number of documents to send in each batch (default: 100)
       </p>
     </div>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      routedSinkType="elasticsearch"
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      bind:selectedDynamic
+      {errors}
+    />
+
+    {#if !selectedDynamic}
+      <div class="space-y-2">
+        <Label for="index_name">Index name</Label>
+        <Input
+          id="index_name"
+          name="sink[index_name]"
+          bind:value={form.sink.index_name}
+          placeholder="my-index"
+        />
+        {#if errors.sink?.index_name}
+          <p class="text-destructive text-sm">{errors.sink.index_name}</p>
+        {/if}
+      </div>
+    {/if}
   </CardContent>
 </Card>

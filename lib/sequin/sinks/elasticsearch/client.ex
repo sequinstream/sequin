@@ -116,6 +116,7 @@ defmodule Sequin.Sinks.Elasticsearch.Client do
 
   defp auth_header(%ElasticsearchSink{} = sink) do
     case sink.auth_type do
+      :none -> []
       :api_key -> [{"Authorization", "ApiKey #{sink.auth_value}"}]
       :basic -> [{"Authorization", "Basic #{Base.encode64(sink.auth_value)}"}]
       :bearer -> [{"Authorization", "Bearer #{sink.auth_value}"}]

@@ -90,6 +90,7 @@ defmodule Sequin.Runtime.Routing do
       :gcp_pubsub -> Sequin.Runtime.Routing.Consumers.GcpPubsub
       :typesense -> Sequin.Runtime.Routing.Consumers.Typesense
       :meilisearch -> Sequin.Runtime.Routing.Consumers.Meilisearch
+      :elasticsearch -> Sequin.Runtime.Routing.Consumers.Elasticsearch
       _ -> nil
     end
   end

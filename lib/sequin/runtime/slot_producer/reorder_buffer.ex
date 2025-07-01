@@ -22,7 +22,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   def handle_batch_marker(id, %BatchMarker{} = marker) do
-    GenStage.async_info(via_tuple(id), {:batch_marker, marker})
+    GenStage.sync_info(via_tuple(id), {:batch_marker, marker})
   end
 
   def config(key) do
@@ -48,6 +48,11 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       field :setting_max_demand, non_neg_integer()
       field :setting_min_demand, non_neg_integer()
       field :setting_retry_flush_batch_interval, non_neg_integer()
+      field :check_system_fn, (-> :ok | :fail)
+      field :check_system_bytes_processed_since_last_check, non_neg_integer(), default: 0
+      field :check_system_interval, keyword(), default: []
+      field :check_system_last_status, :ok | :fail, default: :ok
+      field :check_system_timer_ref, reference() | nil
     end
   end
 
@@ -59,7 +64,9 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       producer_partition_count: Keyword.fetch!(opts, :producer_partitions),
       setting_max_demand: Keyword.get(opts, :max_demand),
       setting_min_demand: Keyword.get(opts, :min_demand),
-      setting_retry_flush_batch_interval: Keyword.get(opts, :retry_flush_batch_interval)
+      setting_retry_flush_batch_interval: Keyword.get(opts, :retry_flush_batch_interval),
+      check_system_fn: Keyword.get(opts, :check_system_fn, &default_check_system_fn/0),
+      check_system_interval: Keyword.get(opts, :check_system_interval, bytes: 10_000_000, retry_ms: 25)
     }
 
     {:consumer, state, subscribe_to: Keyword.get(opts, :subscribe_to, [])}
@@ -87,6 +94,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     state =
       state
       |> update_subscription_demand(from, -length(events))
+      |> maybe_check_system()
       |> maybe_ask_demand()
 
     {:noreply, [], state}
@@ -110,17 +118,10 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
         state = %{state | ready_batches_by_epoch: ready_batches}
 
         # Ask for demand now that we've successfully flushed a batch
-        state = ask_demand(state)
-
-        # Schedule immediate flush if more ready batches exist
-        state =
-          if map_size(ready_batches) > 0 do
-            schedule_flush_timer(state)
-          else
-            state
-          end
-
-        {:noreply, [], state}
+        state
+        |> ask_demand()
+        |> maybe_schedule_flush_timer()
+        |> maybe_hibernate()
 
       {:error, reason} ->
         Logger.warning("[ReorderBuffer] Error pushing batch #{inspect(batch)}: #{inspect(reason)}")
@@ -129,7 +130,13 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     end
   end
 
-  defp maybe_ask_demand(%State{ready_batches_by_epoch: batches} = state) when map_size(batches) == 0 do
+  def handle_info(:check_system, %State{} = state) do
+    state = check_system(%{state | check_system_timer_ref: nil})
+    {:noreply, [], state}
+  end
+
+  defp maybe_ask_demand(%State{ready_batches_by_epoch: batches, check_system_last_status: :ok} = state)
+       when map_size(batches) == 0 do
     ask_demand(state)
   end
 
@@ -172,7 +179,12 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
         %{batch | messages: [event | batch.messages]}
       end)
 
-    %{state | pending_batches_by_epoch: pending_batches}
+    %{
+      state
+      | pending_batches_by_epoch: pending_batches,
+        check_system_bytes_processed_since_last_check:
+          state.check_system_bytes_processed_since_last_check + event.byte_size
+    }
   end
 
   defp put_batch_marker(%State{} = state, %BatchMarker{epoch: epoch} = marker) when is_integer(epoch) do
@@ -224,6 +236,22 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     %{state | flush_batch_timer_ref: ref}
   end
 
+  defp maybe_schedule_flush_timer(%State{} = state) do
+    if map_size(state.ready_batches_by_epoch) > 0 do
+      schedule_flush_timer(state)
+    else
+      state
+    end
+  end
+
+  defp maybe_hibernate(%State{} = state) do
+    if map_size(state.ready_batches_by_epoch) == 0 and map_size(state.pending_batches_by_epoch) == 0 do
+      {:noreply, [], state, :hibernate}
+    else
+      {:noreply, [], state}
+    end
+  end
+
   defp schedule_flush_timer_retry(%State{flush_batch_timer_ref: nil} = state) do
     interval = setting(state, :setting_retry_flush_batch_interval)
     ref = Process.send_after(self(), :flush_batch, interval)
@@ -248,6 +276,40 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     %{state | flush_batch_timer_ref: nil}
   end
 
+  defp maybe_check_system(%State{} = state) do
+    check_bytes = Keyword.fetch!(state.check_system_interval, :bytes)
+
+    if state.check_system_bytes_processed_since_last_check >= check_bytes do
+      state
+      |> check_system()
+      |> Map.put(:check_system_bytes_processed_since_last_check, 0)
+    else
+      state
+    end
+  end
+
+  defp check_system(%State{} = state) do
+    case state.check_system_fn.() do
+      :ok ->
+        was_failing = state.check_system_last_status == :fail
+
+        state = if was_failing, do: maybe_ask_demand(state), else: state
+        %{state | check_system_last_status: :ok}
+
+      :fail ->
+        schedule_check_system_timer_retry(state)
+        %{state | check_system_last_status: :fail}
+    end
+  end
+
+  defp schedule_check_system_timer_retry(%State{check_system_timer_ref: nil} = state) do
+    retry_ms = Keyword.fetch!(state.check_system_interval, :retry_ms)
+    ref = Process.send_after(self(), :check_system, retry_ms)
+    %{state | check_system_timer_ref: ref}
+  end
+
+  defp schedule_check_system_timer_retry(state), do: state
+
   def setting(%State{} = state, setting) do
     case Map.fetch!(state, setting) do
       nil ->
@@ -262,6 +324,16 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
       setting ->
         setting
+    end
+  end
+
+  defp default_check_system_fn do
+    current_memory = :erlang.memory(:total)
+
+    if current_memory >= Application.get_env(:sequin, :max_memory_bytes) do
+      :fail
+    else
+      :ok
     end
   end
 end

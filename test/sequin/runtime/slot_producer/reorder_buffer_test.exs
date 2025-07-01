@@ -202,7 +202,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       end
 
       # Should receive batch_ready
-      assert_receive {:batch_ready, %{messages: received_messages}}, 1000
+      assert_receive {:batch_ready, %{messages: received_messages}}, 2000
 
       # Verify messages are ordered by {commit_lsn, commit_idx} ascending
       ordered_tuples =

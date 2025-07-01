@@ -1,6 +1,8 @@
 defmodule Sequin.DebouncedLoggerTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias Sequin.DebouncedLogger
   alias Sequin.DebouncedLogger.Config
 
@@ -140,9 +142,6 @@ defmodule Sequin.DebouncedLoggerTest do
     assert_receive {:log, :warning, "Message with merged metadata", metadata}
     assert Keyword.get(metadata, :existing_key) == "existing_value"
     assert Keyword.get(metadata, :request_id) == "req-456"
-
-    # Clean up
-    Logger.metadata(existing_key: nil)
   end
 
   test "counts accumulate correctly with many duplicates" do
@@ -171,9 +170,8 @@ defmodule Sequin.DebouncedLoggerTest do
       # logger_fun defaults to &Logger.bare_log/3
     }
 
-    # This should not crash and should use the real Logger
-    # We can't easily assert the output without capture_log, but we can
-    # verify it doesn't error
-    assert :ok = DebouncedLogger.warning("Real logger message", config)
+    assert capture_log(fn ->
+             DebouncedLogger.warning("Real logger message", config)
+           end) =~ "Real logger message"
   end
 end

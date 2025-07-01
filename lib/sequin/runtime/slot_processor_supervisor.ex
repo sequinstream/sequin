@@ -53,7 +53,7 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
 
     children = [
       {SlotProcessorServer, slot_opts},
-      {SlotProducer.Supervisor, Keyword.merge([replication_slot: slot], slot_producer_opts)}
+      {SlotProducer.Supervisor, Keyword.merge([replication_slot: slot, test_pid: opts[:test_pid]], slot_producer_opts)}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)

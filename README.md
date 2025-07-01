@@ -39,10 +39,19 @@ Sequin delivers industry-leading performance for change data capture (CDC), sust
 | **Sequin** | **>50 k ops / s** | **55 ms** | **253 ms** |
 | Debezium · MSK | 6 k ops / s | 258 ms | 499 ms |
 | Debezium · Server | 23 k ops / s | 210 ms  | 440 ms |
-| Fivetran | 5+ minutes | - | - |
-| Airbyte | 1+ hours | - | - |
+| Fivetran | - | 5+ minutes | - |
+| Airbyte | - | 1+ hours | - |
 
 Read more about our [benchmarking methodology and performance](https://sequinstream.com/docs/performance) in our docs.
+
+## Use cases
+
+Sequin works great for change data capture use cases like:
+
+- **[Streaming events](https://sequinstream.com/docs/how-to/trigger-automated-workflows):** Stream database changes as events for other services to consume using Kafka, SQS, Pub/Sub and more.
+- **[Audit logging](https://sequinstream.com/docs/how-to/create-audit-logs):** Track, enrich, and record every change in your database for compliance or feature development.
+- **[Maintaining a cache](https://sequinstream.com/docs/how-to/maintain-caches):** Keep application caches in sync with your database by streaming changes to Redis compliant caches.
+- **[Refreshing search indexes](https://sequinstream.com/docs/how-to/sync-search-indexes):** End-to-end tooling to warm search indexes like Typesense and Elasticsearch and keep them in sync with sub-second latency.
 
 ## Sinks
 
@@ -66,15 +75,6 @@ We're adding new destinations almost [every week](.CHANGELOG.md).
 | <img src="docs/images/introduction/sns.png" alt="SNS" width="24" height="24" /> | [SNS](https://sequinstream.com/docs/quickstart/sns) | [Reference](https://sequinstream.com/docs/reference/sinks/sns) | Send messages to Amazon SNS |
 | <img src="docs/images/introduction/typesense.png" alt="Typesense" width="24" height="24" /> | [Typesense](https://sequinstream.com/docs/quickstart/typesense) | [Reference](https://sequinstream.com/docs/reference/sinks/typesense) | Index database changes with Typesense |
 | <img src="docs/images/introduction/webhook.png" alt="Webhook" width="24" height="24" /> | [Webhooks (HTTP `POST`)](https://sequinstream.com/docs/quickstart/webhooks) | [Reference](https://sequinstream.com/docs/reference/sinks/webhooks) | Send changes to any HTTP endpoint |
-
-## Use cases
-
-Sequin works great for change data capture use cases like:
-
-- **[Streaming events](https://sequinstream.com/docs/how-to/trigger-automated-workflows):** Stream database changes as events for other services to consume using Kafka, SQS, Pub/Sub and more.
-- **[Audit logging](https://sequinstream.com/docs/how-to/create-audit-logs):** Track, enrich, and record every change in your database for compliance or feature development.
-- **[Maintaining a cache](https://sequinstream.com/docs/how-to/maintain-caches):** Keep application caches in sync with your database by streaming changes to Redis compliant caches.
-- **[Refreshing search indexes](https://sequinstream.com/docs/how-to/sync-search-indexes):** End-to-end tooling to warm search indexes like Typesense and Elasticsearch and keep them in sync with sub-second latency.
 
 ## Killer features
 

@@ -3,11 +3,16 @@ title: "AWS Kinesis sink"
 sidebarTitle: "AWS Kinesis sink"
 description: "Reference for configuring and using the AWS Kinesis sink with Sequin."
 ---
+
 The Kinesis sink sends messages to an Amazon Kinesis data stream.
 
 Kinesis is a durable, distributed, sharded queue that stores messages for up to 1 year, with ordering guaranteed within each shard based on partition keys.
 
 Unlike SQS or SNS, Kinesis maintains message ordering and enables multiple consumers to process the same data stream independently.
+
+<Tip>
+  This is the reference for the Kinesis sink. See the [quickstart](/quickstart/kinesis) for a step-by-step walkthrough or the [how-to guide](/how-to/stream-postgres-to-kinesis) for an explanation of how to use the Kinesis sink.
+</Tip>
 
 ## Configuration
 

@@ -42,14 +42,14 @@ defmodule Sequin.Runtime.TypesensePipeline do
 
   @impl SinkPipeline
   def handle_message(message, context) do
-    batcher =
-      case message.data.data.action do
-        :delete -> :delete
-        _ -> :default
-      end
-
-    %Routing.Consumers.Typesense{collection_name: collection_name} =
+    %Routing.Consumers.Typesense{action: action, collection_name: collection_name} =
       Routing.route_message(context.consumer, message.data)
+
+    batcher =
+      case action do
+        :index -> :default
+        :delete -> :delete
+      end
 
     message =
       message

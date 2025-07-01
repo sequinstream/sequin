@@ -90,15 +90,17 @@ Error messages from the Typesense API are passed through unchanged to the Sequin
 
 ## Routing
 
-The Typesense sink supports dynamic routing of the `collection_name` with [routing functions](/reference/routing).
+The Typesense sink supports dynamic routing of the `action` and `collection_name` with [routing functions](/reference/routing).
 
 Example routing function:
 
 ```elixir
 def route(action, record, changes, metadata) do
-  %{
-    collection_name: "sequin.#{metadata.database_name}.#{metadata.table_schema}.#{metadata.table_name}"
-  }
+  if record["deleted_at"] != nil do
+    %{collection_name: metadata.table_name, action: "delete"}
+  else
+    %{collection_name: metadata.table_name, action: "index"}
+  end
 end
 ```
 

@@ -132,6 +132,17 @@ services:
     volumes:
       - sequin_dev_elasticsearch:/usr/share/elasticsearch/data
 
+  typesense:
+    profiles: [typesense]
+    image: typesense/typesense:28.0
+    restart: on-failure
+    ports:
+      - "8108:8108"
+    volumes:
+      - ./typesense-data:/data
+    command: '--data-dir /data --api-key=xyz --enable-cors'
+
+
 
 volumes:
   sequin_dev_postgres:

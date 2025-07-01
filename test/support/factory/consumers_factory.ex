@@ -191,7 +191,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         endpoint_url: "http://127.0.0.1:7700",
         primary_key: "masterKey",
         index_name: Factory.word(),
-        api_key: Factory.word()
+        api_key: Factory.word(),
+        routing_mode: "static"
       },
       attrs
     )

@@ -134,7 +134,7 @@ defmodule Sequin.MixProject do
       {:floki, ">= 0.30.0", only: :test},
       {:uuid, "~> 1.1"},
       {:tidewave, "~> 0.1", only: :dev},
-      {:assert_eventually, "~> 1.0", only: :test}
+      {:assert_eventually, "~> 1.0", only: [:dev, :test]}
     ]
   end
 

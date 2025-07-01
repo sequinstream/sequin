@@ -362,7 +362,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
   @impl GenStage
   def handle_call(:status, _from, %State{} = state) do
-    {:reply, state.status, state}
+    {:reply, state.status, [], state}
   end
 
   defp maybe_log_message(%State{} = state) do

@@ -11,6 +11,7 @@ defmodule Sequin.PostgresReplicationTest do
   like isolating tests with partitioned tables. (Cost is low, at time of writing these tests take 0.6s)
   """
   use Sequin.DataCase, async: false
+  use AssertEventually, interval: 1
 
   alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
@@ -22,6 +23,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.TestEventLogFactory
   alias Sequin.Functions.TestMessages
+  alias Sequin.Postgres
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime
@@ -56,7 +58,7 @@ defmodule Sequin.PostgresReplicationTest do
   end
 
   describe "PostgresReplicationSlot end-to-end" do
-    setup do
+    setup ctx do
       # Create source database
       account_id = AccountsFactory.insert_account!().id
       source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id, pg_major_version: 17)
@@ -214,7 +216,8 @@ defmodule Sequin.PostgresReplicationTest do
       test_event_log_partitioned_consumer = Repo.preload(test_event_log_partitioned_consumer, :postgres_database)
       sup = Module.concat(__MODULE__, Runtime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
-      {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
+      start_opts = ctx |> Map.get(:start_opts, []) |> Keyword.put(:test_pid, self())
+      {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, start_opts)
 
       %{
         sup: sup,
@@ -734,6 +737,31 @@ defmodule Sequin.PostgresReplicationTest do
       # Assert the consumer event details
       assert consumer_event.consumer_id == consumer.id
       assert consumer_event.table_oid == TestEventLogPartitioned.table_oid()
+    end
+
+    @tag start_opts: [
+           heartbeat_interval: 1,
+           slot_producer: [slot_producer_opts: [ack_interval: 5, update_cursor_interval: 5]]
+         ]
+    test "replication slot advances even when database is idle", %{source_db: db} do
+      {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
+      assert_lsn_progress(init_lsn, db)
+    end
+
+    @tag start_opts: [
+           heartbeat_interval: :timer.minutes(1),
+           slot_producer: [slot_producer_opts: [ack_interval: 5, update_cursor_interval: 5]]
+         ]
+    test "replication slot advances after insert", %{source_db: db, event_character_consumer: consumer} do
+      {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
+
+      CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      assert_lsn_progress(init_lsn, db)
+      [consumer_event] = receive_messages(consumer, 1)
+      commit_lsn = consumer_event.commit_lsn
+
+      assert {:ok, ^commit_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
     end
 
     @tag :jepsen
@@ -1627,6 +1655,58 @@ defmodule Sequin.PostgresReplicationTest do
     end
   end
 
+  describe "PostgresReplicationSlot with no attached consumers/message stores" do
+    setup ctx do
+      # Create source database
+      account_id = AccountsFactory.insert_account!().id
+      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id, pg_major_version: 17)
+
+      ConnectionCache.cache_connection(source_db, UnboxedRepo)
+
+      # Create PostgresReplicationSlot entity
+      pg_replication =
+        ReplicationFactory.insert_postgres_replication!(
+          postgres_database_id: source_db.id,
+          slot_name: replication_slot(),
+          publication_name: @publication,
+          account_id: account_id,
+          status: :active
+        )
+
+      sup = Module.concat(__MODULE__, Runtime.Supervisor)
+      start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
+      start_opts = ctx |> Map.get(:start_opts, []) |> Keyword.put(:test_pid, self())
+      {:ok, _} = Runtime.Supervisor.start_replication(sup, pg_replication, start_opts)
+
+      %{
+        sup: sup,
+        pg_replication: pg_replication,
+        source_db: source_db
+      }
+    end
+
+    @tag start_opts: [
+           heartbeat_interval: 1,
+           slot_producer: [slot_producer_opts: [ack_interval: 5, update_cursor_interval: 5]]
+         ]
+    test "replication slot advances even when database is idle", %{source_db: db} do
+      {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
+      assert_lsn_progress(init_lsn, db)
+    end
+
+    @tag start_opts: [
+           heartbeat_interval: :timer.minutes(1),
+           slot_producer: [slot_producer_opts: [ack_interval: 5, update_cursor_interval: 5]]
+         ]
+    test "replication slot advances after insert", %{source_db: db} do
+      {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
+
+      CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      assert_lsn_progress(init_lsn, db)
+    end
+  end
+
   defp start_replication!(opts) do
     replication_slot_id = Keyword.get(opts, :replication_slot_id, "test_slot_id")
 
@@ -1726,5 +1806,25 @@ defmodule Sequin.PostgresReplicationTest do
       5_000 ->
         flunk("Did not receive :simple_http_server_loaded within 5 seconds")
     end
+  end
+
+  defp assert_lsn_progress(init_lsn, db) do
+    # Verify LSN progressed after heartbeats
+    assert_eventually(
+      (fn ->
+         case Postgres.confirmed_flush_lsn(db, replication_slot()) do
+           {:ok, current_lsn} ->
+             if current_lsn > init_lsn do
+               current_lsn
+             else
+               false
+             end
+
+           error ->
+             false
+         end
+       end).(),
+      1000
+    )
   end
 end

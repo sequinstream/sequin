@@ -431,24 +431,4 @@ defmodule Sequin.Runtime.SlotProducerTest do
   defp db_connect_opts(postgres_database) do
     PostgresDatabase.to_protocol_opts(postgres_database)
   end
-
-  # defp assert_lsn_progress(init_lsn, db) do
-  #   # Verify LSN progressed after heartbeats
-  #   assert_eventually(
-  #     (fn ->
-  #        case Postgres.confirmed_flush_lsn(db, replication_slot()) do
-  #          {:ok, current_lsn} ->
-  #            if current_lsn > init_lsn do
-  #              current_lsn
-  #            else
-  #              false
-  #            end
-
-  #          error ->
-  #            false
-  #        end
-  #      end).(),
-  #     1000
-  #   )
-  # end
 end

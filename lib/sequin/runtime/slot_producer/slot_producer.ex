@@ -297,7 +297,7 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   def handle_info(:send_ack, %State{} = state) do
-    Logger.info("[SlotProcessorServer] Sending ack for LSN #{state.restart_wal_cursor.commit_lsn}")
+    Logger.info("[SlotProducer] Sending ack for LSN #{state.restart_wal_cursor.commit_lsn}")
 
     msg = ack_message(state.restart_wal_cursor.commit_lsn)
     state = schedule_ack(%{state | ack_timer: nil})

@@ -19,8 +19,8 @@ defmodule Sequin.ConfigParserTest do
     end
 
     test "configures SSL for valid SSL settings" do
-      for ssl_value <- ["true", "1", "verify-none"] do
-        env = valid_redis_config(%{"REDIS_SSL" => ssl_value})
+      for ssl_value <- ["true", "1", "verify-none"], key <- ["REDIS_SSL", "REDIS_TLS"] do
+        env = valid_redis_config(%{key => ssl_value})
         config = ConfigParser.redis_config(env)
 
         assert config[:url] == "redis://localhost:6379"
@@ -29,8 +29,8 @@ defmodule Sequin.ConfigParserTest do
     end
 
     test "does not configure SSL for disabled SSL settings" do
-      for ssl_value <- ["false", "0"] do
-        env = valid_redis_config(%{"REDIS_SSL" => ssl_value})
+      for ssl_value <- ["false", "0"], key <- ["REDIS_SSL", "REDIS_TLS"] do
+        env = valid_redis_config(%{key => ssl_value})
         config = ConfigParser.redis_config(env)
 
         assert config[:url] == "redis://localhost:6379"
@@ -41,7 +41,15 @@ defmodule Sequin.ConfigParserTest do
     test "raises error for invalid REDIS_SSL value" do
       env = valid_redis_config(%{"REDIS_SSL" => "invalid"})
 
-      assert_raise ArgumentError, ~r/REDIS_SSL must be true, 1, verify-none, false, or 0/, fn ->
+      assert_raise ArgumentError, ~r/REDIS_TLS must be true, 1, verify-none, false, or 0/, fn ->
+        ConfigParser.redis_config(env)
+      end
+    end
+
+    test "raises error for invalid REDIS_TLS value" do
+      env = valid_redis_config(%{"REDIS_TLS" => "invalid"})
+
+      assert_raise ArgumentError, ~r/REDIS_TLS must be true, 1, verify-none, false, or 0/, fn ->
         ConfigParser.redis_config(env)
       end
     end
@@ -51,6 +59,162 @@ defmodule Sequin.ConfigParserTest do
       config = ConfigParser.redis_config(env)
 
       assert config[:url] == "rediss://localhost:6379"
+      assert config[:tls] == [verify: :verify_none]
+    end
+
+    test "configures TLS with CA certificate" do
+      # Create a temporary cert file for testing
+      cert_path = create_temp_cert_file()
+
+      env = valid_redis_config(%{"REDIS_TLS_CA_CERT_FILE" => cert_path})
+      config = ConfigParser.redis_config(env)
+
+      assert config[:tls] == [verify: :verify_peer, cacertfile: cert_path]
+
+      # Clean up
+      File.rm!(cert_path)
+    end
+
+    test "configures mTLS with client certificates" do
+      # Create temporary cert files for testing
+      ca_cert_path = create_temp_cert_file()
+      client_cert_path = create_temp_cert_file()
+      client_key_path = create_temp_cert_file()
+
+      env =
+        valid_redis_config(%{
+          "REDIS_TLS_CA_CERT_FILE" => ca_cert_path,
+          "REDIS_TLS_CLIENT_CERT_FILE" => client_cert_path,
+          "REDIS_TLS_CLIENT_KEY_FILE" => client_key_path
+        })
+
+      config = ConfigParser.redis_config(env)
+
+      expected_tls = [
+        verify: :verify_peer,
+        keyfile: client_key_path,
+        certfile: client_cert_path,
+        cacertfile: ca_cert_path
+      ]
+
+      assert config[:tls] == expected_tls
+
+      # Clean up
+      File.rm!(ca_cert_path)
+      File.rm!(client_cert_path)
+      File.rm!(client_key_path)
+    end
+
+    test "allows explicit verify_none with certificates" do
+      cert_path = create_temp_cert_file()
+
+      env =
+        valid_redis_config(%{
+          "REDIS_TLS_CA_CERT_FILE" => cert_path,
+          "REDIS_TLS_VERIFY" => "verify-none"
+        })
+
+      config = ConfigParser.redis_config(env)
+
+      assert config[:tls] == [verify: :verify_none, cacertfile: cert_path]
+
+      File.rm!(cert_path)
+    end
+
+    test "raises error when client cert file doesn't exist" do
+      env = valid_redis_config(%{"REDIS_TLS_CA_CERT_FILE" => "/nonexistent/ca.crt"})
+
+      assert_raise ArgumentError, ~r/No file exists for path provided for/, fn ->
+        ConfigParser.redis_config(env)
+      end
+    end
+
+    test "raises error when client cert is provided without key" do
+      cert_path = create_temp_cert_file()
+
+      env = valid_redis_config(%{"REDIS_TLS_CLIENT_CERT_FILE" => cert_path})
+
+      assert_raise ArgumentError,
+                   ~r/REDIS_TLS_CLIENT_KEY_FILE must be set when REDIS_TLS_CLIENT_CERT_FILE is provided/,
+                   fn ->
+                     ConfigParser.redis_config(env)
+                   end
+
+      File.rm!(cert_path)
+    end
+
+    test "raises error when client key is provided without cert" do
+      key_path = create_temp_cert_file()
+
+      env = valid_redis_config(%{"REDIS_TLS_CLIENT_KEY_FILE" => key_path})
+
+      assert_raise ArgumentError, ~r/REDIS_TLS_CLIENT_CERT_FILE must be set/, fn ->
+        ConfigParser.redis_config(env)
+      end
+
+      File.rm!(key_path)
+    end
+
+    test "raises error for invalid REDIS_TLS_VERIFY value" do
+      cert_path = create_temp_cert_file()
+
+      env =
+        valid_redis_config(%{
+          "REDIS_TLS_CA_CERT_FILE" => cert_path,
+          "REDIS_TLS_VERIFY" => "invalid_mode"
+        })
+
+      assert_raise ArgumentError, ~r/REDIS_TLS_VERIFY must be either 'verify-peer' or 'verify-none'/, fn ->
+        ConfigParser.redis_config(env)
+      end
+
+      File.rm!(cert_path)
+    end
+
+    test "REDIS_TLS=false disables TLS even with cert files" do
+      cert_path = create_temp_cert_file()
+
+      env =
+        valid_redis_config(%{
+          "REDIS_TLS" => "false",
+          "REDIS_TLS_CA_CERT_FILE" => cert_path
+        })
+
+      assert_raise ArgumentError, ~r/REDIS_TLS must be set to true/, fn ->
+        ConfigParser.redis_config(env)
+      end
+
+      File.rm!(cert_path)
+    end
+
+    test "TLS cert files take precedence over basic REDIS_TLS" do
+      cert_path = create_temp_cert_file()
+
+      env =
+        valid_redis_config(%{
+          "REDIS_TLS" => "true",
+          "REDIS_TLS_CA_CERT_FILE" => cert_path
+        })
+
+      config = ConfigParser.redis_config(env)
+
+      # Should use proper cert validation, not basic SSL
+      assert config[:tls] == [verify: :verify_peer, cacertfile: cert_path]
+
+      File.rm!(cert_path)
+    end
+
+    test "backward compatibility for REDIS_SSL: no cert files defaults to verify_none" do
+      env = valid_redis_config(%{"REDIS_SSL" => "true"})
+      config = ConfigParser.redis_config(env)
+
+      assert config[:tls] == [verify: :verify_none]
+    end
+
+    test "backward compatibility for REDIS_TLS: no cert files defaults to verify_none" do
+      env = valid_redis_config(%{"REDIS_TLS" => "true"})
+      config = ConfigParser.redis_config(env)
+
       assert config[:tls] == [verify: :verify_none]
     end
   end
@@ -150,5 +314,12 @@ defmodule Sequin.ConfigParserTest do
 
   defp valid_redis_config(attrs \\ %{}) do
     Map.merge(%{"REDIS_URL" => "redis://localhost:6379"}, attrs)
+  end
+
+  defp create_temp_cert_file do
+    # Create a temporary file with some dummy content for testing
+    path = Path.join(System.tmp_dir!(), "test_cert_#{System.unique_integer()}.crt")
+    File.write!(path, "dummy cert content")
+    path
   end
 end

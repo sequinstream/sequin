@@ -81,7 +81,17 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   @initial_route_typesense """
   def route(action, record, changes, metadata) do
+    typesense_action =
+      case action do
+        "insert" -> "index"
+        "update" -> "index"
+        "delete" -> "delete"
+        # backfills emit a read action
+        "read" -> "index"
+      end
+
     %{
+      action: typesense_action,
       collection_name: "\#{metadata.table_schema}.\#{metadata.table_name}"
     }
   end

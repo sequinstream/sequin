@@ -95,6 +95,13 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
   },
   typesense: {
     fields: {
+      action: {
+        description: "Typesense action to perform",
+        staticValue:
+          "'index' for insert, update, and read, 'delete' for delete",
+        dynamicDefault:
+          "'index' for insert, update, and read, 'delete' for delete",
+      },
       collection_name: {
         description: "Typesense collection name",
         staticValue: "<empty>",

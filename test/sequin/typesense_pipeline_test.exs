@@ -154,7 +154,11 @@ defmodule Sequin.Runtime.TypesensePipelineTest do
           function_type: :routing,
           function_attrs: %{
             body: """
-            %{collection_name: "router-collection"}
+            if record["deleted_at"] != nil do
+              %{collection_name: "router-collection", action: "delete"}
+            else
+              %{collection_name: "router-collection"}
+            end
             """
           }
         )
@@ -270,6 +274,41 @@ defmodule Sequin.Runtime.TypesensePipelineTest do
 
       assert_receive {:ack, _ref, successful, []}, 3000
       assert length(successful) == 3
+    end
+
+    test "router can change action to delete based on deleted_at field", %{consumer: consumer} do
+      test_pid = self()
+
+      message =
+        ConsumersFactory.consumer_message(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          data:
+            ConsumersFactory.consumer_message_data(
+              message_kind: consumer.message_kind,
+              action: :insert,
+              record: %{"id" => 123, "deleted_at" => "2024-01-01T00:00:00Z"}
+            )
+        )
+
+      adapter = fn request ->
+        send(test_pid, {:typesense_request, request})
+
+        assert request.method == :delete
+        assert request.url.path =~ "collections/router-collection/documents/123"
+        assert request.url.query == "ignore_not_found=true"
+
+        {request, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      send_test_batch(consumer, [message])
+
+      assert_receive {:typesense_request, _sink}, 3000
+
+      assert_receive {:ack, _ref, [success], []}, 3000
+      assert success.data == message
     end
   end
 

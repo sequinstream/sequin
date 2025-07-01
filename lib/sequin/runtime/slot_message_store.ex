@@ -87,6 +87,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     %SinkConsumer{} = consumer = Consumers.get_sink_consumer!(consumer_id)
 
     Logger.metadata(consumer_id: consumer_id)
+    Sequin.name_process({__MODULE__, {consumer_id, partition}})
     ProcessMetrics.metadata(%{consumer_id: consumer_id, consumer_name: consumer.name, partition: partition})
     Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
 

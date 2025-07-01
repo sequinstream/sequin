@@ -180,6 +180,18 @@ defmodule Sequin.Runtime.SlotProducer do
 
   @impl GenStage
   def init(opts) do
+    id = Keyword.fetch!(opts, :id)
+    database_id = Keyword.fetch!(opts, :database_id)
+    account_id = Keyword.fetch!(opts, :account_id)
+
+    Sequin.name_process({__MODULE__, id})
+
+    Logger.metadata(
+      account_id: account_id,
+      replication_id: id,
+      database_id: database_id
+    )
+
     connect_opts = Keyword.fetch!(opts, :connect_opts)
 
     connect_opts = Keyword.put(connect_opts, :parameters, replication: "database")

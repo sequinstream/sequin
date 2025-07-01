@@ -401,6 +401,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
         [
           id: UUID.uuid4(),
           database_id: db.id,
+          account_id: db.account_id,
           slot_name: replication_slot(),
           publication_name: @publication,
           pg_major_version: 17,

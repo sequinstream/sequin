@@ -169,6 +169,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       database_id: state.postgres_database.id
     )
 
+    Sequin.name_process({__MODULE__, state.id})
+
     ProcessMetrics.metadata(%{replication_id: state.id, slot_name: state.slot_name})
 
     Logger.info("[SlotProcessorServer] Initialized")

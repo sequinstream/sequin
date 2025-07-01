@@ -49,6 +49,7 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
       Keyword.merge(
         [
           id: pipeline_id,
+          account_id: postgres_database.account_id,
           database_id: postgres_database.id,
           slot_name: replication_slot.slot_name,
           publication_name: replication_slot.publication_name,
@@ -72,6 +73,8 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
              [
                id: pipeline_id,
                partition_idx: partition_idx,
+               account_id: postgres_database.account_id,
+
                # Subscribe to SlotProducer in init - subscribe_to can be overridden for tests
                subscribe_to: [
                  {SlotProducer.via_tuple(pipeline_id), []}
@@ -88,6 +91,7 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
         [
           id: pipeline_id,
           producer_partitions: partition_count,
+          account_id: postgres_database.account_id,
           flush_batch_fn: &PipelineDefaults.flush_batch/2,
           # Subscribe to all Processor partitions via subscribe_to in init
           subscribe_to:

@@ -95,10 +95,16 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
   @impl GenStage
   def init(opts) do
     id = Keyword.fetch!(opts, :id)
+    account_id = Keyword.fetch!(opts, :account_id)
+    partition_idx = Keyword.fetch!(opts, :partition_idx)
+
+    Logger.metadata(replication_id: id, account_id: account_id)
+
+    Sequin.name_process({__MODULE__, {id, partition_idx}})
 
     state = %State{
       id: id,
-      partition_idx: Keyword.fetch!(opts, :partition_idx)
+      partition_idx: partition_idx
     }
 
     # Get subscription configuration - default to empty for manual subscriptions

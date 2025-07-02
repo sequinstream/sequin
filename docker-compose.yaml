@@ -145,7 +145,7 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.15
     profiles: [meilisearch]
-    command: 'meilisearch --master-key="dc088a8f287a40a2b21948c081e7d821"'
+    command: 'meilisearch --master-key="masterKey"'
     ports:
       - "7700:7700"
     volumes:

@@ -96,7 +96,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       assert {lsn2, idx2} <= {lsn3, idx3}
 
       # Verify batch marker has correct epoch and high watermark
-      assert batch1.epoch == 0
+      assert batch1.idx == 0
       assert is_integer(batch1.high_watermark_wal_cursor.commit_lsn)
       assert batch1.high_watermark_wal_cursor.commit_lsn == lsn3
       assert batch1.high_watermark_wal_cursor.commit_idx == idx3
@@ -108,7 +108,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       [batch2] = receive_messages_batched(3)
       messages = batch2.messages
 
-      assert batch2.epoch == 1
+      assert batch2.idx == 1
       # Two update messages
       assert Enum.all?(messages, fn msg -> msg.message.action == :update end)
 

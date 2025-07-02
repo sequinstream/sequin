@@ -72,7 +72,6 @@ defmodule Sequin.Application do
   end
 
   defp base_children do
-    topologies = Application.get_env(:libcluster, :topologies)
     Sequin.Redis.connect_cluster()
 
     [
@@ -93,7 +92,6 @@ defmodule Sequin.Application do
       Sequin.Sinks.RabbitMq.ConnectionCache,
       SequinWeb.Presence,
       Sequin.SystemMetricsServer,
-      {Cluster.Supervisor, [topologies]},
       {Task, fn -> enqueue_workers() end},
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint,

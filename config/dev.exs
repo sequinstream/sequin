@@ -1,15 +1,5 @@
 import Config
 
-config :libcluster,
-  topologies: [
-    sequin: [
-      strategy: Sequin.Libcluster.PostgresStrategy,
-      config: [
-        channel_name: "sequin_cluster_dev"
-      ]
-    ]
-  ]
-
 config :mix_test_interactive,
   clear: true
 

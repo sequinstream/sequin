@@ -110,6 +110,7 @@ config :sequin,
   redis_module: Sequin.Sinks.RedisMock,
   kafka_module: Sequin.Sinks.KafkaMock,
   nats_module: Sequin.Sinks.NatsMock,
+  rabbitmq_module: Sequin.Sinks.RabbitMqMock,
   # Arbitrarily high memory limit for testing
   max_memory_bytes: 100 * 1024 * 1024 * 1024,
   slot_message_store: [flush_batch_size: 8],

@@ -9,9 +9,23 @@
   import { Label } from "$lib/components/ui/label";
   import { Switch } from "$lib/components/ui/switch";
   import { Eye, EyeOff } from "lucide-svelte";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
+  import { Textarea } from "$lib/components/ui/textarea";
 
   export let form;
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
   export let errors: any = {};
+  let isDynamicRouting = form.routingMode === "dynamic";
+  let headersString = JSON.stringify(form.sink.headers || {}, null, 2);
+  $: form.sink.headers = (() => {
+    try {
+      return headersString.trim() ? JSON.parse(headersString) : {};
+    } catch {
+      return {};
+    }
+  })();
   let showPassword = false;
 
   function togglePasswordVisibility() {
@@ -99,18 +113,6 @@
       {/if}
     </div>
 
-    <div class="space-y-2">
-      <Label for="exchange">Exchange</Label>
-      <Input
-        id="exchange"
-        bind:value={form.sink.exchange}
-        placeholder="amq.fanout"
-      />
-      {#if errors.sink?.exchange}
-        <p class="text-destructive text-sm">{errors.sink.exchange}</p>
-      {/if}
-    </div>
-
     <div class="flex items-center gap-2">
       <Switch
         id="tls"
@@ -124,5 +126,48 @@
         <p class="text-destructive text-sm">{errors.sink.tls}</p>
       {/if}
     </div>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      routedSinkType="rabbitmq"
+      bind:selectedDynamic={isDynamicRouting}
+      {errors}
+    />
+
+    {#if !isDynamicRouting}
+      <div class="space-y-2">
+        <Label for="exchange">Exchange</Label>
+        <Input
+          id="exchange"
+          bind:value={form.sink.exchange}
+          placeholder="amq.fanout"
+        />
+        {#if errors.sink?.exchange}
+          <p class="text-destructive text-sm">{errors.sink.exchange}</p>
+        {/if}
+      </div>
+
+      <div class="space-y-2">
+        <Label for="headers">Headers (JSON map)</Label>
+        <Textarea
+          id="headers"
+          bind:value={headersString}
+          placeholder="Enter headers as JSON"
+        />
+        {#if errors.sink?.headers}
+          <p class="text-destructive text-sm">{errors.sink.headers}</p>
+        {/if}
+      </div>
+    {/if}
   </CardContent>
 </Card>

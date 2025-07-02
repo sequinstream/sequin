@@ -900,7 +900,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       username: sink.username,
       virtual_host: sink.virtual_host,
       tls: sink.tls,
-      topic: topic
+      topic: topic,
+      headers: sink.headers
     }
   end
 

@@ -278,7 +278,9 @@ defmodule Sequin.Factory.ConsumersFactory do
         type: :rabbitmq,
         host: "localhost",
         port: 5672,
-        exchange: "test-exchange"
+        exchange: "test-exchange",
+        headers: %{},
+        routing_mode: "static"
       },
       attrs
     )

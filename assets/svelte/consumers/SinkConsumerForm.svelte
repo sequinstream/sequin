@@ -575,7 +575,13 @@
         bind:functionRefreshState
       />
     {:else if consumer.type === "rabbitmq"}
-      <RabbitMqSinkForm errors={errors.consumer} bind:form />
+      <RabbitMqSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {:else if consumer.type === "azure_event_hub"}
       <AzureEventHubSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "typesense"}

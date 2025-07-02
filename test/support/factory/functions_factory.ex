@@ -159,7 +159,8 @@ defmodule Sequin.Factory.FunctionsFactory do
           :meilisearch,
           :elasticsearch,
           :sqs,
-          :sns
+          :sns,
+          :rabbitmq
         ])
       end)
 
@@ -235,6 +236,13 @@ defmodule Sequin.Factory.FunctionsFactory do
             """
             %{
               index_name: metadata.table_name
+            }
+            """
+
+          :rabbitmq ->
+            """
+            %{
+              exchange_name: metadata.table_name
             }
             """
         end

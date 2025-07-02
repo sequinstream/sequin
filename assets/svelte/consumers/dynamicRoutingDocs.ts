@@ -167,4 +167,27 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  rabbitmq: {
+    fields: {
+      exchange: {
+        description: "RabbitMQ exchange to publish to",
+        staticValue: "<empty>",
+        staticFormField: "exchange",
+        dynamicDefault: "<empty>",
+      },
+      routing_key: {
+        description: "RabbitMQ routing key to publish to",
+        staticValue:
+          "sequin.<database_name>.<table_schema>.<table_name>.<action>",
+        dynamicDefault:
+          "sequin.<database_name>.<table_schema>.<table_name>.<action>",
+      },
+      headers: {
+        description: "Map of header key value pairs",
+        staticValue: "%{}",
+        staticFormField: "headers",
+        dynamicDefault: "%{}",
+      },
+    },
+  },
 };

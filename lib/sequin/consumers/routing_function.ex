@@ -25,6 +25,7 @@ defmodule Sequin.Consumers.RoutingFunction do
         :typesense,
         :meilisearch,
         :elasticsearch,
+        :rabbitmq,
         :sqs
       ]
 

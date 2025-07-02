@@ -86,11 +86,11 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       2. Find the "Bindings" section and expand it if needed
       3. In "Add binding to this queue", enter:
          - From exchange: sequin
-         - Routing key: `sequin.changes.sequin-playground.public.products.*`
+         - Routing key: `sequin.sequin_playground.public.products.*`
       4. Click "Bind"
 
       This routing key pattern will match all changes to the products table. The format is:
-      `sequin.changes.<database>.<schema>.<table>.<action>`
+      `sequin.<database_name>.<table_schema>.<table_name>.<action>`
 
       <Frame>
         <img style={{ maxWidth: '700px' }} src="/images/quickstart/rabbitmq/add-binding.png" alt="Adding a binding in RabbitMQ" />

@@ -105,6 +105,7 @@
     kafka: "Kafka",
     meilisearch: "Meilisearch",
     nats: "NATS",
+    rabbitmq: "RabbitMQ",
     redis_stream: "Redis Stream",
     redis_string: "Redis String",
     typesense: "Typesense",

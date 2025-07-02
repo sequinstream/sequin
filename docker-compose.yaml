@@ -142,6 +142,15 @@ services:
       - ./typesense-data:/data
     command: '--data-dir /data --api-key=xyz --enable-cors'
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.15
+    command: 'meilisearch --master-key="dc088a8f287a40a2b21948c081e7d821"'
+    ports:
+      - "7700:7700"
+    volumes:
+      - ./meilisearch-data:/meili_data
+    restart: on-failure
+
 
 
 volumes:

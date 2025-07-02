@@ -99,7 +99,16 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   @initial_route_meilisearch """
   def route(action, record, changes, metadata) do
+    meilisearch_action =
+      case action do
+        "insert" -> "index"
+        "update" -> "index"
+        "delete" -> "delete"
+        # backfills emit a read action
+        "read" -> "index"
+      end
     %{
+      action: meilisearch_action,
       index_name: "\#{metadata.table_schema}.\#{metadata.table_name}"
     }
   end

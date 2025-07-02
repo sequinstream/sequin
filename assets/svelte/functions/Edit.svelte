@@ -841,18 +841,9 @@ Please help me create or modify the Elixir function transform to achieve the des
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem
-                    value="http_push"
-                    label={sinkTypeInternalToExternal.http_push}
-                  />
-                  <SelectItem
-                    value="redis_string"
-                    label={sinkTypeInternalToExternal.redis_string}
-                  />
-                  <SelectItem
-                    value="nats"
-                    label={sinkTypeInternalToExternal.nats}
-                  />
+                  {#each Object.entries(sinkTypeInternalToExternal) as [value, label]}
+                    <SelectItem {value} {label} />
+                  {/each}
                 </SelectContent>
               </Select>
               {#if showErrors && formErrors.function?.sink_type}

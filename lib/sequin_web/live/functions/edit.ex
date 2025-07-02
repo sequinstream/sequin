@@ -216,7 +216,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   # We generate the function completions at compile time because
   # docs are not available at runtime in our release.
-  @function_completions AutoComplete.function_completions()
+  @all_completions AutoComplete.all_completions()
 
   @impl Phoenix.LiveView
   def mount(params, _session, socket) do
@@ -264,7 +264,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
         selected_table_oid: nil,
         synthetic_test_message: Consumers.synthetic_message(),
         initial_code: @initial_code_map,
-        function_completions: @function_completions,
+        all_completions: @all_completions,
         function_transforms_enabled: Sequin.feature_enabled?(current_account_id(socket), :function_transforms)
       )
       |> assign_encoded_messages()
@@ -292,7 +292,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
             initialCodeMap: @initial_code,
             initialCode: "glugma",
             functionTransformsEnabled: @function_transforms_enabled,
-            functionCompletions: @function_completions
+            completions: @all_completions
           }
         }
         socket={@socket}

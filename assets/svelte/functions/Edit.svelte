@@ -82,7 +82,7 @@
   export let usedByConsumers: Consumer[] = [];
   export let initialCodeMap: Record<string, string>;
   export let functionTransformsEnabled: boolean;
-  export let functionCompletions: Array<{
+  export let completions: Array<{
     label: string;
     type: string;
     info: string;
@@ -218,7 +218,7 @@
 
     return {
       from: word.from,
-      options: [...variableCompletions, ...functionCompletions],
+      options: [...variableCompletions, ...completions],
     };
   };
 

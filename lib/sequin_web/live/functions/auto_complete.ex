@@ -1,5 +1,6 @@
 defmodule SequinWeb.FunctionLive.AutoComplete do
   @moduledoc false
+  @reserved_words ~w(do if else end case cond for with fn)
   @function_completion_modules [
     Date,
     DateTime,
@@ -12,6 +13,14 @@ defmodule SequinWeb.FunctionLive.AutoComplete do
     URI,
     Base
   ]
+
+  def all_completions do
+    reserved_completions() ++ function_completions()
+  end
+
+  def reserved_completions do
+    Enum.map(@reserved_words, &%{label: &1, type: "keyword"})
+  end
 
   def function_completions do
     Enum.flat_map(@function_completion_modules, &function_completions/1)

@@ -34,6 +34,7 @@ The following sinks support dynamic routing:
 
 - HTTP Push
 - Redis String
+- Redis Stream
 - NATS
 - Kafka
 - GCP PubSub
@@ -76,6 +77,14 @@ The `key` is used to determine the key in Redis where the message will be stored
 ```redis
 SET key value
 ```
+
+### Redis Stream sink
+
+For [Redis Stream](/reference/sinks/redis-stream), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `stream_key` | String | The stream key to publish to | `"users"` |
 
 ### NATS sink
 

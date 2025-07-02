@@ -57,6 +57,16 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  redis_stream: {
+    fields: {
+      stream_key: {
+        description: "The Redis stream key to XADD messages to",
+        staticValue: "<empty>",
+        staticFormField: "streamKey",
+        dynamicDefault: "sequin.<table_schema>.<table_name>",
+      },
+    },
+  },
   nats: {
     fields: {
       subject: {

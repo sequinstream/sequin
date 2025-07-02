@@ -85,6 +85,7 @@ defmodule Sequin.Runtime.Routing do
     case sink_type do
       :http_push -> Sequin.Runtime.Routing.Consumers.HttpPush
       :redis_string -> Sequin.Runtime.Routing.Consumers.RedisString
+      :redis_stream -> Sequin.Runtime.Routing.Consumers.RedisStream
       :nats -> Sequin.Runtime.Routing.Consumers.Nats
       :kafka -> Sequin.Runtime.Routing.Consumers.Kafka
       :gcp_pubsub -> Sequin.Runtime.Routing.Consumers.GcpPubsub

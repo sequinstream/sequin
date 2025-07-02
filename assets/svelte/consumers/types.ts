@@ -284,6 +284,7 @@ export type SinkType = (typeof SinkTypeValues)[number];
 export const RoutedSinkTypeValues = [
   "http_push",
   "redis_string",
+  "redis_stream",
   "nats",
   "kafka",
   "gcp_pubsub",

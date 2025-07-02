@@ -2,23 +2,20 @@ defmodule Sequin.Sinks.Redis do
   @moduledoc false
   import Sequin.Consumers.Guards, only: [is_redis_sink: 1]
 
-  alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Runtime.Routing.RoutedMessage
 
-  @callback send_messages(SinkConsumer.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
-              :ok | {:error, Error.t()}
+  @callback send_messages(SinkConsumer.t(), [RoutedMessage.t()]) :: :ok | {:error, Error.t()}
 
   @callback set_messages(RedisStringSink.t(), [RoutedMessage.t()]) :: :ok | {:error, Error.t()}
   @callback message_count(RedisStreamSink.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   @callback client_info(RedisStreamSink.t()) :: {:ok, String.t()} | {:error, Error.t()}
   @callback test_connection(RedisStreamSink.t()) :: :ok | {:error, Error.t()}
 
-  @spec send_messages(SinkConsumer.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
-          :ok | {:error, Error.t()}
+  @spec send_messages(SinkConsumer.t(), [RoutedMessage.t()]) :: :ok | {:error, Error.t()}
   def send_messages(%SinkConsumer{} = consumer, messages) do
     impl().send_messages(consumer, messages)
   end

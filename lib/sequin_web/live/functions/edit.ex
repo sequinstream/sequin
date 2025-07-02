@@ -64,6 +64,12 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_redis_stream """
+  def route(action, record, changes, metadata) do
+    %{stream_key: "sequin.\#{metadata.table_schema}.\#{metadata.table_name}"}
+  end
+  """
+
   @initial_route_nats """
   def route(action, record, changes, metadata) do
     %{
@@ -146,6 +152,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_gcp_pubsub" => @initial_route_gcp_pubsub,
     "routing_typesense" => @initial_route_typesense,
     "routing_meilisearch" => @initial_route_meilisearch,
+    "routing_redis_stream" => @initial_route_redis_stream,
     "routing_elasticsearch" => @initial_route_elasticsearch,
     "routing_sqs" => @initial_route_sqs
   }

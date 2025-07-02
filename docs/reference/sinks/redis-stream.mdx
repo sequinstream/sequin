@@ -97,6 +97,20 @@ Sequin `XADD`s messages to the Redis stream in the same order that they are rece
 
 For example, if you are using a Redis stream as an audit log, you can process messages in order by their ID to reconstruct the state of the audited object at any point in time. Or if you are maintaining a materialized view of the stream, you can safely upsert to the view as long as the incoming ID is greater than the last processed ID.
 
+## Routing
+
+The Redis Stream sink supports dynamic routing of the `stream_key` with [routing functions](/reference/routing).
+
+Example routing function:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{stream_key: metadata.table_name}
+end
+```
+
+When not using a routing function, messages will be appended to the statically configured stream.
+
 ## Security
 
 Sequin supports the following security features for Redis connections:

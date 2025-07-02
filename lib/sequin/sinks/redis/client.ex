@@ -116,24 +116,24 @@ defmodule Sequin.Sinks.Redis.Client do
       {:error, handle_error(error)}
   end
 
-  defp xadd_commands(%SinkConsumer{sink: %RedisStreamSink{} = sink}, messages) do
-    Enum.map(messages, fn message ->
-      unless is_map(message.data) do
+  defp xadd_commands(%SinkConsumer{}, messages) do
+    Enum.map(messages, fn %RoutedMessage{routing_info: %{stream_key: stream_key}, transformed_message: data} ->
+      unless is_map(data) do
         raise Error.validation(
                 summary: "Message data must be a map for Redis Stream sinks",
-                details: "Got #{inspect(message.data)}"
+                details: "Got #{inspect(data)}"
               )
       end
 
       fields =
-        message.data
+        data
         |> Map.to_list()
         |> Enum.flat_map(fn {key, value} ->
           value = if is_binary(value), do: value, else: Jason.encode!(value)
           [key, value]
         end)
 
-      ["XADD", sink.stream_key, "*" | fields]
+      ["XADD", stream_key, "*" | fields]
     end)
   end
 

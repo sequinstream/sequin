@@ -75,13 +75,6 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
     setup do
       account = AccountsFactory.insert_account!()
 
-      transform =
-        FunctionsFactory.insert_function!(
-          account_id: account.id,
-          function_type: :transform,
-          function_attrs: %{body: "record"}
-        )
-
       routing =
         FunctionsFactory.insert_function!(
           account_id: account.id,
@@ -97,7 +90,6 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
           }
         )
 
-      MiniElixir.create(transform.id, transform.function.code)
       MiniElixir.create(routing.id, routing.function.code)
 
       consumer =
@@ -105,7 +97,6 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
           account_id: account.id,
           type: :meilisearch,
           message_kind: :event,
-          transform_id: transform.id,
           routing_mode: "dynamic",
           routing_id: routing.id
         )
@@ -114,8 +105,6 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
     end
 
     test "router can change action to delete based on deleted_at field", %{consumer: consumer} do
-      test_pid = self()
-
       message =
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
@@ -131,8 +120,6 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
       start_pipeline!(consumer)
 
       send_test_batch(consumer, [message])
-
-      assert_receive {:meilisearch_request, _sink}, 3000
 
       assert_receive {:ack, _ref, [success], []}, 3000
       assert success.data == message

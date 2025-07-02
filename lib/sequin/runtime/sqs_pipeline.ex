@@ -6,6 +6,7 @@ defmodule Sequin.Runtime.SqsPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Error
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
 
   require Logger
@@ -28,9 +29,21 @@ defmodule Sequin.Runtime.SqsPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_message(message, context) do
+    %{consumer: consumer, test_pid: test_pid} = context
+    setup_allowances(test_pid)
+
+    %Routing.Consumers.Sqs{queue_url: queue_url} = Routing.route_message(consumer, message.data)
+
+    message = Broadway.Message.put_batch_key(message, queue_url)
+
+    {:ok, message, context}
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, %{batch_key: queue_url}, context) do
     %{
-      consumer: %SinkConsumer{sink: sink} = consumer,
+      consumer: %SinkConsumer{} = consumer,
       sqs_client: sqs_client,
       test_pid: test_pid
     } = context
@@ -42,7 +55,7 @@ defmodule Sequin.Runtime.SqsPipeline do
         build_sqs_message(consumer, data)
       end)
 
-    case SQS.send_messages(sqs_client, sink.queue_url, sqs_messages) do
+    case SQS.send_messages(sqs_client, queue_url, sqs_messages) do
       :ok ->
         {:ok, messages, context}
 
@@ -58,6 +71,7 @@ defmodule Sequin.Runtime.SqsPipeline do
       id: UUID.uuid4()
     }
 
+    # TODO Consider moving this to routing layer
     if consumer.sink.is_fifo do
       message
       |> Map.put(:message_deduplication_id, record_or_event.data.metadata.idempotency_key)

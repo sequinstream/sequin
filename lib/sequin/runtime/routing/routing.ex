@@ -91,6 +91,7 @@ defmodule Sequin.Runtime.Routing do
       :typesense -> Sequin.Runtime.Routing.Consumers.Typesense
       :meilisearch -> Sequin.Runtime.Routing.Consumers.Meilisearch
       :elasticsearch -> Sequin.Runtime.Routing.Consumers.Elasticsearch
+      :sqs -> Sequin.Runtime.Routing.Consumers.Sqs
       _ -> nil
     end
   end
@@ -104,12 +105,9 @@ defmodule Sequin.Runtime.Routing do
     # TODO Consider memoizing this call
     default_routing_map = routing_module.route(to_string(action), record, changes, Map.from_struct(metadata))
 
-    # Convert the map returned by route() to a validated struct
-    default_routing =
-      case Helpers.validate_attributes(routing_module, default_routing_map) do
-        {:ok, validated_struct} -> validated_struct
-        {:error, error} -> raise "Invalid routing from route/4: #{inspect(error)}"
-      end
+    # Convert the map returned by route() to a struct without validation
+    # Validation will be performed later after merging with sink/custom routing
+    default_routing = Helpers.create_struct_without_validation(routing_module, default_routing_map)
 
     case consumer.routing do
       nil ->

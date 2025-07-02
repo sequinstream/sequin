@@ -71,6 +71,7 @@ export type SqsConsumer = BaseConsumer & {
     region: string;
     is_fifo: boolean;
   };
+  routing_mode?: "static" | "dynamic";
 };
 
 // Kinesis specific sink
@@ -289,6 +290,7 @@ export const RoutedSinkTypeValues = [
   "typesense",
   "meilisearch",
   "elasticsearch",
+  "sqs",
 ] as const;
 
 export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

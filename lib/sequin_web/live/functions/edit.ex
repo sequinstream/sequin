@@ -109,6 +109,14 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_sqs """
+  def route(action, record, changes, metadata) do
+    %{
+      queue_url: "https://sqs.<region>.amazonaws.com/<account_id>/<queue-name>"
+    }
+  end
+  """
+
   @initial_filter """
   def filter(action, record, changes, metadata) do
     # Must return true or false!
@@ -128,7 +136,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_gcp_pubsub" => @initial_route_gcp_pubsub,
     "routing_typesense" => @initial_route_typesense,
     "routing_meilisearch" => @initial_route_meilisearch,
-    "routing_elasticsearch" => @initial_route_elasticsearch
+    "routing_elasticsearch" => @initial_route_elasticsearch,
+    "routing_sqs" => @initial_route_sqs
   }
 
   # We generate the function completions at compile time because

@@ -52,19 +52,11 @@ defmodule Sequin.Runtime.Routing.Helpers do
   end
 
   @doc """
-  Generic validate_attributes implementation that can be used by all routing modules.
-  Takes a module and attributes, creates a struct, runs changeset validation.
-
-  ## Examples
-
-      iex> validate_attributes(MyRoutingModule, %{valid: "attrs"})
-      {:ok, %MyRoutingModule{}}
-
-      iex> validate_attributes(MyRoutingModule, %{invalid: "attrs"})
-      {:error, %Ecto.Changeset{}}
+  Creates a struct from a module and attributes without validation.
+  This allows for partial/incomplete structs that will be validated later.
   """
-  def validate_attributes(module, attrs) when is_map(attrs) do
-    merge_and_validate(struct(module), attrs)
+  def create_struct_without_validation(module, attrs) when is_map(attrs) do
+    struct(module, attrs)
   end
 
   @doc """

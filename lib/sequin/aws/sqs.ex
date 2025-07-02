@@ -245,6 +245,28 @@ defmodule Sequin.Aws.SQS do
     end
   end
 
+  @doc """
+  Test SQS credentials and basic permissions without requiring a specific queue.
+  This is useful for dynamic routing scenarios where the queue URL is not known at configuration time.
+  """
+  @spec test_credentials_and_permissions(Client.t()) :: :ok | {:error, Error.t()}
+  def test_credentials_and_permissions(%Client{} = client) do
+    case AWS.SQS.list_queues(client, %{}) do
+      {:ok, _response, %{status_code: 200}} ->
+        :ok
+
+      {:error, {:unexpected_response, details}} ->
+        Logger.debug("[SQS] Failed to list queues for credential test: #{inspect(details)}")
+        handle_unexpected_response(details)
+
+      {:error, error} ->
+        Logger.debug("[SQS] Failed to list queues for credential test: #{inspect(error)}")
+
+        {:error,
+         Error.service(service: :aws_sqs, message: "Failed to test SQS credentials and permissions", details: error)}
+    end
+  end
+
   @spec queue_meta(Client.t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def queue_meta(%Client{} = client, queue_url) do
     case AWS.SQS.get_queue_attributes(

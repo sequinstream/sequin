@@ -433,7 +433,7 @@ defmodule Sequin.Factory.ReplicationFactory do
       fields: [],
       subscription_ids: [],
       byte_size: Faker.random_between(100, 10_000),
-      batch_epoch: Faker.random_between(0, 10)
+      batch_idx: Faker.random_between(0, 10)
     }
 
     merge_attributes(
@@ -446,7 +446,7 @@ defmodule Sequin.Factory.ReplicationFactory do
         payload: "",
         message: slot_processor_message,
         transaction_annotations: slot_processor_message.transaction_annotations,
-        batch_epoch: slot_processor_message.batch_epoch
+        batch_idx: slot_processor_message.batch_idx
       },
       attrs
     )
@@ -457,7 +457,7 @@ defmodule Sequin.Factory.ReplicationFactory do
 
     merge_attributes(
       %Sequin.Runtime.SlotProducer.BatchMarker{
-        epoch: Faker.random_between(0, 10),
+        idx: Faker.random_between(0, 10),
         high_watermark_wal_cursor: %{
           commit_lsn: Factory.unique_integer(),
           commit_idx: Faker.random_between(0, 100)

@@ -54,9 +54,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       field :slot_name, String.t()
       field :test_pid, pid()
 
-      # Current state tracking
-      field :last_commit_lsn, integer()
-
       # Buffers
       field :backfill_watermark_messages, [LogicalMessage.t()], default: []
 
@@ -110,7 +107,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
       message_handler_module: message_handler_module,
-      last_commit_lsn: nil,
       heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15))
     }
 
@@ -472,8 +468,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       is_nil(state.current_heartbeat_id) and is_nil(state.heartbeat_emitted_at) ->
         {:error, :no_heartbeat}
 
-      not is_nil(state.heartbeat_emitted_lsn) and not is_nil(state.last_commit_lsn) and
-          state.last_commit_lsn > state.heartbeat_emitted_lsn ->
+      not is_nil(state.heartbeat_emitted_lsn) and not is_nil(state.last_flushed_high_watermark) and
+          state.last_flushed_high_watermark.commit_lsn > state.heartbeat_emitted_lsn ->
         {:error, :lsn_advanced}
 
       # We have an outstanding heartbeat and we have received a message since it was emitted
@@ -492,7 +488,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       not is_nil(state.current_heartbeat_id) ->
         {:error, :stale_connection}
 
-      is_nil(state.last_commit_lsn) ->
+      is_nil(state.last_flushed_high_watermark) ->
         {:error, :no_last_commit_lsn}
     end
   end

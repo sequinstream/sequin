@@ -39,8 +39,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
     typedstruct do
       field :id, String.t()
-      field :pending_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
-      field :ready_batches_by_epoch, %{non_neg_integer() => Batch.t()}, default: %{}
+      field :pending_batches_by_idx, %{non_neg_integer() => Batch.t()}, default: %{}
+      field :ready_batches_by_idx, %{non_neg_integer() => Batch.t()}, default: %{}
       field :flush_batch_fn, (PostgresReplicationSlot.id(), Batch.t() -> :ok)
       field :producer_partition_count, non_neg_integer()
       field :producer_subscriptions, [%{producer: pid(), demand: integer()}], default: []
@@ -114,15 +114,15 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   def handle_info(:flush_batch, %State{} = state) do
-    # Order ready batches by epoch and ensure epoch ordering
-    ready_epoch = state.ready_batches_by_epoch |> Map.keys() |> Enum.min()
-    {batch, ready_batches} = Map.pop(state.ready_batches_by_epoch, ready_epoch)
+    # Order ready batches by idx and ensure idx ordering
+    ready_idx = state.ready_batches_by_idx |> Map.keys() |> Enum.min()
+    {batch, ready_batches} = Map.pop(state.ready_batches_by_idx, ready_idx)
 
     state = maybe_cancel_flush_batch_timer(state)
 
     case state.flush_batch_fn.(state.id, batch) do
       :ok ->
-        state = %{state | ready_batches_by_epoch: ready_batches}
+        state = %{state | ready_batches_by_idx: ready_batches}
 
         # Ask for demand now that we've successfully flushed a batch
         state
@@ -142,7 +142,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     {:noreply, [], state}
   end
 
-  defp maybe_ask_demand(%State{ready_batches_by_epoch: batches, check_system_last_status: :ok} = state)
+  defp maybe_ask_demand(%State{ready_batches_by_idx: batches, check_system_last_status: :ok} = state)
        when map_size(batches) == 0 do
     ask_demand(state)
   end
@@ -176,32 +176,32 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     %{state | producer_subscriptions: updated_subs}
   end
 
-  defp add_event_to_state(%Message{batch_epoch: epoch} = event, %State{} = state) when is_integer(epoch) do
-    if Map.get(state.ready_batches_by_epoch, epoch) do
+  defp add_event_to_state(%Message{batch_idx: idx} = event, %State{} = state) when is_integer(idx) do
+    if Map.get(state.ready_batches_by_idx, idx) do
       raise "Received a message for a completed batch"
     end
 
     pending_batches =
-      Map.update(state.pending_batches_by_epoch, epoch, %Batch{epoch: epoch, messages: [event]}, fn %Batch{} = batch ->
+      Map.update(state.pending_batches_by_idx, idx, %Batch{idx: idx, messages: [event]}, fn %Batch{} = batch ->
         %{batch | messages: [event | batch.messages]}
       end)
 
     %{
       state
-      | pending_batches_by_epoch: pending_batches,
+      | pending_batches_by_idx: pending_batches,
         check_system_bytes_processed_since_last_check:
           state.check_system_bytes_processed_since_last_check + event.byte_size
     }
   end
 
-  defp put_batch_marker(%State{} = state, %BatchMarker{epoch: epoch} = marker) when is_integer(epoch) do
-    # Validate that we don't receive markers for epochs that are already ready
-    if Map.has_key?(state.ready_batches_by_epoch, epoch) do
-      raise "Received batch marker for epoch #{epoch} that is already ready"
+  defp put_batch_marker(%State{} = state, %BatchMarker{idx: idx} = marker) when is_integer(idx) do
+    # Validate that we don't receive markers for idxs that are already ready
+    if Map.has_key?(state.ready_batches_by_idx, idx) do
+      raise "Received batch marker for idx #{idx} that is already ready"
     end
 
     batch =
-      case Map.fetch(state.pending_batches_by_epoch, epoch) do
+      case Map.fetch(state.pending_batches_by_idx, idx) do
         {:ok, batch} ->
           Batch.put_marker(batch, marker)
 
@@ -212,21 +212,21 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     if MapSet.size(batch.markers_received) == state.producer_partition_count do
       # Batch is ready - move from pending to ready
       # First, verify state
-      lower_pending_epoch =
-        Enum.find(Map.keys(state.pending_batches_by_epoch), fn other_epoch -> other_epoch < epoch end)
+      lower_pending_idx =
+        Enum.find(Map.keys(state.pending_batches_by_idx), fn other_idx -> other_idx < idx end)
 
-      unless is_nil(lower_pending_epoch) do
-        raise "Batch epochs completed out-of-order: other_epoch=#{lower_pending_epoch} min_ready_epoch=#{epoch}"
+      unless is_nil(lower_pending_idx) do
+        raise "Batch idxs completed out-of-order: other_idx=#{lower_pending_idx} min_ready_idx=#{idx}"
       end
 
       # Then, sort messages
       messages = Enum.sort_by(batch.messages, fn %Message{} = msg -> {msg.commit_lsn, msg.commit_idx} end)
 
-      was_empty = map_size(state.ready_batches_by_epoch) == 0
-      pending_batches = Map.delete(state.pending_batches_by_epoch, epoch)
-      ready_batches = Map.put(state.ready_batches_by_epoch, epoch, %{batch | messages: messages})
+      was_empty = map_size(state.ready_batches_by_idx) == 0
+      pending_batches = Map.delete(state.pending_batches_by_idx, idx)
+      ready_batches = Map.put(state.ready_batches_by_idx, idx, %{batch | messages: messages})
 
-      state = %{state | pending_batches_by_epoch: pending_batches, ready_batches_by_epoch: ready_batches}
+      state = %{state | pending_batches_by_idx: pending_batches, ready_batches_by_idx: ready_batches}
 
       # If this was the first ready batch, trigger flush
       state = if was_empty, do: schedule_flush_timer(state), else: state
@@ -234,7 +234,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       state
     else
       # Still waiting for more markers - keep in pending
-      %{state | pending_batches_by_epoch: Map.put(state.pending_batches_by_epoch, epoch, batch)}
+      %{state | pending_batches_by_idx: Map.put(state.pending_batches_by_idx, idx, batch)}
     end
   end
 
@@ -244,7 +244,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   defp maybe_schedule_flush_timer(%State{} = state) do
-    if map_size(state.ready_batches_by_epoch) > 0 do
+    if map_size(state.ready_batches_by_idx) > 0 do
       schedule_flush_timer(state)
     else
       state
@@ -252,7 +252,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   defp maybe_hibernate(%State{} = state) do
-    if map_size(state.ready_batches_by_epoch) == 0 and map_size(state.pending_batches_by_epoch) == 0 do
+    if map_size(state.ready_batches_by_idx) == 0 and map_size(state.pending_batches_by_idx) == 0 do
       {:noreply, [], state, :hibernate}
     else
       {:noreply, [], state}

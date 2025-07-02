@@ -89,7 +89,7 @@ defmodule Sequin.Runtime.SlotProducer do
       # Temp: This wraps the current Message/LogicalMessage payload for compatibility
       field :message, Message.t() | LogicalMessage.t()
       field :transaction_annotations, String.t()
-      field :batch_epoch, non_neg_integer()
+      field :batch_idx, non_neg_integer()
     end
   end
 
@@ -128,7 +128,7 @@ defmodule Sequin.Runtime.SlotProducer do
       field :flushed_high_watermark_wal_cursor, Replication.wal_cursor()
 
       # Batches
-      field :batch_epoch, BatchMarker.epoch(), default: 0
+      field :batch_idx, BatchMarker.idx(), default: 0
       field :last_flushed_batch_at, DateTime.t()
 
       field :processed_messages_since_last_flush_stats, %{count: non_neg_integer(), bytes: non_neg_integer()},
@@ -341,7 +341,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
     batch_marker = %BatchMarker{
       high_watermark_wal_cursor: high_watermark_cursor,
-      epoch: state.batch_epoch
+      idx: state.batch_idx
     }
 
     Enum.each(state.consumers, fn consumer ->
@@ -352,7 +352,7 @@ defmodule Sequin.Runtime.SlotProducer do
       state
       | flushed_high_watermark_wal_cursor: high_watermark_cursor,
         processed_messages_since_last_flush_stats: %{count: 0, bytes: 0},
-        batch_epoch: state.batch_epoch + 1,
+        batch_idx: state.batch_idx + 1,
         last_flushed_batch_at: DateTime.utc_now(),
         last_batch_marker: batch_marker
     }
@@ -556,7 +556,7 @@ defmodule Sequin.Runtime.SlotProducer do
       kind: kind,
       payload: binary,
       transaction_annotations: state.transaction_annotations,
-      batch_epoch: state.batch_epoch,
+      batch_idx: state.batch_idx,
       message: nil
     }
   end

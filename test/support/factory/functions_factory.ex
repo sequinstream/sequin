@@ -155,6 +155,7 @@ defmodule Sequin.Factory.FunctionsFactory do
           :redis_stream,
           :kafka,
           :gcp_pubsub,
+          :azure_event_hub,
           :typesense,
           :meilisearch,
           :elasticsearch,
@@ -236,6 +237,13 @@ defmodule Sequin.Factory.FunctionsFactory do
             """
             %{
               index_name: metadata.table_name
+            }
+            """
+
+          :azure_event_hub ->
+            """
+            %{
+              event_hub_name: metadata.table_name
             }
             """
 

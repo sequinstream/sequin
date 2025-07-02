@@ -18,7 +18,7 @@
         <div class="mt-2">
           <div class="overflow-x-auto">
             <span
-              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md inline-block whitespace-nowrap"
+              class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md inline-block whitespace-nowrap"
               >{consumer.sink.host}</span
             >
           </div>
@@ -30,7 +30,7 @@
         <div class="mt-2">
           <div class="overflow-x-auto">
             <span
-              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md inline-block whitespace-nowrap"
+              class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md inline-block whitespace-nowrap"
               >{consumer.sink.port}</span
             >
           </div>
@@ -41,7 +41,7 @@
         <span class="text-sm text-gray-500">Username</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.username || "-"}</span
           >
         </div>
@@ -51,7 +51,7 @@
         <span class="text-sm text-gray-500">TLS Enabled</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.tls ? "Yes" : "No"}</span
           >
         </div>
@@ -61,7 +61,7 @@
         <span class="text-sm text-gray-500">JWT</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.jwt ? "********" : "-"}</span
           >
         </div>
@@ -71,7 +71,7 @@
         <span class="text-sm text-gray-500">NKey Seed</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.nkey_seed ? "********" : "-"}</span
           >
         </div>
@@ -81,7 +81,7 @@
         <span class="text-sm text-gray-500">Subject</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
           >
             {#if consumer.routing_id}
               Determined by <a

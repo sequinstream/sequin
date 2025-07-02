@@ -7,13 +7,18 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
   import type { AzureEventHubConsumer } from "$lib/consumers/types";
   import FormItem from "$lib/components/ui/form-item.svelte";
   import FormErrorMessage from "$lib/components/ui/form-error-message.svelte";
   import FormToggleVisibilityButton from "$lib/components/ui/form-toggle-visibility-button.svelte";
 
   export let form: AzureEventHubConsumer;
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
   export let errors: any = {};
+  let selectedDynamic = form.routingMode === "dynamic";
 
   let showPassword = false;
 
@@ -36,18 +41,6 @@
       />
       {#if errors.sink?.namespace}
         <FormErrorMessage>{errors.sink.namespace}</FormErrorMessage>
-      {/if}
-    </FormItem>
-
-    <FormItem>
-      <Label for="event-hub-name">Event Hub Name</Label>
-      <Input
-        id="event-hub-name"
-        bind:value={form.sink.event_hub_name}
-        placeholder="my-event-hub"
-      />
-      {#if errors.sink?.event_hub_name}
-        <FormErrorMessage>{errors.sink.event_hub_name}</FormErrorMessage>
       {/if}
     </FormItem>
 
@@ -85,5 +78,36 @@
         <FormErrorMessage>{errors.sink.shared_access_key}</FormErrorMessage>
       {/if}
     </FormItem>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      bind:selectedDynamic
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      {errors}
+      routedSinkType="azure_event_hub"
+    />
+
+    {#if !selectedDynamic}
+      <FormItem>
+        <Label for="event-hub-name">Event Hub Name</Label>
+        <Input
+          id="event-hub-name"
+          bind:value={form.sink.event_hub_name}
+          placeholder="my-event-hub"
+        />
+        {#if errors.sink?.event_hub_name}
+          <FormErrorMessage>{errors.sink.event_hub_name}</FormErrorMessage>
+        {/if}
+      </FormItem>
+    {/if}
   </CardContent>
 </Card>

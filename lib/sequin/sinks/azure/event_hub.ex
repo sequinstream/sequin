@@ -3,6 +3,7 @@ defmodule Sequin.Sinks.Azure.EventHub do
   import Sequin.Error.Guards, only: [is_error: 1]
 
   alias Sequin.Error
+  alias Sequin.Error.NotFoundError
 
   @eventhub_data_plane_suffix ".servicebus.windows.net"
 
@@ -14,7 +15,6 @@ defmodule Sequin.Sinks.Azure.EventHub do
       field :namespace, String.t(), enforce: true
       field :shared_access_key_name, String.t(), enforce: true
       field :shared_access_key, String.t(), enforce: true
-      field :event_hub_name, String.t(), enforce: true
       field :req_opts, keyword(), enforce: true
     end
   end
@@ -27,14 +27,13 @@ defmodule Sequin.Sinks.Azure.EventHub do
       namespace: opts.namespace,
       shared_access_key_name: opts.shared_access_key_name,
       shared_access_key: opts.shared_access_key,
-      event_hub_name: opts.event_hub_name,
       req_opts: req_opts
     }
   end
 
-  @spec publish_messages(Client.t(), [map()]) :: :ok | {:error, any()}
-  def publish_messages(%Client{} = client, messages) do
-    path = "#{client.event_hub_name}/messages"
+  @spec publish_messages(Client.t(), String.t(), [map()]) :: :ok | {:error, any()}
+  def publish_messages(%Client{} = client, event_hub_name, messages) do
+    path = "#{event_hub_name}/messages"
     encoded_messages = Enum.map(messages, &to_encoded_message/1)
     req = base_req(client, path, method: :post, json: encoded_messages)
 
@@ -52,9 +51,9 @@ defmodule Sequin.Sinks.Azure.EventHub do
 
   We choose a non-deleterious operation that is OK with limited (send-only) permissions.
   """
-  @spec test_connection(Client.t()) :: :ok | {:error, any()}
-  def test_connection(%Client{} = client) do
-    path = "#{client.event_hub_name}/does-not-exist"
+  @spec test_connection(Client.t(), String.t()) :: :ok | {:error, any()}
+  def test_connection(%Client{} = client, event_hub_name) do
+    path = "#{event_hub_name}/does-not-exist"
     req = base_req(client, path, method: :get)
 
     case Req.request(req) do
@@ -70,11 +69,22 @@ defmodule Sequin.Sinks.Azure.EventHub do
         {:error,
          Error.not_found(
            entity: :event_hub,
-           params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
+           params: %{namespace: client.namespace, event_hub_name: event_hub_name}
          )}
 
       error ->
         handle_error(client, error, "test connection")
+    end
+  end
+
+  @doc """
+  Test credentials and permissions without requiring a specific Event Hub. Useful for dynamic routing.
+  """
+  @spec test_credentials_and_permissions(Client.t()) :: :ok | {:error, any()}
+  def test_credentials_and_permissions(%Client{} = client) do
+    case test_connection(client, "does-not-exist") do
+      {:error, %NotFoundError{entity: :event_hub}} -> :ok
+      {:error, error} -> {:error, error}
     end
   end
 
@@ -117,22 +127,22 @@ defmodule Sequin.Sinks.Azure.EventHub do
 
   defp handle_error(%Client{} = client, error, req_desc) do
     case error do
-      {:ok, %{status: 404}} ->
-        {:error,
-         Error.not_found(
-           entity: :event_hub,
-           params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
-         )}
-
       {:error, %Req.TransportError{reason: :nxdomain}} ->
         {:error,
          Error.not_found(
            entity: :event_hub,
-           params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
+           params: %{namespace: client.namespace}
          )}
 
       {:error, error} when is_error(error) ->
         {:error, error}
+
+      {:ok, %Req.Response{body: body}} when is_binary(body) ->
+        {:error,
+         Error.service(
+           service: :event_hub,
+           message: "#{req_desc}: #{body}"
+         )}
 
       {:ok, %Req.Response{} = res} ->
         {:error,

@@ -572,14 +572,24 @@ defmodule SequinWeb.Components.ConsumerForm do
       end
 
     if sink_changeset.valid? do
-      client =
-        sink_changeset
-        |> Ecto.Changeset.apply_changes()
-        |> AzureEventHubSink.event_hub_client()
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+      client = AzureEventHubSink.event_hub_client(sink)
 
-      case EventHub.test_connection(client) do
-        :ok -> :ok
-        {:error, error} -> {:error, Exception.message(error)}
+      case sink.routing_mode do
+        :dynamic ->
+          case EventHub.test_credentials_and_permissions(client) do
+            :ok -> :ok
+            {:error, error} -> {:error, Exception.message(error)}
+          end
+
+        :static ->
+          case EventHub.test_connection(client, sink.event_hub_name) do
+            :ok -> :ok
+            {:error, error} -> {:error, Exception.message(error)}
+          end
+
+        _ ->
+          {:error, "Invalid routing mode"}
       end
     else
       {:error, encode_errors(sink_changeset)}

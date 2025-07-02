@@ -18,6 +18,7 @@ defmodule Sequin.Consumers.AzureEventHubSink do
     field :event_hub_name, :string
     field :shared_access_key_name, :string
     field :shared_access_key, EncryptedField
+    field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
   end
 
   def changeset(struct, params) do
@@ -26,10 +27,27 @@ defmodule Sequin.Consumers.AzureEventHubSink do
       :namespace,
       :event_hub_name,
       :shared_access_key_name,
-      :shared_access_key
+      :shared_access_key,
+      :routing_mode
     ])
-    |> validate_required([:namespace, :event_hub_name, :shared_access_key_name, :shared_access_key])
+    |> validate_required([:namespace, :shared_access_key_name, :shared_access_key])
+    |> validate_routing()
     |> put_connection_id()
+  end
+
+  defp validate_routing(changeset) do
+    routing_mode = get_field(changeset, :routing_mode)
+
+    cond do
+      routing_mode == :dynamic ->
+        put_change(changeset, :event_hub_name, nil)
+
+      routing_mode == :static ->
+        validate_required(changeset, [:event_hub_name])
+
+      true ->
+        add_error(changeset, :routing_mode, "is required")
+    end
   end
 
   defp put_connection_id(changeset) do
@@ -39,12 +57,15 @@ defmodule Sequin.Consumers.AzureEventHubSink do
     end
   end
 
-  def event_hub_client(%__MODULE__{} = sink) do
-    EventHub.new(%{
-      namespace: sink.namespace,
-      event_hub_name: sink.event_hub_name,
-      shared_access_key_name: sink.shared_access_key_name,
-      shared_access_key: sink.shared_access_key
-    })
+  def event_hub_client(%__MODULE__{} = sink, req_opts \\ []) do
+    EventHub.new(
+      %{
+        namespace: sink.namespace,
+        event_hub_name: sink.event_hub_name,
+        shared_access_key_name: sink.shared_access_key_name,
+        shared_access_key: sink.shared_access_key
+      },
+      req_opts
+    )
   end
 end

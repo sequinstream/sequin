@@ -21,6 +21,7 @@ defmodule Sequin.Consumers.RoutingFunction do
         :nats,
         :kafka,
         :gcp_pubsub,
+        :azure_event_hub,
         :sns,
         :typesense,
         :meilisearch,

@@ -26,21 +26,23 @@
     TypesenseConsumer,
     ElasticsearchConsumer,
     RedisStringConsumer,
+    AzureEventHubConsumer,
   } from "./types";
-  import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
-  import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
-  import SnsSinkCard from "../sinks/sns/SnsSinkCard.svelte";
-  import KinesisSinkCard from "../sinks/kinesis/KinesisSinkCard.svelte";
-  import S2SinkCard from "../sinks/s2/S2SinkCard.svelte";
-  import RedisStreamSinkCard from "../sinks/redis-stream/RedisStreamSinkCard.svelte";
-  import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
-  import SequinStreamSinkCard from "../sinks/sequin_stream/SequinStreamSinkCard.svelte";
+  import AzureEventHubSinkCard from "../sinks/azure_event_hub/AzureEventHubSinkCard.svelte";
+  import ElasticsearchSinkCard from "../sinks/elasticsearch/ElasticsearchSinkCard.svelte";
   import GcpPubsubSinkCard from "../sinks/gcp_pubsub/GcpPubsubSinkCard.svelte";
+  import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
+  import KinesisSinkCard from "../sinks/kinesis/KinesisSinkCard.svelte";
   import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
   import RabbitMqSinkCard from "../sinks/rabbitmq/RabbitMqSinkCard.svelte";
-  import TypesenseSinkCard from "../sinks/typesense/TypesenseSinkCard.svelte";
-  import ElasticsearchSinkCard from "../sinks/elasticsearch/ElasticsearchSinkCard.svelte";
+  import RedisStreamSinkCard from "../sinks/redis-stream/RedisStreamSinkCard.svelte";
   import RedisStringSinkCard from "../sinks/redis-string/RedisStringSinkCard.svelte";
+  import S2SinkCard from "../sinks/s2/S2SinkCard.svelte";
+  import SequinStreamSinkCard from "../sinks/sequin_stream/SequinStreamSinkCard.svelte";
+  import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
+  import SnsSinkCard from "../sinks/sns/SnsSinkCard.svelte";
+  import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
+  import TypesenseSinkCard from "../sinks/typesense/TypesenseSinkCard.svelte";
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
@@ -79,6 +81,12 @@
   };
   export let apiBaseUrl: string;
   export let apiTokens: any[];
+
+  function isAzureEventHubConsumer(
+    consumer: Consumer,
+  ): consumer is AzureEventHubConsumer {
+    return consumer.sink.type === "azure_event_hub";
+  }
 
   // Add type predicates
   function isHttpPushConsumer(
@@ -1095,7 +1103,7 @@
                   <span class="text-sm text-gray-500">Path</span>
                   <div class="mt-2">
                     <span
-                      class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+                      class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
                       >{transform.function.path}</span
                     >
                   </div>
@@ -1137,6 +1145,9 @@
         </Card>
       {/if}
 
+      {#if isAzureEventHubConsumer(consumer)}
+        <AzureEventHubSinkCard {consumer} />
+      {/if}
       {#if isHttpPushConsumer(consumer)}
         <SinkCardHttpPush {consumer} />
       {:else if isSqsConsumer(consumer)}

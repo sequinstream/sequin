@@ -142,7 +142,7 @@ export type AzureEventHubConsumer = BaseConsumer & {
   sink: {
     type: "azure_event_hub";
     namespace: string;
-    event_hub_name: string;
+    event_hub_name: string | null;
     shared_access_key_name: string;
     shared_access_key: string;
   };
@@ -293,6 +293,7 @@ export const RoutedSinkTypeValues = [
   "typesense",
   "meilisearch",
   "elasticsearch",
+  "azure_event_hub",
   "rabbitmq",
   "sqs",
   "sns",

@@ -160,6 +160,14 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_azure_event_hub """
+  def route(action, record, changes, metadata) do
+    %{
+      event_hub_name: "\#{metadata.table_schema}-\#{metadata.table_name}"
+    }
+  end
+  """
+
   @initial_filter """
   def filter(action, record, changes, metadata) do
     # Must return true or false!
@@ -183,7 +191,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_elasticsearch" => @initial_route_elasticsearch,
     "routing_sns" => @initial_route_sns,
     "routing_sqs" => @initial_route_sqs,
-    "routing_rabbitmq" => @initial_route_rabbitmq
+    "routing_rabbitmq" => @initial_route_rabbitmq,
+    "routing_azure_event_hub" => @initial_route_azure_event_hub
   }
 
   # We generate the function completions at compile time because

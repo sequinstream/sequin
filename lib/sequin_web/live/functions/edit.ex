@@ -669,16 +669,21 @@ defmodule SequinWeb.FunctionsLive.Edit do
          {:ok, metadata} <- validate_field(message["metadata"], "metadata"),
          {:ok, changes} <- validate_field(message["changes"], "changes"),
          {:ok, action} <- validate_action(message["action"]) do
-      {:ok, %{record: record, action: action, metadata: metadata, changes: changes}}
+      {:ok,
+       %{
+         record: record,
+         action: action,
+         metadata: struct(Sequin.Consumers.ConsumerEventData.Metadata, metadata),
+         changes: changes
+       }}
     else
       {:error, field, error} -> %{error: %{field => error}}
     end
   end
 
   defp validate_field(value, field) when is_binary(value) do
-    with {:ok, parsed} <- MiniElixir.eval_raw_string(value, field),
-         :ok <- validate_field(parsed, field) do
-      {:ok, parsed}
+    with {:ok, parsed} <- MiniElixir.eval_raw_string(value, field) do
+      validate_field(parsed, field)
     end
   end
 

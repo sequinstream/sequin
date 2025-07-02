@@ -167,18 +167,6 @@ See [secret generation](#secret-generation) for how to generate these values.
 - `LONG_POLL_FALLBACK_MS`: Long poll fallback time in milliseconds (default: 3000)
   - This is the duration that Sequin will wait for a healthy websocket connection before falling back to HTTP long polling. If your network configuration disallows websocket connections, you should set this to a low value (e.g. 100ms).
 
-### Clustering configuration
-
-You can cluster Sequin nodes in an active-passive configuration for high availability. See [Active-passive architecture](#active-passive-architecture) for more information.
-
-We recommend using the `AUTO_ASSIGN_RELEASE_NODE` setting, unless it doesn't suit your requirements.
-
-- `RELEASE_DISTRIBUTION`: Must be set to `name` (default: `sname`, which disables network clustering).
-- `AUTO_ASSIGN_RELEASE_NODE`: Set to `true` to automatically assign a node name (default: `false`). See [`start_commands.sh`](https://github.com/sequinstream/sequin/blob/main/scripts/start_commands.sh) to see how Sequin generates node names. Overrides `RELEASE_NODE`.
-- `RELEASE_NODE`: Manually set the node name. Each node must have a unique name. Format is `{node_name}@{ip_address_or_hostname}`.
-- `RELEASE_COOKIE`: The secret key nodes will use to authenticate with each other. Must be same for all nodes. Use a strong random string.
-- `ELIXIR_ERL_OPTIONS`: Set to `-proto_dist inet6_tcp` to enable IPv6 support when clustering (default is unset).
-
 ### Email configuration
 
 Email configuration is coming soon. [Please comment on this issue](https://github.com/sequinstream/sequin/issues/579) if you'd like to see this feature.
@@ -235,7 +223,9 @@ If you're hosting Sequin at a public URL, you should set `SERVER_CHECK_ORIGIN` t
 
 ### Active-passive architecture
 
-Sequin supports deployment in an active-passive configuration for high availability. In this setup:
+You can run multiple Sequin nodes at the same time safely. They will run in an active-passive configuration. This is helpful for both rolling deploys and high availability.
+
+In this setup:
 
 - One node operates as the active node, running all sinks
 - Additional nodes operate as passive ("hot standby") nodes
@@ -252,7 +242,8 @@ Requirements for multi-node deployment:
 - Network latency between nodes should be minimal
 - Environment variables for [Clustering configuration](#clustering-configuration) must be properly set
 
-Sequin uses Postgres for node discovery and Redis for distributed locking and leader election.
+Sequin uses Redis for distributed locking and leader election.
+
 ### Runtime requirements
 
 #### Redis

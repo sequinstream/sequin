@@ -156,7 +156,7 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       raise "Received batch marker without a reorder buffer"
     end
 
-    ReorderBuffer.handle_batch_marker(state.id, %{marker | processor_partition_idx: state.partition_idx})
+    ReorderBuffer.handle_batch_marker(state.id, %{marker | producer_partition_idx: state.partition_idx})
 
     {:noreply, [], state}
   end
@@ -182,7 +182,7 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       commit_timestamp: envelope.commit_ts,
       transaction_annotations: envelope.transaction_annotations,
       byte_size: envelope.byte_size,
-      batch_epoch: envelope.batch_epoch
+      batch_idx: envelope.batch_idx
     }
   end
 
@@ -212,7 +212,7 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       commit_timestamp: envelope.commit_ts,
       transaction_annotations: envelope.transaction_annotations,
       byte_size: envelope.byte_size,
-      batch_epoch: envelope.batch_epoch
+      batch_idx: envelope.batch_idx
     }
   end
 
@@ -243,7 +243,7 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       commit_timestamp: envelope.commit_ts,
       transaction_annotations: envelope.transaction_annotations,
       byte_size: envelope.byte_size,
-      batch_epoch: envelope.batch_epoch
+      batch_idx: envelope.batch_idx
     }
   end
 

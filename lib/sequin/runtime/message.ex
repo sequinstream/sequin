@@ -39,6 +39,6 @@ defmodule Sequin.Runtime.SlotProcessor.Message do
     field :fields, list(Field.t())
     field :subscription_ids, list(String.t())
     field :byte_size, non_neg_integer()
-    field :batch_epoch, non_neg_integer()
+    field :batch_idx, non_neg_integer()
   end
 end

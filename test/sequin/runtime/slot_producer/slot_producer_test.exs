@@ -327,7 +327,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
 
       max_lsn = max(msg1.commit_lsn, msg2.commit_lsn)
 
-      assert marker.epoch == 0
+      assert marker.idx == 0
       assert marker.high_watermark_wal_cursor.commit_lsn == max_lsn
 
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)

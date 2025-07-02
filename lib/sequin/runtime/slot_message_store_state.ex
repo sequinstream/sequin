@@ -337,15 +337,15 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       |> Enum.min(fn -> nil end)
 
     case {min_messages_wal_cursor, state.high_watermark_wal_cursor} do
-      # No unpersisted messages and no epoch cursor
+      # No unpersisted messages and no high watermark cursor
       {nil, nil} ->
         nil
 
-      # No unpersisted messages, use epoch cursor
-      {nil, epoch_cursor} ->
-        epoch_cursor
+      # No unpersisted messages, use high watermark cursor
+      {nil, high_watermark_cursor} ->
+        high_watermark_cursor
 
-      # Has unpersisted messages regardless of epoch cursor, be conservative
+      # Has unpersisted messages regardless of watermark cursor, be conservative
       {{commit_lsn, commit_idx}, _} ->
         %{commit_lsn: commit_lsn, commit_idx: commit_idx}
     end

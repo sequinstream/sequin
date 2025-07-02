@@ -125,7 +125,7 @@ defmodule Sequin.Runtime.SlotProducer do
       field :setting_ack_interval, non_neg_integer()
       field :ack_timer, reference()
       field :update_cursor_timer, reference()
-      field :flushed_high_watermark_wal_cursor, Replication.wal_cursor()
+      field :last_dispatched_wal_cursor, Replication.wal_cursor()
 
       # Batches
       field :batch_idx, BatchMarker.idx(), default: 0
@@ -227,7 +227,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
   @impl GenStage
   def handle_demand(incoming, %{demand: demand} = state) do
-    {messages, state} = maybe_produce(%{state | demand: demand + incoming})
+    {messages, state} = maybe_produce_and_flush(%{state | demand: demand + incoming})
     state = maybe_toggle_buffering(state)
     {:noreply, messages, state}
   end
@@ -281,8 +281,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
     with {:ok, copies, protocol} <- Protocol.handle_copy_recv(msg, @max_messages_per_protocol_read, protocol),
          {:ok, state} <- handle_copies(copies, %{state | protocol: protocol}) do
-      state = maybe_flush(state)
-      {messages, state} = maybe_produce(state)
+      {messages, state} = maybe_produce_and_flush(state)
       state = maybe_toggle_buffering(state)
       {:noreply, messages, state}
     else
@@ -318,26 +317,14 @@ defmodule Sequin.Runtime.SlotProducer do
     {:noreply, [], state}
   end
 
-  def handle_info(:flush_batch_timer, %State{} = state) do
-    send(self(), :flush_batch)
+  def handle_info(:flush_batch, %State{commit_lsn: nil, last_commit_lsn: nil} = state) do
+    Logger.info("[SlotProducer] Skipping flush_batch, no commits seen or processed yet.")
 
     {:noreply, [], %{state | batch_flush_timer: nil}}
   end
 
-  def handle_info(:flush_batch, %State{commit_lsn: nil, last_commit_lsn: nil} = state) do
-    Logger.info("[SlotProducer] Skipping flush_batch, no commits seen or processed yet.")
-
-    {:noreply, [], state}
-  end
-
   def handle_info(:flush_batch, %State{} = state) do
-    high_watermark_cursor =
-      if state.commit_lsn do
-        # commit_idx starts at 0, and is incremented *after* each assignment. So the last assignment is -1
-        %{commit_lsn: state.commit_lsn, commit_idx: state.commit_idx - 1}
-      else
-        %{commit_lsn: state.last_commit_lsn, commit_idx: state.last_commit_idx}
-      end
+    high_watermark_cursor = state.last_dispatched_wal_cursor || state.restart_wal_cursor
 
     batch_marker = %BatchMarker{
       high_watermark_wal_cursor: high_watermark_cursor,
@@ -350,11 +337,11 @@ defmodule Sequin.Runtime.SlotProducer do
 
     state = %{
       state
-      | flushed_high_watermark_wal_cursor: high_watermark_cursor,
-        processed_messages_since_last_flush_stats: %{count: 0, bytes: 0},
+      | processed_messages_since_last_flush_stats: %{count: 0, bytes: 0},
         batch_idx: state.batch_idx + 1,
         last_flushed_batch_at: DateTime.utc_now(),
-        last_batch_marker: batch_marker
+        last_batch_marker: batch_marker,
+        batch_flush_timer: nil
     }
 
     {:noreply, [], state}
@@ -561,14 +548,26 @@ defmodule Sequin.Runtime.SlotProducer do
     }
   end
 
-  defp maybe_produce(%State{demand: demand} = state) when demand > 0 do
+  defp maybe_produce_and_flush(%State{demand: demand} = state) when demand > 0 do
     {acc_msgs, remaining_msgs} = state.accumulated_messages.messages |> Enum.reverse() |> Enum.split(demand)
     remaining_msgs = Enum.reverse(remaining_msgs)
     dropped_bytes = acc_msgs |> Enum.map(& &1.byte_size) |> Enum.sum()
 
+    # Update last_dispatched_wal_cursor to the highest cursor from dispatched messages
+    last_dispatched_wal_cursor =
+      case acc_msgs do
+        [] ->
+          state.last_dispatched_wal_cursor
+
+        msgs ->
+          last_msg = List.last(msgs)
+          %{commit_lsn: last_msg.commit_lsn, commit_idx: last_msg.commit_idx}
+      end
+
     state = %{
       state
       | demand: state.demand - length(acc_msgs),
+        last_dispatched_wal_cursor: last_dispatched_wal_cursor,
         accumulated_messages: %{
           state.accumulated_messages
           | count: state.accumulated_messages.count - length(acc_msgs),
@@ -577,11 +576,11 @@ defmodule Sequin.Runtime.SlotProducer do
         }
     }
 
-    {acc_msgs, state}
+    {acc_msgs, maybe_flush(state)}
   end
 
-  defp maybe_produce(state) do
-    {[], state}
+  defp maybe_produce_and_flush(state) do
+    {[], maybe_flush(state)}
   end
 
   defp maybe_toggle_buffering(%State{status: :disconnected} = state), do: state
@@ -675,6 +674,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp schedule_update_cursor(state), do: state
 
+  # We always trigger a flush check after producing
   defp maybe_flush(%State{} = state) do
     interval = batch_flush_interval(state)
     %{count: count, bytes: bytes} = state.processed_messages_since_last_flush_stats
@@ -706,7 +706,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp schedule_flush(%State{batch_flush_timer: nil} = state, delay \\ nil) do
     delay = delay || Keyword.fetch!(batch_flush_interval(state), :max_age)
-    ref = Process.send_after(self(), :flush_batch_timer, delay)
+    ref = Process.send_after(self(), :flush_batch, delay)
     time = :os.system_time(:millisecond) + delay
     %{state | batch_flush_timer: {ref, time}}
   end
@@ -720,7 +720,7 @@ defmodule Sequin.Runtime.SlotProducer do
     case Process.cancel_timer(timer) do
       false ->
         receive do
-          :flush_batch_timer -> :ok
+          :flush_batch -> :ok
         after
           0 -> :ok
         end

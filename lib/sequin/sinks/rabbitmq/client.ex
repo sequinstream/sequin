@@ -3,24 +3,22 @@ defmodule Sequin.Sinks.RabbitMq.Client do
   @behaviour Sequin.Sinks.RabbitMq
 
   alias AMQP.Basic
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.NetworkUtils
+  alias Sequin.Runtime.Routing.Consumers.Rabbitmq
+  alias Sequin.Runtime.Routing.RoutedMessage
   alias Sequin.Sinks.RabbitMq
   alias Sequin.Sinks.RabbitMq.ConnectionCache
 
   require Logger
 
   @impl RabbitMq
-  def send_messages(%SinkConsumer{sink: %RabbitMqSink{} = sink} = consumer, messages) when is_list(messages) do
+  def send_messages(%SinkConsumer{sink: %RabbitMqSink{} = sink}, routed_messages) when is_list(routed_messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
-      Enum.reduce_while(messages, :ok, fn message, :ok ->
-        case publish_message(consumer, message, connection) do
+      Enum.reduce_while(routed_messages, :ok, fn routed_message, :ok ->
+        case publish_message(routed_message, connection) do
           :ok ->
             {:cont, :ok}
 
@@ -47,16 +45,24 @@ defmodule Sequin.Sinks.RabbitMq.Client do
       {:error, to_sequin_error(error)}
   end
 
-  defp publish_message(%SinkConsumer{sink: %RabbitMqSink{} = sink} = consumer, message, %AMQP.Channel{} = channel) do
+  defp publish_message(%RoutedMessage{} = routed_message, %AMQP.Channel{} = channel) do
     # https://hexdocs.pm/amqp/AMQP.Basic.html#publish/5-options
-    # FIXME: message.id should not be relied on?
-    opts = [message_id: to_string(message.id), content_type: "application/json"]
-    payload = to_payload(consumer, message)
-    routing_key = routing_key(message)
+    %RoutedMessage{
+      transformed_message: transformed_message,
+      routing_info: %Rabbitmq{
+        exchange: exchange,
+        headers: headers,
+        routing_key: routing_key,
+        message_id: message_id
+      }
+    } = routed_message
+
+    opts = [message_id: message_id, content_type: "application/json", headers: Map.to_list(headers)]
 
     try do
-      with {:error, reason} <- Basic.publish(channel, sink.exchange, routing_key, Jason.encode!(payload), opts) do
-        {:error, to_sequin_error(reason)}
+      case Basic.publish(channel, exchange, routing_key, Jason.encode!(transformed_message), opts) do
+        :ok -> :ok
+        {:error, reason} -> {:error, to_sequin_error(reason)}
       end
     catch
       error ->
@@ -87,19 +93,5 @@ defmodule Sequin.Sinks.RabbitMq.Client do
         Logger.warning("Unknown RabbitMQ error: #{inspect(error)}", error: error)
         Error.service(service: :rabbitmq, message: "Unknown RabbitMQ error")
     end
-  end
-
-  defp to_payload(%SinkConsumer{} = consumer, message) do
-    Sequin.Transforms.Message.to_external(consumer, message)
-  end
-
-  defp routing_key(%ConsumerEvent{data: %ConsumerEventData{} = data}) do
-    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
-    "sequin.changes.#{database_name}.#{table_schema}.#{table_name}.#{data.action}"
-  end
-
-  defp routing_key(%ConsumerRecord{data: %ConsumerRecordData{} = data}) do
-    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
-    "sequin.rows.#{database_name}.#{table_schema}.#{table_name}"
   end
 end

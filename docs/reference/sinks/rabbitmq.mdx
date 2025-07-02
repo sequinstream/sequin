@@ -46,23 +46,17 @@ Sequin sends messages to RabbitMQ as JSON. You can find the shape of the message
 
 ## Routing keys
 
-Messages are published with routing keys using the following patterns:
+Messages are published with routing keys using the following pattern:
 
-For change events:
 ```
-sequin.changes.<database_name>.<schema_name>.<table_name>.<action>
-```
-
-For record events:
-```
-sequin.rows.<database_name>.<schema_name>.<table_name>
+sequin.<database_name>.<schema_name>.<table_name>.<action>
 ```
 
-For example, if you're streaming changes from a table called `products` in the `public` schema of a database called `shop`, you would see routing keys like:
+For example, if you're streaming changes from a table called `products` in the `public` schema of a database called `shop_prod`, you would see routing keys like:
 
-- `sequin.changes.shop_prod.public.products.insert`
-- `sequin.changes.shop_prod.public.products.update`
-- `sequin.changes.shop_prod.public.products.delete`
+- `sequin.shop_prod.public.products.insert`
+- `sequin.shop_prod.public.products.update`
+- `sequin.shop_prod.public.products.delete`
 
 ## Message properties
 
@@ -107,6 +101,24 @@ rabbitmqadmin declare binding \
   destination=my-queue \
   routing_key="sequin.changes.mydb.public.mytable.*"
 ```
+
+## Routing
+
+The RabbitMQ sink supports dynamic routing of the `exchange`, `routing_key`, and message `headers` with [routing functions](/reference/routing).
+
+Example routing function:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{
+    exchange: "sequin_" <> metadata.table_schema,
+    routing_key: "#{metadata.database_name}.#{metadata.table_schema}.#{metadata.table_name}.#{action}",
+    headers: %{"Idempotency-Key" => metadata.idempotency_key}
+  }
+end
+```
+
+When not using a routing function, messages will be published to the statically configured exchange with any headers specified in the sink configuration.
 
 ## Debugging
 

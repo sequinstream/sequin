@@ -42,6 +42,7 @@ The following sinks support dynamic routing:
 - Meilisearch
 - Elasticsearch
 - AWS SQS
+- RabbitMQ
 
 Each sink type has different fields that can be routed:
 
@@ -135,6 +136,16 @@ For [AWS SQS](/reference/sinks/sqs), your routing function must return a map wit
 | Key | Type | Description | Example |
 |-----|------|-------------|---------|
 | `queue_url` | String | The queue URL to publish to | `"https://sqs.us-east-1.amazonaws.com/123456789012/users"` |
+
+### RabbitMQ sink
+
+For [RabbitMQ](/reference/sinks/rabbitmq), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `exchange` | String | The exchange to publish to | `"sequin"` |
+| `routing_key` | String | The routing key to publish to | `"sequin.users.insert"` |
+| `headers` | Map | AMQP headers to include | `%{"x-key" => "value"}` |
 
 ## Common routing patterns
 

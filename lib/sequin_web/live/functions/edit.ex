@@ -150,6 +150,16 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_rabbitmq """
+  def route(action, record, changes, _metadata) do
+    %{
+      exchange: "amq.fanout",
+      routing_key: "\#{metadata.database_name}.\#{metadata.table_schema}.\#{metadata.table_name}.\#{action}",
+      headers: %{"Idempotency-Key" => metadata.idempotency_key}
+    }
+  end
+  """
+
   @initial_filter """
   def filter(action, record, changes, metadata) do
     # Must return true or false!
@@ -172,7 +182,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_redis_stream" => @initial_route_redis_stream,
     "routing_elasticsearch" => @initial_route_elasticsearch,
     "routing_sns" => @initial_route_sns,
-    "routing_sqs" => @initial_route_sqs
+    "routing_sqs" => @initial_route_sqs,
+    "routing_rabbitmq" => @initial_route_rabbitmq
   }
 
   # We generate the function completions at compile time because

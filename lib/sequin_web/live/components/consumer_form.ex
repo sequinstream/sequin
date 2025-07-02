@@ -810,7 +810,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "username" => sink["username"],
       "password" => sink["password"],
       "virtual_host" => sink["virtual_host"],
-      "tls" => sink["tls"]
+      "tls" => sink["tls"],
+      "headers" => sink["headers"]
     }
   end
 
@@ -1065,7 +1066,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "exchange" => sink.exchange,
       "username" => sink.username,
       "password" => sink.password,
-      "virtual_host" => sink.virtual_host
+      "virtual_host" => sink.virtual_host,
+      "headers" => sink.headers
     }
   end
 

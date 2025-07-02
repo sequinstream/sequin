@@ -154,7 +154,8 @@ export type RabbitMqConsumer = BaseConsumer & {
     type: "rabbitmq";
     host: string;
     port: number;
-    exchange: string;
+    exchange: string | null;
+    headers: Record<string, string> | null;
     topic: string;
     username: string;
     password?: string;
@@ -292,6 +293,7 @@ export const RoutedSinkTypeValues = [
   "typesense",
   "meilisearch",
   "elasticsearch",
+  "rabbitmq",
   "sqs",
   "sns",
 ] as const;

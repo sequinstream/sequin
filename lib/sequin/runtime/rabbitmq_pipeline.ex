@@ -3,6 +3,7 @@ defmodule Sequin.Runtime.RabbitMqPipeline do
   @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Error
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.RabbitMq
 
@@ -31,9 +32,9 @@ defmodule Sequin.Runtime.RabbitMqPipeline do
     %{consumer: consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    consumer_messages = Enum.map(messages, & &1.data)
+    routed_messages = Routing.route_and_transform_messages(consumer, Enum.map(messages, & &1.data))
 
-    case RabbitMq.send_messages(consumer, consumer_messages) do
+    case RabbitMq.send_messages(consumer, routed_messages) do
       :ok ->
         {:ok, messages, context}
 

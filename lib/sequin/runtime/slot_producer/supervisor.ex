@@ -6,11 +6,6 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
   1. SlotProducer - Connects to PostgreSQL replication and produces messages
   2. Multiple Processor partitions - Transform replication messages into SlotProcessor.Messages
   3. ReorderBuffer - Reorders messages from partitions and delivers batches
-
-  The supervisor follows GenStage best practices by:
-  - Starting stages in dependency order (bottom-up)
-  - Using :rest_for_one strategy so if SlotProducer fails, all downstream stages restart
-  - Handling subscriptions during stage initialization
   """
   use Supervisor
 
@@ -54,7 +49,6 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
           slot_name: replication_slot.slot_name,
           publication_name: replication_slot.publication_name,
           pg_major_version: postgres_database.pg_major_version,
-          postgres_database: postgres_database,
           connect_opts: PostgresDatabase.to_protocol_opts(postgres_database),
           restart_wal_cursor_fn: &PipelineDefaults.restart_wal_cursor/2,
           on_connect_fail_fn: &PipelineDefaults.on_connect_fail/2,
@@ -104,18 +98,13 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
         reorder_buffer_opts
       )
 
-    children = [
-      {SlotProducer, slot_producer_opts},
-      %{
-        id: :processor_supervisor,
-        start: {Supervisor, :start_link, [processor_specs, [strategy: :one_for_all]]},
-        type: :supervisor
-      },
-      {ReorderBuffer, reoder_buffer_opts}
-    ]
+    children =
+      List.flatten([
+        {SlotProducer, slot_producer_opts},
+        processor_specs,
+        {ReorderBuffer, reoder_buffer_opts}
+      ])
 
-    # Use :rest_for_one so if SlotProducer fails, all downstream stages restart
-    # This ensures proper cleanup and re-subscription of the pipeline
     Supervisor.init(children, strategy: :one_for_all)
   end
 

@@ -383,6 +383,52 @@ defmodule Sequin.Runtime.SlotProducerTest do
       assert SlotProducer.status(slot.id) == :active
     end
 
+    @tag start_opts: [processor_opts: [consumer_demand: :manual]]
+    test "batch marker only reflects dispatched messages, not buffered messages", %{
+      consumer_pid: consumer_pid
+    } do
+      # Insert data to generate messages
+      # Do this in a transaction so they (likely) flood in at once
+      UnboxedRepo.transaction(fn ->
+        CharacterFactory.insert_character!(%{name: "Character 1"}, repo: UnboxedRepo)
+        CharacterFactory.insert_character!(%{name: "Character 2"}, repo: UnboxedRepo)
+        CharacterFactory.insert_character!(%{name: "Character 3"}, repo: UnboxedRepo)
+      end)
+
+      CharacterFactory.insert_character!(%{name: "Character 4"}, repo: UnboxedRepo)
+
+      # Ask for only 1 message (leaving 3 buffered)
+      TestProcessor.ask(consumer_pid, 1)
+
+      # Receive the first message
+      [%{commit_lsn: commit_lsn, commit_idx: commit_idx}] = receive_messages(1)
+
+      # The batch marker should only reflect the dispatched message (msg1), not the buffered ones
+      assert_receive {:batch_marker_received,
+                      %BatchMarker{high_watermark_wal_cursor: %{commit_lsn: ^commit_lsn, commit_idx: ^commit_idx}}}
+
+      # Now ask for two more messages
+      # We can only ask for one at a time because our first ask set max_demand to 1.
+      TestProcessor.ask(consumer_pid, 1)
+      receive_messages(1)
+
+      TestProcessor.ask(consumer_pid, 1)
+      [%{commit_lsn: commit_lsn, commit_idx: commit_idx} = msg] = receive_messages(1)
+      assert msg.payload =~ "Character 3"
+
+      # Now the batch marker should reflect the highest dispatched message (msg3)
+      assert_receive {:batch_marker_received,
+                      %BatchMarker{high_watermark_wal_cursor: %{commit_lsn: ^commit_lsn, commit_idx: ^commit_idx}}}
+
+      # Finally ask for last message
+      TestProcessor.ask(consumer_pid, 1)
+      [%{commit_lsn: commit_lsn, commit_idx: commit_idx}] = receive_messages(1)
+
+      # Now the batch marker should reflect the highest dispatched message (msg3)
+      assert_receive {:batch_marker_received,
+                      %BatchMarker{high_watermark_wal_cursor: %{commit_lsn: ^commit_lsn, commit_idx: ^commit_idx}}}
+    end
+
     # test "handles connection failures gracefully", %{postgres_database: postgres_database} do
     #   # Use invalid connection options to trigger failure
     #   invalid_connect_opts =

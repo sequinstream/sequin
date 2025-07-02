@@ -527,7 +527,13 @@
     {:else if consumer.type === "s2"}
       <S2SinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "redis_stream"}
-      <RedisStreamSinkForm errors={errors.consumer} bind:form />
+      <RedisStreamSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {:else if consumer.type === "redis_string"}
       <RedisStringSinkForm
         errors={errors.consumer}

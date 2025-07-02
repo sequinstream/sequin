@@ -20,17 +20,34 @@ defmodule Sequin.Consumers.RedisStreamSink do
     field :stream_key, :string
     field :database, :integer, default: 0
     field :connection_id, :string
+    field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:host, :port, :username, :password, :tls, :stream_key, :database])
-    |> validate_required([:host, :port, :stream_key])
+    |> cast(params, [:host, :port, :username, :password, :tls, :stream_key, :database, :routing_mode])
+    |> validate_required([:host, :port])
+    |> validate_routing()
     |> validate_number(:port, greater_than: 0, less_than: 65_536)
     |> validate_number(:database, greater_than_or_equal_to: 0)
     |> validate_length(:stream_key, max: 255)
     |> validate_redis_host()
     |> put_new_connection_id()
+  end
+
+  defp validate_routing(changeset) do
+    routing_mode = get_field(changeset, :routing_mode)
+
+    cond do
+      routing_mode == :dynamic ->
+        put_change(changeset, :stream_key, nil)
+
+      routing_mode == :static ->
+        validate_required(changeset, [:stream_key])
+
+      true ->
+        add_error(changeset, :routing_mode, "is required")
+    end
   end
 
   defp validate_redis_host(changeset) do

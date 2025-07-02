@@ -253,7 +253,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         port: 6379,
         database: 0,
         tls: false,
-        stream_key: Factory.word()
+        stream_key: Factory.word(),
+        routing_mode: "static"
       },
       attrs
     )

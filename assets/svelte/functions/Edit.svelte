@@ -100,6 +100,7 @@
   let sinkTypeInternalToExternal = {
     http_push: "HTTP Push",
     redis_string: "Redis String",
+    redis_stream: "Redis Stream",
     nats: "NATS",
     kafka: "Kafka",
     gcp_pubsub: "GCP PubSub",

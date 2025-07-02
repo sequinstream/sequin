@@ -149,7 +149,17 @@ defmodule Sequin.Factory.FunctionsFactory do
   def routing_function(attrs \\ []) do
     {sink_type, attrs} =
       Map.pop_lazy(Map.new(attrs), :sink_type, fn ->
-        Enum.random([:http_push, :redis_string, :kafka, :gcp_pubsub, :typesense, :meilisearch, :elasticsearch, :sqs])
+        Enum.random([
+          :http_push,
+          :redis_string,
+          :redis_stream,
+          :kafka,
+          :gcp_pubsub,
+          :typesense,
+          :meilisearch,
+          :elasticsearch,
+          :sqs
+        ])
       end)
 
     {body, attrs} =
@@ -160,6 +170,13 @@ defmodule Sequin.Factory.FunctionsFactory do
             %{
               key: record["id"] || "default",
               value: record
+            }
+            """
+
+          :redis_stream ->
+            """
+            %{
+              stream_key: metadata.table_name
             }
             """
 

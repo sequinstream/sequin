@@ -15,9 +15,14 @@
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
   import { Eye, EyeOff } from "lucide-svelte";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
 
   export let form;
   export let errors: any = {};
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
+  let selectedDynamic = form.routingMode === "dynamic";
   let showPassword = false;
 
   function togglePasswordVisibility() {
@@ -90,22 +95,6 @@
     </div>
 
     <div class="space-y-2">
-      <Label for="streamKey">Stream Key</Label>
-      <Input
-        id="streamKey"
-        bind:value={form.sink.streamKey}
-        placeholder="my-stream"
-      />
-      <p class="text-sm text-muted-foreground">
-        The key to use for the stream. Records are <code>XADD</code>ed to this
-        key.
-      </p>
-      {#if errors.sink?.stream_key}
-        <p class="text-destructive text-sm">{errors.sink.stream_key}</p>
-      {/if}
-    </div>
-
-    <div class="space-y-2">
       <Label for="database">Database</Label>
       <Input
         id="database"
@@ -150,5 +139,40 @@
         <p class="text-destructive text-sm">{errors.sink.tls}</p>
       {/if}
     </div>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      routedSinkType="redis_stream"
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      bind:selectedDynamic
+      {errors}
+    />
+
+    {#if !selectedDynamic}
+      <div class="space-y-2">
+        <Label for="streamKey">Stream Key</Label>
+        <Input
+          id="streamKey"
+          bind:value={form.sink.streamKey}
+          placeholder="my-stream"
+        />
+        <p class="text-sm text-muted-foreground">
+          The key to use for the stream. Records are <code>XADD</code>ed to this
+          key.
+        </p>
+        {#if errors.sink?.stream_key}
+          <p class="text-destructive text-sm">{errors.sink.stream_key}</p>
+        {/if}
+      </div>
+    {/if}
   </CardContent>
 </Card>

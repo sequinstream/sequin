@@ -5,6 +5,8 @@ defmodule Sequin.RedisStreamPipelineTest do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Functions.MiniElixir
+  alias Sequin.Runtime.Routing.Consumers.RedisStream
+  alias Sequin.Runtime.Routing.RoutedMessage
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.RedisMock
 
@@ -31,7 +33,12 @@ defmodule Sequin.RedisStreamPipelineTest do
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :send_messages, fn _, _ -> :ok end)
+      # No routing function; uses stream key from sink
+      Mox.expect(RedisMock, :send_messages, fn _, [%RoutedMessage{} = routed_message] ->
+        assert %RedisStream{stream_key: stream_key} = routed_message.routing_info
+        assert stream_key == consumer.sink.stream_key
+        :ok
+      end)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data
@@ -79,7 +86,48 @@ defmodule Sequin.RedisStreamPipelineTest do
 
       ref = send_test_message(consumer, message)
 
-      Mox.expect(RedisMock, :send_messages, fn _, [%{data: %{"transformed" => ^column_value}}] -> :ok end)
+      Mox.expect(RedisMock, :send_messages, fn _, [%RoutedMessage{} = routed_message] ->
+        assert %RedisStream{stream_key: stream_key} = routed_message.routing_info
+        assert stream_key == consumer.sink.stream_key
+        assert routed_message.transformed_message == %{"transformed" => column_value}
+        :ok
+      end)
+
+      assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
+      assert data == message.data
+    end
+
+    test "sends messages to redis with routing function", %{consumer: consumer} do
+      assert {:ok, routing_function} =
+               Consumers.create_function(consumer.account_id, %{
+                 name: "test",
+                 function: %{
+                   type: "routing",
+                   sink_type: "redis_stream",
+                   code: """
+                   def route(action, record, changes, metadata) do
+                     %{"stream_key" => metadata.table_name}
+                   end
+                   """
+                 }
+               })
+
+      assert MiniElixir.create(routing_function.id, routing_function.function.code)
+
+      {:ok, consumer} =
+        Consumers.update_sink_consumer(consumer, %{routing_id: routing_function.id, routing_mode: "dynamic"})
+
+      message = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+
+      Mox.expect(RedisMock, :send_messages, fn _, [%RoutedMessage{} = routed_message] ->
+        assert %RedisStream{stream_key: stream_key} = routed_message.routing_info
+        assert stream_key == message.data.metadata.table_name
+        :ok
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_message(consumer, message)
 
       assert_receive {:ack, ^ref, [%{data: %{data: data}}], []}, 1_000
       assert data == message.data

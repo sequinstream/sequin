@@ -17,6 +17,7 @@ defmodule Sequin.Consumers.RoutingFunction do
       values: [
         :http_push,
         :redis_string,
+        :redis_stream,
         :nats,
         :kafka,
         :gcp_pubsub,

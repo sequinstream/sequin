@@ -23,7 +23,7 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
       default: [
         concurrency: 400,
         batch_size: consumer.batch_size,
-        batch_timeout: 50
+        batch_timeout: 1
       ]
     ]
   end

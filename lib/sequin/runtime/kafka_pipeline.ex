@@ -22,7 +22,7 @@ defmodule Sequin.Runtime.KafkaPipeline do
       default: [
         concurrency: 160,
         batch_size: batch_size,
-        batch_timeout: 50
+        batch_timeout: 5
       ]
     ]
   end

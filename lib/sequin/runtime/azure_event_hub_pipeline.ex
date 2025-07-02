@@ -22,7 +22,7 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
       default: [
         concurrency: 400,
         batch_size: 10,
-        batch_timeout: 50
+        batch_timeout: 5
       ]
     ]
   end

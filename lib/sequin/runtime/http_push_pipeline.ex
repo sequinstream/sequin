@@ -64,7 +64,7 @@ defmodule Sequin.Runtime.HttpPushPipeline do
       default: [
         concurrency: min(System.schedulers_online() * 2, 80),
         batch_size: 10,
-        batch_timeout: 50
+        batch_timeout: 1
       ]
     ]
   end

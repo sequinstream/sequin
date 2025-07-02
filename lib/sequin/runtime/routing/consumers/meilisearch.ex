@@ -20,7 +20,7 @@ defmodule Sequin.Runtime.Routing.Consumers.Meilisearch do
     |> validate_length(:index_name, min: 1, max: 1024)
   end
 
-  def route(action, _record, _changes, metadata) do
+  def route(action, _record, _changes, _metadata) do
     meilisearch_action =
       case action do
         "insert" -> :index
@@ -29,10 +29,7 @@ defmodule Sequin.Runtime.Routing.Consumers.Meilisearch do
         "read" -> :index
       end
 
-    %{
-      action: meilisearch_action,
-      index_name: "sequin.#{metadata.table_schema}.#{metadata.table_name}"
-    }
+    %{action: meilisearch_action}
   end
 
   def route_consumer(%Sequin.Consumers.SinkConsumer{sink: sink}) do

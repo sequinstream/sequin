@@ -128,16 +128,6 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
             )
         )
 
-      adapter = fn request ->
-        send(test_pid, {:meilisearch_request, request})
-
-        assert request.method == :delete
-        assert request.url.path =~ "indexes/router-collection/documents/123"
-        assert request.url.query == "ignore_not_found=true"
-
-        {request, Req.Response.new(status: 200)}
-      end
-
       start_pipeline!(consumer)
 
       send_test_batch(consumer, [message])

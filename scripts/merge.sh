@@ -69,6 +69,8 @@ elif [ "${PR_COUNT}" -eq 1 ]; then
             read -p "$(echo -e "${BLUE}Delete local branch '${LOCAL_BRANCH_NAME}' and pull latest changes? [Y/n] ${RESET}")" RESPONSE
             RESPONSE=${RESPONSE:-Y}  # Default to Y if empty
 
+            # innocuous change
+
             if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
                 # If this was a Graphite branch, run gt sync
                 if [ "${IS_GRAPHITE_BRANCH}" = "true" ]; then

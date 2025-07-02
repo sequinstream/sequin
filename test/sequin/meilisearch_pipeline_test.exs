@@ -138,7 +138,7 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
         {request, Req.Response.new(status: 200)}
       end
 
-      start_pipeline!(consumer, adapter)
+      start_pipeline!(consumer)
 
       send_test_batch(consumer, [message])
 

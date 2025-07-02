@@ -38,11 +38,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
   @max_messages_per_protocol_read 500
 
-  @type batch_flush_interval :: %{
-          max_messages: non_neg_integer(),
-          max_bytes: non_neg_integer(),
-          max_age_ms: non_neg_integer()
-        }
+  @type batch_flush_interval :: non_neg_integer()
 
   @type status :: :active | :buffering | :disconnected
 
@@ -130,11 +126,7 @@ defmodule Sequin.Runtime.SlotProducer do
       # Batches
       field :batch_idx, BatchMarker.idx(), default: 0
 
-      field :processed_messages_since_last_flush_stats,
-            %{count: non_neg_integer(), bytes: non_neg_integer(), last_flushed_at: DateTime.t()},
-            default: %{count: 0, bytes: 0, last_flushed_at: nil}
-
-      field :batch_flush_timer, {reference(), non_neg_integer()}
+      field :batch_flush_timer, reference()
       field :setting_batch_flush_interval, SlotProducer.batch_flush_interval()
 
       # Current xaction state
@@ -337,8 +329,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
     state = %{
       state
-      | processed_messages_since_last_flush_stats: %{count: 0, bytes: 0, last_flushed_at: DateTime.utc_now()},
-        batch_idx: state.batch_idx + 1,
+      | batch_idx: state.batch_idx + 1,
         last_batch_marker: batch_marker,
         batch_flush_timer: nil
     }
@@ -484,12 +475,8 @@ defmodule Sequin.Runtime.SlotProducer do
     msg = message_from_binary(state, msg)
 
     state =
-      state
-      |> Map.update!(:accumulated_messages, fn acc ->
+      Map.update!(state, :accumulated_messages, fn acc ->
         %{acc | count: acc.count + 1, bytes: acc.bytes + raw_bytes_received, messages: [msg | acc.messages]}
-      end)
-      |> Map.update!(:processed_messages_since_last_flush_stats, fn stats ->
-        %{stats | count: stats.count + 1, bytes: stats.bytes + raw_bytes_received}
       end)
 
     ProcessMetrics.gauge("accumulated_messages_count", state.accumulated_messages.count)
@@ -589,11 +576,11 @@ defmodule Sequin.Runtime.SlotProducer do
         }
     }
 
-    {acc_msgs, maybe_flush(state)}
+    {acc_msgs, maybe_schedule_flush(state)}
   end
 
   defp maybe_produce_and_flush(state) do
-    {[], maybe_flush(state)}
+    {[], state}
   end
 
   defp maybe_toggle_buffering(%State{status: :disconnected} = state), do: state
@@ -690,65 +677,17 @@ defmodule Sequin.Runtime.SlotProducer do
   defp schedule_update_cursor(state), do: state
 
   # We always trigger a flush check after producing
-  defp maybe_flush(%State{} = state) do
-    interval = batch_flush_interval(state)
-    %{count: count, bytes: bytes} = state.processed_messages_since_last_flush_stats
-    max_count = Keyword.fetch!(interval, :max_messages)
-    max_bytes = Keyword.fetch!(interval, :max_bytes)
-    flush_now? = bytes >= max_bytes or count >= max_count
-
-    imminent_timer =
-      case state.batch_flush_timer do
-        {_ref, time} ->
-          :os.system_time(:millisecond) > time
-
-        _ ->
-          false
-      end
-
-    cond do
-      flush_now? and imminent_timer ->
-        state
-
-      flush_now? ->
-        maybe_cancel_flush_timer(state.batch_flush_timer)
-        schedule_flush(%{state | batch_flush_timer: nil}, 0)
-
-      is_nil(state.batch_flush_timer) ->
-        schedule_flush(state)
-
-      true ->
-        state
-    end
-  end
-
-  defp schedule_flush(%State{batch_flush_timer: nil} = state, delay \\ nil) do
-    delay = delay || Keyword.fetch!(batch_flush_interval(state), :max_age)
+  defp maybe_schedule_flush(%State{batch_flush_timer: nil} = state) do
+    delay = batch_flush_interval(state)
     ref = Process.send_after(self(), :flush_batch, delay)
-    time = :os.system_time(:millisecond) + delay
-    %{state | batch_flush_timer: {ref, time}}
+    %{state | batch_flush_timer: ref}
   end
+
+  defp maybe_schedule_flush(state), do: state
 
   defp batch_flush_interval(%State{} = state) do
-    interval = state.setting_batch_flush_interval || []
-    Keyword.merge(batch_flush_interval(), interval)
+    state.setting_batch_flush_interval || batch_flush_interval()
   end
-
-  defp maybe_cancel_flush_timer({timer, _}) when is_reference(timer) do
-    case Process.cancel_timer(timer) do
-      false ->
-        receive do
-          :flush_batch -> :ok
-        after
-          0 -> :ok
-        end
-
-      _ ->
-        :ok
-    end
-  end
-
-  defp maybe_cancel_flush_timer(_), do: :ok
 
   defp ack_message(lsn) when is_integer(lsn) do
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]

@@ -57,12 +57,7 @@ config :sequin, Sequin.Repo,
   ssl: false,
   types: PostgrexTypes
 
-config :sequin, Sequin.Runtime.SlotProducer,
-  batch_flush_interval: [
-    max_messages: 500,
-    max_bytes: 1024 * 1024 * 10,
-    max_age: 5
-  ]
+config :sequin, Sequin.Runtime.SlotProducer, batch_flush_interval: 10
 
 config :sequin, Sequin.Runtime.SlotProducer.ReorderBuffer,
   min_demand: 1,

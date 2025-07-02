@@ -329,14 +329,14 @@ defmodule Sequin.Runtime.SlotProducerTest do
       Replication.put_restart_wal_cursor!(slot.id, %{commit_lsn: current_lsn, commit_idx: 0})
 
       # Insert second character (this will be after the restart cursor)
-      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
+      CharacterFactory.insert_character!(%{name: "Character 2"}, repo: UnboxedRepo)
 
       start_slot_producer(slot)
 
-      messages = receive_messages(1)
+      [msg] = receive_messages(1)
 
-      assert length(messages) == 1, "Expected 1 message but got #{length(messages)}"
-      assert hd(messages).kind == :insert
+      assert msg.kind == :insert
+      assert msg.payload =~ "Character 2"
     end
 
     @tag start_opts: [processor_opts: [consumer_demand: :manual]]

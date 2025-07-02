@@ -46,7 +46,8 @@ defmodule Sequin.Runtime.MessageHandler do
 
   @callback handle_messages(Context.t(), [Message.t()]) :: {:ok, non_neg_integer()} | {:error, Sequin.Error.t()}
   @callback before_handle_messages(Context.t(), [Message.t()]) :: :ok
-  @callback put_high_watermark_wal_cursor(Context.t(), Replication.wal_cursor()) :: :ok | {:error, Sequin.Error.t()}
+  @callback put_high_watermark_wal_cursor(Context.t(), {batch_idx :: non_neg_integer(), Replication.wal_cursor()}) ::
+              :ok | {:error, Sequin.Error.t()}
 
   def context(%PostgresReplicationSlot{} = pr) do
     pr =
@@ -151,10 +152,11 @@ defmodule Sequin.Runtime.MessageHandler do
   @doc """
   Updates the high watermark WAL cursor for all sink consumers.
   """
-  @spec put_high_watermark_wal_cursor(Context.t(), Replication.wal_cursor()) :: :ok | {:error, Sequin.Error.t()}
-  def put_high_watermark_wal_cursor(%Context{} = ctx, wal_cursor) do
+  @spec put_high_watermark_wal_cursor(Context.t(), {batch_idx :: non_neg_integer(), Replication.wal_cursor()}) ::
+          :ok | {:error, Sequin.Error.t()}
+  def put_high_watermark_wal_cursor(%Context{} = ctx, {batch_idx, wal_cursor}) do
     Sequin.Enum.reduce_while_ok(ctx.consumers, fn consumer ->
-      SlotMessageStore.put_high_watermark_wal_cursor(consumer, wal_cursor)
+      SlotMessageStore.put_high_watermark_wal_cursor(consumer, {batch_idx, wal_cursor})
     end)
   end
 

@@ -58,7 +58,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
 
       state = %{state | demand: new_demand - length(events), pending_events: remaining_events}
 
-      state = maybe_send_markers(state)
+      Process.send_after(self(), :maybe_send_batch_markers, 0)
 
       {:noreply, events, state}
     end
@@ -79,6 +79,12 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       # Send batch marker to ReorderBuffer directly with producer_partition_idx set
       marker_with_partition = %{batch_marker | producer_partition_idx: partition_idx}
       state = %{state | pending_markers: [marker_with_partition | state.pending_markers]}
+      state = maybe_send_markers(state)
+
+      {:noreply, [], state}
+    end
+
+    def handle_info(:maybe_send_batch_markers, state) do
       state = maybe_send_markers(state)
 
       {:noreply, [], state}
@@ -262,7 +268,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       assert_receive {:DOWN, _ref, :process, _pid,
                       {%RuntimeError{
                          message: "Batch idxs completed out-of-order: other_idx=0 min_ready_idx=1"
-                       }, _stacktrace}}
+                       }, _stacktrace}},
+                     1000
     end
 
     @tag buffer_opts: [setting_min_demand: 2, setting_max_demand: 5]
@@ -354,7 +361,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
       Agent.update(flush_control, fn _ -> :succeed end)
 
       # Should receive batch and demand should recover
-      assert_receive {:batch_ready, _}
+      assert_receive {:batch_ready, _}, 1000
 
       assert_eventually Enum.all?(producers, fn {_idx, producer} -> TestProducer.get_demand(producer) >= 50 end)
     end

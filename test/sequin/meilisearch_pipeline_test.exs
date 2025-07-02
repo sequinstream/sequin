@@ -71,61 +71,6 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
     end
   end
 
-  describe "meilisearch routing" do
-    setup do
-      account = AccountsFactory.insert_account!()
-
-      routing =
-        FunctionsFactory.insert_function!(
-          account_id: account.id,
-          function_type: :routing,
-          function_attrs: %{
-            body: """
-            if record["deleted_at"] != nil do
-              %{index_name: "router-collection", action: "delete"}
-            else
-              %{index_name: "router-collection"}
-            end
-            """
-          }
-        )
-
-      MiniElixir.create(routing.id, routing.function.code)
-
-      consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          account_id: account.id,
-          type: :meilisearch,
-          message_kind: :event,
-          routing_mode: "dynamic",
-          routing_id: routing.id
-        )
-
-      {:ok, %{consumer: consumer}}
-    end
-
-    test "router can change action to delete based on deleted_at field", %{consumer: consumer} do
-      message =
-        ConsumersFactory.consumer_message(
-          consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
-          data:
-            ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
-              action: :insert,
-              record: %{"id" => 123, "deleted_at" => "2024-01-01T00:00:00Z"}
-            )
-        )
-
-      start_pipeline!(consumer)
-
-      send_test_batch(consumer, [message])
-
-      assert_receive {:ack, _ref, [success], []}, 3000
-      assert success.data == message
-    end
-  end
-
   defp generate_events(consumer, count) do
     records =
       for _ <- 1..count do

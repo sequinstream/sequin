@@ -91,23 +91,23 @@
   let saving: boolean = false;
   let validating: boolean = false;
   let functionInternalToExternal = {
-    path: "Path transform",
+    filter: "Filter function",
     transform: "Transform function",
     routing: "Routing function",
-    filter: "Filter function",
+    path: "Path transform",
   };
 
   let sinkTypeInternalToExternal = {
-    http_push: "HTTP Push",
-    redis_string: "Redis String",
-    redis_stream: "Redis Stream",
-    nats: "NATS",
-    kafka: "Kafka",
-    gcp_pubsub: "GCP PubSub",
-    typesense: "Typesense",
-    meilisearch: "Meilisearch",
+    sqs: "AWS SQS",
     elasticsearch: "Elasticsearch",
-    sqs: "SQS",
+    gcp_pubsub: "GCP PubSub",
+    kafka: "Kafka",
+    meilisearch: "Meilisearch",
+    nats: "NATS",
+    redis_stream: "Redis Stream",
+    redis_string: "Redis String",
+    typesense: "Typesense",
+    http_push: "Webhook",
   };
 
   let errorKeyOrder = ["description", "snippet", "line", "column"];
@@ -802,22 +802,9 @@ Please help me create or modify the Elixir function transform to achieve the des
                 <SelectValue placeholder="Select a function type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem
-                  value="filter"
-                  label={functionInternalToExternal.filter}
-                />
-                <SelectItem
-                  value="transform"
-                  label={functionInternalToExternal.transform}
-                />
-                <SelectItem
-                  value="routing"
-                  label={functionInternalToExternal.routing}
-                />
-                <SelectItem
-                  value="path"
-                  label={functionInternalToExternal.path}
-                />
+                {#each Object.entries(functionInternalToExternal) as [value, label]}
+                  <SelectItem {value} {label} />
+                {/each}
               </SelectContent>
             </Select>
             {#if showErrors && formErrors.function && Array.isArray(formErrors.function)}

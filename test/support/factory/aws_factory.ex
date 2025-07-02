@@ -91,4 +91,28 @@ defmodule Sequin.Factory.AwsFactory do
       }
     })
   end
+
+  def kinesis_put_records_response_success do
+    %{
+      "FailedRecordCount" => 0,
+      "Records" => [
+        %{
+          "SequenceNumber" => "49590338271490256608559692538361571095921575989136588801",
+          "ShardId" => "shardId-000000000001"
+        }
+      ]
+    }
+  end
+
+  def kinesis_put_records_response_failure do
+    %{
+      "FailedRecordCount" => 1,
+      "Records" => [
+        %{
+          "ErrorCode" => "InternalFailure",
+          "ErrorMessage" => "Internal service failure."
+        }
+      ]
+    }
+  end
 end

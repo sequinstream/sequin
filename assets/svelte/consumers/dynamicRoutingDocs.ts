@@ -200,4 +200,14 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  kinesis: {
+    fields: {
+      stream_arn: {
+        description: "AWS Kinesis stream ARN",
+        staticValue: "<empty>",
+        staticFormField: "stream_arn",
+        dynamicDefault: "<empty>",
+      },
+    },
+  },
 };

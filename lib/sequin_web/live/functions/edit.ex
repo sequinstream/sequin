@@ -142,6 +142,14 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_kinesis """
+  def route(action, record, changes, metadata) do
+    %{
+      stream_arn: "arn:aws:kinesis:<region>:<account-id>:stream/sequin-\#{metadata.database.name}-\#{metadata.table_schema}-\#{metadata.table_name}"
+    }
+  end
+  """
+
   @initial_route_sqs """
   def route(action, record, changes, metadata) do
     %{
@@ -192,7 +200,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_sns" => @initial_route_sns,
     "routing_sqs" => @initial_route_sqs,
     "routing_rabbitmq" => @initial_route_rabbitmq,
-    "routing_azure_event_hub" => @initial_route_azure_event_hub
+    "routing_azure_event_hub" => @initial_route_azure_event_hub,
+    "routing_kinesis" => @initial_route_kinesis
   }
 
   # We generate the function completions at compile time because

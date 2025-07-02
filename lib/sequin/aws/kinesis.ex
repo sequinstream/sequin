@@ -4,6 +4,30 @@ defmodule Sequin.Aws.Kinesis do
   alias AWS.Client
   alias Sequin.Error
 
+  require Logger
+
+  @spec test_credentials_and_permissions(Client.t()) :: :ok | {:error, Error.t()}
+  def test_credentials_and_permissions(%Client{} = client) do
+    case AWS.Kinesis.list_streams(client, %{}) do
+      {:ok, _response, %{status_code: 200}} ->
+        :ok
+
+      {:error, {:unexpected_response, details}} ->
+        Logger.debug("[Kinesis] Failed to list streams for credential test: #{inspect(details)}")
+        handle_unexpected_response(details)
+
+      {:error, error} ->
+        Logger.debug("[Kinesis] Failed to list streams for credential test: #{inspect(error)}")
+
+        {:error,
+         Error.service(
+           service: :aws_kinesis,
+           message: "Failed to test Kinesis credentials and permissions",
+           details: error
+         )}
+    end
+  end
+
   def put_records(%Client{} = client, stream_arn, records) when is_list(records) do
     request_body = %{
       "StreamARN" => stream_arn,

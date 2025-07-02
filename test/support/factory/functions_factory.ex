@@ -161,7 +161,8 @@ defmodule Sequin.Factory.FunctionsFactory do
           :elasticsearch,
           :sqs,
           :sns,
-          :rabbitmq
+          :rabbitmq,
+          :kinesis
         ])
       end)
 
@@ -209,6 +210,13 @@ defmodule Sequin.Factory.FunctionsFactory do
             """
             %{
               topic_arn: "arn:aws:sns:us-west-2:123456789012:" <> metadata.table_name
+            }
+            """
+
+          :kinesis ->
+            """
+            %{
+              stream_arn: "arn:aws:kinesis:us-west-2:123456789012:stream/" <> metadata.table_name
             }
             """
 

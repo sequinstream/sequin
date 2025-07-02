@@ -201,21 +201,24 @@ defmodule Sequin.Factory.ConsumersFactory do
   end
 
   defp sink(:kinesis, _account_id, attrs) do
+    region = Enum.random(["us-east-1", "us-west-1", "us-west-2"])
+
     merge_attributes(
       %KinesisSink{
         type: :kinesis,
         stream_arn:
           :erlang.iolist_to_binary([
-            "arn:aws:kinesis",
+            "arn:aws:kinesis:",
+            region,
             ":",
-            Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
-            ":",
-            to_string(Factory.integer()),
+            "123456789012",
             ":stream/",
             Factory.word()
           ]),
+        region: region,
         access_key_id: Factory.word(),
-        secret_access_key: Factory.word()
+        secret_access_key: Factory.word(),
+        routing_mode: :static
       },
       attrs
     )

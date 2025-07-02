@@ -66,15 +66,17 @@ Sequin does not perform any searches.
 
 ## Routing
 
-The Meilisearch sink supports dynamic routing of the `index_name` with [routing functions](/reference/routing).
+The Meilisearch sink supports dynamic routing of the `action` and `index_name` with [routing functions](/reference/routing).
 
 Example routing function:
 
 ```elixir
 def route(action, record, changes, metadata) do
-  %{
-    index_name: metadata.table_name
-  }
+  if record["deleted_at"] != nil do
+    %{index_name: metadata.table_name, action: "delete"}
+  else
+    %{index_name: metadata.table_name, action: "index"}
+  end
 end
 ```
 

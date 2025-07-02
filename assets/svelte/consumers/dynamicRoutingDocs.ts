@@ -122,6 +122,13 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
   },
   meilisearch: {
     fields: {
+      action: {
+        description: "Meilisearch action to perform",
+        staticValue:
+          "'index' for insert, update, and read, 'delete' for delete",
+        dynamicDefault:
+          "'index' for insert, update, and read, 'delete' for delete",
+      },
       index_name: {
         description: "Meilisearch index name to publish to",
         staticValue: "<empty>",

@@ -176,7 +176,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       [solo_msg] = receive_messages(1)
       assert solo_msg.message.action == :insert
       # First message in its transaction
-      assert solo_msg.commit_idx == 1
+      assert solo_msg.commit_idx == 0
 
       # Now insert multiple characters in a single transaction
       # This should generate multiple messages with same commit_lsn but different commit_idx

@@ -741,7 +741,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag start_opts: [
            heartbeat_interval: 1,
-           slot_producer: [slot_producer_opts: [ack_interval: 5, update_cursor_interval: 5]]
+           slot_producer: [slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]]
          ]
     test "replication slot advances even when database is idle", %{source_db: db} do
       {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
@@ -750,7 +750,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag start_opts: [
            heartbeat_interval: :timer.minutes(1),
-           slot_producer: [slot_producer_opts: [ack_interval: 5, update_cursor_interval: 5]]
+           slot_producer: [slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]]
          ]
     test "replication slot advances after insert", %{source_db: db, event_character_consumer: consumer} do
       {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
@@ -971,9 +971,9 @@ defmodule Sequin.PostgresReplicationTest do
       [insert1, insert2, insert3] = changes
 
       # Assert seq values increase within transaction
-      assert insert1.commit_idx == 1
-      assert insert2.commit_idx == 2
-      assert insert3.commit_idx == 3
+      assert insert1.commit_idx == 0
+      assert insert2.commit_idx == 1
+      assert insert3.commit_idx == 2
 
       assert action?(insert1, :insert)
       assert get_field_value(insert1.fields, "name") == "Paul Atreides"
@@ -1045,7 +1045,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {:change, [create_change]}, to_timeout(second: 1)
       assert action?(create_change, :insert)
       assert is_integer(create_change.commit_lsn)
-      assert create_change.commit_idx == 1
+      assert create_change.commit_idx == 0
 
       assert fields_equal?(create_change.fields, record)
       assert create_change.action == :insert
@@ -1687,7 +1687,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag start_opts: [
            heartbeat_interval: 1,
-           slot_producer: [slot_producer_opts: [ack_interval: 5, update_cursor_interval: 5]]
+           slot_producer: [slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]]
          ]
     test "replication slot advances even when database is idle", %{source_db: db} do
       {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
@@ -1696,7 +1696,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag start_opts: [
            heartbeat_interval: :timer.minutes(1),
-           slot_producer: [slot_producer_opts: [ack_interval: 5, update_cursor_interval: 5]]
+           slot_producer: [slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]]
          ]
     test "replication slot advances after insert", %{source_db: db} do
       {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())

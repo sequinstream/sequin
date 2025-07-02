@@ -33,7 +33,7 @@ defmodule Sequin.Runtime.SlotProducer do
             when elem(message, 0) in [:tcp, :tcp_closed, :tcp_error, :ssl, :ssl_closed, :ssl_error]
 
   defguardp below_restart_wal_cursor?(state)
-            when {state.commit_lsn, state.commit_idx} <
+            when {state.commit_lsn, state.next_commit_idx} <
                    {state.restart_wal_cursor.commit_lsn, state.restart_wal_cursor.commit_idx}
 
   @max_messages_per_protocol_read 500
@@ -121,18 +121,18 @@ defmodule Sequin.Runtime.SlotProducer do
       # Cursors & aliveness
       field :restart_wal_cursor, Replication.wal_cursor()
       field :restart_wal_cursor_fn, (PostgresReplicationSlot.id(), Postgres.wal_cursor() -> Postgres.wal_cursor())
-      field :setting_update_cursor_interval, non_neg_integer()
+      field :setting_restart_wal_cursor_update_interval, non_neg_integer()
+      field :restart_wal_cursor_update_timer, reference()
       field :setting_ack_interval, non_neg_integer()
       field :ack_timer, reference()
-      field :update_cursor_timer, reference()
       field :last_dispatched_wal_cursor, Replication.wal_cursor()
 
       # Batches
       field :batch_idx, BatchMarker.idx(), default: 0
-      field :last_flushed_batch_at, DateTime.t()
 
-      field :processed_messages_since_last_flush_stats, %{count: non_neg_integer(), bytes: non_neg_integer()},
-        default: %{count: 0, bytes: 0}
+      field :processed_messages_since_last_flush_stats,
+            %{count: non_neg_integer(), bytes: non_neg_integer(), last_flushed_at: DateTime.t()},
+            default: %{count: 0, bytes: 0, last_flushed_at: nil}
 
       field :batch_flush_timer, {reference(), non_neg_integer()}
       field :setting_batch_flush_interval, SlotProducer.batch_flush_interval()
@@ -140,7 +140,7 @@ defmodule Sequin.Runtime.SlotProducer do
       # Current xaction state
       field :commit_ts, DateTime.t()
       field :commit_lsn, integer()
-      field :commit_idx, integer()
+      field :next_commit_idx, integer()
       field :commit_xid, integer()
       field :transaction_annotations, nil | String.t()
       field :last_commit_lsn, nil | integer()
@@ -148,11 +148,10 @@ defmodule Sequin.Runtime.SlotProducer do
 
       field :demand, integer(), default: 0
       field :consumers, [pid()], default: []
-      field :processor_mod, module()
+      field :consumer_mod, module()
 
-      # Relations
+      # For consumers
       field :relations, %{required(table_oid :: String.t()) => Relation.t()}, default: %{}
-
       # Last batch marker for new subscribers
       field :last_batch_marker, BatchMarker.t() | nil
 
@@ -211,8 +210,9 @@ defmodule Sequin.Runtime.SlotProducer do
       restart_wal_cursor_fn: Keyword.fetch!(opts, :restart_wal_cursor_fn),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
-      setting_update_cursor_interval: Keyword.get(opts, :update_cursor_interval, :timer.seconds(10)),
-      processor_mod: Keyword.get(opts, :processor_mod),
+      setting_restart_wal_cursor_update_interval:
+        Keyword.get(opts, :restart_wal_cursor_update_interval, :timer.seconds(10)),
+      consumer_mod: Keyword.get(opts, :consumer_mod),
       conn: Keyword.fetch!(opts, :conn),
       setting_batch_flush_interval: Keyword.get(opts, :batch_flush_interval)
     }
@@ -236,12 +236,12 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_subscribe(:consumer, _opts, {pid, _ref}, state) do
     # Send all stored relations to the new consumer
     Enum.each(state.relations, fn {_table_oid, relation} ->
-      state.processor_mod.handle_relation(pid, relation)
+      state.consumer_mod.handle_relation(pid, relation)
     end)
 
     # Send last batch marker to the new consumer if we have one
     if state.last_batch_marker do
-      state.processor_mod.handle_batch_marker(pid, state.last_batch_marker)
+      state.consumer_mod.handle_batch_marker(pid, state.last_batch_marker)
     end
 
     {:automatic, %{state | consumers: [pid | state.consumers]}}
@@ -313,7 +313,7 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_info(:update_restart_wal_cursor, %State{} = state) do
     state = update_restart_wal_cursor(state)
 
-    state = schedule_update_cursor(%{state | update_cursor_timer: nil})
+    state = schedule_update_cursor(%{state | restart_wal_cursor_update_timer: nil})
     {:noreply, [], state}
   end
 
@@ -332,14 +332,13 @@ defmodule Sequin.Runtime.SlotProducer do
     }
 
     Enum.each(state.consumers, fn consumer ->
-      state.processor_mod.handle_batch_marker(consumer, batch_marker)
+      state.consumer_mod.handle_batch_marker(consumer, batch_marker)
     end)
 
     state = %{
       state
-      | processed_messages_since_last_flush_stats: %{count: 0, bytes: 0},
+      | processed_messages_since_last_flush_stats: %{count: 0, bytes: 0, last_flushed_at: DateTime.utc_now()},
         batch_idx: state.batch_idx + 1,
-        last_flushed_batch_at: DateTime.utc_now(),
         last_batch_marker: batch_marker,
         batch_flush_timer: nil
     }
@@ -353,17 +352,24 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   defp maybe_log_message(%State{} = state) do
-    if is_nil(state.last_commit_lsn) and state.commit_idx == 0 and state.accumulated_messages.count == 0 do
+    if is_nil(state.last_commit_lsn) and state.next_commit_idx == 0 and state.accumulated_messages.count == 0 do
       Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
     end
   end
 
+  @advance_idx_types [?I, ?U, ?D, ?T, ?M]
+  # Ignore ?T for processing, but still count it for idx advancement to future-proof
+  @ignoreable_messages [?Y, ?T, ?O]
   defp handle_copies(copies, state) do
     Enum.reduce_while(copies, {:ok, state}, fn copy, {:ok, state} ->
-      case handle_data(copy, state) do
+      {type, msg} = parse_copy(copy)
+
+      case handle_data(type, msg, state) do
         {:ok, next_state} ->
-          if not is_nil(state.commit_lsn) and next_state.commit_lsn == state.commit_lsn do
-            {:cont, {:ok, %{next_state | commit_idx: state.commit_idx + 1}}}
+          advance_next_commit_idx? = not is_nil(state.commit_lsn) and type in @advance_idx_types
+
+          if advance_next_commit_idx? do
+            {:cont, {:ok, %{next_state | next_commit_idx: state.next_commit_idx + 1}}}
           else
             {:cont, {:ok, next_state}}
           end
@@ -374,27 +380,35 @@ defmodule Sequin.Runtime.SlotProducer do
     end)
   end
 
-  @ignoreable_messages [?Y, ?T, ?O]
-  defp handle_data(<<?w, _header::192, type, _rest::binary>>, %State{} = state) when type in @ignoreable_messages do
+  defp parse_copy(<<?w, _header::192, msg::binary>>) do
+    <<type, _::binary>> = msg
+    {type, msg}
+  end
+
+  defp parse_copy(<<?k, _rest::binary>> = msg) do
+    {?k, msg}
+  end
+
+  defp handle_data(type, _msg, %State{} = state) when type in @ignoreable_messages do
     {:ok, state}
   end
 
-  defp handle_data(<<?w, _header::192, ?B, rest::binary>>, %State{} = state) do
+  defp handle_data(?B, msg, %State{} = state) do
     %State{last_commit_lsn: last_commit_lsn} = state
-    %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid} = Decoder.decode_message(<<?B, rest::binary>>)
+    %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid} = Decoder.decode_message(msg)
     begin_lsn = Postgres.lsn_to_int(lsn)
 
     if not is_nil(last_commit_lsn) and begin_lsn < last_commit_lsn do
       raise "Received a Begin message with an LSN that is less than the last commit LSN (#{begin_lsn} < #{last_commit_lsn})"
     end
 
-    state = %State{state | commit_ts: ts, commit_idx: 0, commit_lsn: begin_lsn, commit_xid: xid}
+    state = %State{state | commit_ts: ts, next_commit_idx: 0, commit_lsn: begin_lsn, commit_xid: xid}
     {:ok, state}
   end
 
-  defp handle_data(<<?w, _header::192, ?C, msg::binary>>, %State{} = state) do
+  defp handle_data(?C, msg, %State{} = state) do
     %State{commit_lsn: commit_lsn, commit_ts: commit_ts} = state
-    %Commit{} = commit = Decoder.decode_message(<<?C, msg::binary>>)
+    %Commit{} = commit = Decoder.decode_message(msg)
     recv_lsn = Postgres.lsn_to_int(commit.lsn)
 
     if commit_lsn != recv_lsn or commit_ts != commit.commit_timestamp do
@@ -410,33 +424,32 @@ defmodule Sequin.Runtime.SlotProducer do
     state = %State{
       state
       | last_commit_lsn: commit_lsn,
-        # This number starts at 0, and is incremented *after* each assignment. So the last assignment is -1
-        last_commit_idx: state.commit_idx - 1,
+        last_commit_idx: state.next_commit_idx - 1,
         commit_lsn: nil,
         commit_ts: nil,
         commit_xid: nil,
-        commit_idx: 0,
+        next_commit_idx: 0,
         transaction_annotations: nil
     }
 
     {:ok, state}
   end
 
-  defp handle_data(<<?w, _header::192, ?R, msg::binary>>, %State{} = state) do
-    relation = Relation.parse_relation(<<?R, msg::binary>>, state.database_id, state.conn.())
+  defp handle_data(?R, msg, %State{} = state) do
+    relation = Relation.parse_relation(msg, state.database_id, state.conn.())
 
     state = %{state | relations: Map.put(state.relations, relation.id, relation)}
 
     Enum.each(state.consumers, fn consumer ->
-      state.processor_mod.handle_relation(consumer, relation)
+      state.consumer_mod.handle_relation(consumer, relation)
     end)
 
     {:ok, state}
   end
 
   defp handle_data(
-         <<?w, _header::192, ?M, _transactional::binary-1, _lsn::binary-8, "sequin:transaction_annotations."::binary,
-           rest::binary>>,
+         ?M,
+         <<?M, _transactional::binary-1, _lsn::binary-8, "sequin:transaction_annotations."::binary, rest::binary>>,
          %State{} = state
        ) do
     [op, <<_length::integer-32, content::binary>>] = String.split(rest, <<0>>, parts: 2)
@@ -452,25 +465,19 @@ defmodule Sequin.Runtime.SlotProducer do
 
       unknown ->
         Logger.warning("Unknown transaction annotation operation: #{unknown}")
+        {:ok, state}
     end
   end
 
-  defp handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) when below_restart_wal_cursor?(state) do
-    if is_nil(state.last_commit_lsn) and state.accumulated_messages.count == 0 do
-      Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
-    end
-
+  @change_types [?I, ?U, ?D, ?M]
+  defp handle_data(type, msg, %State{} = state) when below_restart_wal_cursor?(state) and type in @change_types do
     raw_bytes_received = byte_size(msg)
     ProcessMetrics.increment_throughput("raw_bytes_received", raw_bytes_received)
 
     {:ok, state}
   end
 
-  defp handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    if is_nil(state.last_commit_lsn) and state.commit_idx > 0 and state.accumulated_messages.count == 0 do
-      Logger.info("Received first message from slot (`last_commit_lsn` was nil)")
-    end
-
+  defp handle_data(type, msg, %State{} = state) when type in @change_types do
     raw_bytes_received = byte_size(msg)
     ProcessMetrics.increment_throughput("raw_bytes_received", raw_bytes_received)
 
@@ -499,7 +506,7 @@ defmodule Sequin.Runtime.SlotProducer do
   # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   # The server is not asking for a reply
-  defp handle_data(<<?k, wal_end::64, clock::64, reply_requested>>, %State{} = state) do
+  defp handle_data(?k, <<?k, wal_end::64, clock::64, reply_requested>>, %State{} = state) do
     diff_ms = Sequin.Time.microseconds_since_2000_to_ms_since_now(clock)
     log = "Received keepalive message for slot (reply_requested=#{reply_requested}) (clock_diff=#{diff_ms}ms)"
     log_meta = [clock: clock, wal_end: wal_end, diff_ms: diff_ms]
@@ -509,6 +516,12 @@ defmodule Sequin.Runtime.SlotProducer do
     else
       Logger.debug(log, log_meta)
     end
+
+    {:ok, state}
+  end
+
+  defp handle_data(type, _msg, %State{} = state) do
+    Logger.warning("Unsupported message type: #{type}")
 
     {:ok, state}
   end
@@ -537,7 +550,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
     %Message{
       byte_size: byte_size(binary),
-      commit_idx: state.commit_idx,
+      commit_idx: state.next_commit_idx,
       commit_lsn: state.commit_lsn,
       commit_ts: state.commit_ts,
       kind: kind,
@@ -651,7 +664,7 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   defp close_commit(%State{} = state) do
-    %State{state | commit_ts: nil, commit_lsn: nil, commit_idx: nil, commit_xid: nil, transaction_annotations: nil}
+    %State{state | commit_ts: nil, commit_lsn: nil, next_commit_idx: nil, commit_xid: nil, transaction_annotations: nil}
   end
 
   defp schedule_timers(state) do
@@ -667,9 +680,11 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp schedule_ack(state), do: state
 
-  defp schedule_update_cursor(%State{update_cursor_timer: nil, setting_update_cursor_interval: int} = state) do
+  defp schedule_update_cursor(
+         %State{restart_wal_cursor_update_timer: nil, setting_restart_wal_cursor_update_interval: int} = state
+       ) do
     ref = Process.send_after(self(), :update_restart_wal_cursor, int)
-    %{state | update_cursor_timer: ref}
+    %{state | restart_wal_cursor_update_timer: ref}
   end
 
   defp schedule_update_cursor(state), do: state
@@ -692,7 +707,10 @@ defmodule Sequin.Runtime.SlotProducer do
       end
 
     cond do
-      flush_now? and not imminent_timer ->
+      flush_now? and imminent_timer ->
+        state
+
+      flush_now? ->
         maybe_cancel_flush_timer(state.batch_flush_timer)
         schedule_flush(%{state | batch_flush_timer: nil}, 0)
 

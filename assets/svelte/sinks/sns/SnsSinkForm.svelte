@@ -7,9 +7,15 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
+  import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
 
   export let form;
   export let errors: any = {};
+  export let functions: Array<any> = [];
+  export let refreshFunctions: () => void;
+  export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
+
+  let isDynamicRouting = form.routingMode === "dynamic";
 
   // Update is_fifo based on topic ARN
   $: if (form.sink?.topic_arn) {
@@ -21,22 +27,8 @@
   <CardHeader>
     <CardTitle>SNS Configuration</CardTitle>
   </CardHeader>
-  <CardContent class="flex flex-col gap-4">
-    <div class="flex flex-col gap-2">
-      <Label for="topic-arn">Topic ARN</Label>
-      <Input
-        id="topic-arn"
-        bind:value={form.sink.topic_arn}
-        placeholder="arn:aws:sns:region:123456789012:topic-name"
-      />
-      {#if errors.sink?.topic_arn}
-        <p class="text-destructive text-sm">{errors.sink.topic_arn}</p>
-      {:else if errors.sink?.region}
-        <p class="text-destructive text-sm">{errors.sink.region}</p>
-      {/if}
-    </div>
-
-    <div class="flex flex-col gap-2">
+  <CardContent class="space-y-4">
+    <div class="space-y-2">
       <Label for="access-key">AWS Access Key ID</Label>
       <Input
         id="access-key"
@@ -52,7 +44,7 @@
       {/if}
     </div>
 
-    <div class="flex flex-col gap-2">
+    <div class="space-y-2">
       <Label for="secret-key">AWS Secret Access Key</Label>
       <Input
         id="secret-key"
@@ -68,5 +60,50 @@
         </p>
       {/if}
     </div>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent class="space-y-4">
+    <DynamicRoutingForm
+      bind:form
+      {functions}
+      {refreshFunctions}
+      bind:functionRefreshState
+      routedSinkType="sns"
+      bind:selectedDynamic={isDynamicRouting}
+      {errors}
+    />
+
+    <div class="space-y-2" hidden={isDynamicRouting}>
+      <Label for="topic-arn">Topic ARN</Label>
+      <Input
+        id="topic-arn"
+        name="sink[topic_arn]"
+        bind:value={form.sink.topic_arn}
+        placeholder="arn:aws:sns:region:123456789012:topic-name"
+      />
+      {#if errors.sink?.topic_arn}
+        <p class="text-destructive text-sm">{errors.sink.topic_arn}</p>
+      {/if}
+    </div>
+
+    {#if isDynamicRouting}
+      <div class="space-y-2">
+        <Label for="region">AWS Region</Label>
+        <Input
+          id="region"
+          name="sink[region]"
+          bind:value={form.sink.region}
+          placeholder="us-east-1"
+        />
+        {#if errors.sink?.region}
+          <p class="text-destructive text-sm">{errors.sink.region}</p>
+        {/if}
+      </div>
+    {/if}
   </CardContent>
 </Card>

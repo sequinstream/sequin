@@ -134,6 +134,14 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_sns """
+  def route(action, record, changes, metadata) do
+    %{
+      topic_arn: "arn:aws:sns:<region>:<account-id>:sequin-\#{metadata.database.name}-\#{metadata.table_schema}-\#{metadata.table_name}"
+    }
+  end
+  """
+
   @initial_route_sqs """
   def route(action, record, changes, metadata) do
     %{
@@ -163,6 +171,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_meilisearch" => @initial_route_meilisearch,
     "routing_redis_stream" => @initial_route_redis_stream,
     "routing_elasticsearch" => @initial_route_elasticsearch,
+    "routing_sns" => @initial_route_sns,
     "routing_sqs" => @initial_route_sqs
   }
 

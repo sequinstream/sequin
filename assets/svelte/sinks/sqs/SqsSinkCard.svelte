@@ -43,37 +43,45 @@
           </div>
         </div>
       </div>
-      <div>
-        <span class="text-sm text-gray-500">Queue URL</span>
+    </div>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <div>
+      <span class="text-sm text-gray-500">Queue URL</span>
+      <div class="mt-2">
+        <span
+          class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+        >
+          {#if consumer.routing_id}
+            Determined by <a
+              href={`/functions/${consumer.routing_id}`}
+              data-phx-link="redirect"
+              data-phx-link-state="push"
+              class="underline">router</a
+            >
+            <ExternalLink class="h-4 w-4 inline" />
+          {:else}
+            {consumer.sink.queue_url}
+          {/if}
+        </span>
+      </div>
+    </div>
+    {#if consumer.routing}
+      <div class="mt-2">
+        <span class="text-sm text-gray-500">Router</span>
         <div class="mt-2">
-          <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-          >
-            {#if consumer.routing_id}
-              Determined by <a
-                href={`/functions/${consumer.routing_id}`}
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-                class="underline">router</a
-              >
-              <ExternalLink class="h-4 w-4 inline" />
-            {:else}
-              {consumer.sink.queue_url}
-            {/if}
-          </span>
+          <pre
+            class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
+              >{consumer.routing.function.code}</code
+            ></pre>
         </div>
       </div>
-      {#if consumer.routing}
-        <div class="mt-2">
-          <span class="text-sm text-gray-500">Router</span>
-          <div class="mt-2">
-            <pre
-              class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
-                >{consumer.routing.function.code}</code
-              ></pre>
-          </div>
-        </div>
-      {/if}
-    </div>
+    {/if}
   </CardContent>
 </Card>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ExternalLink } from "lucide-svelte";
-  import { Card, CardContent } from "$lib/components/ui/card";
+  import { Card, CardContent, CardTitle } from "$lib/components/ui/card";
+  import CardHeader from "$lib/components/ui/card/card-header.svelte";
   import { Button } from "$lib/components/ui/button";
   import type { SnsConsumer } from "../../consumers/types";
 
@@ -41,15 +42,47 @@
           </div>
         </div>
       </div>
+    </div>
+  </CardContent>
+</Card>
+
+<Card>
+  <CardHeader>
+    <CardTitle>Routing</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div>
         <span class="text-sm text-gray-500">Topic ARN</span>
         <div class="mt-2">
           <span
             class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-            >{consumer.sink.topic_arn}</span
           >
+            {#if consumer.routing_id}
+              Determined by <a
+                href={`/functions/${consumer.routing_id}`}
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+                class="underline">router</a
+              >
+              <ExternalLink class="h-4 w-4 inline" />
+            {:else}
+              {consumer.sink.topic_arn}
+            {/if}
+          </span>
         </div>
       </div>
     </div>
+    {#if consumer.routing}
+      <div class="mt-2">
+        <span class="text-sm text-gray-500">Router</span>
+        <div class="mt-2">
+          <pre
+            class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
+              >{consumer.routing.function.code}</code
+            ></pre>
+        </div>
+      </div>
+    {/if}
   </CardContent>
 </Card>

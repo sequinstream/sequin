@@ -99,6 +99,7 @@
 
   let sinkTypeInternalToExternal = {
     sqs: "AWS SQS",
+    sns: "AWS SNS",
     elasticsearch: "Elasticsearch",
     gcp_pubsub: "GCP PubSub",
     kafka: "Kafka",

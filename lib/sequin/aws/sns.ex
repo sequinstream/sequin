@@ -83,6 +83,24 @@ defmodule Sequin.Aws.SNS do
     end
   end
 
+  @spec test_credentials_and_permissions(Client.t()) :: :ok | {:error, Error.t()}
+  def test_credentials_and_permissions(%Client{} = client) do
+    case AWS.SNS.list_topics(client, %{}) do
+      {:ok, _response, %{status_code: 200}} ->
+        :ok
+
+      {:error, {:unexpected_response, details}} ->
+        Logger.debug("[SNS] Failed to list topics for credential test: #{inspect(details)}")
+        handle_unexpected_response(details)
+
+      {:error, error} ->
+        Logger.debug("[SNS] Failed to list topics for credential test: #{inspect(error)}")
+
+        {:error,
+         Error.service(service: :aws_sns, message: "Failed to test SNS credentials and permissions", details: error)}
+    end
+  end
+
   @spec topic_meta(Client.t(), String.t()) :: :ok | {:error, Error.t()}
   def topic_meta(%Client{} = client, topic_arn) do
     case AWS.SNS.get_topic_attributes(client, %{"TopicArn" => topic_arn}) do

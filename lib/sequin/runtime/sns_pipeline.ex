@@ -5,6 +5,7 @@ defmodule Sequin.Runtime.SnsPipeline do
   alias Sequin.Aws.SNS
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
 
   require Logger
@@ -27,9 +28,21 @@ defmodule Sequin.Runtime.SnsPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_message(message, context) do
+    %{consumer: consumer, test_pid: test_pid} = context
+    setup_allowances(test_pid)
+
+    %Routing.Consumers.Sns{topic_arn: topic_arn} = Routing.route_message(consumer, message.data)
+
+    message = Broadway.Message.put_batch_key(message, topic_arn)
+
+    {:ok, message, context}
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, %{batch_key: topic_arn}, context) do
     %{
-      consumer: %SinkConsumer{sink: sink} = consumer,
+      consumer: %SinkConsumer{} = consumer,
       sns_client: sns_client,
       test_pid: test_pid
     } = context
@@ -37,11 +50,11 @@ defmodule Sequin.Runtime.SnsPipeline do
     setup_allowances(test_pid)
 
     sns_messages =
-      Enum.map(messages, fn %{data: data} ->
-        build_sns_message(consumer, data)
+      Enum.map(messages, fn message ->
+        build_sns_message(consumer, message)
       end)
 
-    case SNS.publish_messages(sns_client, sink.topic_arn, sns_messages) do
+    case SNS.publish_messages(sns_client, topic_arn, sns_messages) do
       :ok ->
         {:ok, messages, context}
 
@@ -50,16 +63,21 @@ defmodule Sequin.Runtime.SnsPipeline do
     end
   end
 
-  @spec build_sns_message(SinkConsumer.t(), term()) :: map()
+  @spec build_sns_message(
+          SinkConsumer.t(),
+          Sequin.Consumers.ConsumerEvent.t() | Sequin.Consumers.ConsumerRecord.t()
+        ) :: map()
   defp build_sns_message(consumer, record_or_event) do
+    consumer_data = record_or_event.data
+
     message = %{
-      message: Sequin.Transforms.Message.to_external(consumer, record_or_event),
-      message_deduplication_id: record_or_event.data.metadata.idempotency_key,
+      message: Sequin.Transforms.Message.to_external(consumer, consumer_data),
+      message_deduplication_id: consumer_data.data.metadata.idempotency_key,
       message_id: UUID.uuid4()
     }
 
     if consumer.sink.is_fifo do
-      Map.put(message, :message_group_id, record_or_event.group_id)
+      Map.put(message, :message_group_id, consumer_data.group_id)
     else
       message
     end

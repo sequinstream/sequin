@@ -228,6 +228,7 @@ export type SnsConsumer = BaseConsumer & {
     region: string;
     is_fifo: boolean;
   };
+  routing_mode?: "static" | "dynamic";
 };
 
 // Elasticsearch specific sink
@@ -292,6 +293,7 @@ export const RoutedSinkTypeValues = [
   "meilisearch",
   "elasticsearch",
   "sqs",
+  "sns",
 ] as const;
 
 export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

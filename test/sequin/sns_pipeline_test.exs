@@ -2,6 +2,7 @@ defmodule Sequin.Runtime.SnsPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Aws.HttpClient
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
@@ -10,6 +11,7 @@ defmodule Sequin.Runtime.SnsPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotMessageStoreSupervisor
@@ -38,7 +40,7 @@ defmodule Sequin.Runtime.SnsPipelineTest do
           replication_slot_id: replication.id
         )
 
-      {:ok, %{consumer: consumer}}
+      {:ok, %{consumer: consumer, account: account}}
     end
 
     test "events are sent to SNS", %{consumer: consumer} do
@@ -49,7 +51,7 @@ defmodule Sequin.Runtime.SnsPipelineTest do
       record =
         [consumer_id: consumer.id, source_record: :character]
         |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record, action: :insert))
 
       Req.Test.stub(HttpClient, fn conn ->
         send(test_pid, {:sns_request, conn})
@@ -105,6 +107,127 @@ defmodule Sequin.Runtime.SnsPipelineTest do
 
       ref = send_test_event(consumer)
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
+    end
+
+    test "events are sent to SNS with routing function", %{consumer: consumer, account: account} do
+      test_pid = self()
+
+      assert {:ok, routing_function} =
+               Consumers.create_function(account.id, %{
+                 name: "test_sns_routing",
+                 function: %{
+                   type: "routing",
+                   sink_type: "sns",
+                   code: """
+                   def route(action, record, changes, metadata) do
+                     topic_suffix = if action == "insert", do: "new", else: "updates"
+                     %{"topic_arn" => "arn:aws:sns:us-east-1:123456789012:test-topic-" <> topic_suffix}
+                   end
+                   """
+                 }
+               })
+
+      {:ok, _} = MiniElixir.create(routing_function.id, routing_function.function.code)
+
+      {:ok, consumer} =
+        Consumers.update_sink_consumer(consumer, %{routing_id: routing_function.id, routing_mode: "dynamic"})
+
+      record = CharacterFactory.character_attrs()
+
+      record =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record, action: :insert))
+
+      Req.Test.stub(HttpClient, fn conn ->
+        # Parse the request body to verify routing worked
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+
+        # Check that the topic ARN in the request matches our routing function output (URL-encoded)
+        assert String.contains?(body, "arn%3Aaws%3Asns%3Aus-east-1%3A123456789012%3Atest-topic-new")
+
+        send(test_pid, {:sns_request, conn})
+        body = AwsFactory.sns_publish_batch_response_success()
+        Req.Test.text(conn, body)
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_event(consumer, record)
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:sns_request, _conn}, 1_000
+    end
+
+    test "batched messages with routing function route to different topics", %{consumer: consumer, account: account} do
+      test_pid = self()
+
+      assert {:ok, routing_function} =
+               Consumers.create_function(account.id, %{
+                 name: "test_sns_batch_routing",
+                 function: %{
+                   type: "routing",
+                   sink_type: "sns",
+                   code: """
+                   def route(action, record, changes, metadata) do
+                     topic_suffix = if String.contains?(record["name"], "admin"), do: "admin", else: "users"
+                     %{"topic_arn" => "arn:aws:sns:us-east-1:123456789012:test-topic-" <> topic_suffix}
+                   end
+                   """
+                 }
+               })
+
+      {:ok, _} = MiniElixir.create(routing_function.id, routing_function.function.code)
+
+      {:ok, consumer} =
+        Consumers.update_sink_consumer(consumer, %{routing_id: routing_function.id, routing_mode: "dynamic"})
+
+      # Create records that will route to different topics
+      record1 = CharacterFactory.character_attrs(%{name: "admin_user"})
+      record2 = CharacterFactory.character_attrs(%{name: "regular_user"})
+
+      event1 =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record1))
+
+      event2 =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
+
+      request_count = :counters.new(1, [:atomics])
+
+      Req.Test.stub(HttpClient, fn conn ->
+        # Parse the request body to verify routing worked
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+
+        # Each batch should go to different topics based on routing function (URL-encoded)
+        is_admin_topic = String.contains?(body, "arn%3Aaws%3Asns%3Aus-east-1%3A123456789012%3Atest-topic-admin")
+        is_users_topic = String.contains?(body, "arn%3Aaws%3Asns%3Aus-east-1%3A123456789012%3Atest-topic-users")
+
+        # is_admin_topic EXCLUSIVE OR is_users_topic
+        assert (is_admin_topic or is_users_topic) and is_admin_topic !== is_users_topic
+
+        :counters.add(request_count, 1, 1)
+        send(test_pid, {:sns_request, conn, if(is_admin_topic, do: :admin, else: :users)})
+        body = AwsFactory.sns_publish_batch_response_success()
+        Req.Test.text(conn, body)
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_batch(consumer, [event1, event2])
+
+      # Should receive acknowledgment for each message separately (they go to different topics)
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+
+      # Should receive two separate SNS requests (one for each topic)
+      assert_receive {:sns_request, _conn, :admin}, 1_000
+      assert_receive {:sns_request, _conn, :users}, 1_000
+
+      # Verify we got exactly 2 requests
+      assert :counters.get(request_count, 1) == 2
     end
   end
 

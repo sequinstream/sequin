@@ -420,12 +420,13 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Updates the high watermark WAL cursor across all partitions.
   """
-  @spec put_high_watermark_wal_cursor(SinkConsumer.t(), Replication.wal_cursor()) :: :ok | {:error, Exception.t()}
-  def put_high_watermark_wal_cursor(consumer, wal_cursor) do
+  @spec put_high_watermark_wal_cursor(SinkConsumer.t(), {batch_idx :: non_neg_integer(), Replication.wal_cursor()}) ::
+          :ok | {:error, Exception.t()}
+  def put_high_watermark_wal_cursor(consumer, {batch_idx, wal_cursor}) do
     consumer
     |> partitions()
     |> Sequin.Enum.reduce_while_ok(fn partition ->
-      GenServer.cast(via_tuple(consumer.id, partition), {:put_high_watermark_wal_cursor, wal_cursor})
+      GenServer.cast(via_tuple(consumer.id, partition), {:put_high_watermark_wal_cursor, {batch_idx, wal_cursor}})
     end)
   end
 
@@ -786,8 +787,23 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @impl GenServer
-  def handle_cast({:put_high_watermark_wal_cursor, high_watermark_wal_cursor}, %State{} = state) do
-    state = %State{state | high_watermark_wal_cursor: high_watermark_wal_cursor}
+
+  def handle_cast({:put_high_watermark_wal_cursor, {batch_idx, wal_cursor}}, %State{} = state) do
+    %State{high_watermark_wal_cursor: current_cursor} = state
+
+    case current_cursor do
+      nil ->
+        :ok
+
+      {current_idx, _cursor} when batch_idx == current_idx + 1 ->
+        :ok
+
+      true ->
+        {current_idx, _} = current_cursor
+        raise "Unexpected high watermark WAL cursor: #{batch_idx} != #{current_idx + 1}"
+    end
+
+    state = %State{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}
     {:noreply, state}
   end
 

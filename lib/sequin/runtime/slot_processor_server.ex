@@ -567,7 +567,10 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         :millisecond
       )
 
-    state.message_handler_module.put_high_watermark_wal_cursor(state.message_handler_ctx, batch.high_watermark_wal_cursor)
+    state.message_handler_module.put_high_watermark_wal_cursor(
+      state.message_handler_ctx,
+      {batch.idx, batch.high_watermark_wal_cursor}
+    )
 
     if state.test_pid do
       send(state.test_pid, {__MODULE__, :flush_messages, length(unwrapped_messages)})

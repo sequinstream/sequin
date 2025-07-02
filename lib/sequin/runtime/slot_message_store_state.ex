@@ -43,7 +43,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :visibility_check_interval, non_neg_integer()
     field :max_time_since_delivered_ms, non_neg_integer()
 
-    field :high_watermark_wal_cursor, Replication.wal_cursor() | nil
+    field :high_watermark_wal_cursor, {non_neg_integer(), Replication.wal_cursor()} | nil
   end
 
   @spec setup_ets(State.t()) :: :ok
@@ -342,7 +342,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
         nil
 
       # No unpersisted messages, use high watermark cursor
-      {nil, high_watermark_cursor} ->
+      {nil, {_batch_idx, high_watermark_cursor}} ->
         high_watermark_cursor
 
       # Has unpersisted messages regardless of watermark cursor, be conservative

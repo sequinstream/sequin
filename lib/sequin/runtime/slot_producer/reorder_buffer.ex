@@ -89,12 +89,6 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   @impl GenStage
-  def handle_cancel(_reason, from, %State{} = state) do
-    state = %{state | producer_subscriptions: Enum.reject(state.producer_subscriptions, &(&1.producer == from))}
-    {:noreply, [], state}
-  end
-
-  @impl GenStage
   def handle_events(events, from, %State{} = state) do
     state = Enum.reduce(events, state, &add_event_to_state/2)
 

@@ -521,7 +521,13 @@
         bind:functionRefreshState
       />
     {:else if consumer.type === "sns"}
-      <SnsSinkForm errors={errors.consumer} bind:form />
+      <SnsSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
     {:else if consumer.type === "kinesis"}
       <KinesisSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "s2"}

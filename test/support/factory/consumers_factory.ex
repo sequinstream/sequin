@@ -239,7 +239,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         topic_arn: "arn:aws:sns:us-east-1:123456789012:MyTopic",
         region: Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
         access_key_id: Factory.word(),
-        secret_access_key: Factory.word()
+        secret_access_key: Factory.word(),
+        routing_mode: :static
       },
       attrs
     )

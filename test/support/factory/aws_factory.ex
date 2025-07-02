@@ -71,4 +71,24 @@ defmodule Sequin.Factory.AwsFactory do
       }
     })
   end
+
+  def sns_list_topics_response_success do
+    AWS.XML.encode_to_iodata!(%{
+      "ListTopicsResponse" => %{
+        "Topics" => %{
+          "member" => [
+            %{
+              "TopicArn" => "arn:aws:sns:us-east-1:123456789012:test-topic-1"
+            },
+            %{
+              "TopicArn" => "arn:aws:sns:us-east-1:123456789012:test-topic-2"
+            }
+          ]
+        },
+        "ResponseMetadata" => %{
+          "RequestId" => "e9b5b9e5-5b5b-5b5b-5b5b-5b5b5b5b5b5b"
+        }
+      }
+    })
+  end
 end

@@ -18,14 +18,16 @@ defmodule Sequin.Consumers.SnsSink do
     field :access_key_id, :string
     field :secret_access_key, Encrypted.Field
     field :is_fifo, :boolean, default: false
+    field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:topic_arn, :region, :access_key_id, :secret_access_key])
+    |> cast(params, [:topic_arn, :region, :access_key_id, :secret_access_key, :routing_mode])
     |> maybe_put_region_from_arn()
-    |> validate_required([:topic_arn, :region, :access_key_id, :secret_access_key])
+    |> validate_required([:region, :access_key_id, :secret_access_key])
     |> validate_topic_arn()
+    |> validate_routing()
     |> put_is_fifo()
   end
 
@@ -51,6 +53,21 @@ defmodule Sequin.Consumers.SnsSink do
 
       _ ->
         changeset
+    end
+  end
+
+  defp validate_routing(changeset) do
+    routing_mode = get_field(changeset, :routing_mode)
+
+    cond do
+      routing_mode == :dynamic ->
+        put_change(changeset, :topic_arn, nil)
+
+      routing_mode == :static ->
+        validate_required(changeset, [:topic_arn])
+
+      true ->
+        add_error(changeset, :routing_mode, "is required")
     end
   end
 
@@ -93,7 +110,7 @@ defmodule Sequin.Consumers.SnsSink do
     end
   end
 
-  defp sns_arn_regex do
+  def sns_arn_regex do
     ~r/^arn:aws:sns:(?<region>[a-z0-9-]+):(?<account_id>\d{12}):(?<topic_name>[a-zA-Z0-9_.-]+)$/
   end
 end

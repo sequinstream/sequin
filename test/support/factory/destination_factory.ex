@@ -48,6 +48,7 @@ defmodule Sequin.Factory.SinkFactory do
 
     merge_attributes(
       %{
+        topic_arn: "arn:aws:sns:us-east-1:123456789012:test-topic",
         message_id: Factory.uuid(),
         message: %{
           "event" => Factory.word(),

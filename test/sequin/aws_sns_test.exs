@@ -59,4 +59,17 @@ defmodule Sequin.Aws.SNSTest do
       assert :ok = SNS.topic_meta(client, @topic_arn)
     end
   end
+
+  describe "test_credentials_and_permissions/1" do
+    test "successfully tests credentials with list topics", %{client: client} do
+      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+        assert conn.method == "POST"
+        assert String.contains?(conn.host, "sns.us-east-1.amazonaws.com")
+        body = AwsFactory.sns_list_topics_response_success()
+        Req.Test.text(conn, body)
+      end)
+
+      assert :ok = SNS.test_credentials_and_permissions(client)
+    end
+  end
 end

@@ -73,6 +73,8 @@ The `sinkTypeInternalToExternal` map in `assets/svelte/functions/Edit.svelte` ne
 
 The `RoutedSinkTypeValues` list in `assets/svelte/consumers/types.ts` needs to be updated to include the new sink type.
 
+A new value in `sinkTypeInternalToExternal` needs to be added so it appears in the functions edit form sink type dropdown in (`assets/svelte/functions/Edit.svelte`).
+
 ### [Frontend] Update the sink consumer form
 
 Sink consumer forms typically have a <Card> for the sink configuration. We should remove the fields from this card that are routable and add them to a new <Card> for the routing configuration.
@@ -106,3 +108,16 @@ See `assets/svelte/sinks/gcp_pubsub/GcpPubsubSinkCard.svelte` for an example.
 Add the new supported sink type to `docs/reference/routing.mdx`
 
 Update the reference for the docs to discuss routable fields, ie. `docs/reference/sinks/kafka.mdx`
+
+### [Backend] Improve Test Connection methods
+
+For sinks that support dynamic routing, improve the testing mechanism so we test credentials or permissions without requiring specific resource access. This is needed because dynamic routing may not have specific topics/queues configured at setup time.
+
+Example: `test_credentials_and_permissions/1` in `lib/sequin/aws/sns.ex`
+
+### [Backend] Update consumer form validation
+
+Update the consumer form validation logic in `lib/sequin_web/live/components/consumer_form.ex` to handle both static and dynamic routing modes properly when testing sink connections.
+
+For static mode: Test specific resource access (e.g., topic permissions)
+For dynamic mode: Test general service permissions (e.g., list topics)

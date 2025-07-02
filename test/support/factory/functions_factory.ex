@@ -158,7 +158,8 @@ defmodule Sequin.Factory.FunctionsFactory do
           :typesense,
           :meilisearch,
           :elasticsearch,
-          :sqs
+          :sqs,
+          :sns
         ])
       end)
 
@@ -199,6 +200,13 @@ defmodule Sequin.Factory.FunctionsFactory do
             """
             %{
               topic_id: metadata.table_name
+            }
+            """
+
+          :sns ->
+            """
+            %{
+              topic_arn: "arn:aws:sns:us-west-2:123456789012:" <> metadata.table_name
             }
             """
 

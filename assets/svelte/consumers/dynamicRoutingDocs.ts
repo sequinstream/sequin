@@ -157,4 +157,14 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  sns: {
+    fields: {
+      topic_arn: {
+        description: "AWS SNS topic ARN",
+        staticValue: "<empty>",
+        staticFormField: "topic_arn",
+        dynamicDefault: "<empty>",
+      },
+    },
+  },
 };

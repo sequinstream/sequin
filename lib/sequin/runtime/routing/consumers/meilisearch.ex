@@ -28,6 +28,7 @@ defmodule Sequin.Runtime.Routing.Consumers.Meilisearch do
         "delete" -> :delete
         "read" -> :index
       end
+
     %{
       action: meilisearch_action,
       index_name: "sequin.#{metadata.table_schema}.#{metadata.table_name}"

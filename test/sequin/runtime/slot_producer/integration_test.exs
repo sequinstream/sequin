@@ -67,7 +67,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
     end
 
     @tag start_opts: [
-           slot_producer: [batch_flush_interval: [max_messages: 3, max_bytes: 1024 * 1024 * 10, max_age: 5_000]]
+           slot_producer: [batch_flush_interval: 5_000]
          ]
     test "messages flow through complete pipeline" do
       # Insert test data to generate replication messages
@@ -124,7 +124,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       CharacterFactory.insert_character!(%{name: "Super Early Bird"}, repo: UnboxedRepo)
 
       opts = [
-        slot_producer: [batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 10, max_age: 5_000]],
+        slot_producer: [batch_flush_interval: 5_000],
         processor_opts: [subscribe_to: []]
       ]
 
@@ -166,7 +166,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
     end
 
     @tag start_opts: [
-           slot_producer: [batch_flush_interval: [max_messages: 1, max_bytes: 1024, max_age: 50]]
+           slot_producer: [batch_flush_interval: 50]
          ]
     test "transaction boundaries are preserved through the complete pipeline" do
       # First, insert a character outside any transaction to establish baseline
@@ -287,7 +287,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       Keyword.merge(
         [
           restart_wal_cursor_fn: fn _id, _last -> %{commit_lsn: 0, commit_idx: 0} end,
-          batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 1024, max_age: 10],
+          batch_flush_interval: 10,
           test_pid: self()
         ],
         Keyword.get(opts, :slot_producer_opts, [])

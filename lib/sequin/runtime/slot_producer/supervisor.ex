@@ -131,7 +131,7 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
           :ok
         end,
         slot_producer_opts: [
-          batch_flush_interval: [max_messages: 1000, max_bytes: 1024 * 1024 * 10, max_age: 5000]
+          batch_flush_interval: 5000
         ]
       )
   """

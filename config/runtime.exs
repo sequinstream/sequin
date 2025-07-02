@@ -317,16 +317,6 @@ if config_env() == :prod do
   datadog_api_key = get_env.("DATADOG_API_KEY")
   datadog_app_key = get_env.("DATADOG_APP_KEY")
 
-  config :libcluster,
-    topologies: [
-      sequin: [
-        strategy: Sequin.Libcluster.PostgresStrategy,
-        config: [
-          channel_name: "sequin_cluster"
-        ]
-      ]
-    ]
-
   config :sequin, Sequin.Mailer, adapter: Sequin.Swoosh.Adapters.Loops, api_key: System.get_env("LOOPS_API_KEY")
   config :sequin, Sequin.Redis, ConfigParser.redis_config(env_vars)
 

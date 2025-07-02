@@ -13,9 +13,6 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Delete
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Insert
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.LogicalMessage
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Origin
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Truncate
-  alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Type
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message.Field
@@ -130,13 +127,6 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
         case Decoder.decode_message(msg.payload) do
           %type{} = payload when type in [Insert, Update, Delete, LogicalMessage] ->
             %{msg | message: cast_message(payload, msg, state.relations)}
-
-          %type{} = _msg when type in [Origin, Truncate, Type] ->
-            nil
-
-          msg ->
-            Logger.warning("Unhandled message type: #{inspect(msg)}")
-            nil
         end
       end)
       |> Enum.reject(&is_nil/1)

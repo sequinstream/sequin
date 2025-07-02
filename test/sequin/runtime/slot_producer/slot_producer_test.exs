@@ -177,7 +177,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       messages = receive_messages(4)
 
       assert [
-               %Message{commit_lsn: lsn1, commit_idx: 1, commit_ts: ts1, kind: :insert},
+               %Message{commit_lsn: lsn1, commit_idx: 0, commit_ts: ts1, kind: :insert},
                %Message{commit_lsn: lsn2, commit_idx: 0, commit_ts: ts2, kind: :insert},
                %Message{commit_lsn: lsn2, commit_idx: 1, commit_ts: ts2, kind: :insert},
                %Message{commit_lsn: lsn3, commit_idx: 0, commit_ts: ts3, kind: :update}
@@ -202,9 +202,9 @@ defmodule Sequin.Runtime.SlotProducerTest do
       messages = receive_messages(3)
 
       assert [
-               %Message{transaction_annotations: nil, commit_idx: 1},
-               %Message{transaction_annotations: ^annotation, commit_idx: 3},
-               %Message{transaction_annotations: ^annotation, commit_idx: 4}
+               %Message{transaction_annotations: nil, commit_idx: 0},
+               %Message{transaction_annotations: ^annotation, commit_idx: 2},
+               %Message{transaction_annotations: ^annotation, commit_idx: 3}
              ] = messages
     end
 
@@ -221,8 +221,8 @@ defmodule Sequin.Runtime.SlotProducerTest do
       messages = receive_messages(2)
 
       assert [
-               %Message{transaction_annotations: ^annotation, commit_idx: 2},
-               %Message{transaction_annotations: nil, commit_idx: 4}
+               %Message{transaction_annotations: ^annotation, commit_idx: 1},
+               %Message{transaction_annotations: nil, commit_idx: 3}
              ] = messages
     end
 
@@ -233,7 +233,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
 
       start_slot_producer(slot,
         ack_interval: 1,
-        update_cursor_interval: 1,
+        restart_wal_cursor_update_interval: 1,
         restart_wal_cursor_fn: fn _, _ -> Agent.get(agent, & &1) end
       )
 
@@ -531,7 +531,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
           restart_wal_cursor_fn: fn _id, _last -> %{commit_lsn: 0, commit_idx: 0} end,
           test_pid: self(),
           conn: fn -> db end,
-          processor_mod: TestProcessor
+          consumer_mod: TestProcessor
         ],
         opts
       )

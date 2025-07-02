@@ -104,7 +104,6 @@ defmodule Sequin.MixProject do
       {:eredis, github: "acco/eredis", override: true},
 
       # Clustering and Distribution
-      {:libcluster, "~> 3.3"},
       {:dns_cluster, "~> 0.1.1"},
 
       # Data Processing and Types

@@ -73,6 +73,10 @@
   let selectedTableOids: Set<number> = new Set();
   let filteredSelectedTableOids: Set<number> = new Set();
 
+  // Add state for storing last schema selections
+  let lastSchemaMode: SelectionMode = "all";
+  let lastSelectedSchemas: Set<string> = new Set();
+
   if (isEditMode) {
     if (source.include_schemas) {
       schemaMode = "include";
@@ -240,6 +244,21 @@
   }
 
   function handleTableMode(mode: SelectionMode) {
+    if (mode === "include" && tableMode !== "include") {
+      // Save current schema state before switching to include mode
+      lastSchemaMode = schemaMode;
+      lastSelectedSchemas = new Set(selectedSchemas);
+
+      // Reset schema selection for include mode
+      schemaMode = "all";
+      selectedSchemas.clear();
+      selectedSchemas = selectedSchemas;
+    } else if (mode !== "include" && tableMode === "include") {
+      // Restore previous schema state when leaving include mode
+      schemaMode = lastSchemaMode;
+      selectedSchemas = new Set(lastSelectedSchemas);
+    }
+
     tableMode = mode;
     updateSource();
   }
@@ -267,6 +286,9 @@
       }, 2000);
     });
   }
+
+  // Add computed property for schema disabled state
+  $: isSchemaSelectionDisabled = tableMode === "include";
 
   onMount(() => {
     if (databases.length === 1 && !selectedDatabaseId) {
@@ -335,38 +357,47 @@
           <h3 class="font-medium">Schemas</h3>
           <div class="inline-flex rounded-md shadow-sm" role="group">
             <button
-              class="text-sm px-4 py-2 transition-all border {schemaMode ===
-              'all'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-l-md border-r-0"
+              class="text-sm px-4 py-2 transition-all border {isSchemaSelectionDisabled
+                ? 'bg-background text-muted-foreground border-input'
+                : schemaMode === 'all'
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-l-md border-r-0"
               on:click={(e) => {
                 e.preventDefault();
-                handleSchemaMode("all");
+                if (!isSchemaSelectionDisabled) handleSchemaMode("all");
               }}
+              disabled={isSchemaSelectionDisabled}
+              class:opacity-50={isSchemaSelectionDisabled}
             >
               All
             </button>
             <button
-              class="text-sm px-4 py-2 transition-all border {schemaMode ===
-              'include'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} border-r-0"
+              class="text-sm px-4 py-2 transition-all border {isSchemaSelectionDisabled
+                ? 'bg-background text-muted-foreground border-input'
+                : schemaMode === 'include'
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} border-r-0"
               on:click={(e) => {
                 e.preventDefault();
-                handleSchemaMode("include");
+                if (!isSchemaSelectionDisabled) handleSchemaMode("include");
               }}
+              disabled={isSchemaSelectionDisabled}
+              class:opacity-50={isSchemaSelectionDisabled}
             >
               Include
             </button>
             <button
-              class="text-sm px-4 py-2 transition-all border {schemaMode ===
-              'exclude'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-r-md"
+              class="text-sm px-4 py-2 transition-all border {isSchemaSelectionDisabled
+                ? 'bg-background text-muted-foreground border-input'
+                : schemaMode === 'exclude'
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-r-md"
               on:click={(e) => {
                 e.preventDefault();
-                handleSchemaMode("exclude");
+                if (!isSchemaSelectionDisabled) handleSchemaMode("exclude");
               }}
+              disabled={isSchemaSelectionDisabled}
+              class:opacity-50={isSchemaSelectionDisabled}
             >
               Exclude
             </button>
@@ -374,7 +405,7 @@
         </div>
       </div>
 
-      {#if schemaMode !== "all"}
+      {#if schemaMode !== "all" && !isSchemaSelectionDisabled}
         <div class="border rounded-lg overflow-hidden">
           <div class="p-2 border-b bg-gray-50">
             <div class="relative">

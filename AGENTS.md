@@ -2,9 +2,19 @@
 
 When working in this repository, run the following commands to verify your changes.
 
-If you have access to a setup Postgres and Redis, you can additionally run `mix test`. (If the first run fails, you can run `mix test --failed`.)
-
 ```bash
+# Test whole repo
+mix test
+
+# Test individual test you worked on
+mix test test/sequin/runtime/slot_producer/slot_producer_test.exs:1234
+
+# Test individual file you worked on:
+mix test test/sequin/runtime/slot_producer/slot_producer_test.exs
+
+# Re-run tests on intermittent failure
+mix test --failed
+
 mix format --check-formatted
 MIX_ENV=prod mix compile --warnings-as-errors
 
@@ -29,4 +39,4 @@ npm run tsc
 cd ..
 ```
 
-These commands should pass before committing.
+These commands should pass before committing. Warnings or noise in test is not acceptable.

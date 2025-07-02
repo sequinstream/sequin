@@ -302,7 +302,7 @@ defmodule Sequin.Runtime.SlotProducerTest do
       refute seq_col.pk?
     end
 
-    @tag start_opts: [batch_flush_interval: [max_messages: 100, max_bytes: 1024 * 1024 * 1024, max_age: 1]]
+    @tag start_opts: [batch_flush_interval: 1]
     test "receives a batch flush marker after batch timer expires" do
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
 
@@ -315,23 +315,6 @@ defmodule Sequin.Runtime.SlotProducerTest do
       [msg] = receive_messages(1)
       commit_lsn = msg.commit_lsn
       assert_receive {:batch_marker_received, %BatchMarker{high_watermark_wal_cursor: %{commit_lsn: ^commit_lsn}}}
-    end
-
-    @tag start_opts: [batch_flush_interval: [max_messages: 2, max_bytes: 1024 * 1024 * 1024, max_age: 60_000]]
-    test "receives a batch flush marker after batch messages threshold crossed" do
-      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
-      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
-
-      [msg1, msg2] = receive_messages(2)
-      assert_receive {:batch_marker_received, %BatchMarker{} = marker}
-
-      max_lsn = max(msg1.commit_lsn, msg2.commit_lsn)
-
-      assert marker.idx == 0
-      assert marker.high_watermark_wal_cursor.commit_lsn == max_lsn
-
-      CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
-      refute_receive {:batch_marker_received, _marker}, 50
     end
 
     @tag skip_start: true

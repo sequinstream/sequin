@@ -965,9 +965,7 @@ defmodule Sequin.PostgresReplicationTest do
         CharacterFactory.insert_character!([name: "Chani"], repo: UnboxedRepo)
       end)
 
-      assert_receive {:changes, changes}, to_timeout(second: 1)
-      # Assert the order of changes
-      assert length(changes) == 3
+      changes = receive_messages_from_mock(3)
       [insert1, insert2, insert3] = changes
 
       # Assert seq values increase within transaction
@@ -1112,7 +1110,7 @@ defmodule Sequin.PostgresReplicationTest do
       character3 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the new message to be handled
-      assert_receive {:changes, [change2, change3]}, to_timeout(second: 1)
+      [change2, change3] = receive_messages_from_mock(2)
 
       # Verify we only get the records >= low watermark
       assert action?(change2, :insert)
@@ -1135,7 +1133,7 @@ defmodule Sequin.PostgresReplicationTest do
         message_handler_module: MessageHandlerMock,
         reconnect_interval: 5,
         replication_slot_id: pg_replication.id,
-        slot_producer: [slot_producer_opts: [batch_flush_interval: [max_age: 50]]]
+        slot_producer: [slot_producer_opts: [batch_flush_interval: 50]]
       )
 
       # Insert a character to generate a message
@@ -1784,6 +1782,26 @@ defmodule Sequin.PostgresReplicationTest do
     await_messages(count)
 
     list_messages(consumer)
+  end
+
+  defp receive_messages_from_mock(count, acc \\ []) do
+    assert_receive {:changes, changes}, 1_000
+    acc = acc ++ changes
+
+    case count - length(acc) do
+      0 -> acc
+      total when total < 0 -> flunk("Expected #{count} messages but got #{length(acc)}")
+      _ -> receive_messages_from_mock(count, acc)
+    end
+  rescue
+    err ->
+      case err do
+        %ExUnit.AssertionError{message: "Assertion failed, no matching message after" <> _rest} ->
+          flunk("Did not receive remaining #{count - length(acc)} messages")
+
+        err ->
+          reraise err, __STACKTRACE__
+      end
   end
 
   defp list_messages(consumer) do

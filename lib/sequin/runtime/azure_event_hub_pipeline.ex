@@ -2,8 +2,11 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
   @moduledoc false
   @behaviour Sequin.Runtime.SinkPipeline
 
+  alias Broadway.Message
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Runtime.Routing
+  alias Sequin.Runtime.Routing.Consumers.AzureEventHub
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Azure.EventHub
   alias Sequin.Transforms.Message
@@ -11,9 +14,10 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
   require Logger
 
   @impl SinkPipeline
-  def init(context, _opts) do
+  def init(context, opts) do
     %{consumer: %SinkConsumer{sink: sink}} = context
-    Map.put(context, :event_hub_client, AzureEventHubSink.event_hub_client(sink))
+    req_opts = Keyword.get(opts, :req_opts, [])
+    Map.put(context, :event_hub_client, AzureEventHubSink.event_hub_client(sink, req_opts))
   end
 
   @impl SinkPipeline
@@ -28,21 +32,30 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_message(message, context) do
+    %{consumer: consumer, test_pid: test_pid} = context
+    setup_allowances(test_pid)
+
+    %AzureEventHub{event_hub_name: event_hub_name} = Routing.route_message(consumer, message)
+
+    {:ok, Broadway.Message.put_batch_key(message, event_hub_name), context}
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, batch_info, context) do
     %{consumer: consumer, event_hub_client: event_hub_client, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
+    event_hub_name = batch_info.batch_key
+
     event_hub_messages =
-      Enum.map(messages, fn %{data: data} ->
+      Enum.map(messages, fn %Broadway.Message{data: data} ->
         build_event_hub_message(consumer, data)
       end)
 
-    case EventHub.publish_messages(event_hub_client, event_hub_messages) do
-      :ok ->
-        {:ok, messages, context}
-
-      {:error, error} ->
-        {:error, error}
+    case EventHub.publish_messages(event_hub_client, event_hub_name, event_hub_messages) do
+      :ok -> {:ok, messages, context}
+      {:error, error} -> {:error, error}
     end
   end
 

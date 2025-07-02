@@ -21,7 +21,7 @@
         <span class="text-sm text-gray-500">URL</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.url}</span
           >
         </div>
@@ -40,7 +40,7 @@
         <span class="text-sm text-gray-500">Stream Key</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
           >
             {#if consumer.routing_id}
               determined-by-router

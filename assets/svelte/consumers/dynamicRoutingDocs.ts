@@ -190,4 +190,14 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  azure_event_hub: {
+    fields: {
+      event_hub_name: {
+        description: "Azure Event Hub name to publish to",
+        staticValue: "<empty>",
+        staticFormField: "event_hub_name",
+        dynamicDefault: "sequin.<database_name>.<table_schema>.<table_name>",
+      },
+    },
+  },
 };

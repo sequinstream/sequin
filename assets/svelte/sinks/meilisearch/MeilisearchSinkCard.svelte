@@ -22,7 +22,7 @@
         <span class="text-sm text-gray-500">Endpoint URL</span>
         <div class="mt-2">
           <div
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md break-all w-fit"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md break-all w-fit"
           >
             <span>{consumer.sink.endpoint_url}</span>
           </div>
@@ -33,7 +33,7 @@
         <span class="text-sm text-gray-500">Primary Key</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.primary_key}</span
           >
         </div>
@@ -52,7 +52,7 @@
         <span class="text-sm text-gray-500">Index Name</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
           >
             {#if consumer.routing_id}
               determined-by-router

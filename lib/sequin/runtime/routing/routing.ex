@@ -89,6 +89,7 @@ defmodule Sequin.Runtime.Routing do
       :nats -> Sequin.Runtime.Routing.Consumers.Nats
       :kafka -> Sequin.Runtime.Routing.Consumers.Kafka
       :gcp_pubsub -> Sequin.Runtime.Routing.Consumers.GcpPubsub
+      :azure_event_hub -> Sequin.Runtime.Routing.Consumers.AzureEventHub
       :sns -> Sequin.Runtime.Routing.Consumers.Sns
       :typesense -> Sequin.Runtime.Routing.Consumers.Typesense
       :meilisearch -> Sequin.Runtime.Routing.Consumers.Meilisearch

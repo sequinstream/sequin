@@ -149,7 +149,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         namespace: Factory.word(),
         event_hub_name: Factory.word(),
         shared_access_key_name: Factory.word(),
-        shared_access_key: Factory.word()
+        shared_access_key: Factory.word(),
+        routing_mode: "static"
       },
       attrs
     )

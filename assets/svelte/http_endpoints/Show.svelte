@@ -185,7 +185,7 @@
           </div>
           <div class="flex items-center space-x-2 overflow-x-auto">
             <p
-              class="w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+              class="w-fit font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >
               {http_endpoint.baseUrl}
             </p>

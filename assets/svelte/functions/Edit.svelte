@@ -106,6 +106,7 @@
     meilisearch: "Meilisearch",
     nats: "NATS",
     rabbitmq: "RabbitMQ",
+    azure_event_hub: "Azure Event Hub",
     redis_stream: "Redis Stream",
     redis_string: "Redis String",
     typesense: "Typesense",

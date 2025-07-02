@@ -43,6 +43,7 @@ The following sinks support dynamic routing:
 - Elasticsearch
 - AWS SQS
 - RabbitMQ
+- Azure Event Hub
 
 Each sink type has different fields that can be routed:
 
@@ -146,6 +147,14 @@ For [RabbitMQ](/reference/sinks/rabbitmq), your routing function must return a m
 | `exchange` | String | The exchange to publish to | `"sequin"` |
 | `routing_key` | String | The routing key to publish to | `"sequin.users.insert"` |
 | `headers` | Map | AMQP headers to include | `%{"x-key" => "value"}` |
+
+### Azure Event Hub sink
+
+For [Azure Event Hubs](/reference/sinks/azure-event-hubs), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `event_hub_name` | String | The Event Hub name to publish to | `"sequin.db.public.users"` |
 
 ## Common routing patterns
 

@@ -35,7 +35,7 @@
         <span class="text-sm text-gray-500">Project ID</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
             >{consumer.sink.project_id}</span
           >
         </div>
@@ -54,14 +54,14 @@
         <div class="mt-2">
           {#if consumer.routing_id}
             <span
-              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+              class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
               >projects/{consumer.sink.project_id}/topics/<span
                 class="text-gray-500">determined-by-router</span
               ></span
             >
           {:else}
             <span
-              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+              class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
               >projects/{consumer.sink.project_id}/topics/{consumer.sink
                 .topic_id}</span
             >
@@ -72,7 +72,7 @@
         <span class="text-sm text-gray-500">Topic ID</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
           >
             {#if consumer.routing_id}
               Determined by <a

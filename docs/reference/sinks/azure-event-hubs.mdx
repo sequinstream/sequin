@@ -68,6 +68,22 @@ Sequin will order the delivery of messages with the same group according to thei
   If you want to see support for setting the partition key on each message, please [comment on the corresponding issue](https://github.com/sequinstream/sequin/issues/928).
 </Info>
 
+## Routing
+
+The Azure Event Hubs sink supports dynamic routing of the `event_hub_name` with [routing functions](/reference/routing).
+
+Example routing function:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{
+    event_hub_name: "#{metadata.table_schema}-#{metadata.table_name}"
+  }
+end
+```
+
+When not using a routing function, messages will be published to the Event Hub specified in the sink configuration.
+
 ## Debugging
 
 You can view the status of your Event Hubs sink in the Sequin web console.

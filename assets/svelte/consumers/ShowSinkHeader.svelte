@@ -27,6 +27,7 @@
   import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
   import SequinStreamIcon from "../sinks/sequin_stream/SequinStreamIcon.svelte";
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";
+  import MeilisearchIcon from "../sinks/meilisearch/MeilisearchIcon.svelte";
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
   import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
@@ -169,6 +170,8 @@
             <SequinStreamIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "nats"}
             <NatsIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "meilisearch"}
+            <MeilisearchIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "rabbitmq"}
             <RabbitMqIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "azure_event_hub"}

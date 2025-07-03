@@ -187,11 +187,11 @@ functions:
 		}
 
 		testCases := []struct {
-			name        string
-			filePath    string // Path to use in YAML
-			codePath    string // Actual path where code should be written
-			cleanup     func()
-			useStdin    bool   // Whether to use STDIN for YAML input
+			name     string
+			filePath string // Path to use in YAML
+			codePath string // Actual path where code should be written
+			cleanup  func()
+			useStdin bool // Whether to use STDIN for YAML input
 		}{
 			{
 				name:     "from current directory with direct relative path",

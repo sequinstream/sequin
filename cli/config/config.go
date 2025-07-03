@@ -159,12 +159,12 @@ func processYAML(pctx *ProcessingContext, yamlContent []byte) ([]byte, error) {
 
 	with_subst, err := applyEnvSubst(yamlData)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("environment variable substitution failed: %w", err)
 	}
 
 	with_files, err := processFunctions(pctx, with_subst)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("function parsing failed: %w", err)
 	}
 
 	processed, err := yaml.Marshal(with_files)
@@ -226,8 +226,6 @@ func processFunctionsList(pctx *ProcessingContext, node interface{}) (interface{
 func processFileInFunction(pctx *ProcessingContext, funcObj map[string]interface{}) (map[string]interface{}, error) {
 	if filePathRaw, hasFile := funcObj["file"]; hasFile {
 		if filePath, ok := filePathRaw.(string); ok {
-			fmt.Printf("Processing file reference: %s\n", filePath)
-
 			resolvedPath, err := resolveFilePath(pctx, filePath)
 			if err != nil {
 				return nil, fmt.Errorf("error resolving file path %s: %w", filePath, err)

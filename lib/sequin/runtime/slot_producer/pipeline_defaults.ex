@@ -13,8 +13,13 @@ defmodule Sequin.Runtime.SlotProducer.PipelineDefaults do
   alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.SlotProducer
   alias Sequin.Runtime.SlotProducer.Batch
+  alias Sequin.Runtime.SlotProducer.Processor
   alias Sequin.Runtime.SlotProducer.ReorderBuffer
   alias Sequin.Workers.CreateReplicationSlotWorker
+
+  def processor_mod do
+    Processor
+  end
 
   @doc "Default implementation for ReorderBuffer's flush_batch_fn callback"
   @impl ReorderBuffer
@@ -72,7 +77,7 @@ defmodule Sequin.Runtime.SlotProducer.PipelineDefaults do
       end
 
     Health.put_event(
-      :replication_slot,
+      :postgres_replication_slot,
       state.id,
       %Event{slug: :replication_connected, status: :fail, error: error}
     )

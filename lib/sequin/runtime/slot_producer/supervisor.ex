@@ -12,7 +12,6 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Repo
   alias Sequin.Runtime.SlotProducer
-  alias Sequin.Runtime.SlotProducer.PipelineDefaults
   alias Sequin.Runtime.SlotProducer.Processor
   alias Sequin.Runtime.SlotProducer.ReorderBuffer
 
@@ -50,10 +49,7 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
           publication_name: replication_slot.publication_name,
           pg_major_version: postgres_database.pg_major_version,
           connect_opts: PostgresDatabase.to_protocol_opts(postgres_database),
-          restart_wal_cursor_fn: &PipelineDefaults.restart_wal_cursor/2,
-          on_connect_fail_fn: &PipelineDefaults.on_connect_fail/2,
           conn: fn -> postgres_database end,
-          consumer_mod: Processor,
           test_pid: opts[:test_pid]
         ],
         slot_producer_opts
@@ -86,7 +82,6 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
           id: pipeline_id,
           producer_partitions: partition_count,
           account_id: postgres_database.account_id,
-          flush_batch_fn: &PipelineDefaults.flush_batch/2,
           # Subscribe to all Processor partitions via subscribe_to in init
           subscribe_to:
             Enum.map(0..(partition_count - 1), fn partition_idx ->

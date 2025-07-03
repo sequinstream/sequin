@@ -340,6 +340,13 @@ defmodule Sequin.Databases.ConnectionCache do
     {:noreply, state}
   end
 
+  # Handle stop task completion messages
+  def handle_info({ref, :ok}, %State{} = state) when is_reference(ref) do
+    # This is from a stop task completing successfully - we can ignore it
+    Process.demonitor(ref, [:flush])
+    {:noreply, state}
+  end
+
   # This is from the GenServer.stop/1 call in State.stop_fn or from the start_fn crashing
   def handle_info({:DOWN, ref, :process, _pid, reason}, %State{} = state) do
     {listeners, state} =

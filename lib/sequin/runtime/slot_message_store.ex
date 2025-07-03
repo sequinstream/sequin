@@ -788,19 +788,19 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   @impl GenServer
 
+  def handle_cast(
+        {:put_high_watermark_wal_cursor, {batch_idx, wal_cursor}},
+        %State{high_watermark_wal_cursor: nil} = state
+      ) do
+    state = %State{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}
+    {:noreply, state}
+  end
+
   def handle_cast({:put_high_watermark_wal_cursor, {batch_idx, wal_cursor}}, %State{} = state) do
-    %State{high_watermark_wal_cursor: current_cursor} = state
+    {current_idx, _current_cursor} = state.high_watermark_wal_cursor
 
-    case current_cursor do
-      nil ->
-        :ok
-
-      {current_idx, _cursor} when batch_idx == current_idx + 1 ->
-        :ok
-
-      true ->
-        {current_idx, _} = current_cursor
-        raise "Unexpected high watermark WAL cursor: #{batch_idx} != #{current_idx + 1}"
+    unless batch_idx == current_idx + 1 do
+      raise "Unexpected high watermark WAL cursor: #{batch_idx} != #{current_idx + 1}"
     end
 
     state = %State{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}

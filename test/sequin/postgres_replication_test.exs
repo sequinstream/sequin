@@ -1185,7 +1185,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       start_replication!(
         replication_slot_id: pg_replication.id,
-        slot_producer: [slot_producer_opts: [on_connect_fail: on_connect_fail]]
+        slot_producer: [slot_producer_opts: [on_connect_fail_fn: on_connect_fail]]
       )
 
       assert_receive :connect_fail, 1000

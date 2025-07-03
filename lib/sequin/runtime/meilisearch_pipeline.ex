@@ -21,13 +21,13 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
     [
       default: [
         concurrency: concurrency,
-        batch_size: consumer.sink.batch_size,
-        batch_timeout: 1000
+        batch_size: consumer.sink.batch_size || 100,
+        batch_timeout: 5
       ],
       delete: [
         concurrency: concurrency,
-        batch_size: consumer.sink.batch_size,
-        batch_timeout: 1000
+        batch_size: consumer.sink.batch_size || 100,
+        batch_timeout: 5
       ]
     ]
   end

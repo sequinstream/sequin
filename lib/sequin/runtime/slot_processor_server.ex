@@ -725,7 +725,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             # We just recently started up, and may have accumulated some messages, and may have even flushed them.
             # But our highwatermark wal cursor has not made it to all SlotMessageStores yet.
             # So, it is not safe to advance the slot.
-            Logger.info("[SlotProcessorServer] no unpersisted messages in stores")
+            Logger.info("[SlotProcessorServer] High watermark wal cursor has not made it to all stores")
 
             nil
           else

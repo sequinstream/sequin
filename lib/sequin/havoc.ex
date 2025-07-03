@@ -7,6 +7,7 @@ if Mix.env() != :prod do
     alias Sequin.Replication
     alias Sequin.Runtime.SinkPipeline
     alias Sequin.Runtime.SlotMessageStore
+    alias Sequin.Runtime.SlotProducer.Processor
 
     require Logger
 
@@ -117,7 +118,9 @@ if Mix.env() != :prod do
           :slot_processor,
           :slot_message_store,
           :sink_pipeline,
-          :consumer_producer
+          :consumer_producer,
+          :processor,
+          :reorder_buffer
         ])
 
       # Get a PID to stop based on the process type
@@ -163,6 +166,12 @@ if Mix.env() != :prod do
 
           {:consumer_producer, consumer_id} ->
             "consumer_id=#{consumer_id}"
+
+          {:processor, {consumer_id, partition_idx}} ->
+            "consumer_id=#{consumer_id}, partition=#{partition_idx}"
+
+          {:reorder_buffer, slot_id} ->
+            "slot_id=#{slot_id}"
 
           _ ->
             ""
@@ -230,6 +239,35 @@ if Mix.env() != :prod do
 
         if pid, do: {pid, consumer.id}
       end
+    end
+
+    defp get_random_pid(:processor, _slot_id, consumers) do
+      if Enum.empty?(consumers) do
+        nil
+      else
+        # Randomly select a consumer
+        consumer = Enum.random(consumers)
+
+        # Randomly select a partition
+        partition_idx = :rand.uniform(Processor.partition_count()) - 1
+
+        # Get the processor PID
+        pid =
+          consumer.id
+          |> Processor.via_tuple(partition_idx)
+          |> GenServer.whereis()
+
+        if pid, do: {pid, {consumer.id, partition_idx}}
+      end
+    end
+
+    defp get_random_pid(:reorder_buffer, slot_id, _consumers) do
+      pid =
+        slot_id
+        |> Sequin.Runtime.SlotProducer.ReorderBuffer.via_tuple()
+        |> GenServer.whereis()
+
+      if pid, do: {pid, slot_id}
     end
   end
 end

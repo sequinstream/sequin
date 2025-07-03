@@ -7,6 +7,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   alias Sequin.Runtime.SlotProducer.Batch
   alias Sequin.Runtime.SlotProducer.BatchMarker
   alias Sequin.Runtime.SlotProducer.Message
+  alias Sequin.Runtime.SlotProducer.PipelineDefaults
 
   require Logger
 
@@ -67,7 +68,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
     state = %State{
       id: Keyword.fetch!(opts, :id),
-      flush_batch_fn: Keyword.fetch!(opts, :flush_batch_fn),
+      flush_batch_fn: Keyword.get(opts, :flush_batch_fn, &PipelineDefaults.flush_batch/2),
       producer_partition_count: Keyword.fetch!(opts, :producer_partitions),
       setting_max_demand: Keyword.get(opts, :max_demand),
       setting_min_demand: Keyword.get(opts, :min_demand),

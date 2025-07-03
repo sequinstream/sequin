@@ -20,6 +20,9 @@ defmodule Sequin.Postgres do
   @type db_conn() :: pid() | module() | DBConnection.t()
   @type wal_cursor :: %{commit_lsn: integer(), commit_idx: integer()}
 
+  defguardp is_postgrex_error(error)
+            when is_struct(error, Postgrex.Error) or is_struct(error, DBConnection.ConnectionError)
+
   @event_table_columns [
     %{name: "id", type: "serial"},
     %{name: "seq", type: "bigint"},
@@ -472,7 +475,7 @@ defmodule Sequin.Postgres do
          [res] <- result_to_maps(res) do
       {:ok, res}
     else
-      {:error, %Postgrex.Error{} = error} ->
+      {:error, error} when is_postgrex_error(error) ->
         {:error, ValidationError.from_postgrex("Failed to check replication slot status: ", error)}
 
       [] ->
@@ -506,7 +509,7 @@ defmodule Sequin.Postgres do
             :ok
         end
 
-      {:error, %Postgrex.Error{} = error} ->
+      {:error, error} when is_postgrex_error(error) ->
         {:error,
          ValidationError.from_postgrex(
            "Failed to check replication permissions: ",

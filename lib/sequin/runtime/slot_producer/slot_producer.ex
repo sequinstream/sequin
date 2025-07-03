@@ -25,6 +25,7 @@ defmodule Sequin.Runtime.SlotProducer do
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Begin
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Commit
   alias Sequin.Runtime.SlotProducer.BatchMarker
+  alias Sequin.Runtime.SlotProducer.PipelineDefaults
   alias Sequin.Runtime.SlotProducer.Relation
 
   require Logger
@@ -116,6 +117,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
       # Cursors & aliveness
       field :restart_wal_cursor, Replication.wal_cursor()
+      field :last_sent_restart_wal_cursor, Replication.wal_cursor() | nil
       field :restart_wal_cursor_fn, (PostgresReplicationSlot.id(), Postgres.wal_cursor() -> Postgres.wal_cursor())
       field :setting_restart_wal_cursor_update_interval, non_neg_integer()
       field :restart_wal_cursor_update_timer, reference()
@@ -194,17 +196,16 @@ defmodule Sequin.Runtime.SlotProducer do
       publication_name: Keyword.fetch!(opts, :publication_name),
       connect_opts: connect_opts,
       pg_major_version: Keyword.fetch!(opts, :pg_major_version),
-      # TODO: What happens when we're disconnected?
       status: :disconnected,
-      on_connect_fail: Keyword.get(opts, :on_connect_fail),
+      on_connect_fail: Keyword.get(opts, :on_connect_fail_fn, &PipelineDefaults.on_connect_fail/2),
       # TODO: On disconnect, does anyone else in the pipeline care?
       on_disconnect: Keyword.get(opts, :on_disconnect),
-      restart_wal_cursor_fn: Keyword.fetch!(opts, :restart_wal_cursor_fn),
+      restart_wal_cursor_fn: Keyword.get(opts, :restart_wal_cursor_fn, &PipelineDefaults.restart_wal_cursor/2),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
       setting_restart_wal_cursor_update_interval:
         Keyword.get(opts, :restart_wal_cursor_update_interval, :timer.seconds(10)),
-      consumer_mod: Keyword.get(opts, :consumer_mod),
+      consumer_mod: Keyword.get_lazy(opts, :consumer_mod, fn -> PipelineDefaults.processor_mod() end),
       conn: Keyword.fetch!(opts, :conn),
       setting_batch_flush_interval: Keyword.get(opts, :batch_flush_interval)
     }
@@ -251,7 +252,13 @@ defmodule Sequin.Runtime.SlotProducer do
       state = schedule_timers(state)
       {:noreply, [], state}
     else
-      {:error, reason} ->
+      error ->
+        reason =
+          case error do
+            {:error, msg} -> msg
+            {:error, msg, %Protocol{}} -> msg
+          end
+
         error_msg = if is_exception(reason), do: Exception.message(reason), else: inspect(reason)
         Logger.error("[SlotProducer] replication connect failed: #{error_msg}")
         if fun = state.on_connect_fail, do: fun.(state, reason)
@@ -288,14 +295,30 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   def handle_info(:send_ack, %State{} = state) do
-    Logger.info("[SlotProducer] Sending ack for LSN #{state.restart_wal_cursor.commit_lsn}")
+    delta =
+      case state.last_sent_restart_wal_cursor do
+        nil -> 0
+        last_sent -> state.restart_wal_cursor.commit_lsn - last_sent.commit_lsn
+      end
+
+    if delta < 0 do
+      raise """
+        Was about to send lower restart_wal_cursor:
+          restart_wal_cursor=#{inspect(state.restart_wal_cursor)}
+          last_sent_restart_wal_cursor=#{inspect(state.last_sent_restart_wal_cursor)}
+      """
+    end
+
+    Logger.info("[SlotProducer] Sending ack for LSN #{state.restart_wal_cursor.commit_lsn} (+#{delta})",
+      delta_bytes: delta
+    )
 
     msg = ack_message(state.restart_wal_cursor.commit_lsn)
     state = schedule_ack(%{state | ack_timer: nil})
 
     case Protocol.handle_copy_send(msg, state.protocol) do
       :ok ->
-        {:noreply, [], state}
+        {:noreply, [], %{state | last_sent_restart_wal_cursor: state.restart_wal_cursor}}
 
       {error, reason, protocol} ->
         handle_disconnect(error, reason, %{state | protocol: protocol})
@@ -520,6 +543,10 @@ defmodule Sequin.Runtime.SlotProducer do
         next_cursor -> next_cursor
       end
 
+    if not is_nil(state.restart_wal_cursor) and restart_wal_cursor < state.restart_wal_cursor do
+      raise "New restart cursor is behind new restart cursor: #{restart_wal_cursor} < #{state.restart_wal_cursor}"
+    end
+
     Replication.put_restart_wal_cursor!(state.id, restart_wal_cursor)
 
     %{state | restart_wal_cursor: restart_wal_cursor}
@@ -576,7 +603,11 @@ defmodule Sequin.Runtime.SlotProducer do
         }
     }
 
-    {acc_msgs, maybe_schedule_flush(state)}
+    if acc_msgs == [] do
+      {[], state}
+    else
+      {acc_msgs, maybe_schedule_flush(state)}
+    end
   end
 
   defp maybe_produce_and_flush(state) do

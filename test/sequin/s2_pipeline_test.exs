@@ -5,6 +5,8 @@ defmodule Sequin.Runtime.S2PipelineTest do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.FunctionsFactory
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.S2.Client
 
@@ -48,6 +50,70 @@ defmodule Sequin.Runtime.S2PipelineTest do
         # Verify record contains a "body" key
         assert %{"body" => body} = record
         assert is_binary(body), "Expected body to be a string, got: #{inspect(body)}"
+
+        send(test_pid, {:s2_request, conn})
+        Req.Test.json(conn, %{})
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:s2_request, _}, 1_000
+    end
+  end
+
+  describe "s2 routing" do
+    setup do
+      account = AccountsFactory.insert_account!()
+
+      transform =
+        FunctionsFactory.insert_function!(
+          account_id: account.id,
+          function_type: :transform,
+          function_attrs: %{body: "record"}
+        )
+
+      routing =
+        FunctionsFactory.insert_function!(
+          account_id: account.id,
+          function_type: :routing,
+          function_attrs: %{
+            body: """
+              %{basin: \"other-basin\", stream: metadata.table_name}
+            """
+          }
+        )
+
+      {:ok, _} = MiniElixir.create(transform.id, transform.function.code)
+      {:ok, _} = MiniElixir.create(routing.id, routing.function.code)
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          type: :s2,
+          message_kind: :record,
+          transform_id: transform.id,
+          routing_id: routing.id,
+          routing_mode: "dynamic"
+        )
+
+      {:ok, %{consumer: consumer}}
+    end
+
+    test "routing overrides basin and stream", %{consumer: consumer} do
+      test_pid = self()
+
+      record = CharacterFactory.character_attrs()
+
+      event =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.host == "other-basin.b.aws.s2.dev"
+        assert conn.request_path == "/v1/streams/#{event.data.metadata.table_name}/records"
 
         send(test_pid, {:s2_request, conn})
         Req.Test.json(conn, %{})

@@ -210,4 +210,20 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  s2: {
+    fields: {
+      basin: {
+        description: "S2 basin name",
+        staticValue: "<empty>",
+        staticFormField: "basin",
+        dynamicDefault: "<empty>",
+      },
+      stream: {
+        description: "S2 stream name",
+        staticValue: "<empty>",
+        staticFormField: "stream",
+        dynamicDefault: "<empty>",
+      },
+    },
+  },
 };

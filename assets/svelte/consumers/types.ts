@@ -293,6 +293,7 @@ export const RoutedSinkTypeValues = [
   "elasticsearch",
   "azure_event_hub",
   "rabbitmq",
+  "s2",
   "sqs",
   "sns",
   "kinesis",

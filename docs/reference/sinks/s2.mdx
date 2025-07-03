@@ -79,3 +79,20 @@ For live verification you can tail the stream with the S2 CLI:
 s2 tail s2://<basin>/<stream>
 ```
 Successful reads confirm that S2 is receiving and storing events.
+
+## Routing
+
+The S2 sink supports dynamic routing of the `basin` and `stream` using [routing functions](/reference/routing).
+
+Example routing function:
+
+```elixir
+def route(action, record, changes, metadata) do
+  %{
+    basin: "logs-" <> metadata.table_schema,
+    stream: metadata.table_name
+  }
+end
+```
+
+When not using a routing function, records will be appended to the basin and stream specified in the sink configuration.

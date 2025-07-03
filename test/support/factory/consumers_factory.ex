@@ -230,7 +230,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         type: :s2,
         basin: "test-basin",
         stream: Factory.word(),
-        access_token: Factory.word()
+        access_token: Factory.word(),
+        routing_mode: :static
       },
       attrs
     )

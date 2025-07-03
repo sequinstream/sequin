@@ -15,6 +15,7 @@ defmodule Sequin.Consumers.S2Sink do
     field :basin, :string
     field :stream, :string
     field :access_token, Encrypted.Field
+    field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
   end
 
   def endpoint_url(%__MODULE__{basin: basin}) do
@@ -27,9 +28,27 @@ defmodule Sequin.Consumers.S2Sink do
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:basin, :stream, :access_token])
-    |> validate_required([:basin, :stream, :access_token])
+    |> cast(params, [:basin, :stream, :access_token, :routing_mode])
+    |> validate_required([:access_token])
+    |> validate_routing()
     |> validate_basin()
+  end
+
+  defp validate_routing(changeset) do
+    routing_mode = get_field(changeset, :routing_mode)
+
+    cond do
+      routing_mode == :dynamic ->
+        changeset
+        |> put_change(:basin, nil)
+        |> put_change(:stream, nil)
+
+      routing_mode == :static ->
+        validate_required(changeset, [:basin, :stream])
+
+      true ->
+        add_error(changeset, :routing_mode, "is required")
+    end
   end
 
   defp validate_basin(changeset) do

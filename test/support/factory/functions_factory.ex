@@ -161,6 +161,7 @@ defmodule Sequin.Factory.FunctionsFactory do
           :elasticsearch,
           :sqs,
           :sns,
+          :s2,
           :rabbitmq,
           :kinesis
         ])
@@ -245,6 +246,14 @@ defmodule Sequin.Factory.FunctionsFactory do
             """
             %{
               index_name: metadata.table_name
+            }
+            """
+
+          :s2 ->
+            """
+            %{
+              basin: "other-basin",
+              stream: metadata.table_name
             }
             """
 

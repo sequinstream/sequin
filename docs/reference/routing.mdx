@@ -131,6 +131,15 @@ For [AWS Kinesis](/reference/sinks/kinesis), your routing function must return a
 |-----|------|-------------|---------|
 | `stream_arn` | String | The Kinesis stream ARN to publish to | `"arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"` |
 
+### S2 sink
+
+For [S2](/reference/sinks/s2), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `basin` | String | The S2 basin to publish to | `"my-basin"` |
+| `stream` | String | The S2 stream to append records to | `"users"` |
+
 ### RabbitMQ sink
 
 For [RabbitMQ](/reference/sinks/rabbitmq), your routing function must return a map with these keys:

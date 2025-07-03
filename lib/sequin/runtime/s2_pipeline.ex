@@ -4,6 +4,7 @@ defmodule Sequin.Runtime.S2Pipeline do
 
   alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.S2.Client
   alias Sequin.Transforms.Message
@@ -29,14 +30,27 @@ defmodule Sequin.Runtime.S2Pipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_message(message, context) do
+    %{consumer: consumer} = context
+
+    %Routing.Consumers.S2{basin: basin, stream: stream} =
+      Routing.route_message(consumer, message.data)
+
+    message = Broadway.Message.put_batch_key(message, {basin, stream})
+
+    {:ok, message, context}
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, %{batch_key: {basin, stream}}, context) do
     %{consumer: %SinkConsumer{sink: %S2Sink{} = sink} = consumer, test_pid: test_pid} = context
+
+    sink = %S2Sink{sink | basin: basin, stream: stream}
 
     setup_allowances(test_pid)
 
     records =
       Enum.map(messages, fn %{data: data} ->
-        # Body has to be serialized as a string
         %{"body" => Jason.encode!(Message.to_external(consumer, data))}
       end)
 

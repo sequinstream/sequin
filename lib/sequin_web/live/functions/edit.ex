@@ -158,6 +158,15 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_s2 """
+  def route(action, record, changes, metadata) do
+    %{
+      basin: "my-basin",
+      stream: metadata.table_name
+    }
+  end
+  """
+
   @initial_route_rabbitmq """
   def route(action, record, changes, _metadata) do
     %{
@@ -201,7 +210,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_sqs" => @initial_route_sqs,
     "routing_rabbitmq" => @initial_route_rabbitmq,
     "routing_azure_event_hub" => @initial_route_azure_event_hub,
-    "routing_kinesis" => @initial_route_kinesis
+    "routing_kinesis" => @initial_route_kinesis,
+    "routing_s2" => @initial_route_s2
   }
 
   # We generate the function completions at compile time because

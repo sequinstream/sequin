@@ -119,7 +119,7 @@ defmodule Sequin.Sinks.S2.Client do
         {:error,
          Error.service(
            service: :s2,
-           message: "Failed to append records",
+           message: "Failed to append records: [#{status}] #{inspect(body)}",
            details: %{status: status, body: body}
          )}
 

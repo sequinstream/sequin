@@ -123,6 +123,14 @@ For [AWS SQS](/reference/sinks/sqs), your routing function must return a map wit
 |-----|------|-------------|---------|
 | `queue_url` | String | The queue URL to publish to | `"https://sqs.us-east-1.amazonaws.com/123456789012/users"` |
 
+### AWS Kinesis sink
+
+For [AWS Kinesis](/reference/sinks/kinesis), your routing function must return a map with these keys:
+
+| Key | Type | Description | Example |
+|-----|------|-------------|---------|
+| `stream_arn` | String | The Kinesis stream ARN to publish to | `"arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"` |
+
 ### RabbitMQ sink
 
 For [RabbitMQ](/reference/sinks/rabbitmq), your routing function must return a map with these keys:

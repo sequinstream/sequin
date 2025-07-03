@@ -71,7 +71,6 @@ export type SqsConsumer = BaseConsumer & {
     region: string;
     is_fifo: boolean;
   };
-  routing_mode?: "static" | "dynamic";
 };
 
 // Kinesis specific sink
@@ -79,6 +78,7 @@ export type KinesisConsumer = BaseConsumer & {
   sink: {
     type: "kinesis";
     stream_arn: string;
+    region: string;
     access_key_id: string;
     secret_access_key: string;
   };
@@ -119,7 +119,6 @@ export type RedisStringConsumer = BaseConsumer & {
     url: string;
     expireMs: number | null;
   };
-  routing_mode?: "static" | "dynamic";
 };
 
 // NATS specific sink
@@ -229,7 +228,6 @@ export type SnsConsumer = BaseConsumer & {
     region: string;
     is_fifo: boolean;
   };
-  routing_mode?: "static" | "dynamic";
 };
 
 // Elasticsearch specific sink
@@ -297,6 +295,7 @@ export const RoutedSinkTypeValues = [
   "rabbitmq",
   "sqs",
   "sns",
+  "kinesis",
 ] as const;
 
 export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

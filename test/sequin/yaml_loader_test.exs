@@ -1267,9 +1267,10 @@ defmodule Sequin.YamlLoaderTest do
                    database: "test-db"
                    destination:
                      type: "kinesis"
-                     stream_arn: "arn:aws:kinesis:us-west-2:1:stream/test"
+                     stream_arn: "arn:aws:kinesis:us-west-2:123456789012:stream/test"
                      access_key_id: "AKIAXXXXXXXXXXXXXXXX"
                      secret_access_key: "secret123"
+                     routing_mode: "static"
                """)
 
       assert [consumer] = Repo.all(SinkConsumer)
@@ -1278,9 +1279,11 @@ defmodule Sequin.YamlLoaderTest do
 
       assert %KinesisSink{
                type: :kinesis,
-               stream_arn: "arn:aws:kinesis:us-west-2:1:stream/test",
+               stream_arn: "arn:aws:kinesis:us-west-2:123456789012:stream/test",
+               region: "us-west-2",
                access_key_id: "AKIAXXXXXXXXXXXXXXXX",
-               secret_access_key: "secret123"
+               secret_access_key: "secret123",
+               routing_mode: :static
              } = consumer.sink
     end
 

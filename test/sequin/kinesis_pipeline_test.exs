@@ -2,13 +2,16 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Aws.HttpClient
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.AwsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.SinkPipeline
 
   describe "events are sent to Kinesis" do
@@ -35,7 +38,7 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
           replication_slot_id: replication.id
         )
 
-      {:ok, %{consumer: consumer}}
+      {:ok, %{consumer: consumer, account: account}}
     end
 
     test "events are sent to Kinesis", %{consumer: consumer} do
@@ -50,7 +53,7 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
 
       Req.Test.stub(HttpClient, fn conn ->
         send(test_pid, {:kinesis_request, conn})
-        Req.Test.json(conn, %{"FailedRecordCount" => 0, "Records" => []})
+        Req.Test.json(conn, AwsFactory.kinesis_put_records_response_success())
       end)
 
       start_pipeline!(consumer)
@@ -58,6 +61,168 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       ref = send_test_event(consumer, event)
       assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
       assert_receive {:kinesis_request, _}, 1_000
+    end
+
+    test "batched messages are processed together", %{consumer: consumer} do
+      test_pid = self()
+
+      record1 = CharacterFactory.character_attrs()
+      record2 = CharacterFactory.character_attrs()
+
+      event1 =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record1))
+
+      event2 =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
+
+      Req.Test.stub(HttpClient, fn conn ->
+        send(test_pid, {:kinesis_request, conn})
+        Req.Test.json(conn, AwsFactory.kinesis_put_records_response_success())
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_batch(consumer, [event1, event2])
+
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}, %{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:kinesis_request, _conn}, 1_000
+    end
+
+    @tag capture_log: true
+    test "failed Kinesis requests result in failed events", %{consumer: consumer} do
+      Req.Test.stub(HttpClient, fn conn ->
+        Req.Test.json(conn, AwsFactory.kinesis_put_records_response_failure())
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_event(consumer)
+      assert_receive {:ack, ^ref, [], [_failed]}, 2_000
+    end
+
+    test "events are sent to Kinesis with routing function", %{consumer: consumer, account: account} do
+      test_pid = self()
+
+      assert {:ok, routing_function} =
+               Consumers.create_function(account.id, %{
+                 name: "test_kinesis_routing",
+                 function: %{
+                   type: "routing",
+                   sink_type: "kinesis",
+                   code: """
+                   def route(action, record, changes, metadata) do
+                     stream_suffix = if action == "insert", do: "new", else: "updates"
+                     %{"stream_arn" => "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream-" <> stream_suffix}
+                   end
+                   """
+                 }
+               })
+
+      {:ok, _} = MiniElixir.create(routing_function.id, routing_function.function.code)
+
+      {:ok, consumer} =
+        Consumers.update_sink_consumer(consumer, %{routing_id: routing_function.id, routing_mode: "dynamic"})
+
+      record = CharacterFactory.character_attrs()
+
+      record =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record, action: :insert))
+
+      Req.Test.stub(HttpClient, fn conn ->
+        # Parse the request body to verify routing worked
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+        {:ok, parsed_body} = Jason.decode(body)
+
+        # Check that the stream ARN in the request matches our routing function output
+        assert parsed_body["StreamARN"] == "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream-new"
+
+        send(test_pid, {:kinesis_request, conn})
+        Req.Test.json(conn, AwsFactory.kinesis_put_records_response_success())
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_event(consumer, record)
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:kinesis_request, _conn}, 1_000
+    end
+
+    test "batched messages with routing function route to different streams", %{consumer: consumer, account: account} do
+      test_pid = self()
+
+      assert {:ok, routing_function} =
+               Consumers.create_function(account.id, %{
+                 name: "test_kinesis_batch_routing",
+                 function: %{
+                   type: "routing",
+                   sink_type: "kinesis",
+                   code: """
+                   def route(action, record, changes, metadata) do
+                     stream_suffix = if String.contains?(record["name"], "admin"), do: "admin", else: "users"
+                     %{"stream_arn" => "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream-" <> stream_suffix}
+                   end
+                   """
+                 }
+               })
+
+      {:ok, _} = MiniElixir.create(routing_function.id, routing_function.function.code)
+
+      {:ok, consumer} =
+        Consumers.update_sink_consumer(consumer, %{routing_id: routing_function.id, routing_mode: "dynamic"})
+
+      # Create records that will route to different streams
+      record1 = CharacterFactory.character_attrs(%{name: "admin_user"})
+      record2 = CharacterFactory.character_attrs(%{name: "regular_user"})
+
+      event1 =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record1))
+
+      event2 =
+        [consumer_id: consumer.id, source_record: :character]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
+
+      request_count = :counters.new(1, [:atomics])
+
+      Req.Test.stub(HttpClient, fn conn ->
+        # Parse the request body to verify routing worked
+        {:ok, body, _conn} = Plug.Conn.read_body(conn)
+        {:ok, parsed_body} = Jason.decode(body)
+
+        # Each batch should go to different streams based on routing function
+        is_admin_stream = parsed_body["StreamARN"] == "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream-admin"
+        is_users_stream = parsed_body["StreamARN"] == "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream-users"
+
+        # is_admin_stream EXCLUSIVE OR is_users_stream
+        assert (is_admin_stream or is_users_stream) and is_admin_stream !== is_users_stream
+
+        :counters.add(request_count, 1, 1)
+        send(test_pid, {:kinesis_request, conn, if(is_admin_stream, do: :admin, else: :users)})
+        Req.Test.json(conn, AwsFactory.kinesis_put_records_response_success())
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_batch(consumer, [event1, event2])
+
+      # Should receive acknowledgment for each message separately (they go to different streams)
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+
+      # Should receive two separate Kinesis requests (one for each stream)
+      assert_receive {:kinesis_request, _conn, :admin}, 1_000
+      assert_receive {:kinesis_request, _conn, :users}, 1_000
+
+      # Verify we got exactly 2 requests
+      assert :counters.get(request_count, 1) == 2
     end
   end
 
@@ -72,8 +237,16 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
     )
   end
 
-  defp send_test_event(consumer, event) do
+  defp send_test_event(consumer, event \\ nil) do
+    event =
+      event ||
+        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+
     Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test", headers: []})
+  end
+
+  defp send_test_batch(consumer, events) do
+    Broadway.test_batch(broadway(consumer), events, metadata: %{topic: "test", headers: []})
   end
 
   defp broadway(consumer) do

@@ -2,6 +2,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   @moduledoc false
   use SequinWeb, :live_component
 
+  alias Sequin.Aws.Kinesis
   alias Sequin.Aws.SNS
   alias Sequin.Aws.SQS
   alias Sequin.Consumers
@@ -404,9 +405,24 @@ defmodule SequinWeb.Components.ConsumerForm do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
       client = KinesisSink.aws_client(sink)
 
-      case Sequin.Aws.Kinesis.describe_stream(client, sink.stream_arn) do
-        {:ok, _} -> :ok
-        {:error, error} -> {:error, Exception.message(error)}
+      # Check routing mode to determine which test to perform
+      case sink.routing_mode do
+        :dynamic ->
+          # Dynamic routing mode - test credentials and basic Kinesis permissions
+          case Kinesis.test_credentials_and_permissions(client) do
+            :ok -> :ok
+            {:error, error} -> {:error, Exception.message(error)}
+          end
+
+        :static ->
+          # Static routing mode - test specific stream access
+          case Kinesis.describe_stream(client, sink.stream_arn) do
+            {:ok, _} -> :ok
+            {:error, error} -> {:error, Exception.message(error)}
+          end
+
+        _ ->
+          {:error, "Invalid routing mode"}
       end
     else
       {:error, encode_errors(sink_changeset)}
@@ -728,7 +744,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp decode_sink(:sqs, sink) do
-    region = sink["region"] || aws_region_from_queue_url(sink["queue_url"])
+    region = aws_region_from_queue_url(sink["queue_url"]) || sink["region"]
 
     %{
       "type" => "sqs",
@@ -740,7 +756,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp decode_sink(:sns, sink) do
-    region = sink["region"] || aws_region_from_topic_arn(sink["topic_arn"])
+    region = aws_region_from_topic_arn(sink["topic_arn"]) || sink["region"]
 
     %{
       "type" => "sns",
@@ -752,9 +768,12 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp decode_sink(:kinesis, sink) do
+    region = aws_region_from_stream_arn(sink["stream_arn"]) || sink["region"]
+
     %{
       "type" => "kinesis",
       "stream_arn" => sink["stream_arn"],
+      "region" => region,
       "access_key_id" => sink["access_key_id"],
       "secret_access_key" => sink["secret_access_key"]
     }
@@ -925,6 +944,15 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp aws_region_from_stream_arn(nil), do: nil
+
+  defp aws_region_from_stream_arn(stream_arn) do
+    case KinesisSink.region_from_arn(stream_arn) do
+      {:error, _} -> nil
+      region -> region
+    end
+  end
+
   defp encode_consumer(nil), do: nil
 
   defp encode_consumer(%SinkConsumer{} = consumer) do
@@ -991,8 +1019,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "region" => sink.region,
       "access_key_id" => sink.access_key_id,
       "secret_access_key" => sink.secret_access_key,
-      "is_fifo" => sink.is_fifo,
-      "routing_mode" => sink.routing_mode
+      "is_fifo" => sink.is_fifo
     }
   end
 
@@ -1002,8 +1029,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "topic_arn" => sink.topic_arn,
       "region" => sink.region,
       "access_key_id" => sink.access_key_id,
-      "secret_access_key" => sink.secret_access_key,
-      "routing_mode" => sink.routing_mode
+      "secret_access_key" => sink.secret_access_key
     }
   end
 
@@ -1011,6 +1037,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     %{
       "type" => "kinesis",
       "stream_arn" => sink.stream_arn,
+      "region" => sink.region,
       "access_key_id" => sink.access_key_id,
       "secret_access_key" => sink.secret_access_key
     }

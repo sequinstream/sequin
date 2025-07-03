@@ -40,4 +40,26 @@ defmodule Sequin.Aws.KinesisTest do
       assert {:error, _} = Kinesis.put_records(client, @stream, records)
     end
   end
+
+  describe "test_credentials_and_permissions/1" do
+    test "successfully tests credentials with list streams", %{client: client} do
+      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+        assert conn.method == "POST"
+        assert String.contains?(conn.host, "kinesis.us-east-1.amazonaws.com")
+        Req.Test.json(conn, %{"StreamNames" => ["stream1", "stream2"]})
+      end)
+
+      assert :ok = Kinesis.test_credentials_and_permissions(client)
+    end
+
+    test "returns error when credentials are invalid", %{client: client} do
+      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+        conn
+        |> Plug.Conn.put_status(400)
+        |> Req.Test.json(%{"__type" => "UnrecognizedClientException", "message" => "Invalid credentials"})
+      end)
+
+      assert {:error, _} = Kinesis.test_credentials_and_permissions(client)
+    end
+  end
 end

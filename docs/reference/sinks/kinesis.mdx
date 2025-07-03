@@ -77,6 +77,29 @@ The default group for a message is the source row's primary key(s). You can over
 
 Sequin will order the delivery of messages with the same group according to their commit timestamp.
 
+## Routing
+
+You can use [routing functions](/reference/routing) to dynamically route messages to different Kinesis streams based on the message content.
+
+Your routing function should return a map with the `stream_arn` field:
+
+```elixir
+def route(action, record, changes, metadata) do
+  # Route to different streams based on record type
+  stream_name = case record["type"] do
+    "user" -> "user-events"
+    "order" -> "order-events"
+    _ -> "general-events"
+  end
+
+  %{
+    stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/#{stream_name}"
+  }
+end
+```
+
+This allows you to dynamically select which Kinesis stream receives each message based on your routing logic.
+
 ## Debugging
 
 You can view the status of your Kinesis sink in the Sequin web console.

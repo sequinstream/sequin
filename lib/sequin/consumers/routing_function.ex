@@ -23,6 +23,7 @@ defmodule Sequin.Consumers.RoutingFunction do
         :gcp_pubsub,
         :azure_event_hub,
         :sns,
+        :kinesis,
         :typesense,
         :meilisearch,
         :elasticsearch,

@@ -802,7 +802,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_sink(%SinkConsumer{sink: %KinesisSink{} = sink}) do
     %{
       type: :kinesis,
-      stream_arn: sink.stream_arn
+      stream_arn: sink.stream_arn,
+      region: sink.region
     }
   end
 

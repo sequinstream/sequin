@@ -66,9 +66,6 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       {:ok, %{postgres_replication: pg_replication}}
     end
 
-    @tag start_opts: [
-           slot_producer: [batch_flush_interval: 5_000]
-         ]
     test "messages flow through complete pipeline" do
       # Insert test data to generate replication messages
       CharacterFactory.insert_character!(%{name: "Alice"}, repo: UnboxedRepo)
@@ -123,10 +120,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       # A message will be waiting
       CharacterFactory.insert_character!(%{name: "Super Early Bird"}, repo: UnboxedRepo)
 
-      opts = [
-        slot_producer: [batch_flush_interval: 5_000],
-        processor_opts: [subscribe_to: []]
-      ]
+      opts = [processor_opts: [subscribe_to: []]]
 
       # Start pipeline but don't subscribe processors yet
       start_pipeline(slot, opts)
@@ -165,9 +159,6 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
              end)
     end
 
-    @tag start_opts: [
-           slot_producer: [batch_flush_interval: 50]
-         ]
     test "transaction boundaries are preserved through the complete pipeline" do
       # First, insert a character outside any transaction to establish baseline
       CharacterFactory.insert_character!(%{name: "Solo"}, repo: UnboxedRepo)
@@ -297,7 +288,8 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
       replication_slot: postgres_replication,
       reorder_buffer_opts: reorder_buffer_opts,
       processor_opts: processor_opts,
-      slot_producer_opts: slot_producer_opts
+      slot_producer_opts: slot_producer_opts,
+      slot_processor_opts: [skip_start?: true]
     ]
 
     start_supervised!({Supervisor, opts})

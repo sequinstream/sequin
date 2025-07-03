@@ -11,9 +11,22 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
 
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Repo
+  alias Sequin.Runtime.MessageHandler
+  alias Sequin.Runtime.SlotProcessorServer
   alias Sequin.Runtime.SlotProducer
   alias Sequin.Runtime.SlotProducer.Processor
   alias Sequin.Runtime.SlotProducer.ReorderBuffer
+
+  def child_spec(opts) do
+    replication_slot = Keyword.fetch!(opts, :replication_slot)
+
+    spec = %{
+      id: via_tuple(replication_slot.id),
+      start: {__MODULE__, :start_link, [opts]}
+    }
+
+    Supervisor.child_spec(spec, [])
+  end
 
   def start_link(opts) do
     replication_slot = Keyword.fetch!(opts, :replication_slot)
@@ -37,6 +50,8 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
     slot_producer_opts = Keyword.get(opts, :slot_producer_opts, [])
     processor_opts = Keyword.get(opts, :processor_opts, [])
     reorder_buffer_opts = Keyword.get(opts, :reorder_buffer_opts, [])
+    slot_processor_opts = Keyword.get(opts, :slot_processor_opts, [])
+    {skip_slot_processor_server?, slot_processor_opts} = Keyword.pop(slot_processor_opts, :skip_start?, false)
     pipeline_id = replication_slot.id
 
     slot_producer_opts =
@@ -93,11 +108,34 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
         reorder_buffer_opts
       )
 
+    slot_processor_opts =
+      Keyword.merge(
+        [
+          id: replication_slot.id,
+          slot_name: replication_slot.slot_name,
+          postgres_database: %PostgresDatabase{postgres_database | tables: []},
+          replication_slot: replication_slot,
+          message_handler_ctx_fn: &MessageHandler.context/1,
+          message_handler_module: default_message_handler_module(),
+          ipv6: replication_slot.postgres_database.ipv6,
+          test_pid: opts[:test_pid]
+        ],
+        slot_processor_opts
+      )
+
+    slot_processor_server =
+      if Application.get_env(:sequin, :env) == :test and skip_slot_processor_server? do
+        []
+      else
+        [{SlotProcessorServer, slot_processor_opts}]
+      end
+
     children =
       List.flatten([
         {SlotProducer, slot_producer_opts},
         processor_specs,
-        {ReorderBuffer, reoder_buffer_opts}
+        {ReorderBuffer, reoder_buffer_opts},
+        slot_processor_server
       ])
 
     Supervisor.init(children, strategy: :one_for_all)
@@ -152,5 +190,9 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
       nil -> []
       pid -> Supervisor.which_children(pid)
     end
+  end
+
+  defp default_message_handler_module do
+    Application.get_env(:sequin, :message_handler_module)
   end
 end

@@ -32,7 +32,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.SlotProcessorServer
-  alias Sequin.Runtime.SlotProcessorSupervisor
+  alias Sequin.Runtime.SlotProducer.Supervisor
   alias Sequin.Sinks.RedisMock
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
@@ -741,7 +741,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag start_opts: [
            heartbeat_interval: 1,
-           slot_producer: [slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]]
+           slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]
          ]
     test "replication slot advances even when database is idle", %{source_db: db} do
       {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
@@ -750,7 +750,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag start_opts: [
            heartbeat_interval: :timer.minutes(1),
-           slot_producer: [slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]]
+           slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]
          ]
     test "replication slot advances after insert", %{source_db: db, event_character_consumer: consumer} do
       {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
@@ -942,7 +942,7 @@ defmodule Sequin.PostgresReplicationTest do
         |> Sequin.Map.from_ecto()
         |> Sequin.Map.stringify_keys()
 
-      start_replication!(message_handler_module: MessageHandlerMock, replication_slot_id: pg_replication.id)
+      start_replication!(pg_replication, slot_processor_opts: [message_handler_module: MessageHandlerMock])
       assert_receive {:changes, [change]}, :timer.seconds(5)
 
       assert action?(change, :insert), "Expected change to be an insert, got: #{inspect(change)}"
@@ -956,7 +956,7 @@ defmodule Sequin.PostgresReplicationTest do
     test "changes in a transaction are buffered then delivered to message handler in order", %{
       pg_replication: pg_replication
     } do
-      start_replication!(message_handler_module: MessageHandlerMock, replication_slot_id: pg_replication.id)
+      start_replication!(pg_replication, slot_processor_opts: [message_handler_module: MessageHandlerMock])
 
       # Create three characters in sequence
       UnboxedRepo.transaction(fn ->
@@ -1000,7 +1000,7 @@ defmodule Sequin.PostgresReplicationTest do
         raise "Simulated crash"
       end)
 
-      start_replication!(message_handler_module: MessageHandlerMock, replication_slot_id: pg_replication.id)
+      start_replication!(pg_replication, slot_processor_opts: [message_handler_module: MessageHandlerMock])
 
       record =
         []
@@ -1017,7 +1017,7 @@ defmodule Sequin.PostgresReplicationTest do
         {:ok, length(msgs)}
       end)
 
-      start_replication!(message_handler_module: MessageHandlerMock, replication_slot_id: pg_replication.id)
+      start_replication!(pg_replication, slot_processor_opts: [message_handler_module: MessageHandlerMock])
 
       assert_receive {:change, [change]}, to_timeout(second: 1)
       assert action?(change, :insert)
@@ -1034,7 +1034,7 @@ defmodule Sequin.PostgresReplicationTest do
         {:ok, length(msgs)}
       end)
 
-      start_replication!(message_handler_module: MessageHandlerMock, replication_slot_id: pg_replication.id)
+      start_replication!(pg_replication, slot_processor_opts: [message_handler_module: MessageHandlerMock])
 
       # Test create
       character = CharacterFactory.insert_character_ident_full!([planet: "Caladan"], repo: UnboxedRepo)
@@ -1076,7 +1076,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag capture_log: true
     test "messages are processed exactly once, even after crash and reboot", %{pg_replication: pg_replication} do
-      start_replication!(message_handler_module: MessageHandlerMock, replication_slot_id: pg_replication.id)
+      start_replication!(pg_replication, slot_processor_opts: [message_handler_module: MessageHandlerMock])
 
       # Insert a record
       character1 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
@@ -1104,7 +1104,7 @@ defmodule Sequin.PostgresReplicationTest do
       stop_replication!(pg_replication)
 
       # Restart the replication
-      start_replication!(message_handler_module: MessageHandlerMock, replication_slot_id: pg_replication.id)
+      start_replication!(pg_replication, slot_processor_opts: [message_handler_module: MessageHandlerMock])
 
       # Insert another record to verify replication is working
       character3 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
@@ -1130,10 +1130,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Start replication with our custom reconnect interval
       start_replication!(
-        message_handler_module: MessageHandlerMock,
-        reconnect_interval: 5,
-        replication_slot_id: pg_replication.id,
-        slot_producer: [slot_producer_opts: [batch_flush_interval: 50]]
+        pg_replication,
+        slot_processor_opts: [message_handler_module: MessageHandlerMock],
+        slot_producer_opts: [batch_flush_interval: 50, reconnect_interval: 5]
       )
 
       # Insert a character to generate a message
@@ -1177,15 +1176,15 @@ defmodule Sequin.PostgresReplicationTest do
     test "fails to start when replication slot does not exist", %{pg_replication: pg_replication} do
       # Use a non-existent slot name
       non_existent_slot = "non_existent_slot"
-      Replication.update_pg_replication(pg_replication, %{slot_name: non_existent_slot})
+      pg_replication = %{pg_replication | slot_name: non_existent_slot}
 
       # Attempt to start replication with the non-existent slot
       test_pid = self()
       on_connect_fail = fn _, _ -> send(test_pid, :connect_fail) end
 
       start_replication!(
-        replication_slot_id: pg_replication.id,
-        slot_producer: [slot_producer_opts: [on_connect_fail_fn: on_connect_fail]]
+        pg_replication,
+        slot_producer_opts: [on_connect_fail_fn: on_connect_fail]
       )
 
       assert_receive :connect_fail, 1000
@@ -1193,7 +1192,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     test "emits heartbeat messages for latest postgres version", %{pg_replication: pg_replication} do
       # Attempt to start replication with the non-existent slot
-      start_replication!(heartbeat_interval: 5, replication_slot_id: pg_replication.id)
+      start_replication!(pg_replication, slot_processor_opts: [heartbeat_interval: 5])
 
       assert_receive {SlotProcessorServer, :heartbeat_received}, 1000
       assert_receive {SlotProcessorServer, :heartbeat_received}, 1000
@@ -1208,7 +1207,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     test "emits heartbeat messages for older postgres version", %{pg_replication: pg_replication} do
       # Attempt to start replication with the non-existent slot
-      start_replication!(heartbeat_interval: 5, replication_slot_id: pg_replication.id)
+      start_replication!(pg_replication, slot_processor_opts: [heartbeat_interval: 5])
 
       assert_receive {SlotProcessorServer, :heartbeat_received}, 1000
       assert_receive {SlotProcessorServer, :heartbeat_received}, 1000
@@ -1685,7 +1684,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag start_opts: [
            heartbeat_interval: 1,
-           slot_producer: [slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]]
+           slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]
          ]
     test "replication slot advances even when database is idle", %{source_db: db} do
       {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
@@ -1694,7 +1693,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag start_opts: [
            heartbeat_interval: :timer.minutes(1),
-           slot_producer: [slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]]
+           slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]
          ]
     test "replication slot advances after insert", %{source_db: db} do
       {:ok, init_lsn} = Postgres.confirmed_flush_lsn(db, replication_slot())
@@ -1705,21 +1704,20 @@ defmodule Sequin.PostgresReplicationTest do
     end
   end
 
-  defp start_replication!(opts) do
-    replication_slot_id = Keyword.get(opts, :replication_slot_id, "test_slot_id")
-
+  defp start_replication!(replication_slot, opts) do
+    {slot_processor_opts, opts} = Keyword.pop(opts, :slot_processor_opts, [])
     # Merge supervisor options
     supervisor_opts =
       Keyword.merge(
         [
-          replication_slot_id: replication_slot_id,
-          message_handler_module: MessageHandlerMock,
+          replication_slot: replication_slot,
+          slot_processor_opts: Keyword.merge([message_handler_module: MessageHandlerMock], slot_processor_opts),
           test_pid: self()
         ],
         opts
       )
 
-    start_supervised!({SlotProcessorSupervisor, supervisor_opts})
+    start_supervised!({Supervisor, supervisor_opts})
   end
 
   defp action?(change, action) do
@@ -1728,7 +1726,7 @@ defmodule Sequin.PostgresReplicationTest do
 
   defp stop_replication!(pg_replication) do
     # Stop the supervisor using its via_tuple
-    stop_supervised!(SlotProcessorSupervisor.via_tuple(pg_replication.id))
+    stop_supervised!(Supervisor.via_tuple(pg_replication.id))
   end
 
   # defp config do

@@ -28,22 +28,7 @@ end
 In general, some details of how the message is processed will be static and fixed by the sink.  Routing functions enable you to customize the behavior of a sink, but they are not intended to replace the idea of multiple sinks where necessary.
 For example, for the HTTP Webhook sink, the base URL is a static property - this improves batching and enables other performance optimizations such as connection pooling and request pipelining.
 
-## Supported sinks
-
-The following sinks support dynamic routing:
-
-- HTTP Push
-- Redis String
-- Redis Stream
-- NATS
-- Kafka
-- GCP PubSub
-- Typesense
-- Meilisearch
-- Elasticsearch
-- AWS SQS
-- RabbitMQ
-- Azure Event Hub
+## Sinks
 
 Each sink type has different fields that can be routed:
 

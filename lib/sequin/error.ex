@@ -100,7 +100,9 @@ defmodule Sequin.Error do
       |> JSON.struct(__MODULE__)
     end
 
-    def from_postgrex(summary_prefix \\ "Postgres error: ", %Postgrex.Error{} = error) do
+    def from_postgrex(summary_prefix \\ "Postgres error: ", error)
+
+    def from_postgrex(summary_prefix, %Postgrex.Error{} = error) do
       pg_code = error.postgres && error.postgres.code
       message = error.message || (error.postgres && error.postgres.message)
       code = if pg_code, do: pg_code, else: :postgrex_error
@@ -109,6 +111,14 @@ defmodule Sequin.Error do
         service: :postgres,
         message: summary_prefix <> message,
         code: code
+      }
+    end
+
+    def from_postgrex(summary_prefix, %DBConnection.ConnectionError{} = error) do
+      %__MODULE__{
+        service: :db_connection,
+        message: summary_prefix <> error.message,
+        code: :db_connection_error
       }
     end
   end
@@ -198,7 +208,9 @@ defmodule Sequin.Error do
       |> JSON.struct(__MODULE__)
     end
 
-    def from_postgrex(summary_prefix \\ "Postgres error: ", %Postgrex.Error{} = error) do
+    def from_postgrex(summary_prefix \\ "Postgres error: ", error)
+
+    def from_postgrex(summary_prefix, %Postgrex.Error{} = error) do
       pg_code = error.postgres && error.postgres.code
       message = error.message || (error.postgres && error.postgres.message)
       # Use a list so it's JSON-encodeable
@@ -208,6 +220,14 @@ defmodule Sequin.Error do
         errors: %{},
         summary: summary_prefix <> message,
         code: code
+      }
+    end
+
+    def from_postgrex(summary_prefix, %DBConnection.ConnectionError{} = error) do
+      %__MODULE__{
+        errors: %{},
+        summary: summary_prefix <> error.message,
+        code: :db_connection_error
       }
     end
   end

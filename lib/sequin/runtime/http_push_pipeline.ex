@@ -149,6 +149,9 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     headers = Map.merge(headers, routed_message.routing_info.headers)
     headers = Map.merge(headers, Map.new(Keyword.get(req_opts, :headers, [])))
 
+    # Check if gzip compression should be enabled based on content-encoding header
+    gzip_compress_body = should_gzip_compress_body?(headers)
+
     req =
       [
         method: routed_message.routing_info.method,
@@ -157,7 +160,8 @@ defmodule Sequin.Runtime.HttpPushPipeline do
         headers: headers,
         json: routed_message.transformed_message,
         receive_timeout: consumer.ack_wait_ms,
-        finch: Sequin.Finch
+        finch: Sequin.Finch,
+        compress_body: gzip_compress_body
       ]
       |> Keyword.merge(Keyword.drop(req_opts, [:method, :base_url, :url, :headers, :json, :receive_timeout, :finch]))
       |> Req.new()
@@ -363,5 +367,36 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
     Req.Test.allow(HttpClient, test_pid, self())
+  end
+
+  # Check if the body should be gzip compressed based on content-encoding header
+  defp should_gzip_compress_body?(headers) do
+    # Find content-encoding header in a case-insensitive way
+    content_encoding =
+      Enum.find_value(headers, fn
+        {key, value} when is_binary(key) ->
+          if String.downcase(key) == "content-encoding", do: value
+
+        {key, value} when is_atom(key) ->
+          if String.downcase(Atom.to_string(key)) == "content-encoding", do: value
+
+        _ ->
+          nil
+      end)
+
+    case content_encoding do
+      nil ->
+        false
+
+      value ->
+        case String.downcase(value) do
+          "gzip" ->
+            true
+
+          _ ->
+            Logger.warning("[HttpPushPipeline] Content-Encoding #{value} not supported yet")
+            false
+        end
+    end
   end
 end

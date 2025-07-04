@@ -4,8 +4,7 @@
       {
         "builtIn": 1,
         "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
+          "uid": "$datasource"
         },
         "enable": true,
         "hide": true,
@@ -18,13 +17,12 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
+  "id": 233,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -32,11 +30,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "msg/s",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -45,6 +45,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -66,8 +67,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -98,12 +98,12 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0",
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "sum by(replication_slot_id, slot_name) (rate(sequin_messages_ingested_count[$__rate_interval]))",
+          "expr": "sum by(replication_slot_id, slot_name) (rate(sequin_messages_ingested_count[5m]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "{{slot_name}}",
@@ -117,8 +117,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -126,11 +125,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "msg/s",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -139,6 +140,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -160,8 +162,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -192,12 +193,12 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0",
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by(consumer_id, consumer_name) (rate(sequin_message_deliver_success_count[$__rate_interval]))",
+          "expr": "sum by(consumer_id, consumer_name) (rate(sequin_message_deliver_success_count[5m]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "{{consumer_name}}",
@@ -211,8 +212,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -220,6 +220,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "Deliver Success/Attempts",
@@ -227,6 +228,7 @@
             "axisSoftMax": 1,
             "axisSoftMin": 0.9,
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -235,6 +237,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -256,8 +259,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               }
             ]
           },
@@ -285,7 +287,7 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0",
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "disableTextWrap": false,
@@ -304,8 +306,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -319,8 +320,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "orange",
@@ -358,7 +358,7 @@
         "showThresholdMarkers": true,
         "sizing": "auto"
       },
-      "pluginVersion": "10.0.3",
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "editorMode": "code",
@@ -375,8 +375,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -384,11 +383,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -397,6 +398,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -418,8 +420,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -451,12 +452,11 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0",
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "sqpds"
+            "uid": "$datasource"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
@@ -476,8 +476,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -485,12 +484,14 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "axisSoftMin": -4,
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -499,6 +500,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -522,8 +524,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -555,16 +556,15 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0",
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "sqpds"
+            "uid": "$datasource"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.95, sum by(le, success, consumer_id, consumer_name) (rate(sequin_internal_latency_us_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le, success, consumer_id, consumer_name) (rate(sequin_internal_latency_us_bucket[5m])))",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": false,
@@ -580,8 +580,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -589,12 +588,14 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "axisSoftMin": -4,
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -603,6 +604,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -626,8 +628,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -659,16 +660,15 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0",
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "sqpds"
+            "uid": "$datasource"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "histogram_quantile(0.95, sum by(le, success, consumer_id, consumer_name) (rate(sequin_delivery_latency_us_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le, success, consumer_id, consumer_name) (rate(sequin_delivery_latency_us_bucket[5m])))",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": false,
@@ -684,8 +684,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -693,11 +692,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -706,6 +707,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -727,8 +729,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -759,15 +760,16 @@
           "sortDesc": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "sqpds"
+            "uid": "$datasource"
           },
           "editorMode": "code",
           "expr": "sum(sequin_slot_processor_server_operation_percent) by (replication_id, slot_name, operation)",
@@ -782,8 +784,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -791,11 +792,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -804,6 +807,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -825,8 +829,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -857,15 +860,16 @@
           "sortDesc": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "sqpds"
+            "uid": "$datasource"
           },
           "editorMode": "code",
           "expr": "sum(sequin_slot_message_handler_operation_percent) by (replication_id, slot_name, operation)",
@@ -880,8 +884,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -889,11 +892,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -902,6 +907,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -923,8 +929,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -955,15 +960,16 @@
           "sortDesc": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "sqpds"
+            "uid": "$datasource"
           },
           "editorMode": "code",
           "expr": "sum(sequin_slot_message_store_operation_percent) by (consumer_id, consumer_name, operation)",
@@ -978,8 +984,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -987,11 +992,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1000,6 +1007,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1021,8 +1029,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1053,12 +1060,12 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0",
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "rate(erlang_vm_statistics_reductions_total[$__rate_interval])",
+          "expr": "rate(erlang_vm_statistics_reductions_total[5m])",
           "fullMetaSearch": false,
           "includeNullMetadata": false,
           "legendFormat": "__auto",
@@ -1072,8 +1079,7 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "sqpds"
+        "uid": "$datasource"
       },
       "fieldConfig": {
         "defaults": {
@@ -1081,11 +1087,13 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 0,
             "gradientMode": "none",
@@ -1094,6 +1102,7 @@
               "tooltip": false,
               "viz": false
             },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
@@ -1115,8 +1124,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1148,12 +1156,11 @@
           "sort": "none"
         }
       },
-      "pluginVersion": "11.6.0",
+      "pluginVersion": "12.0.2",
       "targets": [
         {
           "datasource": {
-            "type": "prometheus",
-            "uid": "sqpds"
+            "uid": "$datasource"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
@@ -1172,12 +1179,26 @@
       "type": "timeseries"
     }
   ],
+  "preload": false,
   "refresh": "5s",
-  "schemaVersion": 38,
-  "style": "dark",
+  "schemaVersion": 41,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {
+          "text": "Prometheus Stage",
+          "value": "000000005"
+        },
+        "label": "Datasource",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      }
+    ]
   },
   "time": {
     "from": "now-15m",
@@ -1187,6 +1208,5 @@
   "timezone": "browser",
   "title": "Sequin",
   "uid": "behuozial454wc",
-  "version": 1,
-  "weekStart": ""
+  "version": 9
 }

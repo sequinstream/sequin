@@ -17,10 +17,15 @@ defmodule Sequin.Sinks.Elasticsearch.Client do
   @doc """
   Import multiple documents in NDJSON format for bulk indexing.
   """
-  @spec import_documents(sink :: ElasticsearchSink.t(), index_name :: String.t(), ndjson :: IO.chardata()) ::
+  @spec import_documents(
+          sink :: ElasticsearchSink.t(),
+          index_name :: String.t(),
+          ndjson :: IO.chardata(),
+          req_opts :: keyword()
+        ) ::
           {:ok, [index_result()]} | {:error, Error.t()}
-  def import_documents(%ElasticsearchSink{} = sink, index_name, ndjson) do
-    req = base_request(sink)
+  def import_documents(%ElasticsearchSink{} = sink, index_name, ndjson, req_opts \\ []) do
+    req = base_request(sink, req_opts)
 
     case Req.post(req,
            url: "/#{index_name}/_bulk",
@@ -76,9 +81,9 @@ defmodule Sequin.Sinks.Elasticsearch.Client do
   @doc """
   Test the connection to the Elasticsearch server using a search request.
   """
-  @spec test_connection(sink :: ElasticsearchSink.t()) :: :ok | {:error, Error.t()}
-  def test_connection(%ElasticsearchSink{} = sink) do
-    req = base_request(sink)
+  @spec test_connection(sink :: ElasticsearchSink.t(), req_opts :: keyword()) :: :ok | {:error, Error.t()}
+  def test_connection(%ElasticsearchSink{} = sink, req_opts \\ []) do
+    req = base_request(sink, req_opts)
 
     case Req.get(req, url: "/") do
       {:ok, %{status: status}} when status in 200..299 ->
@@ -105,13 +110,16 @@ defmodule Sequin.Sinks.Elasticsearch.Client do
 
   # Private helpers
 
-  defp base_request(%ElasticsearchSink{} = sink) do
-    Req.new(
+  defp base_request(%ElasticsearchSink{} = sink, req_opts) do
+    [
       base_url: sink.endpoint_url,
       headers: auth_header(sink),
       receive_timeout: :timer.seconds(60),
-      retry: false
-    )
+      retry: false,
+      compress_body: true
+    ]
+    |> Req.new()
+    |> Req.merge(req_opts)
   end
 
   defp auth_header(%ElasticsearchSink{} = sink) do

@@ -13,8 +13,9 @@ defmodule Sequin.Runtime.ElasticsearchPipeline do
   require Logger
 
   @impl SinkPipeline
-  def init(context, _opts) do
-    context
+  def init(context, opts) do
+    req_opts = Keyword.get(opts, :req_opts, [])
+    Map.put(context, :req_opts, req_opts)
   end
 
   @impl SinkPipeline
@@ -45,7 +46,7 @@ defmodule Sequin.Runtime.ElasticsearchPipeline do
 
   @impl SinkPipeline
   def handle_batch(:default, messages, batch_info, context) do
-    %{consumer: consumer, test_pid: test_pid} = context
+    %{consumer: consumer, test_pid: test_pid, req_opts: req_opts} = context
     index_name = batch_info.batch_key
     sink = consumer.sink
 
@@ -69,7 +70,7 @@ defmodule Sequin.Runtime.ElasticsearchPipeline do
         end
       end)
 
-    case Client.import_documents(sink, index_name, ndjson) do
+    case Client.import_documents(sink, index_name, ndjson, req_opts) do
       {:ok, results} ->
         messages =
           messages

@@ -1186,10 +1186,6 @@
   "templating": {
     "list": [
       {
-        "current": {
-          "text": "Prometheus Stage",
-          "value": "000000005"
-        },
         "label": "Datasource",
         "name": "datasource",
         "options": [],

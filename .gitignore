@@ -39,8 +39,10 @@ dump.rdb
 
 docker-compose.override.yaml
 
-# IntelliJ things
+# IDE files
 *.iml
+.idea/
+.vscode/
 
 # Mac UI directory attributes
 .DS_Store

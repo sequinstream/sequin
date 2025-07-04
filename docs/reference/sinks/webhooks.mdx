@@ -178,6 +178,22 @@ Example (when batching is enabled):
 }
 ```
 
+## Payload compression
+
+Sequin supports gzip compression for webhook payloads to reduce bandwidth usage and improve performance for large messages or high-throughput scenarios.
+
+To enable gzip compression, add a `content-encoding: gzip` header to your webhook sink configuration. This can be configured either as a header in the HTTP endpoint or via a routing function.
+
+<Note>
+  Most modern web frameworks, and HTTP proxies or libraries automatically handle gzip decompression when the `content-encoding: gzip` header is present. However, make sure to check your framework's documentation for specific implementation details.
+</Note>
+
+<Tip>
+  Compression is most beneficial when:
+  - Your messages contain large payloads (e.g., JSON with many fields or large text values)
+  - You're using batching with multiple messages per request
+  - You're processing high volumes of messages and want to reduce network overhead
+</Tip>
 
 ## Response format
 

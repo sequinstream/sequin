@@ -376,6 +376,55 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
       assert_receive :all_headers_verified, 1_000
     end
+
+    test "compress payloads if content-type gzip is set", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
+      test_pid = self()
+
+      # Update the HTTP endpoint with encrypted headers
+      non_encrypted_headers = %{"Content-Encoding" => "gzip"}
+
+      {:ok, http_endpoint} =
+        Consumers.update_http_endpoint(http_endpoint, %{
+          headers: non_encrypted_headers
+        })
+
+      # Update the consumer to use routing and the updated endpoint
+      {:ok, consumer} =
+        Consumers.update_sink_consumer(consumer, %{
+          sink: consumer.sink |> Map.from_struct() |> Map.put(:http_endpoint_id, http_endpoint.id)
+        })
+
+      event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          action: :insert,
+          data:
+            ConsumersFactory.consumer_event_data(
+              action: :insert,
+              record: %{"id" => "test-compression-123"}
+            )
+        )
+
+      adapter = fn %Req.Request{} = req ->
+        assert req.headers["content-encoding"] == ["gzip"]
+
+        uncompressed_body = :zlib.gunzip(req.body)
+
+        assert String.contains?(uncompressed_body, "test-compression-123")
+
+        send(test_pid, :compression_verified)
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_event(consumer, event)
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
+      assert_receive :compression_verified, 1_000
+    end
   end
 
   describe "messages flow from SlotMessageStore to http end-to-end" do

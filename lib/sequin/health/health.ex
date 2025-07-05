@@ -94,6 +94,7 @@ defmodule Sequin.Health do
       })
   """
   @spec put_event(entity(), Event.t()) :: :ok | {:error, Error.t()}
+  @spec put_event(entity_kind :: entity(), entity_id :: String.t(), event :: Event.t()) :: :ok | {:error, Error.t()}
   def put_event(%_{} = entity, %Event{} = event) do
     case entity do
       %PostgresReplicationSlot{} = slot ->

@@ -218,6 +218,12 @@ defmodule Sequin.Databases.PostgresDatabase do
     end
   end
 
+  def to_protocol_opts(%PostgresDatabase{} = pd) do
+    pd
+    |> to_postgrex_opts()
+    |> Keyword.drop([:socket, :socket_dir, :endpoints])
+  end
+
   def from_primary(pri) do
     %__MODULE__{
       database: pri.database,

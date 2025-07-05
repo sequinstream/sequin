@@ -33,6 +33,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
     consumer_id = Keyword.fetch!(opts, :consumer_id)
     slot_message_store_mod = Keyword.get(opts, :slot_message_store_mod, SlotMessageStore)
     Logger.metadata(consumer_id: consumer_id)
+    Sequin.name_process({__MODULE__, consumer_id})
     Logger.info("Initializing consumer producer")
 
     if test_pid = Keyword.get(opts, :test_pid) do

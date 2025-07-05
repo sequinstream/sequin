@@ -18,6 +18,7 @@ defmodule Sequin.Postgres do
   require Logger
 
   @type db_conn() :: pid() | module() | DBConnection.t()
+  @type wal_cursor :: %{commit_lsn: integer(), commit_idx: integer()}
 
   @event_table_columns [
     %{name: "id", type: "serial"},
@@ -1243,6 +1244,28 @@ defmodule Sequin.Postgres do
 
       {:error, _} = error ->
         error
+    end
+  end
+
+  @doc """
+  Gets the current WAL write position as an integer.
+
+  ## Examples
+
+      iex> current_wal_lsn(conn)
+      {:ok, 285212704}
+
+  """
+  @spec current_wal_lsn(db_conn()) :: {:ok, integer()} | {:error, Error.t()}
+  def current_wal_lsn(conn) do
+    query = "SELECT pg_current_wal_lsn()"
+
+    case query(conn, query, []) do
+      {:ok, %{rows: [[lsn_string]]}} ->
+        {:ok, lsn_to_int(lsn_string)}
+
+      {:error, error} ->
+        {:error, Error.service(service: :postgres, message: Exception.message(error))}
     end
   end
 

@@ -67,7 +67,7 @@ defmodule Sequin.Databases.ConnectionCacheTest do
 
       {:ok, pid} = ConnectionCache.connection(cache, db)
 
-      updated_db = %{db | database: Factory.postgres_object()}
+      updated_db = %{db | database: Factory.postgres_object() <> "_changed"}
 
       {:ok, new_pid} = ConnectionCache.connection(cache, updated_db)
 
@@ -149,6 +149,8 @@ defmodule Sequin.Databases.ConnectionCacheTest do
       task1 = Task.async(fn -> ConnectionCache.connection(cache, db) end)
       assert_receive {:started, pid}
       task2 = Task.async(fn -> ConnectionCache.connection(cache, db) end)
+
+      Process.sleep(1)
       :erlang.yield()
 
       send(pid, :go)

@@ -248,7 +248,8 @@ defmodule Sequin.Sinks.Gcp.PubSub do
         [
           method: method,
           url: "#{base_url}/v1/#{path}",
-          headers: headers
+          headers: headers,
+          compress_body: true
         ]
         |> Req.new()
         |> Req.merge(client.req_opts)

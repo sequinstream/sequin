@@ -33,7 +33,7 @@ defmodule Sequin.Consumers.TypesenseSink do
     |> validate_endpoint_url()
     |> validate_length(:collection_name, max: 1024)
     |> validate_number(:batch_size, greater_than: 0, less_than_or_equal_to: 10_000)
-    |> validate_number(:timeout_seconds, greater_than: 0, less_than_or_equal_to: 300)
+    |> validate_number(:timeout_seconds, greater_than: 0, less_than_or_equal_to: 3600)
     |> validate_routing()
   end
 

@@ -11,6 +11,7 @@
   import { Label } from "$lib/components/ui/label";
   import { Eye, EyeOff, Info } from "lucide-svelte";
   import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let form: TypesenseConsumer;
   export let errors: any = {};
@@ -85,18 +86,6 @@
     </div>
 
     <div class="space-y-2">
-      <Label for="collection_name">Collection name</Label>
-      <Input
-        id="collection_name"
-        bind:value={form.sink.collection_name}
-        placeholder="my-collection"
-      />
-      {#if errors.sink?.collection_name}
-        <p class="text-destructive text-sm">{errors.sink.collection_name}</p>
-      {/if}
-    </div>
-
-    <div class="space-y-2">
       <Label for="api_key">API key</Label>
       <div class="relative">
         <Input
@@ -121,6 +110,38 @@
       </div>
       {#if errors.sink?.api_key}
         <p class="text-destructive text-sm">{errors.sink.api_key}</p>
+      {/if}
+    </div>
+
+    <div class="space-y-2">
+      <div class="flex items-center space-x-2">
+        <Label for="timeout_seconds">Timeout (seconds)</Label>
+        <Tooltip.Root openDelay={200}>
+          <Tooltip.Trigger>
+            <Info class="h-4 w-4 text-gray-400 cursor-help" />
+          </Tooltip.Trigger>
+          <Tooltip.Content class="p-4 max-w-xs">
+            <div class="text-sm text-muted-foreground font-normal">
+              The timeout for requests to the Typesense server. You may want to
+              increase this if:
+              <ul class="list-disc pl-4 mt-2">
+                <li>You have a slow network connection</li>
+                <li>You are indexing a large number of documents per batch</li>
+                <li>You have auto-embedding enabled in Typesense</li>
+              </ul>
+            </div>
+          </Tooltip.Content>
+        </Tooltip.Root>
+      </div>
+      <Input
+        id="timeout_seconds"
+        bind:value={form.sink.timeout_seconds}
+        placeholder="5"
+        type="number"
+        min="1"
+      />
+      {#if errors.sink?.timeout_seconds}
+        <p class="text-destructive text-sm">{errors.sink.timeout_seconds}</p>
       {/if}
     </div>
   </CardContent>

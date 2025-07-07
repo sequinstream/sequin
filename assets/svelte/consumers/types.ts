@@ -201,6 +201,7 @@ export type TypesenseConsumer = BaseConsumer & {
   sink: {
     type: "typesense";
     endpoint_url: string;
+    api_key: string;
     collection_name: string;
     batch_size: number;
     timeout_seconds: number;

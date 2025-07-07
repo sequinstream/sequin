@@ -94,7 +94,6 @@ defmodule SequinWeb.PostgresDatabaseJSON do
   defp render_primary_database(nil), do: nil
 
   defp render_primary_database(%{
-         id: id,
          hostname: hostname,
          port: port,
          database: database_name,
@@ -103,7 +102,6 @@ defmodule SequinWeb.PostgresDatabaseJSON do
          ipv6: ipv6
        }) do
     %{
-      id: id,
       hostname: hostname,
       port: port,
       database: database_name,

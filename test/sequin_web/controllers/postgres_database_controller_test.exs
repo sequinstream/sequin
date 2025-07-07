@@ -14,6 +14,12 @@ defmodule SequinWeb.PostgresDatabaseControllerTest do
     other_account = AccountsFactory.insert_account!()
     database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
 
+    database_with_primary =
+      DatabasesFactory.insert_configured_postgres_database!(
+        account_id: account.id,
+        primary: DatabasesFactory.postgres_database_primary_attrs(hostname: "primary.example.com")
+      )
+
     slot =
       ReplicationFactory.insert_configured_postgres_replication!(
         postgres_database_id: database.id,
@@ -23,18 +29,22 @@ defmodule SequinWeb.PostgresDatabaseControllerTest do
     other_database =
       DatabasesFactory.insert_configured_postgres_database!(account_id: other_account.id)
 
-    %{database: database, other_database: other_database, other_account: other_account, slot: slot}
+    %{
+      database: database,
+      database_with_primary: database_with_primary,
+      other_database: other_database,
+      other_account: other_account,
+      slot: slot
+    }
   end
 
   describe "index" do
     test "lists databases in the given account", %{
       conn: conn,
-      account: account,
       database: database,
+      database_with_primary: database_with_primary,
       slot: slot
     } do
-      another_database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
-
       conn = get(conn, ~p"/api/postgres_databases")
       assert %{"data" => databases_json} = json_response(conn, 200)
       assert length(databases_json) == 2
@@ -54,9 +64,18 @@ defmodule SequinWeb.PostgresDatabaseControllerTest do
                }
              ]
 
-      second_db_json = Enum.find(databases_json, &(&1["id"] == another_database.id))
-      assert second_db_json["name"] == another_database.name
-      assert second_db_json["password"] == Sequin.String.obfuscate(another_database.password)
+      second_db_json = Enum.find(databases_json, &(&1["id"] == database_with_primary.id))
+      assert second_db_json["name"] == database_with_primary.name
+      assert second_db_json["password"] == Sequin.String.obfuscate(database_with_primary.password)
+
+      assert second_db_json["primary"] == %{
+               "hostname" => database_with_primary.primary.hostname,
+               "port" => database_with_primary.primary.port,
+               "database" => database_with_primary.primary.database,
+               "username" => database_with_primary.primary.username,
+               "ssl" => database_with_primary.primary.ssl,
+               "ipv6" => database_with_primary.primary.ipv6
+             }
     end
 
     test "lists databases with sensitive data when requested", %{conn: conn, database: database} do

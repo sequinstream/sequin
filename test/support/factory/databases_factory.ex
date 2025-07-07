@@ -226,4 +226,25 @@ defmodule Sequin.Factory.DatabasesFactory do
     |> column()
     |> Sequin.Map.from_ecto()
   end
+
+  def postgres_database_primary(attrs \\ []) do
+    merge_attributes(
+      %Sequin.Databases.PostgresDatabasePrimary{
+        database: Factory.postgres_object(),
+        hostname: Factory.hostname(),
+        port: Factory.port(),
+        ssl: Factory.boolean(),
+        username: Factory.username(),
+        password: Factory.password(),
+        ipv6: Factory.boolean()
+      },
+      attrs
+    )
+  end
+
+  def postgres_database_primary_attrs(attrs \\ []) do
+    attrs
+    |> postgres_database_primary()
+    |> Sequin.Map.from_ecto()
+  end
 end

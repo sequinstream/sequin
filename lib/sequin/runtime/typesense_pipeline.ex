@@ -73,9 +73,7 @@ defmodule Sequin.Runtime.TypesensePipeline do
 
     external_messages =
       Enum.map(messages, fn %{data: data} ->
-        consumer
-        |> Message.to_external(data)
-        |> ensure_id_string()
+        Message.to_external(consumer, data)
       end)
 
     case external_messages do
@@ -126,14 +124,14 @@ defmodule Sequin.Runtime.TypesensePipeline do
 
     external_messages =
       Enum.map(messages, fn %{data: data} ->
-        consumer
-        |> Message.to_external(data)
-        |> ensure_id_string()
+        Message.to_external(consumer, data)
       end)
 
     case external_messages do
       [external_message] ->
-        if document_id = external_message["id"] do
+        document_id = get_stringified_id(external_message)
+
+        if document_id do
           case Client.delete_document(consumer, client, collection_name, document_id) do
             {:ok, _response} ->
               {:ok, messages, context}
@@ -159,9 +157,13 @@ defmodule Sequin.Runtime.TypesensePipeline do
     Enum.map_join(messages, "\n", &Jason.encode!/1)
   end
 
-  defp ensure_id_string(%{"id" => id} = m) when is_binary(id), do: m
-  defp ensure_id_string(%{"id" => id} = m), do: %{m | "id" => to_string(id)}
-  defp ensure_id_string(m), do: m
+  defp get_stringified_id(message) do
+    case Map.get(message, "id") || Map.get(message, :id) do
+      nil -> nil
+      id when is_binary(id) -> id
+      id -> to_string(id)
+    end
+  end
 
   defp setup_allowances(nil), do: :ok
 

@@ -135,6 +135,41 @@ defmodule Sequin.Runtime.TypesensePipelineTest do
       assert_receive {:ack, _ref, successful, []}, 3000
       assert length(successful) == 3
     end
+
+    test "pipeline passes the right document_id to delete_document if id is an atom", %{consumer: consumer} do
+      test_pid = self()
+
+      message =
+        ConsumersFactory.consumer_message(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          data:
+            ConsumersFactory.consumer_message_data(
+              message_kind: consumer.message_kind,
+              action: :delete,
+              record: %{id: 12_345}
+            )
+        )
+
+      adapter = fn request ->
+        send(test_pid, {:typesense_request, request})
+
+        assert request.method == :delete
+        assert request.url.path =~ "collections/#{consumer.sink.collection_name}/documents/12345"
+        assert request.url.query == "ignore_not_found=true"
+
+        {request, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      send_test_batch(consumer, [message])
+
+      assert_receive {:typesense_request, _sink}, 3000
+
+      assert_receive {:ack, _ref, [success], []}, 3000
+      assert success.data == message
+    end
   end
 
   describe "typesense routing" do

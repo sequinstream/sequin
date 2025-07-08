@@ -123,7 +123,7 @@ defmodule Sequin.MixProject do
       {:decorator, "~> 1.4"},
 
       # Development and Testing
-      {:styler, "~> 1.0.0-rc.1", only: [:dev, :test], runtime: false},
+      {:styler, "~> 1.4.0", only: [:dev, :test], runtime: false},
       {:faker, "~> 0.18.0", only: [:dev, :test]},
       {:mix_test_interactive, "~> 2.0", only: :dev, runtime: false},
       {:mox, "~> 1.0", runtime: false},

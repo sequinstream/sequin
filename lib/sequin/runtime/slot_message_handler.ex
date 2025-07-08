@@ -10,7 +10,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
 
   use Sequin.ProcessMetrics,
     metric_prefix: "sequin.slot_message_handler",
-    interval: :timer.seconds(30),
+    interval: to_timeout(second: 30),
     on_log: {__MODULE__, :process_metrics_on_log, []}
 
   use Sequin.ProcessMetrics.Decorator
@@ -71,7 +71,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
       field :table_reader, module()
       field :message_handler, module()
 
-      field :setting_retry_deliver_interval, non_neg_integer(), default: :timer.seconds(1)
+      field :setting_retry_deliver_interval, non_neg_integer(), default: to_timeout(second: 1)
     end
   end
 
@@ -134,7 +134,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
     # Send messages to each partition
     Sequin.Enum.reduce_while_ok(messages_by_partition, fn {processor_idx, partition_messages} ->
       name = via_tuple(slot_id, processor_idx)
-      GenServer.call(name, {:handle_messages, partition_messages}, :timer.seconds(30))
+      GenServer.call(name, {:handle_messages, partition_messages}, to_timeout(second: 30))
     end)
   end
 
@@ -164,7 +164,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
         GenServer.call(name, :flush)
       end,
       max_concurrency: partition_count,
-      timeout: :timer.seconds(10)
+      timeout: to_timeout(second: 10)
     )
     |> Sequin.Enum.reduce_while_ok(fn
       {:ok, :ok} -> :ok
@@ -202,7 +202,7 @@ defmodule Sequin.Runtime.SlotMessageHandler do
   def init(opts) do
     replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
     processor_idx = Keyword.fetch!(opts, :processor_idx)
-    retry_deliver_interval = Keyword.get(opts, :setting_retry_deliver_interval, :timer.seconds(1))
+    retry_deliver_interval = Keyword.get(opts, :setting_retry_deliver_interval, to_timeout(second: 1))
 
     Logger.metadata(
       replication_id: replication_slot_id,

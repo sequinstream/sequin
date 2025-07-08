@@ -217,7 +217,7 @@ defmodule Sequin.Aws.SQS do
         # AWS will return a list for multiple items but an object for single items
         successful = List.wrap(successful)
 
-        unless length(successful) == length(messages) do
+        if length(successful) != length(messages) do
           Logger.error("Did not delete messages for all handles")
         end
 

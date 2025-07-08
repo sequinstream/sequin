@@ -15,7 +15,7 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   @type id :: String.t()
 
-  @default_connect_timeout :timer.seconds(20)
+  @default_connect_timeout to_timeout(second: 20)
 
   @derive {Jason.Encoder,
            only: [
@@ -161,7 +161,7 @@ defmodule Sequin.Databases.PostgresDatabase do
   end
 
   def with_local_tunnel(%PostgresDatabase{use_local_tunnel: true} = pd) do
-    %PostgresDatabase{pd | hostname: Application.get_env(:sequin, :portal_hostname)}
+    %{pd | hostname: Application.get_env(:sequin, :portal_hostname)}
   end
 
   def with_local_tunnel(pd), do: pd

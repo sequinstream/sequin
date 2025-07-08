@@ -157,7 +157,7 @@ defmodule Sequin.Sinks.Kafka.Client do
       sink
       |> KafkaSink.hosts()
       |> Enum.map(fn {hostname, port} ->
-        NetworkUtils.test_tcp_reachability(hostname, port, false, :timer.seconds(5))
+        NetworkUtils.test_tcp_reachability(hostname, port, false, to_timeout(second: 5))
       end)
 
     if Enum.all?(results, &(&1 == :ok)) do

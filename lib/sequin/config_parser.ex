@@ -143,7 +143,7 @@ defmodule Sequin.ConfigParser do
       |> Enum.map(fn key -> {key, Map.get(env, key)} end)
       |> Enum.filter(fn {_, path} -> is_binary(path) end)
       |> Map.new(fn {env_key, path} ->
-        unless File.exists?(path) do
+        if !File.exists?(path) do
           raise ArgumentError, "No file exists for path provided for `#{env_key}`: #{path}"
         end
 

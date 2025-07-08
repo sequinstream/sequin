@@ -96,10 +96,10 @@ defmodule Sequin.Runtime.SlotMessageStore do
         Keyword.get(opts, :setting_system_max_memory_bytes, Application.get_env(:sequin, :max_memory_bytes)),
       max_memory_bytes: Keyword.get(opts, :max_memory_bytes),
       partition: partition,
-      flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(15)),
-      message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, :timer.minutes(2)),
-      visibility_check_interval: Keyword.get(opts, :visibility_check_interval, :timer.minutes(5)),
-      max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, :timer.minutes(2))
+      flush_interval: Keyword.get(opts, :flush_interval, to_timeout(second: 15)),
+      message_age_before_flush_ms: Keyword.get(opts, :message_age_before_flush_ms, to_timeout(minute: 2)),
+      visibility_check_interval: Keyword.get(opts, :visibility_check_interval, to_timeout(minute: 5)),
+      max_time_since_delivered_ms: Keyword.get(opts, :max_time_since_delivered_ms, to_timeout(minute: 2))
     }
 
     {:ok, state, {:continue, :init}}
@@ -125,7 +125,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     Sequin.ProcessMetrics.start()
     ProcessMetrics.metadata(%{consumer_id: consumer.id, consumer_name: consumer.name, partition: state.partition})
 
-    state = %State{state | consumer: consumer}
+    state = %{state | consumer: consumer}
 
     Logger.metadata(account_id: consumer.account_id, replication_id: consumer.replication_slot_id)
 
@@ -503,7 +503,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     consumer
     |> partitions()
     |> Sequin.Enum.reduce_while_ok(fn partition ->
-      GenServer.call(via_tuple(consumer.id, partition), {:set_monitor_ref, ref}, :timer.seconds(120))
+      GenServer.call(via_tuple(consumer.id, partition), {:set_monitor_ref, ref}, to_timeout(second: 120))
     end)
   end
 
@@ -901,7 +901,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     state
   end
 
-  defp schedule_max_memory_check(interval \\ :timer.minutes(5)) do
+  defp schedule_max_memory_check(interval \\ to_timeout(minute: 5)) do
     Process.send_after(self(), :max_memory_check, interval)
   end
 
@@ -994,7 +994,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
         duration_ms: duration_ms
       )
     else
-      unless persisted_messages == [] do
+      if persisted_messages != [] do
         Logger.info("[SlotMessageStore] Loaded messages from disk",
           consumer_id: state.consumer_id,
           partition: state.partition,
@@ -1021,7 +1021,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   defp maybe_finish_table_reader_batch(%State{} = prev_state, %State{} = state) do
-    unless State.unpersisted_table_reader_batch_ids(prev_state) == State.unpersisted_table_reader_batch_ids(state) do
+    if State.unpersisted_table_reader_batch_ids(prev_state) != State.unpersisted_table_reader_batch_ids(state) do
       :syn.publish(
         :consumers,
         {:table_reader_batches_changed, state.consumer.id},

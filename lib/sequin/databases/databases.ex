@@ -87,7 +87,7 @@ defmodule Sequin.Databases do
   @spec get_cached_db(database_id :: PostgresDatabase.id()) ::
           {:ok, database :: PostgresDatabase.t()} | {:error, Error.t()}
   def get_cached_db(database_id) do
-    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+    ttl = Sequin.Time.with_jitter(to_timeout(second: 30))
 
     Cache.get_or_store(
       database_id,
@@ -166,15 +166,15 @@ defmodule Sequin.Databases do
   """
   def create_db_with_slot(account_id, db_params, replication_params) do
     Repo.transact(fn ->
-      with {:ok, db} <- create_db(account_id, db_params),
-           replication_params = Map.put(replication_params, "postgres_database_id", db.id),
-           {:ok, replication} <-
+      with {:ok, %PostgresDatabase{} = database} <- create_db(account_id, db_params),
+           replication_params = Map.put(replication_params, "postgres_database_id", database.id),
+           {:ok, %PostgresReplicationSlot{} = replication} <-
              Replication.create_pg_replication(
                account_id,
                replication_params
              ) do
-        db_with_associations = Repo.preload(db, [:replication_slot])
-        {:ok, %PostgresDatabase{db_with_associations | replication_slot: replication}}
+        database_with_associations = Repo.preload(database, [:replication_slot])
+        {:ok, %{database_with_associations | replication_slot: replication}}
       end
     end)
   end
@@ -184,11 +184,12 @@ defmodule Sequin.Databases do
   """
   def update_db_with_slot(%PostgresDatabase{} = database, db_params, replication_params) do
     Repo.transact(fn ->
-      with {:ok, updated_db} <- update_db(database, db_params),
+      with {:ok, %PostgresDatabase{} = updated_db} <- update_db(database, db_params),
            # Preload the slot association after successful update for the next step
            replication_slot = Repo.preload(updated_db, :replication_slot).replication_slot,
-           {:ok, replication} <- Replication.update_pg_replication(replication_slot, replication_params) do
-        {:ok, %PostgresDatabase{updated_db | replication_slot: replication}}
+           {:ok, %PostgresReplicationSlot{} = replication} <-
+             Replication.update_pg_replication(replication_slot, replication_params) do
+        {:ok, %{updated_db | replication_slot: replication}}
       end
     end)
   end
@@ -205,7 +206,7 @@ defmodule Sequin.Databases do
         health_checker_query =
           Oban.Job
           |> ObanQuery.where_args(%{postgres_database_id: db.id})
-          |> ObanQuery.where_worker(Sequin.Health.CheckPostgresReplicationSlotWorker)
+          |> ObanQuery.where_worker(CheckPostgresReplicationSlotWorker)
 
         # Check for related entities that need to be removed first
         with :ok <- check_related_entities(db),

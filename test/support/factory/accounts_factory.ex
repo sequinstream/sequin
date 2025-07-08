@@ -91,7 +91,7 @@ defmodule Sequin.Factory.AccountsFactory do
     # Some tests need to then use the password
     |> Map.put(:password, attrs.password)
     |> tap(fn user ->
-      Sequin.Accounts.associate_user_with_account(user, %Sequin.Accounts.Account{id: account_id})
+      Sequin.Accounts.associate_user_with_account(user, %Account{id: account_id})
     end)
   end
 

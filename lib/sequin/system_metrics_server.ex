@@ -4,7 +4,7 @@ defmodule Sequin.SystemMetricsServer do
 
   require Logger
 
-  @interval :timer.seconds(30)
+  @interval to_timeout(second: 30)
   @run_queue_threshold 50
   @cpu_load_threshold 80
   @scheduler_util_threshold 80

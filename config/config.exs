@@ -78,7 +78,7 @@ config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
 
 config :sequin, Sequin.Redis,
   url: "redis://localhost:6379",
-  reconnect_sleep: :timer.seconds(5),
+  reconnect_sleep: to_timeout(second: 5),
   pool_size: 10
 
 config :sequin, Sequin.Repo,

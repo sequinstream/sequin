@@ -1,5 +1,7 @@
 defmodule Sequin.Functions.MiniElixir.Validator do
   @moduledoc false
+  alias Sequin.Functions.MiniElixir.Validator.PatternChecker
+
   @allowed_funname [:transform, :route, :filter]
   @args [:action, :record, :changes, :metadata]
   @error_bad_toplevel "Expecting only `def transform`, `def route` or `def filter` at the top level"
@@ -218,7 +220,7 @@ defmodule Sequin.Functions.MiniElixir.Validator do
   defp good({:cond, _meta, [[{:do, body}]]}), do: check(body)
 
   defp good({:=, _meta, [l, r]}) do
-    with {:ok, bound} = __MODULE__.PatternChecker.extract_bound_vars(l) do
+    with {:ok, bound} <- PatternChecker.extract_bound_vars(l) do
       case Enum.find(bound, fn b -> b in @args end) do
         nil -> check(r)
         b -> {:error, :validator, "can't assign to argument: #{to_string(b)}"}

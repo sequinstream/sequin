@@ -288,7 +288,7 @@ defmodule Sequin.Runtime.SinkPipeline do
     setup_allowances(context[:test_pid])
 
     # Add jitter for thundering herd
-    unless Application.get_env(:sequin, :env) == :test do
+    if Application.get_env(:sequin, :env) != :test do
       :timer.sleep(:rand.uniform(50))
     end
 
@@ -521,7 +521,7 @@ defmodule Sequin.Runtime.SinkPipeline do
     else
       DebouncedLogger.info("[SinkPipeline] Rejected messages for idempotency", %DebouncedLogger.Config{
         dedupe_key: {:message_idempotency, consumer.id},
-        debounce_interval_ms: :timer.seconds(10)
+        debounce_interval_ms: to_timeout(second: 10)
       })
 
       slot_message_store_mod.messages_already_succeeded(consumer, Enum.map(already_delivered, & &1.data))

@@ -163,7 +163,7 @@ defmodule Sequin.Runtime.TableReader do
     # This function is similar to fetch_batch_primary_keys but returns a map with a `pks` key
     # instead of a `rows` key for better semantic clarity. It also uses the optimized query
     # that only selects the necessary columns.
-    timeout = Keyword.get(opts, :timeout, :timer.minutes(1))
+    timeout = Keyword.get(opts, :timeout, to_timeout(minute: 1))
 
     # Add the option to select only primary key and cursor columns
     opts = Keyword.put(opts, :select_only_pk_and_cursor_columns, true)
@@ -227,7 +227,7 @@ defmodule Sequin.Runtime.TableReader do
         min_cursor,
         opts \\ []
       ) do
-    timeout = Keyword.get(opts, :timeout, :timer.minutes(1))
+    timeout = Keyword.get(opts, :timeout, to_timeout(minute: 1))
     {sql, params} = fetch_batch_query(table, min_cursor, opts)
 
     case Postgres.query(db_or_conn, sql, params, timeout: timeout) do
@@ -332,7 +332,7 @@ defmodule Sequin.Runtime.TableReader do
 
   # Add this new function
   def fast_count_estimate(%PostgresDatabase{} = db, %PostgresDatabaseTable{} = table, min_cursor, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout, :timer.minutes(1))
+    timeout = Keyword.get(opts, :timeout, to_timeout(minute: 1))
     include_min = Keyword.get(opts, :include_min, false)
     min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
     cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)

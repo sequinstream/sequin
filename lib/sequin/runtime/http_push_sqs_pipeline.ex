@@ -30,8 +30,8 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
 
   require Logger
 
-  @backoff_base :timer.minutes(1)
-  @backoff_max :timer.minutes(10)
+  @backoff_base to_timeout(minute: 1)
+  @backoff_max to_timeout(minute: 10)
 
   @spec main_queue_child_spec(keyword()) :: Supervisor.child_spec() | nil
   def main_queue_child_spec(opts \\ []) do

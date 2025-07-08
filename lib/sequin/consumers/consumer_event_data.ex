@@ -104,7 +104,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
   end
 
   def deserialize(%ConsumerEventData{} = data) do
-    %ConsumerEventData{
+    %{
       data
       | record: Sequin.Changeset.deserialize(data.record, data.record_deserializers),
         changes: Sequin.Changeset.deserialize(data.changes, data.changes_deserializers)

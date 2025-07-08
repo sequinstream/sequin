@@ -300,7 +300,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
     quote location: :keep, bind_quoted: [opts: opts] do
       @behaviour Sequin.Postgres.ReplicationConnection
 
-      unless Module.has_attribute?(__MODULE__, :doc) do
+      if !Module.has_attribute?(__MODULE__, :doc) do
         @doc """
         Returns a specification to start this module under a supervisor.
 
@@ -556,7 +556,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
     end
   end
 
-  defp handle(mod, fun, args, from, %{streaming: streaming} = s) do
+  defp handle(mod, fun, args, from, %__MODULE__{streaming: streaming} = s) do
     case apply(mod, fun, args) do
       {:keep_state, mod_state} ->
         {:keep_state, %{s | state: {mod, mod_state}}}
@@ -573,7 +573,7 @@ defmodule Sequin.Postgres.ReplicationConnection do
         end
 
       {:inactivate_socket, mod_state} ->
-        s = %__MODULE__{s | buffering_sock_messages?: true, state: {mod, mod_state}}
+        s = %{s | buffering_sock_messages?: true, state: {mod, mod_state}}
         {:keep_state, s}
 
       {:activate_socket, mod_state} ->
@@ -636,12 +636,12 @@ defmodule Sequin.Postgres.ReplicationConnection do
   end
 
   defp reconnect_or_stop(error, reason, protocol, s) when error in [:error, :disconnect] do
-    %{state: {mod, mod_state}} = s
+    %__MODULE__{state: {mod, mod_state}} = s
 
     # Exception is unused
     Protocol.disconnect(%RuntimeError{}, protocol)
 
-    maybe_handle(mod, :handle_disconnect, [error, reason, mod_state], %__MODULE__{
+    maybe_handle(mod, :handle_disconnect, [error, reason, mod_state], %{
       s
       | protocol: nil,
         streaming: nil,

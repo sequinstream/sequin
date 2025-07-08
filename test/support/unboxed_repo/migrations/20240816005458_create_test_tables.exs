@@ -7,7 +7,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
   def my_version, do: 1
 
   def check_version!(repo) do
-    unless my_version() == get_version(repo) do
+    if my_version() != get_version(repo) do
       IO.puts(
         :stderr,
         [

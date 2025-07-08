@@ -600,16 +600,16 @@ defmodule SequinWeb.FunctionsLive.Edit do
     consumer =
       case function.function do
         %RoutingFunction{} ->
-          %SinkConsumer{consumer | type: function.function.sink_type, routing: function}
+          %{consumer | type: function.function.sink_type, routing: function}
 
         %TransformFunction{} ->
-          %SinkConsumer{consumer | transform: function}
+          %{consumer | transform: function}
 
         %FilterFunction{} ->
-          %SinkConsumer{consumer | filter: function}
+          %{consumer | filter: function}
 
         %PathFunction{} ->
-          %SinkConsumer{consumer | transform: function}
+          %{consumer | transform: function}
       end
 
     Enum.map(test_messages, fn test_message ->

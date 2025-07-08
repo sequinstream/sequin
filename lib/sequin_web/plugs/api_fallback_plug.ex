@@ -17,7 +17,7 @@ defmodule SequinWeb.ApiFallbackPlug do
 
   def call(conn, {:error, %NotFoundError{} = error}) do
     # Remove params from error to avoid leaking sensitive information
-    error = %NotFoundError{error | params: nil}
+    error = %{error | params: nil}
     render_error(conn, :not_found, error)
   end
 

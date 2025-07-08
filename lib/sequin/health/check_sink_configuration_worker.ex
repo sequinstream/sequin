@@ -38,7 +38,7 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
           Source.schema_and_table_oid_in_source?(source, table_schema, table_oid)
         end)
 
-      Health.put_event(consumer, %Event{
+      Health.put_event(consumer, %{
         event
         | data: %{
             tables_with_replica_identities: tables_with_replica_identities,
@@ -47,10 +47,10 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
       })
     else
       {:error, %Error.NotFoundError{entity: :sink_consumer}} ->
-        Health.put_event(consumer, %Event{event | status: :fail, error: Error.not_found(entity: :sink_consumer)})
+        Health.put_event(consumer, %{event | status: :fail, error: Error.not_found(entity: :sink_consumer)})
 
       {:error, error} when is_exception(error) ->
-        Health.put_event(consumer, %Event{event | status: :fail, error: error})
+        Health.put_event(consumer, %{event | status: :fail, error: error})
 
       {:error, error} ->
         error =
@@ -60,7 +60,7 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
             details: inspect(error)
           )
 
-        Health.put_event(consumer, %Event{event | status: :fail, error: error})
+        Health.put_event(consumer, %{event | status: :fail, error: error})
     end
   end
 

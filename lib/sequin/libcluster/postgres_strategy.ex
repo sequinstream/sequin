@@ -70,7 +70,7 @@ defmodule Sequin.Libcluster.PostgresStrategy do
   def handle_info({:notification, _, _, _, node}, state) do
     node = String.to_atom(node)
 
-    unless node == node() do
+    if node != node() do
       topology = state.topology
       Logger.debug(topology, "Trying to connect to node: #{node}")
 

@@ -193,7 +193,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
   end
 
   def deserialize(%ConsumerEvent{} = consumer_event) do
-    %ConsumerEvent{
+    %{
       consumer_event
       | data: ConsumerEventData.deserialize(consumer_event.data)
     }

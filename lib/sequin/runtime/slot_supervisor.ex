@@ -64,13 +64,12 @@ defmodule Sequin.Runtime.SlotSupervisor do
         start_stores_and_pipeline!(consumer, opts)
       end,
       max_concurrency: 10,
-      timeout: :timer.seconds(20)
+      timeout: to_timeout(second: 20)
     )
-    |> Stream.map(fn
+    |> Enum.each(fn
       {:ok, :ok} -> :ok
       {:error, error} -> raise error
     end)
-    |> Stream.run()
 
     # Then start the slot processor
     case Sequin.DynamicSupervisor.maybe_start_child(sup, slot_processor_spec) do
@@ -96,7 +95,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
     with {:ok, _store_sup_pid} <- Sequin.DynamicSupervisor.maybe_start_child(supervisor, store_sup_child_spec),
          :ok <- maybe_start_consumer_pipeline(sink_consumer, opts) do
-      unless Keyword.get(opts, :skip_monitor, false) do
+      if !Keyword.get(opts, :skip_monitor, false) do
         :ok = SlotProcessorServer.monitor_message_store(sink_consumer.replication_slot_id, sink_consumer)
       end
 

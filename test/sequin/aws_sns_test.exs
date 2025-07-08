@@ -24,7 +24,7 @@ defmodule Sequin.Aws.SNSTest do
         SinkFactory.sns_message()
       ]
 
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         assert conn.host == "sns.us-east-1.amazonaws.com"
         assert conn.method == "POST"
         body = Sequin.Factory.AwsFactory.sns_publish_batch_response_success()
@@ -37,7 +37,7 @@ defmodule Sequin.Aws.SNSTest do
     test "returns error when batch publish fails", %{client: client} do
       messages = [SinkFactory.sns_message()]
 
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         body = AwsFactory.sns_publish_batch_response_failure()
         Req.Test.text(conn, body)
       end)
@@ -49,7 +49,7 @@ defmodule Sequin.Aws.SNSTest do
 
   describe "topic_meta/2" do
     test "successfully retrieves topic metadata", %{client: client} do
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         assert conn.method == "POST"
         assert String.contains?(conn.host, "sns.us-east-1.amazonaws.com")
         body = AwsFactory.sns_get_topic_attributes_response_success()
@@ -62,7 +62,7 @@ defmodule Sequin.Aws.SNSTest do
 
   describe "test_credentials_and_permissions/1" do
     test "successfully tests credentials with list topics", %{client: client} do
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         assert conn.method == "POST"
         assert String.contains?(conn.host, "sns.us-east-1.amazonaws.com")
         body = AwsFactory.sns_list_topics_response_success()

@@ -83,7 +83,7 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
   # end
 
   test "flushes remaining events on termination" do
-    start_reporter(publish_interval: :timer.minutes(1))
+    start_reporter(publish_interval: to_timeout(minute: 1))
 
     :telemetry.execute(
       [:sequin, :posthog, :event],

@@ -19,7 +19,7 @@ defmodule Sequin.MutexOwner do
     use TypedStruct
 
     typedstruct do
-      field :lock_expiry, non_neg_integer(), default: :timer.seconds(5)
+      field :lock_expiry, non_neg_integer(), default: to_timeout(second: 5)
       field :mutex_key, String.t(), required: true
       field :mutex_token, String.t(), required: true
       field :on_acquired, (-> any()), required: true

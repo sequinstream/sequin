@@ -323,7 +323,7 @@ defmodule Sequin.Sinks.Typesense.Client do
       headers: [
         {"X-TYPESENSE-API-KEY", client.api_key}
       ],
-      receive_timeout: :timer.seconds(client.timeout_seconds),
+      receive_timeout: to_timeout(second: client.timeout_seconds),
       retry: false
     ]
     |> Keyword.merge(client.req_opts)

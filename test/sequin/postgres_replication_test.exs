@@ -939,7 +939,7 @@ defmodule Sequin.PostgresReplicationTest do
       end)
 
       start_replication!(message_handler_module: SlotMessageHandlerMock)
-      assert_receive {:change, [change]}, :timer.seconds(5)
+      assert_receive {:change, [change]}, to_timeout(second: 5)
 
       assert action?(change, :insert), "Expected change to be an insert, got: #{inspect(change)}"
 
@@ -968,7 +968,7 @@ defmodule Sequin.PostgresReplicationTest do
         CharacterFactory.insert_character!([name: "Chani"], repo: UnboxedRepo)
       end)
 
-      assert_receive {:changes, changes}, :timer.seconds(1)
+      assert_receive {:changes, changes}, to_timeout(second: 1)
       # Assert the order of changes
       assert length(changes) == 3
       [insert1, insert2, insert3] = changes
@@ -990,7 +990,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Insert another character
       CharacterFactory.insert_character!([name: "Duncan Idaho"], repo: UnboxedRepo)
 
-      assert_receive {:changes, [insert4]}, :timer.seconds(1)
+      assert_receive {:changes, [insert4]}, to_timeout(second: 1)
       # commit_idx resets but seq should be higher than previous transaction
       assert insert4.commit_lsn > insert3.commit_lsn
       assert insert4.commit_idx == 0
@@ -1016,7 +1016,7 @@ defmodule Sequin.PostgresReplicationTest do
         |> Sequin.Map.from_ecto()
         |> Sequin.Map.stringify_keys()
 
-      assert_receive {:change, _}, :timer.seconds(1)
+      assert_receive {:change, _}, to_timeout(second: 1)
 
       stop_replication!()
 
@@ -1029,7 +1029,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       start_replication!(message_handler_module: SlotMessageHandlerMock)
 
-      assert_receive {:change, [change]}, :timer.seconds(1)
+      assert_receive {:change, [change]}, to_timeout(second: 1)
       assert action?(change, :insert)
 
       # Should have received the record (it was re-delivered)
@@ -1052,7 +1052,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character_ident_full!([planet: "Caladan"], repo: UnboxedRepo)
       record = character |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
-      assert_receive {:change, [create_change]}, :timer.seconds(1)
+      assert_receive {:change, [create_change]}, to_timeout(second: 1)
       assert action?(create_change, :insert)
       assert is_integer(create_change.commit_lsn)
       assert create_change.commit_idx == 0
@@ -1064,7 +1064,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
       record = Map.put(record, "planet", "Arrakis")
 
-      assert_receive {:change, [update_change]}, :timer.seconds(1)
+      assert_receive {:change, [update_change]}, to_timeout(second: 1)
       assert action?(update_change, :update)
       assert update_change.commit_lsn > create_change.commit_lsn
       assert update_change.commit_idx == 0
@@ -1077,7 +1077,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Test delete
       UnboxedRepo.delete!(character)
 
-      assert_receive {:change, [delete_change]}, :timer.seconds(1)
+      assert_receive {:change, [delete_change]}, to_timeout(second: 1)
       assert action?(delete_change, :delete)
       assert delete_change.commit_lsn > update_change.commit_lsn
       assert delete_change.commit_idx == 0
@@ -1103,7 +1103,7 @@ defmodule Sequin.PostgresReplicationTest do
       character1 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {:changes, [change]}, :timer.seconds(1)
+      assert_receive {:changes, [change]}, to_timeout(second: 1)
       assert action?(change, :insert)
       assert get_field_value(change.fields, "id") == character1.id
 
@@ -1111,7 +1111,7 @@ defmodule Sequin.PostgresReplicationTest do
       character2 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {:changes, [change]}, :timer.seconds(1)
+      assert_receive {:changes, [change]}, to_timeout(second: 1)
       assert action?(change, :insert)
       assert get_field_value(change.fields, "id") == character2.id
 
@@ -1131,7 +1131,7 @@ defmodule Sequin.PostgresReplicationTest do
       character3 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the new message to be handled
-      assert_receive {:changes, [change2, change3]}, :timer.seconds(1)
+      assert_receive {:changes, [change2, change3]}, to_timeout(second: 1)
 
       # Verify we only get the records >= low watermark
       assert action?(change2, :insert)
@@ -1186,7 +1186,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessorServer, :inactivate_socket}, 1000
 
       # Should reconnect, then process ONLY the second message
-      assert_receive {:changes, [change]}, :timer.seconds(1)
+      assert_receive {:changes, [change]}, to_timeout(second: 1)
       assert get_field_value(change.fields, "id") == character2.id
     end
 

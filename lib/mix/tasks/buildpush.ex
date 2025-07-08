@@ -103,7 +103,7 @@ defmodule Mix.Tasks.Buildpush do
   defp build_and_push(start_time, owner, repo, sha, config) do
     IO.puts("#{@blue}Building and pushing Docker image...#{@reset}")
 
-    unless config[:sentry_dsn] do
+    if !config[:sentry_dsn] do
       raise "config[:sentry_dsn] was not set, please update your config/dev.secret.exs"
     end
 

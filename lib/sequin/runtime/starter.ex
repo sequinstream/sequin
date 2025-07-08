@@ -16,7 +16,7 @@ defmodule Sequin.Runtime.Starter do
   def init(_) do
     Logger.info("[RuntimeStarter] Booting")
 
-    schedule_start(:timer.seconds(1))
+    schedule_start(to_timeout(second: 1))
 
     {:ok, :ignore}
   end
@@ -35,7 +35,7 @@ defmodule Sequin.Runtime.Starter do
     {:noreply, :ignore}
   end
 
-  defp schedule_start(timeout \\ :timer.seconds(20)) do
+  defp schedule_start(timeout \\ to_timeout(second: 20)) do
     Process.send_after(self(), :start, timeout)
   end
 
@@ -43,7 +43,7 @@ defmodule Sequin.Runtime.Starter do
     Logger.info("[RuntimeStarter] Starting")
 
     (Replication.all_active_pg_replications() ++ Consumers.list_sink_consumers_with_active_backfill())
-    |> Task.async_stream(&start/1, timeout: :timer.seconds(30))
+    |> Task.async_stream(&start/1, timeout: to_timeout(second: 30))
     |> Stream.run()
 
     Logger.info("[RuntimeStarter] Finished starting")

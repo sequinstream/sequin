@@ -158,7 +158,7 @@ defmodule Sequin.Functions.MiniElixir do
   end
 
   defp ensure_code_is_loaded(id) do
-    unless code_loaded?(id) do
+    if !code_loaded?(id) do
       __MODULE__
       |> Agent.get_and_update(fn state ->
         try do

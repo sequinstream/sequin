@@ -37,7 +37,7 @@ defmodule Sequin.Postgres do
     "tcp recv: closed (the connection was closed by the pool, possibly due to a timeout or because the pool has been terminated)",
     "ssl recv: closed (the connection was closed by the pool, possibly due to a timeout or because the pool has been terminated)"
   ]
-  @default_postgrex_timeout :timer.seconds(15)
+  @default_postgrex_timeout to_timeout(second: 15)
 
   @doc """
   Checks if the given table is an event table by verifying it has all the required columns.
@@ -1234,8 +1234,8 @@ defmodule Sequin.Postgres do
 
     case query(conn, query, [slot_name]) do
       {:ok, %{rows: [[restart_lsn, confirmed_flush_lsn]]}} ->
-        restart_lsn = unless is_nil(restart_lsn), do: lsn_to_int(restart_lsn)
-        confirmed_flush_lsn = unless is_nil(confirmed_flush_lsn), do: lsn_to_int(confirmed_flush_lsn)
+        restart_lsn = if !is_nil(restart_lsn), do: lsn_to_int(restart_lsn)
+        confirmed_flush_lsn = if !is_nil(confirmed_flush_lsn), do: lsn_to_int(confirmed_flush_lsn)
         {:ok, %{restart_lsn: restart_lsn, confirmed_flush_lsn: confirmed_flush_lsn}}
 
       {:ok, %{rows: []}} ->

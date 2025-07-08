@@ -146,7 +146,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       consumer: consumer
     } do
       test_pid = self()
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+      %ConsumerEvent{} = event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
 
       # Mark the message as already delivered
       wal_cursor = %{commit_lsn: event.commit_lsn, commit_idx: event.commit_idx, commit_timestamp: event.commit_timestamp}
@@ -161,7 +161,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
       )
 
-      event = %ConsumerEvent{event | payload_size_bytes: 1000}
+      event = %{event | payload_size_bytes: 1000}
       SlotMessageStore.put_messages(consumer, [event])
 
       # Start the pipeline
@@ -182,8 +182,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
            consumer: consumer
          } do
       test_pid = self()
-      event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
-      event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :update)
+      %ConsumerEvent{} = event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+      %ConsumerEvent{} = event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :update)
 
       # Mark the first message as already delivered
       wal_cursor = %{
@@ -203,8 +203,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: self(), persisted_mode?: false]}
       )
 
-      event1 = %ConsumerEvent{event1 | payload_size_bytes: 1000}
-      event2 = %ConsumerEvent{event2 | payload_size_bytes: 1000}
+      event1 = %{event1 | payload_size_bytes: 1000}
+      event2 = %{event2 | payload_size_bytes: 1000}
       SlotMessageStore.put_messages(consumer, [event1, event2])
 
       # Start the pipeline

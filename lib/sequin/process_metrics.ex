@@ -145,7 +145,7 @@ defmodule Sequin.ProcessMetrics do
       @opts opts
 
       defp process_metrics_interval do
-        Keyword.get(@opts, :interval, :timer.seconds(10))
+        Keyword.get(@opts, :interval, to_timeout(second: 10))
       end
 
       defp process_metrics_logger_prefix do

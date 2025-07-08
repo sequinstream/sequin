@@ -6,7 +6,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
   use Sequin.ProcessMetrics,
     metric_prefix: "sequin.consumer_producer",
-    interval: :timer.seconds(30)
+    interval: to_timeout(second: 30)
 
   use Sequin.ProcessMetrics.Decorator
 
@@ -49,7 +49,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
       consumer: nil,
       receive_timer: nil,
       trim_timer: nil,
-      batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
+      batch_timeout: Keyword.get(opts, :batch_timeout, to_timeout(second: 10)),
       test_pid: test_pid,
       scheduled_handle_demand: false,
       slot_message_store_mod: slot_message_store_mod
@@ -135,7 +135,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
     {:noreply, [], schedule_trim_idempotency(state)}
   end
 
-  defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
+  defp handle_receive_messages(%{demand: demand, consumer: %SinkConsumer{} = consumer} = state) when demand > 0 do
     {time, messages} = :timer.tc(fn -> produce_messages(state, demand) end, :millisecond)
     more_upstream_messages? = length(messages) == demand
 
@@ -155,8 +155,8 @@ defmodule Sequin.Runtime.ConsumerProducer do
     # Processes already have the consumer in context, but this is for the acknowledger. When we
     # consolidate pipelines, we can `configure_ack` to add the consumer to the acknowledger context.
     bare_consumer =
-      %SinkConsumer{
-        state.consumer
+      %{
+        consumer
         | active_backfills: [],
           postgres_database: nil,
           replication_slot: nil,
@@ -192,7 +192,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
 
     case state.slot_message_store_mod.produce(consumer, count, self()) do
       {:ok, messages} ->
-        unless messages == [] do
+        if messages != [] do
           Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
         end
 
@@ -210,7 +210,7 @@ defmodule Sequin.Runtime.ConsumerProducer do
   end
 
   defp schedule_trim_idempotency(state) do
-    trim_timer = Process.send_after(self(), :trim_idempotency, :timer.seconds(10))
+    trim_timer = Process.send_after(self(), :trim_idempotency, to_timeout(second: 10))
     %{state | trim_timer: trim_timer}
   end
 

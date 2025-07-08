@@ -30,7 +30,7 @@ defmodule Sequin.Sinks.Nats.Client do
   @impl Nats
   def test_connection(%NatsSink{} = sink) do
     with :ok <-
-           NetworkUtils.test_tcp_reachability(sink.host, sink.port, NatsSink.ipv6?(sink), :timer.seconds(10)),
+           NetworkUtils.test_tcp_reachability(sink.host, sink.port, NatsSink.ipv6?(sink), to_timeout(second: 10)),
          {:ok, connection} <- ConnectionCache.connection(sink) do
       nuid = 12 |> :crypto.strong_rand_bytes() |> Base.encode64()
       subject = "_SEQUIN.TEST.#{nuid}"

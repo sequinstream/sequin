@@ -23,7 +23,7 @@ defmodule Sequin.Aws.SQSTest do
         SinkFactory.sqs_message()
       ]
 
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         assert conn.host == "sqs.us-east-1.amazonaws.com"
         assert conn.method == "POST"
 
@@ -42,7 +42,7 @@ defmodule Sequin.Aws.SQSTest do
     test "returns error when batch send fails", %{client: client} do
       messages = [SinkFactory.sqs_message()]
 
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         Req.Test.json(conn, %{
           "Failed" => [
             %{
@@ -61,7 +61,7 @@ defmodule Sequin.Aws.SQSTest do
 
   describe "queue_meta/2" do
     test "successfully retrieves queue metadata", %{client: client} do
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         assert conn.method == "POST"
         assert String.contains?(conn.host, "sqs.us-east-1.amazonaws.com")
 

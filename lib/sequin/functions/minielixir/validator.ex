@@ -307,7 +307,11 @@ defmodule Sequin.Functions.MiniElixir.Validator do
   defp fnok([Integer, _]), do: :ok
   defp fnok([Regex, _]), do: :ok
   defp fnok([Eden, _]), do: :ok
-  defp fnok(p), do: {:error, :validator, "Forbidden function: #{redot(p)}"}
+  defp fnok([:&]), do: :ok
+
+  defp fnok(p) do
+    {:error, :validator, "Forbidden function: #{redot(p)}"}
+  end
 
   # Convert left-associated instances of the . operator to a get_in path
   defp dedot(ast), do: dedot(ast, [])

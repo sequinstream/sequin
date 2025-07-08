@@ -2,16 +2,20 @@ defmodule SequinWeb.FunctionLive.AutoComplete do
   @moduledoc false
   @reserved_words ~w(do if else end case cond for with fn)
   @function_completion_modules [
+    Base,
     Date,
     DateTime,
     Decimal,
+    Eden,
     Enum,
+    Integer,
+    JSON,
     Map,
     NaiveDateTime,
+    Regex,
     String,
     Time,
-    URI,
-    Base
+    URI
   ]
 
   def all_completions do

@@ -148,6 +148,18 @@ defmodule SequinWeb.DatabasesLive.Show do
     end
   end
 
+  def handle_event("restart", _params, socket) do
+    slot = socket.assigns.database.replication_slot
+
+    case Sequin.Runtime.Supervisor.restart_replication(slot) do
+      {:ok, _pid} ->
+        {:reply, %{ok: true}, socket}
+
+      {:error, _error} ->
+        {:reply, %{ok: false}, put_flash(socket, :error, "Failed to restart database. Please try again.")}
+    end
+  end
+
   @impl Phoenix.LiveView
   def handle_event("refresh_health", _params, socket) do
     # Will receive a :postgres_replication_slot_checked message when the worker finishes

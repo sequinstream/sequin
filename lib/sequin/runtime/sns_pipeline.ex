@@ -3,6 +3,7 @@ defmodule Sequin.Runtime.SnsPipeline do
   @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Aws.SNS
+  alias Sequin.AwsMock
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Runtime.Routing
@@ -12,8 +13,17 @@ defmodule Sequin.Runtime.SnsPipeline do
 
   @impl SinkPipeline
   def init(context, _opts) do
-    %{consumer: consumer} = context
-    Map.put(context, :sns_client, SnsSink.aws_client(consumer.sink))
+    %{consumer: consumer, test_pid: test_pid} = context
+
+    setup_allowances(test_pid)
+
+    case SnsSink.aws_client(consumer.sink) do
+      {:ok, client} ->
+        Map.put(context, :sns_client, client)
+
+      {:error, reason} ->
+        raise "Failed to initialize SNS client: #{inspect(reason)}"
+    end
   end
 
   @impl SinkPipeline
@@ -92,5 +102,6 @@ defmodule Sequin.Runtime.SnsPipeline do
   defp setup_allowances(test_pid) do
     Req.Test.allow(Sequin.Aws.HttpClient, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Mox.allow(AwsMock, test_pid, self())
   end
 end

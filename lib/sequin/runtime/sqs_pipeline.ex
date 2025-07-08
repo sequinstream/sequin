@@ -3,6 +3,7 @@ defmodule Sequin.Runtime.SqsPipeline do
   @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Aws.SQS
+  alias Sequin.AwsMock
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Error
@@ -13,8 +14,17 @@ defmodule Sequin.Runtime.SqsPipeline do
 
   @impl SinkPipeline
   def init(context, _opts) do
-    %{consumer: consumer} = context
-    Map.put(context, :sqs_client, SqsSink.aws_client(consumer.sink))
+    %{consumer: consumer, test_pid: test_pid} = context
+
+    setup_allowances(test_pid)
+
+    case SqsSink.aws_client(consumer.sink) do
+      {:ok, client} ->
+        Map.put(context, :sqs_client, client)
+
+      {:error, reason} ->
+        raise "Failed to initialize SQS client: #{inspect(reason)}"
+    end
   end
 
   @impl SinkPipeline
@@ -89,5 +99,6 @@ defmodule Sequin.Runtime.SqsPipeline do
   defp setup_allowances(test_pid) do
     Req.Test.allow(Sequin.Aws.HttpClient, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Mox.allow(AwsMock, test_pid, self())
   end
 end

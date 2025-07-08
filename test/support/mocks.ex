@@ -1,3 +1,7 @@
+Mox.defmock(Sequin.ConfigMock,
+  for: Sequin.Config
+)
+
 Mox.defmock(Sequin.Runtime.MessageHandlerMock,
   for: Sequin.Runtime.MessageHandler
 )
@@ -25,6 +29,8 @@ Mox.defmock(Sequin.TestSupport.DateTimeMock,
 Mox.defmock(Sequin.TestSupport.UUIDMock,
   for: Sequin.TestSupport.UUID
 )
+
+Mox.defmock(Sequin.AwsMock, for: Sequin.Aws)
 
 Mox.defmock(Sequin.Runtime.SlotMessageStoreMock,
   for: Sequin.Runtime.SlotMessageStoreBehaviour

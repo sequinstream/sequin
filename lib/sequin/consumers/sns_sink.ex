@@ -8,7 +8,7 @@ defmodule Sequin.Consumers.SnsSink do
   alias Sequin.Aws.HttpClient
   alias Sequin.Encrypted
 
-  @derive {Jason.Encoder, only: [:topic_arn, :region]}
+  @derive {Jason.Encoder, only: [:topic_arn, :region, :use_task_role]}
   @derive {Inspect, except: [:secret_access_key]}
   @primary_key false
   typed_embedded_schema do
@@ -17,18 +17,35 @@ defmodule Sequin.Consumers.SnsSink do
     field :region, :string
     field :access_key_id, :string
     field :secret_access_key, Encrypted.Field
+    field :use_task_role, :boolean, default: false
     field :is_fifo, :boolean, default: false
     field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:topic_arn, :region, :access_key_id, :secret_access_key, :routing_mode])
+    |> cast(params, [:topic_arn, :region, :access_key_id, :secret_access_key, :use_task_role, :routing_mode])
     |> maybe_put_region_from_arn()
-    |> validate_required([:region, :access_key_id, :secret_access_key])
+    |> validate_credentials()
     |> validate_topic_arn()
     |> validate_routing()
     |> put_is_fifo()
+    |> validate_cloud_mode_restrictions()
+  end
+
+  defp validate_credentials(changeset) do
+    use_task_role = get_field(changeset, :use_task_role)
+
+    if use_task_role do
+      # When using task role, we only need region
+      changeset
+      |> validate_required([:region])
+      |> put_change(:access_key_id, nil)
+      |> put_change(:secret_access_key, nil)
+    else
+      # When using explicit credentials, we need all three
+      validate_required(changeset, [:region, :access_key_id, :secret_access_key])
+    end
   end
 
   defp validate_topic_arn(changeset) do
@@ -83,9 +100,13 @@ defmodule Sequin.Consumers.SnsSink do
   defp ends_with_fifo?(arn), do: String.ends_with?(arn, ".fifo")
 
   def aws_client(%__MODULE__{} = sink) do
-    sink.access_key_id
-    |> AWS.Client.create(sink.secret_access_key, sink.region)
-    |> HttpClient.put_client()
+    case Sequin.Aws.get_aws_client(sink) do
+      {:ok, client} ->
+        {:ok, HttpClient.put_client(client)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc """
@@ -112,5 +133,20 @@ defmodule Sequin.Consumers.SnsSink do
 
   def sns_arn_regex do
     ~r/^arn:aws:sns:(?<region>[a-z0-9-]+):(?<account_id>\d{12}):(?<topic_name>[a-zA-Z0-9_.-]+)$/
+  end
+
+  defp validate_cloud_mode_restrictions(changeset) do
+    self_hosted? = Sequin.Config.self_hosted?()
+    use_task_role? = get_field(changeset, :use_task_role)
+
+    if not self_hosted? and use_task_role? do
+      add_error(
+        changeset,
+        :use_task_role,
+        "Task role credentials are not supported in Sequin Cloud. Please use explicit credentials instead."
+      )
+    else
+      changeset
+    end
   end
 end

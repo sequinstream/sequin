@@ -638,5 +638,161 @@ defmodule SequinWeb.YamlControllerTest do
         assert old == new
       end)
     end
+
+    test "for AWS sinks with use_task_role=true", %{account: account, conn: conn} do
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      # Create AWS sinks with use_task_role=true
+      ConsumersFactory.insert_sink_consumer!(
+        name: "sqs-task-role-sink",
+        account_id: account.id,
+        postgres_database_id: database.id,
+        sink: %{
+          type: :sqs,
+          queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
+          region: "us-east-1",
+          use_task_role: true
+        }
+      )
+
+      ConsumersFactory.insert_sink_consumer!(
+        name: "sns-task-role-sink",
+        account_id: account.id,
+        postgres_database_id: database.id,
+        sink: %{
+          type: :sns,
+          topic_arn: "arn:aws:sns:us-east-1:123456789012:test-topic",
+          region: "us-east-1",
+          use_task_role: true
+        }
+      )
+
+      ConsumersFactory.insert_sink_consumer!(
+        name: "kinesis-task-role-sink",
+        account_id: account.id,
+        postgres_database_id: database.id,
+        sink: %{
+          type: :kinesis,
+          stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream",
+          use_task_role: true
+        }
+      )
+
+      # Export the configuration
+      conn = get(conn, ~p"/api/config/export", %{"show-sensitive" => true})
+      assert %{"yaml" => exported_yaml} = json_response(conn, 200)
+
+      # Verify the exported YAML contains use_task_role=true and no credentials
+      parsed_yaml = YamlElixir.read_from_string!(exported_yaml)
+
+      sqs_sink = Enum.find(parsed_yaml["sinks"], fn sink -> sink["name"] == "sqs-task-role-sink" end)
+      assert sqs_sink["destination"]["use_task_role"] == true
+      refute Map.has_key?(sqs_sink["destination"], "access_key_id")
+      refute Map.has_key?(sqs_sink["destination"], "secret_access_key")
+
+      sns_sink = Enum.find(parsed_yaml["sinks"], fn sink -> sink["name"] == "sns-task-role-sink" end)
+      assert sns_sink["destination"]["use_task_role"] == true
+      refute Map.has_key?(sns_sink["destination"], "access_key_id")
+      refute Map.has_key?(sns_sink["destination"], "secret_access_key")
+
+      kinesis_sink = Enum.find(parsed_yaml["sinks"], fn sink -> sink["name"] == "kinesis-task-role-sink" end)
+      assert kinesis_sink["destination"]["use_task_role"] == true
+      refute Map.has_key?(kinesis_sink["destination"], "access_key_id")
+      refute Map.has_key?(kinesis_sink["destination"], "secret_access_key")
+
+      # Test round-trip: plan the exported configuration
+      conn = ensure_recycled(conn)
+      conn = put_req_header(conn, "content-type", "application/json")
+
+      conn = post(conn, ~p"/api/config/plan", %{"yaml" => exported_yaml, "show-sensitive" => true})
+      assert %{"changes" => changes} = json_response(conn, 200)
+
+      # Verify no changes are needed (round-trip successful)
+      Enum.each(changes, fn %{"action" => action, "old" => old, "new" => new} ->
+        assert action == "update"
+        assert old == new
+      end)
+    end
+
+    test "for AWS sinks with use_task_role=false", %{account: account, conn: conn} do
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      # Create AWS sinks with use_task_role=false and explicit credentials
+      ConsumersFactory.insert_sink_consumer!(
+        name: "sqs-credentials-sink",
+        account_id: account.id,
+        postgres_database_id: database.id,
+        sink: %{
+          type: :sqs,
+          queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue",
+          region: "us-east-1",
+          access_key_id: "AKIAIOSFODNN7EXAMPLE",
+          secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          use_task_role: false
+        }
+      )
+
+      ConsumersFactory.insert_sink_consumer!(
+        name: "sns-credentials-sink",
+        account_id: account.id,
+        postgres_database_id: database.id,
+        sink: %{
+          type: :sns,
+          topic_arn: "arn:aws:sns:us-east-1:123456789012:test-topic",
+          region: "us-east-1",
+          access_key_id: "AKIAIOSFODNN7EXAMPLE",
+          secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          use_task_role: false
+        }
+      )
+
+      ConsumersFactory.insert_sink_consumer!(
+        name: "kinesis-credentials-sink",
+        account_id: account.id,
+        postgres_database_id: database.id,
+        sink: %{
+          type: :kinesis,
+          stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream",
+          access_key_id: "AKIAIOSFODNN7EXAMPLE",
+          secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+          use_task_role: false
+        }
+      )
+
+      # Export the configuration
+      conn = get(conn, ~p"/api/config/export", %{"show-sensitive" => true})
+      assert %{"yaml" => exported_yaml} = json_response(conn, 200)
+
+      # Verify the exported YAML contains use_task_role=false and includes credentials
+      parsed_yaml = YamlElixir.read_from_string!(exported_yaml)
+
+      sqs_sink = Enum.find(parsed_yaml["sinks"], fn sink -> sink["name"] == "sqs-credentials-sink" end)
+      assert sqs_sink["destination"]["use_task_role"] == false
+      assert sqs_sink["destination"]["access_key_id"] == "AKIAIOSFODNN7EXAMPLE"
+      assert sqs_sink["destination"]["secret_access_key"] == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+      sns_sink = Enum.find(parsed_yaml["sinks"], fn sink -> sink["name"] == "sns-credentials-sink" end)
+      assert sns_sink["destination"]["use_task_role"] == false
+      assert sns_sink["destination"]["access_key_id"] == "AKIAIOSFODNN7EXAMPLE"
+      assert sns_sink["destination"]["secret_access_key"] == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+      kinesis_sink = Enum.find(parsed_yaml["sinks"], fn sink -> sink["name"] == "kinesis-credentials-sink" end)
+      assert kinesis_sink["destination"]["use_task_role"] == false
+      assert kinesis_sink["destination"]["access_key_id"] == "AKIAIOSFODNN7EXAMPLE"
+      assert kinesis_sink["destination"]["secret_access_key"] == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+      # Test round-trip: plan the exported configuration
+      conn = ensure_recycled(conn)
+      conn = put_req_header(conn, "content-type", "application/json")
+
+      conn = post(conn, ~p"/api/config/plan", %{"yaml" => exported_yaml, "show-sensitive" => true})
+      assert %{"changes" => changes} = json_response(conn, 200)
+
+      # Verify no changes are needed (round-trip successful)
+      Enum.each(changes, fn %{"action" => action, "old" => old, "new" => new} ->
+        assert action == "update"
+        assert old == new
+      end)
+    end
   end
 end

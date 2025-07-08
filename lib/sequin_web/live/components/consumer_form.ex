@@ -328,26 +328,31 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     if sink_changeset.valid? do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
-      client = SqsSink.aws_client(sink)
 
-      # Check routing mode to determine which test to perform
-      case sink.routing_mode do
-        :dynamic ->
-          # Dynamic routing mode - test credentials and basic SQS permissions
-          case SQS.test_credentials_and_permissions(client) do
-            :ok -> :ok
-            {:error, error} -> {:error, Exception.message(error)}
+      case SqsSink.aws_client(sink) do
+        {:ok, client} ->
+          # Check routing mode to determine which test to perform
+          case sink.routing_mode do
+            :dynamic ->
+              # Dynamic routing mode - test credentials and basic SQS permissions
+              case SQS.test_credentials_and_permissions(client) do
+                :ok -> :ok
+                {:error, error} -> {:error, Exception.message(error)}
+              end
+
+            :static ->
+              # Static routing mode - test specific queue access
+              case SQS.queue_meta(client, sink.queue_url) do
+                {:ok, _} -> :ok
+                {:error, error} -> {:error, Exception.message(error)}
+              end
+
+            _ ->
+              {:error, "Invalid routing mode"}
           end
 
-        :static ->
-          # Static routing mode - test specific queue access
-          case SQS.queue_meta(client, sink.queue_url) do
-            {:ok, _} -> :ok
-            {:error, error} -> {:error, Exception.message(error)}
-          end
-
-        _ ->
-          {:error, "Invalid routing mode"}
+        {:error, reason} ->
+          {:error, Exception.message(reason)}
       end
     else
       {:error, encode_errors(sink_changeset)}
@@ -365,26 +370,31 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     if sink_changeset.valid? do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
-      client = SnsSink.aws_client(sink)
 
-      # Check routing mode to determine which test to perform
-      case sink.routing_mode do
-        :dynamic ->
-          # Dynamic routing mode - test credentials and basic SNS permissions
-          case SNS.test_credentials_and_permissions(client) do
-            :ok -> :ok
-            {:error, error} -> {:error, Exception.message(error)}
+      case SnsSink.aws_client(sink) do
+        {:ok, client} ->
+          # Check routing mode to determine which test to perform
+          case sink.routing_mode do
+            :dynamic ->
+              # Dynamic routing mode - test credentials and basic SNS permissions
+              case SNS.test_credentials_and_permissions(client) do
+                :ok -> :ok
+                {:error, error} -> {:error, Exception.message(error)}
+              end
+
+            :static ->
+              # Static routing mode - test specific topic access
+              case SNS.topic_meta(client, sink.topic_arn) do
+                :ok -> :ok
+                {:error, error} -> {:error, Exception.message(error)}
+              end
+
+            _ ->
+              {:error, "Invalid routing mode"}
           end
 
-        :static ->
-          # Static routing mode - test specific topic access
-          case SNS.topic_meta(client, sink.topic_arn) do
-            :ok -> :ok
-            {:error, error} -> {:error, Exception.message(error)}
-          end
-
-        _ ->
-          {:error, "Invalid routing mode"}
+        {:error, reason} ->
+          {:error, "Failed to create AWS client: #{inspect(reason)}"}
       end
     else
       {:error, encode_errors(sink_changeset)}
@@ -402,26 +412,31 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     if sink_changeset.valid? do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
-      client = KinesisSink.aws_client(sink)
 
-      # Check routing mode to determine which test to perform
-      case sink.routing_mode do
-        :dynamic ->
-          # Dynamic routing mode - test credentials and basic Kinesis permissions
-          case Kinesis.test_credentials_and_permissions(client) do
-            :ok -> :ok
-            {:error, error} -> {:error, Exception.message(error)}
+      case KinesisSink.aws_client(sink) do
+        {:ok, client} ->
+          # Check routing mode to determine which test to perform
+          case sink.routing_mode do
+            :dynamic ->
+              # Dynamic routing mode - test credentials and basic Kinesis permissions
+              case Kinesis.test_credentials_and_permissions(client) do
+                :ok -> :ok
+                {:error, error} -> {:error, Exception.message(error)}
+              end
+
+            :static ->
+              # Static routing mode - test specific stream access
+              case Kinesis.describe_stream(client, sink.stream_arn) do
+                {:ok, _} -> :ok
+                {:error, error} -> {:error, Exception.message(error)}
+              end
+
+            _ ->
+              {:error, "Invalid routing mode"}
           end
 
-        :static ->
-          # Static routing mode - test specific stream access
-          case Kinesis.describe_stream(client, sink.stream_arn) do
-            {:ok, _} -> :ok
-            {:error, error} -> {:error, Exception.message(error)}
-          end
-
-        _ ->
-          {:error, "Invalid routing mode"}
+        {:error, reason} ->
+          {:error, "Failed to create AWS client: #{inspect(reason)}"}
       end
     else
       {:error, encode_errors(sink_changeset)}
@@ -751,7 +766,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "queue_url" => sink["queue_url"],
       "region" => region,
       "access_key_id" => sink["access_key_id"],
-      "secret_access_key" => sink["secret_access_key"]
+      "secret_access_key" => sink["secret_access_key"],
+      "use_task_role" => sink["use_task_role"]
     }
   end
 
@@ -763,7 +779,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "topic_arn" => sink["topic_arn"],
       "region" => region,
       "access_key_id" => sink["access_key_id"],
-      "secret_access_key" => sink["secret_access_key"]
+      "secret_access_key" => sink["secret_access_key"],
+      "use_task_role" => sink["use_task_role"]
     }
   end
 
@@ -775,7 +792,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "stream_arn" => sink["stream_arn"],
       "region" => region,
       "access_key_id" => sink["access_key_id"],
-      "secret_access_key" => sink["secret_access_key"]
+      "secret_access_key" => sink["secret_access_key"],
+      "use_task_role" => sink["use_task_role"]
     }
   end
 
@@ -1020,6 +1038,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "region" => sink.region,
       "access_key_id" => sink.access_key_id,
       "secret_access_key" => sink.secret_access_key,
+      "use_task_role" => sink.use_task_role,
       "is_fifo" => sink.is_fifo
     }
   end
@@ -1030,7 +1049,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "topic_arn" => sink.topic_arn,
       "region" => sink.region,
       "access_key_id" => sink.access_key_id,
-      "secret_access_key" => sink.secret_access_key
+      "secret_access_key" => sink.secret_access_key,
+      "use_task_role" => sink.use_task_role
     }
   end
 
@@ -1040,7 +1060,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "stream_arn" => sink.stream_arn,
       "region" => sink.region,
       "access_key_id" => sink.access_key_id,
-      "secret_access_key" => sink.secret_access_key
+      "secret_access_key" => sink.secret_access_key,
+      "use_task_role" => sink.use_task_role
     }
   end
 

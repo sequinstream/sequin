@@ -329,6 +329,8 @@ destination:
 
 #### SQS sink
 For sending changes to Amazon SQS queues:
+
+**Using access keys:**
 ```yaml
 destination:
   type: "sqs"                   # Required
@@ -338,8 +340,18 @@ destination:
   secret_access_key: "secret"   # Required
 ```
 
+**Using task role (recommended for AWS environments):**
+```yaml
+destination:
+  type: "sqs"                   # Required
+  queue_url: "https://sqs.us-west-2.amazonaws.com/123/MyQueue.fifo" # Required
+  use_task_role: true           # Use ECS task role, EC2 instance profile, or EKS service account
+```
+
 #### SNS sink
 For publishing changes to AWS SNS topics:
+
+**Using access keys:**
 ```yaml
 destination:
   type: "sns"                   # Required
@@ -348,6 +360,14 @@ destination:
   access_key_id: "AKIAXXXX"    # Required
   secret_access_key: "secret"   # Required
   is_fifo: false               # Optional, automatically detected from topic_arn
+```
+
+**Using task role (recommended for AWS environments):**
+```yaml
+destination:
+  type: "sns"                   # Required
+  topic_arn: "arn:aws:sns:us-west-2:123456789012:my-topic" # Required, full SNS Topic ARN
+  use_task_role: true           # Use ECS task role, EC2 instance profile, or EKS service account
 ```
 
 #### Redis sink
@@ -456,12 +476,22 @@ destination:
 
 #### Kinesis sink
 For publishing changes to AWS Kinesis streams:
+
+**Using access keys:**
 ```yaml
 destination:
   type: "kinesis"                # Required
   stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"  # Required
   access_key_id: "AKIAXXXX"     # Required
   secret_access_key: "secret"    # Required
+```
+
+**Using task role (recommended for AWS environments):**
+```yaml
+destination:
+  type: "kinesis"                # Required
+  stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"  # Required
+  use_task_role: true            # Use ECS task role, EC2 instance profile, or EKS service account
 ```
 
 ### Function configuration

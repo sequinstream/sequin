@@ -82,6 +82,8 @@ config :sequin, UnboxedRepo,
   priv: "test/support/unboxed_repo",
   types: PostgrexTypes
 
+config :sequin, :config_module, Sequin.ConfigMock
+
 config :sequin,
   ecto_repos: [Sequin.Repo, UnboxedRepo],
   portal_hostname: "portal.sequin.test",
@@ -108,6 +110,7 @@ config :sequin,
   kafka_module: Sequin.Sinks.KafkaMock,
   nats_module: Sequin.Sinks.NatsMock,
   rabbitmq_module: Sequin.Sinks.RabbitMqMock,
+  aws_module: Sequin.AwsMock,
   # Arbitrarily high memory limit for testing
   max_memory_bytes: 100 * 1024 * 1024 * 1024,
   slot_message_store: [flush_batch_size: 8],
@@ -115,6 +118,9 @@ config :sequin,
   jepsen_http_port: "JEPSEN_HTTP_PORT" |> System.get_env("4040") |> String.to_integer(),
   jepsen_transactions_count: "JEPSEN_TRANSACTIONS_COUNT" |> System.get_env("10") |> String.to_integer(),
   jepsen_transaction_queries_count: "JEPSEN_TRANSACTION_QUERIES_COUNT" |> System.get_env("10") |> String.to_integer()
+
+# Disable swoosh api client as it is only required for production adapters.
+config :swoosh, :api_client, false
 
 # In AES.GCM, it is important to specify 12-byte IV length for
 # interoperability with other encryption software. See this GitHub
@@ -127,9 +133,6 @@ config :sequin,
 # you can enable the server option below.
 
 # In test we don't send emails.
-
-# Disable swoosh api client as it is only required for production adapters.
-config :swoosh, :api_client, false
 
 # Print only warnings and errors during test
 

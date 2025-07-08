@@ -43,6 +43,19 @@
           </div>
         </div>
       </div>
+
+      {#if consumer.sink.use_task_role}
+        <div class="mt-4">
+          <div>
+            <span class="text-sm text-gray-500">AWS Credentials</span>
+            <div class="mt-2">
+              <span class="text-sm text-green-600"
+                >Loaded from task role, environment, or AWS profile</span
+              >
+            </div>
+          </div>
+        </div>
+      {/if}
     </div>
   </CardContent>
 </Card>

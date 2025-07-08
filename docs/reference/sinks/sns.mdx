@@ -18,17 +18,11 @@ The SNS sink publishes messages to an Amazon SNS topic.
 
     For FIFO topics the topic name **must** end with `.fifo`.
 
-- **Access Key ID**
+<Snippet file="aws-access-key-config.mdx" />
 
-    AWS access key ID that has permission to publish to the topic.
+## IAM permissions
 
-- **Secret Access Key**
-
-    The secret access key that pairs with the access key ID.
-
-## IAM user permissions
-
-Sequin needs an IAM user or role with the following permissions:
+Sequin requires the following AWS permissions to publish messages to SNS:
 
 ```json
 {
@@ -48,6 +42,39 @@ Sequin needs an IAM user or role with the following permissions:
 ```
 
 Replace `<your-topic-arn>` with the ARN of your SNS topic (e.g., `arn:aws:sns:us-east-1:123456789012:products-updates`).
+
+<Snippet file="aws-iam-settings.mdx" />
+
+## Configuration examples
+
+### Using access keys
+
+```yaml
+sinks:
+  - name: "sns-sink"
+    batch_size: 10
+    destination:
+      type: "sns"
+      topic_arn: "arn:aws:sns:us-east-1:123456789012:my-topic"
+      access_key_id: "AKIA..."
+      secret_access_key: "your-secret-key"
+```
+
+### Using task role (recommended for AWS environments)
+
+```yaml
+sinks:
+  - name: "sns-sink"
+    batch_size: 10
+    destination:
+      type: "sns"
+      topic_arn: "arn:aws:sns:us-east-1:123456789012:my-topic"
+      use_task_role: true
+```
+
+<Note>
+When using `use_task_role: true`, ensure your ECS task role, EC2 instance profile, or EKS service account has the required SNS permissions.
+</Note>
 
 ## Message format
 

@@ -20,17 +20,11 @@ Unlike SQS or SNS, Kinesis maintains message ordering and enables multiple consu
 
     The ARN of your Kinesis data stream. Must be in the format `arn:aws:kinesis:<region>:<account-id>:stream/<stream-name>`.
 
-- **Access Key ID**
+<Snippet file="aws-access-key-config.mdx" />
 
-    The AWS access key ID with permissions to put records to the stream.
+## IAM permissions
 
-- **Secret Access Key**
-
-    The AWS secret access key corresponding to the access key ID.
-
-## IAM user permissions
-
-Sequin requires an IAM user with the following permissions:
+Sequin requires the following AWS permissions to send messages to Kinesis:
 
 ```json
 {
@@ -45,7 +39,40 @@ Sequin requires an IAM user with the following permissions:
 }
 ```
 
-Replace `<your-stream-arn>` with your actual stream ARN.
+Replace `<your-stream-arn>` with your actual stream ARN (e.g., `arn:aws:kinesis:us-east-1:123456789012:stream/my-stream`).
+
+<Snippet file="aws-iam-settings.mdx" />
+
+## Configuration examples
+
+### Using access keys
+
+```yaml
+sinks:
+  - name: "kinesis-sink"
+    batch_size: 10
+    destination:
+      type: "kinesis"
+      stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"
+      access_key_id: "AKIA..."
+      secret_access_key: "your-secret-key"
+```
+
+### Using task role (recommended for AWS environments)
+
+```yaml
+sinks:
+  - name: "kinesis-sink"
+    batch_size: 10
+    destination:
+      type: "kinesis"
+      stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"
+      use_task_role: true
+```
+
+<Note>
+When using `use_task_role: true`, ensure your ECS task role, EC2 instance profile, or EKS service account has the required Kinesis permissions.
+</Note>
 
 ## Message format
 

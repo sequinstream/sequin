@@ -1,7 +1,8 @@
 defmodule Sequin.Consumers.KinesisSinkTest do
-  use ExUnit.Case, async: true
+  use Sequin.Case
 
   alias Sequin.Consumers.KinesisSink
+  alias Sequin.Test.AwsTestHelpers
 
   describe "changeset/2" do
     test "validates required fields" do
@@ -93,6 +94,85 @@ defmodule Sequin.Consumers.KinesisSinkTest do
       assert changeset.valid?
       assert changeset.changes[:region] == "eu-west-1"
     end
+
+    test "validates explicit credentials when use_task_role is false" do
+      changeset =
+        KinesisSink.changeset(%KinesisSink{}, %{
+          stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream",
+          region: "us-east-1",
+          use_task_role: false,
+          routing_mode: :static
+        })
+
+      refute changeset.valid?
+      assert "can't be blank" in errors_on(changeset).access_key_id
+      assert "can't be blank" in errors_on(changeset).secret_access_key
+    end
+
+    test "only requires region when use_task_role is true" do
+      changeset =
+        KinesisSink.changeset(%KinesisSink{}, %{
+          stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream",
+          region: "us-east-1",
+          use_task_role: true,
+          routing_mode: :static
+        })
+
+      assert changeset.valid?
+      refute errors_on(changeset)[:access_key_id]
+      refute errors_on(changeset)[:secret_access_key]
+    end
+  end
+
+  describe "changeset/2 cloud mode restrictions" do
+    @tag self_hosted: false
+    test "validates that use_task_role is false when not self_hosted" do
+      params = %{
+        stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream",
+        region: "us-east-1",
+        use_task_role: true,
+        routing_mode: :static
+      }
+
+      changeset = KinesisSink.changeset(%KinesisSink{}, params)
+
+      refute changeset.valid?
+
+      assert changeset.errors[:use_task_role] ==
+               {"Task role credentials are not supported in Sequin Cloud. Please use explicit credentials instead.", []}
+    end
+
+    @tag self_hosted: true
+    test "allows use_task_role when self_hosted" do
+      params = %{
+        stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream",
+        region: "us-east-1",
+        use_task_role: true,
+        routing_mode: :static
+      }
+
+      changeset = KinesisSink.changeset(%KinesisSink{}, params)
+
+      assert changeset.valid?
+      refute changeset.errors[:use_task_role]
+    end
+
+    @tag self_hosted: false
+    test "allows use_task_role=false in cloud mode" do
+      params = %{
+        stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/test-stream",
+        region: "us-east-1",
+        use_task_role: false,
+        access_key_id: "test_key",
+        secret_access_key: "test_secret",
+        routing_mode: :static
+      }
+
+      changeset = KinesisSink.changeset(%KinesisSink{}, params)
+
+      assert changeset.valid?
+      refute changeset.errors[:use_task_role]
+    end
   end
 
   describe "region_from_arn/1" do
@@ -114,7 +194,7 @@ defmodule Sequin.Consumers.KinesisSinkTest do
         region: "us-west-2"
       }
 
-      client = KinesisSink.aws_client(sink)
+      assert {:ok, client} = KinesisSink.aws_client(sink)
       assert client.region == "us-west-2"
     end
 
@@ -125,17 +205,39 @@ defmodule Sequin.Consumers.KinesisSinkTest do
         secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
       }
 
-      client = KinesisSink.aws_client(sink)
+      assert {:ok, client} = KinesisSink.aws_client(sink)
       assert client.region == "eu-central-1"
     end
-  end
 
-  # Helper function to extract error messages
-  defp errors_on(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
+    test "creates client with task role credentials when use_task_role is true" do
+      AwsTestHelpers.setup_task_role_stub(
+        access_key_id: "ASIA123456789",
+        secret_access_key: "mock_secret",
+        session_token: "mock_token"
+      )
+
+      sink = %KinesisSink{
+        region: "us-east-1",
+        use_task_role: true
+      }
+
+      assert {:ok, client} = KinesisSink.aws_client(sink)
+      assert client.access_key_id == "ASIA123456789"
+      assert client.secret_access_key == "mock_secret"
+      assert client.session_token == "mock_token"
+      assert client.region == "us-east-1"
+    end
+
+    test "returns error when task role credentials are unavailable" do
+      AwsTestHelpers.setup_failed_task_role_stub()
+
+      sink = %KinesisSink{
+        region: "us-east-1",
+        use_task_role: true
+      }
+
+      expected_error = Sequin.Error.service(service: :aws, message: "No credentials available")
+      assert {:error, ^expected_error} = KinesisSink.aws_client(sink)
+    end
   end
 end

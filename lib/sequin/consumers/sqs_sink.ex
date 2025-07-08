@@ -8,7 +8,7 @@ defmodule Sequin.Consumers.SqsSink do
   alias Sequin.Aws.HttpClient
   alias Sequin.Encrypted
 
-  @derive {Jason.Encoder, only: [:queue_url, :region]}
+  @derive {Jason.Encoder, only: [:queue_url, :region, :use_task_role]}
   @derive {Inspect, except: [:secret_access_key]}
   @primary_key false
   typed_embedded_schema do
@@ -17,6 +17,7 @@ defmodule Sequin.Consumers.SqsSink do
     field :region, :string
     field :access_key_id, :string
     field :secret_access_key, Encrypted.Field
+    field :use_task_role, :boolean, default: false
     field :is_fifo, :boolean, default: false
     field :use_emulator, :boolean, default: false
     field :emulator_base_url, :string
@@ -30,17 +31,34 @@ defmodule Sequin.Consumers.SqsSink do
       :region,
       :access_key_id,
       :secret_access_key,
+      :use_task_role,
       :is_fifo,
       :use_emulator,
       :emulator_base_url,
       :routing_mode
     ])
     |> maybe_put_region()
-    |> validate_required([:region, :access_key_id, :secret_access_key])
+    |> validate_credentials()
     |> validate_queue_url()
     |> put_is_fifo()
     |> validate_emulator_base_url()
     |> validate_routing()
+    |> validate_cloud_mode_restrictions()
+  end
+
+  defp validate_credentials(changeset) do
+    use_task_role = get_field(changeset, :use_task_role)
+
+    if use_task_role do
+      # When using task role, we only need region
+      changeset
+      |> validate_required([:region])
+      |> put_change(:access_key_id, nil)
+      |> put_change(:secret_access_key, nil)
+    else
+      # When using explicit credentials, we need all three
+      validate_required(changeset, [:region, :access_key_id, :secret_access_key])
+    end
   end
 
   defp validate_emulator_base_url(changeset) do
@@ -103,20 +121,25 @@ defmodule Sequin.Consumers.SqsSink do
   defp ends_with_fifo?(url), do: String.ends_with?(url, ".fifo")
 
   def aws_client(%__MODULE__{} = sink) do
-    client = AWS.Client.create(sink.access_key_id, sink.secret_access_key, sink.region)
+    with {:ok, client} <- Sequin.Aws.get_aws_client(sink),
+         {:ok, client} <- configure_emulator(client, sink) do
+      {:ok, HttpClient.put_client(client)}
+    end
+  end
 
-    client =
-      if sink.use_emulator do
-        %{scheme: scheme, authority: authority} = URI.parse(sink.emulator_base_url)
+  defp configure_emulator(client, sink) do
+    if sink.use_emulator do
+      %{scheme: scheme, authority: authority} = URI.parse(sink.emulator_base_url)
 
+      client =
         client
         |> Map.put(:proto, scheme)
         |> Map.put(:endpoint, authority)
-      else
-        client
-      end
 
-    HttpClient.put_client(client)
+      {:ok, client}
+    else
+      {:ok, client}
+    end
   end
 
   @doc """
@@ -146,5 +169,20 @@ defmodule Sequin.Consumers.SqsSink do
 
   def sqs_url_regex do
     ~r/^https?:\/\/sqs\.(?<region>[a-z0-9-]+)\.([a-zA-Z0-9.-]+)(?::\d+)?\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/
+  end
+
+  defp validate_cloud_mode_restrictions(changeset) do
+    self_hosted? = Sequin.Config.self_hosted?()
+    use_task_role? = get_field(changeset, :use_task_role)
+
+    if not self_hosted? and use_task_role? do
+      add_error(
+        changeset,
+        :use_task_role,
+        "Task role credentials are not supported in Sequin Cloud. Please use explicit credentials instead."
+      )
+    else
+      changeset
+    end
   end
 end

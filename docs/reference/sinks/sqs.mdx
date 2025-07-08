@@ -18,17 +18,11 @@ The SQS sink sends messages to an Amazon SQS queue.
 
     For FIFO queues, the queue name must end with `.fifo`.
 
-- **Access Key ID**
+<Snippet file="aws-access-key-config.mdx" />
 
-    The AWS access key ID with permissions to send messages to the specified SQS queue.
+## IAM permissions
 
-- **Secret Access Key**
-
-    The AWS secret access key corresponding to the access key ID.
-
-## IAM user permissions
-
-Sequin requires an IAM user with the following permissions:
+Sequin requires the following AWS permissions to send messages to SQS:
 
   ```json
   {
@@ -52,6 +46,39 @@ Sequin requires an IAM user with the following permissions:
   ```
 
 Replace `<your-queue-arn>` with your actual queue ARN (e.g., `arn:aws:sqs:us-east-1:123456789012:my-queue`).
+
+<Snippet file="aws-iam-settings.mdx" />
+
+## Configuration examples
+
+### Using access keys
+
+```yaml
+sinks:
+  - name: "sqs-sink"
+    batch_size: 10
+    destination:
+      type: "sqs"
+      queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
+      access_key_id: "AKIA..."
+      secret_access_key: "your-secret-key"
+```
+
+### Using task role (recommended for AWS environments)
+
+```yaml
+sinks:
+  - name: "sqs-sink"
+    batch_size: 10
+    destination:
+      type: "sqs"
+      queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
+      use_task_role: true
+```
+
+<Note>
+When using `use_task_role: true`, ensure your ECS task role, EC2 instance profile, or EKS service account has the required SQS permissions.
+</Note>
 
 ## Message format
 
@@ -95,6 +122,7 @@ sinks:
     destination:
       type: "sqs"
       queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/orders.fifo"
+      use_task_role: true
 
   - name: "sqs-high-throughput"
     message_grouping: false  # Disable grouping for max throughput
@@ -102,6 +130,7 @@ sinks:
     destination:
       type: "sqs"
       queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/events"
+      use_task_role: true
 ```
 
 ### FIFO vs standard queues

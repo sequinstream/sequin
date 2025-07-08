@@ -15,7 +15,7 @@ Sequin provides fast, real-time Postgres change data capture into streams and qu
 This log is updated every Friday to track our feature releases and updates week by week. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
 ## June 27, 2025
-[v0.10.6...v0.11.2](https://github.com/sequinstream/sequin/releases/tag/v0.11.2)
+[v0.10.6...v0.11.1](https://github.com/sequinstream/sequin/releases/tag/v0.11.1)
 
 ### Enhanced Routing Sink Types
 
@@ -38,6 +38,7 @@ Improved capabilities via Routing functions:
 </details>
 
 ## June 20, 2025
+[v0.10.2...v0.10.5](https://github.com/sequinstream/sequin/releases/tag/v0.10.5)
 
 ### S2 Sink
 
@@ -77,6 +78,7 @@ Consider an S2 stream when you'd otherwise reach for any other durable stream li
 </details>
 
 ## June 13, 2025
+[v0.8.26...v0.10.1](https://github.com/sequinstream/sequin/releases/tag/v0.10.1)
 
 ### Advanced table and schema inclusion / exclusion
 
@@ -119,6 +121,7 @@ As we make each sink more powerful with support for many tables and custom code 
 </details>
 
 ## June 6, 2025
+[v0.8.13...v0.8.25](https://github.com/sequinstream/sequin/releases/tag/v0.8.25)
 
 ### Multiple tables per sink
 
@@ -158,6 +161,7 @@ The Trace tab is now available for TypeSense sinks. Trace shows the recent logs 
 </details>
 
 ## May 30, 2025
+[v0.8.8...v0.8.12](https://github.com/sequinstream/sequin/releases/tag/v0.8.12)
 
 ### Added
 
@@ -179,6 +183,7 @@ The Trace tab is now available for TypeSense sinks. Trace shows the recent logs 
 * Fix edit flow for path transforms
 
 ## May 23, 2025
+[v0.7.32...v0.8.7](https://github.com/sequinstream/sequin/releases/tag/v0.8.7)
 
 ### Added
 
@@ -198,6 +203,7 @@ The Trace tab is now available for TypeSense sinks. Trace shows the recent logs 
 * Fixed invited on self-hosted when self-signup is disabled.
 
 ## May 16, 2025
+[v0.7.16...v0.7.31](https://github.com/sequinstream/sequin/releases/tag/v0.7.31)
 
 ### Added
 
@@ -221,6 +227,7 @@ The Trace tab is now available for TypeSense sinks. Trace shows the recent logs 
 * Fixed `null` value handling when processing the WAL.
 
 ## May 09, 2025
+[v0.7.3...v0.7.14](https://github.com/sequinstream/sequin/releases/tag/v0.7.14)
 
 ### Added
 
@@ -244,6 +251,7 @@ The Trace tab is now available for TypeSense sinks. Trace shows the recent logs 
 * Fix reporting of replication slot size.
 
 ## May 02, 2025
+[v0.6.110...v0.7.2](https://github.com/sequinstream/sequin/releases/tag/v0.7.2)
 
 ### Added
 
@@ -262,6 +270,7 @@ The Trace tab is now available for TypeSense sinks. Trace shows the recent logs 
 * Fixed database string parsing in the console.
 
 ## April 25, 2025
+[v0.6.103...v0.6.109](https://github.com/sequinstream/sequin/releases/tag/v0.6.109)
 
 ### Added
 
@@ -281,6 +290,7 @@ The Trace tab is now available for TypeSense sinks. Trace shows the recent logs 
 * Resolved some TLS configuration issues in CLI when working with `localhost`.
 
 ## April 18, 2025
+[v0.6.96...v0.6.102](https://github.com/sequinstream/sequin/releases/tag/v0.6.102)
 
 We're introducing [routing functions](https://sequinstream.com/docs/reference/routing) which allow you to write custom logic on the message content to direct the message to different destinations. For instance, you can send `inserts` to a `POST` endpoint and `updates` to a `PUT`. We're starting with HTTP Webhook and Redis String sinks, with more coming soon!
 
@@ -300,6 +310,7 @@ We're introducing [routing functions](https://sequinstream.com/docs/reference/ro
 * Eliminated race condition during startup where transform functions were loaded simultaneously.
 
 ## April 11, 2025
+[v0.6.89...v0.6.95](https://github.com/sequinstream/sequin/releases/tag/v0.6.95)
 
 ### Added
 
@@ -318,6 +329,7 @@ We're introducing [routing functions](https://sequinstream.com/docs/reference/ro
 * Various CLI improvements around config plan/apply
 
 ## Week of March 31, 2025
+[v0.6.69...v0.6.84](https://github.com/sequinstream/sequin/releases/tag/v0.6.84)
 
 We're beginning to roll out **[transform functions](https://sequinstream.com/docs/reference/transforms)**. Transform functions let you modify messages before they are delivered to a sink.
 

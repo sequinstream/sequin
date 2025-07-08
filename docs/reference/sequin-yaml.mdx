@@ -522,6 +522,19 @@ functions:
       end
 ```
 
+#### Functions via files
+
+You can also define functions in separate files and reference them in your configuration.
+
+```yaml
+functions:
+  - name: "my-transform-function"
+    type: "transform"
+    file: "my-transform-function.exs" # Relative or absolute path to the file
+```
+
+When using this approach, the path is either absolute or relative to the location of the `.yaml` file.
+
 #### Using functions in sinks
 
 You can attach functions to your sinks using the `transform`, `filter`, and `routing` fields:

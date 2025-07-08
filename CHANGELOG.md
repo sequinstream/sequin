@@ -4,6 +4,10 @@
 
 </div>
 
+# Release Notes
+
+This document details changes on a weekly basis. For notes on Docker and CLI version releases, see the [GitHub Releases](https://github.com/sequinstream/sequin/releases) page.
+
 # Changelog
 
 Sequin provides fast, real-time Postgres change data capture into streams and queues.
@@ -11,6 +15,7 @@ Sequin provides fast, real-time Postgres change data capture into streams and qu
 This log is updated every Friday to track our feature releases and updates week by week. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
 ## June 27, 2025
+[v0.10.6...v0.11.2](https://github.com/sequinstream/sequin/releases/tag/v0.11.2)
 
 ### Enhanced Routing Sink Types
 

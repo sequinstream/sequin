@@ -303,6 +303,7 @@ defmodule Sequin.Functions.MiniElixir.Validator do
   defp fnok([URI, _]), do: :ok
   defp fnok([Base, _]), do: :ok
   defp fnok([UUID, _]), do: :ok
+  defp fnok([JSON, _]), do: :ok
   defp fnok(p), do: {:error, :validator, "Forbidden function: #{redot(p)}"}
 
   # Convert left-associated instances of the . operator to a get_in path

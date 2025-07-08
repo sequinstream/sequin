@@ -321,12 +321,21 @@ defmodule Sequin.MiniElixirTest do
       assert :ok = Validator.check(quote do: fun.())
     end
 
-    test "Disallows &capture" do
+    test "Disallows evil &capture" do
       assert {:error, :validator, _} =
                Validator.check(
                  quote do
                    evil = &erlang.halt/0
                    evil.()
+                 end
+               )
+    end
+
+    test "allows benign &capture" do
+      assert :ok =
+               Validator.check(
+                 quote do
+                   Map.update(%{id: 1}, :id, nil, &(&1 + 1))
                  end
                )
     end

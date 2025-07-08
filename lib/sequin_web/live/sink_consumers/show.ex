@@ -1166,6 +1166,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           seq: message.commit_lsn + message.commit_idx,
           state: state,
           state_color: get_message_state_color(consumer, state),
+          table_name: message.data.metadata.table_name,
+          table_schema: message.data.metadata.table_schema,
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
           functioned_message: maybe_function_message(consumer, message)
@@ -1188,6 +1190,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           seq: message.commit_lsn + message.commit_idx,
           state: state,
           state_color: get_message_state_color(consumer, state),
+          table_name: message.data.metadata.table_name,
+          table_schema: message.data.metadata.table_schema,
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
           functioned_message: maybe_function_message(consumer, message)
@@ -1211,6 +1215,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           seq: message.seq,
           state: state,
           state_color: get_message_state_color(consumer, state),
+          table_name: message.table_name,
+          table_schema: message.table_schema,
           table_oid: message.table_oid,
           trace_id: message.trace_id
         }

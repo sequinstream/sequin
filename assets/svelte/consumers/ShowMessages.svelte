@@ -429,12 +429,12 @@
     <th
       class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
     >
-      Seq
+      State
     </th>
     <th
-      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]"
+      class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
     >
-      State
+      Table
     </th>
     <th
       class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
@@ -471,16 +471,16 @@
   </svelte:fragment>
 
   <svelte:fragment slot="row" let:item>
-    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-      >{item.seq}</td
-    >
-    <td class="px-2 py-1 whitespace-nowrap text-2xs min-w-[150px]">
+    <td class="px-2 py-1 whitespace-nowrap text-2xs w-fit">
       <span
         class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getMessageStateColor(item.state_color)} text-gray-800`}
       >
         {item.state}
       </span>
     </td>
+    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
+      >{item.table_schema}.{item.table_name}</td
+    >
     <td class="px-2 py-1 whitespace-nowrap text-2xs">{item.record_pks}</td>
     <td
       class="px-2 py-1 whitespace-nowrap text-2xs"

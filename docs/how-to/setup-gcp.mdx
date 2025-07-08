@@ -15,13 +15,14 @@ This guide provides step-by-step instructions to connect your [GCP Cloud SQL](ht
 
 ## Enable logical replication on GCP Cloud SQL
 
-By default, logical replication is not enabled on GCP Cloud SQL. You can double check if logical replication is enabled by connecting to your database and running the following command:
+By default, logical replication is not enabled on GCP Cloud SQL. You can double check if logical replication is enabled by connecting to your database and running the following commands:
 
 ```sql
-SHOW rds.logical_replication;
+SHOW cloudsql.logical_decoding;
+SHOW cloudsql.logical_replication;
 ```
 
-If the output is `off`, then logical replication is not enabled.
+If the output to either of these commands is `off`, then logical decoding or replication is not enabled.
 
 To enable it, follow these steps:
 

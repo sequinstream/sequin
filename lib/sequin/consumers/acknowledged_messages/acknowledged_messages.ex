@@ -83,7 +83,9 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
       not_visible_until: record.not_visible_until,
       inserted_at: record.inserted_at,
       trace_id: record.replication_message_trace_id,
-      state: record.state
+      state: record.state,
+      table_name: record.data.metadata.table_name,
+      table_schema: record.data.metadata.table_schema
     }
   end
 
@@ -105,7 +107,9 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
       not_visible_until: event.not_visible_until,
       inserted_at: event.inserted_at,
       trace_id: event.replication_message_trace_id,
-      state: event.state
+      state: event.state,
+      table_name: event.data.metadata.table_name,
+      table_schema: event.data.metadata.table_schema
     }
   end
 end

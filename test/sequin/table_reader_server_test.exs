@@ -590,7 +590,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       initial_page_size: 3,
       test_pid: self(),
       max_pending_messages: 100,
-      check_state_timeout: :timer.seconds(5),
+      check_state_timeout: to_timeout(second: 5),
       fetch_slot_lsn: fn _db, _slot_name -> {:ok, 0} end,
       page_size_optimizer_mod: PageSizeOptimizerMock,
       task_supervisor: GenServer.whereis(@task_sup_name)

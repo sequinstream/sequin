@@ -820,8 +820,8 @@ defmodule Sequin.Accounts do
   def initialize_account_features_cache do
     ConCache.start_link(
       name: :account_features,
-      ttl_check_interval: :timer.minutes(1),
-      global_ttl: :timer.hours(1)
+      ttl_check_interval: to_timeout(minute: 1),
+      global_ttl: to_timeout(hour: 1)
     )
   end
 

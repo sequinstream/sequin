@@ -34,7 +34,7 @@ defmodule SequinWeb.UserSettingsLive do
            password_confirmation: new_password_confirmation
          }) do
       {:ok, _user} ->
-        Process.send_after(self(), :login, :timer.seconds(3))
+        Process.send_after(self(), :login, to_timeout(second: 3))
 
         {:reply, %{ok: true},
          put_flash(socket, :toast, %{kind: :info, title: "Password updated successfully. Redirecting to login..."})}
@@ -48,7 +48,7 @@ defmodule SequinWeb.UserSettingsLive do
   end
 
   def handle_event("update_email", %{"email" => email}, socket) do
-    unless socket.assigns.self_hosted, do: raise("update_email is only supported on self-hosted instances")
+    if !socket.assigns.self_hosted, do: raise("update_email is only supported on self-hosted instances")
 
     case Accounts.update_user_email(socket.assigns.current_user, email) do
       {:ok, user} ->

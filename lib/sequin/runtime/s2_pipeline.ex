@@ -45,7 +45,7 @@ defmodule Sequin.Runtime.S2Pipeline do
   def handle_batch(:default, messages, %{batch_key: {basin, stream}}, context) do
     %{consumer: %SinkConsumer{sink: %S2Sink{} = sink} = consumer, test_pid: test_pid} = context
 
-    sink = %S2Sink{sink | basin: basin, stream: stream}
+    sink = %{sink | basin: basin, stream: stream}
 
     setup_allowances(test_pid)
 

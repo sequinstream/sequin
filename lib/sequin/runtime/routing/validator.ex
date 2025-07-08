@@ -49,7 +49,7 @@ defmodule Sequin.Runtime.Routing.Validator do
         not function_exported?(module, name, arity)
       end)
 
-    unless missing_functions == [] do
+    if missing_functions != [] do
       raise CompileError,
         description: """
         Module #{module} is missing required functions for RoutedConsumer behavior:
@@ -62,7 +62,7 @@ defmodule Sequin.Runtime.Routing.Validator do
   end
 
   defp validate_struct_definition(module) do
-    unless function_exported?(module, :__struct__, 0) do
+    if !function_exported?(module, :__struct__, 0) do
       raise CompileError,
         description: """
         Module #{module} must define a struct with the routing parameters.

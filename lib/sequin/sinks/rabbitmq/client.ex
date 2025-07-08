@@ -31,7 +31,8 @@ defmodule Sequin.Sinks.RabbitMq.Client do
 
   @impl RabbitMq
   def test_connection(%RabbitMqSink{} = sink) do
-    with :ok <- NetworkUtils.test_tcp_reachability(sink.host, sink.port, RabbitMqSink.ipv6?(sink), :timer.seconds(10)),
+    with :ok <-
+           NetworkUtils.test_tcp_reachability(sink.host, sink.port, RabbitMqSink.ipv6?(sink), to_timeout(second: 10)),
          {:ok, _connection} <- ConnectionCache.connection(sink) do
       # TODO: figure out how to test connection
       # Check https://www.rabbitmq.com/docs/troubleshooting-networking

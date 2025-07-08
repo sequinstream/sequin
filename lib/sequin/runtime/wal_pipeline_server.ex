@@ -19,7 +19,7 @@ defmodule Sequin.Runtime.WalPipelineServer do
 
   @default_batch_size 1000
   @default_interval_ms 5_000
-  @max_backoff_ms :timer.minutes(5)
+  @max_backoff_ms to_timeout(minute: 5)
 
   # Client API
 

@@ -131,34 +131,34 @@ defmodule Sequin.Runtime.Trace do
   Publishes an info trace event for a specific consumer.
   """
   @spec info(String.t(), Event.t()) :: :ok | {:error, term()}
-  def info(consumer_id, event) do
-    publish(consumer_id, %Event{event | status: :info})
+  def info(consumer_id, %Event{} = event) do
+    publish(consumer_id, %{event | status: :info})
   end
 
   @doc """
   Publishes a warning trace event for a specific consumer.
   """
   @spec warning(String.t(), Event.t()) :: :ok | {:error, term()}
-  def warning(consumer_id, event) do
-    publish(consumer_id, %Event{event | status: :warning})
+  def warning(consumer_id, %Event{} = event) do
+    publish(consumer_id, %{event | status: :warning})
   end
 
   @doc """
   Publishes an error trace event for a specific consumer.
   """
   @spec error(String.t(), Event.t()) :: :ok | {:error, term()}
-  def error(consumer_id, event) do
-    publish(consumer_id, %Event{event | status: :error})
+  def error(consumer_id, %Event{} = event) do
+    publish(consumer_id, %{event | status: :error})
   end
 
   @spec publish(String.t() | nil, Event.t()) :: :ok | {:error, term()}
   defp publish(nil, _event), do: :ok
 
-  defp publish(consumer_id, event) when is_binary(consumer_id) do
+  defp publish(consumer_id, %Event{} = event) when is_binary(consumer_id) do
     Phoenix.PubSub.broadcast(
       Sequin.PubSub,
       topic(consumer_id),
-      {:trace_event, %Event{event | published_at: DateTime.utc_now()}}
+      {:trace_event, %{event | published_at: DateTime.utc_now()}}
     )
   end
 

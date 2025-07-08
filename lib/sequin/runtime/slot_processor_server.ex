@@ -90,7 +90,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         if Application.get_env(:sequin, :env) == :test do
           5
         else
-          :timer.seconds(1)
+          to_timeout(second: 1)
         end
 
       value ->
@@ -242,14 +242,15 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       message_handler_module: message_handler_module,
       connection: connection,
       last_commit_lsn: nil,
-      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15)),
+      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, to_timeout(second: 15)),
       max_memory_bytes: max_memory_bytes,
       bytes_between_limit_checks: bytes_between_limit_checks,
       check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0),
       safe_wal_cursor_fn: Keyword.get(opts, :safe_wal_cursor_fn, &default_safe_wal_cursor_fn/1),
-      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
-      setting_update_safe_wal_cursor_interval: Keyword.get(opts, :update_safe_wal_cursor_interval, :timer.seconds(30)),
-      setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10))
+      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, to_timeout(second: 10)),
+      setting_update_safe_wal_cursor_interval:
+        Keyword.get(opts, :update_safe_wal_cursor_interval, to_timeout(second: 30)),
+      setting_ack_interval: Keyword.get(opts, :ack_interval, to_timeout(second: 10))
     }
 
     ReplicationConnection.start_link(SlotProcessorServer, init, rep_conn_opts)
@@ -278,7 +279,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   def monitor_message_store(id, consumer) do
-    GenServer.call(via_tuple(id), {:monitor_message_store, consumer}, :timer.seconds(120))
+    GenServer.call(via_tuple(id), {:monitor_message_store, consumer}, to_timeout(second: 120))
   end
 
   def demonitor_message_store(id, consumer_id) do
@@ -662,11 +663,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
          postgres: %{code: :undefined_table, message: "relation \"public.sequin_logical_messages\" does not exist"}
        }} ->
         Logger.warning("Heartbeat table does not exist.")
-        {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(30))}
+        {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, to_timeout(second: 30))}
 
       {:error, error} ->
         Logger.error("Error emitting heartbeat: #{inspect(error)}")
-        {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(10))}
+        {:keep_state, schedule_heartbeat(%{state | heartbeat_timer: nil}, to_timeout(second: 10))}
     end
   end
 
@@ -986,7 +987,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
     cond do
       should_flush_now? ->
-        unless is_nil(state.flush_timer) do
+        if !is_nil(state.flush_timer) do
           cancel_flush_timer(state.flush_timer)
         end
 
@@ -1033,7 +1034,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp schedule_heartbeat_verification(%State{} = state) do
-    verification_ref = Process.send_after(self(), :verify_heartbeat, :timer.seconds(30))
+    verification_ref = Process.send_after(self(), :verify_heartbeat, to_timeout(second: 30))
     %{state | heartbeat_verification_timer: verification_ref}
   end
 
@@ -1171,7 +1172,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     current_hash = PostgresRelationHashCache.compute_schema_hash(enriched_relation)
     stored_hash = PostgresRelationHashCache.get_schema_hash(state.postgres_database.id, id)
 
-    unless stored_hash == current_hash do
+    if stored_hash != current_hash do
       Logger.info("[SlotProcessorServer] Schema changes detected for table, enqueueing database update",
         relation_id: id,
         schema: parent_info.schema,
@@ -1213,7 +1214,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         state
       end
 
-    %State{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: begin_lsn, current_xid: xid}
+    %{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: begin_lsn, current_xid: xid}
   end
 
   # Ensure we do not have an out-of-order bug by asserting equality
@@ -1223,13 +1224,13 @@ defmodule Sequin.Runtime.SlotProcessorServer do
        }) do
     lsn = Postgres.lsn_to_int(lsn)
 
-    unless current_lsn == lsn do
+    if current_lsn != lsn do
       raise "Unexpectedly received a commit LSN that does not match current LSN (#{current_lsn} != #{lsn})"
     end
 
     :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
 
-    %State{
+    %{
       state
       | last_commit_lsn: lsn,
         current_xaction_lsn: nil,
@@ -1258,7 +1259,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         state
       end
 
-    msg = %Message{
+    msg = %{
       msg
       | commit_lsn: state.current_xaction_lsn,
         commit_idx: state.current_commit_idx,
@@ -1266,7 +1267,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         transaction_annotations: state.transaction_annotations
     }
 
-    {%State{state | current_commit_idx: state.current_commit_idx + 1}, msg}
+    {%{state | current_commit_idx: state.current_commit_idx + 1}, msg}
   end
 
   # Ignore type messages, we receive them before type columns:
@@ -1287,7 +1288,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp process_message(%State{} = state, %LogicalMessage{prefix: @backfill_batch_high_watermark} = msg) do
-    %State{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}
+    %{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}
   end
 
   # Ignore other logical messages
@@ -1576,7 +1577,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
             SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
           end,
           max_concurrency: max(map_size(state.message_store_refs), 1),
-          timeout: :timer.seconds(15)
+          timeout: to_timeout(second: 15)
         )
         |> Enum.flat_map(fn {:ok, cursors} -> cursors end)
         |> Enum.filter(& &1)
@@ -1763,7 +1764,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp schedule_observe_ingestion_latency do
-    Process.send_after(self(), :observe_ingestion_latency, :timer.seconds(5))
+    Process.send_after(self(), :observe_ingestion_latency, to_timeout(second: 5))
   end
 
   defp observe_ingestion_latency(%State{} = state, ts) do

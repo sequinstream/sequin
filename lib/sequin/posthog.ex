@@ -83,7 +83,7 @@ defmodule Sequin.Posthog do
   end
 
   defp post(body, opts) do
-    unless disabled?(opts) do
+    if !disabled?(opts) do
       body
       |> base_req(opts)
       |> Req.run()
@@ -91,7 +91,7 @@ defmodule Sequin.Posthog do
   end
 
   defp async_post(body, opts) do
-    unless disabled?(opts) do
+    if !disabled?(opts) do
       Task.Supervisor.start_child(Sequin.TaskSupervisor, fn ->
         body
         |> base_req(opts)

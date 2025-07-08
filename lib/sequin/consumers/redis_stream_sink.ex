@@ -90,7 +90,7 @@ defmodule Sequin.Consumers.RedisStreamSink do
     [
       host: to_charlist(sink.host),
       port: sink.port,
-      reconnect_sleep: :timer.seconds(30),
+      reconnect_sleep: to_timeout(second: 30),
       database: sink.database
     ]
     |> maybe_put_tls(sink)

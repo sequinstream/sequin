@@ -160,7 +160,7 @@ defmodule Sequin.DatabasesTest do
       assert {:ok, db} = Databases.create_db_with_slot(account.id, db_attrs, slot_attrs)
 
       assert db.id
-      assert %Sequin.Replication.PostgresReplicationSlot{} = db.replication_slot
+      assert %PostgresReplicationSlot{} = db.replication_slot
       assert db.replication_slot.id
 
       # Verify they exist in DB
@@ -218,7 +218,7 @@ defmodule Sequin.DatabasesTest do
 
       # Verify changes in DB
       reloaded_db = Repo.get!(PostgresDatabase, db.id)
-      reloaded_slot = Repo.get!(Sequin.Replication.PostgresReplicationSlot, db.replication_slot.id)
+      reloaded_slot = Repo.get!(PostgresReplicationSlot, db.replication_slot.id)
       assert reloaded_db.name == new_db_attrs.name
       assert reloaded_slot.slot_name == new_slot_attrs.slot_name
       assert reloaded_slot.publication_name == new_slot_attrs.publication_name
@@ -234,7 +234,7 @@ defmodule Sequin.DatabasesTest do
       assert {:error, %ValidationError{}} = Databases.update_db_with_slot(db, db_attrs, slot_attrs)
 
       reloaded_db = Repo.get!(PostgresDatabase, db.id)
-      reloaded_slot = Repo.get!(Sequin.Replication.PostgresReplicationSlot, db.replication_slot.id)
+      reloaded_slot = Repo.get!(PostgresReplicationSlot, db.replication_slot.id)
       assert reloaded_db.name == original_name
       assert reloaded_slot.slot_name == original_slot_name
     end
@@ -249,7 +249,7 @@ defmodule Sequin.DatabasesTest do
       assert {:error, %Ecto.Changeset{}} = Databases.update_db_with_slot(db, db_attrs, slot_attrs)
 
       reloaded_db = Repo.get!(PostgresDatabase, db.id)
-      reloaded_slot = Repo.get!(Sequin.Replication.PostgresReplicationSlot, db.replication_slot.id)
+      reloaded_slot = Repo.get!(PostgresReplicationSlot, db.replication_slot.id)
       assert reloaded_db.name == original_name
       assert reloaded_slot.slot_name == original_slot_name
     end

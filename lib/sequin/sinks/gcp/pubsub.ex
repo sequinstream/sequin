@@ -298,7 +298,7 @@ defmodule Sequin.Sinks.Gcp.PubSub do
       # Store with TTL slightly less than token expiry
       ConCache.put(Sequin.Cache, cache_key, %ConCache.Item{
         value: token,
-        ttl: :timer.seconds(@token_expiry_seconds)
+        ttl: to_timeout(second: @token_expiry_seconds)
       })
 
       {:ok, token}

@@ -81,7 +81,7 @@ defmodule Sequin.Health do
     field :erroring_since, DateTime.t() | nil
   end
 
-  @debounce_window :timer.seconds(5)
+  @debounce_window to_timeout(second: 5)
 
   @doc """
   Stores an event for an entity.
@@ -280,7 +280,7 @@ defmodule Sequin.Health do
   defp validate_event!(entity_kind, %Event{} = event) do
     valid = Event.valid_slug?(entity_kind, event.slug) and Event.valid_status?(event.status)
 
-    unless valid do
+    if !valid do
       raise ArgumentError, "Invalid event: #{event.slug} with status #{event.status}"
     end
   end
@@ -652,7 +652,7 @@ defmodule Sequin.Health do
     base_check =
       if config_checked_event do
         # We pass along sink configuration data to the check so we can use it in the UI
-        %Check{base_check | extra: config_checked_event.data}
+        %{base_check | extra: config_checked_event.data}
       else
         base_check
       end
@@ -943,7 +943,7 @@ defmodule Sequin.Health do
         {:error, %Error.NotFoundError{}} -> nil
       end
 
-    unless status == health.status do
+    if status != health.status do
       # :telemetry.execute(
       #   [:sequin, :health, :status_changed],
       #   %{},
@@ -977,7 +977,7 @@ defmodule Sequin.Health do
   def on_status_change(%PostgresReplicationSlot{} = entity, _old_status, new_status) do
     entity = Repo.preload(entity, [:account])
 
-    unless entity.annotations["ignore_health"] || entity.account.annotations["ignore_health"] do
+    if !(entity.annotations["ignore_health"] || entity.account.annotations["ignore_health"]) do
       dedup_key = get_dedup_key(entity)
       name = entity_with_name(entity)
       metadata = entity_metadata(entity)

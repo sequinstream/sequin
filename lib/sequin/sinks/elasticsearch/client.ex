@@ -114,7 +114,7 @@ defmodule Sequin.Sinks.Elasticsearch.Client do
     [
       base_url: sink.endpoint_url,
       headers: auth_header(sink),
-      receive_timeout: :timer.seconds(60),
+      receive_timeout: to_timeout(minute: 1),
       retry: false,
       compress_body: true
     ]

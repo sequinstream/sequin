@@ -101,7 +101,7 @@ defmodule SequinWeb.PullController do
   end
 
   defp maybe_wait(%{"wait_for" => wait_for}, consumer) when is_number(wait_for) do
-    if wait_for >= min_wait_for() and wait_for <= :timer.minutes(5) do
+    if wait_for >= min_wait_for() and wait_for <= to_timeout(minute: 5) do
       wait(consumer, wait_for)
     else
       {:error,

@@ -69,7 +69,7 @@ defmodule Sequin.YamlLoader do
                      Repo.rollback(error)
                  end
                end,
-               timeout: :timer.seconds(90)
+               timeout: to_timeout(second: 90)
              ) do
           {:ok, {:ok, {resources, actions}}} ->
             case perform_actions(actions) do
@@ -110,7 +110,7 @@ defmodule Sequin.YamlLoader do
               |> apply_config(config, opts)
               |> Repo.rollback()
             end,
-            timeout: :timer.seconds(90)
+            timeout: to_timeout(second: 90)
           )
 
         case result do
@@ -451,7 +451,7 @@ defmodule Sequin.YamlLoader do
 
   defp create_database_with_replication(account_id, database_attrs) do
     with {:ok, database_attrs, replication_attrs, slot_attrs, pub_attrs} <- parse_database_attrs(database_attrs),
-         {:ok, db} <- Databases.create_db(account_id, database_attrs) do
+         {:ok, %PostgresDatabase{} = db} <- Databases.create_db(account_id, database_attrs) do
       create_pub_actions = maybe_create_publication_action(db, pub_attrs)
       create_slot_actions = maybe_create_slot_action(db, slot_attrs)
 
@@ -466,7 +466,7 @@ defmodule Sequin.YamlLoader do
            ) do
         {:ok, replication} ->
           Logger.info("Created database: #{inspect(db, pretty: true)}")
-          {:ok, %PostgresDatabase{db | replication_slot: replication}, create_pub_actions ++ create_slot_actions}
+          {:ok, %{db | replication_slot: replication}, create_pub_actions ++ create_slot_actions}
 
         {:error, error} when is_exception(error) ->
           {:error,
@@ -1006,8 +1006,8 @@ defmodule Sequin.YamlLoader do
       }
     else
       %{
-        timeout_ms: :timer.seconds(30),
-        interval_ms: :timer.seconds(3)
+        timeout_ms: to_timeout(second: 30),
+        interval_ms: to_timeout(second: 3)
       }
     end
   end

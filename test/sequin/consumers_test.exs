@@ -89,8 +89,8 @@ defmodule Sequin.ConsumersTest do
       record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
       record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
 
-      record1 = %ConsumerRecord{record1 | payload_size_bytes: Size.bytes(100)}
-      record2 = %ConsumerRecord{record2 | payload_size_bytes: Size.bytes(200)}
+      record1 = %{record1 | payload_size_bytes: Size.bytes(100)}
+      record2 = %{record2 | payload_size_bytes: Size.bytes(200)}
 
       assert {:ok, 2} = Consumers.ack_messages(consumer, [record1.ack_id, record2.ack_id])
       assert {:ok, 2} = Consumers.after_messages_acked(consumer, [record1, record2])

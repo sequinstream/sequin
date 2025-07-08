@@ -68,7 +68,7 @@ defmodule Sequin.Consumers do
   @spec get_cached_consumer(consumer_id :: SinkConsumer.id()) ::
           {:ok, consumer :: SinkConsumer.t()} | {:error, Error.t()}
   def get_cached_consumer(consumer_id) do
-    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+    ttl = Sequin.Time.with_jitter(to_timeout(second: 30))
 
     Cache.get_or_store(
       consumer_id,
@@ -339,7 +339,7 @@ defmodule Sequin.Consumers do
         |> Repo.update()
 
       with {:ok, consumer} <- res do
-        unless opts[:skip_lifecycle] do
+        if !opts[:skip_lifecycle] do
           ConsumerLifecycleEventWorker.enqueue(:update, :sink_consumer, consumer.id)
         end
 
@@ -406,7 +406,7 @@ defmodule Sequin.Consumers do
 
   def cached_sink_consumer_for_sequin_stream(account_id, id_or_name) do
     cache_key = "sink_consumer:sequin_stream:#{account_id}:#{id_or_name}"
-    ttl = Sequin.Time.with_jitter(:timer.seconds(10))
+    ttl = Sequin.Time.with_jitter(to_timeout(second: 10))
 
     Cache.get_or_store(
       cache_key,
@@ -562,7 +562,7 @@ defmodule Sequin.Consumers do
       Enum.map(consumer_events, fn %ConsumerEvent{} = event ->
         attrs = ConsumerEvent.map_from_struct(event)
 
-        %ConsumerEvent{event | updated_at: now, inserted_at: now}
+        %{event | updated_at: now, inserted_at: now}
         |> ConsumerEvent.create_changeset(attrs)
         |> Changeset.apply_changes()
         |> Sequin.Map.from_ecto()
@@ -581,10 +581,10 @@ defmodule Sequin.Consumers do
     {:ok, count}
   end
 
-  @exponential_backoff_max :timer.minutes(10)
+  @exponential_backoff_max to_timeout(minute: 10)
   def advance_delivery_state_for_failure(%{data: message}) do
     deliver_count = message.deliver_count + 1
-    backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
+    backoff_time = Time.exponential_backoff(to_timeout(second: 1), deliver_count, @exponential_backoff_max)
     not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
 
     %{message | deliver_count: deliver_count, not_visible_until: not_visible_until}
@@ -689,7 +689,7 @@ defmodule Sequin.Consumers do
       Enum.map(consumer_records, fn %ConsumerRecord{} = record ->
         attrs = ConsumerRecord.map_from_struct(record)
 
-        %ConsumerRecord{record | updated_at: now, inserted_at: now}
+        %{record | updated_at: now, inserted_at: now}
         |> ConsumerRecord.create_changeset(attrs)
         |> Changeset.apply_changes()
         |> Sequin.Map.from_ecto()
@@ -913,7 +913,7 @@ defmodule Sequin.Consumers do
     do_generate_group_id(consumer, message, default_group_id, fn source_table, message ->
       table = Enum.find(database.tables, &(&1.oid == message.table_oid))
 
-      unless is_nil(table) do
+      if !is_nil(table) do
         %PostgresDatabaseTable{columns: columns} = table
 
         source_table.group_column_attnums
@@ -979,14 +979,14 @@ defmodule Sequin.Consumers do
     }
 
     data = %{event.data | metadata: metadata}
-    %ConsumerEvent{event | group_id: generate_group_id(consumer, event, database), data: data}
+    %{event | group_id: generate_group_id(consumer, event, database), data: data}
   end
 
   def put_dynamic_fields(%ConsumerRecord{} = record, %SinkConsumer{} = consumer, %PostgresDatabase{} = database) do
     # Records don't have a database metadata
     metadata = %{record.data.metadata | consumer: consumer_metadata(consumer), database_name: database.name}
     data = %{record.data | metadata: metadata}
-    %ConsumerRecord{record | group_id: generate_group_id(consumer, record, database), data: data}
+    %{record | group_id: generate_group_id(consumer, record, database), data: data}
   end
 
   def decode_transaction_annotations(nil), do: {:ok, nil}
@@ -1264,7 +1264,7 @@ defmodule Sequin.Consumers do
   @spec get_cached_http_endpoint(endpoint_id :: HttpEndpoint.id()) ::
           {:ok, endpoint :: HttpEndpoint.t()} | {:error, Error.t()}
   def get_cached_http_endpoint(endpoint_id) do
-    ttl = Sequin.Time.with_jitter(:timer.seconds(30))
+    ttl = Sequin.Time.with_jitter(to_timeout(second: 30))
 
     Cache.get_or_store(
       {:http_endpoint, endpoint_id},
@@ -1329,7 +1329,7 @@ defmodule Sequin.Consumers do
         |> Repo.insert()
 
       with {:ok, http_endpoint} <- res do
-        unless opts[:skip_lifecycle] do
+        if !opts[:skip_lifecycle] do
           ConsumerLifecycleEventWorker.enqueue(:create, :http_endpoint, http_endpoint.id)
         end
 
@@ -1346,7 +1346,7 @@ defmodule Sequin.Consumers do
         |> Repo.update()
 
       with {:ok, http_endpoint} <- res do
-        unless opts[:skip_lifecycle] do
+        if !opts[:skip_lifecycle] do
           ConsumerLifecycleEventWorker.enqueue(:update, :http_endpoint, http_endpoint.id)
         end
 
@@ -1363,7 +1363,7 @@ defmodule Sequin.Consumers do
         |> Repo.delete()
 
       with {:ok, http_endpoint} <- res do
-        unless opts[:skip_lifecycle] do
+        if !opts[:skip_lifecycle] do
           ConsumerLifecycleEventWorker.enqueue(:delete, :http_endpoint, http_endpoint.id)
         end
 
@@ -1603,16 +1603,16 @@ defmodule Sequin.Consumers do
       %Sequin.Consumers.SourceTable{} = source_table ->
         table = Sequin.Enum.find!(postgres_database.tables, &(&1.oid == source_table.table_oid))
 
-        %Sequin.Consumers.SourceTable{
+        %{
           source_table
           | schema_name: table.schema,
             table_name: table.name
         }
 
-      %Sequin.WalPipeline.SourceTable{} = source_table ->
+      %SourceTable{} = source_table ->
         table = Sequin.Enum.find!(postgres_database.tables, &(&1.oid == source_table.oid))
 
-        %Sequin.WalPipeline.SourceTable{
+        %{
           source_table
           | schema_name: source_table.schema_name,
             table_name: source_table.table_name,
@@ -1669,7 +1669,7 @@ defmodule Sequin.Consumers do
         |> Repo.update()
 
       with {:ok, backfill} <- res do
-        unless opts[:skip_lifecycle] do
+        if !opts[:skip_lifecycle] do
           ConsumerLifecycleEventWorker.enqueue(:update, :backfill, backfill.id)
         end
 
@@ -1686,7 +1686,7 @@ defmodule Sequin.Consumers do
         |> Repo.insert()
 
       with {:ok, backfill} <- res do
-        unless opts[:skip_lifecycle] do
+        if !opts[:skip_lifecycle] do
           ConsumerLifecycleEventWorker.enqueue(:create, :backfill, backfill.id)
         end
 

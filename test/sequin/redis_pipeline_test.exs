@@ -96,7 +96,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
     @tag capture_log: true
     test "failed Redis requests result in failed events", %{consumer: consumer} do
-      Mox.expect(Sequin.Sinks.RedisMock, :send_messages, fn _sink, _redis_messages ->
+      Mox.expect(RedisMock, :send_messages, fn _sink, _redis_messages ->
         {:error, Sequin.Error.service(service: :redis, code: "batch_error", message: "Redis batch send failed")}
       end)
 
@@ -135,7 +135,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
     test "messages are sent from postgres to Redis", %{consumer: consumer} do
       test_pid = self()
 
-      Mox.expect(Sequin.Sinks.RedisMock, :send_messages, fn sink, redis_messages ->
+      Mox.expect(RedisMock, :send_messages, fn sink, redis_messages ->
         send(test_pid, {:redis_request, sink, redis_messages})
         :ok
       end)

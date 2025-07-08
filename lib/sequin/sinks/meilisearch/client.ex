@@ -178,7 +178,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
     [
       base_url: String.trim_trailing(sink.endpoint_url, "/"),
       headers: [{"Authorization", "Bearer #{sink.api_key}"}],
-      receive_timeout: :timer.seconds(sink.timeout_seconds),
+      receive_timeout: to_timeout(second: sink.timeout_seconds),
       retry: false,
       compress_body: true
     ]

@@ -35,8 +35,8 @@ defmodule Sequin.Runtime.TableReaderServer do
   @callback active_table_oids() :: [integer()]
   @callback pks_seen(table_oid :: integer(), pks :: [any()]) :: :ok
 
-  @max_backoff_ms :timer.seconds(1)
-  @max_backoff_time :timer.minutes(1)
+  @max_backoff_ms to_timeout(second: 1)
+  @max_backoff_time to_timeout(minute: 1)
 
   @max_batches 3
 
@@ -249,7 +249,7 @@ defmodule Sequin.Runtime.TableReaderServer do
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
 
     initial_page_size = Keyword.get(opts, :initial_page_size, 1_000)
-    max_timeout_ms = Keyword.get(opts, :max_timeout_ms, :timer.seconds(5))
+    max_timeout_ms = Keyword.get(opts, :max_timeout_ms, to_timeout(second: 5))
 
     page_size_optimizer_mod = Keyword.get(opts, :page_size_optimizer_mod, PageSizeOptimizer)
 
@@ -266,8 +266,8 @@ defmodule Sequin.Runtime.TableReaderServer do
       table_oid: Keyword.fetch!(opts, :table_oid),
       setting_max_pending_messages: max_pending_messages,
       count_pending_messages: 0,
-      setting_check_state_timeout: Keyword.get(opts, :check_state_timeout, :timer.seconds(30)),
-      setting_check_sms_timeout: Keyword.get(opts, :check_sms_timeout, :timer.seconds(5)),
+      setting_check_state_timeout: Keyword.get(opts, :check_state_timeout, to_timeout(second: 30)),
+      setting_check_sms_timeout: Keyword.get(opts, :check_sms_timeout, to_timeout(second: 5)),
       fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2),
       fetch_batch_pks: Keyword.get(opts, :fetch_batch_pks, &TableReader.fetch_batch_pks/4),
       fetch_batch: Keyword.get(opts, :fetch_batch, &TableReader.fetch_batch/6),
@@ -815,7 +815,7 @@ defmodule Sequin.Runtime.TableReaderServer do
             case push_messages_with_retry(state, batch.id, messages) do
               :ok ->
                 # Clear the messages from memory
-                batch = %Batch{batch | messages: nil, size: batch_size}
+                batch = %{batch | messages: nil, size: batch_size}
 
                 {:keep_state,
                  %{
@@ -951,7 +951,7 @@ defmodule Sequin.Runtime.TableReaderServer do
     # If we have a last fetch time, ensure we've waited the backoff period
     can_fetch_after_backoff? =
       if state.last_fetch_request_at && state.successive_failure_count > 0 do
-        backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, :timer.minutes(5))
+        backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, to_timeout(minute: 5))
 
         DateTime.diff(Sequin.utc_now(), state.last_fetch_request_at, :millisecond) >= backoff
       else
@@ -979,11 +979,11 @@ defmodule Sequin.Runtime.TableReaderServer do
   end
 
   defp maybe_fetch_timeout(timeout \\ 0) do
-    {{:timeout, :maybe_fetch_batch}, :timer.seconds(timeout), nil}
+    {{:timeout, :maybe_fetch_batch}, to_timeout(second: timeout), nil}
   end
 
   defp process_logging_timeout do
-    {{:timeout, :process_logging}, :timer.seconds(30), nil}
+    {{:timeout, :process_logging}, to_timeout(second: 30), nil}
   end
 
   defp replication_slot(%State{consumer: consumer}) do

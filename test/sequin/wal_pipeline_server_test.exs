@@ -175,7 +175,7 @@ defmodule Sequin.Runtime.WalPipelineServerTest do
          test_pid: self(),
          batch_size: 2,
          # arbitrary delay
-         interval_ms: :timer.minutes(1)
+         interval_ms: to_timeout(minute: 1)
        ]})
 
       # Assert that we get :no_events initially

@@ -277,7 +277,7 @@ defmodule Sequin.Databases.ConnectionCache do
               fn ->
                 {:start_result, state.start_fn.(db)}
               end,
-              timeout: :timer.seconds(30)
+              timeout: to_timeout(second: 30)
             )
 
           state =

@@ -70,7 +70,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
           consumer = Repo.preload(consumer, :replication_slot)
           CheckSinkConfigurationWorker.enqueue(consumer.id)
 
-          unless consumer.status == :disabled do
+          if consumer.status != :disabled do
             # Restart the entire supervision tree for replication, including slot processor, smss, etc.
             # This is safest- later we can be a bit more intelligent about when to restart (ie. when name changes we don't have to restart)
             {:ok, _} = RuntimeSupervisor.restart_replication(consumer.replication_slot)

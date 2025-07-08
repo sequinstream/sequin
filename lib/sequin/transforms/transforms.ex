@@ -1274,7 +1274,7 @@ defmodule Sequin.Transforms do
         value_type = determine_value_type(filter, column)
 
         {:ok,
-         Sequin.WalPipeline.SourceTable.ColumnFilter.from_external(%{
+         ColumnFilter.from_external(%{
            "columnAttnum" => column.attnum,
            "operator" => filter["operator"],
            "valueType" => value_type,

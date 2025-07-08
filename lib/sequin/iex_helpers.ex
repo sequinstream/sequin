@@ -29,7 +29,7 @@ defmodule Sequin.IexHelpers do
   end
 
   def via(:slot_store_sup, id) do
-    Sequin.Runtime.SlotMessageStoreSupervisor.via_tuple(id)
+    SlotMessageStoreSupervisor.via_tuple(id)
   end
 
   def via(:sink, id) do
@@ -107,7 +107,7 @@ defmodule Sequin.IexHelpers do
   def entity(id) do
     with nil <- Repo.get(Sequin.Accounts.Account, id),
          nil <- Repo.get(Sequin.Accounts.User, id),
-         nil <- Repo.get(Sequin.Consumers.Backfill, id),
+         nil <- Repo.get(Backfill, id),
          nil <- Repo.get(Sequin.Consumers.SinkConsumer, id),
          nil <- Repo.get(Sequin.Databases.PostgresDatabase, id),
          nil <- Repo.get(Sequin.Replication.PostgresReplicationSlot, id),

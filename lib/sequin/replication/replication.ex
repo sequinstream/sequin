@@ -316,7 +316,7 @@ defmodule Sequin.Replication do
   defp notify_wal_pipeline_changed(%WalPipeline{} = pipeline) do
     pipeline = Repo.preload(pipeline, :replication_slot)
 
-    unless env() == :test do
+    if env() != :test do
       RuntimeSupervisor.restart_wal_pipeline_servers(pipeline.replication_slot)
     end
 
@@ -393,7 +393,7 @@ defmodule Sequin.Replication do
         on_conflict: :nothing
       )
 
-    unless Repo.in_transaction?() do
+    if !Repo.in_transaction?() do
       :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)
     end
 

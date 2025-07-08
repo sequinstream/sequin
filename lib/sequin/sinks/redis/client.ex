@@ -82,7 +82,7 @@ defmodule Sequin.Sinks.Redis.Client do
   def test_connection(redis_sink) when is_redis_sink(redis_sink) do
     with {:ok, ipv6} <- NetworkUtils.check_ipv6(redis_sink.host),
          :ok <-
-           NetworkUtils.test_tcp_reachability(redis_sink.host, redis_sink.port, ipv6, :timer.seconds(10)),
+           NetworkUtils.test_tcp_reachability(redis_sink.host, redis_sink.port, ipv6, to_timeout(second: 10)),
          {:ok, connection} <- ConnectionCache.connection(redis_sink) do
       case q(connection, ["PING"]) do
         {:ok, "PONG"} ->
@@ -97,7 +97,7 @@ defmodule Sequin.Sinks.Redis.Client do
   end
 
   defp qp(connection, commands) do
-    case :eredis.qp(connection, commands, :timer.seconds(15)) do
+    case :eredis.qp(connection, commands, to_timeout(second: 15)) do
       {:error, error} -> {:error, handle_error(error)}
       _res -> :ok
     end
@@ -107,7 +107,7 @@ defmodule Sequin.Sinks.Redis.Client do
   end
 
   defp q(connection, command) do
-    case :eredis.q(connection, command, :timer.seconds(15)) do
+    case :eredis.q(connection, command, to_timeout(second: 15)) do
       {:ok, res} -> {:ok, res}
       {:error, error} -> {:error, handle_error(error)}
     end
@@ -118,7 +118,7 @@ defmodule Sequin.Sinks.Redis.Client do
 
   defp xadd_commands(%SinkConsumer{}, messages) do
     Enum.map(messages, fn %RoutedMessage{routing_info: %{stream_key: stream_key}, transformed_message: data} ->
-      unless is_map(data) do
+      if !is_map(data) do
         raise Error.validation(
                 summary: "Message data must be a map for Redis Stream sinks",
                 details: "Got #{inspect(data)}"
@@ -144,7 +144,7 @@ defmodule Sequin.Sinks.Redis.Client do
 
   defp handle_error(:timeout) do
     Logger.error("[Sequin.Sinks.Redis] Timeout sending messages to Redis")
-    Error.timeout(source: :redis_stream_sink, timeout_ms: :timer.seconds(5))
+    Error.timeout(source: :redis_stream_sink, timeout_ms: to_timeout(second: 5))
   end
 
   # Not sure if we hit this clause

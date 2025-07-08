@@ -69,6 +69,6 @@ defmodule Sequin.Consumers.ConsumerRecordData do
   end
 
   def deserialize(%ConsumerRecordData{} = data) do
-    %ConsumerRecordData{data | record: Sequin.Changeset.deserialize(data.record, data.record_deserializers)}
+    %{data | record: Sequin.Changeset.deserialize(data.record, data.record_deserializers)}
   end
 end

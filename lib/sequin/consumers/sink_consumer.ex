@@ -398,7 +398,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     from(c in query, as: :consumer)
   end
 
-  @backfill_completed_at_threshold :timer.minutes(5)
+  @backfill_completed_at_threshold to_timeout(minute: 5)
   def should_delete_acked_messages?(consumer, now \\ DateTime.utc_now())
 
   def should_delete_acked_messages?(%SinkConsumer{backfill_completed_at: nil}, _now), do: false

@@ -35,7 +35,7 @@ defmodule Sequin.Factory.DatabasesFactory do
       end
 
     {tables_refreshed_at, attrs} =
-      Map.pop_lazy(attrs, :tables_refreshed_at, fn -> unless tables == [], do: Factory.timestamp() end)
+      Map.pop_lazy(attrs, :tables_refreshed_at, fn -> if tables != [], do: Factory.timestamp() end)
 
     tables = maybe_cast_tables(tables)
 

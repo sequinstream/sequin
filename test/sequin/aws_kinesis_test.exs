@@ -20,7 +20,7 @@ defmodule Sequin.Aws.KinesisTest do
     test "successfully sends batch of records", %{client: client} do
       records = [SinkFactory.kinesis_record(), SinkFactory.kinesis_record()]
 
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         assert conn.host == "kinesis.us-east-1.amazonaws.com"
         assert conn.method == "POST"
 
@@ -33,7 +33,7 @@ defmodule Sequin.Aws.KinesisTest do
     test "returns error when request fails", %{client: client} do
       records = [SinkFactory.kinesis_record()]
 
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         Req.Test.json(conn, %{"FailedRecordCount" => 1, "Records" => []})
       end)
 
@@ -43,7 +43,7 @@ defmodule Sequin.Aws.KinesisTest do
 
   describe "test_credentials_and_permissions/1" do
     test "successfully tests credentials with list streams", %{client: client} do
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         assert conn.method == "POST"
         assert String.contains?(conn.host, "kinesis.us-east-1.amazonaws.com")
         Req.Test.json(conn, %{"StreamNames" => ["stream1", "stream2"]})
@@ -53,7 +53,7 @@ defmodule Sequin.Aws.KinesisTest do
     end
 
     test "returns error when credentials are invalid", %{client: client} do
-      Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
+      Req.Test.stub(HttpClient, fn conn ->
         conn
         |> Plug.Conn.put_status(400)
         |> Req.Test.json(%{"__type" => "UnrecognizedClientException", "message" => "Invalid credentials"})

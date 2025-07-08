@@ -1,4 +1,4 @@
-unless Mix.env() == :prod do
+if Mix.env() != :prod do
   defmodule Sequin.Havoc do
     @moduledoc false
 
@@ -65,7 +65,7 @@ unless Mix.env() == :prod do
       end
 
       # Start the havoc task
-      timeout = Keyword.get(opts, :timeout, :timer.minutes(10))
+      timeout = Keyword.get(opts, :timeout, to_timeout(minute: 10))
       task = Task.async(fn -> wreak_havoc(slot_id, consumers, interval, timeout) end)
 
       # Store the task PID in ETS
@@ -144,7 +144,7 @@ unless Mix.env() == :prod do
       Process.sleep(interval)
 
       # Recurse to continue the havoc
-      unless DateTime.after?(DateTime.utc_now(), DateTime.add(started_at, timeout, :millisecond)) do
+      if !DateTime.after?(DateTime.utc_now(), DateTime.add(started_at, timeout, :millisecond)) do
         wreak_havoc(slot_id, consumers, interval, timeout, started_at)
       end
     end

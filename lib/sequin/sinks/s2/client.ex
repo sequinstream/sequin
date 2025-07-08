@@ -29,7 +29,7 @@ defmodule Sequin.Sinks.S2.Client do
         {"authorization", "Bearer #{sink.access_token}"},
         {"content-type", "application/json"}
       ],
-      receive_timeout: :timer.seconds(60),
+      receive_timeout: to_timeout(minute: 1),
       retry: false,
       compress_body: true
     )

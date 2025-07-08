@@ -4,7 +4,7 @@ defmodule Sequin.Telemetry.PosthogReporter do
 
   require Logger
 
-  @default_publish_interval :timer.minutes(1)
+  @default_publish_interval to_timeout(minute: 1)
 
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name, __MODULE__)
@@ -37,7 +37,7 @@ defmodule Sequin.Telemetry.PosthogReporter do
         {{:"$1", :"$2", :"$3"}, [{:<, :"$1", now}], [{{:"$2", :"$3", :"$1"}}]}
       ])
 
-    unless Enum.empty?(events) do
+    if !Enum.empty?(events) do
       merged_events = merge_events(events)
 
       Sequin.Posthog.batch(merged_events, state.posthog_opts)
@@ -64,7 +64,7 @@ defmodule Sequin.Telemetry.PosthogReporter do
         {{:"$1", :"$2", :"$3"}, [], [{{:"$2", :"$3", :"$1"}}]}
       ])
 
-    unless Enum.empty?(events) do
+    if !Enum.empty?(events) do
       Sequin.Posthog.batch(events, state.posthog_opts)
     end
 

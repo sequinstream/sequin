@@ -67,7 +67,7 @@ defmodule SequinWeb.SinkConsumerController do
   defp load_health(%SinkConsumer{} = sink_consumer) do
     case Health.health(sink_consumer) do
       {:ok, health} ->
-        %SinkConsumer{sink_consumer | health: health}
+        %{sink_consumer | health: health}
 
       {:error, error} ->
         Logger.warning("Failed to load health for sink consumer #{sink_consumer.id}", error: error)

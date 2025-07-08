@@ -26,7 +26,7 @@ defmodule Sequin.Runtime.ElasticsearchPipeline do
       default: [
         concurrency: concurrency,
         batch_size: batch_size,
-        batch_timeout: :timer.seconds(1)
+        batch_timeout: to_timeout(second: 1)
       ]
     ]
   end

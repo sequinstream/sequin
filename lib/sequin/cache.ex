@@ -1,7 +1,7 @@
 defmodule Sequin.Cache do
   @moduledoc false
   def child_spec do
-    {ConCache, name: __MODULE__, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity}
+    {ConCache, name: __MODULE__, ttl_check_interval: to_timeout(second: 1), global_ttl: :infinity}
   end
 
   def get(key), do: ConCache.get(__MODULE__, key)

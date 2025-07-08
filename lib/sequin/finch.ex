@@ -27,7 +27,7 @@ defmodule Sequin.Finch do
 
     pools = %{default: [size: pool_size, count: config!(:pool_count)]}
 
-    {Finch, name: __MODULE__, pools: pools, pool_timeout: :timer.seconds(10)}
+    {Finch, name: __MODULE__, pools: pools, pool_timeout: to_timeout(second: 10)}
   end
 
   defp config!(key) do

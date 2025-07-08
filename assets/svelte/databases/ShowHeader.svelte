@@ -7,6 +7,7 @@
     Loader2,
     CirclePlay,
     Pause,
+    RefreshCw,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
@@ -54,6 +55,7 @@
   let statusTransitioning = false;
   let statusTransitionTimeout: NodeJS.Timeout | null = null;
   let displayPaused = database.paused;
+  let isRestarting = false;
 
   $: {
     if (!statusTransitioning) {
@@ -70,6 +72,15 @@
       statusTransitioning = false;
       statusTransitionTimeout = null;
     }, 2000);
+  }
+
+  function restartDatabase() {
+    isRestarting = true;
+    live.pushEventTo("#" + parent, "restart", {}, (res: any) => {
+      setTimeout(() => {
+        isRestarting = false;
+      }, 2000);
+    });
   }
 
   function enableDatabase() {
@@ -119,6 +130,22 @@
             <span>Updated {formatRelativeTimestamp(database.updated_at)}</span>
           </div>
         </div>
+        {#if isRestarting}
+          <Button variant="outline" size="sm" disabled>
+            <RefreshCw class="h-4 w-4 mr-1 animate-spin" />
+            Restarting...
+          </Button>
+        {:else}
+          <Button
+            variant="outline"
+            size="sm"
+            on:click={restartDatabase}
+            disabled={statusTransitioning || displayPaused}
+          >
+            <RefreshCw class="h-4 w-4 mr-1" />
+            Restart
+          </Button>
+        {/if}
         {#if statusTransitioning}
           {#if !displayPaused}
             <Button variant="outline" size="sm" disabled>

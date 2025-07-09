@@ -749,7 +749,7 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     @tag start_opts: [
-           heartbeat_interval: :timer.minutes(1),
+           heartbeat_interval: to_timeout(minute: 1),
            slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]
          ]
     test "replication slot advances after insert", %{source_db: db, event_character_consumer: consumer} do
@@ -943,7 +943,7 @@ defmodule Sequin.PostgresReplicationTest do
         |> Sequin.Map.stringify_keys()
 
       start_replication!(pg_replication, slot_processor_opts: [message_handler_module: MessageHandlerMock])
-      assert_receive {:changes, [change]}, :timer.seconds(5)
+      assert_receive {:changes, [change]}, to_timeout(second: 5)
 
       assert action?(change, :insert), "Expected change to be an insert, got: #{inspect(change)}"
 
@@ -1168,7 +1168,7 @@ defmodule Sequin.PostgresReplicationTest do
       end)
 
       # Should process ONLY the second message
-      assert_receive {:changes, [change]}, :timer.seconds(1)
+      assert_receive {:changes, [change]}, to_timeout(second: 1)
       assert get_field_value(change.fields, "id") == character2.id
     end
 
@@ -1692,7 +1692,7 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     @tag start_opts: [
-           heartbeat_interval: :timer.minutes(1),
+           heartbeat_interval: to_timeout(minute: 1),
            slot_producer_opts: [ack_interval: 5, restart_wal_cursor_update_interval: 5]
          ]
     test "replication slot advances after insert", %{source_db: db} do

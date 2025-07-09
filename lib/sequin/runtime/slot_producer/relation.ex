@@ -110,7 +110,7 @@ defmodule Sequin.Runtime.SlotProducer.Relation do
       Enum.map(columns, fn %{name: name} = column ->
         case Enum.find(attnum_rows, fn [col_name, _, _, _] -> col_name == name end) do
           [_, attnum, base_type, is_pk] ->
-            %Column{column | pk?: is_pk, attnum: attnum, type: base_type}
+            %{column | pk?: is_pk, attnum: attnum, type: base_type}
 
           nil ->
             column
@@ -124,7 +124,7 @@ defmodule Sequin.Runtime.SlotProducer.Relation do
     current_hash = PostgresRelationHashCache.compute_schema_hash(enriched_relation)
     stored_hash = PostgresRelationHashCache.get_schema_hash(db_id, id)
 
-    unless stored_hash == current_hash do
+    if stored_hash != current_hash do
       Logger.info("[SlotProcessorServer] Schema changes detected for table, enqueueing database update",
         relation_id: id,
         schema: parent_info.schema,

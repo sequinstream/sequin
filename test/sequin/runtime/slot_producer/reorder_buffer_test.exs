@@ -106,7 +106,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
   describe "ReorderBuffer with multiple producer partitions" do
     setup ctx do
       producers =
-        unless ctx[:skip_start] do
+        if !ctx[:skip_start] do
           ctx |> Map.get(:buffer_opts, []) |> start_buffer() |> Map.new()
         end
 

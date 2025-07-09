@@ -113,7 +113,7 @@ defmodule Sequin.Runtime.SlotProducer.Supervisor do
         [
           id: replication_slot.id,
           slot_name: replication_slot.slot_name,
-          postgres_database: %PostgresDatabase{postgres_database | tables: []},
+          postgres_database: %{postgres_database | tables: []},
           replication_slot: replication_slot,
           message_handler_ctx_fn: &MessageHandler.context/1,
           message_handler_module: default_message_handler_module(),

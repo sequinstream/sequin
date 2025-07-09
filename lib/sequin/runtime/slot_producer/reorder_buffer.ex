@@ -210,7 +210,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       lower_pending_idx =
         Enum.find(Map.keys(state.pending_batches_by_idx), fn other_idx -> other_idx < idx end)
 
-      unless is_nil(lower_pending_idx) do
+      if !is_nil(lower_pending_idx) do
         raise "Batch idxs completed out-of-order: other_idx=#{lower_pending_idx} min_ready_idx=#{idx}"
       end
 

@@ -1,4 +1,4 @@
-defmodule SequinWeb.TransformEditTest do
+defmodule SequinWeb.FunctionsLive.EditTest do
   use SequinWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
@@ -88,7 +88,12 @@ defmodule SequinWeb.TransformEditTest do
     conn = log_in_user(conn, AccountsFactory.insert_user!())
     {:ok, lv, _} = live(conn, ~p"/functions/new")
 
-    p1 = %{"description" => nil, "id" => nil, "name" => nil, "function" => %{"type" => "transform"}}
+    p1 = %{
+      "description" => nil,
+      "id" => nil,
+      "name" => nil,
+      "function" => %{"type" => "transform"}
+    }
 
     render_hook(lv, "validate", %{"function" => p1})
 

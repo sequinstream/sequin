@@ -10,7 +10,7 @@ defmodule Sequin.Runtime.SlotSupervisor do
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStoreSupervisor
   alias Sequin.Runtime.SlotProcessorServer
-  alias Sequin.Runtime.SlotProcessorSupervisor
+  alias Sequin.Runtime.SlotProducer.Supervisor, as: SlotProducerSupervisor
 
   require Logger
 
@@ -44,14 +44,18 @@ defmodule Sequin.Runtime.SlotSupervisor do
 
   def stop_slot_processor(id) do
     sup_via = via_tuple(id)
-    Sequin.DynamicSupervisor.stop_child(sup_via, SlotProcessorSupervisor.via_tuple(id))
+    Sequin.DynamicSupervisor.stop_child(sup_via, SlotProducerSupervisor.via_tuple(id))
   end
 
   def start_children(%PostgresReplicationSlot{} = pg_replication, opts) do
     pg_replication = Repo.preload(pg_replication, [:sink_consumers, :not_disabled_sink_consumers])
 
-    opts = Keyword.put(opts, :replication_slot_id, pg_replication.id)
-    slot_processor_spec = SlotProcessorSupervisor.child_spec(opts)
+    opts =
+      opts
+      |> Keyword.put(:replication_slot_id, pg_replication.id)
+      |> Keyword.put(:replication_slot, pg_replication)
+
+    slot_processor_spec = SlotProducerSupervisor.child_spec(opts)
     sup = via_tuple(pg_replication.id)
 
     # First start all message stores for consumers

@@ -9,10 +9,11 @@
   },
   {
     "label": "Test current file",
-    "command": "p",
-    "args": ["$ZED_RELATIVE_FILE"],
+    "command": "mix",
+    "args": ["test.interactive", "$ZED_RELATIVE_FILE"],
     "use_new_terminal": false,
-    "reveal": "no_focus"
+    "reveal": "no_focus",
+    "allow_concurrent_runs": true
   },
   {
     "label": "Interactive test file",

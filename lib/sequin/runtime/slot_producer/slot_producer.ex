@@ -198,8 +198,7 @@ defmodule Sequin.Runtime.SlotProducer do
       pg_major_version: Keyword.fetch!(opts, :pg_major_version),
       status: :disconnected,
       on_connect_fail: Keyword.get(opts, :on_connect_fail_fn, &PipelineDefaults.on_connect_fail/2),
-      # TODO: On disconnect, does anyone else in the pipeline care?
-      on_disconnect: Keyword.get(opts, :on_disconnect),
+      # on_disconnect: Keyword.get(opts, :on_disconnect),
       restart_wal_cursor_fn: Keyword.get(opts, :restart_wal_cursor_fn, &PipelineDefaults.restart_wal_cursor/2),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
       setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
@@ -669,16 +668,21 @@ defmodule Sequin.Runtime.SlotProducer do
     Protocol.disconnect(%RuntimeError{}, state.protocol)
     Process.send_after(self(), :connect, state.setting_reconnect_interval)
 
-    state.on_disconnect.()
+    if is_function(state.on_disconnect) do
+      state.on_disconnect.()
+    end
 
-    close_commit(%State{
-      state
-      | status: :disconnected,
-        last_commit_lsn: nil,
-        last_commit_idx: nil,
-        accumulated_messages: %{count: 0, bytes: 0, messages: []},
-        buffered_sock_msg: nil
-    })
+    state =
+      close_commit(%State{
+        state
+        | status: :disconnected,
+          last_commit_lsn: nil,
+          last_commit_idx: nil,
+          accumulated_messages: %{count: 0, bytes: 0, messages: []},
+          buffered_sock_msg: nil
+      })
+
+    {:noreply, [], state}
   end
 
   defp close_commit(%State{} = state) do

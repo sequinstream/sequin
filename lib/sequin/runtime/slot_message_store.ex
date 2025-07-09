@@ -799,8 +799,9 @@ defmodule Sequin.Runtime.SlotMessageStore do
   def handle_cast({:put_high_watermark_wal_cursor, {batch_idx, wal_cursor}}, %State{} = state) do
     {current_idx, _current_cursor} = state.high_watermark_wal_cursor
 
-    unless batch_idx == current_idx + 1 do
-      raise "Unexpected high watermark WAL cursor: #{batch_idx} != #{current_idx + 1}"
+    # Do not raise if batch_idx is 0, means SlotProducer et al may have restarted
+    if batch_idx != current_idx + 1 and batch_idx > 0 do
+      raise "Unexpected high watermark WAL cursor: #{batch_idx} (given) != #{current_idx + 1} (expected)"
     end
 
     state = %State{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}

@@ -547,6 +547,10 @@ defmodule Sequin.Runtime.SlotProducer do
       raise "New restart cursor is behind new restart cursor: #{inspect(restart_wal_cursor)} < #{inspect(state.restart_wal_cursor)}"
     end
 
+    if is_nil(restart_wal_cursor) or is_nil(restart_wal_cursor.commit_lsn) or is_nil(restart_wal_cursor.commit_idx) do
+      raise "[SlotProducer] restart_wal_cursor is empty"
+    end
+
     Replication.put_restart_wal_cursor!(state.id, restart_wal_cursor)
 
     %{state | restart_wal_cursor: restart_wal_cursor}
@@ -638,7 +642,7 @@ defmodule Sequin.Runtime.SlotProducer do
     case Replication.restart_wal_cursor(state.id) do
       {:error, %NotFoundError{}} ->
         case Protocol.handle_simple(query, [], protocol) do
-          {:ok, [%Postgrex.Result{rows: [[lsn]]}], protocol} ->
+          {:ok, [%Postgrex.Result{rows: [[lsn]]}], protocol} when not is_nil(lsn) ->
             cursor = %{commit_lsn: Postgres.lsn_to_int(lsn), commit_idx: 0}
             {:ok, %{state | restart_wal_cursor: cursor}, protocol}
 

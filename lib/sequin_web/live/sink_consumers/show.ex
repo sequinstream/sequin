@@ -318,42 +318,68 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     consumer = socket.assigns.consumer
 
     # Create backfills for each selected table
-    Enum.each(selected_tables, fn %{
-                                    "oid" => table_oid,
-                                    "sortColumnAttnum" => sort_column_attnum,
-                                    "initialMinCursor" => initial_min_cursor
-                                  } ->
-      table = find_table_by_oid(table_oid, consumer.postgres_database.tables)
+    selected_tables
+    |> Enum.map(fn
+      # Full backfill
+      %{"oid" => table_oid, "type" => "full"} ->
+        table = find_table_by_oid(table_oid, consumer.postgres_database.tables)
 
-      # Set table with sort column if provided
-      table =
-        case sort_column_attnum do
-          nil -> table
-          attnum -> %PostgresDatabaseTable{table | sort_column_attnum: attnum}
-        end
+        # Use provided cursor or default
+        initial_min_cursor = KeysetCursor.min_cursor(table)
 
-      # Use provided cursor or default
-      initial_min_cursor =
-        case initial_min_cursor do
-          nil -> KeysetCursor.min_cursor(table)
-          cursor -> cursor
-        end
+        %{
+          account_id: current_account_id(socket),
+          sink_consumer_id: consumer.id,
+          table_oid: table_oid,
+          initial_min_cursor: initial_min_cursor,
+          state: :active
+        }
 
-      backfill_attrs = %{
-        account_id: current_account_id(socket),
-        sink_consumer_id: consumer.id,
-        initial_min_cursor: initial_min_cursor,
-        sort_column_attnum: sort_column_attnum,
-        state: :active
-      }
+      # Partial backfill
+      %{
+        "oid" => table_oid,
+        "type" => "partial",
+        "sortColumnAttnum" => sort_column_attnum,
+        "initialMinCursor" => initial_min_cursor
+      } ->
+        table = find_table_by_oid(table_oid, consumer.postgres_database.tables)
+        table = %{table | sort_column_attnum: sort_column_attnum}
+        initial_min_cursor = KeysetCursor.min_cursor(table, initial_min_cursor)
 
-      Consumers.create_backfill(backfill_attrs)
+        %{
+          account_id: current_account_id(socket),
+          sink_consumer_id: consumer.id,
+          table_oid: table_oid,
+          initial_min_cursor: initial_min_cursor,
+          sort_column_attnum: sort_column_attnum,
+          state: :active
+        }
     end)
+    |> Enum.map(fn backfill_attrs -> Consumers.create_backfill(backfill_attrs) end)
+    |> Enum.group_by(
+      fn
+        {:ok, _} -> :created
+        {:error, _} -> :failed
+      end,
+      fn
+        {:ok, backfill} -> backfill
+        {:error, changeset} -> changeset
+      end
+    )
+    |> tap(fn _ -> maybe_start_table_readers(consumer) end)
+    |> case do
+      %{failed: changesets} ->
+        {:reply, %{ok: true},
+         socket
+         |> load_consumer_backfills()
+         |> put_flash(:toast, %{kind: :error, title: "Failed to create #{length(changesets)} backfill(s)"})}
 
-    consumer = Repo.preload(consumer, :active_backfills, force: true)
-    Sequin.Runtime.Supervisor.maybe_start_table_readers(consumer)
-
-    {:reply, %{ok: true}, load_consumer_backfills(socket)}
+      %{created: backfills} ->
+        {:reply, %{ok: true},
+         socket
+         |> load_consumer_backfills()
+         |> put_flash(:toast, %{kind: :success, title: "Created #{length(backfills)} backfill(s)"})}
+    end
   end
 
   # Add a catch-all clause for invalid parameters
@@ -371,8 +397,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       backfill ->
         case Consumers.update_backfill(backfill, %{state: :cancelled}) do
           {:ok, _updated_backfill} ->
-            {:reply, %{ok: true},
-             put_flash(socket, :toast, %{kind: :success, title: "Backfill cancelled successfully"})}
+            {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill cancelled successfully"})}
 
           {:error, _error} ->
             {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to cancel backfill"})}
@@ -676,8 +701,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   # If the live action is not :trace, don't add any more events
-  def handle_info({:trace_event, _event}, %{assigns: %{live_action: live_action}} = socket)
-      when live_action != :trace do
+  def handle_info({:trace_event, _event}, %{assigns: %{live_action: live_action}} = socket) when live_action != :trace do
     {:noreply, socket}
   end
 
@@ -1060,7 +1084,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_column(%PostgresDatabaseTable.Column{} = column) do
     %{
       name: column.name,
-      attnum: column.attnum
+      attnum: column.attnum,
+      type: column.type
     }
   end
 
@@ -1559,10 +1584,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp maybe_augment_alert(check, _consumer), do: check
 
-  defp env do
-    Application.get_env(:sequin, :env)
-  end
-
   # Function to load backfills for the consumer
   defp load_consumer_backfills(%{assigns: %{live_action: action}} = socket) when action != :backfills do
     consumer = Repo.preload(socket.assigns.consumer, :active_backfills, force: true)
@@ -1625,5 +1646,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp find_table_by_oid(oid, tables) do
     Enum.find(tables, fn table -> table.oid == oid end)
+  end
+
+  defp maybe_start_table_readers(consumer) do
+    if env() != :test do
+      consumer = Repo.preload(consumer, :active_backfills, force: true)
+      Sequin.Runtime.Supervisor.maybe_start_table_readers(consumer)
+    end
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

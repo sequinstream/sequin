@@ -11,21 +11,15 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { slide } from "svelte/transition";
-  import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from "$lib/components/ui/select";
   import { Checkbox } from "$lib/components/ui/checkbox";
+  import Datetime from "./Datetime.svelte";
 
   export let form: {
     selectedTables?: Array<{
       oid: number;
       type: "full" | "partial";
       sortColumnAttnum?: number | null;
-      initialMinCursor?: string | null;
+      initialMinCursor?: string | Date | null;
     }>;
   };
   export let tables_included_in_source: Table[];
@@ -192,11 +186,7 @@
       ? form.selectedTables.length === tables_included_in_source.length
       : false;
 
-  $: selectedTable = tables_included_in_source.find(
-    (table) =>
-      form.selectedTables?.length === 1 &&
-      table.oid === form.selectedTables[0].oid,
-  );
+  $: console.log(form.selectedTables);
 
   function handleStartPositionInput(e: Event, tableOid: number) {
     const target = e.target as HTMLInputElement;
@@ -205,6 +195,15 @@
       tableOid,
       selectedTable?.sortColumnAttnum ?? null,
       target.value || null,
+    );
+  }
+
+  function handleDateChange(date: Date, tableOid: number) {
+    const selectedTable = form.selectedTables?.find((t) => t.oid === tableOid);
+    updateTableOptions(
+      tableOid,
+      selectedTable?.sortColumnAttnum ?? null,
+      date.toISOString(),
     );
   }
 </script>
@@ -290,14 +289,14 @@
                         transition:slide={{ duration: 200 }}
                         class="mt-4 space-y-4 w-full"
                       >
-                        <div class="grid grid-cols-2 gap-4">
-                          <div class="space-y-2">
+                        <div class="h-24 flex gap-4">
+                          <div class="space-y-2 w-1/3">
                             <Label for="sortColumn-{table.oid}" class="text-xs"
                               >Sort Column</Label
                             >
                             <select
                               id="sortColumn-{table.oid}"
-                              class="h-8 text-sm w-full rounded-md border border-input bg-background px-3"
+                              class="h-8 py-0 text-sm w-full rounded-md border border-input bg-background px-3"
                               value={form.selectedTables?.find(
                                 (t) => t.oid === table.oid,
                               )?.sortColumnAttnum ?? ""}
@@ -312,22 +311,50 @@
                               {/each}
                             </select>
                           </div>
-                          <div class="space-y-2">
+                          <div class="space-y-2 w-2/3">
                             <Label
                               for="startPosition-{table.oid}"
                               class="text-xs">Start Position</Label
                             >
-                            <Input
-                              type="text"
-                              id="startPosition-{table.oid}"
-                              class="h-8 text-sm"
-                              placeholder="e.g. 1000, 2023-01-01"
-                              value={form.selectedTables?.find(
-                                (t) => t.oid === table.oid,
-                              )?.initialMinCursor ?? ""}
-                              on:input={(e) =>
-                                handleStartPositionInput(e, table.oid)}
-                            />
+                            {#if table.columns
+                              .find((c) => c.attnum === form.selectedTables?.find((t) => t.oid === table.oid)?.sortColumnAttnum)
+                              ?.type.startsWith("timestamp")}
+                              <Datetime
+                                id="startPosition-{table.oid}"
+                                class="h-8 text-sm"
+                                value={new Date(
+                                  form.selectedTables?.find(
+                                    (t) => t.oid === table.oid,
+                                  )?.initialMinCursor ?? new Date(),
+                                )}
+                                onChange={(date) =>
+                                  handleDateChange(date, table.oid)}
+                              />
+                            {:else if ["integer", "bigint", "smallint", "serial"].includes(table.columns.find((c) => c.attnum === form.selectedTables?.find((t) => t.oid === table.oid)?.sortColumnAttnum)?.type)}
+                              <Input
+                                type="number"
+                                id="startPosition-{table.oid}"
+                                class="h-8 text-sm"
+                                placeholder="e.g. 1000"
+                                value={form.selectedTables?.find(
+                                  (t) => t.oid === table.oid,
+                                )?.initialMinCursor ?? ""}
+                                on:input={(e) =>
+                                  handleStartPositionInput(e, table.oid)}
+                              />
+                            {:else}
+                              <Input
+                                type="text"
+                                id="startPosition-{table.oid}"
+                                class="h-8 text-sm"
+                                placeholder="Enter start position"
+                                value={form.selectedTables?.find(
+                                  (t) => t.oid === table.oid,
+                                )?.initialMinCursor ?? ""}
+                                on:input={(e) =>
+                                  handleStartPositionInput(e, table.oid)}
+                              />
+                            {/if}
                           </div>
                         </div>
                       </div>

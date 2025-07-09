@@ -14,6 +14,7 @@
   export let value: Date;
   value = value || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   export let error: string = "";
+  export let onChange: (date: Date) => void;
 
   const months = [
     "January",
@@ -102,6 +103,7 @@
     // Only update if the new date is different to prevent infinite loops
     if (+newDate !== +value) {
       value = newDate;
+      onChange(newDate);
     }
   }
 

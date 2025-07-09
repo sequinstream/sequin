@@ -43,6 +43,18 @@ defmodule Sequin.Postgres do
   ]
   @default_postgrex_timeout to_timeout(second: 15)
 
+  @spec compare_wal_cursors(wal_cursor(), wal_cursor()) :: :gt | :lt | :eq
+  def compare_wal_cursors(cursor1, cursor2) do
+    cursor_1 = {cursor1.commit_lsn, cursor1.commit_idx}
+    cursor_2 = {cursor2.commit_lsn, cursor2.commit_idx}
+
+    cond do
+      cursor_1 > cursor_2 -> :gt
+      cursor_1 < cursor_2 -> :lt
+      cursor_1 == cursor_2 -> :eq
+    end
+  end
+
   @doc """
   Checks if the given table is an event table by verifying it has all the required columns.
   """

@@ -542,8 +542,9 @@ defmodule Sequin.Runtime.SlotProducer do
         next_cursor -> next_cursor
       end
 
-    if not is_nil(state.restart_wal_cursor) and restart_wal_cursor < state.restart_wal_cursor do
-      raise "New restart cursor is behind new restart cursor: #{restart_wal_cursor} < #{state.restart_wal_cursor}"
+    if not is_nil(state.restart_wal_cursor) and
+         Postgres.compare_wal_cursors(restart_wal_cursor, state.restart_wal_cursor) == :lt do
+      raise "New restart cursor is behind new restart cursor: #{inspect(restart_wal_cursor)} < #{inspect(state.restart_wal_cursor)}"
     end
 
     Replication.put_restart_wal_cursor!(state.id, restart_wal_cursor)

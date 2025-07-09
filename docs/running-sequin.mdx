@@ -182,7 +182,27 @@ services:
 
 ## Adding to an existing project
 
-To add Sequin to an existing project's Docker Compose file, add a `sequin` service:
+### Using Docker Compose include (recommended)
+
+The cleanest way to add Sequin to an existing project is using Docker Compose's `include` functionality:
+
+1. Download the Sequin's [docker-compose.yaml](https://github.com/sequinstream/sequin/blob/main/docker/docker-compose.yaml).
+
+2. Add an `include` section to your existing `docker-compose.yaml`:
+
+```yaml
+include:
+  - sequin-docker-compose.yaml
+
+services:
+  # your existing services...
+```
+
+This approach keeps your main compose file clean while providing all of Sequin's services.
+
+### Adding Sequin service directly
+
+Alternatively, you can add Sequin directly to your existing Docker Compose file by adding a `sequin` service:
 
 ```yaml
 services:

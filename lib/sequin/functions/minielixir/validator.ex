@@ -98,6 +98,7 @@ defmodule Sequin.Functions.MiniElixir.Validator do
     :<>,
     :.,
     :|>,
+    :|,
     :__block__,
     :->,
     :fn,
@@ -204,11 +205,17 @@ defmodule Sequin.Functions.MiniElixir.Validator do
     with :ok <- check(e), do: check_body(body)
   end
 
+  defp good({:with, _, clauses}) do
+    check_with_clauses(clauses)
+  end
+
   defp good({a, _, nil}) when is_atom(a), do: :ok
   defp good(body) when is_list(body), do: check_body(body)
   defp good({l, r}), do: with(:ok <- check(l), do: check(r))
   defp good({sigil, _, body}) when sigil in @kernel_sigils, do: check(body)
+
   defp good({kernel_function, _, args}) when kernel_function in @kernel_functions, do: check_body(args)
+
   defp good({kernel_guard, _, args}) when kernel_guard in @kernel_guards, do: check_body(args)
 
   defp good({:match?, _, [l, r]}), do: with(:ok <- check(l), do: check(r))
@@ -309,6 +316,7 @@ defmodule Sequin.Functions.MiniElixir.Validator do
   defp fnok([Integer, _]), do: :ok
   defp fnok([Regex, _]), do: :ok
   defp fnok([Eden, _]), do: :ok
+  defp fnok([List, _]), do: :ok
   defp fnok([:&]), do: :ok
 
   defp fnok(p) do
@@ -325,6 +333,39 @@ defmodule Sequin.Functions.MiniElixir.Validator do
   defp dedot(l, acc) when is_atom(l), do: [l | acc]
 
   defp redot(xs), do: Enum.join(xs, ".")
+
+  defp check_with_clauses([]), do: :ok
+
+  defp check_with_clauses([{:<-, _, [pattern, expr]} | rest]) do
+    with {:ok, bound} <- PatternChecker.extract_bound_vars(pattern) do
+      case Enum.find(bound, fn b -> b in @args end) do
+        nil ->
+          with :ok <- check(pattern),
+               :ok <- check(expr) do
+            check_with_clauses(rest)
+          end
+
+        b ->
+          {:error, :validator, "can't assign to argument: #{to_string(b)}"}
+      end
+    end
+  end
+
+  defp check_with_clauses([keyword_list]) when is_list(keyword_list) do
+    # Handle the do/else block at the end
+    with :ok <- check(keyword_list[:do]) do
+      case keyword_list[:else] do
+        nil -> :ok
+        else_clauses -> check_body(else_clauses)
+      end
+    end
+  end
+
+  defp check_with_clauses([expr | rest]) do
+    with :ok <- check(expr) do
+      check_with_clauses(rest)
+    end
+  end
 
   defmodule PatternChecker do
     @moduledoc false

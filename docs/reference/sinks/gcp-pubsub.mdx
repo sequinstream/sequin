@@ -20,9 +20,15 @@ The GCP Pub/Sub sink sends messages to a Google Cloud Pub/Sub topic.
 
     The ID of your Pub/Sub topic (e.g., `postgres-changes`).
 
-- **Service Account Credentials**
+- **Service Account Credentials** (when not using Application Default Credentials)
 
     The JSON key file contents for a service account with permissions to publish to the specified topic.
+
+- **Use Application Default Credentials** (optional)
+
+    When enabled (`true`), Sequin will automatically discover GCP credentials from the environment instead of requiring explicit service account keys. This is recommended for deployments on GCP compute environments where service accounts can be attached directly to the compute instance.
+
+    When this option is enabled, you do not need to provide service account credentials.
 
 ## Service account permissions
 
@@ -31,7 +37,64 @@ Sequin requires a service account with the following roles:
 - `roles/pubsub.publisher`: Allows publishing messages to topics
 - `roles/pubsub.viewer`: Allows viewing topic configuration and metadata
 
-For more information on creating a service account, see the [how-to guide](/how-to/stream-postgres-to-gcp-pubsub#create-a-service-account).
+### Using service account keys (explicit credentials)
+
+For explicit service account credentials, create a service account and download the JSON key file. For more information on creating a service account, see the [how-to guide](/how-to/stream-postgres-to-gcp-pubsub#create-a-service-account).
+
+### Using Application Default Credentials (recommended for GCP environments)
+
+When deploying Sequin on GCP infrastructure, you can attach the service account directly to the compute instance:
+
+- **Compute Engine**: Attach the service account to the VM instance
+- **Google Kubernetes Engine (GKE)**: Use Workload Identity to associate the service account with the Kubernetes service account
+- **Cloud Run**: Attach the service account to the Cloud Run service
+- **Google Cloud Functions**: Attach the service account to the function
+
+Then set `use_application_default_credentials: true` in your sink configuration. Sequin will automatically discover and use the credentials from the environment.
+
+## Configuration examples
+
+### Using service account keys
+
+```yaml
+sinks:
+  - name: "gcp-pubsub-sink"
+    batch_size: 10
+    destination:
+      type: "gcp_pubsub"
+      project_id: "my-project"
+      topic_id: "postgres-changes"
+      credentials: |
+        {
+          "type": "service_account",
+          "project_id": "my-project",
+          "private_key_id": "key-id",
+          "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+          "client_email": "sequin@my-project.iam.gserviceaccount.com",
+          "client_id": "123456789",
+          "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+          "token_uri": "https://oauth2.googleapis.com/token",
+          "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+          "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/sequin%40my-project.iam.gserviceaccount.com"
+        }
+```
+
+### Using Application Default Credentials (recommended for GCP environments)
+
+```yaml
+sinks:
+  - name: "gcp-pubsub-sink"
+    batch_size: 10
+    destination:
+      type: "gcp_pubsub"
+      project_id: "my-project"
+      topic_id: "postgres-changes"
+      use_application_default_credentials: true
+```
+
+<Note>
+When using `use_application_default_credentials: true`, ensure your compute instance has the required service account attached with the necessary Pub/Sub permissions.
+</Note>
 
 ## Message format
 

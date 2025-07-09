@@ -122,7 +122,8 @@ defmodule SequinWeb.Components.ConsumerForm do
         submit_error: nil,
         changeset: nil,
         component: component,
-        prev_params: %{}
+        prev_params: %{},
+        self_hosted: Application.get_env(:sequin, :self_hosted, true)
       )
       |> assign_databases()
       |> assign_http_endpoints()
@@ -896,7 +897,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "topic_id" => sink["topic_id"],
       "credentials" => creds,
       "use_emulator" => sink["use_emulator"],
-      "emulator_base_url" => sink["emulator_base_url"]
+      "emulator_base_url" => sink["emulator_base_url"],
+      "use_application_default_credentials" => sink["use_application_default_credentials"]
     }
   end
 
@@ -1174,7 +1176,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "topic_id" => sink.topic_id,
       "credentials" => Jason.encode!(Sequin.Map.reject_nil_values(creds), pretty: true),
       "use_emulator" => sink.use_emulator,
-      "emulator_base_url" => sink.emulator_base_url
+      "emulator_base_url" => sink.emulator_base_url,
+      "use_application_default_credentials" => sink.use_application_default_credentials
     }
   end
 

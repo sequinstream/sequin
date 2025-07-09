@@ -50,7 +50,11 @@ defmodule Sequin.Sinks.Gcp.PubSub do
         %Credentials{} = creds ->
           creds
 
-        map ->
+        nil when use_emulator ->
+          # For emulator, we don't need real credentials
+          %Credentials{}
+
+        map when is_map(map) ->
           creds = Sequin.Map.atomize_keys(map)
           struct(Credentials, creds)
       end

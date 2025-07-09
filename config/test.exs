@@ -111,6 +111,7 @@ config :sequin,
   nats_module: Sequin.Sinks.NatsMock,
   rabbitmq_module: Sequin.Sinks.RabbitMqMock,
   aws_module: Sequin.AwsMock,
+  gcp_credentials_module: Sequin.Gcp.ApplicationDefaultCredentialsMock,
   # Arbitrarily high memory limit for testing
   max_memory_bytes: 100 * 1024 * 1024 * 1024,
   slot_message_store: [flush_batch_size: 8],

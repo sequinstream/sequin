@@ -348,29 +348,41 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%GcpPubsubSink{credentials: %Gcp.Credentials{} = credentials} = sink, show_sensitive) do
-    reject_nil_values(%{
+    base_config = %{
       type: "gcp_pubsub",
       project_id: sink.project_id,
       topic_id: sink.topic_id,
       use_emulator: sink.use_emulator,
       emulator_base_url: sink.emulator_base_url,
-      credentials:
-        reject_nil_values(%{
-          type: credentials.type,
-          project_id: credentials.project_id,
-          private_key_id: SensitiveValue.new(credentials.private_key_id, show_sensitive),
-          private_key: SensitiveValue.new(credentials.private_key, show_sensitive),
-          client_email: SensitiveValue.new(credentials.client_email, show_sensitive),
-          client_id: SensitiveValue.new(credentials.client_id, show_sensitive),
-          auth_uri: credentials.auth_uri,
-          token_uri: credentials.token_uri,
-          auth_provider_x509_cert_url: credentials.auth_provider_x509_cert_url,
-          client_x509_cert_url: credentials.client_x509_cert_url,
-          universe_domain: SensitiveValue.new(credentials.universe_domain, show_sensitive),
-          client_secret: SensitiveValue.new(credentials.client_secret, show_sensitive),
-          api_key: SensitiveValue.new(credentials.api_key, show_sensitive)
-        })
-    })
+      use_application_default_credentials: sink.use_application_default_credentials
+    }
+
+    config =
+      if sink.use_application_default_credentials do
+        base_config
+      else
+        Map.put(
+          base_config,
+          :credentials,
+          reject_nil_values(%{
+            type: credentials.type,
+            project_id: credentials.project_id,
+            private_key_id: SensitiveValue.new(credentials.private_key_id, show_sensitive),
+            private_key: SensitiveValue.new(credentials.private_key, show_sensitive),
+            client_email: SensitiveValue.new(credentials.client_email, show_sensitive),
+            client_id: SensitiveValue.new(credentials.client_id, show_sensitive),
+            auth_uri: credentials.auth_uri,
+            token_uri: credentials.token_uri,
+            auth_provider_x509_cert_url: credentials.auth_provider_x509_cert_url,
+            client_x509_cert_url: credentials.client_x509_cert_url,
+            universe_domain: SensitiveValue.new(credentials.universe_domain, show_sensitive),
+            client_secret: SensitiveValue.new(credentials.client_secret, show_sensitive),
+            api_key: SensitiveValue.new(credentials.api_key, show_sensitive)
+          })
+        )
+      end
+
+    reject_nil_values(config)
   end
 
   def to_external(%NatsSink{} = sink, show_sensitive) do
@@ -1234,7 +1246,8 @@ defmodule Sequin.Transforms do
        topic_id: attrs["topic_id"],
        credentials: attrs["credentials"],
        use_emulator: attrs["use_emulator"] || false,
-       emulator_base_url: attrs["emulator_base_url"]
+       emulator_base_url: attrs["emulator_base_url"],
+       use_application_default_credentials: attrs["use_application_default_credentials"] || false
      }}
   end
 

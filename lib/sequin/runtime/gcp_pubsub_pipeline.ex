@@ -13,8 +13,17 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
 
   @impl SinkPipeline
   def init(context, _opts) do
-    %{consumer: %SinkConsumer{sink: sink}} = context
-    Map.put(context, :pubsub_client, GcpPubsubSink.pubsub_client(sink))
+    %{consumer: %SinkConsumer{sink: sink}, test_pid: test_pid} = context
+
+    setup_allowances(test_pid)
+
+    case GcpPubsubSink.pubsub_client(sink) do
+      client when is_struct(client) ->
+        Map.put(context, :pubsub_client, client)
+
+      {:error, reason} ->
+        raise "Failed to initialize GCP PubSub client: #{inspect(reason)}"
+    end
   end
 
   @impl SinkPipeline
@@ -96,5 +105,6 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
   defp setup_allowances(test_pid) do
     Req.Test.allow(Sequin.Sinks.Gcp.HttpClient, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Mox.allow(Sequin.Gcp.ApplicationDefaultCredentialsMock, test_pid, self())
   end
 end

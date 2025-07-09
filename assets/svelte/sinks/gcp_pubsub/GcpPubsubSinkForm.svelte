@@ -14,12 +14,14 @@
   import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
   import type { GcpPubsubConsumer } from "$lib/consumers/types";
   import { Textarea } from "$lib/components/ui/textarea";
+  import GcpAuthenticationForm from "$lib/components/GcpAuthenticationForm.svelte";
 
   export let form;
   export let functions: Array<any> = [];
   export let refreshFunctions: () => void;
   export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
   export let errors: any = {};
+  export let isSelfHosted: boolean = true;
 
   let selectedDynamic = form.routingMode === "dynamic";
 </script>
@@ -92,23 +94,11 @@
     {/if}
 
     {#if !form.sink.use_emulator}
-      <div class="space-y-2">
-        <Label for="credentials">Service Account Credentials</Label>
-        <Textarea
-          id="credentials"
-          bind:value={form.sink.credentials}
-          placeholder="Paste your JSON service account key here"
-          rows={8}
-          data-1p-ignore
-          autocomplete="off"
-        />
-        <p class="text-sm text-muted-foreground">
-          JSON credentials from your Google Cloud service account key
-        </p>
-        {#if errors.sink?.credentials}
-          <p class="text-destructive text-sm">{errors.sink.credentials}</p>
-        {/if}
-      </div>
+      <GcpAuthenticationForm
+        bind:sink={form.sink}
+        errors={errors.sink || {}}
+        {isSelfHosted}
+      />
     {/if}
   </CardContent>
 </Card>

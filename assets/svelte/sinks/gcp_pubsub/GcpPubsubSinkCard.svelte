@@ -40,8 +40,21 @@
           >
         </div>
       </div>
-    </div></CardContent
-  >
+    </div>
+
+    {#if consumer.sink.use_application_default_credentials}
+      <div class="mt-4">
+        <div>
+          <span class="text-sm text-gray-500">GCP Credentials</span>
+          <div class="mt-2">
+            <span class="text-sm text-green-600"
+              >Loaded from Application Default Credentials</span
+            >
+          </div>
+        </div>
+      </div>
+    {/if}
+  </CardContent>
 </Card>
 <Card>
   <CardHeader>

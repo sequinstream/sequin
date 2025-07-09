@@ -297,7 +297,6 @@
     transformSectionExpanded = transformSectionEnabled && !isEditMode;
 
     backfillSectionEnabled = !!selectedDatabase && !isEditMode;
-    backfillSectionExpanded = backfillSectionEnabled && !isEditMode;
   }
 
   let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
@@ -451,7 +450,7 @@
     {#if !isEditMode}
       <ExpandableCard
         disabled={!backfillSectionEnabled}
-        expanded={!isEditMode && backfillSectionEnabled}
+        expanded={backfillSectionExpanded}
       >
         <svelte:fragment slot="title">
           Initial backfill

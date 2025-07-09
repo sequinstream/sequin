@@ -122,6 +122,9 @@ defmodule Sequin.Factory.ReplicationFactory do
 
   def postgres_insert(attrs \\ []) do
     attrs = Map.new(attrs)
+    {commit_lsn, attrs} = Map.pop_lazy(attrs, :commit_lsn, &Factory.unique_integer/0)
+    {commit_idx, attrs} = Map.pop_lazy(attrs, :commit_idx, &Factory.unique_integer/0)
+    idempotency_key = "#{commit_lsn}:#{commit_idx}"
 
     merge_attributes(
       %SlotProcessor.Message{
@@ -129,6 +132,7 @@ defmodule Sequin.Factory.ReplicationFactory do
         commit_timestamp: Factory.timestamp(),
         commit_lsn: Factory.unique_integer(),
         commit_idx: Enum.random(0..100),
+        idempotency_key: idempotency_key,
         errors: nil,
         ids: [Factory.unique_integer()],
         table_schema: "__postgres_replication_test_schema__",

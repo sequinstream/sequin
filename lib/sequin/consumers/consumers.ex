@@ -756,14 +756,15 @@ defmodule Sequin.Consumers do
     }
   end
 
-  defp event_data_from_message(%Message{action: :insert} = message, consumer, database) do
+  defp event_data_from_message(%Message{action: action} = message, consumer, database)
+       when action in [:insert, :read, :delete] do
     metadata = metadata(message, consumer, database)
     metadata = struct(ConsumerEventData.Metadata, metadata)
 
     %ConsumerEventData{
       record: message_record(message),
       changes: nil,
-      action: :insert,
+      action: action,
       metadata: metadata
     }
   end
@@ -780,20 +781,8 @@ defmodule Sequin.Consumers do
     }
   end
 
-  defp event_data_from_message(%Message{action: :delete} = message, consumer, database) do
-    metadata = metadata(message, consumer, database)
-    metadata = struct(ConsumerEventData.Metadata, metadata)
-
-    %ConsumerEventData{
-      record: message_record(message),
-      changes: nil,
-      action: :delete,
-      metadata: metadata
-    }
-  end
-
   defp record_data_from_message(%Message{action: action} = message, consumer, database)
-       when action in [:insert, :update] do
+       when action in [:insert, :update, :read] do
     metadata = metadata(message, consumer, database)
     metadata = struct(ConsumerRecordData.Metadata, metadata)
 
@@ -850,7 +839,7 @@ defmodule Sequin.Consumers do
       commit_idx: message.commit_idx,
       consumer: consumer_metadata(consumer),
       transaction_annotations: nil,
-      idempotency_key: Base.encode64("#{message.commit_lsn}:#{message.commit_idx}"),
+      idempotency_key: message.idempotency_key,
       record_pks: message_pks(message)
     }
 

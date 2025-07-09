@@ -42,10 +42,12 @@ defmodule Sequin.Runtime.SlotProcessor.Message do
     field :subscription_ids, list(String.t())
     field :byte_size, non_neg_integer()
     field :batch_idx, non_neg_integer()
+    field :idempotency_key, String.t()
   end
 
   def message_fields(%Message{action: :insert} = message), do: message.fields
   def message_fields(%Message{action: :update} = message), do: message.fields
+  def message_fields(%Message{action: :read} = message), do: message.fields
   def message_fields(%Message{action: :delete} = message), do: message.old_fields
 
   def fields_to_map(fields) do

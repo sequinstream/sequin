@@ -405,7 +405,9 @@
 
 <!-- Backfill Dialog -->
 <Dialog.Root bind:open={showBackfillDialog}>
-  <Dialog.Content class="md:max-w-4xl overflow-visible">
+  <Dialog.Content
+    class="md:max-w-2xl lg:max-w-4xl xl:max-w-6xl max-h-[90vh] overflow-visible"
+  >
     <Dialog.Header>
       <Dialog.Title>
         Start backfill for {consumer.database.name} database

@@ -61,7 +61,7 @@
         </Button>
       </div>
 
-      <div class="max-h-60 overflow-y-auto">
+      <div class="overflow-y-auto" style="max-height: calc(75vh - 300px)">
         {#if tables_included_in_source.length === 0}
           <div class="p-8 text-center text-gray-500">
             <p>No tables in source to backfill.</p>

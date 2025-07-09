@@ -23,7 +23,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   def handle_batch_marker(id, %BatchMarker{} = marker) do
-    GenStage.sync_info(via_tuple(id), {:batch_marker, marker})
+    GenStage.async_info(via_tuple(id), {:batch_marker, marker})
   end
 
   def config(key) do

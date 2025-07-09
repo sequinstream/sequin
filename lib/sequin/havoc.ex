@@ -89,7 +89,7 @@ if Mix.env() != :prod do
       else
         case :ets.lookup(@table_name, id) do
           [{^id, pid}] ->
-            Process.exit(pid, :normal)
+            Process.exit(pid, :brutal_kill)
             :ets.delete(@table_name, id)
             Logger.info("Havoc stopped for id=#{id}")
             :ok

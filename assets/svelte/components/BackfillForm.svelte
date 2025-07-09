@@ -8,48 +8,213 @@
     TableRow,
   } from "$lib/components/ui/table";
   import type { Table } from "$lib/databases/types";
+  import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
+  import { slide } from "svelte/transition";
+  import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  } from "$lib/components/ui/select";
+  import { Checkbox } from "$lib/components/ui/checkbox";
 
   export let form: {
-    selectedTableOids?: number[];
+    selectedTables?: Array<{
+      oid: number;
+      type: "full" | "partial";
+      sortColumnAttnum?: number | null;
+      initialMinCursor?: string | null;
+    }>;
   };
   export let tables_included_in_source: Table[];
 
+  // Initialize selectedTables if not present
+  if (!form.selectedTables) {
+    form.selectedTables = [];
+  }
+
+  const defaultSortColumnNames = [
+    // Updated/Modified columns
+    "updated_at",
+    "UpdatedAt",
+    "updatedAt",
+    "last_modified",
+    "LastModified",
+    "lastModified",
+    "last_modified_at",
+    "LastModifiedAt",
+    "lastModifiedAt",
+    "last_updated",
+    "lastUpdated",
+    "last_updated_at",
+    "lastUpdatedAt",
+    "modified_at",
+    "ModifiedAt",
+    "modifiedAt",
+    "modified_date",
+    "modifiedDate",
+    "modified_on",
+    "modifiedOn",
+    "update_time",
+    "updateTime",
+    "modification_date",
+    "modificationDate",
+    "dateModified",
+    "dateUpdated",
+
+    // Created/Inserted columns
+    "created_at",
+    "CreatedAt",
+    "createdAt",
+    "inserted_at",
+    "InsertedAt",
+    "insertedAt",
+    "creation_date",
+    "CreationDate",
+    "creationDate",
+    "creation_time",
+    "create_time",
+    "createTime",
+    "created_date",
+    "created_on",
+    "DateCreated",
+    "dateCreated",
+    "insert_date",
+    "insert_time",
+    "insertTime",
+    "timestamp",
+  ];
+
   // Handle table selection for multi-table mode
   function toggleTableSelection(tableOid: number) {
-    if (!form.selectedTableOids) form.selectedTableOids = [];
+    if (!form.selectedTables) form.selectedTables = [];
 
-    const index = form.selectedTableOids.indexOf(tableOid);
+    const index = form.selectedTables.findIndex((t) => t.oid === tableOid);
     if (index > -1) {
-      form.selectedTableOids = form.selectedTableOids.filter(
-        (id) => id !== tableOid,
+      form.selectedTables = form.selectedTables.filter(
+        (t) => t.oid !== tableOid,
       );
     } else {
-      form.selectedTableOids = [...form.selectedTableOids, tableOid];
+      form.selectedTables = [
+        ...form.selectedTables,
+        {
+          oid: tableOid,
+          type: "full",
+          sortColumnAttnum: null,
+          initialMinCursor: null,
+        },
+      ];
     }
   }
 
   function toggleSelectAll() {
-    if (!tables_included_in_source || !form.selectedTableOids) return;
+    if (!tables_included_in_source || !form.selectedTables) return;
 
-    if (form.selectedTableOids.length === tables_included_in_source.length) {
-      form.selectedTableOids = [];
+    if (form.selectedTables.length === tables_included_in_source.length) {
+      form.selectedTables = [];
     } else {
-      form.selectedTableOids = tables_included_in_source.map((t) => t.oid);
+      form.selectedTables = tables_included_in_source.map((t) => ({
+        oid: t.oid,
+        type: "full",
+        sortColumnAttnum: null,
+        initialMinCursor: null,
+      }));
+    }
+  }
+
+  function handleSortColumnInput(e: Event, tableOid: number) {
+    const target = e.target as HTMLSelectElement;
+    const selectedTable = form.selectedTables?.find((t) => t.oid === tableOid);
+    updateTableOptions(
+      tableOid,
+      target.value ? parseInt(target.value, 10) : null,
+      selectedTable?.initialMinCursor ?? null,
+    );
+  }
+
+  function getDefaultSortColumn(table: Table): number | null {
+    const defaultColumn = table.columns.find((col) =>
+      defaultSortColumnNames.includes(col.name),
+    );
+    return defaultColumn?.attnum ?? null;
+  }
+
+  function handleBackfillMode(tableOid: number, mode: "full" | "partial") {
+    const index = form.selectedTables?.findIndex((t) => t.oid === tableOid);
+    if (index > -1) {
+      const table = tables_included_in_source.find((t) => t.oid === tableOid);
+      const defaultColumn = table?.columns.find((col) =>
+        defaultSortColumnNames.includes(col.name),
+      );
+      form.selectedTables = [
+        ...form.selectedTables.slice(0, index),
+        {
+          ...form.selectedTables[index],
+          type: mode,
+          ...(mode === "full"
+            ? {
+                sortColumnAttnum: null,
+                initialMinCursor: null,
+              }
+            : {
+                sortColumnAttnum: defaultColumn?.attnum ?? null,
+                initialMinCursor: null,
+              }),
+        },
+        ...form.selectedTables.slice(index + 1),
+      ];
+    }
+  }
+
+  function updateTableOptions(
+    tableOid: number,
+    sortColumnAttnum: number | null,
+    initialMinCursor: string | null,
+  ) {
+    const index = form.selectedTables.findIndex((t) => t.oid === tableOid);
+    if (index > -1) {
+      form.selectedTables = [
+        ...form.selectedTables.slice(0, index),
+        {
+          ...form.selectedTables[index],
+          sortColumnAttnum,
+          initialMinCursor,
+        },
+        ...form.selectedTables.slice(index + 1),
+      ];
     }
   }
 
   $: allTablesSelected =
-    form.selectedTableOids && tables_included_in_source
-      ? form.selectedTableOids.length === tables_included_in_source.length
+    form.selectedTables && tables_included_in_source
+      ? form.selectedTables.length === tables_included_in_source.length
       : false;
+
+  $: selectedTable = tables_included_in_source.find(
+    (table) =>
+      form.selectedTables?.length === 1 &&
+      table.oid === form.selectedTables[0].oid,
+  );
+
+  function handleStartPositionInput(e: Event, tableOid: number) {
+    const target = e.target as HTMLInputElement;
+    const selectedTable = form.selectedTables?.find((t) => t.oid === tableOid);
+    updateTableOptions(
+      tableOid,
+      selectedTable?.sortColumnAttnum ?? null,
+      target.value || null,
+    );
+  }
 </script>
 
 <div class="space-y-4">
   <div class="space-y-4">
     <div>
       <p class="text-sm text-muted-foreground mt-1">
-        Select one or more tables to backfill. Sequin will backfill all rows in
-        the selected tables while concurrently capturing changes.
+        Select one or more tables to backfill. Sequin will backfill rows in the
+        selected tables while concurrently capturing changes.
       </p>
     </div>
 
@@ -71,20 +236,102 @@
             <TableBody>
               {#each tables_included_in_source as table (table.oid)}
                 <TableRow
-                  on:click={() => toggleTableSelection(table.oid)}
-                  class="cursor-pointer {form.selectedTableOids?.includes(
-                    table.oid,
-                  )
-                    ? 'bg-blue-50 hover:bg-blue-100'
-                    : 'hover:bg-gray-100'}"
+                  class={form.selectedTables?.find((t) => t.oid === table.oid)
+                    ? "bg-blue-50 hover:bg-blue-100"
+                    : "hover:bg-gray-100"}
                 >
-                  <TableCell class="flex items-center space-x-2">
-                    {#if form.selectedTableOids?.includes(table.oid)}
-                      <CheckIcon class="h-4 w-4 text-green-500" />
-                    {:else}
-                      <TableIcon class="h-4 w-4 text-gray-400" />
+                  <TableCell class="w-12 p-0">
+                    <div class="h-full flex items-center justify-center">
+                      <Checkbox
+                        checked={form.selectedTables?.some(
+                          (t) => t.oid === table.oid,
+                        )}
+                        onCheckedChange={() => toggleTableSelection(table.oid)}
+                      />
+                    </div>
+                  </TableCell>
+                  <TableCell class="p-4">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        <span>{table.schema}.{table.name}</span>
+                      </div>
+
+                      {#if form.selectedTables?.find((t) => t.oid === table.oid)}
+                        {@const selectedTable = form.selectedTables?.find(
+                          (t) => t.oid === table.oid,
+                        )}
+                        <div class="flex">
+                          <button
+                            class="text-xs px-2 py-1 transition-all border {selectedTable?.type ===
+                            'full'
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-l-md border-r-0"
+                            on:click={() =>
+                              handleBackfillMode(table.oid, "full")}
+                          >
+                            Full
+                          </button>
+                          <button
+                            class="text-xs px-2 py-1 transition-all border {selectedTable?.type ===
+                            'partial'
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'} rounded-r-md"
+                            on:click={() =>
+                              handleBackfillMode(table.oid, "partial")}
+                          >
+                            Partial
+                          </button>
+                        </div>
+                      {/if}
+                    </div>
+
+                    {#if form.selectedTables?.find((t) => t.oid === table.oid)?.type === "partial"}
+                      <div
+                        transition:slide={{ duration: 200 }}
+                        class="mt-4 space-y-4 w-full"
+                      >
+                        <div class="grid grid-cols-2 gap-4">
+                          <div class="space-y-2">
+                            <Label for="sortColumn-{table.oid}" class="text-xs"
+                              >Sort Column</Label
+                            >
+                            <select
+                              id="sortColumn-{table.oid}"
+                              class="h-8 text-sm w-full rounded-md border border-input bg-background px-3"
+                              value={form.selectedTables?.find(
+                                (t) => t.oid === table.oid,
+                              )?.sortColumnAttnum ?? ""}
+                              on:change={(e) =>
+                                handleSortColumnInput(e, table.oid)}
+                            >
+                              <option value="">Select a column</option>
+                              {#each table.columns as column}
+                                <option value={column.attnum}>
+                                  {column.name}
+                                </option>
+                              {/each}
+                            </select>
+                          </div>
+                          <div class="space-y-2">
+                            <Label
+                              for="startPosition-{table.oid}"
+                              class="text-xs">Start Position</Label
+                            >
+                            <Input
+                              type="text"
+                              id="startPosition-{table.oid}"
+                              class="h-8 text-sm"
+                              placeholder="e.g. 1000, 2023-01-01"
+                              value={form.selectedTables?.find(
+                                (t) => t.oid === table.oid,
+                              )?.initialMinCursor ?? ""}
+                              on:input={(e) =>
+                                handleStartPositionInput(e, table.oid)}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     {/if}
-                    <span>{table.schema}.{table.name}</span>
                   </TableCell>
                 </TableRow>
               {/each}

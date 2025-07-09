@@ -314,20 +314,40 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("run-backfill", %{"selectedTableOids" => selected_table_ids}, socket) do
+  def handle_event("run-backfill", %{"selectedTables" => selected_tables}, socket) do
     consumer = socket.assigns.consumer
 
-    Enum.map(selected_table_ids, fn table_oid ->
-      table = Enum.find(consumer.postgres_database.tables, &(&1.oid == table_oid))
-      initial_min_cursor = KeysetCursor.min_cursor(table)
+    # Create backfills for each selected table
+    Enum.each(selected_tables, fn %{
+                                    "oid" => table_oid,
+                                    "sortColumnAttnum" => sort_column_attnum,
+                                    "initialMinCursor" => initial_min_cursor
+                                  } ->
+      table = find_table_by_oid(table_oid, consumer.postgres_database.tables)
 
-      Consumers.create_backfill(%{
+      # Set table with sort column if provided
+      table =
+        case sort_column_attnum do
+          nil -> table
+          attnum -> %PostgresDatabaseTable{table | sort_column_attnum: attnum}
+        end
+
+      # Use provided cursor or default
+      initial_min_cursor =
+        case initial_min_cursor do
+          nil -> KeysetCursor.min_cursor(table)
+          cursor -> cursor
+        end
+
+      backfill_attrs = %{
         account_id: current_account_id(socket),
         sink_consumer_id: consumer.id,
-        state: :active,
-        table_oid: table_oid,
-        initial_min_cursor: initial_min_cursor
-      })
+        initial_min_cursor: initial_min_cursor,
+        sort_column_attnum: sort_column_attnum,
+        state: :active
+      }
+
+      Consumers.create_backfill(backfill_attrs)
     end)
 
     consumer = Repo.preload(consumer, :active_backfills, force: true)
@@ -351,7 +371,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       backfill ->
         case Consumers.update_backfill(backfill, %{state: :cancelled}) do
           {:ok, _updated_backfill} ->
-            {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill cancelled successfully"})}
+            {:reply, %{ok: true},
+             put_flash(socket, :toast, %{kind: :success, title: "Backfill cancelled successfully"})}
 
           {:error, _error} ->
             {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to cancel backfill"})}
@@ -474,6 +495,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
       {:error, error} ->
         Logger.error("Failed to disable consumer: #{inspect(error)}", error: error)
+
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to disable consumer"})}
     end
   end
@@ -488,6 +510,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
       {:error, error} ->
         Logger.error("Failed to pause consumer: #{inspect(error)}", error: error)
+
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to pause consumer"})}
     end
   end
@@ -502,6 +525,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
       {:error, error} ->
         Logger.error("Failed to enable consumer: #{inspect(error)}", error: error)
+
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to enable consumer"})}
     end
   end
@@ -548,7 +572,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
       {:error, reason} ->
         {:reply, %{ok: false},
-         put_flash(socket, :toast, %{kind: :error, title: "Failed to reset message visibility: #{inspect(reason)}"})}
+         put_flash(socket, :toast, %{
+           kind: :error,
+           title: "Failed to reset message visibility: #{inspect(reason)}"
+         })}
     end
   end
 
@@ -649,7 +676,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   # If the live action is not :trace, don't add any more events
-  def handle_info({:trace_event, _event}, %{assigns: %{live_action: live_action}} = socket) when live_action != :trace do
+  def handle_info({:trace_event, _event}, %{assigns: %{live_action: live_action}} = socket)
+      when live_action != :trace do
     {:noreply, socket}
   end
 
@@ -1024,7 +1052,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     %{
       oid: table.oid,
       schema: table.schema,
-      name: table.name
+      name: table.name,
+      columns: Enum.map(table.columns, &encode_column/1)
+    }
+  end
+
+  defp encode_column(%PostgresDatabaseTable.Column{} = column) do
+    %{
+      name: column.name,
+      attnum: column.attnum
     }
   end
 
@@ -1086,6 +1122,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
       {:error, error} ->
         Logger.error("Failed to load messages from store for consumer #{consumer.id}: #{Exception.message(error)}")
+
         []
     end
   end
@@ -1584,5 +1621,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp calculate_backfill_progress(%Backfill{rows_initial_count: initial, rows_processed_count: processed}) do
     processed / initial * 100.0
+  end
+
+  defp find_table_by_oid(oid, tables) do
+    Enum.find(tables, fn table -> table.oid == oid end)
   end
 end

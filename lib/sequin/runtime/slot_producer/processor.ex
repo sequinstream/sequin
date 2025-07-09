@@ -105,7 +105,7 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
     }
 
     # Get subscription configuration - default to empty for manual subscriptions
-    {:producer_consumer, state, subscribe_to: Keyword.get(opts, :subscribe_to, [])}
+    {:producer_consumer, state, subscribe_to: Keyword.get(opts, :subscribe_to, []), buffer_size: :infinity}
   end
 
   @impl GenStage

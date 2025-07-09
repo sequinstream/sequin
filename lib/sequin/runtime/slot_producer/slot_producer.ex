@@ -214,7 +214,7 @@ defmodule Sequin.Runtime.SlotProducer do
     end
 
     Process.send_after(self(), :connect, 0)
-    {:producer, state}
+    {:producer, state, buffer_size: :infinity}
   end
 
   @impl GenStage

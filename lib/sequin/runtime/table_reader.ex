@@ -1,11 +1,10 @@
 defmodule Sequin.Runtime.TableReader do
   @moduledoc false
   alias Sequin.Constants
+  alias Sequin.Consumers
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
@@ -14,6 +13,7 @@ defmodule Sequin.Runtime.TableReader do
   alias Sequin.Postgres
   alias Sequin.Redis
   alias Sequin.Runtime.KeysetCursor
+  alias Sequin.Runtime.SlotProcessor.Message
 
   require Logger
 
@@ -379,94 +379,34 @@ defmodule Sequin.Runtime.TableReader do
     end
   end
 
-  defp message_from_row(
-         %SinkConsumer{message_kind: :record} = consumer,
-         %Backfill{} = backfill,
-         %PostgresDatabaseTable{} = table,
-         record
-       ) do
-    record_pks = record_pks(table, record)
-    data = build_record_data(table, consumer, backfill, record, record_pks)
-
-    %ConsumerRecord{
-      consumer_id: consumer.id,
-      table_oid: table.oid,
-      record_pks: record_pks,
-      group_id: generate_group_id(consumer, table, record),
-      replication_message_trace_id: UUID.uuid4(),
-      data: data,
-      payload_size_bytes: :erlang.external_size(data)
-    }
-  end
-
-  defp message_from_row(
-         %SinkConsumer{message_kind: :event} = consumer,
-         %Backfill{} = backfill,
-         %PostgresDatabaseTable{} = table,
-         record
-       ) do
-    record_pks = record_pks(table, record)
-    data = build_event_data(table, consumer, backfill, record, record_pks)
-
-    %ConsumerEvent{
-      consumer_id: consumer.id,
-      record_pks: record_pks,
-      group_id: generate_group_id(consumer, table, record),
-      table_oid: table.oid,
-      deliver_count: 0,
-      replication_message_trace_id: UUID.uuid4(),
-      data: data,
-      payload_size_bytes: :erlang.external_size(data)
-    }
-  end
-
-  defp build_record_data(table, consumer, backfill, record_attnums_to_values, record_pks) do
-    %ConsumerRecordData{
-      action: :read,
-      record: build_record_payload(table, record_attnums_to_values),
-      metadata: %ConsumerRecordData.Metadata{
-        database_name: consumer.replication_slot.postgres_database.name,
-        table_name: table.name,
-        table_schema: table.schema,
-        consumer: %ConsumerRecordData.Metadata.Sink{
-          id: consumer.id,
-          name: consumer.name,
-          annotations: consumer.annotations
-        },
-        commit_timestamp: DateTime.utc_now(),
-        idempotency_key: Base.encode64("#{backfill.id}:#{record_pks}"),
-        record_pks: record_pks
-      }
-    }
-  end
-
-  defp build_event_data(table, consumer, backfill, record_attnums_to_values, record_pks) do
+  defp message_from_row(%SinkConsumer{} = consumer, %Backfill{} = backfill, %PostgresDatabaseTable{} = table, record) do
     db = consumer.replication_slot.postgres_database
+    record_pks = record_pks(table, record)
 
-    %ConsumerEventData{
-      action: :read,
-      record: build_record_payload(table, record_attnums_to_values),
-      metadata: %ConsumerEventData.Metadata{
-        database_name: db.name,
-        table_name: table.name,
+    message =
+      %Message{
+        action: :read,
+        errors: nil,
+        ids: record_pks,
         table_schema: table.schema,
-        consumer: %ConsumerEventData.Metadata.Sink{
-          id: consumer.id,
-          name: consumer.name,
-          annotations: consumer.annotations
-        },
-        database: %ConsumerEventData.Metadata.Database{
-          id: db.id,
-          name: db.name,
-          annotations: db.annotations,
-          database: db.database,
-          hostname: db.hostname
-        },
+        table_name: table.name,
+        table_oid: table.oid,
         commit_timestamp: DateTime.utc_now(),
-        idempotency_key: Base.encode64("#{backfill.id}:#{record_pks}"),
-        record_pks: record_pks
+        fields:
+          Enum.map(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
+            value = Map.fetch!(record, column.attnum)
+
+            %Message.Field{
+              column_name: column.name,
+              column_attnum: column.attnum,
+              value: value
+            }
+          end),
+        trace_id: UUID.uuid4(),
+        idempotency_key: Base.encode64(Enum.join([backfill.id | record_pks], ":"))
       }
-    }
+
+    Consumers.consumer_message(consumer, db, message)
   end
 
   defp record_pks(%PostgresDatabaseTable{} = table, record_attnums_to_values) do
@@ -477,27 +417,11 @@ defmodule Sequin.Runtime.TableReader do
     |> Enum.map(&to_string/1)
   end
 
-  defp build_record_payload(table, record_attnums_to_values) do
-    Map.new(table.columns, fn column -> {column.name, Map.get(record_attnums_to_values, column.attnum)} end)
-  end
-
   defp records_by_column_attnum(%PostgresDatabaseTable{} = table, records) do
     Enum.map(records, fn record ->
       Map.new(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
         {column.attnum, Map.get(record, column.name)}
       end)
     end)
-  end
-
-  defp generate_group_id(consumer, table, record_attnums_to_values) do
-    case Enum.find(consumer.source_tables, &(&1.table_oid == table.oid)) do
-      nil ->
-        table |> record_pks(record_attnums_to_values) |> Enum.join(",")
-
-      source_table ->
-        Enum.map_join(source_table.group_column_attnums, ",", fn attnum ->
-          to_string(Map.get(record_attnums_to_values, attnum))
-        end)
-    end
   end
 end

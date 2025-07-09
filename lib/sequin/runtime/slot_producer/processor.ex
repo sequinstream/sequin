@@ -172,7 +172,8 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       commit_timestamp: envelope.commit_ts,
       transaction_annotations: envelope.transaction_annotations,
       byte_size: envelope.byte_size,
-      batch_idx: envelope.batch_idx
+      batch_idx: envelope.batch_idx,
+      idempotency_key: Base.encode64("#{envelope.commit_lsn}:#{envelope.commit_idx}")
     }
   end
 
@@ -202,7 +203,8 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       commit_timestamp: envelope.commit_ts,
       transaction_annotations: envelope.transaction_annotations,
       byte_size: envelope.byte_size,
-      batch_idx: envelope.batch_idx
+      batch_idx: envelope.batch_idx,
+      idempotency_key: Base.encode64("#{envelope.commit_lsn}:#{envelope.commit_idx}")
     }
   end
 
@@ -233,7 +235,8 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       commit_timestamp: envelope.commit_ts,
       transaction_annotations: envelope.transaction_annotations,
       byte_size: envelope.byte_size,
-      batch_idx: envelope.batch_idx
+      batch_idx: envelope.batch_idx,
+      idempotency_key: Base.encode64("#{envelope.commit_lsn}:#{envelope.commit_idx}")
     }
   end
 

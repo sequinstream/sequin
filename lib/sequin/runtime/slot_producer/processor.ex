@@ -80,12 +80,12 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
 
   @impl ProcessorBehaviour
   def handle_batch_marker(pid, batch) when is_pid(pid) do
-    GenStage.sync_info(pid, {:batch_marker, batch})
+    GenStage.async_info(pid, {:batch_marker, batch})
   end
 
   def handle_batch_marker(id, batch) do
     Enum.each(partitions(), fn partition_idx ->
-      GenStage.sync_info(via_tuple(id, partition_idx), {:batch_marker, batch})
+      GenStage.async_info(via_tuple(id, partition_idx), {:batch_marker, batch})
     end)
   end
 

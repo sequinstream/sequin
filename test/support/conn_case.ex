@@ -60,8 +60,9 @@ defmodule SequinWeb.ConnCase do
   test context.
   """
   def logged_in_user(%{conn: conn}) do
-    user = AccountsFactory.insert_user!()
-    %{conn: log_in_user(conn, user), user: user}
+    account = AccountsFactory.insert_account!()
+    user = AccountsFactory.insert_user!(account_id: account.id)
+    %{conn: log_in_user(conn, user), user: user, account: account}
   end
 
   @doc """

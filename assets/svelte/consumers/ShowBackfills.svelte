@@ -412,7 +412,7 @@
 <!-- Backfill Dialog -->
 <Dialog.Root bind:open={showBackfillDialog}>
   <Dialog.Content
-    class="md:max-w-2xl lg:max-w-4xl xl:max-w-6xl max-h-[90vh] overflow-visible"
+    class="md:max-w-2xl lg:max-w-6xl max-h-[90vh] overflow-visible"
   >
     <Dialog.Header>
       <Dialog.Title>

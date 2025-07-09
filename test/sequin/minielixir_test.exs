@@ -415,6 +415,117 @@ defmodule Sequin.MiniElixirTest do
                  end
                )
     end
+
+    test "with expressions" do
+      # Basic with expression
+      good_with =
+        quote do
+          with {:ok, x} <- Map.get(record, "field1"),
+               {:ok, y} <- Map.get(record, "field2") do
+            x + y
+          end
+        end
+
+      assert :ok = Validator.check(good_with)
+
+      # With expression with else clause
+      with_else =
+        quote do
+          with {:ok, x} <- Map.get(record, "field1"),
+               {:ok, y} <- Map.get(record, "field2") do
+            x + y
+          else
+            error -> {:error, error}
+          end
+        end
+
+      assert :ok = Validator.check(with_else)
+
+      # With expression with multiple else clauses
+      with_multiple_else =
+        quote do
+          with {:ok, x} <- Map.get(record, "field1"),
+               {:ok, y} <- Map.get(record, "field2") do
+            x + y
+          else
+            {:error, reason} -> {:error, reason}
+            :timeout -> {:error, :timeout}
+            _ -> {:error, :unknown}
+          end
+        end
+
+      assert :ok = Validator.check(with_multiple_else)
+
+      # With expression with guard
+      with_guard =
+        quote do
+          with {:ok, x} when x > 0 <- Map.get(record, "field1"),
+               {:ok, y} when y < 10 <- Map.get(record, "field2") do
+            x + y
+          end
+        end
+
+      assert :ok = Validator.check(with_guard)
+
+      # With expression that tries to shadow argument should fail
+      bad_with =
+        quote do
+          with {:ok, record} <- Map.get(action, "data") do
+            record
+          end
+        end
+
+      assert {:error, :validator, msg} = Validator.check(bad_with)
+      assert msg =~ "can't assign to argument: record"
+
+      # With expression with dangerous function call should fail
+      evil_with =
+        quote do
+          with {:ok, x} <- :erlang.halt() do
+            x
+          end
+        end
+
+      assert {:error, :validator, _} = Validator.check(evil_with)
+    end
+
+    test "list cons operator" do
+      # Test that the list cons operator | works in patterns
+      list_cons =
+        quote do
+          case [1, 2, 3] do
+            [head | tail] -> {head, tail}
+            [] -> :empty
+          end
+        end
+
+      assert :ok = Validator.check(list_cons)
+
+      # Test with with expression using list cons
+      with_list_cons =
+        quote do
+          with {:ok, [first | rest]} <- Map.get(record, "items") do
+            {first, length(rest)}
+          end
+        end
+
+      assert :ok = Validator.check(with_list_cons)
+    end
+
+    test "with expression with plain expressions" do
+      # Test with expression that has plain expressions (not just <-)
+      with_plain_expressions =
+        quote do
+          x = 1 + 2
+          y = x * 2
+
+          with {:ok, z} <- Map.get(record, "value") do
+            x + y + z
+          end
+        end
+
+      assert :ok = Validator.check(with_plain_expressions)
+    end
   end
 
   defp get_vars(ast) do

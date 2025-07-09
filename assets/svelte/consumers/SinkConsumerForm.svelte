@@ -95,7 +95,12 @@
     sink: any;
     runInitialBackfill: boolean;
     backfill: {
-      selectedTableOids: number[];
+      selectedTables: {
+        oid: number;
+        type: "full" | "partial";
+        sortColumnAttnum?: number;
+        initialMinCursor?: string | number | Date;
+      }[];
     };
     groupColumnAttnums: number[];
     batchSize: number;
@@ -121,7 +126,7 @@
     sink: consumer.sink,
     runInitialBackfill: false,
     backfill: {
-      selectedTableOids: [],
+      selectedTables: [],
     },
     groupColumnAttnums: consumer.group_column_attnums || [],
     batchSize: Number(consumer.batch_size) || 1,
@@ -476,20 +481,19 @@
 
         <svelte:fragment slot="summary">
           <p class="text-sm text-muted-foreground">
-            {#if form.backfill.selectedTableOids.length === 0}
+            {#if form.backfill.selectedTables.length === 0}
               No initial backfill. You can run backfills at any time in the
               future.
-            {:else if form.backfill.selectedTableOids.length === 1}
+            {:else if form.backfill.selectedTables.length === 1}
               Backfilling the <b
                 >{tables_included_in_source.find(
-                  (t) => t.oid === form.backfill.selectedTableOids[0],
+                  (t) => t.oid === form.backfill.selectedTables[0].oid,
                 )?.name}</b
               > table.
-            {:else if form.backfill.selectedTableOids.length === tables_included_in_source.length}
+            {:else if form.backfill.selectedTables.length === tables_included_in_source.length}
               Backfilling all tables in the database.
             {:else}
-              Backfilling {form.backfill.selectedTableOids.length} tables in the
-              database.
+              Backfilling {form.backfill.selectedTables.length} tables in the database.
             {/if}
           </p>
         </svelte:fragment>

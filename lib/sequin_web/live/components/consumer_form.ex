@@ -37,7 +37,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Posthog
   alias Sequin.Repo
   alias Sequin.Runtime
-  alias Sequin.Runtime.KeysetCursor
   alias Sequin.Sinks.Azure.EventHub
   alias Sequin.Sinks.Elasticsearch
   alias Sequin.Sinks.Gcp.Credentials
@@ -718,8 +717,8 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   defp update_params_for_sink(_, params, _), do: params
 
-  defp decode_initial_backfill(%{"backfill" => %{"selectedTableOids" => tableOids}}) do
-    %{"selected_table_oids" => tableOids}
+  defp decode_initial_backfill(%{"backfill" => %{"selectedTables" => selectedTables}}) do
+    %{"selected_tables" => selectedTables}
   end
 
   defp decode_source(source) do
@@ -1325,23 +1324,13 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp maybe_create_backfills(socket, consumer, params, %{"selected_table_oids" => table_oids}) do
-    postgres_database_id = params["postgres_database_id"]
+  defp maybe_create_backfills(_socket, _consumer, _params, nil), do: :ok
 
-    Enum.each(table_oids, fn table_oid ->
-      table = table(socket.assigns.databases, postgres_database_id, table_oid, nil)
-
-      Consumers.create_backfill(%{
-        "account_id" => consumer.account_id,
-        "sink_consumer_id" => consumer.id,
-        "table_oid" => table_oid,
-        "initial_min_cursor" => KeysetCursor.min_cursor(table),
-        "sort_column_attnum" => nil,
-        "state" => :active
-      })
-    end)
-
-    :ok
+  defp maybe_create_backfills(socket, consumer, _params, %{"selected_tables" => selected_tables}) do
+    case Consumers.create_backfills_for_tables(current_account_id(socket), consumer, selected_tables) do
+      %{failed: _} -> {:error, "Failed to create backfills"}
+      %{created: _} -> :ok
+    end
   end
 
   defp reset_changeset(socket) do
@@ -1442,14 +1431,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       :typesense -> "Typesense Sink"
       :meilisearch -> "Meilisearch Sink"
       :elasticsearch -> "Elasticsearch Sink"
-    end
-  end
-
-  defp table(databases, postgres_database_id, table_oid, sort_column_attnum) do
-    if postgres_database_id do
-      db = Sequin.Enum.find!(databases, &(&1.id == postgres_database_id))
-      table = Sequin.Enum.find!(db.tables, &(&1.oid == table_oid))
-      %{table | sort_column_attnum: sort_column_attnum}
     end
   end
 

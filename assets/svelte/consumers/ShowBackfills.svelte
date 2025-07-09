@@ -25,7 +25,7 @@
   // Backfill form state
   let showBackfillDialog = false;
   let backfillForm = {
-    selectedTableOids: [],
+    selectedTables: [],
   };
   let backfillFormErrors: Record<string, string> = {};
   let isSubmittingBackfill = false;
@@ -144,17 +144,23 @@
     isSubmittingBackfill = true;
     showBackfillDialog = false;
 
-    live.pushEvent("run-backfill", backfillForm, (reply) => {
-      isSubmittingBackfill = false;
-      if (!reply.ok) {
-        backfillFormErrors = reply.errors || {};
-      }
-    });
+    live.pushEvent(
+      "run-backfill",
+      {
+        selectedTables: backfillForm.selectedTables,
+      },
+      (reply) => {
+        isSubmittingBackfill = false;
+        if (!reply.ok) {
+          backfillFormErrors = reply.errors || {};
+        }
+      },
+    );
   }
 
   function openBackfillDialog() {
     backfillForm = {
-      selectedTableOids: [],
+      selectedTables: [],
     };
     backfillFormErrors = {};
     showBackfillDialog = true;

@@ -107,7 +107,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
       message_handler_module: message_handler_module,
-      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.seconds(15))
+      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, to_timeout(second: 15))
     }
 
     GenServer.start_link(__MODULE__, init, name: via_tuple(id))
@@ -290,11 +290,11 @@ defmodule Sequin.Runtime.SlotProcessorServer do
          postgres: %{code: :undefined_table, message: "relation \"public.sequin_logical_messages\" does not exist"}
        }} ->
         Logger.warning("Heartbeat table does not exist.")
-        {:noreply, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(30))}
+        {:noreply, schedule_heartbeat(%{state | heartbeat_timer: nil}, to_timeout(second: 30))}
 
       {:error, error} ->
         Logger.error("Error emitting heartbeat: #{inspect(error)}")
-        {:noreply, schedule_heartbeat(%{state | heartbeat_timer: nil}, :timer.seconds(10))}
+        {:noreply, schedule_heartbeat(%{state | heartbeat_timer: nil}, to_timeout(second: 10))}
     end
   end
 
@@ -627,7 +627,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   end
 
   defp fold_message(%State{} = state, %LogicalMessage{prefix: @backfill_batch_high_watermark} = msg) do
-    %State{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}
+    %{state | backfill_watermark_messages: [msg | state.backfill_watermark_messages]}
   end
 
   # Ignore other logical messages
@@ -709,7 +709,7 @@ defmodule Sequin.Runtime.SlotProcessorServer do
                 SlotMessageStore.min_unpersisted_wal_cursors(consumer, ref)
               end,
               max_concurrency: max(map_size(state.message_store_refs), 1),
-              timeout: :timer.seconds(15)
+              timeout: to_timeout(second: 15)
             )
             |> Enum.flat_map(fn {:ok, cursors} -> cursors end)
             |> Enum.reject(&is_nil/1)

@@ -792,7 +792,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
         {:put_high_watermark_wal_cursor, {batch_idx, wal_cursor}},
         %State{high_watermark_wal_cursor: nil} = state
       ) do
-    state = %State{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}
+    state = %{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}
     {:noreply, state}
   end
 
@@ -800,11 +800,12 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {current_idx, _current_cursor} = state.high_watermark_wal_cursor
 
     # Do not raise if batch_idx is 0, means SlotProducer et al may have restarted
+    # We may get repeated batches, in the instance
     if batch_idx != current_idx + 1 and batch_idx > 0 do
       raise "Unexpected high watermark WAL cursor: #{batch_idx} (given) != #{current_idx + 1} (expected)"
     end
 
-    state = %State{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}
+    state = %{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}
     {:noreply, state}
   end
 

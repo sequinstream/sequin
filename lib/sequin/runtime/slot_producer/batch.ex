@@ -34,7 +34,7 @@ defmodule Sequin.Runtime.SlotProducer.Batch do
           raise "Invariant error: high_watermark_cursor mismatch (batch: #{inspect(Map.delete(batch, :messages))}, marker: #{inspect(marker)})"
       end
 
-    %__MODULE__{
+    %{
       batch
       | high_watermark_wal_cursor: high_watermark_cursor,
         markers_received: MapSet.put(batch.markers_received, marker.producer_partition_idx)

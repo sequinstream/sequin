@@ -59,7 +59,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
 
       pg_replication = %{pg_replication | postgres_database: postgres_database}
 
-      unless ctx[:skip_start] do
+      if !ctx[:skip_start] do
         start_pipeline(pg_replication, Map.get(ctx, :start_opts, []))
       end
 

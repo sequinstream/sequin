@@ -200,10 +200,10 @@ defmodule Sequin.Runtime.SlotProducer do
       on_connect_fail: Keyword.get(opts, :on_connect_fail_fn, &PipelineDefaults.on_connect_fail/2),
       # on_disconnect: Keyword.get(opts, :on_disconnect),
       restart_wal_cursor_fn: Keyword.get(opts, :restart_wal_cursor_fn, &PipelineDefaults.restart_wal_cursor/2),
-      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, :timer.seconds(10)),
-      setting_ack_interval: Keyword.get(opts, :ack_interval, :timer.seconds(10)),
+      setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, to_timeout(second: 10)),
+      setting_ack_interval: Keyword.get(opts, :ack_interval, to_timeout(second: 10)),
       setting_restart_wal_cursor_update_interval:
-        Keyword.get(opts, :restart_wal_cursor_update_interval, :timer.seconds(10)),
+        Keyword.get(opts, :restart_wal_cursor_update_interval, to_timeout(second: 10)),
       consumer_mod: Keyword.get_lazy(opts, :consumer_mod, fn -> PipelineDefaults.processor_mod() end),
       conn: Keyword.fetch!(opts, :conn),
       setting_batch_flush_interval: Keyword.get(opts, :batch_flush_interval)
@@ -415,7 +415,7 @@ defmodule Sequin.Runtime.SlotProducer do
       raise "Received a Begin message with an LSN that is less than the last commit LSN (#{begin_lsn} < #{last_commit_lsn})"
     end
 
-    state = %State{state | commit_ts: ts, next_commit_idx: 0, commit_lsn: begin_lsn, commit_xid: xid}
+    state = %{state | commit_ts: ts, next_commit_idx: 0, commit_lsn: begin_lsn, commit_xid: xid}
     {:ok, state}
   end
 
@@ -434,7 +434,7 @@ defmodule Sequin.Runtime.SlotProducer do
       raise error
     end
 
-    state = %State{
+    state = %{
       state
       | last_commit_lsn: commit_lsn,
         last_commit_idx: state.next_commit_idx - 1,
@@ -640,7 +640,7 @@ defmodule Sequin.Runtime.SlotProducer do
         case Protocol.handle_simple(query, [], protocol) do
           {:ok, [%Postgrex.Result{rows: [[lsn]]}], protocol} ->
             cursor = %{commit_lsn: Postgres.lsn_to_int(lsn), commit_idx: 0}
-            {:ok, %State{state | restart_wal_cursor: cursor}, protocol}
+            {:ok, %{state | restart_wal_cursor: cursor}, protocol}
 
           {:ok, _res} ->
             {:error,
@@ -658,7 +658,7 @@ defmodule Sequin.Runtime.SlotProducer do
         end
 
       {:ok, cursor} ->
-        {:ok, %State{state | restart_wal_cursor: cursor}, protocol}
+        {:ok, %{state | restart_wal_cursor: cursor}, protocol}
     end
   end
 
@@ -674,7 +674,7 @@ defmodule Sequin.Runtime.SlotProducer do
     end
 
     state =
-      close_commit(%State{
+      close_commit(%{
         state
         | status: :disconnected,
           last_commit_lsn: nil,
@@ -687,7 +687,7 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   defp close_commit(%State{} = state) do
-    %State{state | commit_ts: nil, commit_lsn: nil, next_commit_idx: nil, commit_xid: nil, transaction_annotations: nil}
+    %{state | commit_ts: nil, commit_lsn: nil, next_commit_idx: nil, commit_xid: nil, transaction_annotations: nil}
   end
 
   defp schedule_timers(state) do

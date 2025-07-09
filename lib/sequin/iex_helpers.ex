@@ -8,6 +8,10 @@ defmodule Sequin.IexHelpers do
   alias Sequin.Runtime.SlotMessageStoreSupervisor
 
   def via(:slot, id) do
+    Sequin.Runtime.SlotProducer.via_tuple(id)
+  end
+
+  def via(:slotp, id) do
     Sequin.Runtime.SlotProcessorServer.via_tuple(id)
   end
 
@@ -36,8 +40,12 @@ defmodule Sequin.IexHelpers do
     Sequin.Runtime.SinkPipeline.via_tuple(id)
   end
 
-  def whereis(:slot, pg_replication_or_database_id) do
-    via = via(:slot, pg_replication_or_database_id)
+  def via(:processor, {id, idx}) do
+    Sequin.Runtime.SlotProducer.Processor.via_tuple(id, idx)
+  end
+
+  def whereis(slot, pg_replication_or_database_id) when slot in [:slot, :slotp] do
+    via = via(slot, pg_replication_or_database_id)
 
     with nil <- GenServer.whereis(via) do
       # Might be a postgres database id
@@ -45,7 +53,7 @@ defmodule Sequin.IexHelpers do
         {:ok, db} ->
           db = Repo.preload(db, :replication_slot)
 
-          :slot
+          slot
           |> via(db.replication_slot.id)
           |> GenServer.whereis()
 
@@ -89,6 +97,12 @@ defmodule Sequin.IexHelpers do
   def whereis(:sink, id) do
     :sink
     |> via(id)
+    |> GenServer.whereis()
+  end
+
+  def whereis(:processor, {id, idx}) do
+    :processor
+    |> via({id, idx})
     |> GenServer.whereis()
   end
 

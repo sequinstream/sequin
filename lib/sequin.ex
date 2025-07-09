@@ -23,6 +23,10 @@ defmodule Sequin do
     @process_mod.alive?(pid)
   end
 
+  def name_process(name) do
+    Process.put(:__sequin__name, name)
+  end
+
   @doc """
   Returns true if the feature is enabled.
 

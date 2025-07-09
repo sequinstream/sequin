@@ -67,13 +67,6 @@ config :sequin, Oban,
      ]}
   ]
 
-# Configures the mailer
-#
-# By default it uses the "Local" adapter which stores the emails
-# locally. You can see the emails in your browser, at "/dev/mailbox".
-#
-# For production it's recommended to configure a different adapter
-# at the `config/runtime.exs`.
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
 
 config :sequin, Sequin.Redis,
@@ -94,6 +87,13 @@ config :sequin, Sequin.Repo,
   ],
   migration_lock: :pg_advisory_lock,
   log: false
+
+config :sequin, Sequin.Runtime.SlotProducer, batch_flush_interval: 10
+
+config :sequin, Sequin.Runtime.SlotProducer.ReorderBuffer,
+  min_demand: 500,
+  max_demand: 1000,
+  retry_flush_batch_interval: 250
 
 # Configures the endpoint
 config :sequin, SequinWeb.Endpoint,
@@ -123,7 +123,7 @@ config :sequin,
   datadog_req_opts: [],
   datadog: [configured: false],
   api_base_url: "http://localhost:4000",
-  message_handler_module: Sequin.Runtime.SlotMessageHandler
+  message_handler_module: Sequin.Runtime.MessageHandler
 
 # Configure tailwind (the version is required)
 config :tailwind,

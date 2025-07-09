@@ -16,8 +16,7 @@ defmodule SequinWeb.PostgresReplicationController do
     account_id = conn.assigns.account_id
 
     with {:ok, postgres_replication} <- Replication.get_pg_replication_for_account(account_id, id) do
-      postgres_replication_with_info = Replication.add_info(postgres_replication)
-      render(conn, "show_with_info.json", postgres_replication: postgres_replication_with_info)
+      render(conn, "show_with_info.json", postgres_replication: postgres_replication)
     end
   end
 

@@ -5,12 +5,11 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
 
   use Supervisor
 
-  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Runtime.MessageHandler
-  alias Sequin.Runtime.SlotMessageHandler
   alias Sequin.Runtime.SlotProcessorServer
+  alias Sequin.Runtime.SlotProducer
 
   def child_spec(opts) do
     replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
@@ -34,6 +33,7 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
 
   def init(opts) do
     {replication_slot_id, opts} = Keyword.pop!(opts, :replication_slot_id)
+    {slot_producer_opts, opts} = Keyword.pop(opts, :slot_producer, [])
     %PostgresReplicationSlot{} = slot = Replication.get_pg_replication!(replication_slot_id)
     slot = Sequin.Repo.preload(slot, :postgres_database)
     message_handler_module = Keyword.get_lazy(opts, :message_handler_module, &default_message_handler_module/0)
@@ -42,31 +42,18 @@ defmodule Sequin.Runtime.SlotProcessorSupervisor do
       [
         id: slot.id,
         slot_name: slot.slot_name,
-        publication: slot.publication_name,
         postgres_database: slot.postgres_database,
         replication_slot: slot,
         message_handler_ctx_fn: &MessageHandler.context/1,
         message_handler_module: message_handler_module,
-        connection: PostgresDatabase.to_postgrex_opts(slot.postgres_database),
         ipv6: slot.postgres_database.ipv6
       ]
 
     slot_opts = Keyword.merge(default_opts, opts)
 
-    message_handlers =
-      Enum.map(0..(slot.partition_count - 1), fn idx ->
-        opts = [
-          replication_slot_id: slot.id,
-          processor_idx: idx,
-          test_pid: opts[:test_pid]
-        ]
-
-        SlotMessageHandler.child_spec(opts)
-      end)
-
     children = [
-      {SlotProcessorServer, slot_opts}
-      | message_handlers
+      {SlotProcessorServer, slot_opts},
+      {SlotProducer.Supervisor, Keyword.merge([replication_slot: slot, test_pid: opts[:test_pid]], slot_producer_opts)}
     ]
 
     Supervisor.init(children, strategy: :one_for_all)

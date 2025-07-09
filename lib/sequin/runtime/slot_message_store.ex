@@ -87,6 +87,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end
 
     Logger.metadata(consumer_id: consumer_id)
+    Sequin.name_process({__MODULE__, {consumer_id, partition}})
     Logger.info("[SlotMessageStore] Initializing message store for consumer #{consumer_id}")
 
     state = %State{
@@ -414,6 +415,19 @@ defmodule Sequin.Runtime.SlotMessageStore do
       error = exit_to_sequin_error(e)
       Logger.error("[SlotMessageStore] Failed to get min unflushed commit lsn", error: error)
       raise error
+  end
+
+  @doc """
+  Updates the high watermark WAL cursor across all partitions.
+  """
+  @spec put_high_watermark_wal_cursor(SinkConsumer.t(), {batch_idx :: non_neg_integer(), Replication.wal_cursor()}) ::
+          :ok | {:error, Exception.t()}
+  def put_high_watermark_wal_cursor(consumer, {batch_idx, wal_cursor}) do
+    consumer
+    |> partitions()
+    |> Sequin.Enum.reduce_while_ok(fn partition ->
+      GenServer.cast(via_tuple(consumer.id, partition), {:put_high_watermark_wal_cursor, {batch_idx, wal_cursor}})
+    end)
   end
 
   @doc """
@@ -770,6 +784,27 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   def handle_call(:payload_size_bytes, _from, state) do
     {:reply, {:ok, state.payload_size_bytes}, state}
+  end
+
+  @impl GenServer
+
+  def handle_cast(
+        {:put_high_watermark_wal_cursor, {batch_idx, wal_cursor}},
+        %State{high_watermark_wal_cursor: nil} = state
+      ) do
+    state = %State{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}
+    {:noreply, state}
+  end
+
+  def handle_cast({:put_high_watermark_wal_cursor, {batch_idx, wal_cursor}}, %State{} = state) do
+    {current_idx, _current_cursor} = state.high_watermark_wal_cursor
+
+    unless batch_idx == current_idx + 1 do
+      raise "Unexpected high watermark WAL cursor: #{batch_idx} != #{current_idx + 1}"
+    end
+
+    state = %State{state | high_watermark_wal_cursor: {batch_idx, wal_cursor}}
+    {:noreply, state}
   end
 
   @impl GenServer

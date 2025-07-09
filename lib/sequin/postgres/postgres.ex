@@ -18,6 +18,10 @@ defmodule Sequin.Postgres do
   require Logger
 
   @type db_conn() :: pid() | module() | DBConnection.t()
+  @type wal_cursor :: %{commit_lsn: integer(), commit_idx: integer()}
+
+  defguardp is_postgrex_error(error)
+            when is_struct(error, Postgrex.Error) or is_struct(error, DBConnection.ConnectionError)
 
   @event_table_columns [
     %{name: "id", type: "serial"},
@@ -471,7 +475,7 @@ defmodule Sequin.Postgres do
          [res] <- result_to_maps(res) do
       {:ok, res}
     else
-      {:error, %Postgrex.Error{} = error} ->
+      {:error, error} when is_postgrex_error(error) ->
         {:error, ValidationError.from_postgrex("Failed to check replication slot status: ", error)}
 
       [] ->
@@ -505,7 +509,7 @@ defmodule Sequin.Postgres do
             :ok
         end
 
-      {:error, %Postgrex.Error{} = error} ->
+      {:error, error} when is_postgrex_error(error) ->
         {:error,
          ValidationError.from_postgrex(
            "Failed to check replication permissions: ",
@@ -1243,6 +1247,28 @@ defmodule Sequin.Postgres do
 
       {:error, _} = error ->
         error
+    end
+  end
+
+  @doc """
+  Gets the current WAL write position as an integer.
+
+  ## Examples
+
+      iex> current_wal_lsn(conn)
+      {:ok, 285212704}
+
+  """
+  @spec current_wal_lsn(db_conn()) :: {:ok, integer()} | {:error, Error.t()}
+  def current_wal_lsn(conn) do
+    query = "SELECT pg_current_wal_lsn()"
+
+    case query(conn, query, []) do
+      {:ok, %{rows: [[lsn_string]]}} ->
+        {:ok, lsn_to_int(lsn_string)}
+
+      {:error, error} ->
+        {:error, Error.service(service: :postgres, message: Exception.message(error))}
     end
   end
 

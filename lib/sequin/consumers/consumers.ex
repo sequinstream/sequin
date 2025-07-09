@@ -28,6 +28,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
   alias Sequin.Runtime.ConsumerLifecycleEventWorker
+  alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.SlotProcessor
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.Trace
@@ -1099,7 +1100,9 @@ defmodule Sequin.Consumers do
 
       # Perform the upsert
       Repo.insert_all(model, updates,
-        on_conflict: [set: [not_visible_until: dynamic([cr], fragment("EXCLUDED.not_visible_until")), state: :available]],
+        on_conflict: [
+          set: [not_visible_until: dynamic([cr], fragment("EXCLUDED.not_visible_until")), state: :available]
+        ],
         conflict_target: [:consumer_id, :ack_id]
       )
     end)
@@ -1704,6 +1707,58 @@ defmodule Sequin.Consumers do
     |> Backfill.where_sink_consumer_id()
     |> Backfill.where_state(:active)
     |> Repo.one()
+  end
+
+  def create_backfills_for_tables(account_id, consumer, tables_config) do
+    # Create backfills for each selected table
+    tables_config
+    |> Enum.map(fn
+      # Full backfill
+      %{"oid" => table_oid, "type" => "full"} ->
+        table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == table_oid))
+
+        # Use provided cursor or default
+        initial_min_cursor = KeysetCursor.min_cursor(table)
+
+        %{
+          account_id: account_id,
+          sink_consumer_id: consumer.id,
+          table_oid: table_oid,
+          initial_min_cursor: initial_min_cursor,
+          state: :active
+        }
+
+      # Partial backfill
+      %{
+        "oid" => table_oid,
+        "type" => "partial",
+        "sortColumnAttnum" => sort_column_attnum,
+        "initialMinCursor" => initial_min_cursor
+      } ->
+        table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == table_oid))
+        table = %{table | sort_column_attnum: sort_column_attnum}
+        initial_min_cursor = KeysetCursor.min_cursor(table, initial_min_cursor)
+
+        %{
+          account_id: account_id,
+          sink_consumer_id: consumer.id,
+          table_oid: table_oid,
+          initial_min_cursor: initial_min_cursor,
+          sort_column_attnum: sort_column_attnum,
+          state: :active
+        }
+    end)
+    |> Enum.map(fn backfill_attrs -> create_backfill(backfill_attrs) end)
+    |> Enum.group_by(
+      fn
+        {:ok, _} -> :created
+        {:error, _} -> :failed
+      end,
+      fn
+        {:ok, backfill} -> backfill
+        {:error, changeset} -> changeset
+      end
+    )
   end
 
   defp drop_virtual_fields(message) when is_map(message) do

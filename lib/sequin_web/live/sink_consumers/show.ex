@@ -41,7 +41,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Metrics
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
-  alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.Trace
   alias Sequin.Transforms.Message
@@ -108,11 +107,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer(id, socket) do
-    with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
+    with {:ok, consumer} <-
+           Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
         |> Repo.preload(
-          [:postgres_database, :active_backfills, :replication_slot, :transform, :routing, :filter],
+          [
+            :postgres_database,
+            :active_backfills,
+            :replication_slot,
+            :transform,
+            :routing,
+            :filter
+          ],
           force: true
         )
         |> SinkConsumer.preload_http_endpoint!()
@@ -317,64 +324,26 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def handle_event("run-backfill", %{"selectedTables" => selected_tables}, socket) do
     consumer = socket.assigns.consumer
 
-    # Create backfills for each selected table
-    selected_tables
-    |> Enum.map(fn
-      # Full backfill
-      %{"oid" => table_oid, "type" => "full"} ->
-        table = find_table_by_oid(table_oid, consumer.postgres_database.tables)
-
-        # Use provided cursor or default
-        initial_min_cursor = KeysetCursor.min_cursor(table)
-
-        %{
-          account_id: current_account_id(socket),
-          sink_consumer_id: consumer.id,
-          table_oid: table_oid,
-          initial_min_cursor: initial_min_cursor,
-          state: :active
-        }
-
-      # Partial backfill
-      %{
-        "oid" => table_oid,
-        "type" => "partial",
-        "sortColumnAttnum" => sort_column_attnum,
-        "initialMinCursor" => initial_min_cursor
-      } ->
-        table = find_table_by_oid(table_oid, consumer.postgres_database.tables)
-        table = %{table | sort_column_attnum: sort_column_attnum}
-        initial_min_cursor = KeysetCursor.min_cursor(table, initial_min_cursor)
-
-        %{
-          account_id: current_account_id(socket),
-          sink_consumer_id: consumer.id,
-          table_oid: table_oid,
-          initial_min_cursor: initial_min_cursor,
-          sort_column_attnum: sort_column_attnum,
-          state: :active
-        }
-    end)
-    |> Enum.map(fn backfill_attrs -> Consumers.create_backfill(backfill_attrs) end)
-    |> Enum.group_by(
-      fn
-        {:ok, _} -> :created
-        {:error, _} -> :failed
-      end,
-      fn
-        {:ok, backfill} -> backfill
-        {:error, changeset} -> changeset
-      end
-    )
-    |> tap(fn _ -> maybe_start_table_readers(consumer) end)
-    |> case do
+    case Consumers.create_backfills_for_tables(
+           current_account_id(socket),
+           consumer,
+           selected_tables
+         ) do
       %{failed: changesets} ->
+        # Some failed but some may also have been created successfully
+        maybe_start_table_readers(consumer)
+
         {:reply, %{ok: true},
          socket
          |> load_consumer_backfills()
-         |> put_flash(:toast, %{kind: :error, title: "Failed to create #{length(changesets)} backfill(s)"})}
+         |> put_flash(:toast, %{
+           kind: :error,
+           title: "Failed to create #{length(changesets)} backfill(s)"
+         })}
 
       %{created: backfills} ->
+        maybe_start_table_readers(consumer)
+
         {:reply, %{ok: true},
          socket
          |> load_consumer_backfills()
@@ -505,7 +474,11 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:reply, %{updated_message: encoded_message}, load_consumer_messages(socket)}
 
       {:error, reason} ->
-        Logger.error("Failed to reset message visibility: #{inspect(reason)}", error: reason, ack_id: ack_id)
+        Logger.error("Failed to reset message visibility: #{inspect(reason)}",
+          error: reason,
+          ack_id: ack_id
+        )
+
         {:reply, %{error: reason}, socket}
     end
   end
@@ -572,11 +545,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     event_slug =
       case String.to_existing_atom(error_slug) do
-        :replica_identity_not_full -> :alert_replica_identity_not_full_dismissed
-        :replica_identity_not_full_partitioned -> :alert_replica_identity_not_full_dismissed
-        :toast_columns_detected -> :alert_toast_columns_detected_dismissed
-        :invalid_transaction_annotation_received -> :invalid_transaction_annotation_received_dismissed
-        :load_shedding_policy_discarded -> :load_shedding_policy_discarded_dismissed
+        :replica_identity_not_full ->
+          :alert_replica_identity_not_full_dismissed
+
+        :replica_identity_not_full_partitioned ->
+          :alert_replica_identity_not_full_dismissed
+
+        :toast_columns_detected ->
+          :alert_toast_columns_detected_dismissed
+
+        :invalid_transaction_annotation_received ->
+          :invalid_transaction_annotation_received_dismissed
+
+        :load_shedding_policy_discarded ->
+          :load_shedding_policy_discarded_dismissed
       end
 
     Health.put_event(consumer, %Health.Event{slug: event_slug})
@@ -758,7 +740,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     messages_processed_bytes = List.last(messages_processed_bytes_timeseries)
 
-    messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 1)
+    messages_failing_count =
+      Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 1)
 
     messages_pending_count =
       case SlotMessageStore.count_messages(consumer) do
@@ -1301,7 +1284,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp get_message_state(consumer, %{not_visible_until: not_visible_until, last_delivered_at: last_delivered_at}) do
     now = DateTime.utc_now()
-    ack_deadline = if last_delivered_at, do: DateTime.add(last_delivered_at, consumer.ack_wait_ms, :millisecond)
+
+    ack_deadline =
+      if last_delivered_at,
+        do: DateTime.add(last_delivered_at, consumer.ack_wait_ms, :millisecond)
 
     cond do
       is_nil(last_delivered_at) ->
@@ -1452,7 +1438,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     table_names_without_full_replica_identity =
       tables_with_replica_identities
-      |> Enum.filter(fn %{"relation_kind" => relation_kind, "replica_identity" => replica_identity} ->
+      |> Enum.filter(fn %{
+                          "relation_kind" => relation_kind,
+                          "replica_identity" => replica_identity
+                        } ->
         relation_kind == "r" and replica_identity != "f"
       end)
       |> Enum.map(fn %{"table_schema" => table_schema, "table_name" => table_name} ->
@@ -1617,7 +1606,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_backfill(%Backfill{} = backfill) do
     backfill = Repo.preload(backfill, sink_consumer: [:postgres_database])
 
-    table = Enum.find(backfill.sink_consumer.postgres_database.tables, &(&1.oid == backfill.table_oid))
+    table =
+      Enum.find(backfill.sink_consumer.postgres_database.tables, &(&1.oid == backfill.table_oid))
+
     table_name = if table, do: "#{table.schema}.#{table.name}", else: "Unknown table"
 
     %{
@@ -1642,10 +1633,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp calculate_backfill_progress(%Backfill{rows_initial_count: initial, rows_processed_count: processed}) do
     processed / initial * 100.0
-  end
-
-  defp find_table_by_oid(oid, tables) do
-    Enum.find(tables, fn table -> table.oid == oid end)
   end
 
   defp maybe_start_table_readers(consumer) do

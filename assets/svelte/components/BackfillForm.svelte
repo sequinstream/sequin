@@ -19,7 +19,7 @@
       oid: number;
       type: "full" | "partial";
       sortColumnAttnum?: number | null;
-      initialMinCursor?: string | Date | null;
+      initialMinCursor?: string | Date | number | null;
     }>;
   };
   export let tables_included_in_source: Table[];
@@ -120,19 +120,11 @@
 
   function handleSortColumnInput(e: Event, tableOid: number) {
     const target = e.target as HTMLSelectElement;
-    const selectedTable = form.selectedTables?.find((t) => t.oid === tableOid);
     updateTableOptions(
       tableOid,
       target.value ? parseInt(target.value, 10) : null,
-      selectedTable?.initialMinCursor ?? null,
+      null, // Clear the initialMinCursor when sort column changes
     );
-  }
-
-  function getDefaultSortColumn(table: Table): number | null {
-    const defaultColumn = table.columns.find((col) =>
-      defaultSortColumnNames.includes(col.name),
-    );
-    return defaultColumn?.attnum ?? null;
   }
 
   function handleBackfillMode(tableOid: number, mode: "full" | "partial") {
@@ -165,7 +157,7 @@
   function updateTableOptions(
     tableOid: number,
     sortColumnAttnum: number | null,
-    initialMinCursor: string | null,
+    initialMinCursor: string | Date | number | null,
   ) {
     const index = form.selectedTables.findIndex((t) => t.oid === tableOid);
     if (index > -1) {
@@ -187,6 +179,8 @@
       : false;
 
   $: console.log(form.selectedTables);
+
+  $: selectedTableOids = form.selectedTables?.map((t) => t.oid) ?? [];
 
   function handleStartPositionInput(e: Event, tableOid: number) {
     const target = e.target as HTMLInputElement;
@@ -235,24 +229,26 @@
             <TableBody>
               {#each tables_included_in_source as table (table.oid)}
                 <TableRow
-                  class={form.selectedTables?.find((t) => t.oid === table.oid)
+                  class={selectedTableOids.includes(table.oid)
                     ? "bg-blue-50 hover:bg-blue-100"
                     : "hover:bg-gray-100"}
                 >
                   <TableCell class="w-12 p-0">
                     <div class="h-full flex items-center justify-center">
                       <Checkbox
-                        checked={form.selectedTables?.some(
-                          (t) => t.oid === table.oid,
-                        )}
+                        checked={selectedTableOids.includes(table.oid)}
                         onCheckedChange={() => toggleTableSelection(table.oid)}
                       />
                     </div>
                   </TableCell>
                   <TableCell class="p-4">
-                    <div class="flex items-center justify-between">
+                    <div class="h-8 flex items-center justify-between">
                       <div class="flex items-center space-x-2">
-                        <span>{table.schema}.{table.name}</span>
+                        <span
+                          class={selectedTableOids.includes(table.oid)
+                            ? "font-medium"
+                            : ""}>{table.schema}.{table.name}</span
+                        >
                       </div>
 
                       {#if form.selectedTables?.find((t) => t.oid === table.oid)}
@@ -289,8 +285,8 @@
                         transition:slide={{ duration: 200 }}
                         class="mt-4 space-y-4 w-full"
                       >
-                        <div class="h-24 flex gap-4">
-                          <div class="space-y-2 w-1/3">
+                        <div class="space-y-4">
+                          <div class="space-y-2">
                             <Label for="sortColumn-{table.oid}" class="text-xs"
                               >Sort Column</Label
                             >
@@ -311,7 +307,7 @@
                               {/each}
                             </select>
                           </div>
-                          <div class="space-y-2 w-2/3">
+                          <div class="space-y-2">
                             <Label
                               for="startPosition-{table.oid}"
                               class="text-xs">Start Position</Label
@@ -321,7 +317,7 @@
                               ?.type.startsWith("timestamp")}
                               <Datetime
                                 id="startPosition-{table.oid}"
-                                class="h-8 text-sm"
+                                class="text-sm"
                                 value={new Date(
                                   form.selectedTables?.find(
                                     (t) => t.oid === table.oid,

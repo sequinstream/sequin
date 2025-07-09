@@ -567,11 +567,6 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         :millisecond
       )
 
-    state.message_handler_module.put_high_watermark_wal_cursor(
-      state.message_handler_ctx,
-      {batch.idx, batch.high_watermark_wal_cursor}
-    )
-
     if state.test_pid do
       send(state.test_pid, {__MODULE__, :flush_messages, length(unwrapped_messages)})
     end
@@ -594,6 +589,12 @@ defmodule Sequin.Runtime.SlotProcessorServer do
       {:ok, _count} ->
         ProcessMetrics.increment_throughput("messages_ingested", count)
         Prometheus.increment_messages_ingested(state.replication_slot.id, state.replication_slot.slot_name, count)
+
+        :ok =
+          state.message_handler_module.put_high_watermark_wal_cursor(
+            state.message_handler_ctx,
+            {batch.idx, batch.high_watermark_wal_cursor}
+          )
 
         state =
           %{state | backfill_watermark_messages: [], last_flushed_high_watermark: batch.high_watermark_wal_cursor}

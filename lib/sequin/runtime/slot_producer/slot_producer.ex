@@ -371,7 +371,7 @@ defmodule Sequin.Runtime.SlotProducer do
   @advance_idx_types [?I, ?U, ?D, ?T, ?M]
   # Ignore ?T for processing, but still count it for idx advancement to future-proof
   @ignoreable_messages [?Y, ?T, ?O]
-  defp handle_copies(copies, state) do
+  defp handle_copies(copies, %State{} = state) do
     Enum.reduce_while(copies, {:ok, state}, fn copy, {:ok, state} ->
       {type, msg} = parse_copy(copy)
 
@@ -480,6 +480,14 @@ defmodule Sequin.Runtime.SlotProducer do
     end
   end
 
+  defp handle_data(?M, <<?M, 0, _lsn::binary-8, _rest::binary>>, %State{} = state) do
+    # Result of calling `select pg_logical_emit_message` with first argument as `false` (non-transactional)
+    # This will appear outside of a transaction. We could parse the LSN from the logical message and emit, but
+    # we don't use these so we can just ignore.
+
+    {:ok, state}
+  end
+
   @change_types [?I, ?U, ?D, ?M]
   defp handle_data(type, msg, %State{} = state) when below_restart_wal_cursor?(state) and type in @change_types do
     raw_bytes_received = byte_size(msg)
@@ -552,6 +560,12 @@ defmodule Sequin.Runtime.SlotProducer do
     Replication.put_restart_wal_cursor!(state.id, restart_wal_cursor)
 
     %{state | restart_wal_cursor: restart_wal_cursor}
+  end
+
+  defp message_from_binary(%State{commit_lsn: nil}, msg) do
+    Logger.error("Got a change message outside of a transaction: #{inspect(msg)}")
+
+    raise "Got a change message outside of a transaction"
   end
 
   defp message_from_binary(%State{} = state, binary) do

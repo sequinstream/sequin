@@ -19,10 +19,14 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
 
   @impl SinkPipeline
   def batchers_config(consumer) do
+    # If message grouping is enabled, we can only send one message at a time
+    # due to GCP Pub/Sub's ordering_key requirement.
+    batch_size = if consumer.message_grouping, do: 1, else: consumer.batch_size
+
     [
       default: [
         concurrency: 400,
-        batch_size: consumer.batch_size,
+        batch_size: batch_size,
         batch_timeout: 1
       ]
     ]

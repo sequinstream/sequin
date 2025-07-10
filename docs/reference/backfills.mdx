@@ -28,27 +28,40 @@ To enable backfilling of specific inserts, updates and deletes, you can set up [
 </Note>
 
 
-## Backfill configuration
+## Full and partial backfills
 
-When creating a backfill, you can indicate whether the backfill should:
+When creating a backfill, you can choose either:
 
-- **Stream the whole table**.
+- **Full backfill**: Stream the whole table.
+- **Partial backfill**: Stream starting at a specific point in the table.
 
-    Sequin will backfill all rows currently in the table to the sink.
+In both cases, Sequin will read rows from the table concurrently with capturing new changes.
 
-- **Stream starting at a specific point in the table**.
+<Info>
+Read more about how Sequin backfills work in our [blog post](https://blog.sequinstream.com/using-watermarks-to-coordinate-change-data-capture-in-postgres/).
+</Info>
 
-    When you add a source table to Sequin, you specify a sort column, like `updated_at`. You can specify a value for this column to start the backfill at (e.g. `updated_at >= '2024-01-01'`). Sequin will backfill all rows from the specified point to the end of the table.
+### Partial backfills
+
+To identify a specific point in the table you choose both a sort column and a start position for that column. For instance, if you choose `updated_at` as the sort column, you can specify a start position of `2025-01-01 00:00:00`.
+
+<Info>
+We highly recommend using a column that is indexed as the sort column.
+</Info>
+
+Partial backfills are particularly useful for **disaster recovery**.
+
+For instance, let's say that your Sequin instance is delivering data to AWS SQS. A bug in your SQS consumer code causes messages to be processed incorrectly from SQS for several hours. Once processed, messages are removed from SQS.
+
+When you deploy a fix for the bug, you can use a **partial backfill** to replay the messages that were incorrectly processed.
+
+These messages are then delivered to your sink, where they will be processed correctly by the updated consumer code.
 
 ## Backfill ordering
 
-Backfills send rows to your sink in the order of the sort column that you specify for your source table. For example, if you specify `updated_at` as the sort column, Sequin will send rows to your sink ordered by `updated_at asc`.
+By default, backfills order rows by primary keys of the table. This ensures that `select` queries are performant, as primary keys are always indexed.
 
-<Info>
-
-Read more about how Sequin backfills work in our [blog post](https://blog.sequinstream.com/using-watermarks-to-coordinate-change-data-capture-in-postgres/).
-
-</Info>
+For partial backfills, you choose a sort column. Sequin will order rows by the sort column. You may choose any column as the sort column, but we strongly recommend using a column that is indexed.
 
 {/* TODO: Add details about monitoring backfills */}
 

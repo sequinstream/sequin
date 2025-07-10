@@ -239,7 +239,7 @@ defmodule Sequin.Consumers.SinkConsumer do
 
         add_error(
           changeset,
-          :source_tables,
+          :message_grouping,
           "Cannot specify group columns when message_grouping is disabled. " <>
             "Found group columns on: #{Enum.join(table_names, ", ")}. " <>
             "For more information, see: https://sequinstream.com/docs/reference/sequin-yaml#message-grouping"

@@ -52,6 +52,7 @@
   import BackfillForm from "$lib/components/BackfillForm.svelte";
   import type { Source } from "./types";
   import { externalType } from "./utils";
+  import { Switch } from "$lib/components/ui/switch";
 
   type Database = {
     id: string;
@@ -83,6 +84,7 @@
   interface FormState {
     type: string;
     messageKind: MessageKind;
+    messageGrouping: boolean;
     maxMemoryMb: number;
     postgresDatabaseId: string | null;
     source: Source;
@@ -114,6 +116,7 @@
   let initialForm: FormState = {
     type: consumer.type,
     messageKind: (consumer.message_kind || "event") as MessageKind,
+    messageGrouping: consumer.message_grouping,
     maxMemoryMb: Number(consumer.max_memory_mb),
     postgresDatabaseId: consumer.postgres_database_id,
     source: consumer.source,
@@ -382,6 +385,45 @@
           {functionRefreshState}
           showTitle={false}
         />
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Message grouping</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div class="space-y-2">
+          <div class="flex items-center gap-2">
+            <Switch
+              bind:checked={form.messageGrouping}
+              onCheckedChange={(checked) => (form.messageGrouping = checked)}
+            />
+            <p class="text-sm font-medium">
+              {form.messageGrouping ? "Enabled" : "Disabled"}
+            </p>
+          </div>
+
+          {#if errors.consumer.message_grouping}
+            <p class="text-destructive text-sm">
+              {errors.consumer.message_grouping}
+            </p>
+          {/if}
+
+          <p class="text-sm text-muted-foreground">
+            When enabled, messages within groups are <a
+              href="https://sequinstream.com/docs/reference/sinks/overview#message-grouping-and-ordering"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-primary underline">delivered in order</a
+            > based on their transaction commit lsn. Groups are created based on
+            the table and primary key(s) of each row.
+          </p>
+          <p class="text-sm text-muted-foreground">
+            When disabled, message ordering is not guaranteed and performance
+            may improve.
+          </p>
+        </div>
       </CardContent>
     </Card>
 

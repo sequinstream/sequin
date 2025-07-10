@@ -789,6 +789,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       type: consumer.type,
       status: consumer.status,
       message_kind: consumer.message_kind,
+      message_grouping: consumer.message_grouping,
       ack_wait_ms: consumer.ack_wait_ms,
       max_ack_pending: consumer.max_ack_pending,
       max_deliver: consumer.max_deliver,

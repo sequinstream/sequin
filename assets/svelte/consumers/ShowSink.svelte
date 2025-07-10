@@ -1056,6 +1056,33 @@
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold flex items-center gap-2">
+              Message grouping
+            </h2>
+          </div>
+          <p class="text-sm text-muted-foreground">
+            {#if consumer.message_grouping}
+              <p class="text-sm text-muted-foreground">
+                Messages are <a
+                  href="https://sequinstream.com/docs/reference/sinks/overview#message-grouping-and-ordering"
+                  target="_blank"
+                  class="text-primary underline"
+                  rel="noopener noreferrer">delivered in order</a
+                > based on their transaction commit lsn. Groups are created based
+                on the table and primary key(s) of each row.
+              </p>
+            {:else}
+              <p class="text-sm text-muted-foreground">
+                Message grouping is not enabled.
+              </p>
+            {/if}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
               Transform
             </h2>
             {#if transform}

@@ -321,6 +321,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("run-backfill", %{"selectedTables" => []}, socket) do
+    {:reply, %{ok: true}, socket}
+  end
+
   def handle_event("run-backfill", %{"selectedTables" => selected_tables}, socket) do
     consumer = socket.assigns.consumer
 

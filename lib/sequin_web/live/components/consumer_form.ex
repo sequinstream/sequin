@@ -1325,6 +1325,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp maybe_create_backfills(_socket, _consumer, _params, nil), do: :ok
+  defp maybe_create_backfills(_socket, _consumer, _params, %{"selected_tables" => []}), do: :ok
 
   defp maybe_create_backfills(socket, consumer, _params, %{"selected_tables" => selected_tables}) do
     case Consumers.create_backfills_for_tables(current_account_id(socket), consumer, selected_tables) do

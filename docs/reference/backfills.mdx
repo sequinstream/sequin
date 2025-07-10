@@ -43,7 +43,7 @@ Read more about how Sequin backfills work in our [blog post](https://blog.sequin
 
 ### Partial backfills
 
-To identify a specific point in the table you choose both a sort column and a start position for that column. For instance, if you choose `updated_at` as the sort column, you can specify a start position of `2025-01-01 00:00:00`.
+To bacfkill from a specific point in the table you choose both a sort column and a start position for that column. For instance, if you choose `updated_at` as the sort column, you can specify a start position of `2025-01-01 00:00:00`.
 
 <Info>
 We highly recommend using a column that is indexed as the sort column.
@@ -51,11 +51,11 @@ We highly recommend using a column that is indexed as the sort column.
 
 Partial backfills are particularly useful for **disaster recovery**.
 
-For instance, let's say that your Sequin instance is delivering data to AWS SQS. A bug in your SQS consumer code causes messages to be processed incorrectly from SQS for several hours. Once processed, messages are removed from SQS.
+For instance, let's say that your Sequin instance is delivering data to AWS SQS. A bug in your SQS consumer code processes messages incorrectly from SQS for several hours. Once processed, messages are removed from SQS.
 
-When you deploy a fix for the bug, you can use a **partial backfill** to replay the messages that were incorrectly processed.
+When you deploy a fix for the bug, you can initiate a **partial backfill** to replay messages that were incorrectly processed.
 
-These messages are then delivered to your sink, where they will be processed correctly by the updated consumer code.
+Sequin will re-deliver these messages to your sink, where the updated consumer code will process them correctly.
 
 ## Backfill ordering
 

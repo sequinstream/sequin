@@ -1482,7 +1482,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         :kafka -> {%KafkaSink{tls: false}, %{batch_size: 200}}
         :redis_stream -> {%RedisStreamSink{}, %{batch_size: 50}}
         :sequin_stream -> {%SequinStreamSink{}, %{}}
-        :gcp_pubsub -> {%GcpPubsubSink{}, %{}}
+        :gcp_pubsub -> {%GcpPubsubSink{}, %{message_grouping: false, batch_size: 100}}
         :nats -> {%NatsSink{}, %{}}
         :rabbitmq -> {%RabbitMqSink{virtual_host: "/"}, %{}}
         :azure_event_hub -> {%AzureEventHubSink{}, %{}}
@@ -1494,6 +1494,6 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     sink_consumer
     |> Map.put(:sink, sink)
-    |> Map.merge(Map.take(attrs, [:batch_size]))
+    |> Map.merge(Map.take(attrs, [:batch_size, :message_grouping]))
   end
 end

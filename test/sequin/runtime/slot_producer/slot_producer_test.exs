@@ -252,6 +252,21 @@ defmodule Sequin.Runtime.SlotProducerTest do
       assert_receive_message_kinds([:logical])
     end
 
+    @tag start_opts: [batch_flush_interval: 1]
+    test "non-transactional logical message flush is skipped", %{db: db} do
+      Postgres.query!(db, "select pg_logical_emit_message(false, 'skip-me', 'body')")
+      Postgres.query!(db, "select pg_logical_emit_message(true, 'see-me', 'body')")
+
+      [msg] = receive_messages(1)
+      assert msg.kind == :logical
+      assert msg.payload =~ "see-me"
+
+      # The batch marker should have a valid LSN from the logical message
+      commit_lsn = msg.commit_lsn
+      assert commit_lsn
+      assert_receive {:batch_marker_received, %BatchMarker{high_watermark_wal_cursor: %{commit_lsn: ^commit_lsn}}}
+    end
+
     test "receives relation messages" do
       CharacterFactory.insert_character!(%{}, repo: UnboxedRepo)
 

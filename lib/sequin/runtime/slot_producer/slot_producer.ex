@@ -331,17 +331,15 @@ defmodule Sequin.Runtime.SlotProducer do
     {:noreply, [], state}
   end
 
-  def handle_info(:flush_batch, %State{commit_lsn: nil, last_commit_lsn: nil} = state) do
-    Logger.info("[SlotProducer] Skipping flush_batch, no commits seen or processed yet.")
+  def handle_info(:flush_batch, %State{last_dispatched_wal_cursor: nil} = state) do
+    Logger.info("[SlotProducer] Skipping flush_batch, no messages dispatched yet.")
 
     {:noreply, [], %{state | batch_flush_timer: nil}}
   end
 
   def handle_info(:flush_batch, %State{} = state) do
-    high_watermark_cursor = state.last_dispatched_wal_cursor || state.restart_wal_cursor
-
     batch_marker = %BatchMarker{
-      high_watermark_wal_cursor: high_watermark_cursor,
+      high_watermark_wal_cursor: state.last_dispatched_wal_cursor,
       idx: state.batch_idx
     }
 

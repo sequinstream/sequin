@@ -340,7 +340,7 @@ defmodule Sequin.Runtime.SinkPipeline do
         min(System.schedulers_online() * 2, 80)
       end
 
-    batch_timeout = consumer.batch_timeout_ms || 50
+    batch_timeout = consumer.batch_timeout_ms || 5
 
     default = [
       default: [

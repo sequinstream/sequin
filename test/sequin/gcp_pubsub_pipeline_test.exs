@@ -48,7 +48,9 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
       assert_receive {:ack, ^ref, [_successful], []}, 1_000
     end
 
-    test "batched messages are processed together", %{consumer: consumer} do
+    test "batched messages are processed together when message grouping is disabled", %{consumer: consumer} do
+      {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{message_grouping: false})
+
       group_id = UUID.uuid4()
       message1 = ConsumersFactory.consumer_message(group_id: group_id)
       message2 = ConsumersFactory.consumer_message(group_id: group_id)
@@ -69,6 +71,33 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
 
       ref = send_test_batch(consumer, [message1, message2])
       assert_receive {:ack, ^ref, [_message1, _message2], []}, 1_000
+    end
+
+    test "batched messages are processed separately when message grouping is enabled", %{consumer: consumer} do
+      group_id = UUID.uuid4()
+      message1 = ConsumersFactory.consumer_message(group_id: group_id)
+      message2 = ConsumersFactory.consumer_message(group_id: group_id)
+
+      Req.Test.expect(PubSub, 3, fn conn ->
+        if conn.host == "oauth2.googleapis.com" do
+          Req.Test.json(conn, %{"access_token" => "test_token"})
+        else
+          assert conn.method == "POST"
+          assert conn.host == "pubsub.googleapis.com"
+
+          {:ok, body, _} = Plug.Conn.read_body(conn)
+          body = Jason.decode!(body)
+          assert length(body["messages"]) == 1
+
+          Req.Test.json(conn, %{})
+        end
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_batch(consumer, [message1, message2])
+      assert_receive {:ack, ^ref, [_message1], []}, 1_000
+      assert_receive {:ack, ^ref, [_message2], []}, 1_000
     end
 
     @tag capture_log: true

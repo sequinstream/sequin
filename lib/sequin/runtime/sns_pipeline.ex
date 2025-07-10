@@ -71,13 +71,17 @@ defmodule Sequin.Runtime.SnsPipeline do
     consumer_data = record_or_event.data
 
     message = %{
-      message: Sequin.Transforms.Message.to_external(consumer, consumer_data),
-      message_deduplication_id: consumer_data.data.metadata.idempotency_key,
-      message_id: UUID.uuid4()
+      message_id: UUID.uuid4(),
+      message: Sequin.Transforms.Message.to_external(consumer, consumer_data)
     }
 
     if consumer.sink.is_fifo do
-      Map.put(message, :message_group_id, consumer_data.group_id)
+      message
+      |> Map.put(:message_group_id, Sequin.Aws.message_group_id(consumer_data.group_id))
+      |> Map.put(
+        :message_deduplication_id,
+        Sequin.Aws.message_deduplication_id(consumer_data.data.metadata.idempotency_key)
+      )
     else
       message
     end

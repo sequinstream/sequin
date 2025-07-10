@@ -74,8 +74,11 @@ defmodule Sequin.Runtime.SqsPipeline do
     # TODO Consider moving this to routing layer
     if consumer.sink.is_fifo do
       message
-      |> Map.put(:message_deduplication_id, record_or_event.data.metadata.idempotency_key)
-      |> Map.put(:message_group_id, record_or_event.group_id)
+      |> Map.put(
+        :message_deduplication_id,
+        Sequin.Aws.message_deduplication_id(record_or_event.data.metadata.idempotency_key)
+      )
+      |> Map.put(:message_group_id, Sequin.Aws.message_group_id(record_or_event.group_id))
     else
       message
     end

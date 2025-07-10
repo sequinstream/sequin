@@ -43,6 +43,7 @@ defmodule Sequin.Case do
   end
 
   def verify_stubs(_context) do
+    # NOTE: Reorder these verify_on_exit! and run the tests to see the problem
     Hammox.verify_on_exit!() # This calls Mox.verify_on_exit!() internally
     Req.Test.verify_on_exit!()
     :ok
@@ -650,7 +651,9 @@ defmodule Req.Test do
     pid = self()
     Req.Test.Ownership.set_owner_to_manual_cleanup(@ownership, pid)
 
-    ExUnit.Callbacks.on_exit(Req, fn ->
+    # NOTE Uncomment this line to fix inconsistencies with verify_on_exit!
+    # ExUnit.Callbacks.on_exit(Req, fn ->
+    ExUnit.Callbacks.on_exit(Mox, fn ->
       verify(pid, :all)
       Req.Test.Ownership.cleanup_owner(@ownership, pid)
     end)

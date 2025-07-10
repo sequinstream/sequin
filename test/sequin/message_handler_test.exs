@@ -487,7 +487,7 @@ defmodule Sequin.MessageHandlerTest do
             })
         })
 
-      expect(TableReaderServerMock, :flush_batch, 1, fn "test-backfill", ^batch_info ->
+      Hammox.expect(TableReaderServerMock, :flush_batch, 1, fn "test-backfill", ^batch_info ->
         :ok
       end)
 
@@ -520,12 +520,12 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       # Mock that only consumer1 has a running TableReaderServer
-      expect(TableReaderServerMock, :active_table_oids, 1, fn ->
+      Hammox.expect(TableReaderServerMock, :active_table_oids, 1, fn ->
         [123]
       end)
 
       # Expect pks_seen to be called only for consumer1's messages
-      expect(TableReaderServerMock, :pks_seen, 1, fn table_oid, pks ->
+      Hammox.expect(TableReaderServerMock, :pks_seen, 1, fn table_oid, pks ->
         assert table_oid == 123
         # Single composite pk
         assert pks == [[1, 2]]
@@ -558,12 +558,12 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       # Mock that the consumer has a running TableReaderServer
-      expect(TableReaderServerMock, :active_table_oids, 1, fn ->
+      Hammox.expect(TableReaderServerMock, :active_table_oids, 1, fn ->
         [123]
       end)
 
       # Expect pks_seen to be called with composite pks from both messages
-      expect(TableReaderServerMock, :pks_seen, 1, fn table_oid, pks ->
+      Hammox.expect(TableReaderServerMock, :pks_seen, 1, fn table_oid, pks ->
         assert table_oid == 123
         # Two different composite pks
         assert pks == [[1, 2], [3, 4, 5]]

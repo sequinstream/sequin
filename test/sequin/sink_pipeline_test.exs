@@ -8,14 +8,16 @@ defmodule Sequin.SinkPipelineTest do
 
   describe "filtering messages" do
     setup do
-      stub(SinkPipelineMock, :init, fn context, _ -> context end)
-      stub(SinkPipelineMock, :processors_config, fn _ -> [] end)
-      stub(SinkPipelineMock, :batchers_config, fn _ -> [] end)
-      stub(SinkPipelineMock, :handle_message, fn message, context -> {:ok, message, context} end)
+      Hammox.stub(SinkPipelineMock, :init, fn context, _ -> context end)
+      Hammox.stub(SinkPipelineMock, :processors_config, fn _ -> [] end)
+      Hammox.stub(SinkPipelineMock, :batchers_config, fn _ -> [] end)
+      Hammox.stub(SinkPipelineMock, :handle_message, fn message, context -> {:ok, message, context} end)
 
-      stub(SinkPipelineMock, :handle_batch, fn _batch_name, messages, _batch_info, context -> {:ok, messages, context} end)
+      Hammox.stub(SinkPipelineMock, :handle_batch, fn _batch_name, messages, _batch_info, context ->
+        {:ok, messages, context}
+      end)
 
-      stub(SinkPipelineMock, :apply_routing, fn _consumer, rinfo -> rinfo end)
+      Hammox.stub(SinkPipelineMock, :apply_routing, fn _consumer, rinfo -> rinfo end)
       :ok
     end
 

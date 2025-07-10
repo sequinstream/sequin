@@ -24,7 +24,7 @@ defmodule Sequin.Runtime.NatsPipelineTest do
 
     test "successfully publishes event messages to NATS", %{consumer: consumer} do
       # Expect successful message delivery
-      expect(NatsMock, :send_messages, fn _sink, messages ->
+      Hammox.expect(NatsMock, :send_messages, fn _sink, messages ->
         assert length(messages) == 1
         message = hd(messages)
         assert String.ends_with?(message.routing_info.subject, "insert")
@@ -50,7 +50,7 @@ defmodule Sequin.Runtime.NatsPipelineTest do
     @tag capture_log: true
     test "handles NATS publish failures", %{consumer: consumer} do
       # Expect failed message delivery
-      expect(NatsMock, :send_messages, fn _sink, _messages ->
+      Hammox.expect(NatsMock, :send_messages, fn _sink, _messages ->
         {:error, Error.service(service: :nats, code: "unknown_error", message: "Failed to publish")}
       end)
 
@@ -70,7 +70,7 @@ defmodule Sequin.Runtime.NatsPipelineTest do
       # Update consumer to use batching
       consumer = %{consumer | batch_size: 2}
 
-      expect(NatsMock, :send_messages, fn _sink, messages ->
+      Hammox.expect(NatsMock, :send_messages, fn _sink, messages ->
         assert length(messages) == 2
 
         assert Enum.map(messages, fn message ->

@@ -59,7 +59,7 @@ defmodule Sequin.SlotMessageHandlerTest do
 
       # Set up expectations for each partition
       Enum.each(messages_by_partition, fn {_partition_idx, partition_messages} ->
-        expect(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        Hammox.expect(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
           assert_lists_equal(msgs, partition_messages)
           {:ok, length(msgs)}
         end)
@@ -90,7 +90,7 @@ defmodule Sequin.SlotMessageHandlerTest do
       messages = [message1, message2, message3]
 
       # Set up expectation for the expected partition
-      expect(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.expect(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         assert length(msgs) == 3
         assert Enum.all?(msgs, fn msg -> msg.table_oid == base_message.table_oid && msg.ids == base_message.ids end)
         {:ok, length(msgs)}
@@ -130,7 +130,7 @@ defmodule Sequin.SlotMessageHandlerTest do
       messages = [message1, message2, message3]
 
       # With a single partition, all messages should go to partition 0
-      expect(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.expect(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         # Verify that all messages were sent to the single partition
         assert length(msgs) == 3
         assert msgs == messages
@@ -158,7 +158,7 @@ defmodule Sequin.SlotMessageHandlerTest do
       # The context should contain the updated slot name
       test_pid = self()
 
-      expect(MessageHandlerMock, :handle_messages, fn ctx, _msgs ->
+      Hammox.expect(MessageHandlerMock, :handle_messages, fn ctx, _msgs ->
         assert Enum.find(ctx.consumers, fn consumer -> consumer.id == new_consumer.id end)
         send(test_pid, :handled_message)
         {:ok, 1}
@@ -179,7 +179,7 @@ defmodule Sequin.SlotMessageHandlerTest do
       message = ReplicationFactory.postgres_message()
 
       # Mock the MessageHandler to return a payload_size_limit_exceeded error
-      stub(MessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
+      Hammox.stub(MessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
         {:error, %Error.InvariantError{code: :payload_size_limit_exceeded, message: "payload_size_limit_exceeded"}}
       end)
 
@@ -197,12 +197,12 @@ defmodule Sequin.SlotMessageHandlerTest do
       test_pid = self()
 
       # First call will fail with payload_size_limit_exceeded
-      expect(MessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
+      Hammox.expect(MessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
         {:error, %Error.InvariantError{code: :payload_size_limit_exceeded, message: "payload_size_limit_exceeded"}}
       end)
 
       # Second call (retry) will succeed
-      expect(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.expect(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         # Verify it's the same message being retried
         assert length(msgs) == 1
         assert hd(msgs) == message
@@ -226,12 +226,12 @@ defmodule Sequin.SlotMessageHandlerTest do
       test_pid = self()
 
       # First two calls will fail with payload_size_limit_exceeded
-      expect(MessageHandlerMock, :handle_messages, 2, fn _ctx, _msgs ->
+      Hammox.expect(MessageHandlerMock, :handle_messages, 2, fn _ctx, _msgs ->
         {:error, %Error.InvariantError{code: :payload_size_limit_exceeded, message: "payload_size_limit_exceeded"}}
       end)
 
       # Third call (second retry) will succeed
-      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, :handled_message)
         # Verify it's the same message being retried
         assert length(msgs) == 1

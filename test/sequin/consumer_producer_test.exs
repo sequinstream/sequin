@@ -44,11 +44,11 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
-      stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid ->
+      Hammox.stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid ->
         {:ok, []}
       end)
 
-      stub(SlotMessageStoreMock, :messages_succeeded, fn _consumer, consumer_messages ->
+      Hammox.stub(SlotMessageStoreMock, :messages_succeeded, fn _consumer, consumer_messages ->
         {:ok, length(consumer_messages)}
       end)
 
@@ -60,10 +60,10 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
       msg2 = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
       # only the first call produces messages
-      expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg1, msg2]} end)
-      stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)
+      Hammox.expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg1, msg2]} end)
+      Hammox.stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)
 
-      expect(SlotMessageStoreMock, :messages_succeeded, fn _consumer, consumer_messages ->
+      Hammox.expect(SlotMessageStoreMock, :messages_succeeded, fn _consumer, consumer_messages ->
         assert length(consumer_messages) == 2
         {:ok, 2}
       end)
@@ -81,10 +81,10 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
     test "failed messages are failed to sms", %{consumer: consumer} do
       msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg]} end)
-      stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)
+      Hammox.expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg]} end)
+      Hammox.stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)
 
-      expect(SlotMessageStoreMock, :messages_failed, fn _consumer, message_metas ->
+      Hammox.expect(SlotMessageStoreMock, :messages_failed, fn _consumer, message_metas ->
         assert length(message_metas) == 1
         assert Enum.all?(message_metas, &is_map/1)
         :ok

@@ -53,7 +53,7 @@ defmodule Sequin.PostgresReplicationTest do
     # Fast-forward the replication slot to the current WAL position
     :ok = ReplicationSlots.reset_slot(UnboxedRepo, replication_slot())
     TestMessages.create_ets_table()
-    stub(SlotMessageHandlerMock, :flush_messages, fn _ctx -> :ok end)
+    Hammox.stub(SlotMessageHandlerMock, :flush_messages, fn _ctx -> :ok end)
 
     :ok
   end
@@ -931,9 +931,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       test_pid = self()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
         :ok
       end)
@@ -952,9 +952,9 @@ defmodule Sequin.PostgresReplicationTest do
     test "changes in a transaction are buffered then delivered to message handler in order" do
       test_pid = self()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:changes, msgs})
         :ok
       end)
@@ -1001,9 +1001,9 @@ defmodule Sequin.PostgresReplicationTest do
       test_pid = self()
 
       # simulate a message mis-handle/crash
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
         raise "Simulated crash"
       end)
@@ -1020,9 +1020,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       stop_replication!()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
         :ok
       end)
@@ -1039,9 +1039,9 @@ defmodule Sequin.PostgresReplicationTest do
     test "creates, updates, and deletes are captured" do
       test_pid = self()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
         :ok
       end)
@@ -1090,9 +1090,9 @@ defmodule Sequin.PostgresReplicationTest do
     test "messages are processed exactly once, even after crash and reboot" do
       test_pid = self()
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:changes, msgs})
         :ok
       end)
@@ -1143,23 +1143,23 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag capture_log: true
     test "disconnects and reconnects when payload size limit exceeded" do
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
-      stub(SlotMessageHandlerMock, :flush_messages, fn _ctx -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :flush_messages, fn _ctx -> :ok end)
 
       test_pid = self()
       # First call succeeds, updating the last_flushed_wal_cursor
-      expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
+      Hammox.expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
         :ok
       end)
 
       # Second call will fail with payload_size_limit_exceeded
-      expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
+      Hammox.expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_msg] ->
         # Return the error that should trigger disconnection
         {:error, Sequin.Error.invariant(code: :payload_size_limit_exceeded, message: "Payload size limit exceeded")}
       end)
 
       # Last call succeeds
-      expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, messages ->
+      Hammox.expect(SlotMessageHandlerMock, :handle_messages, fn _ctx, messages ->
         assert length(messages) == 1
         message = List.first(messages)
         send(test_pid, {:changes, [message]})
@@ -1217,9 +1217,9 @@ defmodule Sequin.PostgresReplicationTest do
       id = Faker.UUID.v4()
       start_replication!(heartbeat_interval: 5, id: id, pg_major_version: 17)
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, [] ->
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, [] ->
         :ok
       end)
 
@@ -1238,9 +1238,9 @@ defmodule Sequin.PostgresReplicationTest do
       id = Faker.UUID.v4()
       start_replication!(heartbeat_interval: 5, id: id, pg_major_version: 13)
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_heartbeat_msg] ->
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, [_heartbeat_msg] ->
         :ok
       end)
 
@@ -1264,9 +1264,9 @@ defmodule Sequin.PostgresReplicationTest do
         :atomics.get(memory_counter, 1)
       end
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
 
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, _msgs ->
         :ok
       end)
 
@@ -1637,8 +1637,8 @@ defmodule Sequin.PostgresReplicationTest do
         )
       end)
 
-      stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
-      stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :before_handle_messages, fn _ctx, _msgs -> :ok end)
+      Hammox.stub(SlotMessageHandlerMock, :handle_messages, fn _ctx, _msgs -> :ok end)
 
       # Start replication
       start_replication!(

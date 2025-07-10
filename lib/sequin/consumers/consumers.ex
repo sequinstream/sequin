@@ -1709,7 +1709,7 @@ defmodule Sequin.Consumers do
     |> Repo.one()
   end
 
-  def create_backfills_for_tables(account_id, consumer, tables_config) do
+  def create_backfills_for_form(account_id, consumer, tables_config) do
     # Create backfills for each selected table
     tables_config
     |> Enum.map(fn

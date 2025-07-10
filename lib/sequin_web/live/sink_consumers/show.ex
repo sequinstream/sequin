@@ -328,7 +328,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def handle_event("run-backfill", %{"selectedTables" => selected_tables}, socket) do
     consumer = socket.assigns.consumer
 
-    case Consumers.create_backfills_for_tables(
+    case Consumers.create_backfills_for_form(
            current_account_id(socket),
            consumer,
            selected_tables

@@ -109,12 +109,8 @@ defmodule Sequin.Aws.SQS do
     }
 
     case AWS.SQS.send_message_batch(client, request_body) do
-      {:ok,
-       %{
-         "Failed" => failed_entries
-       } = resp, %{body: body}}
-      when failed_entries != [] ->
-        {:error, resp, %{body: body}}
+      {:ok, %{"Failed" => failed_entries} = resp, _} when failed_entries != [] ->
+        {:error, Error.service(service: :aws_sqs, message: "Failed to send messages", details: resp)}
 
       {:ok, %{"Successful" => _successful}, %{body: _body}} ->
         :ok

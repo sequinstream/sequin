@@ -22,7 +22,7 @@ defmodule Sequin.Runtime.SnsPipeline do
       default: [
         concurrency: 400,
         batch_size: 10,
-        batch_timeout: 5
+        batch_timeout: 1
       ]
     ]
   end

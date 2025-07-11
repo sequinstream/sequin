@@ -55,6 +55,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       field :check_system_interval, keyword(), default: []
       field :check_system_last_status, :ok | :fail, default: :ok
       field :check_system_timer_ref, reference() | nil
+      field :audit_flush_timer_timer_ref, reference() | nil
     end
   end
 
@@ -79,6 +80,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       check_system_interval: Keyword.get(opts, :check_system_interval, bytes: 10_000_000, retry_ms: 25)
     }
 
+    state = schedule_audit_flush_timer(state)
     {:consumer, state, subscribe_to: Keyword.get(opts, :subscribe_to, [])}
   end
 
@@ -136,6 +138,12 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
   def handle_info(:check_system, %State{} = state) do
     state = check_system(%{state | check_system_timer_ref: nil})
+    {:noreply, [], state}
+  end
+
+  def handle_info(:audit_flush_timer, %State{} = state) do
+    state = audit_flush_timer(state)
+    state = schedule_audit_flush_timer(%{state | audit_flush_timer_timer_ref: nil})
     {:noreply, [], state}
   end
 
@@ -240,7 +248,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     %{state | flush_batch_timer_ref: ref}
   end
 
-  defp maybe_schedule_flush_timer(%State{} = state) do
+  defp maybe_schedule_flush_timer(%State{flush_batch_timer_ref: nil} = state) do
     if map_size(state.ready_batches_by_idx) > 0 do
       schedule_flush_timer(state)
     else
@@ -313,6 +321,44 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   defp schedule_check_system_timer_retry(state), do: state
+
+  defp schedule_audit_flush_timer(%State{audit_flush_timer_timer_ref: nil} = state) do
+    ref = Process.send_after(self(), :audit_flush_timer, 500)
+    %{state | audit_flush_timer_timer_ref: ref}
+  end
+
+  defp audit_flush_timer(%State{ready_batches_by_idx: batches} = state) when batches == %{} do
+    state
+  end
+
+  defp audit_flush_timer(state) do
+    case state.flush_batch_timer_ref do
+      nil ->
+        Logger.error("[ReorderBuffer] Audit failed: ready batches exist but no flush timer scheduled",
+          ready_batches_count: map_size(state.ready_batches_by_idx),
+          pending_batches_count: map_size(state.pending_batches_by_idx),
+          ready_batch_idxs: Map.keys(state.ready_batches_by_idx)
+        )
+
+        schedule_flush_timer(state)
+
+      timer_ref ->
+        case Process.read_timer(timer_ref) do
+          false ->
+            Logger.error("[ReorderBuffer] Audit failed: flush timer expired but not triggered",
+              ready_batches_count: map_size(state.ready_batches_by_idx),
+              pending_batches_count: map_size(state.pending_batches_by_idx),
+              ready_batch_idxs: Map.keys(state.ready_batches_by_idx)
+            )
+
+            schedule_flush_timer(%{state | flush_batch_timer_ref: nil})
+
+          _time_left ->
+            # Timer is active, all good
+            state
+        end
+    end
+  end
 
   def setting(%State{} = state, setting) do
     case Map.fetch!(state, setting) do

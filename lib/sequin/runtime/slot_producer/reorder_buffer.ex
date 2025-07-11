@@ -48,6 +48,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       field :flush_batch_timer_ref, reference() | nil
       field :setting_max_demand, non_neg_integer()
       field :setting_min_demand, non_neg_integer()
+      field :setting_max_ready_batches, non_neg_integer()
       field :setting_retry_flush_batch_interval, non_neg_integer()
       field :check_system_fn, (-> :ok | :fail)
       field :check_system_bytes_processed_since_last_check, non_neg_integer(), default: 0
@@ -72,6 +73,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       producer_partition_count: Keyword.fetch!(opts, :producer_partitions),
       setting_max_demand: Keyword.get(opts, :max_demand),
       setting_min_demand: Keyword.get(opts, :min_demand),
+      setting_max_ready_batches: Keyword.get(opts, :setting_max_ready_batches, 2),
       setting_retry_flush_batch_interval: Keyword.get(opts, :retry_flush_batch_interval),
       check_system_fn: Keyword.get(opts, :check_system_fn, &default_check_system_fn/0),
       check_system_interval: Keyword.get(opts, :check_system_interval, bytes: 10_000_000, retry_ms: 25)
@@ -138,7 +140,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   defp maybe_ask_demand(%State{ready_batches_by_idx: batches, check_system_last_status: :ok} = state)
-       when map_size(batches) <= 2 do
+       when map_size(batches) <= state.setting_max_ready_batches do
     ask_demand(state)
   end
 

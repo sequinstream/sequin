@@ -336,7 +336,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
         min_demand: 50,
         max_demand: max_demand,
         retry_flush_batch_interval: 10,
-        flush_batch_fn: flush_batch_fn
+        flush_batch_fn: flush_batch_fn,
+        setting_max_ready_batches: 0
       ]
 
       producers = start_buffer(opts)

@@ -199,13 +199,38 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
   defp add_event_to_state(%Message{batch_idx: idx} = event, %State{} = state) when is_integer(idx) do
     if Map.get(state.ready_batches_by_idx, idx) do
+      ready_batch = Map.get(state.ready_batches_by_idx, idx)
+
+      duplicate_message =
+        Enum.find(ready_batch.messages, fn %Message{} = msg ->
+          msg.commit_lsn == event.commit_lsn and msg.commit_idx == event.commit_idx
+        end)
+
+      IO.inspect(
+        [
+          idx: idx,
+          messages_in_ready_batch: length(ready_batch.messages),
+          expected_message_count: ready_batch.expected_message_count,
+          all_ready_batch_idxs: Map.keys(state.ready_batches_by_idx),
+          duplicate_message: duplicate_message,
+          event: event
+        ],
+        structs: false,
+        limit: :infinity
+      )
+
       raise "Received a message for a completed batch"
     end
 
     pending_batches =
-      Map.update(state.pending_batches_by_idx, idx, %Batch{idx: idx, messages: [event]}, fn %Batch{} = batch ->
-        %{batch | messages: [event | batch.messages]}
-      end)
+      Map.update(
+        state.pending_batches_by_idx,
+        idx,
+        %Batch{idx: idx, messages: [event], expected_message_count: 0},
+        fn %Batch{} = batch ->
+          %{batch | messages: [event | batch.messages]}
+        end
+      )
 
     %{
       state
@@ -238,6 +263,27 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
       if !is_nil(lower_pending_idx) do
         raise "Batch idxs completed out-of-order: other_idx=#{lower_pending_idx} min_ready_idx=#{idx}"
+      end
+
+      if batch.expected_message_count != length(batch.messages) do
+        duplicates =
+          batch.messages
+          |> Enum.map(fn %Message{} = msg -> {msg.commit_lsn, msg.commit_idx} end)
+          |> Enum.frequencies()
+          |> Enum.filter(fn {_, count} -> count > 1 end)
+          |> Map.new()
+
+        count_by_kind =
+          batch.messages
+          |> Enum.map(fn %Message{} = msg -> msg.kind end)
+          |> Enum.frequencies()
+
+        count_by_batch_idx =
+          batch.messages
+          |> Enum.map(fn %Message{} = msg -> msg.batch_idx end)
+          |> Enum.frequencies()
+
+        raise "Batch expected message count mismatch: expected=#{batch.expected_message_count} actual=#{length(batch.messages)} duplicates=#{inspect(duplicates)} count_by_kind=#{inspect(count_by_kind)} count_by_batch_idx=#{inspect(count_by_batch_idx)}"
       end
 
       # Then, sort messages

@@ -10,6 +10,7 @@ defmodule Sequin.Runtime.SlotProducer.Batch do
     field :high_watermark_wal_cursor, Replication.wal_cursor()
     field :idx, BatchMarker.idx()
     field :messages, list(), default: []
+    field :expected_message_count, non_neg_integer(), enforce: true
     field :markers_received, MapSet.t(), default: MapSet.new()
   end
 
@@ -17,6 +18,7 @@ defmodule Sequin.Runtime.SlotProducer.Batch do
     %__MODULE__{
       idx: marker.idx,
       high_watermark_wal_cursor: marker.high_watermark_wal_cursor,
+      expected_message_count: marker.message_count,
       markers_received: MapSet.new([marker.producer_partition_idx])
     }
   end
@@ -37,6 +39,7 @@ defmodule Sequin.Runtime.SlotProducer.Batch do
     %{
       batch
       | high_watermark_wal_cursor: high_watermark_cursor,
+        expected_message_count: marker.message_count,
         markers_received: MapSet.put(batch.markers_received, marker.producer_partition_idx)
     }
   end

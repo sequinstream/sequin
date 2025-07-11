@@ -132,6 +132,10 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       |> Enum.reject(&is_nil/1)
       |> Enum.reject(&internal_change?/1)
 
+    if length(messages) != length(events) do
+      raise "Received #{length(events)} messages but processed #{length(messages)}"
+    end
+
     {:noreply, messages, state}
   end
 

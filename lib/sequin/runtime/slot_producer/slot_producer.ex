@@ -86,7 +86,7 @@ defmodule Sequin.Runtime.SlotProducer do
       # Temp: This wraps the current Message/LogicalMessage payload for compatibility
       field :message, Message.t() | LogicalMessage.t()
       field :transaction_annotations, String.t()
-      field :batch_idx, non_neg_integer()
+      field :batch_idx, non_neg_integer(), enforce: false
     end
   end
 
@@ -127,7 +127,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
       # Batches
       field :batch_idx, BatchMarker.idx(), default: 0
-
+      field :batch_message_count, non_neg_integer(), default: 0
       field :batch_flush_timer, reference()
       field :setting_batch_flush_interval, SlotProducer.batch_flush_interval()
 
@@ -340,7 +340,8 @@ defmodule Sequin.Runtime.SlotProducer do
   def handle_info(:flush_batch, %State{} = state) do
     batch_marker = %BatchMarker{
       high_watermark_wal_cursor: state.last_dispatched_wal_cursor,
-      idx: state.batch_idx
+      idx: state.batch_idx,
+      message_count: state.batch_message_count
     }
 
     Enum.each(state.consumers, fn consumer ->
@@ -351,7 +352,8 @@ defmodule Sequin.Runtime.SlotProducer do
       state
       | batch_idx: state.batch_idx + 1,
         last_batch_marker: batch_marker,
-        batch_flush_timer: nil
+        batch_flush_timer: nil,
+        batch_message_count: 0
     }
 
     {:noreply, [], state}
@@ -586,13 +588,13 @@ defmodule Sequin.Runtime.SlotProducer do
       kind: kind,
       payload: binary,
       transaction_annotations: state.transaction_annotations,
-      batch_idx: state.batch_idx,
       message: nil
     }
   end
 
   defp maybe_produce_and_flush(%State{demand: demand} = state) when demand > 0 do
     {acc_msgs, remaining_msgs} = state.accumulated_messages.messages |> Enum.reverse() |> Enum.split(demand)
+    acc_msgs = Enum.map(acc_msgs, fn %Message{} = msg -> %{msg | batch_idx: state.batch_idx} end)
     remaining_msgs = Enum.reverse(remaining_msgs)
     dropped_bytes = acc_msgs |> Enum.map(& &1.byte_size) |> Enum.sum()
 
@@ -607,10 +609,20 @@ defmodule Sequin.Runtime.SlotProducer do
           %{commit_lsn: last_msg.commit_lsn, commit_idx: last_msg.commit_idx}
       end
 
+    batch_message_count =
+      Enum.sum_by(acc_msgs, fn
+        %Message{kind: :insert} -> 1
+        %Message{kind: :update} -> 1
+        %Message{kind: :delete} -> 1
+        %Message{kind: :logical} -> 0
+        %Message{kind: :relation} -> 0
+      end)
+
     state = %{
       state
       | demand: state.demand - length(acc_msgs),
         last_dispatched_wal_cursor: last_dispatched_wal_cursor,
+        batch_message_count: state.batch_message_count + batch_message_count,
         accumulated_messages: %{
           state.accumulated_messages
           | count: state.accumulated_messages.count - length(acc_msgs),
@@ -696,7 +708,8 @@ defmodule Sequin.Runtime.SlotProducer do
           last_commit_lsn: nil,
           last_commit_idx: nil,
           accumulated_messages: %{count: 0, bytes: 0, messages: []},
-          buffered_sock_msg: nil
+          buffered_sock_msg: nil,
+          batch_message_count: 0
       })
 
     {:noreply, [], state}

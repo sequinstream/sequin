@@ -147,6 +147,22 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     {:noreply, [], state}
   end
 
+  def handle_info({:verify_timer_ref, timer_ref}, %State{flush_batch_timer_ref: timer_ref} = state) do
+    Logger.error("[ReorderBuffer] Audit failed: flush timer expired but not triggered",
+      ready_batches_count: map_size(state.ready_batches_by_idx),
+      pending_batches_count: map_size(state.pending_batches_by_idx),
+      ready_batch_idxs: Map.keys(state.ready_batches_by_idx)
+    )
+
+    state = schedule_flush_timer(%{state | flush_batch_timer_ref: nil})
+
+    {:noreply, [], state}
+  end
+
+  def handle_info({:verify_timer_ref, _}, %State{} = state) do
+    {:noreply, [], state}
+  end
+
   defp maybe_ask_demand(%State{ready_batches_by_idx: batches, check_system_last_status: :ok} = state)
        when map_size(batches) <= state.setting_max_ready_batches do
     ask_demand(state)
@@ -345,13 +361,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
       timer_ref ->
         case Process.read_timer(timer_ref) do
           false ->
-            Logger.error("[ReorderBuffer] Audit failed: flush timer expired but not triggered",
-              ready_batches_count: map_size(state.ready_batches_by_idx),
-              pending_batches_count: map_size(state.pending_batches_by_idx),
-              ready_batch_idxs: Map.keys(state.ready_batches_by_idx)
-            )
-
-            schedule_flush_timer(%{state | flush_batch_timer_ref: nil})
+            send(self(), {:verify_timer_ref, timer_ref})
+            state
 
           _time_left ->
             # Timer is active, all good

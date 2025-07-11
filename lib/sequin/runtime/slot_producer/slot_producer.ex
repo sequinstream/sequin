@@ -86,7 +86,7 @@ defmodule Sequin.Runtime.SlotProducer do
       # Temp: This wraps the current Message/LogicalMessage payload for compatibility
       field :message, Message.t() | LogicalMessage.t()
       field :transaction_annotations, String.t()
-      field :batch_idx, non_neg_integer()
+      field :batch_idx, non_neg_integer(), enforce: false
     end
   end
 
@@ -586,13 +586,13 @@ defmodule Sequin.Runtime.SlotProducer do
       kind: kind,
       payload: binary,
       transaction_annotations: state.transaction_annotations,
-      batch_idx: state.batch_idx,
       message: nil
     }
   end
 
   defp maybe_produce_and_flush(%State{demand: demand} = state) when demand > 0 do
     {acc_msgs, remaining_msgs} = state.accumulated_messages.messages |> Enum.reverse() |> Enum.split(demand)
+    acc_msgs = Enum.map(acc_msgs, fn %Message{} = msg -> %{msg | batch_idx: state.batch_idx} end)
     remaining_msgs = Enum.reverse(remaining_msgs)
     dropped_bytes = acc_msgs |> Enum.map(& &1.byte_size) |> Enum.sum()
 

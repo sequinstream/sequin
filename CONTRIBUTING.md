@@ -17,7 +17,7 @@ Thank you for your interest in contributing to Sequin! This document provides gu
 1. Fork and clone the repository
 2. Start PostgreSQL and Redis with docker compose
     ```bash
-    docker compose up -d
+    docker compose --profile databases up -d
     ```
 
     If you encounter an error about the default PostgreSQL user "postgres" not existing, you can create the user with:
@@ -25,7 +25,32 @@ Thank you for your interest in contributing to Sequin! This document provides gu
     createuser -s postgres
     ```
 
-3. Run the setup script
+3. Install Elixir, Erlang, and Node.js through `asdf`
+    Install and configure `asdf` if you don't have it already: https://asdf-vm.com/guide/getting-started.html
+
+    On Mac, you can use Homebrew:
+    ```bash
+    brew install asdf
+    ```
+
+    Add the following to your shell configuration file (e.g., `.zshrc` or `.bashrc`) to configure `asdf`:
+    ```bash
+    . /opt/homebrew/opt/asdf/libexec/asdf.sh
+    ```
+
+    Now you can use `asdf` to install the necessary versions of Elixir, Erlang, and Node.js:
+    ```bash
+    asdf plugin add erlang
+    asdf plugin add elixir
+    asdf plugin add nodejs
+    ```
+
+    Run this in the root of the repository to use our `.tool-versions` file:
+    ```bash
+    asdf install
+    ```
+
+4. Run the setup script
     ```bash
     mix setup
     ```

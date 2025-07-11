@@ -3,6 +3,7 @@ defmodule Sequin.Aws.SQSTest do
 
   alias Sequin.Aws.HttpClient
   alias Sequin.Aws.SQS
+  alias Sequin.Error.ServiceError
   alias Sequin.Factory.SinkFactory
 
   @queue_url "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue"
@@ -55,7 +56,7 @@ defmodule Sequin.Aws.SQSTest do
         })
       end)
 
-      assert {:error, %{"Failed" => [_failed_message]}, _} = SQS.send_messages(client, @queue_url, messages)
+      assert {:error, %ServiceError{}} = SQS.send_messages(client, @queue_url, messages)
     end
   end
 

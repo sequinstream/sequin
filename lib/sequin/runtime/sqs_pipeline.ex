@@ -23,7 +23,7 @@ defmodule Sequin.Runtime.SqsPipeline do
       default: [
         concurrency: 400,
         batch_size: 10,
-        batch_timeout: 5
+        batch_timeout: 1
       ]
     ]
   end
@@ -59,7 +59,7 @@ defmodule Sequin.Runtime.SqsPipeline do
       :ok ->
         {:ok, messages, context}
 
-      {:error, error, _} ->
+      {:error, error} ->
         {:error, Error.service(service: "sqs_pipeline", code: :unknown_error, message: inspect(error))}
     end
   end

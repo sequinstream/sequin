@@ -90,7 +90,7 @@ defmodule Sequin.Runtime.KafkaPipeline do
   defp partition_from_message(%SinkConsumer{sink: %KafkaSink{}} = consumer, message, partition_count)
        when is_integer(partition_count) do
     case Kafka.message_key(consumer, message) do
-      "" -> Enum.random(1..partition_count)
+      "" -> Enum.random(0..(partition_count - 1))
       group_id when is_binary(group_id) -> :erlang.phash2(group_id, partition_count)
     end
   end

@@ -47,10 +47,10 @@ defmodule Sequin.Sinks.Kafka do
 
   @spec message_key(SinkConsumer.t(), ConsumerRecord.t() | ConsumerEvent.t()) :: String.t()
   def message_key(%SinkConsumer{sink: %KafkaSink{}}, %ConsumerRecord{} = record) do
-    record.group_id
+    record.group_id || ""
   end
 
   def message_key(%SinkConsumer{sink: %KafkaSink{}}, %ConsumerEvent{} = event) do
-    event.group_id
+    event.group_id || ""
   end
 end

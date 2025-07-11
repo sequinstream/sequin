@@ -121,7 +121,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
         # Ask for demand now that we've successfully flushed a batch
         state
-        |> ask_demand()
+        |> maybe_ask_demand()
         |> maybe_schedule_flush_timer()
         |> maybe_hibernate()
 
@@ -138,7 +138,7 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   end
 
   defp maybe_ask_demand(%State{ready_batches_by_idx: batches, check_system_last_status: :ok} = state)
-       when map_size(batches) == 0 do
+       when map_size(batches) <= 2 do
     ask_demand(state)
   end
 

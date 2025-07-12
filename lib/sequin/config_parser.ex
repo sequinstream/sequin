@@ -4,6 +4,19 @@ defmodule Sequin.ConfigParser do
 
   @secret_generation_docs_link "https://sequinstream.com/docs/reference/configuration#secret-generation"
 
+  def ecto_socket_opts(env) do
+    # Deprecate ECTO_IPV6 in favor of PG_IPV6
+    if (Map.get(env, "ECTO_IPV6") || Map.get(env, "PG_IPV6")) in ~w(true 1), do: [:inet6], else: []
+  end
+
+  def server_host(env) do
+    Map.get(env, "SERVER_HOST") || Map.get(env, "PHX_HOST") || "localhost"
+  end
+
+  def server_port(env) do
+    String.to_integer(Map.get(env, "SERVER_PORT") || Map.get(env, "PORT") || "7376")
+  end
+
   def default_workers_per_sink(env) do
     case env["DEFAULT_WORKERS_PER_SINK"] do
       nil ->
@@ -348,5 +361,12 @@ defmodule Sequin.ConfigParser do
             end
         end
     end
+  end
+
+  @doc """
+  Returns the value of BACKFILL_MAX_PENDING_MESSAGES as a positive integer, or nil if not set/invalid.
+  """
+  def backfill_max_pending_messages(env) do
+    parse_positive_int(env["BACKFILL_MAX_PENDING_MESSAGES"], "BACKFILL_MAX_PENDING_MESSAGES")
   end
 end

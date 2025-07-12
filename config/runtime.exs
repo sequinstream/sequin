@@ -3,6 +3,7 @@ import Config
 alias LoggerJSON.Formatters.Datadog
 alias Sequin.ConfigParser
 alias Sequin.Logger.Redactor
+alias Sequin.Runtime.SinkPipeline
 
 require Logger
 
@@ -64,6 +65,14 @@ if config_env() == :test do
   config :logger, level: ConfigParser.log_level(env_vars, :warning)
 else
   config :logger, level: ConfigParser.log_level(env_vars, :info)
+end
+
+# Configure SinkPipeline debugging features for dev/test environments
+if config_env() in [:dev, :test] do
+  config :sequin, SinkPipeline,
+    debug_sleep_ms_min: maybe_parse_int_env.("SINK_PIPELINE_WORKER_SLEEP_MS_MIN"),
+    debug_sleep_ms_max: maybe_parse_int_env.("SINK_PIPELINE_WORKER_SLEEP_MS_MAX"),
+    debug_error_rate: maybe_parse_int_env.("SINK_PIPELINE_WORKER_ERROR_RATE")
 end
 
 # config/runtime.exs is executed for all environments, including
@@ -309,7 +318,7 @@ config :sequin, Sequin.Finch,
   pool_size: http_pool_size,
   pool_count: String.to_integer(System.get_env("HTTP_POOL_COUNT", "1"))
 
-config :sequin, Sequin.Runtime.SinkPipeline, default_workers_per_sink: default_workers_per_sink
+config :sequin, SinkPipeline, default_workers_per_sink: default_workers_per_sink
 
 if config_env() == :prod do
   vault_key = ConfigParser.vault_key(env_vars)

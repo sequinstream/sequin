@@ -250,14 +250,15 @@ defmodule Sequin.Runtime.SinkPipeline do
     |> Stream.map(&DateTime.diff(now, &1, :microsecond))
     |> Enum.each(&Prometheus.observe_internal_latency(context.consumer.id, context.consumer.name, &1))
 
-    case :timer.tc(pipeline_mod, :handle_batch, [batch_name, to_deliver, batch_info, context], :microsecond) do
-      {t, {:ok, delivered, next_context}} ->
-        Prometheus.increment_message_deliver_success(context.consumer.id, context.consumer.name, length(delivered))
-        Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :ok, t)
+    with :ok <- maybe_apply_debug_features(),
+         {t, {:ok, delivered, next_context}} <-
+           :timer.tc(pipeline_mod, :handle_batch, [batch_name, to_deliver, batch_info, context], :microsecond) do
+      Prometheus.increment_message_deliver_success(context.consumer.id, context.consumer.name, length(delivered))
+      Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :ok, t)
 
-        update_context(context, next_context)
-        delivered
-
+      update_context(context, next_context)
+      delivered
+    else
       {t, {:error, error}} ->
         Prometheus.increment_message_deliver_failure(context.consumer.id, context.consumer.name, length(to_deliver))
         Prometheus.observe_delivery_latency(context.consumer.id, context.consumer.name, :error, t)
@@ -570,5 +571,41 @@ defmodule Sequin.Runtime.SinkPipeline do
       %NaiveDateTime{} = dt -> dt |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix(unit)
       other -> other
     end)
+  end
+
+  defp maybe_apply_debug_features do
+    if Application.get_env(:sequin, :env) in [:test, :dev] do
+      apply_debug_features()
+    else
+      :ok
+    end
+  end
+
+  # Apply debug features for dev/test environments
+  defp apply_debug_features do
+    config = Application.get_env(:sequin, __MODULE__, [])
+
+    # Apply debug sleep if configured
+    case {config[:debug_sleep_ms_min], config[:debug_sleep_ms_max]} do
+      {nil, nil} ->
+        :ok
+
+      {min, max} when is_integer(min) and is_integer(max) and min <= max ->
+        sleep_ms = Enum.random(min..max)
+        :timer.sleep(sleep_ms)
+    end
+
+    # Apply debug error rate if configured
+    case config[:debug_error_rate] do
+      nil ->
+        :ok
+
+      rate when is_integer(rate) and rate > 0 and rate <= 100 ->
+        if Enum.random(1..100) <= rate do
+          {:error, Error.service(service: :sequin_debugger, message: "This is a planned error")}
+        else
+          :ok
+        end
+    end
   end
 end

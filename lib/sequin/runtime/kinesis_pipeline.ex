@@ -3,6 +3,7 @@ defmodule Sequin.Runtime.KinesisPipeline do
   @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Aws.Kinesis
+  alias Sequin.AwsMock
   alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Runtime.Routing
@@ -10,8 +11,17 @@ defmodule Sequin.Runtime.KinesisPipeline do
 
   @impl SinkPipeline
   def init(context, _opts) do
-    %{consumer: consumer} = context
-    Map.put(context, :kinesis_client, KinesisSink.aws_client(consumer.sink))
+    %{consumer: consumer, test_pid: test_pid} = context
+
+    setup_allowances(test_pid)
+
+    case KinesisSink.aws_client(consumer.sink) do
+      {:ok, client} ->
+        Map.put(context, :kinesis_client, client)
+
+      {:error, reason} ->
+        raise "Failed to initialize Kinesis client: #{inspect(reason)}"
+    end
   end
 
   @impl SinkPipeline
@@ -74,5 +84,6 @@ defmodule Sequin.Runtime.KinesisPipeline do
   defp setup_allowances(test_pid) do
     Req.Test.allow(Sequin.Aws.HttpClient, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+    Mox.allow(AwsMock, test_pid, self())
   end
 end

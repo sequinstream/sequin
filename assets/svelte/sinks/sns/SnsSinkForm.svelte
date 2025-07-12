@@ -8,6 +8,7 @@
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
+  import AwsAuthenticationForm from "$lib/components/AwsAuthenticationForm.svelte";
 
   export let form;
   export let errors: any = {};
@@ -28,38 +29,7 @@
     <CardTitle>SNS Configuration</CardTitle>
   </CardHeader>
   <CardContent class="space-y-4">
-    <div class="space-y-2">
-      <Label for="access-key">AWS Access Key ID</Label>
-      <Input
-        id="access-key"
-        data-1p-ignore
-        bind:value={form.sink.access_key_id}
-        placeholder="Enter your AWS access key ID"
-        autocomplete="off"
-      />
-      {#if errors.sink?.access_key_id}
-        <p class="text-destructive text-sm">
-          {errors.sink.access_key_id}
-        </p>
-      {/if}
-    </div>
-
-    <div class="space-y-2">
-      <Label for="secret-key">AWS Secret Access Key</Label>
-      <Input
-        id="secret-key"
-        data-1p-ignore
-        type="password"
-        bind:value={form.sink.secret_access_key}
-        placeholder="Enter your AWS secret access key"
-        autocomplete="off"
-      />
-      {#if errors.sink?.secret_access_key}
-        <p class="text-destructive text-sm">
-          {errors.sink.secret_access_key}
-        </p>
-      {/if}
-    </div>
+    <AwsAuthenticationForm bind:sink={form.sink} errors={errors.sink || {}} />
   </CardContent>
 </Card>
 

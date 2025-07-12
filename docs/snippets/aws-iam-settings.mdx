@@ -1,0 +1,13 @@
+### Using IAM users (access keys)
+
+Create an IAM user and attach the required policy. Use the user's access key ID and secret access key in the sink configuration.
+
+### Using task roles (recommended for AWS environments)
+
+When deploying Sequin on AWS infrastructure, you can attach the required policy directly to:
+
+- **ECS Task Role**: For ECS deployments, attach the policy to the task role
+- **EC2 Instance Profile**: For EC2 deployments, attach the policy to the instance profile
+- **EKS Service Account**: For EKS deployments, use IAM Roles for Service Accounts (IRSA)
+
+Then set `use_task_role: true` in your sink configuration. Sequin will automatically discover and use the credentials from the environment.

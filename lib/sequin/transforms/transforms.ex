@@ -275,34 +275,67 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%SqsSink{} = sink, show_sensitive) do
-    reject_nil_values(%{
+    base_config = %{
       type: "sqs",
       queue_url: sink.queue_url,
       region: sink.region,
-      access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
-      secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive),
-      is_fifo: sink.is_fifo
-    })
+      is_fifo: sink.is_fifo,
+      use_task_role: sink.use_task_role
+    }
+
+    config =
+      if sink.use_task_role do
+        base_config
+      else
+        Map.merge(base_config, %{
+          access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
+          secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive)
+        })
+      end
+
+    reject_nil_values(config)
   end
 
   def to_external(%SnsSink{} = sink, show_sensitive) do
-    reject_nil_values(%{
+    base_config = %{
       type: "sns",
       topic_arn: sink.topic_arn,
       region: sink.region,
-      access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
-      secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive),
-      is_fifo: sink.is_fifo
-    })
+      is_fifo: sink.is_fifo,
+      use_task_role: sink.use_task_role
+    }
+
+    config =
+      if sink.use_task_role do
+        base_config
+      else
+        Map.merge(base_config, %{
+          access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
+          secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive)
+        })
+      end
+
+    reject_nil_values(config)
   end
 
   def to_external(%KinesisSink{} = sink, show_sensitive) do
-    reject_nil_values(%{
+    base_config = %{
       type: "kinesis",
       stream_arn: sink.stream_arn,
-      access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
-      secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive)
-    })
+      use_task_role: sink.use_task_role
+    }
+
+    config =
+      if sink.use_task_role do
+        base_config
+      else
+        Map.merge(base_config, %{
+          access_key_id: SensitiveValue.new(sink.access_key_id, show_sensitive),
+          secret_access_key: SensitiveValue.new(sink.secret_access_key, show_sensitive)
+        })
+      end
+
+    reject_nil_values(config)
   end
 
   def to_external(%S2Sink{} = sink, show_sensitive) do
@@ -1083,7 +1116,8 @@ defmodule Sequin.Transforms do
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"],
        use_emulator: attrs["use_emulator"] || false,
-       emulator_base_url: attrs["emulator_base_url"]
+       emulator_base_url: attrs["emulator_base_url"],
+       use_task_role: attrs["use_task_role"] || false
      }}
   end
 
@@ -1094,7 +1128,8 @@ defmodule Sequin.Transforms do
        topic_arn: attrs["topic_arn"],
        region: attrs["region"],
        access_key_id: attrs["access_key_id"],
-       secret_access_key: attrs["secret_access_key"]
+       secret_access_key: attrs["secret_access_key"],
+       use_task_role: attrs["use_task_role"] || false
      }}
   end
 
@@ -1104,7 +1139,8 @@ defmodule Sequin.Transforms do
        type: :kinesis,
        stream_arn: attrs["stream_arn"],
        access_key_id: attrs["access_key_id"],
-       secret_access_key: attrs["secret_access_key"]
+       secret_access_key: attrs["secret_access_key"],
+       use_task_role: attrs["use_task_role"] || false
      }}
   end
 

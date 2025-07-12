@@ -1,0 +1,13 @@
+- **Access Key ID** (when not using task role)
+
+    The AWS access key ID with permissions to access the service.
+
+- **Secret Access Key** (when not using task role)
+
+    The AWS secret access key corresponding to the access key ID.
+
+- **Use Task Role** (optional)
+
+    When enabled (`true`), Sequin will automatically discover AWS credentials from the environment instead of requiring explicit access keys. This is recommended for deployments on AWS ECS, EKS, or EC2 instances where IAM roles can be attached directly to the compute environment.
+
+    When this option is enabled, you do not need to provide `Access Key ID` or `Secret Access Key`.

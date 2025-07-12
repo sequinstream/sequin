@@ -384,6 +384,190 @@ defmodule Sequin.TransformsTest do
       assert tls == false
       assert status == :active
     end
+
+    test "returns a map of the SQS consumer with use_task_role=false" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "sqs-consumer",
+          account_id: account.id,
+          status: :active,
+          postgres_database_id: database.id,
+          sink: %{
+            type: :sqs,
+            queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
+            region: "us-east-1",
+            access_key_id: "AKIAIOSFODNN7EXAMPLE",
+            secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            use_task_role: false,
+            is_fifo: false
+          }
+        )
+
+      json = Transforms.to_external(consumer)
+
+      assert %{
+               name: name,
+               status: status,
+               database: database_name,
+               destination: %{
+                 type: "sqs",
+                 queue_url: queue_url,
+                 region: region,
+                 access_key_id: %SensitiveValue{value: access_key_id, show_value: false},
+                 secret_access_key: %SensitiveValue{value: secret_access_key, show_value: false},
+                 use_task_role: use_task_role,
+                 is_fifo: is_fifo
+               }
+             } = json
+
+      assert name == "sqs-consumer"
+      assert queue_url == "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
+      assert region == "us-east-1"
+      assert access_key_id == "AKIAIOSFODNN7EXAMPLE"
+      assert secret_access_key == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+      assert use_task_role == false
+      assert is_fifo == false
+      assert database_name == database.name
+      assert status == :active
+    end
+
+    test "returns a map of the SQS consumer with use_task_role=true" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "sqs-consumer-task-role",
+          account_id: account.id,
+          status: :active,
+          postgres_database_id: database.id,
+          sink: %{
+            type: :sqs,
+            queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
+            region: "us-east-1",
+            use_task_role: true,
+            is_fifo: false
+          }
+        )
+
+      json = Transforms.to_external(consumer)
+
+      assert %{
+               name: name,
+               status: status,
+               database: database_name,
+               destination: %{
+                 type: "sqs",
+                 queue_url: queue_url,
+                 region: region,
+                 use_task_role: use_task_role,
+                 is_fifo: is_fifo
+               }
+             } = json
+
+      # When use_task_role is true, credentials should not be included in export
+      refute Map.has_key?(json.destination, :access_key_id)
+      refute Map.has_key?(json.destination, :secret_access_key)
+
+      assert name == "sqs-consumer-task-role"
+      assert queue_url == "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
+      assert region == "us-east-1"
+      assert use_task_role == true
+      assert is_fifo == false
+      assert database_name == database.name
+      assert status == :active
+    end
+
+    test "returns a map of the SNS consumer with use_task_role=true" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "sns-consumer-task-role",
+          account_id: account.id,
+          status: :active,
+          postgres_database_id: database.id,
+          sink: %{
+            type: :sns,
+            topic_arn: "arn:aws:sns:us-east-1:123456789012:my-topic",
+            region: "us-east-1",
+            use_task_role: true,
+            is_fifo: false
+          }
+        )
+
+      json = Transforms.to_external(consumer)
+
+      assert %{
+               name: name,
+               status: status,
+               database: database_name,
+               destination: %{
+                 type: "sns",
+                 topic_arn: topic_arn,
+                 region: region,
+                 use_task_role: use_task_role,
+                 is_fifo: is_fifo
+               }
+             } = json
+
+      # When use_task_role is true, credentials should not be included in export
+      refute Map.has_key?(json.destination, :access_key_id)
+      refute Map.has_key?(json.destination, :secret_access_key)
+
+      assert name == "sns-consumer-task-role"
+      assert topic_arn == "arn:aws:sns:us-east-1:123456789012:my-topic"
+      assert region == "us-east-1"
+      assert use_task_role == true
+      assert is_fifo == false
+      assert database_name == database.name
+      assert status == :active
+    end
+
+    test "returns a map of the Kinesis consumer with use_task_role=true" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "kinesis-consumer-task-role",
+          account_id: account.id,
+          status: :active,
+          postgres_database_id: database.id,
+          sink: %{
+            type: :kinesis,
+            stream_arn: "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream",
+            use_task_role: true
+          }
+        )
+
+      json = Transforms.to_external(consumer)
+
+      assert %{
+               name: name,
+               status: status,
+               database: database_name,
+               destination: %{
+                 type: "kinesis",
+                 stream_arn: stream_arn,
+                 use_task_role: use_task_role
+               }
+             } = json
+
+      # When use_task_role is true, credentials should not be included in export
+      refute Map.has_key?(json.destination, :access_key_id)
+      refute Map.has_key?(json.destination, :secret_access_key)
+
+      assert name == "kinesis-consumer-task-role"
+      assert stream_arn == "arn:aws:kinesis:us-east-1:123456789012:stream/my-stream"
+      assert use_task_role == true
+      assert database_name == database.name
+      assert status == :active
+    end
   end
 
   test "returns a map of the http push consumer" do

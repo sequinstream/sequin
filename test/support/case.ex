@@ -17,6 +17,7 @@ defmodule Sequin.Case do
       setup :start_supervisors
       setup :verify_stubs
       setup :default_stubs
+      setup :setup_self_hosted_tag
       # For Hammox
       # Note: You may be tempted to move this to Hammox.verify_on_exit!() in
       # verify_stubs/1, but that doesn't seem to have an effect.
@@ -64,5 +65,11 @@ defmodule Sequin.Case do
     else
       Phoenix.Flash.get(conn.assigns.flash, kind)
     end
+  end
+
+  def setup_self_hosted_tag(context) do
+    self_hosted = Map.get(context, :self_hosted, true)
+    Mox.stub(Sequin.ConfigMock, :self_hosted?, fn -> self_hosted end)
+    :ok
   end
 end

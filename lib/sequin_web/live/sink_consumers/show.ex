@@ -826,7 +826,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       type: :sqs,
       queue_url: sink.queue_url,
       region: sink.region,
-      is_fifo: sink.is_fifo
+      is_fifo: sink.is_fifo,
+      use_task_role: sink.use_task_role
     }
   end
 
@@ -835,7 +836,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       type: :sns,
       topic_arn: sink.topic_arn,
       region: sink.region,
-      is_fifo: sink.is_fifo
+      is_fifo: sink.is_fifo,
+      use_task_role: sink.use_task_role
     }
   end
 
@@ -843,7 +845,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     %{
       type: :kinesis,
       stream_arn: sink.stream_arn,
-      region: sink.region
+      region: sink.region,
+      use_task_role: sink.use_task_role
     }
   end
 

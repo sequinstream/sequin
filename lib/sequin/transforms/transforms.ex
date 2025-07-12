@@ -467,7 +467,12 @@ defmodule Sequin.Transforms do
     database = backfill.sink_consumer.postgres_database
 
     table = Enum.find(database.tables, &(&1.oid == backfill.table_oid))
-    sort_column = if table, do: Enum.find(table.columns, &(&1.attnum == backfill.sort_column_attnum))
+
+    sort_column =
+      if table, do: Enum.find(table.columns, &(&1.attnum == backfill.sort_column_attnum))
+
+    start_position =
+      if sort_column, do: Map.get(backfill.initial_min_cursor, sort_column.attnum)
 
     %{
       id: backfill.id,
@@ -475,6 +480,7 @@ defmodule Sequin.Transforms do
       state: backfill.state,
       table: if(table, do: "#{table.schema}.#{table.name}"),
       sort_column: if(sort_column, do: sort_column.name),
+      start_position: if(start_position, do: start_position),
       rows_initial_count: backfill.rows_initial_count,
       rows_processed_count: backfill.rows_processed_count,
       rows_ingested_count: backfill.rows_ingested_count,

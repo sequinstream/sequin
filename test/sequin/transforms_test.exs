@@ -10,6 +10,7 @@ defmodule Sequin.TransformsTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Functions.MiniElixir
   alias Sequin.Runtime.ConsumerLifecycleEventWorker, as: CLEW
+  alias Sequin.Runtime.KeysetCursor
   alias Sequin.Transforms
   alias Sequin.Transforms.SensitiveValue
 
@@ -71,6 +72,65 @@ defmodule Sequin.TransformsTest do
       assert is_boolean(use_local_tunnel)
       assert is_binary(slot_name)
       assert is_binary(publication_name)
+    end
+
+    test "returns a map of the backfill without a start position" do
+      backfill = ConsumersFactory.insert_active_backfill!()
+      json = Transforms.to_external(backfill)
+
+      assert %{
+               id: id,
+               start_position: nil,
+               status: "active"
+             } = json
+
+      assert id == backfill.id
+    end
+
+    test "returns a map of the backfill with a start position" do
+      table =
+        DatabasesFactory.table_attrs(
+          columns: [
+            DatabasesFactory.column_attrs(attnum: 1, name: "id", type: "uuid", is_pk?: true),
+            DatabasesFactory.column_attrs(
+              attnum: 2,
+              name: "name",
+              type: "text",
+              is_pk?: false
+            ),
+            DatabasesFactory.column_attrs(
+              attnum: 3,
+              name: "created_at",
+              type: "timestamp with time zone",
+              is_pk?: false
+            )
+          ]
+        )
+
+      database =
+        DatabasesFactory.insert_postgres_database!(tables: [table])
+
+      [table] = database.tables
+      table = %{table | sort_column_attnum: 3}
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: database.account_id,
+          postgres_database_id: database.id
+        )
+
+      backfill =
+        ConsumersFactory.insert_active_backfill!(
+          account_id: consumer.account_id,
+          sink_consumer_id: consumer.id,
+          table_oid: table.oid,
+          sort_column_attnum: table.sort_column_attnum,
+          initial_min_cursor: KeysetCursor.min_cursor(table, ~U[2025-07-09 23:25:12Z])
+        )
+
+      json = Transforms.to_external(backfill)
+
+      assert %{start_position: ~U[2025-07-09T23:25:12Z]} = json
     end
 
     test "returns a map of the wal pipeline" do

@@ -20,21 +20,7 @@ get_env = fn key ->
   end
 end
 
-maybe_parse_int_env = fn key ->
-  try do
-    if System.get_env(key) do
-      String.to_integer(System.get_env(key))
-    end
-  rescue
-    e in ArgumentError ->
-      IO.puts("Environment variable #{key} must be a valid integer: #{inspect(e)}")
-      reraise(e, __STACKTRACE__)
-  end
-end
-
-server_port = String.to_integer(System.get_env("SERVER_PORT") || System.get_env("PORT") || "7376")
 metrics_port = String.to_integer(System.get_env("SEQUIN_METRICS_PORT") || "8376")
-server_host = System.get_env("SERVER_HOST") || System.get_env("PHX_HOST") || "localhost"
 metrics_host = System.get_env("METRICS_HOST") || "localhost"
 
 metrics_auth =
@@ -113,16 +99,6 @@ if System.get_env("PHX_SERVER") do
   config :sequin, SequinWeb.MetricsEndpoint, server: true
 end
 
-# Deprecate ECTO_IPV6 in favor of PG_IPV6
-ecto_socket_opts = if (System.get_env("ECTO_IPV6") || System.get_env("PG_IPV6")) in ~w(true 1), do: [:inet6], else: []
-
-if config_env() == :prod do
-  config :logger,
-    default_handler: [
-      formatter: {Datadog, metadata: :all, redactors: [{Redactor, []}]}
-    ]
-end
-
 if config_env() == :prod and self_hosted do
   account_self_signup =
     if System.get_env("FEATURE_ACCOUNT_SELF_SIGNUP", "enabled") in enabled_feature_values, do: :enabled, else: :disabled
@@ -132,7 +108,7 @@ if config_env() == :prod and self_hosted do
       do: :enabled,
       else: :disabled
 
-  backfill_max_pending_messages = maybe_parse_int_env.("BACKFILL_MAX_PENDING_MESSAGES")
+  backfill_max_pending_messages = ConfigParser.backfill_max_pending_messages(env_vars)
 
   database_url =
     case System.get_env("PG_URL") do
@@ -176,16 +152,14 @@ if config_env() == :prod and self_hosted do
       other -> raise("Invalid SERVER_CHECK_ORIGIN: #{other}, must be true or false or 1 or 0")
     end
 
-  case System.get_env("SEQUIN_LOG_FORMAT") do
-    "DATADOG_JSON" ->
-      config :logger,
-        default_handler: [
-          formatter: {Datadog, metadata: :all, redactors: [{Redactor, []}]}
-        ]
-
-    _ ->
-      # Fallback to ConsoleLogger, set in prod.exs
-      :ok
+  if System.get_env("SEQUIN_LOG_FORMAT") in ~w(DATADOG_JSON datadog_json) do
+    config :logger,
+      default_handler: [
+        formatter: {Datadog, metadata: :all, redactors: [{Redactor, []}]}
+      ]
+  else
+    # Fallback to ConsoleLogger, set in prod.exs
+    :ok
   end
 
   config :sequin, Sequin.Posthog,
@@ -198,16 +172,16 @@ if config_env() == :prod and self_hosted do
     ssl: repo_ssl,
     pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "10")),
     url: database_url,
-    socket_options: ecto_socket_opts
+    socket_options: ConfigParser.ecto_socket_opts(env_vars)
 
   config :sequin, SequinWeb.Endpoint,
     # `url` is used for configuring links in the console. So it corresponds to the *external*
     # host and port of the application
-    url: [host: server_host, port: 443, scheme: "https"],
+    url: [host: ConfigParser.server_host(env_vars), port: 443, scheme: "https"],
     check_origin: check_origin,
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
-      port: server_port
+      port: ConfigParser.server_port(env_vars)
     ],
     secret_key_base: secret_key_base,
     live_view: [
@@ -236,7 +210,7 @@ if config_env() == :prod and self_hosted do
     is_disabled: System.get_env("SEQUIN_TELEMETRY_DISABLED") in ~w(true 1)
 
   config :sequin,
-    api_base_url: "http://#{server_host}:#{server_port}",
+    api_base_url: "http://#{ConfigParser.server_host(env_vars)}:#{ConfigParser.server_port(env_vars)}",
     release_version: System.get_env("RELEASE_VERSION"),
     backfill_max_pending_messages: backfill_max_pending_messages,
     max_memory_bytes: ConfigParser.max_memory_bytes(env_vars)
@@ -244,11 +218,15 @@ end
 
 if config_env() == :prod and not self_hosted do
   database_url = System.fetch_env!("PG_URL")
-
   secret_key_base = ConfigParser.secret_key_base(env_vars)
 
   function_transforms =
     if System.get_env("FEATURE_FUNCTION_TRANSFORMS", "disabled") in enabled_feature_values, do: :enabled, else: :disabled
+
+  config :logger,
+    default_handler: [
+      formatter: {Datadog, metadata: :all, redactors: [{Redactor, []}]}
+    ]
 
   config :sequin, Sequin.Pagerduty, integration_key: System.fetch_env!("PAGERDUTY_INTEGRATION_KEY")
 
@@ -260,7 +238,7 @@ if config_env() == :prod and not self_hosted do
   config :sequin, Sequin.Repo,
     ssl: AwsRdsCAStore.ssl_opts(database_url),
     pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "100")),
-    socket_options: ecto_socket_opts,
+    socket_options: ConfigParser.ecto_socket_opts(env_vars),
     url: database_url,
     datadog_req_opts: [
       headers: [
@@ -272,10 +250,10 @@ if config_env() == :prod and not self_hosted do
   config :sequin, SequinWeb.Endpoint,
     # `url` is used for configuring links in the console. So it corresponds to the *external*
     # host and port of the application
-    url: [host: server_host, port: 443, scheme: "https"],
+    url: [host: ConfigParser.server_host(env_vars), port: 443, scheme: "https"],
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
-      port: server_port
+      port: ConfigParser.server_port(env_vars)
     ],
     secret_key_base: secret_key_base
 
@@ -351,54 +329,4 @@ if config_env() == :prod do
       app_key: datadog_app_key,
       default_query: "service:sequin"
     ]
-
-  # ## SSL Support
-  #
-  # To get SSL working, you will need to add the `https` key
-  # to your endpoint configuration:
-  #
-  #     config :sequin, SequinWeb.Endpoint,
-  #       https: [
-  #         ...,
-  #         port: 443,
-  #         cipher_suite: :strong,
-  #         keyfile: System.get_env("SOME_APP_SSL_KEY_PATH"),
-  #         certfile: System.get_env("SOME_APP_SSL_CERT_PATH")
-  #       ]
-  #
-  # The `cipher_suite` is set to `:strong` to support only the
-  # latest and more secure SSL ciphers. This means old browsers
-  # and clients may not be supported. You can set it to
-  # `:compatible` for wider support.
-  #
-  # `:keyfile` and `:certfile` expect an absolute path to the key
-  # and cert in disk or a relative path inside priv, for example
-  # "priv/ssl/server.key". For all supported SSL configuration
-  # options, see https://hexdocs.pm/plug/Plug.SSL.html#configure/1
-  #
-  # We also recommend setting `force_ssl` in your config/prod.exs,
-  # ensuring no data is ever sent via http, always redirecting to https:
-  #
-  #     config :sequin, SequinWeb.Endpoint,
-  #       force_ssl: [hsts: true]
-  #
-  # Check `Plug.SSL` for all available options in `force_ssl`.
-
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Also, you may need to configure the Swoosh API client of your choice if you
-  # are not using SMTP. Here is an example of the configuration:
-  #
-  #     config :sequin, Sequin.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # For this example you need include a HTTP client required by Swoosh API client.
-  # Swoosh supports Hackney and Finch out of the box:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Hackney
-  #
-  # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end

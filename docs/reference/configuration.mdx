@@ -24,9 +24,9 @@ You can configure Sequin by setting environment variables.
   - If you're hosting Sequin at a public URL, you should set this to `true` and set `SERVER_HOST` to your public domain. This will ensure that Sequin only serves requests from origins matching `SERVER_HOST`. e.g. if your app is hosted at `https://sequin.example.com`, you should set `SERVER_HOST` to `sequin.example.com` and `SERVER_CHECK_ORIGIN` to `true`.
 - `LOG_LEVEL`: Sets application logging verbosity (default: `info`)
   - Valid values: `error`, `warning`, `notice`, `info`, `debug`
-- `SEQUIN_LOG_FORMAT`: Sets the log format (default: `CONSOLE`)
-  - `CONSOLE` outputs logs to the console in a human-readable format.
-  - `DATADOG_JSON` outputs logs in JSON format, which is compatible with Datadog's logging format.
+- `SEQUIN_LOG_FORMAT`: Sets the log format (default: `console`)
+  - `console` outputs logs to the console in a human-readable format.
+  - `datadog_json` outputs logs in JSON format, which is compatible with Datadog's logging format.
 
 ### Configuration file
 

@@ -66,6 +66,7 @@ defmodule Sequin.MixProject do
       {:aws, "~> 1.0"},
       {:aws_rds_castore, "~> 1.2.0"},
       {:aws_signature, "~> 0.3.2"},
+      {:goth, "~> 1.4"},
 
       # Monitoring and Observability
       {:telemetry_metrics, "~> 1.0"},

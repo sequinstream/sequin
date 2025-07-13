@@ -39,7 +39,16 @@ defmodule Sequin.Aws.Kinesis do
         :ok
 
       {:ok, resp, %{body: _body}} ->
-        {:error, resp}
+        message =
+          case Map.get(resp, "FailedRecordCount") do
+            nil ->
+              "Failed to put records to Kinesis stream"
+
+            failed_count ->
+              "Failed to put #{failed_count} records to Kinesis stream"
+          end
+
+        {:error, Error.service(service: :aws_kinesis, message: message, details: resp)}
 
       {:error, {:unexpected_response, details}} ->
         handle_unexpected_response(details)

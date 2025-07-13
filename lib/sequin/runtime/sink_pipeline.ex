@@ -450,13 +450,15 @@ defmodule Sequin.Runtime.SinkPipeline do
             error
 
           {:failed, error} ->
-            Error.service(service: "sink_pipeline", code: :unknown_error, message: error)
+            message = if is_map(error), do: inspect(error), else: error
+            Error.service(service: "sink_pipeline", code: :unknown_error, message: message)
 
           {:error, error, _stacktrace} when is_exception(error) ->
             Error.service(service: "sink_pipeline", code: :unknown_error, message: Exception.message(error))
 
           {:error, error} ->
-            Error.service(service: "sink_pipeline", code: :unknown_error, message: error)
+            message = if is_map(error), do: inspect(error), else: error
+            Error.service(service: "sink_pipeline", code: :unknown_error, message: message)
 
           {:exit, error} ->
             Error.service(service: "sink_pipeline", code: :unknown_error, message: inspect(error, pretty: true))

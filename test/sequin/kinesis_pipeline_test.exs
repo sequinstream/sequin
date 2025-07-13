@@ -105,6 +105,33 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
     end
 
+    @tag capture_log: true
+    test "Kinesis partial failure returns proper Sequin error", %{consumer: consumer} do
+      Req.Test.stub(HttpClient, fn conn ->
+        # Return a response with some failed records
+        Req.Test.json(conn, %{
+          "FailedRecordCount" => 2,
+          "Records" => [
+            %{"SequenceNumber" => "123", "ShardId" => "shard-001"},
+            %{"ErrorCode" => "ProvisionedThroughputExceededException", "ErrorMessage" => "Rate exceeded"},
+            %{"ErrorCode" => "InternalFailure", "ErrorMessage" => "Internal error"}
+          ]
+        })
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_event(consumer)
+      assert_receive {:ack, ^ref, [], [failed]}, 2_000
+
+      # Verify the error is a proper Sequin.Error.ServiceError
+      assert %{status: {:failed, %Sequin.Error.ServiceError{} = error}} = failed
+      assert error.service == :aws_kinesis
+      assert error.message == "[aws_kinesis]: Failed to put 2 records to Kinesis stream"
+      assert is_map(error.details)
+      assert error.details["FailedRecordCount"] == 2
+    end
+
     test "events are sent to Kinesis with routing function", %{consumer: consumer, account: account} do
       test_pid = self()
 

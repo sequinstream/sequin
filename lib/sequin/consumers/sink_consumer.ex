@@ -117,6 +117,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     belongs_to :transform, Function
     belongs_to :routing, Function
     belongs_to :filter, Function
+    belongs_to :enrichment, Function
 
     polymorphic_embeds_one(:sink,
       types: [
@@ -153,12 +154,10 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_memory_mb,
       :transform_id,
       :routing_id,
-      :filter_id
+      :filter_id,
+      :enrichment_id
     ])
     |> changeset(attrs)
-    |> foreign_key_constraint(:transform_id)
-    |> foreign_key_constraint(:routing_id)
-    |> foreign_key_constraint(:filter_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:batch_size,
       name: "ensure_batch_size_one",
@@ -198,6 +197,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       :transform_id,
       :routing_id,
       :filter_id,
+      :enrichment_id,
       :timestamp_format,
       :batch_timeout_ms,
       :load_shedding_policy,
@@ -218,6 +218,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:max_retry_count, greater_than: 0)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
     |> validate_routing(attrs)
+    |> foreign_key_constraint(:transform_id)
+    |> foreign_key_constraint(:routing_id)
+    |> foreign_key_constraint(:filter_id)
+    |> foreign_key_constraint(:enrichment_id)
     |> Sequin.Changeset.annotations_check_constraint()
   end
 

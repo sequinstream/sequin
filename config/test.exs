@@ -92,7 +92,8 @@ config :sequin,
   ],
   features: [
     account_self_signup: :enabled,
-    function_transforms: :enabled
+    function_transforms: :enabled,
+    sql_enrichment_functions: :enabled
   ],
   aws_sqs: [
     req_opts: [plug: {Req.Test, Sequin.Aws.HttpClient}]

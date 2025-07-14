@@ -28,6 +28,7 @@
     path: "/reference/transforms",
     routing: "/reference/routing",
     filter: "/reference/filters#filter-functions",
+    sql_enrichment: "/reference/sql-enrichment",
   };
 
   let getHref = (transform) => docBase + typeToDocPath[transform.type];

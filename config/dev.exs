@@ -74,7 +74,8 @@ config :sequin,
   features: [
     account_self_signup: :enabled,
     provision_default_user: :disabled,
-    function_transforms: :enabled
+    function_transforms: :enabled,
+    sql_enrichment_functions: :enabled
   ],
   backfill_max_pending_messages: 100_000,
   release_version: System.get_env("RELEASE_VERSION"),

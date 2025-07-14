@@ -10,6 +10,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabaseTable
@@ -192,10 +193,21 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_sql_enrichment """
+  select
+    id as sequin_id, -- required to associate the enrichment with the message
+    lower(name) as name_lower -- example of an enrichment
+  from
+    users
+  where
+    id = {{id}} -- this syntax is required for Sequin to perform queries / batching
+  """
+
   @initial_code_map %{
     "path" => "",
     "transform" => @initial_transform,
     "filter" => @initial_filter,
+    "sql_enrichment" => @initial_sql_enrichment,
     "routing_undefined" => @initial_route_no_sink_type,
     "routing_http_push" => @initial_route_http,
     "routing_redis_string" => @initial_route_redis_string,
@@ -610,6 +622,9 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
         %PathFunction{} ->
           %{consumer | transform: function}
+
+        %SqlEnrichmentFunction{} ->
+          %{consumer | enrichment: function}
       end
 
     Enum.map(test_messages, fn test_message ->
@@ -663,6 +678,10 @@ defmodule SequinWeb.FunctionsLive.Edit do
       false -> false
       other -> raise Sequin.Error.invariant(message: "Filter function must return true or false, got: #{inspect(other)}")
     end
+  end
+
+  defp run_function(%SinkConsumer{enrichment: %Function{} = function}, message) do
+    :todo
   end
 
   defp assign_databases(socket) do
@@ -730,6 +749,10 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   defp decode_function(%{"type" => "filter"} = function) do
     %{"type" => "filter", "code" => function["code"]}
+  end
+
+  defp decode_function(%{"type" => "sql_enrichment"} = function) do
+    %{"type" => "sql_enrichment", "code" => function["code"]}
   end
 
   defp decode_function(%{}), do: nil

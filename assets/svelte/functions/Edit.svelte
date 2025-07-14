@@ -62,6 +62,7 @@
   import { EditorView, basicSetup } from "codemirror";
   import { EditorState } from "@codemirror/state";
   import { elixir } from "codemirror-lang-elixir";
+  import { sql } from "@codemirror/lang-sql";
   import { keymap } from "@codemirror/view";
   import { indentWithTab } from "@codemirror/commands";
   import { autocompletion } from "@codemirror/autocomplete";
@@ -95,6 +96,7 @@
     transform: "Transform function",
     routing: "Routing function",
     path: "Path transform",
+    sql_enrichment: "SQL enrichment",
   };
 
   let sinkTypeInternalToExternal = {
@@ -134,6 +136,8 @@
   }
   let functionEditorElement: HTMLElement;
   let functionEditorView: EditorView;
+  let sqlEditorElement: HTMLElement;
+  let sqlEditorView: EditorView;
 
   let copyTimeout: ReturnType<typeof setTimeout>;
 
@@ -292,13 +296,23 @@
       form.function.code = newInitialCode;
     }
 
-    functionEditorView.dispatch({
-      changes: {
-        from: 0,
-        to: functionEditorView.state.doc.length,
-        insert: form.function.code,
-      },
-    });
+    if (form.function.type === "sql_enrichment") {
+      sqlEditorView?.dispatch({
+        changes: {
+          from: 0,
+          to: sqlEditorView.state.doc.length,
+          insert: form.function.code,
+        },
+      });
+    } else {
+      functionEditorView?.dispatch({
+        changes: {
+          from: 0,
+          to: functionEditorView.state.doc.length,
+          insert: form.function.code,
+        },
+      });
+    }
   }
 
   function deleteMessage(message: TestMessage, index: number) {
@@ -589,10 +603,37 @@
       parent: functionEditorElement,
     });
 
+    // Initialize CodeMirror for SQL if it exists
+    const sqlStartState = EditorState.create({
+      doc: form.function.code || "",
+      extensions: [
+        basicSetup,
+        sql(),
+        autocompletion(),
+        keymap.of([indentWithTab]),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            const code = update.state.doc.toString();
+            form.function.code = code;
+            saveFunctionCodeToStorage(form);
+            checkIfCodeModified(code);
+          }
+        }),
+      ],
+    });
+
+    if (sqlEditorElement) {
+      sqlEditorView = new EditorView({
+        state: sqlStartState,
+        parent: sqlEditorElement,
+      });
+    }
+
     loadStoredOrInitialCode();
 
     return () => {
       functionEditorView.destroy();
+      sqlEditorView?.destroy();
     };
   });
 
@@ -700,10 +741,7 @@ Please help me create or modify the Elixir function transform to achieve the des
           <h2 class="text-lg font-semibold tracking-tight">
             Function Configuration
           </h2>
-          <a
-            href="https://sequinstream.com/docs/reference/transforms"
-            target="_blank"
-          >
+          <a href={functionDocsUrl} target="_blank">
             <Button variant="outline" size="sm">
               <BookText class="h-3 w-3 mr-1" />
               Docs
@@ -1003,6 +1041,93 @@ Please help me create or modify the Elixir function transform to achieve the des
                     on:keydown={ignoreEscKeypress}
                     role="textbox"
                     aria-label="Function code editor"
+                    tabindex="0"
+                  >
+                    <div
+                      class="absolute bottom-2 right-2 flex items-center gap-2 z-10"
+                    >
+                      {#if isCodeModified}
+                        <span
+                          class="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded-full font-medium select-none"
+                          >modified</span
+                        >
+                      {/if}
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <button
+                            type="button"
+                            class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            on:click={resetOriginalCode}
+                            disabled={!isCodeModified}
+                          >
+                            <RotateCcw class="w-4 h-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Reset to original code</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
+
+                  <p
+                    class="-mb-2 min-h-10 text-sm text-red-500 dark:text-red-400"
+                  >
+                    {#if formErrors.function?.code}
+                      {formErrors.function.code[0]}
+                    {/if}
+                  </p>
+                </div>
+              {/if}
+            </div>
+          </div>
+
+          <div hidden={form.function.type !== "sql_enrichment"}>
+            <div class="space-y-2">
+              {#if !functionTransformsEnabled}
+                <div
+                  class="flex w-fit items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md"
+                >
+                  <Info
+                    class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5"
+                  />
+                  <div class="flex flex-col gap-1">
+                    <p class="text-sm text-blue-700 dark:text-blue-300">
+                      Functions are not enabled in Cloud.
+                    </p>
+                    <p class="text-sm text-blue-700 dark:text-blue-300">
+                      Talk to the Sequin team if you are interested in trying
+                      them out.
+                    </p>
+                  </div>
+                </div>
+              {:else}
+                <div class="max-w-3xl">
+                  <div class="flex items-center gap-2">
+                    <Label for="sql-function">SQL Query</Label>
+                    <Popover>
+                      <PopoverTrigger>
+                        <Info
+                          class="w-4 h-4 text-slate-500 dark:text-slate-400"
+                        />
+                      </PopoverTrigger>
+                      <PopoverContent
+                        class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      >
+                        <div class="text-sm space-y-2">
+                          <p class="text-slate-500 dark:text-slate-400">
+                            Enter a SQL query to enrich your data. The query
+                            will be executed against your database to fetch
+                            additional data.
+                          </p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div
+                    bind:this={sqlEditorElement}
+                    class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden relative"
+                    on:keydown={ignoreEscKeypress}
+                    role="textbox"
+                    aria-label="SQL query editor"
                     tabindex="0"
                   >
                     <div

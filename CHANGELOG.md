@@ -4,24 +4,96 @@
 
 </div>
 
-# Release Notes
-
-This document details changes on a weekly basis. For notes on Docker and CLI version releases, see the [GitHub Releases](https://github.com/sequinstream/sequin/releases) page.
-
 # Changelog
 
 Sequin provides fast, real-time Postgres change data capture into streams and queues.
 
 This log is updated every Friday to track our feature releases and updates week by week. [Subscribe](https://sequinstream.com/#newsletter) to get updates in your inbox.
 
+> [!NOTE]
+For notes on Docker and CLI version releases, see the [GitHub Releases](https://github.com/sequinstream/sequin/releases) page.
+
+## July 11, 2025
+[v0.12.2...v0.12.11](https://github.com/sequinstream/sequin/releases/tag/v0.12.11)
+
+### Partial backfills
+
+You can now specify a precise subset of a table to backfill using [partial backfills](https://sequinstream.com/docs/reference/backfills#full-and-partial-backfills).
+
+<div align="center">
+<img src="https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-07-11/partial-backfills.png" alt="Screenshot of how to setup a partial backfill in the console" width="600" />
+</div>
+
+You'll define what portion of the table to backfill using a SQL `WHERE` clause on a column in the table. For instance, you can filter on a `created_at` column or enum that represents the state of the row.
+
+Partial backfills are particularly useful in disaster recovery - you can reprocess just the rows affected by an incident. More generally, we see developers using partial backfills in development or when working with incredibly large tables that don't require a full snapshot.
+
+### Performance: 90 MB/sec throughput
+
+We've increased throughput by ~2X with local sinks running at 90 MB/sec. We'll be running full benching and updating our [performance benchmarks](https://sequinstream.com/docs/performance) soon.
+
+Additionally, we're tuning the default configuration for each destination to optimize performance out of the box.
+
+<details>
+
+<summary>Fixes and improvements</summary>
+
+### Improved
+
+* Add gzip compression for [HTTP Webhook](https://sequinstream.com/docs/reference/sinks/webhooks#payload-compression) and GCP Pub/Sub
+* Typesense: increased the timeout to better support embeddings and improved how Sequin handles deletes.
+* Improved auto complete when writing functions in the web console.
+* Added JSON Regex, and integer library support to Mini Elixir for use in functions.
+* You can now **restart** database connections to manually force Sequin to reconnect to your database.
+* Improved the messages tab to better support multiple tables in a sync by showing the origination table for each message
+* You can now load AWS credentials for AWS destinations using the task tole, env, or profile of your Sequin deployment.
+* Sequin now defaults logging to the `console` format to make logs easier to read when getting started.
+
+### Fixed
+
+* Fixed how Sequin handles non-transactional logical messages
+* Improved how the console handles empty states in forms
+
+</details>
+
+## July 4, 2025
+[v0.11.2...v0.12.1](https://github.com/sequinstream/sequin/releases/tag/v0.12.1)
+
+### Routing for all sinks
+
+Sequin now supports [routing](https://sequinstream.com/docs/reference/routing) on **ALL SINKS**. Routing allows you to route messages to different destinations based on the contents of the message. For example:
+
+* With [HTTP Webhok sinks](https://sequinstream.com/docs/reference/routing#http-webhook-sink), you can customize **dynamic headers** and the **HTTP method** based on the contents of the message.
+* For [Redis String sinks](https://sequinstream.com/docs/reference/routing#redis-string-sink), you can customize the Redis action, and key expire time.
+* In [NATS sinks](https://sequinstream.com/docs/reference/routing#nats-sink), you can customize the **full subject**.
+
+Routing is particularly useful in sinks that contain multiple tables - so each can be routed to the proper topic, subject, index, or endpoint.
+
+<details>
+
+<summary>Fixes and improvements</summary>
+
+### Improved
+
+* Add mTLS and CA cert support when configuring Sequin's Redis dependency
+* Improvement to the console UX when working with functions and when selecting tables and schemas to include in a sink.
+* Improve Sequin performance by tuning batch timeouts in sinks
+* Allow transform, routing, and filtering function code to be embedded into sequin.yml by [file reference](https://sequinstream.com/docs/reference/sequin-yaml#functions-via-files) and environment variables.
+
+</details>
+
 ## June 27, 2025
 [v0.10.6...v0.11.1](https://github.com/sequinstream/sequin/releases/tag/v0.11.1)
 
-### Enhanced Routing Sink Types
+### Meilisearch sink
 
-Routing is a key feature of Sequin. It allows you to route messages to different destinations based on the contents of the message.
+Sequin now supports [Meilisearch](https://sequinstream.com/docs/how-to/stream-postgres-to-meilisearch) as a sink destination!
 
-We've added mechanisms to increase the power of existing routing functions and pave the way for more routing functions in the future.
+<div align="center">
+<img src="https://github.com/sequinstream/sequin/blob/main/docs/images/changelog/2025-06-27/meilisearch-sink.png" alt="Sequin now natively integrates with Meilisearch" width="600" />
+</div>
+
+Sequin will keep your Meilisearch search index in sync with your database with millisecond latency. Check out the [Meilisearch Quickstart](https://sequinstream.com/docs/quickstart/meilisearch) and dig into the [reference](https://sequinstream.com/docs/reference/sinks/meilisearch) to learn how to get up and running with a Meilisearch sink today.
 
 <details>
 
@@ -31,9 +103,12 @@ We've added mechanisms to increase the power of existing routing functions and p
 
 Improved capabilities via Routing functions:
 
-* HTTP Push: Now support providing custom **dynamic headers** and **HTTP method**.
-* Redis String: You can now customize the Redis action, and key expire time.
-* NATS: Allow customizing the **full subject** and headers
+* Add support for UUID in transform functions
+* GCP Pub/Sub: improved batching and ordering key configurations to improve performance
+* Add `metadata.database` to all messages
+* Added `message_grouping` configuration option to sequin.yml
+* Support [localstack](https://sequinstream.com/docs/reference/sinks/sqs#running-sqs-locally) for mocking SQS in development.
+*
 
 </details>
 

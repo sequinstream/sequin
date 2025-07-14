@@ -46,7 +46,7 @@ defmodule Sequin.Consumers.RoutingFunction do
         Consumers.validate_code(code)
       end)
     else
-      add_error(changeset, :type, "Function/routing transforms are not enabled. Talk to the Sequin team to enable them.")
+      add_error(changeset, :type, "Functions are not enabled. Talk to the Sequin team to enable them.")
     end
   end
 end

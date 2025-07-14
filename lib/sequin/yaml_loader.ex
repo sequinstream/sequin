@@ -1037,6 +1037,14 @@ defmodule Sequin.YamlLoader do
     {:error, Error.validation(summary: "`name` is required on functions.")}
   end
 
+  defp upsert_function(_account_id, %{"file" => _} = _function_attrs) do
+    {:error,
+     Error.bad_request(
+       message:
+         "`file` parameter found. This might indicate your CLI version is out of date. Please update to the latest version."
+     )}
+  end
+
   defp upsert_function(account_id, %{"name" => name} = raw_attrs) do
     with {:ok, function_attrs} <- coerce_function_attrs(raw_attrs) do
       case Consumers.find_function(account_id, name: name) do

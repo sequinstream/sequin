@@ -28,9 +28,9 @@ You'll define what portion of the table to backfill using a SQL `WHERE` clause o
 
 Partial backfills are particularly useful in disaster recovery - you can reprocess just the rows affected by an incident. More generally, we see developers using partial backfills in development or when working with incredibly large tables that don't require a full snapshot.
 
-### Performance: 90 MB/sec throughput
+### Performance: 50% increase in throughput
 
-We've increased throughput by ~2X with local sinks running at 90 MB/sec. We'll be running full benching and updating our [performance benchmarks](https://sequinstream.com/docs/performance) soon.
+We've increased throughput by ~50%. We'll be running full benching and updating our [performance benchmarks](https://sequinstream.com/docs/performance) soon.
 
 Additionally, we're tuning the default configuration for each destination to optimize performance out of the box.
 

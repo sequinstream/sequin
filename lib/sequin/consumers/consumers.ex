@@ -15,6 +15,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Source
+  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -24,6 +25,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.Postgres
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
@@ -1856,5 +1858,53 @@ defmodule Sequin.Consumers do
         }
       }
     }
+  end
+
+  def enrich_messages!(nil, _, _), do: raise("Database is required to enrich messages, got nil.")
+  def enrich_messages!(%PostgresDatabase{}, nil, messages), do: messages
+
+  def enrich_messages!(%PostgresDatabase{} = database, %Function{function: %SqlEnrichmentFunction{} = function}, messages)
+      when is_list(messages) do
+    # TODO
+    to_replace = "{{id}}"
+
+    # TODO
+    replace_with = """
+    ANY($1::int[])
+    """
+
+    sql = String.replace(function.code, to_replace, replace_with)
+
+    params =
+      messages
+      |> Enum.flat_map(& &1.data.metadata.record_pks)
+      # HACK
+      |> Enum.map(&String.to_integer/1)
+
+    case Postgres.query(database, sql, [params]) do
+      {:ok, %Postgrex.Result{} = result} ->
+        merge_enrichments(messages, Postgres.result_to_maps(result))
+
+      {:error, error} ->
+        raise error
+    end
+  end
+
+  defp merge_enrichments(messages, enrichments) do
+    Enum.map(messages, fn message ->
+      enrichment =
+        Enum.find(enrichments, &enrichment_matches?(message, &1))
+
+      update_in(message.data.record, fn record ->
+        enrichment = Map.delete(enrichment, "sequin_id")
+        Map.merge(record, enrichment)
+      end)
+    end)
+  end
+
+  defp enrichment_matches?(message, enrichment) do
+    [message_pk] = message.data.metadata.record_pks
+    enrichment_id = enrichment["sequin_id"]
+    to_string(enrichment_id) == to_string(message_pk)
   end
 end

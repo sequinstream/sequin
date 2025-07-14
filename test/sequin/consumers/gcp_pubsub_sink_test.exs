@@ -1,23 +1,8 @@
 defmodule Sequin.Consumers.GcpPubsubSinkTest do
-  use ExUnit.Case, async: true
-
-  import Mox
+  use Sequin.Case, async: true
 
   alias Sequin.Consumers.GcpPubsubSink
-  alias Sequin.Gcp.ApplicationDefaultCredentialsMock
-
-  setup :verify_on_exit!
-
-  setup do
-    # Configure application to use the mock
-    Application.put_env(:sequin, :gcp_credentials_module, ApplicationDefaultCredentialsMock)
-
-    on_exit(fn ->
-      Application.delete_env(:sequin, :gcp_credentials_module)
-    end)
-
-    :ok
-  end
+  alias Sequin.Test.GcpTestHelpers
 
   describe "changeset/2" do
     test "validates explicit credentials when use_application_default_credentials is false" do
@@ -76,11 +61,8 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
       assert changeset.errors[:topic_id]
     end
 
+    @tag self_hosted: true
     test "sets topic_id to nil when routing_mode is dynamic" do
-      # Store original value and set self_hosted to true to allow application default credentials
-      original_self_hosted = Application.get_env(:sequin, :self_hosted)
-      Application.put_env(:sequin, :self_hosted, true)
-
       changeset =
         GcpPubsubSink.changeset(%GcpPubsubSink{}, %{
           project_id: "test-project",
@@ -92,9 +74,6 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
 
       assert changeset.valid?
       assert Ecto.Changeset.get_field(changeset, :topic_id) == nil
-
-      # Restore original setting
-      Application.put_env(:sequin, :self_hosted, original_self_hosted)
     end
 
     test "validates topic_id is required when routing_mode is static" do
@@ -194,38 +173,7 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
     end
 
     test "creates client with application default credentials when use_application_default_credentials is true" do
-      # Mock the application default credentials
-      mock_credentials = %{
-        "type" => "service_account",
-        "project_id" => "test-project",
-        "private_key_id" => "key-id",
-        "private_key" => "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----\n",
-        "client_email" => "test@test-project.iam.gserviceaccount.com",
-        "client_id" => "123456789"
-      }
-
-      normalized_credentials = %{
-        type: "service_account",
-        project_id: "test-project",
-        private_key_id: "key-id",
-        private_key: "-----BEGIN PRIVATE KEY-----\ntest-key\n-----END PRIVATE KEY-----\n",
-        client_email: "test@test-project.iam.gserviceaccount.com",
-        client_id: "123456789",
-        auth_uri: "https://accounts.google.com/o/oauth2/auth",
-        token_uri: "https://oauth2.googleapis.com/token",
-        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-        client_x509_cert_url:
-          "https://www.googleapis.com/robot/v1/metadata/x509/test%40test-project.iam.gserviceaccount.com",
-        universe_domain: "googleapis.com"
-      }
-
-      expect(ApplicationDefaultCredentialsMock, :get_credentials, fn ->
-        {:ok, mock_credentials}
-      end)
-
-      expect(ApplicationDefaultCredentialsMock, :normalize_credentials, fn ^mock_credentials ->
-        {:ok, normalized_credentials}
-      end)
+      GcpTestHelpers.setup_application_default_credentials_stub(project_id: "test-project")
 
       sink = %GcpPubsubSink{
         project_id: "test-project",
@@ -257,9 +205,7 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
     end
 
     test "raises error when application default credentials are unavailable" do
-      expect(ApplicationDefaultCredentialsMock, :get_credentials, fn ->
-        {:error, "No credentials available"}
-      end)
+      GcpTestHelpers.setup_failed_application_default_credentials_stub()
 
       sink = %GcpPubsubSink{
         project_id: "test-project",
@@ -267,25 +213,13 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
         use_application_default_credentials: true
       }
 
-      assert_raise RuntimeError, "Failed to get application default credentials: \"No credentials available\"", fn ->
+      assert_raise RuntimeError, ~r/Failed to create PubSub client/, fn ->
         GcpPubsubSink.pubsub_client(sink)
       end
     end
 
     test "raises error when credentials normalization fails" do
-      mock_credentials = %{
-        "type" => "authorized_user",
-        "client_id" => "123456789",
-        "client_secret" => "secret"
-      }
-
-      expect(ApplicationDefaultCredentialsMock, :get_credentials, fn ->
-        {:ok, mock_credentials}
-      end)
-
-      expect(ApplicationDefaultCredentialsMock, :normalize_credentials, fn ^mock_credentials ->
-        {:error, "Authorized user credentials not supported"}
-      end)
+      GcpTestHelpers.setup_authorized_user_credentials_stub()
 
       sink = %GcpPubsubSink{
         project_id: "test-project",
@@ -294,7 +228,7 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
       }
 
       assert_raise RuntimeError,
-                   "Failed to get application default credentials: \"Authorized user credentials not supported\"",
+                   ~r/Failed to create PubSub client/,
                    fn ->
                      GcpPubsubSink.pubsub_client(sink)
                    end
@@ -313,11 +247,8 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
   end
 
   describe "changeset/2 cloud mode restrictions" do
+    @tag self_hosted: false
     test "validates that use_application_default_credentials is false when not self_hosted" do
-      # Store original value and set to cloud mode
-      original_self_hosted = Application.get_env(:sequin, :self_hosted)
-      Application.put_env(:sequin, :self_hosted, false)
-
       params = %{
         project_id: "test-project",
         use_emulator: false,
@@ -332,16 +263,10 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
       assert changeset.errors[:use_application_default_credentials] ==
                {"Application Default Credentials are not supported in Sequin Cloud. Please use explicit credentials instead.",
                 []}
-
-      # Restore the original setting
-      Application.put_env(:sequin, :self_hosted, original_self_hosted)
     end
 
+    @tag self_hosted: true
     test "allows use_application_default_credentials when self_hosted" do
-      # Store original value and set to self-hosted mode
-      original_self_hosted = Application.get_env(:sequin, :self_hosted)
-      Application.put_env(:sequin, :self_hosted, true)
-
       params = %{
         project_id: "test-project",
         use_emulator: false,
@@ -353,16 +278,10 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
 
       assert changeset.valid?
       refute changeset.errors[:use_application_default_credentials]
-
-      # Restore the original setting
-      Application.put_env(:sequin, :self_hosted, original_self_hosted)
     end
 
+    @tag self_hosted: false
     test "allows use_application_default_credentials=false in cloud mode" do
-      # Store original value and set to cloud mode
-      original_self_hosted = Application.get_env(:sequin, :self_hosted)
-      Application.put_env(:sequin, :self_hosted, false)
-
       params = %{
         project_id: "test-project",
         use_emulator: false,
@@ -382,9 +301,6 @@ defmodule Sequin.Consumers.GcpPubsubSinkTest do
 
       assert changeset.valid?
       refute changeset.errors[:use_application_default_credentials]
-
-      # Restore the original setting
-      Application.put_env(:sequin, :self_hosted, original_self_hosted)
     end
   end
 end

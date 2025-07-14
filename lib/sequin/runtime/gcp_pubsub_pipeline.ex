@@ -105,6 +105,6 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
   defp setup_allowances(test_pid) do
     Req.Test.allow(Sequin.Sinks.Gcp.HttpClient, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
-    Mox.allow(Sequin.Gcp.ApplicationDefaultCredentialsMock, test_pid, self())
+    Mox.allow(Sequin.GcpMock, test_pid, self())
   end
 end

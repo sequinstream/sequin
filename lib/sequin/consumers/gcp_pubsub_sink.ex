@@ -6,7 +6,6 @@ defmodule Sequin.Consumers.GcpPubsubSink do
   import Ecto.Changeset
 
   alias Sequin.Sinks.Gcp.Credentials
-  alias Sequin.Sinks.Gcp.PubSub
 
   @derive {Jason.Encoder, only: [:project_id, :topic_id, :use_application_default_credentials]}
   @primary_key false
@@ -95,7 +94,7 @@ defmodule Sequin.Consumers.GcpPubsubSink do
   end
 
   defp validate_cloud_mode_restrictions(changeset) do
-    self_hosted? = Application.get_env(:sequin, :self_hosted, true)
+    self_hosted? = Sequin.Config.self_hosted?()
     use_application_default_credentials? = get_field(changeset, :use_application_default_credentials)
 
     if not self_hosted? and use_application_default_credentials? do
@@ -113,34 +112,12 @@ defmodule Sequin.Consumers.GcpPubsubSink do
   Creates a new PubSub client for the given sink configuration.
   """
   def pubsub_client(%__MODULE__{} = sink) do
-    cond do
-      sink.use_emulator ->
-        opts = [req_opts: [base_url: sink.emulator_base_url], use_emulator: true]
-        PubSub.new(sink.project_id, sink.credentials, opts)
-
-      sink.use_application_default_credentials ->
-        case get_application_default_credentials() do
-          {:ok, credentials} ->
-            PubSub.new(sink.project_id, credentials, [])
-
-          {:error, reason} ->
-            raise "Failed to get application default credentials: #{inspect(reason)}"
-        end
-
-      true ->
-        PubSub.new(sink.project_id, sink.credentials, [])
-    end
-  end
-
-  defp get_application_default_credentials do
-    credentials_module = Application.get_env(:sequin, :gcp_credentials_module, Sequin.Gcp.ApplicationDefaultCredentials)
-
-    case credentials_module.get_credentials() do
-      {:ok, raw_credentials} ->
-        credentials_module.normalize_credentials(raw_credentials)
+    case Sequin.Gcp.get_gcp_pubsub_client(sink) do
+      {:ok, client} ->
+        client
 
       {:error, reason} ->
-        {:error, reason}
+        raise "Failed to create PubSub client: #{inspect(reason)}"
     end
   end
 

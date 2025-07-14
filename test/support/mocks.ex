@@ -31,6 +31,7 @@ Mox.defmock(Sequin.TestSupport.UUIDMock,
 )
 
 Mox.defmock(Sequin.AwsMock, for: Sequin.Aws)
+Mox.defmock(Sequin.GcpMock, for: Sequin.Gcp)
 
 Mox.defmock(Sequin.Runtime.SlotMessageStoreMock,
   for: Sequin.Runtime.SlotMessageStoreBehaviour
@@ -58,8 +59,4 @@ Mox.defmock(Sequin.TestSupport.ApplicationMock,
 
 Mox.defmock(Sequin.Runtime.SinkPipelineMock,
   for: Sequin.Runtime.SinkPipeline
-)
-
-Mox.defmock(Sequin.Gcp.ApplicationDefaultCredentialsMock,
-  for: Sequin.Gcp.ApplicationDefaultCredentials
 )

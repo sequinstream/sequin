@@ -777,6 +777,19 @@ defmodule Sequin.YamlLoaderTest do
       assert is_nil(sink.filter)
       assert is_nil(sink.routing)
     end
+
+    test "rejects functions with file parameter" do
+      assert_raise RuntimeError, ~r/`file` parameter found/, fn ->
+        YamlLoader.apply_from_yml!("""
+        account:
+          name: "Configured by Sequin"
+
+        functions:
+          - name: "my-function"
+            file: "my-function.ex"
+        """)
+      end
+    end
   end
 
   describe "sinks" do

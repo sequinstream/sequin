@@ -26,6 +26,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Source
   alias Sequin.Consumers.SourceTable
+  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
@@ -453,6 +454,15 @@ defmodule Sequin.Transforms do
       description: function.description,
       type: function.type,
       sink_type: function.function.sink_type,
+      code: function.function.code
+    }
+  end
+
+  def to_external(%Function{function: %SqlEnrichmentFunction{}} = function, _show_sensitive) do
+    %{
+      name: function.name,
+      description: function.description,
+      type: function.type,
       code: function.function.code
     }
   end

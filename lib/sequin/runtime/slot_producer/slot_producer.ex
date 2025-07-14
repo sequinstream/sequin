@@ -201,7 +201,7 @@ defmodule Sequin.Runtime.SlotProducer do
       # on_disconnect: Keyword.get(opts, :on_disconnect),
       restart_wal_cursor_fn: Keyword.get(opts, :restart_wal_cursor_fn, &PipelineDefaults.restart_wal_cursor/2),
       setting_reconnect_interval: Keyword.get(opts, :reconnect_interval, to_timeout(second: 10)),
-      setting_ack_interval: Keyword.get(opts, :ack_interval, to_timeout(second: 10)),
+      setting_ack_interval: Keyword.get(opts, :ack_interval, to_timeout(second: 5)),
       setting_restart_wal_cursor_update_interval:
         Keyword.get(opts, :restart_wal_cursor_update_interval, to_timeout(second: 10)),
       consumer_mod: Keyword.get_lazy(opts, :consumer_mod, fn -> PipelineDefaults.processor_mod() end),
@@ -294,34 +294,8 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   def handle_info(:send_ack, %State{} = state) do
-    delta =
-      case state.last_sent_restart_wal_cursor do
-        nil -> 0
-        last_sent -> state.restart_wal_cursor.commit_lsn - last_sent.commit_lsn
-      end
-
-    if delta < 0 do
-      raise """
-        Was about to send lower restart_wal_cursor:
-          restart_wal_cursor=#{inspect(state.restart_wal_cursor)}
-          last_sent_restart_wal_cursor=#{inspect(state.last_sent_restart_wal_cursor)}
-      """
-    end
-
-    Logger.info("[SlotProducer] Sending ack for LSN #{state.restart_wal_cursor.commit_lsn} (+#{delta})",
-      delta_bytes: delta
-    )
-
-    msg = ack_message(state.restart_wal_cursor.commit_lsn)
     state = schedule_ack(%{state | ack_timer: nil})
-
-    case Protocol.handle_copy_send(msg, state.protocol) do
-      :ok ->
-        {:noreply, [], %{state | last_sent_restart_wal_cursor: state.restart_wal_cursor}}
-
-      {error, reason, protocol} ->
-        handle_disconnect(error, reason, %{state | protocol: protocol})
-    end
+    send_ack(state)
   end
 
   def handle_info(:update_restart_wal_cursor, %State{} = state) do
@@ -751,6 +725,36 @@ defmodule Sequin.Runtime.SlotProducer do
       id,
       %Event{slug: :replication_connected, status: :success}
     )
+  end
+
+  defp send_ack(%State{} = state) do
+    delta =
+      case state.last_sent_restart_wal_cursor do
+        nil -> 0
+        last_sent -> state.restart_wal_cursor.commit_lsn - last_sent.commit_lsn
+      end
+
+    if delta < 0 do
+      raise """
+        Was about to send lower restart_wal_cursor:
+          restart_wal_cursor=#{inspect(state.restart_wal_cursor)}
+          last_sent_restart_wal_cursor=#{inspect(state.last_sent_restart_wal_cursor)}
+      """
+    end
+
+    Logger.info("[SlotProducer] Sending ack for LSN #{state.restart_wal_cursor.commit_lsn} (+#{delta})",
+      delta_bytes: delta
+    )
+
+    msg = ack_message(state.restart_wal_cursor.commit_lsn)
+
+    case Protocol.handle_copy_send(msg, state.protocol) do
+      :ok ->
+        {:noreply, [], %{state | last_sent_restart_wal_cursor: state.restart_wal_cursor}}
+
+      {error, reason, protocol} ->
+        handle_disconnect(error, reason, %{state | protocol: protocol})
+    end
   end
 
   defp start_replication_query(%State{} = state) do

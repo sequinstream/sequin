@@ -19,7 +19,8 @@ defmodule Sequin.MixProject do
   def application do
     [
       mod: {Sequin.Application, []},
-      extra_applications: [:logger, :runtime_tools] ++ extra_applications(Mix.env())
+      extra_applications: [:logger, :runtime_tools] ++ extra_applications(Mix.env()),
+      included_applications: [:aws_credentials]
     ]
   end
 

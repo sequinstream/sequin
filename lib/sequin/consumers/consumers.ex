@@ -1863,25 +1863,49 @@ defmodule Sequin.Consumers do
 
   def enrich_messages!(%PostgresDatabase{} = database, %Function{function: %SqlEnrichmentFunction{} = function}, messages)
       when is_list(messages) do
-    # TODO
-    to_replace = "{{id}}"
+    # Create a transaction to ensure the temporary table is cleaned up
+    database
+    |> Postgres.transaction(fn conn ->
+      # Create temporary table for enrichment references
+      # temporary tables are not logged, so they are not persisted to disk
+      # with ON COMMIT DROP, they are automatically dropped at the end of the transaction
+      Postgres.query!(conn, """
+      CREATE TEMPORARY TABLE enrichment_references (
+        id integer NOT NULL
+      ) ON COMMIT DROP;
+      """)
 
-    # TODO
-    replace_with = """
-    ANY($1::int[])
-    """
+      # Extract and insert IDs from messages
+      params =
+        messages
+        |> Enum.flat_map(& &1.data.metadata.record_pks)
+        |> Enum.map(&String.to_integer/1)
 
-    sql = String.replace(function.code, to_replace, replace_with)
+      # Insert IDs into enrichment_references table
+      Postgres.query!(
+        conn,
+        """
+        INSERT INTO enrichment_references (id)
+        SELECT unnest($1::integer[]);
+        """,
+        [params]
+      )
 
-    params =
-      messages
-      |> Enum.flat_map(& &1.data.metadata.record_pks)
-      # HACK
-      |> Enum.map(&String.to_integer/1)
+      # Execute the enrichment query
+      sql = function.code
 
-    case Postgres.query(database, sql, [params]) do
-      {:ok, %Postgrex.Result{} = result} ->
-        merge_enrichments(messages, Postgres.result_to_maps(result))
+      case Postgres.query(conn, sql, []) do
+        {:ok, %Postgrex.Result{} = result} ->
+          IO.inspect(result, label: "RESULT")
+          merge_enrichments(messages, Postgres.result_to_maps(result))
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end)
+    |> case do
+      {:ok, messages} ->
+        messages
 
       {:error, error} ->
         raise error

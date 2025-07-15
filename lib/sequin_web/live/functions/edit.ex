@@ -194,13 +194,13 @@ defmodule SequinWeb.FunctionsLive.Edit do
   """
 
   @initial_sql_enrichment """
-  select
-    id as sequin_id, -- required to associate the enrichment with the message
-    lower(name) as name_lower -- example of an enrichment
-  from
-    users
-  where
-    id = {{id}} -- this syntax is required for Sequin to perform queries / batching
+  -- Example enrichment query that joins with enrichment_references table
+  SELECT
+    u.id as sequin_id, -- required to associate the enrichment with the message
+    lower(u.name) as name_lower -- example of an enrichment
+  FROM
+    users u
+  INNER JOIN enrichment_references r ON r.id = u.id
   """
 
   @initial_code_map %{

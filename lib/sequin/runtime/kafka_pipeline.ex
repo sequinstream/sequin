@@ -28,26 +28,29 @@ defmodule Sequin.Runtime.KafkaPipeline do
   end
 
   @impl SinkPipeline
-  def handle_message(message, context) do
+  def handle_message(broadway_message, context) do
     %{consumer: consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
-    %Routing.Consumers.Kafka{topic: topic} = Routing.route_message(consumer, message.data)
+
+    %Routing.Consumers.Kafka{topic: topic, message_key: message_key} =
+      Routing.route_message(consumer, broadway_message.data)
+
+    message_key = message_key || Kafka.message_key(consumer, broadway_message.data)
     context = maybe_put_partition_count(topic, context)
 
-    # Only prepare the message with its partition information
-    msg = message.data
-    data = Sequin.Transforms.Message.to_external(consumer, msg)
+    consumer_message = broadway_message.data
+    data = Sequin.Transforms.Message.to_external(consumer, consumer_message)
     encoded_data = Jason.encode!(data)
-    msg = %{msg | encoded_data: encoded_data, encoded_data_size_bytes: byte_size(encoded_data)}
+    consumer_message = %{consumer_message | encoded_data: encoded_data, encoded_data_size_bytes: byte_size(encoded_data)}
 
-    partition = partition_from_message(consumer, msg, context.partition_count[topic])
+    partition = partition_from_message(consumer, message_key, context.partition_count[topic])
 
-    message =
-      message
-      |> Broadway.Message.put_data(msg)
+    broadway_message =
+      broadway_message
+      |> Broadway.Message.put_data(consumer_message)
       |> Broadway.Message.put_batch_key({topic, partition})
 
-    {:ok, message, context}
+    {:ok, broadway_message, context}
   catch
     {:failed_to_connect, error} ->
       Logger.error("[KafkaPipeline] Failed to connect to Kafka: #{inspect(error)}", error: error)
@@ -59,9 +62,19 @@ defmodule Sequin.Runtime.KafkaPipeline do
     %{consumer: %SinkConsumer{sink: %KafkaSink{}} = consumer, test_pid: test_pid} = context
     setup_allowances(test_pid)
 
-    msgs = Enum.map(messages, & &1.data)
+    kafka_messages =
+      Enum.map(messages, fn %Broadway.Message{data: consumer_message} ->
+        # TODO: Ideally we would not need to re-execute message_key logic here. It is difficult, however, to pass the message_key
+        # from handle_message to handle_batch because:
+        # 1. The message_key should not impact batching, so we can't put it in batch_info
+        # 2. The broadway_message.data must be a consumer_message for SinkPipeline compatibility, and so we can't put Kafka specific data there
+        %Routing.Consumers.Kafka{message_key: message_key} = Routing.route_message(consumer, consumer_message)
+        message_key = message_key || Kafka.message_key(consumer, consumer_message)
 
-    case Kafka.publish(consumer, topic, partition, msgs) do
+        %Kafka.Message{key: message_key, value: consumer_message.encoded_data}
+      end)
+
+    case Kafka.publish(consumer, topic, partition, kafka_messages) do
       :ok ->
         {:ok, messages, context}
 
@@ -87,11 +100,11 @@ defmodule Sequin.Runtime.KafkaPipeline do
     end
   end
 
-  defp partition_from_message(%SinkConsumer{sink: %KafkaSink{}} = consumer, message, partition_count)
+  defp partition_from_message(%SinkConsumer{sink: %KafkaSink{}}, message_key, partition_count)
        when is_integer(partition_count) do
-    case Kafka.message_key(consumer, message) do
+    case message_key do
       "" -> Enum.random(0..(partition_count - 1))
-      group_id when is_binary(group_id) -> :erlang.phash2(group_id, partition_count)
+      message_key when is_binary(message_key) -> :erlang.phash2(message_key, partition_count)
     end
   end
 

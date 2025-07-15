@@ -6,26 +6,24 @@ defmodule Sequin.Sinks.Kafka do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
 
+  defmodule Message do
+    @moduledoc "A message to be published to Kafka"
+    use TypedStruct
+
+    typedstruct do
+      field :key, :string
+      field :value, :string
+    end
+  end
+
   @module Application.compile_env(:sequin, :kafka_module, Sequin.Sinks.Kafka.Client)
 
-  @callback publish(SinkConsumer.t(), String.t(), ConsumerRecord.t() | ConsumerEvent.t()) ::
-              :ok | {:error, Error.t()}
-  @callback publish(SinkConsumer.t(), String.t(), integer(), [ConsumerRecord.t() | ConsumerEvent.t()]) ::
-              :ok | {:error, Error.t()}
+  @callback publish(SinkConsumer.t(), String.t(), integer(), [Message.t()]) :: :ok | {:error, Error.t()}
   @callback test_connection(KafkaSink.t()) :: :ok | {:error, Error.t()}
   @callback get_metadata(KafkaSink.t()) :: {:ok, any()} | {:error, Error.t()}
   @callback get_partition_count(KafkaSink.t(), String.t()) :: {:ok, integer()} | {:error, Error.t()}
 
-  @spec publish(SinkConsumer.t(), String.t(), ConsumerRecord.t() | ConsumerEvent.t()) ::
-          :ok | {:error, Error.t()}
-  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, topic, %ConsumerRecord{} = record) do
-    @module.publish(consumer, topic, record)
-  end
-
-  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, topic, %ConsumerEvent{} = event) do
-    @module.publish(consumer, topic, event)
-  end
-
+  @spec publish(SinkConsumer.t(), String.t(), integer(), [Message.t()]) :: :ok | {:error, Error.t()}
   def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, topic, partition, messages) when is_list(messages) do
     @module.publish(consumer, topic, partition, messages)
   end

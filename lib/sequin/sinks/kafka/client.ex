@@ -2,8 +2,6 @@ defmodule Sequin.Sinks.Kafka.Client do
   @moduledoc false
   @behaviour Sequin.Sinks.Kafka
 
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.NetworkUtils
@@ -13,38 +11,7 @@ defmodule Sequin.Sinks.Kafka.Client do
   require Logger
 
   @impl Kafka
-  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, topic, message)
-      when is_struct(message, ConsumerRecord) or is_struct(message, ConsumerEvent) do
-    message_key = Kafka.message_key(consumer, message)
-    encoded_data = message.encoded_data || Jason.encode!(message.data)
-
-    with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
-         :ok <-
-           :brod.produce_sync(
-             connection,
-             topic,
-             :hash,
-             message_key,
-             encoded_data
-           ) do
-      :ok
-    else
-      {:error, :unknown_topic_or_partition} ->
-        {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{topic}' does not exist")}
-
-      {:error, reason} ->
-        {:error, to_sequin_error(reason)}
-    end
-  end
-
-  @impl Kafka
   def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, topic, partition, messages) when is_list(messages) do
-    payload =
-      Enum.map(messages, fn message ->
-        encoded_data = message.encoded_data || Jason.encode!(message.data)
-        %{key: Kafka.message_key(consumer, message), value: encoded_data}
-      end)
-
     with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
          :ok <-
            :brod.produce_sync(
@@ -52,7 +19,7 @@ defmodule Sequin.Sinks.Kafka.Client do
              topic,
              partition,
              "unused_key",
-             payload
+             messages
            ) do
       :ok
     else

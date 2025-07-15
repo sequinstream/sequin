@@ -81,7 +81,10 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
   @initial_route_kafka """
   def route(action, record, changes, metadata) do
-    %{topic: "sequin.\#{metadata.database.name}.\#{metadata.table_schema}.\#{metadata.table_name}"}
+    %{
+      topic: "sequin.\#{metadata.database.name}.\#{metadata.table_schema}.\#{metadata.table_name}",
+      message_key: Enum.join(metadata.record_pks, ":")
+     }
   end
   """
 

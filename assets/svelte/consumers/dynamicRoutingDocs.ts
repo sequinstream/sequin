@@ -91,6 +91,11 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
         staticFormField: "topic",
         dynamicDefault: "sequin.<database_name>.<table_schema>.<table_name>",
       },
+      message_key: {
+        description: "Kafka message key",
+        staticValue: "<group-id> (see docs on message grouping)",
+        dynamicDefault: "<group-id> (see docs on message grouping)",
+      },
     },
   },
   gcp_pubsub: {

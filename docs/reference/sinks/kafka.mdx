@@ -64,7 +64,9 @@ If Kafka rejects a message due to size limitations, Sequin will cancel the messa
 
 Kafka ensures message ordering within individual partitions. When messages are sent to the same partition, they are guaranteed to be delivered in the order they were produced. Partitioning plays a critical role in maintaining this order.
 
-Sequin leverages Kafka's partitioning model by using the hash of a record's primary key(s) as the partition key. This strategy ensures that all messages related to the same record are routed to the same partition, preserving the order of updates for that record.
+Sequin leverages Kafka's partitioning model by using the hash of a record's primary key(s) as the default partition key. This strategy ensures that all messages related to the same record are routed to the same partition, preserving the order of updates for that record.
+
+You can override the default partition key by setting the `message_key` field in your [routing function](/reference/routing#kafka-sink).
 
 ## Security
 

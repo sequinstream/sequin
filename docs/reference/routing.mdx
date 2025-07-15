@@ -39,6 +39,7 @@ For [Kafka](/reference/sinks/kafka), your routing function must return a map wit
 | Key | Type | Description | Example |
 |-----|------|-------------|---------|
 | `topic` | String | The topic to publish to | `"users.created"` |
+| `message_key` | String | The message key to publish to | `"users:123"` |
 
 ### HTTP Webhook sink
 

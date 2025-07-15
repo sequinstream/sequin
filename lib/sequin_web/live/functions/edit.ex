@@ -197,13 +197,16 @@ defmodule SequinWeb.FunctionsLive.Edit do
   """
 
   @initial_sql_enrichment """
-  select
-    id as sequin_id, -- required to associate the enrichment with the message
-    lower(name) as name_lower -- example of an enrichment
-  from
-    users
-  where
-    id = {{id}} -- this syntax is required for Sequin to perform queries / batching
+  SELECT
+    u.id, -- you must select all primary keys for Sequin to associate the enrichment with the message
+    a.name as account_name -- example of an enrichment
+  FROM
+    users u
+  JOIN
+    accounts a on u.account_id = a.id
+  WHERE
+    -- this syntax is required for Sequin to perform queries / batching
+    u.id = ANY($1)
   """
 
   @initial_code_map %{
@@ -275,6 +278,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
         form_errors: %{},
         test_messages: [],
         show_errors?: false,
+        databases: [],
         selected_database_id: nil,
         selected_table_oid: nil,
         synthetic_test_message: Consumers.synthetic_message(),
@@ -571,46 +575,35 @@ defmodule SequinWeb.FunctionsLive.Edit do
   defp do_assign_encoded_messages(socket, cache_key) do
     socket
     |> assign(:cache_key, cache_key)
-    |> assign(
-      :encoded_test_messages,
-      encode_test_messages(
-        socket.assigns.test_messages,
-        socket.assigns.form_data,
-        socket.assigns.form_errors,
-        current_account_id(socket)
-      )
-    )
+    |> assign(:encoded_test_messages, encode_test_messages(socket.assigns.test_messages, socket))
     |> assign(
       :encoded_synthetic_test_message,
-      encode_synthetic_test_message(
-        socket.assigns.synthetic_test_message,
-        socket.assigns.form_data,
-        socket.assigns.form_errors,
-        current_account_id(socket)
-      )
+      encode_synthetic_test_message(socket.assigns.synthetic_test_message, socket)
     )
   end
 
-  defp encode_synthetic_test_message(synthetic_message, form_data, form_errors, account_id) do
+  defp encode_synthetic_test_message(synthetic_message, socket) do
     [synthetic_message]
-    |> encode_test_messages(form_data, form_errors, account_id)
+    |> encode_test_messages(socket)
     |> Enum.map(&Map.put(&1, :isSynthetic, true))
   end
 
-  defp encode_test_messages(test_messages, form_data, form_errors, account_id) do
-    function = form_data[:function]
-    function_errors = form_errors[:function]
+  defp encode_test_messages(test_messages, socket) do
+    function = socket.assigns.form_data[:function]
+    function_errors = socket.assigns.form_errors[:function]
 
     if is_struct(function) and function_errors == nil do
-      do_encode_test_messages(test_messages, function, account_id)
+      do_encode_test_messages(test_messages, function, socket)
     else
       Enum.map(test_messages, &format_test_message/1)
     end
   end
 
-  defp do_encode_test_messages(test_messages, function, account_id) do
-    function = %Function{account_id: account_id, type: function.type, function: function}
-    consumer = %SinkConsumer{account_id: account_id}
+  defp do_encode_test_messages(test_messages, function, socket) do
+    function = %Function{account_id: current_account_id(socket), type: function.type, function: function}
+
+    # postgres_database for sql_enrichment functions
+    consumer = %SinkConsumer{account_id: current_account_id(socket), postgres_database: selected_database(socket)}
 
     consumer =
       case function.function do
@@ -683,8 +676,22 @@ defmodule SequinWeb.FunctionsLive.Edit do
     end
   end
 
-  defp run_function(%SinkConsumer{enrichment: %Function{} = function}, message) do
-    :todo
+  defp run_function(%SinkConsumer{postgres_database: nil}, _message) do
+    raise Sequin.Error.invariant(message: "Please select a database to use for sql enrichment")
+  end
+
+  defp run_function(%SinkConsumer{enrichment: %Function{} = function} = consumer, message) do
+    case Consumers.enrich_messages!(consumer.postgres_database, function, [message]) do
+      [] ->
+        nil
+
+      [message] ->
+        message.data.record
+
+      messages ->
+        msg = "Sql enrichment function must return 0 or 1 message, got: #{inspect(length(messages))}"
+        raise Sequin.Error.invariant(message: msg)
+    end
   end
 
   defp assign_databases(socket) do
@@ -804,4 +811,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp validate_action(_), do: {:error, "action", "Action must be a string"}
+
+  defp selected_database(socket) do
+    Enum.find(socket.assigns.databases, fn database -> database.id == socket.assigns.selected_database_id end)
+  end
 end

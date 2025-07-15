@@ -410,6 +410,20 @@
             </p>
           {/if}
 
+          {#if consumer.type === "typesense" && !form.messageGrouping}
+            <Alert.Root variant="destructive" class="mt-4">
+              <CircleAlert class="h-4 w-4" />
+              <Alert.Title>Message grouping disabled for Typesense</Alert.Title>
+              <Alert.Description>
+                <p class="mb-2">
+                  Message grouping ensures that changes are processed in the
+                  correct order - keeping Typesense in sync with your database.
+                  Don't disable it!
+                </p>
+              </Alert.Description>
+            </Alert.Root>
+          {/if}
+
           <p class="text-sm text-muted-foreground">
             When enabled, messages within groups are <a
               href="https://sequinstream.com/docs/reference/sinks/overview#message-grouping-and-ordering"
@@ -471,6 +485,43 @@
       </svelte:fragment>
 
       <svelte:fragment slot="content">
+        {#if consumer.type === "typesense" && form.transform === "none"}
+          <Alert.Root variant="info" class="mb-4">
+            <Alert.Title>Typesense transform requirements</Alert.Title>
+            <Alert.Description>
+              <p class="mb-2">
+                For Typesense, your <a
+                  class="underline font-medium"
+                  href="https://sequinstream.com/docs/reference/transforms"
+                  target="_blank">transform</a
+                >
+                must return a document matching the schema of the
+                <a
+                  class="underline font-medium"
+                  href="https://typesense.org/docs/28.0/api/collections.html#create-a-collection"
+                  target="_blank">Typesense collection</a
+                >.
+              </p>
+              <p class="mb-2">
+                Your message must include an <code>id</code> field, as a string.
+              </p>
+              <div class="mb-2">
+                Sequin uses Typesense's <code>emplace</code> import action,
+                which means:
+                <ul class="ml-6 list-disc">
+                  <li>
+                    Typesense will create a new document or update an existing
+                    one based on the <code>id</code>
+                  </li>
+                  <li>
+                    Your transform can supply either a complete document or a
+                    partial document for update
+                  </li>
+                </ul>
+              </div>
+            </Alert.Description>
+          </Alert.Root>
+        {/if}
         <FunctionPicker
           {functions}
           selectedFunctionId={form.transform}

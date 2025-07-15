@@ -416,9 +416,9 @@
               <Alert.Title>Message grouping disabled for Typesense</Alert.Title>
               <Alert.Description>
                 <p class="mb-2">
-                  Message grouping ensures that changes are processed in the
-                  correct order - keeping Typesense in sync with your database.
-                  Don't disable it!
+                  With message grouping disabled, inserts, updates, and deletes
+                  in your database might be delivered to Typesense out of order.
+                  This can cause inconsistent search results.
                 </p>
               </Alert.Description>
             </Alert.Root>
@@ -762,8 +762,53 @@
               <AccordionTrigger>Advanced configuration</AccordionTrigger>
               <AccordionContent>
                 <div class="space-y-4 pt-4">
+                  {#if consumer.type !== "http_push"}
+                    <div class="space-y-2">
+                      <Label for="batch-size">Batch size</Label>
+                      <Tooltip.Root openDelay={200}>
+                        <Tooltip.Trigger>
+                          <Info class="h-4 w-4 text-gray-400 cursor-help" />
+                        </Tooltip.Trigger>
+                        <Tooltip.Content class="p-4 max-w-xs">
+                          <div
+                            class="text-sm text-muted-foreground font-normal"
+                          >
+                            The number of messages to batch together in a single
+                            request.
+                          </div>
+                        </Tooltip.Content>
+                      </Tooltip.Root>
+
+                      <div class="flex items-center space-x-2">
+                        <Input
+                          id="batch-size"
+                          type="number"
+                          bind:value={form.sink.batch_size}
+                          min="1"
+                          placeholder="40"
+                        />
+                      </div>
+                      {#if errors.consumer?.batch_size}
+                        <p class="text-destructive text-sm">
+                          {errors.consumer.batch_size}
+                        </p>
+                      {/if}
+                    </div>
+                  {/if}
+
                   <div class="space-y-2">
                     <Label for="timestamp-format">Timestamp format</Label>
+                    <Tooltip.Root openDelay={200}>
+                      <Tooltip.Trigger>
+                        <Info class="h-4 w-4 text-gray-400 cursor-help" />
+                      </Tooltip.Trigger>
+                      <Tooltip.Content class="p-4 max-w-xs">
+                        <div class="text-sm text-muted-foreground font-normal">
+                          Choose how timestamps should be formatted in messages
+                          sent to your sink.
+                        </div>
+                      </Tooltip.Content>
+                    </Tooltip.Root>
                     <Select
                       selected={{
                         value: form.timestampFormat,
@@ -788,10 +833,6 @@
                         >
                       </SelectContent>
                     </Select>
-                    <p class="text-xs font-light">
-                      Choose how timestamps should be formatted in messages sent
-                      to your sink.
-                    </p>
                     {#if errors.consumer.timestamp_format}
                       <p class="text-destructive text-sm">
                         {errors.consumer.timestamp_format}

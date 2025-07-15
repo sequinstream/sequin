@@ -89,43 +89,7 @@
           <div class="space-y-4 pt-4">
             <div class="space-y-2">
               <div class="flex items-center space-x-2">
-                <Label for="batch-size">Batch size</Label>
-                <Tooltip.Root openDelay={200}>
-                  <Tooltip.Trigger>
-                    <Info class="h-4 w-4 text-gray-400 cursor-help" />
-                  </Tooltip.Trigger>
-                  <Tooltip.Content class="p-4 max-w-xs">
-                    <div class="text-sm text-muted-foreground font-normal">
-                      The number of messages to batch together in a single
-                      request. By default, Typesense processes
-                      <a
-                        href="https://typesense.org/docs/29.0/api/documents.html#index-multiple-documents"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="underline font-medium">40 documents</a
-                      >
-                      at a time.
-                    </div>
-                  </Tooltip.Content>
-                </Tooltip.Root>
-              </div>
-              <div class="flex items-center space-x-2">
-                <Input
-                  id="batch-size"
-                  type="number"
-                  bind:value={form.sink.batch_size}
-                  min="1"
-                  placeholder="40"
-                />
-              </div>
-              {#if errors.sink?.batch_size}
-                <p class="text-destructive text-sm">{errors.sink.batch_size}</p>
-              {/if}
-            </div>
-
-            <div class="space-y-2">
-              <div class="flex items-center space-x-2">
-                <Label for="timeout_seconds">Timeout (seconds)</Label>
+                <Label for="timeout_seconds">Request timeout (seconds)</Label>
                 <Tooltip.Root openDelay={200}>
                   <Tooltip.Trigger>
                     <Info class="h-4 w-4 text-gray-400 cursor-help" />

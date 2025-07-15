@@ -121,22 +121,6 @@
         <p class="text-destructive text-sm">{errors.sink.api_key}</p>
       {/if}
     </div>
-
-    <div class="space-y-2">
-      <Label for="batch_size">Batch Size</Label>
-      <Input
-        id="batch_size"
-        type="number"
-        bind:value={form.sink.batch_size}
-        placeholder="500"
-      />
-      {#if errors.sink?.batch_size}
-        <p class="text-destructive text-sm">{errors.sink.batch_size}</p>
-      {/if}
-      <p class="text-sm text-muted-foreground">
-        Number of documents to send in each batch (default: 100)
-      </p>
-    </div>
   </CardContent>
 </Card>
 

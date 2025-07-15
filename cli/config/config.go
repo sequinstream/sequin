@@ -114,13 +114,19 @@ func resolveFilePath(pctx *ProcessingContext, filePath string) (string, error) {
 	return "", fmt.Errorf("file not found: tried %s", strings.Join(triedPaths, ", "))
 }
 
-// Apply envsubst to all string values everywhere
+// Apply envsubst to all string values except for those under the "code" key
 func applyEnvSubst(node interface{}) (interface{}, error) {
+	return applyEnvSubstInternal(node, false)
+}
+
+func applyEnvSubstInternal(node interface{}, skip bool) (interface{}, error) {
 	switch v := node.(type) {
 	case map[string]interface{}:
 		result := make(map[string]interface{})
 		for key, value := range v {
-			processed, err := applyEnvSubst(value)
+			// If the key is "code", set skip=true for its value
+			skipSubst := skip || (key == "code")
+			processed, err := applyEnvSubstInternal(value, skipSubst)
 			if err != nil {
 				return nil, err
 			}
@@ -131,7 +137,7 @@ func applyEnvSubst(node interface{}) (interface{}, error) {
 	case []interface{}:
 		result := make([]interface{}, len(v))
 		for i, item := range v {
-			processed, err := applyEnvSubst(item)
+			processed, err := applyEnvSubstInternal(item, skip)
 			if err != nil {
 				return nil, err
 			}
@@ -140,6 +146,9 @@ func applyEnvSubst(node interface{}) (interface{}, error) {
 		return result, nil
 
 	case string:
+		if skip {
+			return v, nil
+		}
 		substituted, err := envsubst.String(v)
 		if err != nil {
 			return nil, fmt.Errorf("environment variable substitution failed for '%s': %w", v, err)

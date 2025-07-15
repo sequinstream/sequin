@@ -31,6 +31,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Source
+  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
@@ -118,6 +119,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
             :active_backfills,
             :replication_slot,
             :transform,
+            :enrichment,
             :routing,
             :filter
           ],
@@ -783,6 +785,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       batch_size: consumer.batch_size,
       transform_id: consumer.transform_id,
       routing_id: consumer.routing_id,
+      enrichment_id: consumer.enrichment_id,
+      enrichment: encode_function(consumer.enrichment),
       routing: encode_function(consumer.routing),
       filter_id: consumer.filter_id,
       filter: encode_function(consumer.filter),
@@ -1031,6 +1035,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_function_inner(%PathFunction{path: path}), do: %{path: path}
   defp encode_function_inner(%TransformFunction{code: code}), do: %{code: code}
   defp encode_function_inner(%FilterFunction{code: code}), do: %{code: code}
+  defp encode_function_inner(%SqlEnrichmentFunction{code: code}), do: %{code: code}
 
   defp encode_function_inner(%RoutingFunction{sink_type: sink_type, code: code}) do
     %{sink_type: sink_type, code: code}

@@ -18,10 +18,6 @@ defmodule Sequin.Case do
       setup :verify_stubs
       setup :default_stubs
       setup :setup_self_hosted_tag
-      # For Hammox
-      # Note: You may be tempted to move this to Hammox.verify_on_exit!() in
-      # verify_stubs/1, but that doesn't seem to have an effect.
-      setup :verify_on_exit!
     end
   end
 
@@ -49,7 +45,10 @@ defmodule Sequin.Case do
   end
 
   def verify_stubs(_context) do
+    # TODO Update Req to the latest version once this is released:
+    # https://github.com/wojtekmach/req/commit/dcb7ddf6a449dfd2cc2a99c6354d050b65e5191a
     Req.Test.verify_on_exit!()
+    Hammox.verify_on_exit!()
     :ok
   end
 

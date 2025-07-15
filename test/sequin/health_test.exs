@@ -235,15 +235,18 @@ defmodule Sequin.HealthTest do
   end
 
   describe "on_status_change/3" do
-    setup do
+    setup context do
       test_pid = self()
 
-      Req.Test.expect(Sequin.Pagerduty, fn conn ->
-        {:ok, body, _} = Plug.Conn.read_body(conn)
-        send(test_pid, {:req, conn, Jason.decode!(body)})
+      # Only set up PagerDuty expectation if test doesn't skip it
+      if !context[:skip_pagerduty_expect] do
+        Req.Test.expect(Sequin.Pagerduty, fn conn ->
+          {:ok, body, _} = Plug.Conn.read_body(conn)
+          send(test_pid, {:req, conn, Jason.decode!(body)})
 
-        Req.Test.json(conn, %{status: "success"})
-      end)
+          Req.Test.json(conn, %{status: "success"})
+        end)
+      end
 
       :ok
     end
@@ -285,6 +288,7 @@ defmodule Sequin.HealthTest do
       assert body["event_action"] == "resolve"
     end
 
+    @tag :skip_pagerduty_expect
     test "skips PagerDuty when entity has ignore_health annotation" do
       entity =
         postgres_replication(
@@ -292,13 +296,18 @@ defmodule Sequin.HealthTest do
           annotations: %{"ignore_health" => true}
         )
 
+      # Stub with function that should not be called
       Req.Test.stub(Sequin.Pagerduty, fn _req ->
-        raise "should not be called"
+        raise "PagerDuty should not be called when entity has ignore_health annotation"
       end)
 
       Health.on_status_change(entity, :healthy, :error)
+
+      # Give it a moment to ensure no calls are made
+      refute_receive {:req, _, _}, 30
     end
 
+    @tag :skip_pagerduty_expect
     test "skips PagerDuty when account has ignore_health annotation" do
       entity =
         postgres_replication(
@@ -307,11 +316,15 @@ defmodule Sequin.HealthTest do
           postgres_database: DatabasesFactory.postgres_database()
         )
 
+      # Stub with function that should not be called
       Req.Test.stub(Sequin.Pagerduty, fn _req ->
-        raise "should not be called"
+        raise "PagerDuty should not be called when account has ignore_health annotation"
       end)
 
       Health.on_status_change(entity, :healthy, :error)
+
+      # Give it a moment to ensure no calls are made
+      refute_receive {:req, _, _}, 30
     end
   end
 

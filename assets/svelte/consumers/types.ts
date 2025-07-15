@@ -41,6 +41,8 @@ export type BaseConsumer = {
   tables_included_in_source: Table[];
   routing_id: string | null;
   routing: Function | null;
+  enrichment_id: string | null;
+  enrichment: Function | null;
   routing_mode?: "static" | "dynamic";
   filter_id: string | null;
   filter: Function | null;

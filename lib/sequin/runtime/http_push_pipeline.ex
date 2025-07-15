@@ -4,7 +4,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
 
   alias Sequin.Aws.HttpClient
   alias Sequin.Aws.SQS
-  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -23,11 +22,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
   def init(context, opts) do
     consumer = Map.fetch!(context, :consumer)
     consumer = SinkConsumer.preload_http_endpoint!(consumer)
-
-    # TODO: Do this without database (or at least without tables)
-    consumer = Sequin.Repo.preload(consumer, :postgres_database)
-    consumer = put_in(consumer.postgres_database.tables, [])
-    :erlang.garbage_collect()
 
     req_opts = Keyword.get(opts, :req_opts, [])
     features = Keyword.get(opts, :features, [])
@@ -122,7 +116,6 @@ defmodule Sequin.Runtime.HttpPushPipeline do
     setup_allowances(test_pid)
 
     consumer_messages = Enum.map(messages, & &1.data)
-    consumer_messages = Consumers.enrich_messages!(consumer.postgres_database, consumer.enrichment, consumer_messages)
 
     routed_message =
       %Routing.RoutedMessage{

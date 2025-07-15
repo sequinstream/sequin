@@ -4,10 +4,14 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
+  alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Source
+  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
@@ -784,14 +788,14 @@ defmodule Sequin.ConsumersTest do
       event =
         ConsumersFactory.consumer_event(
           table_oid: 12_345,
-          data: %Sequin.Consumers.ConsumerEventData{
+          data: %ConsumerEventData{
             record: %{
               "col1" => "user_1",
               "col2" => "group_A",
               "col3" => "other"
             },
             action: :insert,
-            metadata: %Sequin.Consumers.ConsumerEventData.Metadata{
+            metadata: %Metadata{
               table_name: "test_table",
               table_schema: "public"
             }
@@ -829,6 +833,314 @@ defmodule Sequin.ConsumersTest do
 
       assert {:error, changeset} = Consumers.update_backfill(completed_backfill, %{state: :paused})
       assert changeset.valid? == false
+    end
+  end
+
+  describe "enrich_messages!/4" do
+    test "enriches a single message with the given SQL enrichment function" do
+      # Create a database with a table that has a primary key
+      table =
+        DatabasesFactory.table(
+          oid: 12_345,
+          columns: [
+            DatabasesFactory.column(attnum: 1, name: "id", type: "integer", is_pk?: true),
+            DatabasesFactory.column(attnum: 2, name: "name", type: "text", is_pk?: false)
+          ]
+        )
+
+      database = DatabasesFactory.postgres_database(tables: [table])
+
+      # Create a message with primary key data
+      message =
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data: %ConsumerEventData{
+            record: %{
+              "id" => 1,
+              "name" => "original"
+            }
+          }
+        )
+
+      # Create an enrichment function that adds data
+      enrichment_function = %Function{
+        function: %SqlEnrichmentFunction{
+          code: "SELECT id, 'enriched' as name, 'extra' as extra_field FROM unnest($1::int[]) id"
+        }
+      }
+
+      # Mock the database query function
+      query_fn = fn _db, _sql, _params ->
+        {:ok,
+         %Postgrex.Result{
+           rows: [[1, "enriched", "extra"]],
+           columns: ["id", "name", "extra_field"]
+         }}
+      end
+
+      # Enrich the message
+      enriched_message = Consumers.enrich_message!(database, enrichment_function, message, query_fn: query_fn)
+
+      # Verify enrichment
+      assert enriched_message.data.record["name"] == "enriched"
+      assert enriched_message.data.record["extra_field"] == "extra"
+      assert enriched_message.data.record["id"] == 1
+    end
+
+    test "properly handles multiple messages" do
+      # Create a database with a table that has a primary key
+      table =
+        DatabasesFactory.table(
+          oid: 12_345,
+          columns: [
+            DatabasesFactory.column(attnum: 1, name: "id", type: "integer", is_pk?: true),
+            DatabasesFactory.column(attnum: 2, name: "name", type: "text", is_pk?: false)
+          ]
+        )
+
+      database = DatabasesFactory.postgres_database(tables: [table])
+
+      # Create multiple messages
+      messages = [
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data: %ConsumerEventData{
+            record: %{"id" => 1, "name" => "original1"}
+          }
+        ),
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data: %ConsumerEventData{
+            record: %{"id" => 2, "name" => "original2"}
+          }
+        )
+      ]
+
+      # Create an enrichment function
+      enrichment_function = %Function{
+        function: %SqlEnrichmentFunction{
+          code: "SELECT id, 'enriched' || id::text as name FROM unnest($1::int[]) id"
+        }
+      }
+
+      # Mock the database query function
+      query_fn = fn _db, _sql, _params ->
+        {:ok,
+         %Postgrex.Result{
+           rows: [
+             [1, "enriched1"],
+             [2, "enriched2"]
+           ],
+           columns: ["id", "name"]
+         }}
+      end
+
+      # Enrich the messages
+      enriched_messages = Consumers.enrich_messages!(database, enrichment_function, messages, query_fn: query_fn)
+
+      # Verify enrichments
+      assert length(enriched_messages) == 2
+      [msg1, msg2] = enriched_messages
+      assert msg1.data.record["name"] == "enriched1"
+      assert msg2.data.record["name"] == "enriched2"
+    end
+
+    test "succeeds if the enrichment function returns 0 rows for a message" do
+      # Create a database with a table that has a primary key
+      table =
+        DatabasesFactory.table(
+          oid: 12_345,
+          columns: [
+            DatabasesFactory.column(attnum: 1, name: "id", type: "integer", is_pk?: true),
+            DatabasesFactory.column(attnum: 2, name: "name", type: "text", is_pk?: false)
+          ]
+        )
+
+      database = DatabasesFactory.postgres_database(tables: [table])
+
+      # Create a message
+      message =
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data: %ConsumerEventData{
+            record: %{"id" => 1, "name" => "original"}
+          }
+        )
+
+      # Create an enrichment function
+      enrichment_function = %Function{
+        function: %SqlEnrichmentFunction{
+          code: "SELECT id, name FROM (SELECT 2 as id, 'enriched' as name) t WHERE id = ANY($1::int[])"
+        }
+      }
+
+      # Mock the database query function that returns no rows
+      query_fn = fn _db, _sql, _params ->
+        {:ok, %Postgrex.Result{rows: [], columns: ["id", "name"]}}
+      end
+
+      # Enrich the message - should return original message unchanged
+      [enriched_message] = Consumers.enrich_messages!(database, enrichment_function, [message], query_fn: query_fn)
+
+      # Verify the message is unchanged
+      assert enriched_message.data.record["name"] == "original"
+      assert enriched_message.data.record["id"] == 1
+    end
+
+    test "fails if the enrichment function returns > 1 rows for a message" do
+      # Create a database with a table that has a primary key
+      table =
+        DatabasesFactory.table(
+          oid: 12_345,
+          columns: [
+            DatabasesFactory.column(attnum: 1, name: "id", type: "integer", is_pk?: true),
+            DatabasesFactory.column(attnum: 2, name: "name", type: "text", is_pk?: false)
+          ]
+        )
+
+      database = DatabasesFactory.postgres_database(tables: [table])
+
+      # Create a message
+      message =
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data: %ConsumerEventData{
+            record: %{"id" => 1, "name" => "original"}
+          }
+        )
+
+      # Create an enrichment function
+      enrichment_function = %Function{
+        function: %SqlEnrichmentFunction{
+          code: "SELECT * FROM (VALUES (1, 'enriched1'), (1, 'enriched2')) t(id, name)"
+        }
+      }
+
+      # Mock the database query function that returns multiple rows for same ID
+      query_fn = fn _db, _sql, _params ->
+        {:ok,
+         %Postgrex.Result{
+           rows: [
+             [1, "enriched1"],
+             [1, "enriched2"]
+           ],
+           columns: ["id", "name"]
+         }}
+      end
+
+      # Attempt to enrich the message - should raise an error
+      assert_raise RuntimeError, ~r/Expected 0 or 1 enrichment results, got 2/, fn ->
+        Consumers.enrich_messages!(database, enrichment_function, [message], query_fn: query_fn)
+      end
+    end
+
+    test "properly casts uuid primary keys" do
+      # Create a database with a table that has a UUID primary key
+      table =
+        DatabasesFactory.table(
+          oid: 12_345,
+          columns: [
+            DatabasesFactory.column(attnum: 1, name: "id", type: "uuid", is_pk?: true),
+            DatabasesFactory.column(attnum: 2, name: "name", type: "text", is_pk?: false)
+          ]
+        )
+
+      database = DatabasesFactory.postgres_database(tables: [table])
+
+      uuid = Sequin.uuid4()
+      as_binary = Sequin.String.string_to_binary!(uuid)
+
+      # Create a message with UUID primary key
+      message =
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data: %ConsumerEventData{
+            record: %{
+              "id" => uuid,
+              "name" => "original"
+            }
+          }
+        )
+
+      # Create an enrichment function
+      enrichment_function = %Function{
+        function: %SqlEnrichmentFunction{
+          code: "SELECT id::uuid, 'enriched' as name FROM unnest($1::uuid[]) id"
+        }
+      }
+
+      # Mock the database query function
+      query_fn = fn _db, _sql, params ->
+        # Verify the UUID is properly cast in the parameters
+        assert [[^as_binary]] = params
+        assert Sequin.String.uuid?(uuid)
+
+        {:ok,
+         %Postgrex.Result{
+           rows: [[as_binary, "enriched"]],
+           columns: ["id", "name"]
+         }}
+      end
+
+      # Enrich the message
+      [enriched_message] = Consumers.enrich_messages!(database, enrichment_function, [message], query_fn: query_fn)
+
+      # Verify enrichment
+      assert enriched_message.data.record["name"] == "enriched"
+      assert enriched_message.data.record["id"] == uuid
+    end
+
+    test "loads rows from postgres types to elixir types before merging into record" do
+      # Create a database with a table that has a primary key
+      table =
+        DatabasesFactory.table(
+          oid: 12_345,
+          columns: [
+            DatabasesFactory.column(attnum: 1, name: "id", type: "integer", is_pk?: true)
+          ]
+        )
+
+      database = DatabasesFactory.postgres_database(tables: [table])
+
+      # Create a message
+      message =
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data: %ConsumerEventData{
+            record: %{
+              "id" => 1
+            }
+          }
+        )
+
+      uuid = Sequin.uuid4()
+      as_binary = Sequin.String.string_to_binary!(uuid)
+      datetime = DateTime.utc_now()
+
+      # Create an enrichment function
+      enrichment_function = %Function{
+        function: %SqlEnrichmentFunction{
+          code: "SELECT id, o.account_id, o.created_at FROM unnest($1::int[]) id LEFT JOIN other_table o ON o.id = id"
+        }
+      }
+
+      query_fn = fn _db, _sql, params ->
+        assert [[1]] = params
+
+        {:ok,
+         %Postgrex.Result{
+           rows: [[1, as_binary, datetime]],
+           columns: ["id", "account_id", "created_at"]
+         }}
+      end
+
+      # Enrich the message
+      [enriched_message] = Consumers.enrich_messages!(database, enrichment_function, [message], query_fn: query_fn)
+
+      # Verify enrichment
+      assert enriched_message.data.record["id"] == 1
+      assert enriched_message.data.record["account_id"] == uuid
+      assert enriched_message.data.record["created_at"] == datetime
     end
   end
 end

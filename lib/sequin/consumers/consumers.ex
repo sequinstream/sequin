@@ -1860,51 +1860,98 @@ defmodule Sequin.Consumers do
     }
   end
 
-  def enrich_messages!(nil, _, _), do: raise("Database is required to enrich messages, got nil.")
-  def enrich_messages!(%PostgresDatabase{}, nil, messages), do: messages
+  def enrich_message!(database, sql_enrichment_function, message, opts \\ []) do
+    [message] = enrich_messages!(database, sql_enrichment_function, [message], opts)
+    message
+  end
 
-  def enrich_messages!(%PostgresDatabase{} = database, %Function{function: %SqlEnrichmentFunction{} = function}, messages)
+  @doc """
+  Enrich messages with the given SQL enrichment function.
+  """
+  def enrich_messages!(database, sql_enrichment_function, messages, opts \\ [])
+
+  def enrich_messages!(nil, _func, _messages, _opts), do: raise("Database is required to enrich messages, got nil.")
+  def enrich_messages!(%PostgresDatabase{}, nil = _enrichment_function, messages, _opts), do: messages
+
+  def enrich_messages!(
+        %PostgresDatabase{} = database,
+        %Function{function: %SqlEnrichmentFunction{code: sql}},
+        messages,
+        opts
+      )
       when is_list(messages) do
-    # TODO
-    to_replace = "{{id}}"
+    query_fn = Keyword.get(opts, :query_fn, &Postgres.query/3)
 
-    # TODO
-    replace_with = """
-    ANY($1::int[])
-    """
+    # There should be only one table per message group
+    [table_oid] = messages |> Enum.map(& &1.table_oid) |> Enum.uniq()
+    table = Sequin.Enum.find!(database.tables, &(&1.oid == table_oid))
+    primary_key_columns = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.sort_by(& &1.name)
 
-    sql = String.replace(function.code, to_replace, replace_with)
+    # params is a list of lists, one for each primary key column, containing the values for all messages
+    params = primary_key_params(primary_key_columns, messages)
 
-    params =
-      messages
-      |> Enum.flat_map(& &1.data.metadata.record_pks)
-      # HACK
-      |> Enum.map(&String.to_integer/1)
-
-    case Postgres.query(database, sql, [params]) do
+    case query_fn.(database, sql, params) do
       {:ok, %Postgrex.Result{} = result} ->
-        merge_enrichments(messages, Postgres.result_to_maps(result))
+        enrichments = load_enrichments(result)
+        merge_enrichments(messages, enrichments, primary_key_columns)
 
       {:error, error} ->
         raise error
     end
   end
 
-  defp merge_enrichments(messages, enrichments) do
+  defp merge_enrichments(messages, enrichments, primary_key_columns) do
     Enum.map(messages, fn message ->
-      enrichment =
-        Enum.find(enrichments, &enrichment_matches?(message, &1))
+      case Enum.filter(enrichments, &enrichment_matches?(primary_key_columns, message, &1)) do
+        [] ->
+          message
 
-      update_in(message.data.record, fn record ->
-        enrichment = Map.delete(enrichment, "sequin_id")
-        Map.merge(record, enrichment)
+        [enrichment] ->
+          update_in(message.data.record, fn record ->
+            enrichment = Map.delete(enrichment, "sequin_id")
+            Map.merge(record, enrichment)
+          end)
+
+        enrichments ->
+          raise "Expected 0 or 1 enrichment results, got #{length(enrichments)}"
+      end
+    end)
+  end
+
+  defp load_enrichments(%Postgrex.Result{} = result) do
+    result
+    |> Postgres.result_to_maps()
+    |> Enum.map(fn enrichment when is_map(enrichment) ->
+      Map.new(enrichment, fn {key, value} ->
+        {key, maybe_binary_to_string(value)}
       end)
     end)
   end
 
-  defp enrichment_matches?(message, enrichment) do
-    [message_pk] = message.data.metadata.record_pks
-    enrichment_id = enrichment["sequin_id"]
-    to_string(enrichment_id) == to_string(message_pk)
+  defp enrichment_matches?(primary_key_columns, message, enrichment) do
+    message_values = Enum.map(primary_key_columns, &Map.fetch!(message.data.record, &1.name))
+
+    enrichment_values =
+      primary_key_columns
+      |> Enum.map(&Map.fetch!(enrichment, &1.name))
+      |> Enum.map(&maybe_binary_to_string/1)
+
+    message_values == enrichment_values
   end
+
+  defp primary_key_params(primary_key_columns, messages) do
+    Enum.map(primary_key_columns, fn column ->
+      messages
+      |> Enum.map(&Map.fetch!(&1.data.record, column.name))
+      |> Enum.map(&Postgres.cast_value(&1, column.type))
+    end)
+  end
+
+  defp maybe_binary_to_string(binary) when is_binary(binary) do
+    Sequin.String.binary_to_string!(binary)
+  rescue
+    _ -> binary
+  end
+
+  defp maybe_binary_to_string(other), do: other
 end

@@ -134,6 +134,7 @@
               },
               "reference/messages",
               "reference/filters",
+              "reference/enrichment",
               "reference/transforms",
               "reference/routing",
               "reference/backfills",
@@ -144,7 +145,6 @@
               "reference/metrics"
             ]
           },
-
           {
             "group": "Database setup guides",
             "pages": [

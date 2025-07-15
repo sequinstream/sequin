@@ -36,10 +36,11 @@ defmodule Sequin.Runtime.SqsPipelineTest do
           type: :sqs,
           message_kind: :record,
           batch_size: 10,
+          batch_timeout_ms: 50,
           replication_slot_id: replication.id
         )
 
-      {:ok, %{consumer: consumer}}
+      {:ok, %{consumer: consumer, account: account, replication: replication}}
     end
 
     test "events are sent to SQS", %{consumer: consumer} do
@@ -160,7 +161,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
         assert String.contains?(auth_value, "AWS4-HMAC-SHA256"), "Should use AWS SigV4 signing"
         assert String.contains?(auth_value, "task-role-access-key"), "Should use task role access key"
 
-        # Verify session token header is present for task role credentials  
+        # Verify session token header is present for task role credentials
         # Note: The current AWS library version may handle session tokens differently
         # For now, we verify that the correct access key is being used in the auth header
         # which confirms the task role credentials are being applied correctly
@@ -183,6 +184,94 @@ defmodule Sequin.Runtime.SqsPipelineTest do
       ref = send_test_event(consumer, record)
       assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
       assert_receive {:sqs_request, _conn}, 1_000
+    end
+
+    test "respects consumer batch_size configuration", %{consumer: consumer} do
+      test_pid = self()
+
+      # Update consumer to have batch_size of 5
+      {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{batch_size: 5})
+
+      # Create 5 test records
+      records = for _ <- 1..5, do: CharacterFactory.character_attrs()
+
+      events =
+        Enum.map(records, fn record ->
+          [consumer_id: consumer.id, source_record: :character]
+          |> ConsumersFactory.insert_deliverable_consumer_record!()
+          |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+        end)
+
+      Req.Test.stub(HttpClient, fn conn ->
+        send(test_pid, {:sqs_request, conn})
+        # Return success for 5 messages
+        successful = for i <- 1..5, do: %{"Id" => "#{i}", "MessageId" => "msg#{i}"}
+        Req.Test.json(conn, %{"Successful" => successful, "Failed" => []})
+      end)
+
+      start_pipeline!(consumer)
+
+      ref = send_test_batch(consumer, events)
+
+      assert_receive {:ack, ^ref, messages, []}, 1_000
+      assert length(messages) == 5
+      assert_receive {:sqs_request, _conn}, 1_000
+    end
+
+    test "message grouping affects batching for FIFO queues", %{consumer: consumer} do
+      test_pid = self()
+
+      # Update consumer to use a FIFO queue
+      {:ok, consumer} =
+        Consumers.update_sink_consumer(consumer, %{
+          sink: %{
+            type: :sqs,
+            queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue.fifo",
+            region: "us-east-1",
+            access_key_id: "test",
+            secret_access_key: "test",
+            routing_mode: :static,
+            is_fifo: true
+          },
+          message_grouping: true
+        })
+
+      # Create records with different group_ids
+      record1 = CharacterFactory.character_attrs()
+      record2 = CharacterFactory.character_attrs()
+
+      event1 =
+        [consumer_id: consumer.id, source_record: :character, group_id: "group1"]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record1))
+
+      event2 =
+        [consumer_id: consumer.id, source_record: :character, group_id: "group2"]
+        |> ConsumersFactory.insert_deliverable_consumer_record!()
+        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
+
+      request_count = :counters.new(1, [])
+
+      Req.Test.stub(HttpClient, fn conn ->
+        count = :counters.get(request_count, 1) + 1
+        :counters.put(request_count, 1, count)
+        send(test_pid, {:sqs_request, count})
+        Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "msg#{count}"}], "Failed" => []})
+      end)
+
+      start_pipeline!(consumer)
+
+      # Send both events
+      ref1 = send_test_event(consumer, event1)
+      ref2 = send_test_event(consumer, event2)
+
+      # They should be sent in separate batches due to different group_ids
+      assert_receive {:ack, ^ref1, [_], []}, 1_000
+      assert_receive {:ack, ^ref2, [_], []}, 1_000
+
+      # Should receive 2 separate requests
+      assert_receive {:sqs_request, 1}, 1_000
+      assert_receive {:sqs_request, 2}, 1_000
     end
   end
 

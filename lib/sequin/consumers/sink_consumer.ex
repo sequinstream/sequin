@@ -218,6 +218,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:max_retry_count, greater_than: 0)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
     |> validate_routing(attrs)
+    |> validate_sink_specific_batch_size()
     |> Sequin.Changeset.annotations_check_constraint()
   end
 
@@ -266,6 +267,19 @@ defmodule Sequin.Consumers.SinkConsumer do
 
       no_match ->
         add_error(cs, :routing_id, "unknown routing mode: #{inspect(no_match)}")
+    end
+  end
+
+  defp validate_sink_specific_batch_size(changeset) do
+    case get_field(changeset, :sink) do
+      %{type: :sqs} ->
+        validate_number(changeset, :batch_size,
+          less_than_or_equal_to: 10,
+          message: "SQS batch size cannot exceed 10 messages per batch"
+        )
+
+      _ ->
+        changeset
     end
   end
 

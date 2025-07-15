@@ -392,7 +392,7 @@
       <CardHeader>
         <CardTitle>Message grouping</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent class="space-y-4">
         <div class="space-y-2">
           <div class="flex items-center gap-2">
             <Switch
@@ -424,6 +424,59 @@
             may improve.
           </p>
         </div>
+
+        <Accordion class="w-full">
+          <AccordionItem value="advanced">
+            <AccordionTrigger>Advanced settings</AccordionTrigger>
+            <AccordionContent>
+              <div class="space-y-4 pt-4">
+                <div class="space-y-2">
+                  <Label for="batch-size">Batch size</Label>
+                  <div class="flex items-center space-x-2">
+                    <Input
+                      id="batch-size"
+                      type="number"
+                      bind:value={form.batchSize}
+                      class="w-24"
+                      min="1"
+                      max="10"
+                    />
+                    <span class="text-sm text-muted-foreground">messages</span>
+                  </div>
+                  <p class="text-sm text-muted-foreground">
+                    The number of messages to batch together. Most sinks support
+                    batching for improved performance.
+                  </p>
+                  {#if errors.batch_size}
+                    <p class="text-destructive text-sm">{errors.batch_size}</p>
+                  {/if}
+                </div>
+                <div class="space-y-2">
+                  <Label for="batch-timeout">Batch timeout</Label>
+                  <div class="flex items-center space-x-2">
+                    <Input
+                      id="batch-timeout"
+                      type="number"
+                      bind:value={form.batchTimeoutMs}
+                      class="w-24"
+                      min="1"
+                    />
+                    <span class="text-sm text-muted-foreground">ms</span>
+                  </div>
+                  <p class="text-sm text-muted-foreground">
+                    The maximum time to wait for a batch to fill before sending.
+                    Default is 5ms.
+                  </p>
+                  {#if errors.batch_timeout_ms}
+                    <p class="text-destructive text-sm">
+                      {errors.batch_timeout_ms}
+                    </p>
+                  {/if}
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </CardContent>
     </Card>
 

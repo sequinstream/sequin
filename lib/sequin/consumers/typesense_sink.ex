@@ -14,8 +14,8 @@ defmodule Sequin.Consumers.TypesenseSink do
     field :endpoint_url, :string
     field :collection_name, :string
     field :api_key, Sequin.Encrypted.Binary
-    field :batch_size, :integer, default: 100
-    field :timeout_seconds, :integer, default: 5
+    field :batch_size, :integer, default: 40
+    field :timeout_seconds, :integer, default: 10
     field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
   end
 

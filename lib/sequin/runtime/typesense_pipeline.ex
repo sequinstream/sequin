@@ -30,12 +30,12 @@ defmodule Sequin.Runtime.TypesensePipeline do
       default: [
         concurrency: concurrency,
         batch_size: consumer.sink.batch_size,
-        batch_timeout: 10
+        batch_timeout: 1
       ],
       delete: [
         concurrency: concurrency,
         batch_size: 1,
-        batch_timeout: 10
+        batch_timeout: 1
       ]
     ]
   end

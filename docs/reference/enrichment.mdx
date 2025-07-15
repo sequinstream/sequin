@@ -1,0 +1,158 @@
+---
+title: SQL Enrichment
+description: Reference for Sequin's SQL enrichment functionality. Use SQL enrichment to add additional data to your messages before they are sent to sinks.
+---
+
+SQL enrichment allows you to enrich your messages with additional data from your database before they are sent to the sink destination. This is useful for:
+
+- Adding related data from other tables to your messages
+- Reducing the number of queries your downstream systems need to make
+- Including near commit-time data to your messages
+
+## How it works
+
+When you configure SQL enrichment on a sink consumer, Sequin will:
+
+1. Batch messages that need to be enriched
+2. Execute your SQL enrichment query with the primary keys of those messages
+3. Merge the enrichment results back into the original messages
+4. Send the enriched messages through the rest of your sink pipeline, including into transform and routing functions
+
+## SQL enrichment syntax
+
+SQL enrichment functions must:
+
+1. Use parameterized queries with `$1` syntax
+2. Select all primary key columns from the source table
+3. Select additional fields for enrichment
+4. Return 0 or 1 row per message
+
+Here's an example that enriches user messages with their account name:
+
+```sql
+SELECT
+  u.id, -- you must select all primary keys of the source table for Sequin to associate the enrichment with the message
+  a.name as account_name -- example of an enrichment field
+FROM
+  users u -- this enrichment is triggered on `users` table change messages
+JOIN
+  accounts a on u.account_id = a.id
+WHERE
+  -- the `ANY syntax is required for Sequin to perform batched queries
+  u.id = ANY($1)
+```
+
+### Primary keys
+
+Your SQL enrichment query must select all primary key columns from the source table. These are used to match the enrichment results back to the original messages.
+
+For example, if your table has a primary key of `id`, your query must select `id`:
+
+```sql
+SELECT
+  id,
+  -- enrichment fields
+  account_name,
+  subscription_status
+FROM users u
+JOIN accounts a ON u.account_id = a.id
+WHERE id = ANY($1)
+```
+
+### Parameterization
+
+SQL enrichment functions must use the `$1` syntax for parameterization. This allows Sequin to safely batch multiple messages into a single query.
+
+#### Composite primary keys
+
+If your table has componsite primary keys, you must use a relatively advanced SQL where clause to select rows with those keys. Consider a table with a primary keys of `(id, account_id)`:
+
+```sql highlight={8-12}
+SELECT
+  id,
+  account_name,
+  subscription_status
+FROM users u
+JOIN accounts a ON u.account_id = a.id
+
+-- WHERE clause for composite primary keys
+WHERE (u.account_id, u.id) = ANY(
+  SELECT (r.account_id, r.id) 
+  FROM unnest($1, $2) AS r(account_id, id)
+);
+```
+
+Sequin will assign the primary key values to two parameters, `$1` and `$2`. Sequin will assign them in alphabetical order of the column names. In this case, Sequin will assign `$1` to a list of all account IDs and `$2` to a list of all user IDs for the batched messages.
+
+### Results
+
+Your query should return either 0 or 1 row for each message. If your query returns multiple rows for a message, Sequin will raise an error.
+
+The enrichment results will be merged into the original message's record. Any fields returned by your query will overwrite fields with the same name in the original record.
+
+## Testing enrichment
+
+When creating or editing an enrichment function, Sequin will automatically capture up to 10 recent events from your database. You can see how your enrichment affects these events in real-time.
+
+When changes occur in a connected database and you have the enrichment editor open, Sequin will capture events and display them in the editor.
+
+## Example use cases
+
+### Adding related data
+
+Enrich messages with data from related tables:
+
+```sql
+SELECT
+  orders.id,
+  customers.name as customer_name,
+  customers.email as customer_email
+FROM orders
+JOIN customers ON orders.customer_id = customers.id
+WHERE orders.id = ANY($1)
+```
+
+### Calculating aggregates
+
+Add computed fields to your messages:
+
+```sql
+SELECT
+  users.id,
+  COUNT(orders.id) as total_orders,
+  SUM(orders.amount) as lifetime_value
+FROM users
+LEFT JOIN orders ON orders.user_id = users.id
+WHERE users.id = ANY($1)
+GROUP BY users.id
+```
+
+### Formatting data
+
+Transform data into a more useful format:
+
+```sql
+SELECT
+  users.id,
+  CONCAT(users.first_name, ' ', users.last_name) as full_name,
+  LOWER(users.email) as email_normalized
+FROM users
+WHERE users.id = ANY($1)
+```
+
+## Related
+
+<CardGroup>
+  <Card title="Messages reference" icon="message-dots" href="/reference/messages">
+    Review the structure of a message.
+  </Card>
+  <Card title="sequin.yaml transforms" icon="pencil" href="/reference/sequin-yaml#sink-transforms">
+    Learn about the sequin.yaml file and how to use it to configure your Sequin instance.
+  </Card>
+  <Card title="Filters" icon="filter" href="/reference/filters">
+    Learn about filters and how to use them to filter messages before they are sent to your destination.
+  </Card>
+  <Card title="Sinks" icon="list-check" href="/reference/sinks">
+    Learn how to use sinks to send messages to your destination.
+  </Card>
+</CardGroup> 

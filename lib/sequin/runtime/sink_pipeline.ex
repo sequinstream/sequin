@@ -168,6 +168,8 @@ defmodule Sequin.Runtime.SinkPipeline do
     # Have to ensure module is loaded to trust function_exported?
     Code.ensure_loaded?(pipeline_mod)
 
+    message = enrich_message(message, context)
+
     case filter_message(message, context.consumer) do
       {:ok, true} ->
         if function_exported?(pipeline_mod, :handle_message, 2) do
@@ -228,6 +230,13 @@ defmodule Sequin.Runtime.SinkPipeline do
 
         delivered ++ already_delivered
     end
+  end
+
+  defp enrich_message(message, context) do
+    Message.update_data(
+      message,
+      &Consumers.enrich_message!(context.consumer.postgres_database, context.consumer.enrichment, &1)
+    )
   end
 
   defp filter_message(message, %SinkConsumer{} = consumer) do
@@ -542,7 +551,8 @@ defmodule Sequin.Runtime.SinkPipeline do
   end
 
   defp preload_consumer(consumer) do
-    Repo.lazy_preload(consumer, [:transform, :routing, :filter, :enrichment])
+    # TODO: Strip tables to those with enrichment functions
+    Repo.lazy_preload(consumer, [:transform, :routing, :filter, :enrichment, :postgres_database])
   end
 
   # Formats timestamps according to the consumer's timestamp_format setting

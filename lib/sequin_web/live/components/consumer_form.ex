@@ -716,6 +716,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "transform_id" => if(form["transform"] === "none", do: nil, else: form["transform"]),
         "routing_id" => if(form["routingId"] === "none", do: nil, else: form["routingId"]),
         "filter_id" => if(form["filterId"] === "none", do: nil, else: form["filterId"]),
+        "enrichment_id" => if(form["enrichmentId"] === "none", do: nil, else: form["enrichmentId"]),
         "routing_mode" => form["routingMode"],
         "timestamp_format" => form["timestampFormat"],
         "source" => decode_source(form["source"])
@@ -1000,7 +1001,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "transform_id" => consumer.transform_id,
       "timestamp_format" => consumer.timestamp_format,
       "filter_id" => consumer.filter_id,
-      "actions" => consumer.actions
+      "actions" => consumer.actions,
+      "enrichment_id" => consumer.enrichment_id
     }
   end
 

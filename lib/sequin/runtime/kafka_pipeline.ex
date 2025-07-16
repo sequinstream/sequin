@@ -74,13 +74,13 @@ defmodule Sequin.Runtime.KafkaPipeline do
         %Kafka.Message{key: message_key, value: consumer_message.encoded_data}
       end)
 
-    case Kafka.publish(consumer, topic, partition, kafka_messages) do
-      :ok ->
-        {:ok, messages, context}
+    # case Kafka.publish(consumer, topic, partition, kafka_messages) do
+    #   :ok ->
+    {:ok, messages, context}
 
-      {:error, error} when is_exception(error) ->
-        {:error, error}
-    end
+    #   {:error, error} when is_exception(error) ->
+    #     {:error, error}
+    # end
   catch
     {:failed_to_connect, error} ->
       Logger.error("[KafkaPipeline] Failed to connect to Kafka: #{inspect(error)}", error: error)

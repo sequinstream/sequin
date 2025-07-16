@@ -686,7 +686,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
         nil
 
       [message] ->
-        message.data.record
+        message.data
 
       messages ->
         msg = "Sql enrichment function must return 0 or 1 message, got: #{inspect(length(messages))}"

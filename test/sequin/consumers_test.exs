@@ -854,12 +854,13 @@ defmodule Sequin.ConsumersTest do
       message =
         ConsumersFactory.consumer_event(
           table_oid: 12_345,
-          data: %ConsumerEventData{
-            record: %{
-              "id" => 1,
-              "name" => "original"
-            }
-          }
+          data:
+            ConsumersFactory.consumer_event_data(
+              record: %{
+                "id" => 1,
+                "name" => "original"
+              }
+            )
         )
 
       # Create an enrichment function that adds data
@@ -882,9 +883,11 @@ defmodule Sequin.ConsumersTest do
       enriched_message = Consumers.enrich_message!(database, enrichment_function, message, query_fn: query_fn)
 
       # Verify enrichment
-      assert enriched_message.data.record["name"] == "enriched"
-      assert enriched_message.data.record["extra_field"] == "extra"
-      assert enriched_message.data.record["id"] == 1
+      assert enriched_message.data.metadata.enrichment == %{
+               "extra_field" => "extra",
+               "id" => 1,
+               "name" => "enriched"
+             }
     end
 
     test "properly handles multiple messages" do
@@ -904,15 +907,11 @@ defmodule Sequin.ConsumersTest do
       messages = [
         ConsumersFactory.consumer_event(
           table_oid: 12_345,
-          data: %ConsumerEventData{
-            record: %{"id" => 1, "name" => "original1"}
-          }
+          data: ConsumersFactory.consumer_event_data(record: %{"id" => 1, "name" => "original1"})
         ),
         ConsumersFactory.consumer_event(
           table_oid: 12_345,
-          data: %ConsumerEventData{
-            record: %{"id" => 2, "name" => "original2"}
-          }
+          data: ConsumersFactory.consumer_event_data(record: %{"id" => 2, "name" => "original2"})
         )
       ]
 
@@ -941,8 +940,9 @@ defmodule Sequin.ConsumersTest do
       # Verify enrichments
       assert length(enriched_messages) == 2
       [msg1, msg2] = enriched_messages
-      assert msg1.data.record["name"] == "enriched1"
-      assert msg2.data.record["name"] == "enriched2"
+
+      assert msg1.data.metadata.enrichment == %{"id" => 1, "name" => "enriched1"}
+      assert msg2.data.metadata.enrichment == %{"id" => 2, "name" => "enriched2"}
     end
 
     test "succeeds if the enrichment function returns 0 rows for a message" do
@@ -962,9 +962,7 @@ defmodule Sequin.ConsumersTest do
       message =
         ConsumersFactory.consumer_event(
           table_oid: 12_345,
-          data: %ConsumerEventData{
-            record: %{"id" => 1, "name" => "original"}
-          }
+          data: ConsumersFactory.consumer_event_data(record: %{"id" => 1, "name" => "original"})
         )
 
       # Create an enrichment function
@@ -1004,9 +1002,7 @@ defmodule Sequin.ConsumersTest do
       message =
         ConsumersFactory.consumer_event(
           table_oid: 12_345,
-          data: %ConsumerEventData{
-            record: %{"id" => 1, "name" => "original"}
-          }
+          data: ConsumersFactory.consumer_event_data(record: %{"id" => 1, "name" => "original"})
         )
 
       # Create an enrichment function
@@ -1054,12 +1050,13 @@ defmodule Sequin.ConsumersTest do
       message =
         ConsumersFactory.consumer_event(
           table_oid: 12_345,
-          data: %ConsumerEventData{
-            record: %{
-              "id" => uuid,
-              "name" => "original"
-            }
-          }
+          data:
+            ConsumersFactory.consumer_event_data(
+              record: %{
+                "id" => uuid,
+                "name" => "original"
+              }
+            )
         )
 
       # Create an enrichment function
@@ -1086,8 +1083,7 @@ defmodule Sequin.ConsumersTest do
       [enriched_message] = Consumers.enrich_messages!(database, enrichment_function, [message], query_fn: query_fn)
 
       # Verify enrichment
-      assert enriched_message.data.record["name"] == "enriched"
-      assert enriched_message.data.record["id"] == uuid
+      assert enriched_message.data.metadata.enrichment == %{"id" => uuid, "name" => "enriched"}
     end
 
     test "loads rows from postgres types to elixir types before merging into record" do
@@ -1106,11 +1102,12 @@ defmodule Sequin.ConsumersTest do
       message =
         ConsumersFactory.consumer_event(
           table_oid: 12_345,
-          data: %ConsumerEventData{
-            record: %{
-              "id" => 1
-            }
-          }
+          data:
+            ConsumersFactory.consumer_event_data(
+              record: %{
+                "id" => 1
+              }
+            )
         )
 
       uuid = Sequin.uuid4()
@@ -1138,9 +1135,11 @@ defmodule Sequin.ConsumersTest do
       [enriched_message] = Consumers.enrich_messages!(database, enrichment_function, [message], query_fn: query_fn)
 
       # Verify enrichment
-      assert enriched_message.data.record["id"] == 1
-      assert enriched_message.data.record["account_id"] == uuid
-      assert enriched_message.data.record["created_at"] == datetime
+      assert enriched_message.data.metadata.enrichment == %{
+               "id" => 1,
+               "account_id" => uuid,
+               "created_at" => datetime
+             }
     end
   end
 end

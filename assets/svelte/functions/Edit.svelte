@@ -218,6 +218,11 @@
         type: "property",
         info: "An array of all the primary key composite fragments",
       },
+      {
+        label: "metadata.enrichment",
+        type: "property",
+        info: "An enrichment result from a SQL enrichment function",
+      },
     ];
 
     return {

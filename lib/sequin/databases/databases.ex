@@ -84,6 +84,19 @@ defmodule Sequin.Databases do
     end
   end
 
+  def get_db_for_consumer(%SinkConsumer{} = consumer) do
+    PostgresDatabase.join_replication_slot()
+    |> PostgresReplicationSlot.where_id(consumer.replication_slot_id)
+    |> Ecto.Query.select([database: db], db)
+    |> Repo.one()
+  end
+
+  def get_cached_db_for_consumer(%SinkConsumer{} = consumer) do
+    ttl = Sequin.Time.with_jitter(to_timeout(second: 30))
+
+    Cache.get_or_store(consumer.id, fn -> get_db_for_consumer(consumer) end, ttl)
+  end
+
   @spec get_cached_db(database_id :: PostgresDatabase.id()) ::
           {:ok, database :: PostgresDatabase.t()} | {:error, Error.t()}
   def get_cached_db(database_id) do

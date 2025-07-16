@@ -16,9 +16,9 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.Function
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Source
-  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.DebouncedLogger
@@ -562,8 +562,8 @@ defmodule Sequin.Runtime.SinkPipeline do
       nil ->
         consumer
 
-      %SqlEnrichmentFunction{} ->
-        {:ok, %PostgresDatabase{} = database} = Databases.get_cached_db(consumer.postgres_database_id)
+      %Function{} ->
+        %PostgresDatabase{} = database = Databases.get_cached_db_for_consumer(consumer)
         tables = Enum.filter(database.tables, &Source.table_in_source?(consumer.source, &1))
         %{consumer | postgres_database: %{database | tables: tables}}
     end

@@ -28,6 +28,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
       field :database_name, :string
       field :idempotency_key, :string
       field :record_pks, {:array, :string}
+      field :enrichment, :map
 
       embeds_one :consumer, Sink, primary_key: false, on_replace: :update do
         @derive Jason.Encoder
@@ -56,7 +57,8 @@ defmodule Sequin.Consumers.ConsumerRecordData do
       :commit_lsn,
       :database_name,
       :idempotency_key,
-      :record_pks
+      :record_pks,
+      :enrichment
     ])
     |> validate_required([:table_schema, :table_name, :commit_timestamp, :commit_lsn, :record_pks])
     |> cast_embed(:consumer, required: true, with: &consumer_changeset/2)

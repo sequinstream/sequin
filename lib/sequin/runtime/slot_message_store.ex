@@ -397,6 +397,22 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @doc """
+  Discards all messages in the message store.
+  """
+  @spec discard_all_messages(SinkConsumer.t()) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
+  def discard_all_messages(consumer) do
+    call_all_partitions(consumer, :discard_all_messages)
+  end
+
+  @doc """
+  Discards only messages that are currently in a failed state (have not_visible_until set in the future).
+  """
+  @spec discard_failing_messages(SinkConsumer.t()) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
+  def discard_failing_messages(consumer) do
+    call_all_partitions(consumer, :discard_failing_messages)
+  end
+
+  @doc """
   Should raise so SlotProcessorServer cannot continue if this fails.
   """
   @spec min_unpersisted_wal_cursors(SinkConsumer.t(), reference()) :: list(Replication.wal_cursor())
@@ -746,6 +762,45 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {:reply, :ok, state}
   end
 
+  @decorate track_metrics("discard_all_messages")
+  def handle_call(:discard_all_messages, _from, state) do
+    # Get all messages from state
+    all_messages = Map.values(state.messages)
+
+    case discard_messages_and_update_state(state, all_messages) do
+      {:ok, count, new_state} ->
+        Sequin.ProcessMetrics.gauge("message_count", 0)
+        Sequin.ProcessMetrics.gauge("payload_size_bytes", 0)
+        {:reply, {:ok, count}, new_state}
+
+      error ->
+        {:reply, error, state}
+    end
+  end
+
+  @decorate track_metrics("discard_failing_messages")
+  def handle_call(:discard_failing_messages, _from, state) do
+    now = DateTime.utc_now()
+
+    # Get all messages that are currently failing (have not_visible_until set in the future)
+    failing_messages =
+      state.messages
+      |> Map.values()
+      |> Enum.filter(fn msg ->
+        not is_nil(msg.not_visible_until) and DateTime.after?(msg.not_visible_until, now)
+      end)
+
+    case discard_messages_and_update_state(state, failing_messages) do
+      {:ok, count, new_state} ->
+        Sequin.ProcessMetrics.gauge("message_count", map_size(new_state.messages))
+        Sequin.ProcessMetrics.gauge("payload_size_bytes", new_state.payload_size_bytes)
+        {:reply, {:ok, count}, new_state}
+
+      error ->
+        {:reply, error, state}
+    end
+  end
+
   @decorate track_metrics("min_unpersisted_wal_cursor")
   def handle_call({:min_unpersisted_wal_cursor, monitor_ref}, _from, state) do
     if monitor_ref == state.slot_processor_monitor_ref do
@@ -990,6 +1045,21 @@ defmodule Sequin.Runtime.SlotMessageStore do
     Error.invariant(message: "[SlotMessageStore] exited with #{inspect(e)}")
   end
 
+  # Helper function to call a function on all partitions and aggregate the results
+  defp call_all_partitions(consumer, call_name) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while({:ok, 0}, fn partition, {:ok, acc_count} ->
+      case GenServer.call(via_tuple(consumer.id, partition), call_name) do
+        {:ok, count} -> {:cont, {:ok, acc_count + count}}
+        error -> {:halt, error}
+      end
+    end)
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
   @decorate track_metrics("upsert_messages")
   defp upsert_messages(%State{}, []), do: :ok
 
@@ -1092,6 +1162,28 @@ defmodule Sequin.Runtime.SlotMessageStore do
   defp handle_discarded_messages(%State{} = state, discarded_messages) do
     with :ok <- delete_messages(state, Enum.map(discarded_messages, & &1.ack_id)) do
       AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages)
+    end
+  end
+
+  # Common logic for discarding messages
+  defp discard_messages_and_update_state(state, messages_to_discard) do
+    # Mark messages as discarded
+    discarded_messages = Enum.map(messages_to_discard, &%{&1 | state: :discarded, not_visible_until: nil})
+    count = length(discarded_messages)
+
+    # Pop messages from state
+    cursor_tuples = Enum.map(messages_to_discard, fn msg -> {msg.commit_lsn, msg.commit_idx} end)
+    {_removed_messages, new_state} = State.pop_messages(state, cursor_tuples)
+
+    # Handle discarded messages (persist and ack)
+    case handle_discarded_messages(state, discarded_messages) do
+      :ok ->
+        maybe_finish_table_reader_batch(state, new_state)
+        Sequin.ProcessMetrics.increment_throughput("messages_discarded", count)
+        {:ok, count, new_state}
+
+      error ->
+        error
     end
   end
 

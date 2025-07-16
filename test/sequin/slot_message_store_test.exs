@@ -1054,4 +1054,176 @@ defmodule Sequin.SlotMessageStoreTest do
       assert :ok = SlotMessageStore.put_messages(consumer, [message])
     end
   end
+
+  describe "discard_all_messages/1" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [])
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+      %{consumer: consumer}
+    end
+
+    test "discards all messages in the store", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      # Create and put multiple messages
+      messages =
+        Enum.map(1..3, fn i ->
+          ConsumersFactory.consumer_message(
+            message_kind: consumer.message_kind,
+            consumer_id: consumer.id,
+            group_id: "test-group-#{i}"
+          )
+        end)
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      assert_receive {:put_messages_done, ^consumer_id}, 1000
+
+      # Verify messages are in the store
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 3
+
+      # Discard all messages
+      assert {:ok, 3} = SlotMessageStore.discard_all_messages(consumer)
+
+      # Verify all messages are discarded
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 0
+
+      # Verify messages were stored in AcknowledgedMessages
+      {:ok, stored_messages} = AcknowledgedMessages.fetch_messages(consumer.id, 100, 0)
+      assert length(stored_messages) == 3
+      assert Enum.all?(stored_messages, &(&1.state == "discarded"))
+    end
+
+    test "returns 0 when there are no messages", %{consumer: consumer} do
+      # Verify store is empty
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 0
+
+      # Should not error when discarding empty store
+      assert {:ok, 0} = SlotMessageStore.discard_all_messages(consumer)
+    end
+  end
+
+  describe "discard_failing_messages/1" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [])
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+      %{consumer: consumer}
+    end
+
+    test "discards only failing messages", %{consumer: consumer} do
+      consumer_id = consumer.id
+      now = DateTime.utc_now()
+
+      # Create messages
+      messages =
+        Enum.map(1..3, fn i ->
+          ConsumersFactory.consumer_message(
+            message_kind: consumer.message_kind,
+            consumer_id: consumer.id,
+            group_id: "test-group-#{i}"
+          )
+        end)
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      assert_receive {:put_messages_done, ^consumer_id}, 1000
+
+      # Produce and fail some messages to make them "failing"
+      {:ok, [msg1, msg2]} = SlotMessageStore.produce(consumer, 2, self())
+
+      # Fail the first two messages so they have not_visible_until in the future
+      metas = [
+        %{
+          ack_id: msg1.ack_id,
+          deliver_count: 1,
+          group_id: msg1.group_id,
+          last_delivered_at: now,
+          # 5 minutes in future
+          not_visible_until: DateTime.add(now, 300)
+        },
+        %{
+          ack_id: msg2.ack_id,
+          deliver_count: 1,
+          group_id: msg2.group_id,
+          last_delivered_at: now,
+          # 10 minutes in future
+          not_visible_until: DateTime.add(now, 600)
+        }
+      ]
+
+      :ok = SlotMessageStore.messages_failed(consumer, metas)
+
+      # Discard only failing messages
+      assert {:ok, 2} = SlotMessageStore.discard_failing_messages(consumer)
+
+      # Verify count - should have 1 message left (the one that wasn't delivered)
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 1
+
+      # Verify that 2 messages were stored as discarded
+      {:ok, stored_messages} = AcknowledgedMessages.fetch_messages(consumer.id, 100, 0)
+      assert length(stored_messages) == 2
+      assert Enum.all?(stored_messages, &(&1.state == "discarded"))
+    end
+
+    test "returns 0 when there are no failing messages", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      # Create and put a message that's not failing
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          group_id: "test-group"
+        )
+
+      :ok = SlotMessageStore.put_messages(consumer, [message])
+      assert_receive {:put_messages_done, ^consumer_id}, 1000
+
+      # Should not error when there are no failing messages
+      assert {:ok, 0} = SlotMessageStore.discard_failing_messages(consumer)
+
+      # Verify the message is still there
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 1
+    end
+
+    test "does not discard messages with not_visible_until in the past", %{consumer: consumer} do
+      consumer_id = consumer.id
+      now = DateTime.utc_now()
+
+      # Create a message
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          group_id: "test-group"
+        )
+
+      :ok = SlotMessageStore.put_messages(consumer, [message])
+      assert_receive {:put_messages_done, ^consumer_id}, 1000
+
+      # Produce and fail the message with not_visible_until in the past
+      {:ok, [msg]} = SlotMessageStore.produce(consumer, 1, self())
+
+      meta = %{
+        ack_id: msg.ack_id,
+        deliver_count: 1,
+        group_id: msg.group_id,
+        last_delivered_at: now,
+        # 1 minute in the past
+        not_visible_until: DateTime.add(now, -60)
+      }
+
+      :ok = SlotMessageStore.messages_failed(consumer, [meta])
+
+      # Should not discard messages with not_visible_until in the past
+      assert {:ok, 0} = SlotMessageStore.discard_failing_messages(consumer)
+
+      # Verify the message is still available for delivery
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 1
+    end
+  end
 end

@@ -1872,13 +1872,13 @@ defmodule Sequin.Consumers do
 
   def enrich_messages!(_database, nil = _enrichment_function, messages, _opts), do: messages
 
-  def enrich_messages!(nil, %SqlEnrichmentFunction{}, _messages, _opts) do
+  def enrich_messages!(nil, %Function{}, _messages, _opts) do
     raise("Database is required to enrich messages, got nil.")
   end
 
   def enrich_messages!(
         %PostgresDatabase{} = database,
-        %Function{function: %SqlEnrichmentFunction{code: sql}},
+        %Function{function: %SqlEnrichmentFunction{code: sql}} = function,
         messages,
         opts
       )
@@ -1896,24 +1896,53 @@ defmodule Sequin.Consumers do
     case query_fn.(database, sql, params) do
       {:ok, %Postgrex.Result{} = result} ->
         enrichments = load_enrichments(result)
-        merge_enrichments(messages, enrichments, primary_key_columns)
+        merge_enrichments(function, messages, enrichments, primary_key_columns)
 
       {:error, error} ->
         raise error
     end
   end
 
-  defp merge_enrichments(messages, enrichments, primary_key_columns) do
+  defp merge_enrichments(%Function{} = function, messages, enrichments, primary_key_columns) do
     Enum.map(messages, fn message ->
+      consumer_id = message.data.metadata.consumer.id
+
       case Enum.filter(enrichments, &enrichment_matches?(primary_key_columns, message, &1)) do
         [] ->
+          Trace.info(consumer_id, %Trace.Event{
+            message: "Executed enrichment function #{function.name}",
+            extra: %{
+              input: message.data.record,
+              result: "No enrichment matched"
+            }
+          })
+
           message
 
         [enrichment] ->
+          Trace.info(consumer_id, %Trace.Event{
+            message: "Executed enrichment function #{function.name}",
+            extra: %{
+              input: message.data.record,
+              result: enrichment
+            }
+          })
+
           put_in(message.data.metadata.enrichment, enrichment)
 
         enrichments ->
-          raise "Expected 0 or 1 enrichment results, got #{length(enrichments)}"
+          error = Error.invariant(message: "Expected 0 or 1 enrichment results, got #{length(enrichments)}")
+
+          Trace.error(consumer_id, %Trace.Event{
+            message: "Executed enrichment function #{function.name}",
+            error: error,
+            extra: %{
+              input: message.data.record,
+              result: enrichments
+            }
+          })
+
+          raise error
       end
     end)
   end

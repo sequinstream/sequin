@@ -1870,8 +1870,11 @@ defmodule Sequin.Consumers do
   """
   def enrich_messages!(database, sql_enrichment_function, messages, opts \\ [])
 
-  def enrich_messages!(nil, _func, _messages, _opts), do: raise("Database is required to enrich messages, got nil.")
-  def enrich_messages!(%PostgresDatabase{}, nil = _enrichment_function, messages, _opts), do: messages
+  def enrich_messages!(_database, nil = _enrichment_function, messages, _opts), do: messages
+
+  def enrich_messages!(nil, %SqlEnrichmentFunction{}, _messages, _opts) do
+    raise("Database is required to enrich messages, got nil.")
+  end
 
   def enrich_messages!(
         %PostgresDatabase{} = database,

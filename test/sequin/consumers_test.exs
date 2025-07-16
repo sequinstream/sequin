@@ -12,6 +12,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Source
   alias Sequin.Consumers.SqlEnrichmentFunction
+  alias Sequin.Error.InvariantError
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
@@ -1025,7 +1026,7 @@ defmodule Sequin.ConsumersTest do
       end
 
       # Attempt to enrich the message - should raise an error
-      assert_raise RuntimeError, ~r/Expected 0 or 1 enrichment results, got 2/, fn ->
+      assert_raise InvariantError, ~r/Expected 0 or 1 enrichment results, got 2/, fn ->
         Consumers.enrich_messages!(database, enrichment_function, [message], query_fn: query_fn)
       end
     end

@@ -1,6 +1,11 @@
 <script lang="ts">
-  import { CheckIcon, TableIcon } from "lucide-svelte";
+  import { CheckIcon, TableIcon, Info } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+  } from "$lib/components/ui/tooltip";
   import {
     Table as TableComponent,
     TableBody,
@@ -208,6 +213,34 @@
       <p class="text-sm text-muted-foreground mt-1">
         Select one or more tables to backfill. Sequin will backfill rows in the
         selected tables while concurrently capturing changes.
+      </p>
+    </div>
+
+    <div class="space-y-2">
+      <div class="flex items-center gap-2">
+        <Label for="maxTimeoutMs" class="text-sm">Query timeout (ms)</Label>
+        <a
+          href="https://sequinstream.com/docs/reference/backfills#query-timeout"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+        >
+          <Info class="h-3.5 w-3.5" />
+          Learn more in our docs
+        </a>
+      </div>
+      <Input
+        type="number"
+        id="maxTimeoutMs"
+        bind:value={form.maxTimeoutMs}
+        min="1000"
+        max="600000"
+        step="1000"
+        class="w-48"
+        placeholder="5000"
+      />
+      <p class="text-xs text-muted-foreground">
+        Maximum time for each <code>select</code> query during backfill (1-600 seconds)
       </p>
     </div>
 

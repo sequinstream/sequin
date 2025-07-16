@@ -819,7 +819,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         account_id: account_id,
         sink_consumer_id: sink_consumer_id,
         initial_min_cursor: initial_min_cursor,
-        state: Enum.random([:active, :completed, :cancelled]),
+        state: Enum.random([:active, :paused, :completed, :cancelled]),
         rows_initial_count: Enum.random(1..1000),
         rows_processed_count: 0,
         rows_ingested_count: 0,

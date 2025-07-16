@@ -122,6 +122,7 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
           Logger.info("[LifecycleEventWorker] Handling event `#{event}` for backfill")
           InitBackfillStatsWorker.enqueue(backfill.id)
           RuntimeSupervisor.start_table_reader(consumer)
+          :ok
         end
 
       "update" ->
@@ -133,6 +134,10 @@ defmodule Sequin.Runtime.ConsumerLifecycleEventWorker do
           case backfill.state do
             :active ->
               RuntimeSupervisor.restart_table_reader(backfill)
+
+            :paused ->
+              Logger.info("Stopping TableReaderServer for backfill #{backfill.id}", backfill_status: :paused)
+              RuntimeSupervisor.stop_table_reader(backfill.id)
 
             s when s in [:cancelled, :completed, :failed] ->
               # Clear out the backfill_fetch_batch event - if backfill was erroring, we want to

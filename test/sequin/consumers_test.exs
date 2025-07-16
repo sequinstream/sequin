@@ -806,4 +806,29 @@ defmodule Sequin.ConsumersTest do
       assert group_id_from_message == "user_1:group_A"
     end
   end
+
+  describe "update_backfill/2 validates proper status transitions" do
+    test "successfully pauses an active backfill" do
+      backfill = ConsumersFactory.insert_active_backfill!()
+
+      assert {:ok, paused_backfill} = Consumers.update_backfill(backfill, %{state: :paused})
+      assert paused_backfill.state == :paused
+      assert paused_backfill.id == backfill.id
+    end
+
+    test "successfully resumes a paused backfill" do
+      backfill = ConsumersFactory.insert_backfill!(state: :paused)
+
+      assert {:ok, resumed_backfill} = Consumers.update_backfill(backfill, %{state: :active})
+      assert resumed_backfill.state == :active
+      assert resumed_backfill.id == backfill.id
+    end
+
+    test "returns error when trying to pause non-active backfill" do
+      completed_backfill = ConsumersFactory.insert_completed_backfill!()
+
+      assert {:error, changeset} = Consumers.update_backfill(completed_backfill, %{state: :paused})
+      assert changeset.valid? == false
+    end
+  end
 end

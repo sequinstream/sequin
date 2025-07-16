@@ -2,7 +2,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Progress } from "$lib/components/ui/progress";
   import { Badge } from "$lib/components/ui/badge";
-  import { Loader2, ArrowDownSquare, X } from "lucide-svelte";
+  import { Loader2, ArrowDownSquare, X, Pause, Play } from "lucide-svelte";
   import { formatNumberWithCommas, formatRelativeTimestamp } from "../utils";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -21,11 +21,14 @@
   let selectedBackfill = null;
   let isDrawerOpen = false;
   let isCancelling = false;
+  let isPausing = false;
+  let isResuming = false;
 
   // Backfill form state
   let showBackfillDialog = false;
   let backfillForm = {
     selectedTables: [],
+    maxTimeoutMs: 5000,
   };
   let backfillFormErrors: Record<string, string> = {};
   let isSubmittingBackfill = false;
@@ -62,6 +65,8 @@
     isDrawerOpen = false;
     selectedBackfill = null;
     isCancelling = false;
+    isPausing = false;
+    isResuming = false;
   }
 
   function formatDate(dateString: string) {
@@ -99,6 +104,8 @@
         return "bg-gray-200 text-gray-800";
       case "failed":
         return "bg-red-200 text-red-800";
+      case "paused":
+        return "bg-yellow-200 text-yellow-800";
       default:
         return "bg-gray-200 text-gray-800";
     }
@@ -121,6 +128,9 @@
         ? formatRelativeTimestamp(backfill.canceled_at)
         : "unknown time";
       return `Cancelled ${cancelledAt}`;
+    } else if (backfill.state === "paused") {
+      const progress = backfill.progress ? backfill.progress.toFixed(1) : "0";
+      return `Paused at ${progress}% (${formatNumberWithCommas(backfill.rows_processed_count)} rows)`;
     } else if (backfill.state === "failed") {
       const failedAt = backfill.failed_at
         ? formatRelativeTimestamp(backfill.failed_at)
@@ -140,6 +150,26 @@
     });
   }
 
+  function pauseBackfill(backfillId: string) {
+    isPausing = true;
+    live.pushEvent("pause_backfill", { backfill_id: backfillId }, (reply) => {
+      isPausing = false;
+      if (reply.ok) {
+        closeDrawer();
+      }
+    });
+  }
+
+  function resumeBackfill(backfillId: string) {
+    isResuming = true;
+    live.pushEvent("resume_backfill", { backfill_id: backfillId }, (reply) => {
+      isResuming = false;
+      if (reply.ok) {
+        closeDrawer();
+      }
+    });
+  }
+
   function handleBackfillSubmit() {
     isSubmittingBackfill = true;
     showBackfillDialog = false;
@@ -148,6 +178,7 @@
       "run-backfill",
       {
         selectedTables: backfillForm.selectedTables,
+        maxTimeoutMs: backfillForm.maxTimeoutMs,
       },
       (reply) => {
         isSubmittingBackfill = false;
@@ -161,6 +192,7 @@
   function openBackfillDialog() {
     backfillForm = {
       selectedTables: [],
+      maxTimeoutMs: 5000,
     };
     backfillFormErrors = {};
     showBackfillDialog = true;
@@ -385,23 +417,56 @@
         {/if}
 
         <!-- Actions Section -->
-        {#if selectedBackfill.state === "active"}
+        {#if selectedBackfill.state === "active" || selectedBackfill.state === "paused"}
           <div class="bg-gray-50 p-4 rounded-lg space-y-4">
             <h3 class="text-sm font-semibold">Actions</h3>
-            <Button
-              variant="destructive"
-              size="sm"
-              on:click={() => cancelBackfill(selectedBackfill.id)}
-              disabled={isCancelling}
-              class="flex items-center space-x-2"
-            >
-              {#if isCancelling}
-                <Loader2 class="h-4 w-4 animate-spin" />
-              {:else}
-                <X class="h-4 w-4" />
+            <div class="flex gap-2">
+              {#if selectedBackfill.state === "active"}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  on:click={() => pauseBackfill(selectedBackfill.id)}
+                  disabled={isPausing}
+                  class="flex items-center space-x-2"
+                >
+                  {#if isPausing}
+                    <Loader2 class="h-4 w-4 animate-spin" />
+                  {:else}
+                    <Pause class="h-4 w-4" />
+                  {/if}
+                  <span>Pause</span>
+                </Button>
+              {:else if selectedBackfill.state === "paused"}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  on:click={() => resumeBackfill(selectedBackfill.id)}
+                  disabled={isResuming}
+                  class="flex items-center space-x-2"
+                >
+                  {#if isResuming}
+                    <Loader2 class="h-4 w-4 animate-spin" />
+                  {:else}
+                    <Play class="h-4 w-4" />
+                  {/if}
+                  <span>Resume</span>
+                </Button>
               {/if}
-              <span>Cancel Backfill</span>
-            </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                on:click={() => cancelBackfill(selectedBackfill.id)}
+                disabled={isCancelling}
+                class="flex items-center space-x-2"
+              >
+                {#if isCancelling}
+                  <Loader2 class="h-4 w-4 animate-spin" />
+                {:else}
+                  <X class="h-4 w-4" />
+                {/if}
+                <span>Cancel</span>
+              </Button>
+            </div>
           </div>
         {/if}
       </div>

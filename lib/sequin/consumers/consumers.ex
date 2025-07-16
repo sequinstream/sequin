@@ -1709,7 +1709,7 @@ defmodule Sequin.Consumers do
     |> Repo.one()
   end
 
-  def create_backfills_for_form(account_id, consumer, tables_config) do
+  def create_backfills_for_form(account_id, consumer, tables_config, max_timeout_ms \\ 5000) do
     # Create backfills for each selected table
     tables_config
     |> Enum.map(fn
@@ -1725,7 +1725,8 @@ defmodule Sequin.Consumers do
           sink_consumer_id: consumer.id,
           table_oid: table_oid,
           initial_min_cursor: initial_min_cursor,
-          state: :active
+          state: :active,
+          max_timeout_ms: max_timeout_ms
         }
 
       # Partial backfill
@@ -1745,7 +1746,8 @@ defmodule Sequin.Consumers do
           table_oid: table_oid,
           initial_min_cursor: initial_min_cursor,
           sort_column_attnum: sort_column_attnum,
-          state: :active
+          state: :active,
+          max_timeout_ms: max_timeout_ms
         }
     end)
     |> Enum.map(fn backfill_attrs -> create_backfill(backfill_attrs) end)

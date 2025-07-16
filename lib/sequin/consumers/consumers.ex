@@ -1907,10 +1907,7 @@ defmodule Sequin.Consumers do
           message
 
         [enrichment] ->
-          update_in(message.data.record, fn record ->
-            enrichment = Map.delete(enrichment, "sequin_id")
-            Map.merge(record, enrichment)
-          end)
+          put_in(message.data.metadata.enrichment, enrichment)
 
         enrichments ->
           raise "Expected 0 or 1 enrichment results, got #{length(enrichments)}"

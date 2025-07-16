@@ -364,6 +364,7 @@ defmodule Sequin.Runtime.TableReaderServer do
       table = table(state)
       cursor = state.cursor
       fetch_batch_pks = state.fetch_batch_pks
+      timeout_ms = state.page_size_optimizer.max_timeout_ms
 
       task =
         Task.Supervisor.async_nolink(state.task_supervisor, fn ->
@@ -376,7 +377,8 @@ defmodule Sequin.Runtime.TableReaderServer do
                 table,
                 cursor,
                 limit: page_size,
-                include_min: include_min
+                include_min: include_min,
+                timeout: timeout_ms
               )
             end
 
@@ -457,6 +459,7 @@ defmodule Sequin.Runtime.TableReaderServer do
         id = state.id
         slot_id = state.consumer.replication_slot.id
         cursor = state.cursor
+        timeout_ms = state.page_size_optimizer.max_timeout_ms
 
         task =
           Task.Supervisor.async_nolink(state.task_supervisor, fn ->
@@ -477,7 +480,8 @@ defmodule Sequin.Runtime.TableReaderServer do
                     table,
                     cursor,
                     include_min: include_min,
-                    limit: page_size
+                    limit: page_size,
+                    timeout: timeout_ms
                   )
                 end
               )
@@ -958,7 +962,8 @@ defmodule Sequin.Runtime.TableReaderServer do
         true
       end
 
-    not state.done_fetching and
+    state.backfill.state == :active and
+      not state.done_fetching and
       can_fetch_after_backoff? and
       state.count_pending_messages < state.setting_max_pending_messages and
       length(state.unflushed_batches) + length(state.flushed_batches) < @max_batches and

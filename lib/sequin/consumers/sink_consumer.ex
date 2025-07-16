@@ -104,7 +104,7 @@ defmodule Sequin.Consumers.SinkConsumer do
 
     field :health, :map, virtual: true
 
-    has_many :active_backfills, Backfill, where: [state: :active]
+    has_many :active_backfills, Backfill, where: [state: {:in, [:active, :paused]}]
 
     field :actions, {:array, Ecto.Enum}, values: [:insert, :update, :delete]
     embeds_one :source, Source, on_replace: :delete

@@ -63,6 +63,14 @@ By default, backfills order rows by primary keys of the table. This ensures that
 
 For partial backfills, you choose a sort column. Sequin will order rows by the sort column. You may choose any column as the sort column, but we strongly recommend using a column that is indexed.
 
+## Query timeout
+
+Sequin automatically tunes batch sizes in its select queries to maximize throughput during backfills (i.e. messages per second). This setting controls the maximum amount of time each select query should take.
+
+Sequin uses a PageSizeOptimizer that will decrease page sizes as necessary to keep select queries below this limit. This ensures consistent performance and prevents timeouts even when processing large batches of data.
+
+If you're unsure, the default of 5000ms (5 seconds) is fine to start.
+
 {/* TODO: Add details about monitoring backfills */}
 
 {/* TODO: Add an explanation doc for how backfills work */}

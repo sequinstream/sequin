@@ -1,6 +1,7 @@
 defmodule Sequin.Runtime.TableReaderServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
+  use AssertEventually, interval: 5
 
   import Bitwise
   import ExUnit.CaptureLog
@@ -508,6 +509,95 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       assert record["power_level"] == 9001
     end
 
+    @tag :capture_log
+    test "handles paused state correctly", %{backfill: backfill, table_oid: table_oid, consumer: consumer} do
+      # Start SlotMessageStore first
+      start_supervised({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+
+      # Wait for and clear SlotMessageStore init messages (one per partition)
+      for _ <- 1..consumer.partition_count do
+        assert_receive :init_complete, 1000
+      end
+
+      # Start the table reader with short check_state_timeout for testing and small page size
+      table_reader_pid =
+        start_table_reader_server(backfill, table_oid,
+          page_size_optimizer_mod: nil,
+          check_state_timeout: 50,
+          initial_page_size: 2
+        )
+
+      # Let it fetch some initial messages (with page size 2, should get 2 records)
+      assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 100
+
+      # Flush the batch so we can fetch more later
+      assert :ok =
+               TableReaderServer.flush_batch(table_reader_pid, %{
+                 batch_id: batch_id,
+                 commit_lsn: 1,
+                 drop_pks: MapSet.new()
+               })
+
+      # Produce and ack messages to clear pending messages
+      produce_and_ack_messages(consumer, 100)
+
+      # Pause the backfill
+      {:ok, _} = Consumers.update_backfill(backfill, %{state: :paused})
+
+      assert_eventually !Process.alive?(table_reader_pid)
+
+      # Resume the backfill
+      {:ok, updated_backfill} = Consumers.update_backfill(backfill, %{state: :active})
+
+      # Ensure we're loading the latest backfill state
+      assert updated_backfill.state == :active
+
+      # Start a new table reader for the resumed backfill
+      new_table_reader_pid =
+        start_table_reader_server(updated_backfill, table_oid,
+          page_size_optimizer_mod: nil,
+          check_state_timeout: 50,
+          initial_page_size: 2
+        )
+
+      # Check if the new process is alive
+      assert Process.alive?(new_table_reader_pid)
+    end
+
+    test "uses custom max_timeout_ms from backfill", %{backfill: backfill, table_oid: table_oid, consumer: consumer} do
+      # Start SlotMessageStore first
+      start_supervised({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+
+      # Wait for and clear SlotMessageStore init messages (one per partition)
+      for _ <- 1..consumer.partition_count do
+        assert_receive :init_complete, 100
+      end
+
+      # Update backfill with custom timeout
+      custom_timeout = 15_000
+      {:ok, updated_backfill} = Consumers.update_backfill(backfill, %{max_timeout_ms: custom_timeout})
+
+      # Mock the page size optimizer to verify it receives the correct timeout
+      # Only one call is expected now, in init/1 with the custom timeout
+      Mox.expect(PageSizeOptimizerMock, :new, 1, fn opts ->
+        assert opts[:max_timeout_ms] == custom_timeout
+        PageSizeOptimizer.new(opts)
+      end)
+
+      # The size function may be called multiple times during operation
+      Mox.stub(PageSizeOptimizerMock, :size, fn state ->
+        PageSizeOptimizer.size(state)
+      end)
+
+      # Start the table reader which should fulfill the mock expectation
+      _table_reader_pid =
+        start_table_reader_server(
+          updated_backfill,
+          table_oid,
+          page_size_optimizer_mod: PageSizeOptimizerMock
+        )
+    end
+
     test "pks_seen removes primary keys from batches before flushing", %{
       backfill: backfill,
       consumer: consumer,
@@ -520,7 +610,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       pid = start_table_reader_server(backfill, table_oid, initial_page_size: page_size)
 
       # Wait for the first batch to be fetched
-      assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 5000
+      assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 100
 
       # Select a couple of characters to mark as seen
       [char1, char2 | _] = characters
@@ -587,6 +677,7 @@ defmodule Sequin.Runtime.TableReaderServerTest do
     defaults = [
       backfill_id: backfill.id,
       table_oid: table_oid,
+      max_timeout_ms: backfill.max_timeout_ms,
       initial_page_size: 3,
       test_pid: self(),
       max_pending_messages: 100,

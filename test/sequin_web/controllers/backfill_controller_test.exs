@@ -20,7 +20,7 @@ defmodule SequinWeb.BackfillControllerTest do
       )
 
     backfill =
-      ConsumersFactory.insert_backfill!(account_id: account.id, sink_consumer_id: sink_consumer.id, state: :completed)
+      ConsumersFactory.insert_backfill!(account_id: account.id, sink_consumer_id: sink_consumer.id, state: :active)
 
     other_account = AccountsFactory.insert_account!()
     other_sink_consumer = ConsumersFactory.insert_sink_consumer!(account_id: other_account.id)

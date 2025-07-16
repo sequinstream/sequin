@@ -208,6 +208,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> cast_embed(:source_tables)
     |> put_defaults()
     |> validate_message_grouping()
+    |> validate_enrichment()
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
@@ -251,6 +252,26 @@ defmodule Sequin.Consumers.SinkConsumer do
       else
         changeset
       end
+    else
+      changeset
+    end
+  end
+
+  defp validate_enrichment(changeset) do
+    source = get_field(changeset, :source)
+    enrichment_id = get_field(changeset, :enrichment_id)
+
+    has_enrichment? = not is_nil(enrichment_id)
+
+    has_single_table? =
+      not is_nil(source) and is_list(source.include_table_oids) and length(source.include_table_oids) == 1
+
+    if has_enrichment? and not has_single_table? do
+      add_error(
+        changeset,
+        :enrichment_id,
+        "Enrichment is not supported for multiple tables. To use enrichment, please specify a single included table in the source."
+      )
     else
       changeset
     end

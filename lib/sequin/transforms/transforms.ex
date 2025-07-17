@@ -920,6 +920,12 @@ defmodule Sequin.Transforms do
             {:error, error} -> {:halt, {:error, error}}
           end
 
+        "enrichment" ->
+          case parse_function_id(account_id, value) do
+            {:ok, function_id} -> {:cont, {:ok, Map.put(acc, :enrichment_id, function_id)}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+
         "timestamp_format" ->
           {:cont, {:ok, Map.put(acc, :timestamp_format, value)}}
 

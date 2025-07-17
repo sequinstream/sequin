@@ -1124,12 +1124,12 @@ defmodule Sequin.YamlLoader do
     {:ok, nested_attrs}
   end
 
-  defp validate_sql_has_parameterization(%{"function" => %{"type" => "sql_enrichment", "code" => code}}) do
+  defp validate_sql_has_parameterization(%{"function" => %{"type" => "enrichment", "code" => code}}) do
     if String.contains?(code, "$1") do
       :ok
     else
       msg = """
-      SQL enrichment functions must use parameterization.
+      Enrichment functions must use parameterization.
 
       Please use the following $1 syntax:
 

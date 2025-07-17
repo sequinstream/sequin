@@ -764,41 +764,14 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   @decorate track_metrics("discard_all_messages")
   def handle_call(:discard_all_messages, _from, state) do
-    # Get all messages from state
-    all_messages = Map.values(state.messages)
-
-    case discard_messages_and_update_state(state, all_messages) do
-      {:ok, count, new_state} ->
-        Sequin.ProcessMetrics.gauge("message_count", 0)
-        Sequin.ProcessMetrics.gauge("payload_size_bytes", 0)
-        {:reply, {:ok, count}, new_state}
-
-      error ->
-        {:reply, error, state}
-    end
+    all_messages = State.all_messages(state)
+    do_discard_messages(state, all_messages)
   end
 
   @decorate track_metrics("discard_failing_messages")
   def handle_call(:discard_failing_messages, _from, state) do
-    now = DateTime.utc_now()
-
-    # Get all messages that are currently failing (have not_visible_until set in the future)
-    failing_messages =
-      state.messages
-      |> Map.values()
-      |> Enum.filter(fn msg ->
-        not is_nil(msg.not_visible_until) and DateTime.after?(msg.not_visible_until, now)
-      end)
-
-    case discard_messages_and_update_state(state, failing_messages) do
-      {:ok, count, new_state} ->
-        Sequin.ProcessMetrics.gauge("message_count", map_size(new_state.messages))
-        Sequin.ProcessMetrics.gauge("payload_size_bytes", new_state.payload_size_bytes)
-        {:reply, {:ok, count}, new_state}
-
-      error ->
-        {:reply, error, state}
-    end
+    failing_messages = State.failing_messages(state)
+    do_discard_messages(state, failing_messages)
   end
 
   @decorate track_metrics("min_unpersisted_wal_cursor")
@@ -1165,25 +1138,22 @@ defmodule Sequin.Runtime.SlotMessageStore do
     end
   end
 
-  # Common logic for discarding messages
-  defp discard_messages_and_update_state(state, messages_to_discard) do
-    # Mark messages as discarded
-    discarded_messages = Enum.map(messages_to_discard, &%{&1 | state: :discarded, not_visible_until: nil})
-    count = length(discarded_messages)
+  # Common logic for discarding messages through the existing ack path
+  defp do_discard_messages(state, messages) do
+    {all_ack_ids, discarded_messages} = State.prepare_messages_for_discard(messages)
 
-    # Pop messages from state
-    cursor_tuples = Enum.map(messages_to_discard, fn msg -> {msg.commit_lsn, msg.commit_idx} end)
-    {_removed_messages, new_state} = State.pop_messages(state, cursor_tuples)
-
-    # Handle discarded messages (persist and ack)
-    case handle_discarded_messages(state, discarded_messages) do
+    case AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages) do
       :ok ->
-        maybe_finish_table_reader_batch(state, new_state)
-        Sequin.ProcessMetrics.increment_throughput("messages_discarded", count)
-        {:ok, count, new_state}
+        case handle_call({:messages_succeeded, all_ack_ids, false}, nil, state) do
+          {:reply, {:ok, count, _ack_ids}, new_state} ->
+            {:reply, {:ok, count}, new_state}
+
+          other ->
+            other
+        end
 
       error ->
-        error
+        {:reply, error, state}
     end
   end
 

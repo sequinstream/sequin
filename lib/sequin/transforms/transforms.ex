@@ -6,6 +6,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
@@ -26,7 +27,6 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Source
   alias Sequin.Consumers.SourceTable
-  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
@@ -459,7 +459,7 @@ defmodule Sequin.Transforms do
     }
   end
 
-  def to_external(%Function{function: %SqlEnrichmentFunction{}} = function, _show_sensitive) do
+  def to_external(%Function{function: %EnrichmentFunction{}} = function, _show_sensitive) do
     %{
       name: function.name,
       description: function.description,

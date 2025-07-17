@@ -2,11 +2,11 @@ defmodule Sequin.Factory.FunctionsFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RoutingFunction
-  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -347,7 +347,7 @@ defmodule Sequin.Factory.FunctionsFactory do
       """)
 
     merge_attributes(
-      %SqlEnrichmentFunction{
+      %EnrichmentFunction{
         type: :enrichment,
         code: code
       },

@@ -12,6 +12,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
@@ -31,7 +32,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
   alias Sequin.Consumers.Source
-  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Consumers.TypesenseSink
@@ -1035,7 +1035,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_function_inner(%PathFunction{path: path}), do: %{path: path}
   defp encode_function_inner(%TransformFunction{code: code}), do: %{code: code}
   defp encode_function_inner(%FilterFunction{code: code}), do: %{code: code}
-  defp encode_function_inner(%SqlEnrichmentFunction{code: code}), do: %{code: code}
+  defp encode_function_inner(%EnrichmentFunction{code: code}), do: %{code: code}
 
   defp encode_function_inner(%RoutingFunction{sink_type: sink_type, code: code}) do
     %{sink_type: sink_type, code: code}

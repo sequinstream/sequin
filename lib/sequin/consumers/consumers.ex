@@ -11,11 +11,11 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Source
-  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -1895,7 +1895,7 @@ defmodule Sequin.Consumers do
 
   def enrich_messages!(
         %PostgresDatabase{account_id: account_id} = database,
-        %Function{function: %SqlEnrichmentFunction{code: sql}} = function,
+        %Function{function: %EnrichmentFunction{code: sql}} = function,
         messages,
         opts
       )

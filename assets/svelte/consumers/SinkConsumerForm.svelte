@@ -485,6 +485,11 @@
               ""}
           </p>
         {/if}
+        {#if errors.consumer.enrichment_id}
+          <p class="text-destructive text-sm">
+            {errors.consumer.enrichment_id}
+          </p>
+        {/if}
       </svelte:fragment>
 
       <svelte:fragment slot="content">
@@ -503,6 +508,11 @@
             enrichment.
           </svelte:fragment>
         </FunctionPicker>
+        {#if errors.consumer.enrichment_id}
+          <p class="text-destructive text-sm">
+            {errors.consumer.enrichment_id}
+          </p>
+        {/if}
       </svelte:fragment>
     </ExpandableCard>
 
@@ -990,6 +1000,11 @@
             >
           </Button>
         </div>
+        {#if errors.consumer && Object.keys(errors.consumer).length > 0}
+          <div class="text-destructive text-sm">
+            There are errors with your sink configuration, see above.
+          </div>
+        {/if}
         {#if testConnectionState.lastTestStatus === "error"}
           <Alert.Root variant="destructive">
             <CircleAlert class="h-4 w-4" />

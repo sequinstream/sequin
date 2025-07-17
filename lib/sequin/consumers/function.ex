@@ -7,11 +7,11 @@ defmodule Sequin.Consumers.Function do
   import PolymorphicEmbed
 
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RoutingFunction
-  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.TransformFunction
 
   @derive {Jason.Encoder, only: [:name, :type, :description, :function]}
@@ -28,7 +28,7 @@ defmodule Sequin.Consumers.Function do
         transform: TransformFunction,
         routing: RoutingFunction,
         filter: FilterFunction,
-        enrichment: SqlEnrichmentFunction
+        enrichment: EnrichmentFunction
       ],
       on_replace: :update,
       type_field_name: :type
@@ -60,7 +60,7 @@ defmodule Sequin.Consumers.Function do
         routing: &RoutingFunction.changeset(&1, &2, account_id),
         filter: &FilterFunction.changeset(&1, &2, account_id),
         path: &PathFunction.changeset(&1, &2, account_id),
-        enrichment: &SqlEnrichmentFunction.changeset(&1, &2, account_id)
+        enrichment: &EnrichmentFunction.changeset(&1, &2, account_id)
       ]
     )
     |> validate_required([:name])

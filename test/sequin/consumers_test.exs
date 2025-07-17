@@ -7,11 +7,11 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Source
-  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Error.InvariantError
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -866,7 +866,7 @@ defmodule Sequin.ConsumersTest do
 
       # Create an enrichment function that adds data
       enrichment_function = %Function{
-        function: %SqlEnrichmentFunction{
+        function: %EnrichmentFunction{
           code: "SELECT id, 'enriched' as name, 'extra' as extra_field FROM unnest($1::int[]) id"
         }
       }
@@ -918,7 +918,7 @@ defmodule Sequin.ConsumersTest do
 
       # Create an enrichment function
       enrichment_function = %Function{
-        function: %SqlEnrichmentFunction{
+        function: %EnrichmentFunction{
           code: "SELECT id, 'enriched' || id::text as name FROM unnest($1::int[]) id"
         }
       }
@@ -968,7 +968,7 @@ defmodule Sequin.ConsumersTest do
 
       # Create an enrichment function
       enrichment_function = %Function{
-        function: %SqlEnrichmentFunction{
+        function: %EnrichmentFunction{
           code: "SELECT id, name FROM (SELECT 2 as id, 'enriched' as name) t WHERE id = ANY($1::int[])"
         }
       }
@@ -1008,7 +1008,7 @@ defmodule Sequin.ConsumersTest do
 
       # Create an enrichment function
       enrichment_function = %Function{
-        function: %SqlEnrichmentFunction{
+        function: %EnrichmentFunction{
           code: "SELECT * FROM (VALUES (1, 'enriched1'), (1, 'enriched2')) t(id, name)"
         }
       }
@@ -1062,7 +1062,7 @@ defmodule Sequin.ConsumersTest do
 
       # Create an enrichment function
       enrichment_function = %Function{
-        function: %SqlEnrichmentFunction{
+        function: %EnrichmentFunction{
           code: "SELECT id::uuid, 'enriched' as name FROM unnest($1::uuid[]) id"
         }
       }
@@ -1117,7 +1117,7 @@ defmodule Sequin.ConsumersTest do
 
       # Create an enrichment function
       enrichment_function = %Function{
-        function: %SqlEnrichmentFunction{
+        function: %EnrichmentFunction{
           code: "SELECT id, o.account_id, o.created_at FROM unnest($1::int[]) id LEFT JOIN other_table o ON o.id = id"
         }
       }

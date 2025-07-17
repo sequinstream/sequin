@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.SqlEnrichmentFunction do
+defmodule Sequin.Consumers.EnrichmentFunction do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema

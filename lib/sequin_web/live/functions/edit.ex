@@ -5,12 +5,12 @@ defmodule SequinWeb.FunctionsLive.Edit do
   import LiveSvelte
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RoutingFunction
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Consumers.SqlEnrichmentFunction
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabaseTable
@@ -627,7 +627,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
         %PathFunction{} ->
           %{consumer | transform: function}
 
-        %SqlEnrichmentFunction{} ->
+        %EnrichmentFunction{} ->
           %{consumer | enrichment: function}
       end
 

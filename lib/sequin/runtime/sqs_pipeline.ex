@@ -28,12 +28,20 @@ defmodule Sequin.Runtime.SqsPipeline do
   end
 
   @impl SinkPipeline
-  def batchers_config(_consumer) do
+  def batchers_config(consumer) do
+    # SQS has a maximum of 10 messages per batch request
+    batch_size = min(consumer.batch_size, 10)
+    batch_timeout = consumer.batch_timeout_ms || 5
+
+    # Calculate concurrency based on system resources
+    # Can be overridden by DEFAULT_WORKERS_PER_SINK env var
+    concurrency = min(System.schedulers_online() * 2, 80)
+
     [
       default: [
-        concurrency: 400,
-        batch_size: 10,
-        batch_timeout: 1
+        concurrency: concurrency,
+        batch_size: batch_size,
+        batch_timeout: batch_timeout
       ]
     ]
   end
@@ -45,13 +53,22 @@ defmodule Sequin.Runtime.SqsPipeline do
 
     %Routing.Consumers.Sqs{queue_url: queue_url} = Routing.route_message(consumer, message.data)
 
-    message = Broadway.Message.put_batch_key(message, queue_url)
+    # For FIFO queues with message grouping enabled, we need to batch by both queue_url and group_id
+    # to ensure messages with the same MessageGroupId are in the same batch
+    batch_key =
+      if consumer.sink.is_fifo and consumer.message_grouping do
+        {queue_url, message.data.group_id}
+      else
+        {queue_url, nil}
+      end
+
+    message = Broadway.Message.put_batch_key(message, batch_key)
 
     {:ok, message, context}
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, %{batch_key: queue_url}, context) do
+  def handle_batch(:default, messages, %{batch_key: {queue_url, _group_id}}, context) do
     %{
       consumer: %SinkConsumer{} = consumer,
       sqs_client: sqs_client,
@@ -88,9 +105,19 @@ defmodule Sequin.Runtime.SqsPipeline do
         :message_deduplication_id,
         Sequin.Aws.message_deduplication_id(record_or_event.data.metadata.idempotency_key)
       )
-      |> Map.put(:message_group_id, Sequin.Aws.message_group_id(record_or_event.group_id))
+      |> maybe_add_message_group_id(consumer, record_or_event)
     else
       message
+    end
+  end
+
+  defp maybe_add_message_group_id(message, consumer, record_or_event) do
+    if consumer.message_grouping do
+      Map.put(message, :message_group_id, Sequin.Aws.message_group_id(record_or_event.group_id))
+    else
+      # When message grouping is disabled, use a constant group ID
+      # This ensures all messages go to the same queue order but without grouping
+      Map.put(message, :message_group_id, "default")
     end
   end
 

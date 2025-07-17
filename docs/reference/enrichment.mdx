@@ -7,15 +7,20 @@ Enrichment allows you to enrich your messages with additional data from your dat
 
 - Adding related data from other tables to your messages
 - Reducing the number of queries your downstream systems need to make
-- Including near commit-time data to your messages
+- Building composite objects from multiple tables, ie. for search indexing
 
 ## How it works
+
+To configure enrichment on a sink consumer, you must:
+
+1. Create an enrichment function
+2. Configure the sink consumer to use the enrichment function
 
 When you configure enrichment on a sink consumer, Sequin will:
 
 1. Batch messages that need to be enriched
-2. Execute your enrichment query with the primary keys of those messages
-3. Include the enrichment results in the message's `metadata.enrichment` field
+2. Execute your enrichment query against your source database with the primary keys of those messages as parameters (ie. `$1`)
+3. Determine which enrichment result corresponds to each message (by matching the primary key values) and set it as the message's `metadata.enrichment` field
 4. Send the enriched messages through the rest of your sink pipeline, including into transform and routing functions
 
 ## SQL requirements
@@ -27,18 +32,23 @@ Enrichment functions use SQL to query your source database. The SQL query must:
 3. Select additional fields for enrichment
 4. Return 0 or 1 row per message
 
-Here's an example that enriches user messages with their account name:
+Here's an example that enriches user messages with their account information:
 
 ```sql
 SELECT
-  u.id, -- you must select all primary keys of the source table for Sequin to associate the enrichment with the message
-  a.name as account_name -- example of an enrichment field
+  -- select all primary keys of the source table (see below)
+  u.id, 
+  -- enrichment fields
+  a.name as account_name,
+  a.subscription_status as account_subscription_status
 FROM
-  users u -- this enrichment is triggered on `users` table change messages
+  -- source table is `users`
+  users u 
 JOIN
+  -- enrichment joins to `accounts` table
   accounts a on u.account_id = a.id
 WHERE
-  -- the `ANY($1)` syntax is required for Sequin to perform batched queries
+  -- parameterize the query with the primary key values (see below)
   u.id = ANY($1)
 ```
 
@@ -48,8 +58,10 @@ Your enrichment query must select all primary key columns from the source table.
 
 For example, if your table has a primary key of `id`, your query must select `id`:
 
-```sql highlight={2}
+```sql highlight={2-3}
 SELECT
+  -- you must select all primary keys of the source table
+  -- for Sequin to associate the enrichment result with the message
   id,
   -- enrichment fields
   account_name,

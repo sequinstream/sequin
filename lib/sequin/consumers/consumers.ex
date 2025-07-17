@@ -1877,15 +1877,15 @@ defmodule Sequin.Consumers do
     }
   end
 
-  def enrich_message!(database, sql_enrichment_function, message, opts \\ []) do
-    [message] = enrich_messages!(database, sql_enrichment_function, [message], opts)
+  def enrich_message!(database, enrichment_function, message, opts \\ []) do
+    [message] = enrich_messages!(database, enrichment_function, [message], opts)
     message
   end
 
   @doc """
-  Enrich messages with the given SQL enrichment function.
+  Enrich messages with the given enrichment function.
   """
-  def enrich_messages!(database, sql_enrichment_function, messages, opts \\ [])
+  def enrich_messages!(database, enrichment_function, messages, opts \\ [])
 
   def enrich_messages!(_database, nil = _enrichment_function, messages, _opts), do: messages
 

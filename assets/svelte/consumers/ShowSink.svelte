@@ -1083,7 +1083,7 @@
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold flex items-center gap-2">
-              SQL Enrichment
+              Enrichment
             </h2>
             {#if consumer.enrichment}
               <a
@@ -1093,7 +1093,7 @@
               >
                 <Button variant="outline" size="sm">
                   <ExternalLink class="h-4 w-4 mr-2" />
-                  View SQL Enrichment
+                  View Enrichment
                 </Button>
               </a>
             {/if}
@@ -1123,7 +1123,7 @@
             </div>
           {:else}
             <p class="text-sm text-muted-foreground">
-              No SQL enrichment in use. Messages will be sent to the sink
+              No enrichment in use. Messages will be sent to the sink
               destination without additional enrichment.
             </p>
           {/if}

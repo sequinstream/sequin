@@ -503,7 +503,7 @@ Functions allow you to filter, transform, and route your data as it flows throug
 
 Sequin supports five types of functions:
 
-1. [**SQL Enrichment functions**](/reference/sql-enrichment) - Enrich your messages with additional data
+1. [**Enrichment functions**](/reference/enrichment) - Enrich your messages with additional data
 2. [**Path functions**](/reference/transforms#path-transform) - Extract data from a specific path in your message
 3. [**Transform functions**](/reference/transforms#function-transform) - Modify the structure of your messages
 4. [**Filter functions**](/reference/filters#filter-functions) - Filter which messages to process
@@ -513,11 +513,11 @@ You can define functions in your configuration like this:
 
 ```yaml
 functions:
-  # SQL Enrichment function example
-  - name: "my-sql-enrichment-function"
+  # Enrichment function example
+  - name: "my-enrichment-function"
     description: "Enrich with customer data"
-    type: "sql_enrichment"
-    code: |-                          # Required for SQL Enrichment functions
+    type: "enrichment"
+    code: |-                          # Required for Enrichment functions
       SELECT
         u.id,
         a.name as account_name

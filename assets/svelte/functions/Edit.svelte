@@ -93,10 +93,10 @@
   let validating: boolean = false;
   let functionInternalToExternal = {
     filter: "Filter function",
+    enrichment: "Enrichment function",
     transform: "Transform function",
     routing: "Routing function",
     path: "Path transform",
-    sql_enrichment: "SQL enrichment",
   };
 
   let sinkTypeInternalToExternal = {
@@ -221,7 +221,7 @@
       {
         label: "metadata.enrichment",
         type: "property",
-        info: "An enrichment result from a SQL enrichment function",
+        info: "An enrichment result from a enrichment function",
       },
     ];
 
@@ -259,7 +259,7 @@
   }
 
   function isSqlFunction(functionType: string) {
-    return functionType === "sql_enrichment";
+    return functionType === "enrichment";
   }
 
   function handleTypeSelect(event: any) {
@@ -309,7 +309,7 @@
       form.function.code = newInitialCode;
     }
 
-    if (form.function.type === "sql_enrichment") {
+    if (form.function.type === "enrichment") {
       sqlEditorView?.dispatch({
         changes: {
           from: 0,
@@ -1096,7 +1096,7 @@ Please help me create or modify the Elixir function transform to achieve the des
             </div>
           </div>
 
-          <div hidden={form.function.type !== "sql_enrichment"}>
+          <div hidden={form.function.type !== "enrichment"}>
             <div class="space-y-2">
               {#if !functionTransformsEnabled}
                 <div

@@ -63,6 +63,7 @@ export interface FormErrors {
 export interface TestMessage {
   // Use replication_message_trace_id as unique identifier of a message
   replication_message_trace_id: string;
+  sql_parameters: Array<string | number>;
   record: string;
   changes: string;
   action: string;

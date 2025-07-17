@@ -93,7 +93,7 @@ defmodule Sequin.Map do
   @doc """
   Recursively converts a struct and all nested structs into maps.
   """
-  @structs_to_preserve [Date, Time, DateTime, NaiveDateTime]
+  @structs_to_preserve [Date, Time, DateTime, NaiveDateTime, Decimal]
   def from_struct_deep(%struct{} = value) when struct in @structs_to_preserve do
     value
   end

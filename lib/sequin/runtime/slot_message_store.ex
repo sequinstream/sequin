@@ -765,13 +765,29 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @decorate track_metrics("discard_all_messages")
   def handle_call(:discard_all_messages, _from, state) do
     all_messages = State.all_messages(state)
-    do_discard_messages(state, all_messages)
+    all_ack_ids = Enum.map(all_messages, & &1.ack_id)
+
+    case handle_call({:messages_succeeded, all_ack_ids, false}, nil, state) do
+      {:reply, {:ok, count, _ack_ids}, new_state} ->
+        {:reply, {:ok, count}, new_state}
+
+      other ->
+        other
+    end
   end
 
   @decorate track_metrics("discard_failing_messages")
   def handle_call(:discard_failing_messages, _from, state) do
     failing_messages = State.failing_messages(state)
-    do_discard_messages(state, failing_messages)
+    failing_ack_ids = Enum.map(failing_messages, & &1.ack_id)
+
+    case handle_call({:messages_succeeded, failing_ack_ids, false}, nil, state) do
+      {:reply, {:ok, count, _ack_ids}, new_state} ->
+        {:reply, {:ok, count}, new_state}
+
+      other ->
+        other
+    end
   end
 
   @decorate track_metrics("min_unpersisted_wal_cursor")
@@ -1135,25 +1151,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
   defp handle_discarded_messages(%State{} = state, discarded_messages) do
     with :ok <- delete_messages(state, Enum.map(discarded_messages, & &1.ack_id)) do
       AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages)
-    end
-  end
-
-  # Common logic for discarding messages through the existing ack path
-  defp do_discard_messages(state, messages) do
-    {all_ack_ids, discarded_messages} = State.prepare_messages_for_discard(messages)
-
-    case AcknowledgedMessages.store_messages(state.consumer.id, discarded_messages) do
-      :ok ->
-        case handle_call({:messages_succeeded, all_ack_ids, false}, nil, state) do
-          {:reply, {:ok, count, _ack_ids}, new_state} ->
-            {:reply, {:ok, count}, new_state}
-
-          other ->
-            other
-        end
-
-      error ->
-        {:reply, error, state}
     end
   end
 

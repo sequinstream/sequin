@@ -554,32 +554,12 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   end
 
   @doc """
-  Returns messages that are currently failing (have not_visible_until set in the future).
+  Returns messages that are currently failing (have been delivered at least once).
   """
   @spec failing_messages(State.t()) :: list(message())
   def failing_messages(%State{} = state) do
-    now = Sequin.utc_now()
-
     state.messages
     |> Map.values()
-    |> Enum.filter(fn msg ->
-      not is_nil(msg.not_visible_until) and DateTime.after?(msg.not_visible_until, now)
-    end)
-  end
-
-  @doc """
-  Prepares messages for discard by setting their state to :discarded and clearing not_visible_until.
-  Returns a tuple of {all_ack_ids, discarded_messages} where:
-  - all_ack_ids: ack_ids of all messages to remove from memory
-  - discarded_messages: all messages with their state set to :discarded
-  """
-  @spec prepare_messages_for_discard(list(message())) ::
-          {list(SinkConsumer.ack_id()), list(message())}
-  def prepare_messages_for_discard(messages) do
-    messages
-    |> Enum.map(fn msg ->
-      {msg.ack_id, %{msg | state: :discarded, not_visible_until: nil}}
-    end)
-    |> Enum.unzip()
+    |> Enum.filter(fn msg -> msg.deliver_count > 0 end)
   end
 end

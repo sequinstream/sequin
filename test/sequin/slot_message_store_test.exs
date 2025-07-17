@@ -1071,7 +1071,8 @@ defmodule Sequin.SlotMessageStoreTest do
           ConsumersFactory.consumer_message(
             message_kind: consumer.message_kind,
             consumer_id: consumer.id,
-            group_id: "test-group-#{i}"
+            group_id: "test-group-#{i}",
+            deliver_count: 0
           )
         end)
 
@@ -1089,10 +1090,9 @@ defmodule Sequin.SlotMessageStoreTest do
       {:ok, count} = SlotMessageStore.count_messages(consumer)
       assert count == 0
 
-      # Verify messages were stored in AcknowledgedMessages
+      # Verify messages were not stored in AcknowledgedMessages
       {:ok, stored_messages} = AcknowledgedMessages.fetch_messages(consumer.id, 100, 0)
-      assert length(stored_messages) == 3
-      assert Enum.all?(stored_messages, &(&1.state == "discarded"))
+      assert length(stored_messages) == 0
     end
 
     test "returns 0 when there are no messages", %{consumer: consumer} do
@@ -1116,39 +1116,37 @@ defmodule Sequin.SlotMessageStoreTest do
       consumer_id = consumer.id
       now = DateTime.utc_now()
 
-      # Create messages
+      # Create messages with deliver_count: 0 (not yet delivered)
       messages =
         Enum.map(1..3, fn i ->
           ConsumersFactory.consumer_message(
             message_kind: consumer.message_kind,
             consumer_id: consumer.id,
-            group_id: "test-group-#{i}"
+            group_id: "test-group-#{i}",
+            deliver_count: 0
           )
         end)
 
       :ok = SlotMessageStore.put_messages(consumer, messages)
-      assert_receive {:put_messages_done, ^consumer_id}, 1000
+      assert_receive {:put_messages_done, ^consumer_id}, 100
 
       # Produce and fail some messages to make them "failing"
-      {:ok, [msg1, msg2]} = SlotMessageStore.produce(consumer, 2, self())
+      {:ok, [msg1, msg2, _msg3]} = SlotMessageStore.produce(consumer, 3, self())
 
-      # Fail the first two messages so they have not_visible_until in the future
       metas = [
         %{
           ack_id: msg1.ack_id,
           deliver_count: 1,
           group_id: msg1.group_id,
           last_delivered_at: now,
-          # 5 minutes in future
-          not_visible_until: DateTime.add(now, 300)
+          not_visible_until: now
         },
         %{
           ack_id: msg2.ack_id,
           deliver_count: 1,
           group_id: msg2.group_id,
           last_delivered_at: now,
-          # 10 minutes in future
-          not_visible_until: DateTime.add(now, 600)
+          not_visible_until: now
         }
       ]
 
@@ -1161,67 +1159,30 @@ defmodule Sequin.SlotMessageStoreTest do
       {:ok, count} = SlotMessageStore.count_messages(consumer)
       assert count == 1
 
-      # Verify that 2 messages were stored as discarded
+      # Verify messages were not stored in AcknowledgedMessages
       {:ok, stored_messages} = AcknowledgedMessages.fetch_messages(consumer.id, 100, 0)
-      assert length(stored_messages) == 2
-      assert Enum.all?(stored_messages, &(&1.state == "discarded"))
+      assert length(stored_messages) == 0
     end
 
     test "returns 0 when there are no failing messages", %{consumer: consumer} do
       consumer_id = consumer.id
 
-      # Create and put a message that's not failing
+      # Create and put a message that's not failing (deliver_count: 0)
       message =
         ConsumersFactory.consumer_message(
           message_kind: consumer.message_kind,
           consumer_id: consumer.id,
-          group_id: "test-group"
+          group_id: "test-group",
+          deliver_count: 0
         )
 
       :ok = SlotMessageStore.put_messages(consumer, [message])
-      assert_receive {:put_messages_done, ^consumer_id}, 1000
+      assert_receive {:put_messages_done, ^consumer_id}, 100
 
       # Should not error when there are no failing messages
       assert {:ok, 0} = SlotMessageStore.discard_failing_messages(consumer)
 
       # Verify the message is still there
-      {:ok, count} = SlotMessageStore.count_messages(consumer)
-      assert count == 1
-    end
-
-    test "does not discard messages with not_visible_until in the past", %{consumer: consumer} do
-      consumer_id = consumer.id
-      now = DateTime.utc_now()
-
-      # Create a message
-      message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id,
-          group_id: "test-group"
-        )
-
-      :ok = SlotMessageStore.put_messages(consumer, [message])
-      assert_receive {:put_messages_done, ^consumer_id}, 1000
-
-      # Produce and fail the message with not_visible_until in the past
-      {:ok, [msg]} = SlotMessageStore.produce(consumer, 1, self())
-
-      meta = %{
-        ack_id: msg.ack_id,
-        deliver_count: 1,
-        group_id: msg.group_id,
-        last_delivered_at: now,
-        # 1 minute in the past
-        not_visible_until: DateTime.add(now, -60)
-      }
-
-      :ok = SlotMessageStore.messages_failed(consumer, [meta])
-
-      # Should not discard messages with not_visible_until in the past
-      assert {:ok, 0} = SlotMessageStore.discard_failing_messages(consumer)
-
-      # Verify the message is still available for delivery
       {:ok, count} = SlotMessageStore.count_messages(consumer)
       assert count == 1
     end

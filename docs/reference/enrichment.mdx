@@ -1,9 +1,9 @@
 ---
-title: SQL Enrichment
-description: Reference for Sequin's SQL enrichment functionality. Use SQL enrichment to add additional data to your messages before they are sent to sinks.
+title: Enrichment
+description: Reference for Sequin's enrichment functionality. Use enrichment to add additional data to your messages before they are sent to sinks.
 ---
 
-SQL enrichment allows you to enrich your messages with additional data from your database before they are sent to the sink destination. This is useful for:
+Enrichment allows you to enrich your messages with additional data from your database before they are sent to the sink destination. This is useful for:
 
 - Adding related data from other tables to your messages
 - Reducing the number of queries your downstream systems need to make
@@ -11,16 +11,16 @@ SQL enrichment allows you to enrich your messages with additional data from your
 
 ## How it works
 
-When you configure SQL enrichment on a sink consumer, Sequin will:
+When you configure enrichment on a sink consumer, Sequin will:
 
 1. Batch messages that need to be enriched
-2. Execute your SQL enrichment query with the primary keys of those messages
+2. Execute your enrichment query with the primary keys of those messages
 3. Merge the enrichment results back into the original messages
 4. Send the enriched messages through the rest of your sink pipeline, including into transform and routing functions
 
-## SQL enrichment syntax
+## Enrichment syntax
 
-SQL enrichment functions must:
+Enrichment functions must:
 
 1. Use parameterized queries with `$1` syntax
 2. Select all primary key columns from the source table
@@ -44,7 +44,7 @@ WHERE
 
 ### Primary keys
 
-Your SQL enrichment query must select all primary key columns from the source table. These are used to match the enrichment results back to the original messages.
+Your enrichment query must select all primary key columns from the source table. These are used to match the enrichment results back to the original messages.
 
 For example, if your table has a primary key of `id`, your query must select `id`:
 
@@ -61,7 +61,7 @@ WHERE id = ANY($1)
 
 ### Parameterization
 
-SQL enrichment functions must use the `$1` syntax for parameterization. This allows Sequin to safely batch multiple messages into a single query.
+Enrichment functions must use the `$1` syntax for parameterization. This allows Sequin to safely batch multiple messages into a single query.
 
 #### Composite primary keys
 

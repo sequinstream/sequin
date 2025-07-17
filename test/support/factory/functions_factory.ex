@@ -20,7 +20,7 @@ defmodule Sequin.Factory.FunctionsFactory do
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
     {function_type, attrs} =
-      Map.pop_lazy(attrs, :function_type, fn -> Enum.random([:path, :transform, :routing, :filter, :sql_enrichment]) end)
+      Map.pop_lazy(attrs, :function_type, fn -> Enum.random([:path, :transform, :routing, :filter, :enrichment]) end)
 
     {function_attrs, attrs} = Map.pop(attrs, :function_attrs, [])
 
@@ -30,7 +30,7 @@ defmodule Sequin.Factory.FunctionsFactory do
         :transform -> transform_function(function_attrs)
         :routing -> routing_function(function_attrs)
         :filter -> filter_function(function_attrs)
-        :sql_enrichment -> sql_enrichment_function(function_attrs)
+        :enrichment -> enrichment_function(function_attrs)
       end
 
     merge_attributes(
@@ -337,8 +337,8 @@ defmodule Sequin.Factory.FunctionsFactory do
     |> insert_function!()
   end
 
-  # SQL Enrichment Function
-  def sql_enrichment_function(attrs \\ []) do
+  # Enrichment Function
+  def enrichment_function(attrs \\ []) do
     attrs = Map.new(attrs)
 
     {code, attrs} =
@@ -348,23 +348,23 @@ defmodule Sequin.Factory.FunctionsFactory do
 
     merge_attributes(
       %SqlEnrichmentFunction{
-        type: :sql_enrichment,
+        type: :enrichment,
         code: code
       },
       attrs
     )
   end
 
-  def sql_enrichment_function_attrs(attrs \\ []) do
+  def enrichment_function_attrs(attrs \\ []) do
     attrs
-    |> sql_enrichment_function()
+    |> enrichment_function()
     |> Sequin.Map.from_ecto()
   end
 
-  def insert_sql_enrichment_function!(attrs \\ []) do
+  def insert_enrichment_function!(attrs \\ []) do
     attrs
     |> Map.new()
-    |> Map.put(:function_type, :sql_enrichment)
+    |> Map.put(:function_type, :enrichment)
     |> insert_function!()
   end
 end

@@ -15,9 +15,9 @@ defmodule Sequin.Repo.Migrations.AddEnrichmentToSinkConsumers do
               if new.enrichment_id is not null then
                 if not exists (
                   select 1 from #{@config_schema}.functions
-                  where id = new.enrichment_id and type = 'sql_enrichment'
+                  where id = new.enrichment_id and type = 'enrichment'
                 ) then
-                  raise exception 'enrichment_id must reference a function with type ''sql_enrichment''';
+                  raise exception 'enrichment_id must reference a function with type ''enrichment''';
                 end if;
               end if;
               return new;

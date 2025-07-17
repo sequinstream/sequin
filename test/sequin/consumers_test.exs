@@ -838,7 +838,7 @@ defmodule Sequin.ConsumersTest do
   end
 
   describe "enrich_messages!/4" do
-    test "enriches a single message with the given SQL enrichment function" do
+    test "enriches a single message with the given enrichment function" do
       # Create a database with a table that has a primary key
       table =
         DatabasesFactory.table(

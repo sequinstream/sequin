@@ -1200,6 +1200,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_message(consumer, message) do
     state = get_message_state(consumer, message)
+    routing_info = maybe_routing_info(consumer, message)
 
     case message do
       %ConsumerRecord{} = message ->
@@ -1223,7 +1224,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           table_schema: message.data.metadata.table_schema,
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
-          functioned_message: maybe_function_message(consumer, message)
+          functioned_message: maybe_function_message(consumer, message),
+          routing_info: routing_info
         }
 
       %ConsumerEvent{} = message ->
@@ -1247,7 +1249,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           table_schema: message.data.metadata.table_schema,
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
-          functioned_message: maybe_function_message(consumer, message)
+          functioned_message: maybe_function_message(consumer, message),
+          routing_info: routing_info
         }
 
       %AcknowledgedMessage{} = message ->
@@ -1271,7 +1274,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           table_name: message.table_name,
           table_schema: message.table_schema,
           table_oid: message.table_oid,
-          trace_id: message.trace_id
+          trace_id: message.trace_id,
+          routing_info: routing_info
         }
     end
   end
@@ -1284,6 +1288,124 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   rescue
     error ->
       "Error functioning message: #{Exception.message(error)}"
+  end
+
+  defp maybe_routing_info(consumer, %AcknowledgedMessage{}), do: nil
+
+  defp maybe_routing_info(consumer, message) do
+    try do
+      routing_info = Sequin.Runtime.Routing.route_message(consumer, message)
+      format_routing_info(consumer.type, routing_info)
+    rescue
+      error ->
+        %{error: "Error calculating routing: #{Exception.message(error)}"}
+    end
+  end
+
+  defp format_routing_info(:http_push, routing_info) do
+    %{
+      method: routing_info.method,
+      endpoint_path: routing_info.endpoint_path,
+      headers: routing_info.headers
+    }
+  end
+
+  defp format_routing_info(:kafka, routing_info) do
+    %{
+      topic: routing_info.topic,
+      message_key: routing_info.message_key
+    }
+  end
+
+  defp format_routing_info(:redis_string, routing_info) do
+    %{
+      key: routing_info.key,
+      action: routing_info.action,
+      expire_ms: routing_info.expire_ms
+    }
+  end
+
+  defp format_routing_info(:redis_stream, routing_info) do
+    %{
+      stream_key: routing_info.stream_key
+    }
+  end
+
+  defp format_routing_info(:nats, routing_info) do
+    %{
+      subject: routing_info.subject,
+      headers: routing_info.headers
+    }
+  end
+
+  defp format_routing_info(:gcp_pubsub, routing_info) do
+    %{
+      topic_id: routing_info.topic_id
+    }
+  end
+
+  defp format_routing_info(:azure_event_hub, routing_info) do
+    %{
+      partition_key: routing_info.partition_key
+    }
+  end
+
+  defp format_routing_info(:sns, routing_info) do
+    %{
+      topic_arn: routing_info.topic_arn
+    }
+  end
+
+  defp format_routing_info(:kinesis, routing_info) do
+    %{
+      stream_arn: routing_info.stream_arn
+    }
+  end
+
+  defp format_routing_info(:typesense, routing_info) do
+    %{
+      collection_name: routing_info.collection_name,
+      action: routing_info.action
+    }
+  end
+
+  defp format_routing_info(:meilisearch, routing_info) do
+    %{
+      index_name: routing_info.index_name,
+      action: routing_info.action
+    }
+  end
+
+  defp format_routing_info(:elasticsearch, routing_info) do
+    %{
+      index_name: routing_info.index_name
+    }
+  end
+
+  defp format_routing_info(:s2, routing_info) do
+    %{
+      basin: routing_info.basin,
+      stream: routing_info.stream
+    }
+  end
+
+  defp format_routing_info(:rabbitmq, routing_info) do
+    %{
+      exchange: routing_info.exchange,
+      routing_key: routing_info.routing_key,
+      headers: routing_info.headers
+    }
+  end
+
+  defp format_routing_info(:sqs, routing_info) do
+    %{
+      queue_url: routing_info.queue_url
+    }
+  end
+
+  defp format_routing_info(_sink_type, routing_info) do
+    # For any sink type not explicitly handled, return the raw routing info
+    Map.from_struct(routing_info)
   end
 
   defp get_message_state(%{type: :sequin_stream}, %AcknowledgedMessage{}), do: "acknowledged"

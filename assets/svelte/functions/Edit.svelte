@@ -701,7 +701,8 @@ Please help me create or modify the Elixir function transform to achieve the des
             Function Configuration
           </h2>
           <a
-            href="https://sequinstream.com/docs/reference/transforms"
+            href={functionDocsUrl ||
+              "https://sequinstream.com/docs/reference/transforms"}
             target="_blank"
           >
             <Button variant="outline" size="sm">

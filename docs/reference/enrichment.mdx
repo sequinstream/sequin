@@ -15,14 +15,14 @@ When you configure enrichment on a sink consumer, Sequin will:
 
 1. Batch messages that need to be enriched
 2. Execute your enrichment query with the primary keys of those messages
-3. Merge the enrichment results back into the original messages
+3. Include the enrichment results in the message's `metadata.enrichment` field
 4. Send the enriched messages through the rest of your sink pipeline, including into transform and routing functions
 
-## Enrichment syntax
+## SQL requirements
 
-Enrichment functions must:
+Enrichment functions use SQL to query your source database. The SQL query must:
 
-1. Use parameterized queries with `$1` syntax
+1. Use parameterization with the `$1` syntax
 2. Select all primary key columns from the source table
 3. Select additional fields for enrichment
 4. Return 0 or 1 row per message
@@ -38,7 +38,7 @@ FROM
 JOIN
   accounts a on u.account_id = a.id
 WHERE
-  -- the `ANY syntax is required for Sequin to perform batched queries
+  -- the `ANY($1)` syntax is required for Sequin to perform batched queries
   u.id = ANY($1)
 ```
 
@@ -48,7 +48,7 @@ Your enrichment query must select all primary key columns from the source table.
 
 For example, if your table has a primary key of `id`, your query must select `id`:
 
-```sql
+```sql highlight={2}
 SELECT
   id,
   -- enrichment fields
@@ -62,6 +62,19 @@ WHERE id = ANY($1)
 ### Parameterization
 
 Enrichment functions must use the `$1` syntax for parameterization. This allows Sequin to safely batch multiple messages into a single query.
+
+```sql highlight={9-10}
+SELECT
+  u.id, -- you must select all primary keys of the source table for Sequin to associate the enrichment with the message
+  a.name as account_name -- example of an enrichment field
+FROM
+  users u -- this enrichment is triggered on `users` table change messages
+JOIN
+  accounts a on u.account_id = a.id
+WHERE
+  -- the `ANY($1)` syntax is required for Sequin to perform batched queries
+  u.id = ANY($1)
+```
 
 #### Composite primary keys
 
@@ -86,9 +99,11 @@ Sequin will assign the primary key values to two parameters, `$1` and `$2`. Sequ
 
 ### Results
 
-Your query should return either 0 or 1 row for each message. If your query returns multiple rows for a message, Sequin will raise an error.
+Your query should return either **0 or 1 row** for each message. If your query returns multiple rows for a message, Sequin will raise an error and the entire batch will fail.
 
-The enrichment results will be merged into the original message's record. Any fields returned by your query will overwrite fields with the same name in the original record.
+The enrichment results are set into the message's `metadata.enrichment` field. This is sent in Sequin's [default message format](/reference/messages).
+
+Additionally, the `metadata.enrichment` field is available in other functions in your sink pipeline including [filters](/reference/filters), [transforms](/reference/transforms), and [routing functions](/reference/routing).
 
 ## Testing enrichment
 
@@ -127,18 +142,70 @@ WHERE users.id = ANY($1)
 GROUP BY users.id
 ```
 
-### Formatting data
+### Building a search index
 
-Transform data into a more useful format:
+Enrich messages with data from your database to build a search index. This example shows how to enrich messages with materials and colors for faceting:
 
 ```sql
-SELECT
-  users.id,
-  CONCAT(users.first_name, ' ', users.last_name) as full_name,
-  LOWER(users.email) as email_normalized
-FROM users
-WHERE users.id = ANY($1)
+SELECT 
+    p.id,
+    p.name,
+    p.description,
+    p.price,
+    p.category,
+    p.created_at,
+    p.updated_at,
+    -- Aggregate materials as JSON array
+    COALESCE(
+        JSON_AGG(
+            DISTINCT jsonb_build_object(
+                'id', m.id,
+                'name', m.name,
+                'type', m.type
+            )
+        ) FILTER (WHERE m.id IS NOT NULL), 
+        '[]'::json
+    ) AS materials,
+    -- Aggregate colors as JSON array
+    COALESCE(
+        JSON_AGG(
+            DISTINCT jsonb_build_object(
+                'id', c.id,
+                'name', c.name,
+                'hex_code', c.hex_code
+            )
+        ) FILTER (WHERE c.id IS NOT NULL), 
+        '[]'::json
+    ) AS colors,
+    -- Create searchable text fields
+    CONCAT_WS(' ', 
+        p.name, 
+        p.description, 
+        STRING_AGG(DISTINCT m.name, ' '),
+        STRING_AGG(DISTINCT c.name, ' ')
+    ) AS search_text,
+    -- Material names as array for faceting
+    ARRAY_AGG(DISTINCT m.name) FILTER (WHERE m.name IS NOT NULL) AS material_names,
+    -- Color names as array for faceting
+    ARRAY_AGG(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL) AS color_names
+FROM products p
+LEFT JOIN product_materials pm ON p.id = pm.product_id
+LEFT JOIN materials m ON pm.material_id = m.id
+LEFT JOIN product_colors pc ON p.id = pc.product_id
+LEFT JOIN colors c ON pc.color_id = c.id
+GROUP BY p.id, p.name, p.description, p.price, p.category, p.created_at, p.updated_at
+ORDER BY p.updated_at DESC;
 ```
+
+### Formatting data
+
+<Note>
+  For formatting data, we recommend using [transforms](/reference/transforms) instead of enrichment.
+
+  Enrichment functions are designed to query additional data from your database. They make a round trip to your database.
+
+  Transform functions are significantly more expressive and performant than enrichment for pure formatting.
+</Note>
 
 ## Related
 

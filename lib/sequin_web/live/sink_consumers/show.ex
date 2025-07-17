@@ -1037,7 +1037,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp encode_tables(tables) do
-    Enum.map(tables, &encode_table/1)
+    tables
+    |> Enum.map(&encode_table/1)
+    |> Enum.sort_by(&{&1.schema, &1.name}, :asc)
   end
 
   defp encode_table(%PostgresDatabaseTable{} = table) do

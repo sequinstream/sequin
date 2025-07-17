@@ -1979,7 +1979,19 @@ defmodule Sequin.Consumers do
 
     enrichment_values =
       primary_key_columns
-      |> Enum.map(&Map.fetch!(enrichment, &1.name))
+      |> Enum.map(fn column ->
+        case Map.get(enrichment, column.name) do
+          nil ->
+            raise """
+            Primary key column `#{column.name}` is missing from enrichment result.
+
+            You must select all primary key columns from the source table in your enrichment query.
+            """
+
+          value ->
+            value
+        end
+      end)
       |> Enum.map(&maybe_binary_to_string/1)
 
     message_values == enrichment_values

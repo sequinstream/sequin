@@ -1293,13 +1293,11 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp maybe_routing_info(consumer, %AcknowledgedMessage{}), do: nil
 
   defp maybe_routing_info(consumer, message) do
-    try do
-      routing_info = Sequin.Runtime.Routing.route_message(consumer, message)
-      Map.from_struct(routing_info)
-    rescue
-      error ->
-        %{error: "Error calculating routing: #{Exception.message(error)}"}
-    end
+    routing_info = Sequin.Runtime.Routing.route_message(consumer, message)
+    Map.from_struct(routing_info)
+  rescue
+    error ->
+      %{error: "Error calculating routing: #{Exception.message(error)}"}
   end
 
   defp get_message_state(%{type: :sequin_stream}, %AcknowledgedMessage{}), do: "acknowledged"

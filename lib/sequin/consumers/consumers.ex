@@ -1824,6 +1824,7 @@ defmodule Sequin.Consumers do
   def synthetic_message do
     %ConsumerEvent{
       replication_message_trace_id: Ecto.UUID.cast!("00000000-0000-0000-0000-000000000000"),
+      table_oid: -1,
       data: %ConsumerEventData{
         record: %{
           "id" => 1,
@@ -1857,6 +1858,22 @@ defmodule Sequin.Consumers do
           idempotency_key: "c2VxdWluc3RyZWFtLmNvbS9jYXJlZXJz"
         }
       }
+    }
+  end
+
+  def synthetic_table do
+    %PostgresDatabaseTable{
+      oid: -1,
+      schema: "sequin",
+      name: "synthetic_table",
+      columns: [
+        %PostgresDatabaseTable.Column{
+          attnum: 1,
+          name: "id",
+          type: :integer,
+          is_pk?: true
+        }
+      ]
     }
   end
 

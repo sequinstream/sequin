@@ -1290,7 +1290,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       "Error functioning message: #{Exception.message(error)}"
   end
 
-  defp maybe_routing_info(consumer, %AcknowledgedMessage{}), do: nil
+  defp maybe_routing_info(_consumer, %AcknowledgedMessage{}), do: nil
 
   defp maybe_routing_info(consumer, message) do
     routing_info = Sequin.Runtime.Routing.route_message(consumer, message)

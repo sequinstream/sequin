@@ -114,7 +114,7 @@
   }
 
   $: {
-    storedContent = loadFromStorage(selectedMessage, field);
+    const storedContent = loadFromStorage(selectedMessage, field);
     if (storedContent) {
       selectedMessage[field] = storedContent;
       form.modified_test_messages[

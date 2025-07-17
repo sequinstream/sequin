@@ -254,6 +254,14 @@
     }
   }
 
+  function isElixirFunction(functionType: string) {
+    return ["filter", "transform", "routing"].includes(functionType);
+  }
+
+  function isSqlFunction(functionType: string) {
+    return functionType === "sql_enrichment";
+  }
+
   function handleTypeSelect(event: any) {
     form.function.type = event.value;
     if (!isEditing) {
@@ -431,6 +439,9 @@
     selectedDatabaseId = event.value;
     selectedTableOid = null; // Reset table selection when database changes
     testMessages = [];
+    pushEvent("database_selected", {
+      database_id: selectedDatabaseId,
+    });
   }
 
   // function refreshDatabases() {
@@ -1450,7 +1461,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                     {/if}
                   </div>
                 </button>
-                {#if selectedMessageIndex === i}
+                {#if selectedMessageIndex === i && isElixirFunction(form.function.type)}
                   <div
                     class="p-3 border-t border-slate-200 dark:border-slate-800"
                   >
@@ -1483,6 +1494,34 @@ Please help me create or modify the Elixir function transform to achieve the des
                       bind:form
                       bind:formErrors
                     />
+                  </div>
+                {:else if selectedMessageIndex === i && isSqlFunction(form.function.type)}
+                  <div
+                    class="p-3 border-t border-slate-200 dark:border-slate-800"
+                  >
+                    <div
+                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
+                    >
+                      <div
+                        class="font-semibold mb-1 flex w-full justify-between items-center"
+                      >
+                        <span>SQL Parameters</span>
+                      </div>
+                      <pre>
+{#each selectedMessage["sql_parameters"] as [index, value]}${index}: {value}
+                        {/each}</pre>
+                    </div>
+
+                    <div
+                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
+                    >
+                      <div
+                        class="font-semibold mb-1 flex w-full justify-between items-center"
+                      >
+                        <span>record</span>
+                      </div>
+                      <pre>{selectedMessage.record}</pre>
+                    </div>
                   </div>
                 {/if}
               </div>

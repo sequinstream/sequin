@@ -28,7 +28,7 @@ defmodule Sequin.Consumers.Function do
         transform: TransformFunction,
         routing: RoutingFunction,
         filter: FilterFunction,
-        sql_enrichment: SqlEnrichmentFunction
+        enrichment: SqlEnrichmentFunction
       ],
       on_replace: :update,
       type_field_name: :type
@@ -60,7 +60,7 @@ defmodule Sequin.Consumers.Function do
         routing: &RoutingFunction.changeset(&1, &2, account_id),
         filter: &FilterFunction.changeset(&1, &2, account_id),
         path: &PathFunction.changeset(&1, &2, account_id),
-        sql_enrichment: &SqlEnrichmentFunction.changeset(&1, &2, account_id)
+        enrichment: &SqlEnrichmentFunction.changeset(&1, &2, account_id)
       ]
     )
     |> validate_required([:name])

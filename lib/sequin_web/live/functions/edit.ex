@@ -196,7 +196,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
-  @initial_sql_enrichment """
+  @initial_enrichment """
   SELECT
     u.id, -- you must select all primary keys for Sequin to associate the enrichment with the message
     a.name as account_name -- example of an enrichment
@@ -213,7 +213,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "path" => "",
     "transform" => @initial_transform,
     "filter" => @initial_filter,
-    "sql_enrichment" => @initial_sql_enrichment,
+    "enrichment" => @initial_enrichment,
     "routing_undefined" => @initial_route_no_sink_type,
     "routing_http_push" => @initial_route_http,
     "routing_redis_string" => @initial_route_redis_string,
@@ -610,7 +610,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   defp do_encode_test_messages(test_messages, function, socket) do
     function = %Function{account_id: current_account_id(socket), type: function.type, function: function}
 
-    # postgres_database for sql_enrichment functions
+    # postgres_database for enrichment functions
     consumer = %SinkConsumer{account_id: current_account_id(socket), postgres_database: selected_database(socket)}
 
     consumer =
@@ -780,8 +780,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     %{"type" => "filter", "code" => function["code"]}
   end
 
-  defp decode_function(%{"type" => "sql_enrichment"} = function) do
-    %{"type" => "sql_enrichment", "code" => function["code"]}
+  defp decode_function(%{"type" => "enrichment"} = function) do
+    %{"type" => "enrichment", "code" => function["code"]}
   end
 
   defp decode_function(%{}), do: nil

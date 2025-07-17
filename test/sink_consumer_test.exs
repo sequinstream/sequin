@@ -19,7 +19,7 @@ defmodule Sequin.SinkConsumerTest do
 
   describe "functions" do
     setup do
-      enrichment_function = FunctionsFactory.insert_sql_enrichment_function!()
+      enrichment_function = FunctionsFactory.insert_enrichment_function!()
       transform_function = FunctionsFactory.insert_transform_function!()
 
       %{enrichment_function: enrichment_function, transform_function: transform_function}

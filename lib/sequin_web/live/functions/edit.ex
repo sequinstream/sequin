@@ -498,6 +498,12 @@ defmodule SequinWeb.FunctionsLive.Edit do
     end
   end
 
+  def handle_event("database_selected", %{"database_id" => database_id}, socket) do
+    socket = assign(socket, selected_database_id: database_id)
+    socket = assign_encoded_messages(socket)
+    {:noreply, socket}
+  end
+
   def handle_event("table_selected", %{"database_id" => database_id, "table_oid" => table_oid}, socket) do
     socket = assign(socket, selected_database_id: database_id, selected_table_oid: table_oid)
 
@@ -563,7 +569,9 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp assign_encoded_messages(socket) do
-    cache_key = {socket.assigns.form_data[:function], socket.assigns.test_messages, socket.assigns.synthetic_test_message}
+    cache_key =
+      {socket.assigns.form_data[:function], socket.assigns.test_messages, socket.assigns.synthetic_test_message,
+       socket.assigns.selected_database_id}
 
     if socket.assigns[:cache_key] == cache_key do
       socket
@@ -643,12 +651,20 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp format_test_message(m) do
+    sql_parameters =
+      m.data.metadata.record_pks
+      |> Enum.with_index()
+      |> Enum.map(fn {pk, index} ->
+        [index + 1, inspect([pk], pretty: true)]
+      end)
+
     %{
       replication_message_trace_id: m.replication_message_trace_id,
       record: inspect(m.data.record, pretty: true),
       changes: inspect(m.data.changes, pretty: true),
       action: inspect(to_string(m.data.action), pretty: true),
-      metadata: inspect(Sequin.Map.from_struct_deep(m.data.metadata), pretty: true)
+      metadata: inspect(Sequin.Map.from_struct_deep(m.data.metadata), pretty: true),
+      sql_parameters: sql_parameters
     }
   end
 
@@ -681,12 +697,15 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
 
   defp run_function(%SinkConsumer{enrichment: %Function{} = function} = consumer, message) do
-    case Consumers.enrich_messages!(consumer.postgres_database, function, [message]) do
+    database = consumer.postgres_database
+    database = %{database | tables: [Consumers.synthetic_table() | database.tables]}
+
+    case Consumers.enrich_messages!(database, function, [message]) do
       [] ->
         nil
 
       [message] ->
-        message.data
+        message.data.metadata.enrichment
 
       messages ->
         msg = "Sql enrichment function must return 0 or 1 message, got: #{inspect(length(messages))}"

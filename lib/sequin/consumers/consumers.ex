@@ -1894,29 +1894,33 @@ defmodule Sequin.Consumers do
   end
 
   def enrich_messages!(
-        %PostgresDatabase{} = database,
+        %PostgresDatabase{account_id: account_id} = database,
         %Function{function: %SqlEnrichmentFunction{code: sql}} = function,
         messages,
         opts
       )
       when is_list(messages) do
-    query_fn = Keyword.get(opts, :query_fn, &Postgres.query/3)
+    if Sequin.feature_enabled?(account_id, :function_transforms) do
+      query_fn = Keyword.get(opts, :query_fn, &Postgres.query/3)
 
-    # There should be only one table per message group
-    [table_oid] = messages |> Enum.map(& &1.table_oid) |> Enum.uniq()
-    table = Sequin.Enum.find!(database.tables, &(&1.oid == table_oid))
-    primary_key_columns = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.sort_by(& &1.name)
+      # There should be only one table per message group
+      [table_oid] = messages |> Enum.map(& &1.table_oid) |> Enum.uniq()
+      table = Sequin.Enum.find!(database.tables, &(&1.oid == table_oid))
+      primary_key_columns = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.sort_by(& &1.name)
 
-    # params is a list of lists, one for each primary key column, containing the values for all messages
-    params = primary_key_params(primary_key_columns, messages)
+      # params is a list of lists, one for each primary key column, containing the values for all messages
+      params = primary_key_params(primary_key_columns, messages)
 
-    case query_fn.(database, sql, params) do
-      {:ok, %Postgrex.Result{} = result} ->
-        enrichments = load_enrichments(result)
-        merge_enrichments(function, messages, enrichments, primary_key_columns)
+      case query_fn.(database, sql, params) do
+        {:ok, %Postgrex.Result{} = result} ->
+          enrichments = load_enrichments(result)
+          merge_enrichments(function, messages, enrichments, primary_key_columns)
 
-      {:error, error} ->
-        raise error
+        {:error, error} ->
+          raise error
+      end
+    else
+      raise "Enrichment functions are not enabled. Talk to the Sequin team to enable them."
     end
   end
 

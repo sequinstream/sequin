@@ -453,7 +453,7 @@
       expanded={enrichmentSectionExpanded}
     >
       <svelte:fragment slot="title">
-        SQL Enrichment
+        Enrichment
         <Tooltip.Root openDelay={200}>
           <Tooltip.Trigger>
             <Info class="h-4 w-4 text-gray-400 cursor-help" />
@@ -472,7 +472,7 @@
           <p class="text-sm text-muted-foreground">Please select a database.</p>
         {:else if form.enrichmentId === "none"}
           <p class="text-sm text-muted-foreground">
-            No SQL enrichment in use. Messages will be sent without additional
+            No enrichment in use. Messages will be sent without additional
             enrichment.
           </p>
         {:else}
@@ -496,15 +496,15 @@
         <FunctionPicker
           {functions}
           selectedFunctionId={form.enrichmentId}
-          title="SQL Enrichment function"
+          title="Enrichment function"
           onFunctionChange={(functionId) => (form.enrichmentId = functionId)}
           {refreshFunctions}
-          allowedFunctionTypes={["sql_enrichment"]}
-          newFunctionType="sql_enrichment"
+          allowedFunctionTypes={["enrichment"]}
+          newFunctionType="enrichment"
           bind:refreshState={functionRefreshState}
         >
           <svelte:fragment slot="none-option">
-            No SQL enrichment in use. Messages will be sent without additional
+            No enrichment in use. Messages will be sent without additional
             enrichment.
           </svelte:fragment>
         </FunctionPicker>

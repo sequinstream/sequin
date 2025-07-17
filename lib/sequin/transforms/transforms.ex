@@ -172,7 +172,7 @@ defmodule Sequin.Transforms do
   def to_external(%SinkConsumer{sink: sink} = consumer, show_sensitive) do
     consumer =
       consumer
-      |> Repo.preload([:active_backfills, :postgres_database, :transform, :filter, :routing])
+      |> Repo.preload([:active_backfills, :postgres_database, :transform, :filter, :routing, :enrichment])
       |> SinkConsumer.preload_http_endpoint!()
 
     source_tables =
@@ -192,6 +192,7 @@ defmodule Sequin.Transforms do
         filter: if(consumer.filter, do: consumer.filter.name, else: "none"),
         transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
         routing: if(consumer.routing, do: consumer.routing.name, else: "none"),
+        enrichment: if(consumer.enrichment, do: consumer.enrichment.name, else: "none"),
         timestamp_format: consumer.timestamp_format,
         active_backfills: Enum.map(consumer.active_backfills, &to_external(&1, show_sensitive)),
         max_retry_count: consumer.max_retry_count,

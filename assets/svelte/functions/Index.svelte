@@ -37,7 +37,7 @@
 
   // Optionally override the function type display name
   let function_type_display_names = {
-    sql_enrichment: "Enrichment",
+    sql_enrichment: "SQL Enrichment",
   };
 
   function pushEvent(

@@ -134,7 +134,7 @@
               },
               "reference/messages",
               "reference/filters",
-              "reference/enrichment",
+              "reference/sql-enrichment",
               "reference/transforms",
               "reference/routing",
               "reference/backfills",

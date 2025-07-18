@@ -64,6 +64,23 @@
             </li>
           </ul>
         </div>
+        <div class="mb-2">
+          <strong>Advanced:</strong> You can use routing functions to perform
+          partial updates using Meilisearch's function capability:
+          <ul class="ml-6 list-disc">
+            <li>
+              Return <code>action: :function</code> from your routing function
+            </li>
+            <li>
+              Specify a filter expression and JavaScript-like function to update
+              specific fields
+            </li>
+            <li>
+              This is useful for updating nested arrays or specific document
+              properties
+            </li>
+          </ul>
+        </div>
       </Alert.Description>
     </Alert.Root>
 

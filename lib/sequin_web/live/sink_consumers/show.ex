@@ -569,6 +569,46 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
+  def handle_event("discard_messages", %{"discard_type" => discard_type}, socket) do
+    consumer = socket.assigns.consumer
+
+    {result, success_message} =
+      case discard_type do
+        "failing" ->
+          case SlotMessageStore.discard_failing_messages(consumer) do
+            {:ok, count} ->
+              {{:ok, count}, "Discarded #{count} failing message(s)"}
+
+            error ->
+              {error, nil}
+          end
+
+        "all" ->
+          case SlotMessageStore.discard_all_messages(consumer) do
+            {:ok, count} ->
+              {{:ok, count}, "Discarded #{count} message(s)"}
+
+            error ->
+              {error, nil}
+          end
+      end
+
+    case result do
+      {:ok, _count} ->
+        {:reply, %{ok: true},
+         socket
+         |> load_consumer_messages()
+         |> put_flash(:toast, %{kind: :success, title: success_message})}
+
+      {:error, reason} ->
+        {:reply, %{ok: false},
+         put_flash(socket, :toast, %{
+           kind: :error,
+           title: "Failed to discard messages: #{inspect(reason)}"
+         })}
+    end
+  end
+
   def handle_event("trace_stop", _params, socket) do
     Trace.unsubscribe(socket.assigns.consumer.id)
     {:noreply, update(socket, :trace, fn trace -> %{trace | paused: true} end)}

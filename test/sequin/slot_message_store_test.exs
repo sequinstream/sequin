@@ -1054,4 +1054,137 @@ defmodule Sequin.SlotMessageStoreTest do
       assert :ok = SlotMessageStore.put_messages(consumer, [message])
     end
   end
+
+  describe "discard_all_messages/1" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [])
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+      %{consumer: consumer}
+    end
+
+    test "discards all messages in the store", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      # Create and put multiple messages
+      messages =
+        Enum.map(1..3, fn i ->
+          ConsumersFactory.consumer_message(
+            message_kind: consumer.message_kind,
+            consumer_id: consumer.id,
+            group_id: "test-group-#{i}",
+            deliver_count: 0
+          )
+        end)
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      assert_receive {:put_messages_done, ^consumer_id}, 1000
+
+      # Verify messages are in the store
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 3
+
+      # Discard all messages
+      assert {:ok, 3} = SlotMessageStore.discard_all_messages(consumer)
+
+      # Verify all messages are discarded
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 0
+
+      # Verify messages were not stored in AcknowledgedMessages
+      {:ok, stored_messages} = AcknowledgedMessages.fetch_messages(consumer.id, 100, 0)
+      assert length(stored_messages) == 0
+    end
+
+    test "returns 0 when there are no messages", %{consumer: consumer} do
+      # Verify store is empty
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 0
+
+      # Should not error when discarding empty store
+      assert {:ok, 0} = SlotMessageStore.discard_all_messages(consumer)
+    end
+  end
+
+  describe "discard_failing_messages/1" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [])
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+      %{consumer: consumer}
+    end
+
+    test "discards only failing messages", %{consumer: consumer} do
+      consumer_id = consumer.id
+      now = DateTime.utc_now()
+
+      # Create messages with deliver_count: 0 (not yet delivered)
+      messages =
+        Enum.map(1..3, fn i ->
+          ConsumersFactory.consumer_message(
+            message_kind: consumer.message_kind,
+            consumer_id: consumer.id,
+            group_id: "test-group-#{i}",
+            deliver_count: 0
+          )
+        end)
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      assert_receive {:put_messages_done, ^consumer_id}, 100
+
+      # Produce and fail some messages to make them "failing"
+      {:ok, [msg1, msg2, _msg3]} = SlotMessageStore.produce(consumer, 3, self())
+
+      metas = [
+        %{
+          ack_id: msg1.ack_id,
+          deliver_count: 1,
+          group_id: msg1.group_id,
+          last_delivered_at: now,
+          not_visible_until: now
+        },
+        %{
+          ack_id: msg2.ack_id,
+          deliver_count: 1,
+          group_id: msg2.group_id,
+          last_delivered_at: now,
+          not_visible_until: now
+        }
+      ]
+
+      :ok = SlotMessageStore.messages_failed(consumer, metas)
+
+      # Discard only failing messages
+      assert {:ok, 2} = SlotMessageStore.discard_failing_messages(consumer)
+
+      # Verify count - should have 1 message left (the one that wasn't delivered)
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 1
+
+      # Verify messages were not stored in AcknowledgedMessages
+      {:ok, stored_messages} = AcknowledgedMessages.fetch_messages(consumer.id, 100, 0)
+      assert length(stored_messages) == 0
+    end
+
+    test "returns 0 when there are no failing messages", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      # Create and put a message that's not failing (deliver_count: 0)
+      message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          group_id: "test-group",
+          deliver_count: 0
+        )
+
+      :ok = SlotMessageStore.put_messages(consumer, [message])
+      assert_receive {:put_messages_done, ^consumer_id}, 100
+
+      # Should not error when there are no failing messages
+      assert {:ok, 0} = SlotMessageStore.discard_failing_messages(consumer)
+
+      # Verify the message is still there
+      {:ok, count} = SlotMessageStore.count_messages(consumer)
+      assert count == 1
+    end
+  end
 end

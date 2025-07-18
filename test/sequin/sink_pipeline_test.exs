@@ -115,6 +115,69 @@ defmodule Sequin.SinkPipelineTest do
     end
   end
 
+  describe "batcher/2" do
+    test "emits if max_messages is reached" do
+      {init_state, batch_fn} = SinkPipeline.batcher(2, 1000)
+      assert init_state == {2, 1000}
+
+      message = %Broadway.Message{
+        data: %{encoded_data_size_bytes: 100},
+        acknowledger: fn _ -> :ok end
+      }
+
+      # First message should continue
+      assert {:cont, {1, 900}} = batch_fn.(message, {2, 1000})
+
+      # Second message should emit since max_messages reached
+      assert {:emit, {2, 1000}} = batch_fn.(message, {1, 900})
+    end
+
+    test "emits if max_bytes is reached with incoming bytes as buffer" do
+      {init_state, batch_fn} = SinkPipeline.batcher(10, 150)
+      assert init_state == {10, 150}
+
+      message = %Broadway.Message{
+        data: %{encoded_data_size_bytes: 50},
+        acknowledger: fn _ -> :ok end
+      }
+
+      # First message continues
+      assert {:cont, {9, 100}} = batch_fn.(message, {10, 150})
+
+      # Second message emits since not enough bytes remaining
+      assert {:emit, {10, 150}} = batch_fn.(message, {9, 100})
+    end
+
+    test "emits if max_bytes and max_messages are reached with incoming bytes as buffer" do
+      {init_state, batch_fn} = SinkPipeline.batcher(2, 150)
+      assert init_state == {2, 150}
+
+      message = %Broadway.Message{
+        data: %{encoded_data_size_bytes: 50},
+        acknowledger: fn _ -> :ok end
+      }
+
+      # First message continues
+      assert {:cont, {1, 100}} = batch_fn.(message, {2, 150})
+
+      # Second message emits due to both max_messages and max_bytes
+      assert {:emit, {2, 150}} = batch_fn.(message, {1, 100})
+    end
+
+    test "raises if encoded_data_size_bytes is nil" do
+      {_init_state, batch_fn} = SinkPipeline.batcher(2, 150)
+
+      message = %Broadway.Message{
+        data: %{encoded_data_size_bytes: nil},
+        acknowledger: fn _ -> :ok end
+      }
+
+      assert_raise RuntimeError, "Must have encoded_data_size_bytes to use byte-based batching", fn ->
+        batch_fn.(message, {2, 150})
+      end
+    end
+  end
+
   defp start_pipeline!(consumer) do
     start_supervised!(
       {SinkPipeline,

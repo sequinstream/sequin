@@ -99,13 +99,8 @@ defmodule Sequin.Sinks.Gcp.PubSubTest do
         {:ok, body, _} = Plug.Conn.read_body(conn)
         body = body |> :zlib.gunzip() |> Jason.decode!()
 
-        decoded_data =
-          body
-          |> get_in(["messages", Access.at(0), "data"])
-          |> Base.decode64!()
-          |> Jason.decode!()
-
-        assert decoded_data == %{"key" => "value"}
+        data = get_in(body, ["messages", Access.at(0), "data"])
+        assert data == %{"key" => "value"}
         assert get_in(body, ["messages", Access.at(0), "attributes"]) == %{"type" => "test"}
 
         Req.Test.json(conn, %{})

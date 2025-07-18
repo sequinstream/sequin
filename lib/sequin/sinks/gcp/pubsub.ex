@@ -89,17 +89,8 @@ defmodule Sequin.Sinks.Gcp.PubSub do
   def publish_messages(%Client{} = client, topic_id, messages) when is_list(messages) do
     path = "#{topic_path(client.project_id, topic_id)}:publish"
 
-    encoded_messages =
-      Enum.map(messages, fn msg ->
-        %{
-          "data" => Base.encode64(Jason.encode!(msg.data)),
-          "attributes" => msg[:attributes] || %{},
-          "orderingKey" => msg[:ordering_key]
-        }
-      end)
-
     payload = %{
-      "messages" => encoded_messages
+      "messages" => messages
     }
 
     case authenticated_request(client, :post, path, json: payload) do

@@ -7,6 +7,7 @@ defmodule Sequin.Consumers.Function do
   import PolymorphicEmbed
 
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.PathFunction
@@ -26,7 +27,8 @@ defmodule Sequin.Consumers.Function do
         path: PathFunction,
         transform: TransformFunction,
         routing: RoutingFunction,
-        filter: FilterFunction
+        filter: FilterFunction,
+        enrichment: EnrichmentFunction
       ],
       on_replace: :update,
       type_field_name: :type
@@ -57,7 +59,8 @@ defmodule Sequin.Consumers.Function do
         transform: &TransformFunction.changeset(&1, &2, account_id),
         routing: &RoutingFunction.changeset(&1, &2, account_id),
         filter: &FilterFunction.changeset(&1, &2, account_id),
-        path: &PathFunction.changeset(&1, &2, account_id)
+        path: &PathFunction.changeset(&1, &2, account_id),
+        enrichment: &EnrichmentFunction.changeset(&1, &2, account_id)
       ]
     )
     |> validate_required([:name])

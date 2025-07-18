@@ -397,6 +397,22 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @doc """
+  Discards all messages in the message store.
+  """
+  @spec discard_all_messages(SinkConsumer.t()) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
+  def discard_all_messages(consumer) do
+    call_all_partitions(consumer, :discard_all_messages)
+  end
+
+  @doc """
+  Discards only messages that are currently in a failed state (have not_visible_until set in the future).
+  """
+  @spec discard_failing_messages(SinkConsumer.t()) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
+  def discard_failing_messages(consumer) do
+    call_all_partitions(consumer, :discard_failing_messages)
+  end
+
+  @doc """
   Should raise so SlotProcessorServer cannot continue if this fails.
   """
   @spec min_unpersisted_wal_cursors(SinkConsumer.t(), reference()) :: list(Replication.wal_cursor())
@@ -746,6 +762,34 @@ defmodule Sequin.Runtime.SlotMessageStore do
     {:reply, :ok, state}
   end
 
+  @decorate track_metrics("discard_all_messages")
+  def handle_call(:discard_all_messages, _from, state) do
+    all_messages = State.all_messages(state)
+    all_ack_ids = Enum.map(all_messages, & &1.ack_id)
+
+    case handle_call({:messages_succeeded, all_ack_ids, false}, nil, state) do
+      {:reply, {:ok, count, _ack_ids}, new_state} ->
+        {:reply, {:ok, count}, new_state}
+
+      other ->
+        other
+    end
+  end
+
+  @decorate track_metrics("discard_failing_messages")
+  def handle_call(:discard_failing_messages, _from, state) do
+    failing_messages = State.failing_messages(state)
+    failing_ack_ids = Enum.map(failing_messages, & &1.ack_id)
+
+    case handle_call({:messages_succeeded, failing_ack_ids, false}, nil, state) do
+      {:reply, {:ok, count, _ack_ids}, new_state} ->
+        {:reply, {:ok, count}, new_state}
+
+      other ->
+        other
+    end
+  end
+
   @decorate track_metrics("min_unpersisted_wal_cursor")
   def handle_call({:min_unpersisted_wal_cursor, monitor_ref}, _from, state) do
     if monitor_ref == state.slot_processor_monitor_ref do
@@ -988,6 +1032,21 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   defp exit_to_sequin_error(e) do
     Error.invariant(message: "[SlotMessageStore] exited with #{inspect(e)}")
+  end
+
+  # Helper function to call a function on all partitions and aggregate the results
+  defp call_all_partitions(consumer, call_name) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while({:ok, 0}, fn partition, {:ok, acc_count} ->
+      case GenServer.call(via_tuple(consumer.id, partition), call_name) do
+        {:ok, count} -> {:cont, {:ok, acc_count + count}}
+        error -> {:halt, error}
+      end
+    end)
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @decorate track_metrics("upsert_messages")

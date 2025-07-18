@@ -1083,6 +1083,57 @@
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold flex items-center gap-2">
+              Enrichment
+            </h2>
+            {#if consumer.enrichment}
+              <a
+                href="/functions/{consumer.enrichment.id}"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <Button variant="outline" size="sm">
+                  <ExternalLink class="h-4 w-4 mr-2" />
+                  View Enrichment
+                </Button>
+              </a>
+            {/if}
+          </div>
+          {#if consumer.enrichment}
+            <div class="grid grid-cols-1 gap-4">
+              <div>
+                <span class="text-sm text-gray-500">Name</span>
+                <div class="mt-2">
+                  <span class="">{consumer.enrichment.name}</span>
+                </div>
+              </div>
+
+              {#if consumer.enrichment.description}
+                <div>
+                  <span class="text-sm text-gray-500">Description</span>
+                  <div class="mt-2">
+                    <span class="">{consumer.enrichment.description}</span>
+                  </div>
+                </div>
+              {/if}
+
+              <div>
+                <span class="text-sm text-gray-500">Code</span>
+                <CollapsibleCode code={consumer.enrichment.function.code} />
+              </div>
+            </div>
+          {:else}
+            <p class="text-sm text-muted-foreground">
+              No enrichment in use. Messages will be sent to the sink
+              destination without additional enrichment.
+            </p>
+          {/if}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
               Transform
             </h2>
             {#if transform}

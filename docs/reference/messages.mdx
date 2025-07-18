@@ -45,6 +45,10 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
         "database": "myapp-prod",
         "hostname": "db.example.com"
       },
+      "enrichment": {
+        "account_name": "Acme, Inc.",
+        "customer_name": "Paul Atreides"
+      },
       "transaction_annotations": {
         "username": "paul.atreides",
         "source": "web_ui",
@@ -84,6 +88,10 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
         "name": "orders_kafka",
         "annotations": {"my-custom-key": "my-custom-value"}
       },
+      "enrichment": {
+        "account_name": "Acme, Inc.",
+        "customer_name": "Paul Atreides"
+      },
       "database": {
         "id": "12345678-9abc-def0-1234-56789abcdef0",
         "name": "myapp-prod",
@@ -122,6 +130,10 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
         "name": "orders_kafka",
         "annotations": {"my-custom-key": "my-custom-value"}
       },
+      "enrichment": {
+        "account_name": "Acme, Inc.",
+        "customer_name": "Paul Atreides"
+      },
       "database": {
         "id": "12345678-9abc-def0-1234-56789abcdef0",
         "name": "myapp-prod",
@@ -159,6 +171,10 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
         "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         "name": "orders_kafka",
         "annotations": {"my-custom-key": "my-custom-value"}
+      },
+      "enrichment": {
+        "account_name": "Acme, Inc.",
+        "customer_name": "Paul Atreides"
       },
       "database": {
         "id": "12345678-9abc-def0-1234-56789abcdef0",
@@ -237,6 +253,10 @@ You can apply a [transform](/reference/transforms) to the message to modify the 
 
     <ResponseField name="metadata.consumer.annotations" type="object">
       Additional metadata you attached to the consumer.
+    </ResponseField>
+
+    <ResponseField name="metadata.enrichment" type="object">
+      Enrichment results from the [enrichment function](/reference/enrichment) for this message.
     </ResponseField>
 
     <ResponseField name="metadata.database" type="object">

@@ -12,6 +12,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
@@ -36,6 +37,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
+  alias Sequin.Error.NotFoundError
   alias Sequin.Health
   alias Sequin.Health.CheckSinkConfigurationWorker
   alias Sequin.Metrics
@@ -117,6 +119,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
             :active_backfills,
             :replication_slot,
             :transform,
+            :enrichment,
             :routing,
             :filter
           ],
@@ -325,24 +328,29 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     {:reply, %{ok: true}, socket}
   end
 
-  def handle_event("run-backfill", %{"selectedTables" => selected_tables}, socket) do
+  def handle_event("run-backfill", %{"selectedTables" => selected_tables} = params, socket) do
     consumer = socket.assigns.consumer
+    max_timeout_ms = Map.get(params, "maxTimeoutMs", 5000)
 
     case Consumers.create_backfills_for_form(
            current_account_id(socket),
            consumer,
-           selected_tables
+           selected_tables,
+           max_timeout_ms
          ) do
       %{failed: changesets} ->
         # Some failed but some may also have been created successfully
         maybe_start_table_readers(consumer)
+
+        error_messages = Enum.map_join(changesets, "; ", &format_changeset_errors/1)
 
         {:reply, %{ok: true},
          socket
          |> load_consumer_backfills()
          |> put_flash(:toast, %{
            kind: :error,
-           title: "Failed to create #{length(changesets)} backfill(s)"
+           title: "Failed to create #{length(changesets)} backfill(s)",
+           description: error_messages
          })}
 
       %{created: backfills} ->
@@ -360,45 +368,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Invalid backfill parameters provided"})}
   end
 
-  @impl Phoenix.LiveView
-  def handle_event("cancel-backfill", _params, socket) do
-    case socket.assigns.consumer.active_backfills do
-      [] ->
-        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "No active backfill to cancel"})}
-
-      # FIXME
-      backfill ->
-        case Consumers.update_backfill(backfill, %{state: :cancelled}) do
-          {:ok, _updated_backfill} ->
-            {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill cancelled successfully"})}
-
-          {:error, _error} ->
-            {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to cancel backfill"})}
-        end
-    end
+  def handle_event("cancel_backfill", %{"backfill_id" => backfill_id}, socket) do
+    update_backfill_state(socket, backfill_id, :cancelled)
   end
 
-  def handle_event("cancel_backfill", %{"backfill_id" => backfill_id}, socket) do
-    case Consumers.get_backfill(backfill_id) do
-      {:ok, backfill} ->
-        if backfill.sink_consumer_id == socket.assigns.consumer.id do
-          case Consumers.update_backfill(backfill, %{state: :cancelled}) do
-            {:ok, _updated_backfill} ->
-              {:reply, %{ok: true},
-               socket
-               |> put_flash(:toast, %{kind: :success, title: "Backfill cancelled successfully"})
-               |> load_consumer_backfills()}
+  def handle_event("pause_backfill", %{"backfill_id" => backfill_id}, socket) do
+    update_backfill_state(socket, backfill_id, :paused)
+  end
 
-            {:error, _error} ->
-              {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to cancel backfill"})}
-          end
-        else
-          {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Backfill not found"})}
-        end
-
-      {:error, _error} ->
-        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Backfill not found"})}
-    end
+  def handle_event("resume_backfill", %{"backfill_id" => backfill_id}, socket) do
+    update_backfill_state(socket, backfill_id, :active)
   end
 
   def handle_event("fetch_message_data", %{"message_ack_id" => message_ack_id}, socket) do
@@ -586,6 +565,46 @@ defmodule SequinWeb.SinkConsumersLive.Show do
          put_flash(socket, :toast, %{
            kind: :error,
            title: "Failed to reset message visibility: #{inspect(reason)}"
+         })}
+    end
+  end
+
+  def handle_event("discard_messages", %{"discard_type" => discard_type}, socket) do
+    consumer = socket.assigns.consumer
+
+    {result, success_message} =
+      case discard_type do
+        "failing" ->
+          case SlotMessageStore.discard_failing_messages(consumer) do
+            {:ok, count} ->
+              {{:ok, count}, "Discarded #{count} failing message(s)"}
+
+            error ->
+              {error, nil}
+          end
+
+        "all" ->
+          case SlotMessageStore.discard_all_messages(consumer) do
+            {:ok, count} ->
+              {{:ok, count}, "Discarded #{count} message(s)"}
+
+            error ->
+              {error, nil}
+          end
+      end
+
+    case result do
+      {:ok, _count} ->
+        {:reply, %{ok: true},
+         socket
+         |> load_consumer_messages()
+         |> put_flash(:toast, %{kind: :success, title: success_message})}
+
+      {:error, reason} ->
+        {:reply, %{ok: false},
+         put_flash(socket, :toast, %{
+           kind: :error,
+           title: "Failed to discard messages: #{inspect(reason)}"
          })}
     end
   end
@@ -806,6 +825,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       batch_size: consumer.batch_size,
       transform_id: consumer.transform_id,
       routing_id: consumer.routing_id,
+      enrichment_id: consumer.enrichment_id,
+      enrichment: encode_function(consumer.enrichment),
       routing: encode_function(consumer.routing),
       filter_id: consumer.filter_id,
       filter: encode_function(consumer.filter),
@@ -1054,13 +1075,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_function_inner(%PathFunction{path: path}), do: %{path: path}
   defp encode_function_inner(%TransformFunction{code: code}), do: %{code: code}
   defp encode_function_inner(%FilterFunction{code: code}), do: %{code: code}
+  defp encode_function_inner(%EnrichmentFunction{code: code}), do: %{code: code}
 
   defp encode_function_inner(%RoutingFunction{sink_type: sink_type, code: code}) do
     %{sink_type: sink_type, code: code}
   end
 
   defp encode_tables(tables) do
-    Enum.map(tables, &encode_table/1)
+    tables
+    |> Enum.map(&encode_table/1)
+    |> Enum.sort_by(&{&1.schema, &1.name}, :asc)
   end
 
   defp encode_table(%PostgresDatabaseTable{} = table) do
@@ -1664,7 +1688,65 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
+  defp update_backfill_state(socket, backfill_id, target_state) do
+    consumer_id = socket.assigns.consumer.id
+
+    with {:ok, backfill} <- Consumers.get_backfill_for_sink_consumer(consumer_id, backfill_id),
+         {:ok, _updated_backfill} <- Consumers.update_backfill(backfill, %{state: target_state}) do
+      {:reply, %{ok: true},
+       socket
+       |> put_flash(:toast, %{kind: :success, title: "Backfill #{format_state_action(target_state)} successfully"})
+       |> load_consumer_backfills()}
+    else
+      {:error, %NotFoundError{}} ->
+        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Backfill not found"})}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        error_message = format_changeset_errors(changeset)
+
+        {:reply, %{ok: false},
+         put_flash(socket, :toast, %{
+           kind: :error,
+           title: "Failed to #{format_state_action(target_state)} backfill",
+           description: error_message
+         })}
+
+      {:error, error} ->
+        error_message = format_error(error)
+
+        {:reply, %{ok: false},
+         put_flash(socket, :toast, %{
+           kind: :error,
+           title: "Failed to #{format_state_action(target_state)} backfill",
+           description: error_message
+         })}
+    end
+  end
+
+  defp format_state_action(:cancelled), do: "cancel"
+  defp format_state_action(:paused), do: "pause"
+  defp format_state_action(:active), do: "resume"
+
   defp env do
     Application.get_env(:sequin, :env)
   end
+
+  defp format_changeset_errors(changeset) do
+    errors = Sequin.Error.errors_on(changeset)
+
+    case errors do
+      %{} when map_size(errors) == 0 ->
+        "Validation error occurred"
+
+      errors ->
+        Enum.map_join(errors, "; ", fn {field, messages} ->
+          "#{field}: #{Enum.join(messages, ", ")}"
+        end)
+    end
+  end
+
+  defp format_error(error) when is_binary(error), do: error
+  defp format_error(error) when is_atom(error), do: to_string(error)
+  defp format_error(%{message: message}), do: message
+  defp format_error(error), do: inspect(error)
 end

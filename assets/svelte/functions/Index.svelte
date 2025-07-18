@@ -28,11 +28,17 @@
     path: "/reference/transforms",
     routing: "/reference/routing",
     filter: "/reference/filters#filter-functions",
+    enrichment: "/reference/enrichment",
   };
 
   let getHref = (transform) => docBase + typeToDocPath[transform.type];
   let deleteDialogOpen = false;
   let selectedTransform: (typeof functions)[0] | null = null;
+
+  // Optionally override the function type display name
+  let function_type_display_names = {
+    enrichment: "Enrichment",
+  };
 
   function pushEvent(
     event: string,
@@ -101,7 +107,7 @@
                   variant="secondary"
                   class="text-xs capitalize inline-flex items-center gap-1"
                 >
-                  {func.type}
+                  {function_type_display_names[func.type] || func.type}
                   <ExternalLink class="h-3 w-3" />
                 </Badge>
               </a>

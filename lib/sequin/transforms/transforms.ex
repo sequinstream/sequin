@@ -6,6 +6,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
@@ -171,7 +172,7 @@ defmodule Sequin.Transforms do
   def to_external(%SinkConsumer{sink: sink} = consumer, show_sensitive) do
     consumer =
       consumer
-      |> Repo.preload([:active_backfills, :postgres_database, :transform, :filter, :routing])
+      |> Repo.preload([:active_backfills, :postgres_database, :transform, :filter, :routing, :enrichment])
       |> SinkConsumer.preload_http_endpoint!()
 
     source_tables =
@@ -191,6 +192,7 @@ defmodule Sequin.Transforms do
         filter: if(consumer.filter, do: consumer.filter.name, else: "none"),
         transform: if(consumer.transform, do: consumer.transform.name, else: "none"),
         routing: if(consumer.routing, do: consumer.routing.name, else: "none"),
+        enrichment: if(consumer.enrichment, do: consumer.enrichment.name, else: "none"),
         timestamp_format: consumer.timestamp_format,
         active_backfills: Enum.map(consumer.active_backfills, &to_external(&1, show_sensitive)),
         max_retry_count: consumer.max_retry_count,
@@ -453,6 +455,15 @@ defmodule Sequin.Transforms do
       description: function.description,
       type: function.type,
       sink_type: function.function.sink_type,
+      code: function.function.code
+    }
+  end
+
+  def to_external(%Function{function: %EnrichmentFunction{}} = function, _show_sensitive) do
+    %{
+      name: function.name,
+      description: function.description,
+      type: function.type,
       code: function.function.code
     }
   end
@@ -906,6 +917,12 @@ defmodule Sequin.Transforms do
         "filter" ->
           case parse_function_id(account_id, value) do
             {:ok, function_id} -> {:cont, {:ok, Map.put(acc, :filter_id, function_id)}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+
+        "enrichment" ->
+          case parse_function_id(account_id, value) do
+            {:ok, function_id} -> {:cont, {:ok, Map.put(acc, :enrichment_id, function_id)}}
             {:error, error} -> {:halt, {:error, error}}
           end
 

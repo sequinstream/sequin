@@ -104,7 +104,7 @@ defmodule Sequin.Consumers.SinkConsumer do
 
     field :health, :map, virtual: true
 
-    has_many :active_backfills, Backfill, where: [state: :active]
+    has_many :active_backfills, Backfill, where: [state: {:in, [:active, :paused]}]
 
     field :actions, {:array, Ecto.Enum}, values: [:insert, :update, :delete]
     embeds_one :source, Source, on_replace: :delete
@@ -117,6 +117,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     belongs_to :transform, Function
     belongs_to :routing, Function
     belongs_to :filter, Function
+    belongs_to :enrichment, Function
 
     polymorphic_embeds_one(:sink,
       types: [
@@ -153,12 +154,10 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_memory_mb,
       :transform_id,
       :routing_id,
-      :filter_id
+      :filter_id,
+      :enrichment_id
     ])
     |> changeset(attrs)
-    |> foreign_key_constraint(:transform_id)
-    |> foreign_key_constraint(:routing_id)
-    |> foreign_key_constraint(:filter_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:batch_size,
       name: "ensure_batch_size_one",
@@ -198,6 +197,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       :transform_id,
       :routing_id,
       :filter_id,
+      :enrichment_id,
       :timestamp_format,
       :batch_timeout_ms,
       :load_shedding_policy,
@@ -208,6 +208,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> cast_embed(:source_tables)
     |> put_defaults()
     |> validate_message_grouping()
+    |> validate_enrichment()
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
@@ -218,6 +219,10 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:max_retry_count, greater_than: 0)
     |> validate_inclusion(:legacy_transform, [:none, :record_only])
     |> validate_routing(attrs)
+    |> foreign_key_constraint(:transform_id)
+    |> foreign_key_constraint(:routing_id)
+    |> foreign_key_constraint(:filter_id)
+    |> foreign_key_constraint(:enrichment_id)
     |> Sequin.Changeset.annotations_check_constraint()
   end
 
@@ -247,6 +252,26 @@ defmodule Sequin.Consumers.SinkConsumer do
       else
         changeset
       end
+    else
+      changeset
+    end
+  end
+
+  defp validate_enrichment(changeset) do
+    source = get_field(changeset, :source)
+    enrichment_id = get_field(changeset, :enrichment_id)
+
+    has_enrichment? = not is_nil(enrichment_id)
+
+    has_single_table? =
+      not is_nil(source) and is_list(source.include_table_oids) and length(source.include_table_oids) == 1
+
+    if has_enrichment? and not has_single_table? do
+      add_error(
+        changeset,
+        :enrichment_id,
+        "Enrichment is not supported for multiple tables. To use enrichment, please specify a single included table in the source."
+      )
     else
       changeset
     end

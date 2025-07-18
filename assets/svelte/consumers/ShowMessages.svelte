@@ -10,8 +10,11 @@
     Check,
     ChevronDown,
     Info,
+    Trash2,
   } from "lucide-svelte";
   import * as Popover from "$lib/components/ui/popover";
+  import * as RadioGroup from "$lib/components/ui/radio-group";
+  import { Label } from "$lib/components/ui/label";
   import { toast } from "svelte-sonner";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
   import { routedSinkDocs } from "./dynamicRoutingDocs";
@@ -50,6 +53,11 @@
   let isAcknowledging = false;
   let isResettingAll = false;
   let isPopoverOpen = false;
+
+  // State for discard dialog
+  let isDiscardPopoverOpen = false;
+  let isDiscarding = false;
+  let discardMode: "failing" | "all" = "failing";
 
   // Add these new state variables
   let messageShapeOpen = false;
@@ -403,6 +411,19 @@
     const value = fieldValue || "N/A";
 
     return { label, value, description };
+      
+  function handleDiscardMessages() {
+    isDiscardPopoverOpen = false;
+    isDiscarding = true;
+    live.pushEvent(
+      "discard_messages",
+      { discard_type: discardMode },
+      (reply) => {
+        isDiscarding = false;
+        // Reset to default after operation
+        discardMode = "failing";
+      },
+    );
   }
 </script>
 
@@ -465,6 +486,71 @@
             </Button>
             <Button variant="default" size="sm" on:click={handleResetAll}>
               Confirm
+            </Button>
+          </div>
+        </div>
+      </Popover.Content>
+    </Popover.Root>
+
+    <Popover.Root bind:open={isDiscardPopoverOpen}>
+      <Popover.Trigger asChild let:builder>
+        <Button
+          builders={[builder]}
+          variant="outline"
+          size="sm"
+          disabled={totalCount === 0 || isDiscarding}
+          class="flex items-center space-x-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+        >
+          {#if isDiscarding}
+            <Loader2 class="h-4 w-4 mr-1 animate-spin" />
+          {:else}
+            <Trash2 class="h-4 w-4 mr-1" />
+          {/if}
+          <span>Discard All</span>
+        </Button>
+      </Popover.Trigger>
+      <Popover.Content class="w-80 p-4">
+        <div class="grid gap-4">
+          <div class="space-y-2">
+            <h4 class="font-medium leading-none">Discard messages</h4>
+            <p class="text-sm text-muted-foreground">
+              Choose which messages to discard. This action cannot be undone.
+            </p>
+          </div>
+          <RadioGroup.Root bind:value={discardMode}>
+            <div class="flex items-center space-x-2 mb-2">
+              <RadioGroup.Item value="failing" id="r1" />
+              <Label
+                for="r1"
+                class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Discard <i>failing</i> messages
+              </Label>
+            </div>
+            <div class="flex items-center space-x-2">
+              <RadioGroup.Item value="all" id="r2" />
+              <Label
+                for="r2"
+                class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Discard <i>all</i> messages
+              </Label>
+            </div>
+          </RadioGroup.Root>
+          <div class="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={() => (isDiscardPopoverOpen = false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              on:click={handleDiscardMessages}
+            >
+              {discardMode === "failing" ? "Discard Failing" : "Discard All"}
             </Button>
           </div>
         </div>

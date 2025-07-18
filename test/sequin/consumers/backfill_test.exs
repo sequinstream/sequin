@@ -108,5 +108,55 @@ defmodule Sequin.Consumers.BackfillTest do
 
       assert %{sink_consumer_id: ["already has an active backfill"]} = errors_on(changeset)
     end
+
+    test "validates allowed state transitions" do
+      backfill = ConsumersFactory.insert_active_backfill!()
+
+      # Test active -> paused -> active -> cancelled (allowed) -> active (disallowed)
+      assert {:ok, paused_backfill} =
+               Repo.update(Backfill.update_changeset(backfill, %{state: :paused}))
+
+      assert paused_backfill.state == :paused
+
+      assert {:ok, resumed_backfill} =
+               Repo.update(Backfill.update_changeset(paused_backfill, %{state: :active}))
+
+      assert resumed_backfill.state == :active
+
+      assert {:ok, cancelled_backfill} =
+               Repo.update(Backfill.update_changeset(resumed_backfill, %{state: :cancelled}))
+
+      assert cancelled_backfill.state == :cancelled
+
+      assert {:error, _changeset} =
+               Repo.update(Backfill.update_changeset(cancelled_backfill, %{state: :active}))
+    end
+
+    test "prevents multiple active or paused backfills for the same consumer and table" do
+      account = AccountsFactory.insert_account!()
+      consumer = ConsumersFactory.insert_sink_consumer!(account_id: account.id)
+      table_oid = Factory.integer()
+
+      # Test with paused backfill blocking new active backfill
+      ConsumersFactory.insert_backfill!(
+        account_id: account.id,
+        sink_consumer_id: consumer.id,
+        table_oid: table_oid,
+        state: :paused
+      )
+
+      assert {:error, changeset} =
+               %Backfill{}
+               |> Backfill.create_changeset(%{
+                 account_id: consumer.account_id,
+                 sink_consumer_id: consumer.id,
+                 state: :active,
+                 table_oid: table_oid,
+                 initial_min_cursor: %{0 => 0}
+               })
+               |> Repo.insert()
+
+      assert %{sink_consumer_id: ["already has an active backfill"]} = errors_on(changeset)
+    end
   end
 end

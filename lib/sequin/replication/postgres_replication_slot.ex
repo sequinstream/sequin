@@ -76,6 +76,11 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     |> Sequin.Changeset.annotations_check_constraint()
   end
 
+  @spec where_id(Queryable.t(), String.t()) :: Queryable.t()
+  def where_id(query \\ base_query(), id) do
+    from([postgres_replication: pgr] in query, where: pgr.id == ^id)
+  end
+
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()
   def where_account(query \\ base_query(), account_id) do
     from([postgres_replication: pgr] in query, where: pgr.account_id == ^account_id)

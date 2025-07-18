@@ -11,6 +11,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
@@ -24,6 +25,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.Postgres
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
@@ -1709,7 +1711,7 @@ defmodule Sequin.Consumers do
     |> Repo.one()
   end
 
-  def create_backfills_for_form(account_id, consumer, tables_config) do
+  def create_backfills_for_form(account_id, consumer, tables_config, max_timeout_ms \\ 5000) do
     # Create backfills for each selected table
     tables_config
     |> Enum.map(fn
@@ -1725,7 +1727,8 @@ defmodule Sequin.Consumers do
           sink_consumer_id: consumer.id,
           table_oid: table_oid,
           initial_min_cursor: initial_min_cursor,
-          state: :active
+          state: :active,
+          max_timeout_ms: max_timeout_ms
         }
 
       # Partial backfill
@@ -1745,7 +1748,8 @@ defmodule Sequin.Consumers do
           table_oid: table_oid,
           initial_min_cursor: initial_min_cursor,
           sort_column_attnum: sort_column_attnum,
-          state: :active
+          state: :active,
+          max_timeout_ms: max_timeout_ms
         }
     end)
     |> Enum.map(fn backfill_attrs -> create_backfill(backfill_attrs) end)
@@ -1820,6 +1824,7 @@ defmodule Sequin.Consumers do
   def synthetic_message do
     %ConsumerEvent{
       replication_message_trace_id: Ecto.UUID.cast!("00000000-0000-0000-0000-000000000000"),
+      table_oid: -1,
       data: %ConsumerEventData{
         record: %{
           "id" => 1,
@@ -1855,4 +1860,160 @@ defmodule Sequin.Consumers do
       }
     }
   end
+
+  def synthetic_table do
+    %PostgresDatabaseTable{
+      oid: -1,
+      schema: "sequin",
+      name: "synthetic_table",
+      columns: [
+        %PostgresDatabaseTable.Column{
+          attnum: 1,
+          name: "id",
+          type: :integer,
+          is_pk?: true
+        }
+      ]
+    }
+  end
+
+  def enrich_message!(database, enrichment_function, message, opts \\ []) do
+    [message] = enrich_messages!(database, enrichment_function, [message], opts)
+    message
+  end
+
+  @doc """
+  Enrich messages with the given enrichment function.
+  """
+  def enrich_messages!(database, enrichment_function, messages, opts \\ [])
+
+  def enrich_messages!(_database, nil = _enrichment_function, messages, _opts), do: messages
+
+  def enrich_messages!(nil, %Function{}, _messages, _opts) do
+    raise("Database is required to enrich messages, got nil.")
+  end
+
+  def enrich_messages!(
+        %PostgresDatabase{account_id: account_id} = database,
+        %Function{function: %EnrichmentFunction{code: sql}} = function,
+        messages,
+        opts
+      )
+      when is_list(messages) do
+    if Sequin.feature_enabled?(account_id, :function_transforms) do
+      query_fn = Keyword.get(opts, :query_fn, &Postgres.query/3)
+
+      # There should be only one table per message group
+      [table_oid] = messages |> Enum.map(& &1.table_oid) |> Enum.uniq()
+      table = Sequin.Enum.find!(database.tables, &(&1.oid == table_oid))
+      primary_key_columns = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.sort_by(& &1.name)
+
+      # params is a list of lists, one for each primary key column, containing the values for all messages
+      params = primary_key_params(primary_key_columns, messages)
+
+      case query_fn.(database, sql, params) do
+        {:ok, %Postgrex.Result{} = result} ->
+          enrichments = load_enrichments(result)
+          merge_enrichments(function, messages, enrichments, primary_key_columns)
+
+        {:error, error} ->
+          raise error
+      end
+    else
+      raise "Enrichment functions are not enabled. Talk to the Sequin team to enable them."
+    end
+  end
+
+  defp merge_enrichments(%Function{} = function, messages, enrichments, primary_key_columns) do
+    Enum.map(messages, fn message ->
+      consumer_id = message.data.metadata.consumer.id
+
+      case Enum.filter(enrichments, &enrichment_matches?(primary_key_columns, message, &1)) do
+        [] ->
+          Trace.info(consumer_id, %Trace.Event{
+            message: "Executed enrichment function #{function.name}",
+            extra: %{
+              input: message.data.record,
+              result: "No enrichment matched"
+            }
+          })
+
+          message
+
+        [enrichment] ->
+          Trace.info(consumer_id, %Trace.Event{
+            message: "Executed enrichment function #{function.name}",
+            extra: %{
+              input: message.data.record,
+              result: enrichment
+            }
+          })
+
+          put_in(message.data.metadata.enrichment, enrichment)
+
+        enrichments ->
+          error = Error.invariant(message: "Expected 0 or 1 enrichment results, got #{length(enrichments)}")
+
+          Trace.error(consumer_id, %Trace.Event{
+            message: "Executed enrichment function #{function.name}",
+            error: error,
+            extra: %{
+              input: message.data.record,
+              result: enrichments
+            }
+          })
+
+          raise error
+      end
+    end)
+  end
+
+  defp load_enrichments(%Postgrex.Result{} = result) do
+    result
+    |> Postgres.result_to_maps()
+    |> Enum.map(fn enrichment when is_map(enrichment) ->
+      Map.new(enrichment, fn {key, value} ->
+        {key, maybe_binary_to_string(value)}
+      end)
+    end)
+  end
+
+  defp enrichment_matches?(primary_key_columns, message, enrichment) do
+    message_values = Enum.map(primary_key_columns, &Map.fetch!(message.data.record, &1.name))
+
+    enrichment_values =
+      primary_key_columns
+      |> Enum.map(fn column ->
+        case Map.get(enrichment, column.name) do
+          nil ->
+            raise """
+            Primary key column `#{column.name}` is missing from enrichment result.
+
+            You must select all primary key columns from the source table in your enrichment query.
+            """
+
+          value ->
+            value
+        end
+      end)
+      |> Enum.map(&maybe_binary_to_string/1)
+
+    message_values == enrichment_values
+  end
+
+  defp primary_key_params(primary_key_columns, messages) do
+    Enum.map(primary_key_columns, fn column ->
+      messages
+      |> Enum.map(&Map.fetch!(&1.data.record, column.name))
+      |> Enum.map(&Postgres.cast_value(&1, column.type))
+    end)
+  end
+
+  defp maybe_binary_to_string(binary) when is_binary(binary) do
+    Sequin.String.binary_to_string!(binary)
+  rescue
+    _ -> binary
+  end
+
+  defp maybe_binary_to_string(other), do: other
 end

@@ -182,8 +182,9 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
            consumer: consumer
          } do
       test_pid = self()
-      %ConsumerEvent{} = event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
-      %ConsumerEvent{} = event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :update)
+
+      %ConsumerEvent{} = event1 = ConsumersFactory.consumer_event(consumer_id: consumer.id, action: :insert)
+      %ConsumerEvent{} = event2 = ConsumersFactory.consumer_event(consumer_id: consumer.id, action: :update)
 
       # Mark the first message as already delivered
       wal_cursor = %{
@@ -213,7 +214,8 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       # Verify that the second message was sent
       assert_receive {:http_request, _req}, 1_000
 
-      # Verify that the message was marked as already succeeded
+      # Verify that each message is acknowledged separately
+      assert_receive {SinkPipeline, :ack_finished, [_ack_id], []}, 1_000
       assert_receive {SinkPipeline, :ack_finished, [_ack_id], []}, 1_000
 
       # Verify that the consumer record has been processed (deleted on ack)

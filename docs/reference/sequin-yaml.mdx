@@ -165,6 +165,7 @@ sinks:
       exclude_tables:         # Optional, tables to exclude
         - "public.background_jobs"
     status: "active"               # Optional: active or disabled, default: active
+    enrichment: "my-enrichment"    # Optional, reference to an enrichment function name or "none"
     transform: "my-transform"      # Optional, reference to a transform function name or "none"
     filter: "my-filter"            # Optional, reference to a filter function name or "none"
     routing: "my-routing"          # Optional, reference to a routing function name or "none"
@@ -226,7 +227,7 @@ sinks:
 
 #### Sink functions
 
-The `transform`, `filter`, and `routing` fields allow you to attach functions to your sink. Each field can be set to either:
+The `enrichment`, `transform`, `filter`, and `routing` fields allow you to attach functions to your sink. Each field can be set to either:
 - The name of a function defined in the `functions` section
 - `"none"` to explicitly disable that type of function
 
@@ -500,17 +501,33 @@ Functions allow you to filter, transform, and route your data as it flows throug
 
 #### Function types
 
-Sequin supports four types of functions:
+Sequin supports five types of functions:
 
-1. [**Path functions**](/reference/transforms#path-transform) - Extract data from a specific path in your message
-2. [**Transform functions**](/reference/transforms#function-transform) - Modify the structure of your messages
-3. [**Filter functions**](/reference/filters#filter-functions) - Filter which messages to process
-4. [**Routing functions**](/reference/routing) - Dynamically direct messages to different destinations
+1. [**Enrichment functions**](/reference/enrichment) - Enrich your messages with additional data
+2. [**Path functions**](/reference/transforms#path-transform) - Extract data from a specific path in your message
+3. [**Transform functions**](/reference/transforms#function-transform) - Modify the structure of your messages
+4. [**Filter functions**](/reference/filters#filter-functions) - Filter which messages to process
+5. [**Routing functions**](/reference/routing) - Dynamically direct messages to different destinations
 
 You can define functions in your configuration like this:
 
 ```yaml
 functions:
+  # Enrichment function example
+  - name: "my-enrichment-function"
+    description: "Enrich with customer data"
+    type: "enrichment"
+    code: |-                          # Required for Enrichment functions
+      SELECT
+        u.id,
+        a.name as account_name
+      FROM
+        users u
+      JOIN
+        accounts a on u.account_id = a.id
+      WHERE
+        u.id = ANY($1)
+
   # Path function example
   - name: "my-path-function"
     description: "Extract record"       # Optional

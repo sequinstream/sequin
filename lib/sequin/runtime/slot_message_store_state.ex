@@ -544,4 +544,22 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   end
 
   defp group_id(msg), do: {msg.table_oid, msg.group_id}
+
+  @doc """
+  Returns all messages from the state.
+  """
+  @spec all_messages(State.t()) :: list(message())
+  def all_messages(%State{} = state) do
+    Map.values(state.messages)
+  end
+
+  @doc """
+  Returns messages that are currently failing (have been delivered at least once).
+  """
+  @spec failing_messages(State.t()) :: list(message())
+  def failing_messages(%State{} = state) do
+    state.messages
+    |> Map.values()
+    |> Enum.filter(fn msg -> msg.deliver_count > 0 end)
+  end
 end

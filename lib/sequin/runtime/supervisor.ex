@@ -64,7 +64,8 @@ defmodule Sequin.Runtime.Supervisor do
     if backfill.state == :active do
       default_opts = [
         backfill_id: backfill.id,
-        table_oid: backfill.table_oid
+        table_oid: backfill.table_oid,
+        max_timeout_ms: backfill.max_timeout_ms
       ]
 
       opts = Keyword.merge(default_opts, opts)

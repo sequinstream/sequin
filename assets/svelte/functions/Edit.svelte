@@ -62,6 +62,7 @@
   import { EditorView, basicSetup } from "codemirror";
   import { EditorState } from "@codemirror/state";
   import { elixir } from "codemirror-lang-elixir";
+  import { sql } from "@codemirror/lang-sql";
   import { keymap } from "@codemirror/view";
   import { indentWithTab } from "@codemirror/commands";
   import { autocompletion } from "@codemirror/autocomplete";
@@ -92,6 +93,7 @@
   let validating: boolean = false;
   let functionInternalToExternal = {
     filter: "Filter function",
+    enrichment: "Enrichment function",
     transform: "Transform function",
     routing: "Routing function",
     path: "Path transform",
@@ -134,6 +136,8 @@
   }
   let functionEditorElement: HTMLElement;
   let functionEditorView: EditorView;
+  let sqlEditorElement: HTMLElement;
+  let sqlEditorView: EditorView;
 
   let copyTimeout: ReturnType<typeof setTimeout>;
 
@@ -214,6 +218,11 @@
         type: "property",
         info: "An array of all the primary key composite fragments",
       },
+      {
+        label: "metadata.enrichment",
+        type: "property",
+        info: "An enrichment result from a enrichment function",
+      },
     ];
 
     return {
@@ -243,6 +252,14 @@
         saving = false;
       });
     }
+  }
+
+  function isElixirFunction(functionType: string) {
+    return ["filter", "transform", "routing"].includes(functionType);
+  }
+
+  function isSqlFunction(functionType: string) {
+    return functionType === "enrichment";
   }
 
   function handleTypeSelect(event: any) {
@@ -292,13 +309,23 @@
       form.function.code = newInitialCode;
     }
 
-    functionEditorView.dispatch({
-      changes: {
-        from: 0,
-        to: functionEditorView.state.doc.length,
-        insert: form.function.code,
-      },
-    });
+    if (form.function.type === "enrichment") {
+      sqlEditorView?.dispatch({
+        changes: {
+          from: 0,
+          to: sqlEditorView.state.doc.length,
+          insert: form.function.code,
+        },
+      });
+    } else {
+      functionEditorView?.dispatch({
+        changes: {
+          from: 0,
+          to: functionEditorView.state.doc.length,
+          insert: form.function.code,
+        },
+      });
+    }
   }
 
   function deleteMessage(message: TestMessage, index: number) {
@@ -412,6 +439,9 @@
     selectedDatabaseId = event.value;
     selectedTableOid = null; // Reset table selection when database changes
     testMessages = [];
+    pushEvent("database_selected", {
+      database_id: selectedDatabaseId,
+    });
   }
 
   // function refreshDatabases() {
@@ -589,10 +619,37 @@
       parent: functionEditorElement,
     });
 
+    // Initialize CodeMirror for SQL if it exists
+    const sqlStartState = EditorState.create({
+      doc: form.function.code || "",
+      extensions: [
+        basicSetup,
+        sql(),
+        autocompletion(),
+        keymap.of([indentWithTab]),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            const code = update.state.doc.toString();
+            form.function.code = code;
+            saveFunctionCodeToStorage(form);
+            checkIfCodeModified(code);
+          }
+        }),
+      ],
+    });
+
+    if (sqlEditorElement) {
+      sqlEditorView = new EditorView({
+        state: sqlStartState,
+        parent: sqlEditorElement,
+      });
+    }
+
     loadStoredOrInitialCode();
 
     return () => {
       functionEditorView.destroy();
+      sqlEditorView?.destroy();
     };
   });
 
@@ -1043,6 +1100,93 @@ Please help me create or modify the Elixir function transform to achieve the des
             </div>
           </div>
 
+          <div hidden={form.function.type !== "enrichment"}>
+            <div class="space-y-2">
+              {#if !functionTransformsEnabled}
+                <div
+                  class="flex w-fit items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-md"
+                >
+                  <Info
+                    class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5"
+                  />
+                  <div class="flex flex-col gap-1">
+                    <p class="text-sm text-blue-700 dark:text-blue-300">
+                      Functions are not enabled in Cloud.
+                    </p>
+                    <p class="text-sm text-blue-700 dark:text-blue-300">
+                      Talk to the Sequin team if you are interested in trying
+                      them out.
+                    </p>
+                  </div>
+                </div>
+              {:else}
+                <div class="max-w-3xl">
+                  <div class="flex items-center gap-2">
+                    <Label for="sql-function">SQL Query</Label>
+                    <Popover>
+                      <PopoverTrigger>
+                        <Info
+                          class="w-4 h-4 text-slate-500 dark:text-slate-400"
+                        />
+                      </PopoverTrigger>
+                      <PopoverContent
+                        class="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      >
+                        <div class="text-sm space-y-2">
+                          <p class="text-slate-500 dark:text-slate-400">
+                            Enter a SQL query to enrich your data. The query
+                            will be executed against your database to fetch
+                            additional data.
+                          </p>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div
+                    bind:this={sqlEditorElement}
+                    class="w-full max-w-3xl max-h-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden relative"
+                    on:keydown={ignoreEscKeypress}
+                    role="textbox"
+                    aria-label="SQL query editor"
+                    tabindex="0"
+                  >
+                    <div
+                      class="absolute bottom-2 right-2 flex items-center gap-2 z-10"
+                    >
+                      {#if isCodeModified}
+                        <span
+                          class="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded-full font-medium select-none"
+                          >modified</span
+                        >
+                      {/if}
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <button
+                            type="button"
+                            class="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            on:click={resetOriginalCode}
+                            disabled={!isCodeModified}
+                          >
+                            <RotateCcw class="w-4 h-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>Reset to original code</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
+
+                  <p
+                    class="-mb-2 min-h-10 text-sm text-red-500 dark:text-red-400"
+                  >
+                    {#if formErrors.function?.code}
+                      {formErrors.function.code[0]}
+                    {/if}
+                  </p>
+                </div>
+              {/if}
+            </div>
+          </div>
+
           <div class="flex gap-2 pt-2">
             <AlertDialog bind:open={showUpdateDialog}>
               <Button type="submit" loading={saving} disabled={saving}>
@@ -1321,7 +1465,7 @@ Please help me create or modify the Elixir function transform to achieve the des
                     {/if}
                   </div>
                 </button>
-                {#if selectedMessageIndex === i}
+                {#if selectedMessageIndex === i && isElixirFunction(form.function.type)}
                   <div
                     class="p-3 border-t border-slate-200 dark:border-slate-800"
                   >
@@ -1354,6 +1498,34 @@ Please help me create or modify the Elixir function transform to achieve the des
                       bind:form
                       bind:formErrors
                     />
+                  </div>
+                {:else if selectedMessageIndex === i && isSqlFunction(form.function.type)}
+                  <div
+                    class="p-3 border-t border-slate-200 dark:border-slate-800"
+                  >
+                    <div
+                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
+                    >
+                      <div
+                        class="font-semibold mb-1 flex w-full justify-between items-center"
+                      >
+                        <span>SQL Parameters</span>
+                      </div>
+                      <pre>
+{#each selectedMessage["sql_parameters"] as [index, value]}${index}: {value}
+                        {/each}</pre>
+                    </div>
+
+                    <div
+                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
+                    >
+                      <div
+                        class="font-semibold mb-1 flex w-full justify-between items-center"
+                      >
+                        <span>record</span>
+                      </div>
+                      <pre>{selectedMessage.record}</pre>
+                    </div>
                   </div>
                 {/if}
               </div>

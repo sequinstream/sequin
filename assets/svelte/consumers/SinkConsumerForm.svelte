@@ -111,6 +111,7 @@
     routingId: string;
     routingMode: string;
     timestampFormat: string;
+    enrichmentId: string;
   }
 
   let initialForm: FormState = {
@@ -138,6 +139,7 @@
     routingId: consumer.routing_id || "none",
     routingMode: consumer.routing_mode,
     filterId: consumer.filter_id || "none",
+    enrichmentId: consumer.enrichment_id || "none",
   };
   console.log("initialForm", initialForm);
 
@@ -300,9 +302,14 @@
   let transformSectionExpanded = false;
   let backfillSectionEnabled = false;
   let backfillSectionExpanded = false;
+  let enrichmentSectionEnabled = false;
+  let enrichmentSectionExpanded = false;
   $: {
     transformSectionEnabled = !!selectedDatabase;
     transformSectionExpanded = transformSectionEnabled && !isEditMode;
+
+    enrichmentSectionEnabled = !!selectedDatabase;
+    enrichmentSectionExpanded = enrichmentSectionEnabled && !isEditMode;
 
     backfillSectionEnabled = !!selectedDatabase && !isEditMode;
   }
@@ -440,6 +447,74 @@
         </div>
       </CardContent>
     </Card>
+
+    <ExpandableCard
+      disabled={!enrichmentSectionEnabled}
+      expanded={enrichmentSectionExpanded}
+    >
+      <svelte:fragment slot="title">
+        Enrichment
+        <Tooltip.Root openDelay={200}>
+          <Tooltip.Trigger>
+            <Info class="h-4 w-4 text-gray-400 cursor-help" />
+          </Tooltip.Trigger>
+          <Tooltip.Content class="p-4 max-w-xs">
+            <p class="text-sm text-muted-foreground font-normal">
+              Enrich your messages with additional data from SQL queries before
+              they are sent to the sink destination.
+            </p>
+          </Tooltip.Content>
+        </Tooltip.Root>
+      </svelte:fragment>
+
+      <svelte:fragment slot="summary">
+        {#if !selectedDatabase}
+          <p class="text-sm text-muted-foreground">Please select a database.</p>
+        {:else if form.enrichmentId === "none"}
+          <p class="text-sm text-muted-foreground">
+            No enrichment in use. Messages will be sent without additional
+            enrichment.
+          </p>
+        {:else}
+          <p class="font-medium">
+            {functions.find((f) => f.id === form.enrichmentId)?.name ||
+              form.enrichmentId}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {functions.find((f) => f.id === form.enrichmentId)?.description ||
+              ""}
+          </p>
+        {/if}
+        {#if errors.consumer.enrichment_id}
+          <p class="text-destructive text-sm">
+            {errors.consumer.enrichment_id}
+          </p>
+        {/if}
+      </svelte:fragment>
+
+      <svelte:fragment slot="content">
+        <FunctionPicker
+          {functions}
+          selectedFunctionId={form.enrichmentId}
+          title="Enrichment function"
+          onFunctionChange={(functionId) => (form.enrichmentId = functionId)}
+          {refreshFunctions}
+          allowedFunctionTypes={["enrichment"]}
+          newFunctionType="enrichment"
+          bind:refreshState={functionRefreshState}
+        >
+          <svelte:fragment slot="none-option">
+            No enrichment in use. Messages will be sent without additional
+            enrichment.
+          </svelte:fragment>
+        </FunctionPicker>
+        {#if errors.consumer.enrichment_id}
+          <p class="text-destructive text-sm">
+            {errors.consumer.enrichment_id}
+          </p>
+        {/if}
+      </svelte:fragment>
+    </ExpandableCard>
 
     <ExpandableCard
       disabled={!transformSectionEnabled}
@@ -925,6 +1000,11 @@
             >
           </Button>
         </div>
+        {#if errors.consumer && Object.keys(errors.consumer).length > 0}
+          <div class="text-destructive text-sm">
+            There are errors with your sink configuration, see above.
+          </div>
+        {/if}
         {#if testConnectionState.lastTestStatus === "error"}
           <Alert.Root variant="destructive">
             <CircleAlert class="h-4 w-4" />

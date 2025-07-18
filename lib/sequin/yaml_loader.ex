@@ -1046,7 +1046,8 @@ defmodule Sequin.YamlLoader do
   end
 
   defp upsert_function(account_id, %{"name" => name} = raw_attrs) do
-    with {:ok, function_attrs} <- coerce_function_attrs(raw_attrs) do
+    with {:ok, function_attrs} <- coerce_function_attrs(raw_attrs),
+         :ok <- validate_sql_has_parameterization(function_attrs) do
       case Consumers.find_function(account_id, name: name) do
         {:ok, function} ->
           update_function(account_id, function.id, function_attrs)
@@ -1122,6 +1123,26 @@ defmodule Sequin.YamlLoader do
 
     {:ok, nested_attrs}
   end
+
+  defp validate_sql_has_parameterization(%{"function" => %{"type" => "enrichment", "code" => code}}) do
+    if String.contains?(code, "$1") do
+      :ok
+    else
+      msg = """
+      Enrichment functions must use parameterization.
+
+      Please use the following $1 syntax:
+
+        SELECT id, enrichment FROM table WHERE id = ANY($1)
+
+      ⚠️ If your code DOES have parameterization ($1) and you are seeing this error, you may have to upgrade your Sequin CLI.
+      """
+
+      {:error, Error.bad_request(message: msg)}
+    end
+  end
+
+  defp validate_sql_has_parameterization(_), do: :ok
 
   # Helper function to coerce "function" type to "transform" for backwards compatibility
   defp coerce_type_to_transform("function"), do: "transform"

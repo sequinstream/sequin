@@ -125,5 +125,112 @@ defmodule SequinWeb.SinkConsumersLive.ShowTest do
 
       assert backfill.initial_min_cursor == %{1 => "1"}
     end
+
+    test "runs a backfill with custom max timeout", %{conn: conn, consumer: consumer, table: table} do
+      {:ok, view, _html} = live(conn, ~p"/sinks/#{consumer.type}/#{consumer.id}/backfills")
+
+      rendered =
+        render_hook(view, "run-backfill", %{
+          "selectedTables" => [
+            %{
+              "oid" => table.oid,
+              "type" => "full"
+            }
+          ],
+          "maxTimeoutMs" => 45_000
+        })
+
+      assert rendered =~ "Backfills"
+
+      [backfill] = Consumers.list_backfills_for_sink_consumer(consumer.id)
+      assert backfill.max_timeout_ms == 45_000
+    end
+
+    test "pauses an active backfill", %{conn: conn, consumer: consumer, table: table} do
+      # Create an active backfill
+      backfill =
+        ConsumersFactory.insert_active_backfill!(
+          account_id: consumer.account_id,
+          sink_consumer_id: consumer.id,
+          table_oid: table.oid
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/sinks/#{consumer.type}/#{consumer.id}/backfills")
+
+      # Pause the backfill
+      rendered = render_hook(view, "pause_backfill", %{"backfill_id" => backfill.id})
+
+      # Check that the event was handled successfully
+      assert rendered =~ "Backfills"
+
+      # Verify the backfill state was updated
+      updated_backfill = Consumers.get_backfill!(backfill.id)
+      assert updated_backfill.state == :paused
+    end
+
+    test "resumes a paused backfill", %{conn: conn, consumer: consumer, table: table} do
+      # Create a paused backfill
+      backfill =
+        ConsumersFactory.insert_backfill!(
+          account_id: consumer.account_id,
+          sink_consumer_id: consumer.id,
+          table_oid: table.oid,
+          state: :paused
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/sinks/#{consumer.type}/#{consumer.id}/backfills")
+
+      # Resume the backfill
+      rendered = render_hook(view, "resume_backfill", %{"backfill_id" => backfill.id})
+
+      # Check that the event was handled successfully
+      assert rendered =~ "Backfills"
+
+      # Verify the backfill state was updated
+      updated_backfill = Consumers.get_backfill!(backfill.id)
+      assert updated_backfill.state == :active
+    end
+
+    test "cancels an active backfill", %{conn: conn, consumer: consumer, table: table} do
+      # Create an active backfill
+      backfill =
+        ConsumersFactory.insert_active_backfill!(
+          account_id: consumer.account_id,
+          sink_consumer_id: consumer.id,
+          table_oid: table.oid
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/sinks/#{consumer.type}/#{consumer.id}/backfills")
+
+      # Cancel the backfill
+      rendered = render_hook(view, "cancel_backfill", %{"backfill_id" => backfill.id})
+
+      # Check that the event was handled successfully
+      assert rendered =~ "Backfills"
+
+      # Verify the backfill state was updated
+      updated_backfill = Consumers.get_backfill!(backfill.id)
+      assert updated_backfill.state == :cancelled
+    end
+
+    test "prevents pause/resume of backfill from another consumer", %{conn: conn, consumer: consumer} do
+      # Create a backfill for a different consumer
+      other_consumer = ConsumersFactory.insert_sink_consumer!(account_id: consumer.account_id)
+
+      backfill =
+        ConsumersFactory.insert_active_backfill!(
+          account_id: consumer.account_id,
+          sink_consumer_id: other_consumer.id
+        )
+
+      {:ok, view, _html} = live(conn, ~p"/sinks/#{consumer.type}/#{consumer.id}/backfills")
+
+      # Try to pause the backfill from another consumer
+      render_hook(view, "pause_backfill", %{"backfill_id" => backfill.id})
+
+      # Verify the backfill state was NOT updated
+      unchanged_backfill = Consumers.get_backfill!(backfill.id)
+      assert unchanged_backfill.state == :active
+    end
   end
 end

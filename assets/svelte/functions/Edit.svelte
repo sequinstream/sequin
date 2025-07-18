@@ -543,6 +543,7 @@
     transform: "https://sequinstream.com/docs/reference/transforms",
     filter: "https://sequinstream.com/docs/reference/filters",
     routing: "https://sequinstream.com/docs/reference/routing",
+    enrichment: "https://sequinstream.com/docs/reference/enrichment",
   };
 
   $: {
@@ -1511,21 +1512,31 @@ Please help me create or modify the Elixir function transform to achieve the des
                       >
                         <span>SQL Parameters</span>
                       </div>
-                      <pre>
-{#each selectedMessage["sql_parameters"] as [index, value]}${index}: {value}
-                        {/each}</pre>
+
+                      <table class="min-w-64 text-left">
+                        <thead>
+                          <tr>
+                            <th class="font-semibold pr-4">Column</th>
+                            <th class="font-semibold pr-4">Parameter</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {#each selectedMessage["sql_parameters"] as [index, value, name]}
+                            <tr>
+                              <td class="pr-4">{name}</td>
+                              <td class="font-mono">${index}: {value}</td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
                     </div>
 
-                    <div
-                      class="text-sm bg-slate-50 dark:bg-slate-800/50 p-3 rounded-md overflow-auto font-mono text-slate-700 dark:text-slate-300 select-text space-y-4 mb-3"
-                    >
-                      <div
-                        class="font-semibold mb-1 flex w-full justify-between items-center"
-                      >
-                        <span>record</span>
-                      </div>
-                      <pre>{selectedMessage.record}</pre>
-                    </div>
+                    <EditableArgument
+                      field="record"
+                      bind:selectedMessage
+                      bind:form
+                      bind:formErrors
+                    />
                   </div>
                 {/if}
               </div>

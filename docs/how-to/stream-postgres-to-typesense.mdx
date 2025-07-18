@@ -74,9 +74,9 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Typesense Sink".
   </Step>
 
   <Step title="Enrichment">
-    If your sink includes **a single table**, you can optionally enrich your documents with additional data from your database using an [enrichment function](/reference/enrichments). This can add helpful metadata and context to your documents to increase the relevance of your search results.
+    If your sink includes **a single table**, you can optionally enrich your documents with additional data from your database using an [enrichment function](/reference/enrichment). This can add helpful metadata and context to your documents to increase the relevance of your search results.
 
-    For example, if you want to enrich your `products` collection with the `category` field from your `categories` table, you can add a [function enrichment](/reference/enrichments#function-enrichment) that returns the `category` field for each document:
+    For example, if you want to enrich your `products` collection with the `category` field from your `categories` table, you can add a function enrichment that returns the `category` field for each document:
 
     ```sql
     SELECT

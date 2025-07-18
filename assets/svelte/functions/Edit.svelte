@@ -757,7 +757,11 @@ Please help me create or modify the Elixir function transform to achieve the des
           <h2 class="text-lg font-semibold tracking-tight">
             Function Configuration
           </h2>
-          <a href={functionDocsUrl} target="_blank">
+          <a
+            href={functionDocsUrl ||
+              "https://sequinstream.com/docs/reference/transforms"}
+            target="_blank"
+          >
             <Button variant="outline" size="sm">
               <BookText class="h-3 w-3 mr-1" />
               Docs

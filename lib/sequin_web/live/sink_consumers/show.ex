@@ -1224,6 +1224,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_message(consumer, message) do
     state = get_message_state(consumer, message)
+    routing_info = maybe_routing_info(consumer, message)
 
     case message do
       %ConsumerRecord{} = message ->
@@ -1247,7 +1248,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           table_schema: message.data.metadata.table_schema,
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
-          functioned_message: maybe_function_message(consumer, message)
+          functioned_message: maybe_function_message(consumer, message),
+          routing_info: routing_info
         }
 
       %ConsumerEvent{} = message ->
@@ -1271,7 +1273,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           table_schema: message.data.metadata.table_schema,
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
-          functioned_message: maybe_function_message(consumer, message)
+          functioned_message: maybe_function_message(consumer, message),
+          routing_info: routing_info
         }
 
       %AcknowledgedMessage{} = message ->
@@ -1295,7 +1298,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           table_name: message.table_name,
           table_schema: message.table_schema,
           table_oid: message.table_oid,
-          trace_id: message.trace_id
+          trace_id: message.trace_id,
+          routing_info: routing_info
         }
     end
   end
@@ -1308,6 +1312,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   rescue
     error ->
       "Error functioning message: #{Exception.message(error)}"
+  end
+
+  defp maybe_routing_info(_consumer, %AcknowledgedMessage{}), do: nil
+
+  defp maybe_routing_info(consumer, message) do
+    routing_info = Sequin.Runtime.Routing.route_message(consumer, message)
+    Map.from_struct(routing_info)
+  rescue
+    error ->
+      %{error: "Error calculating routing: #{Exception.message(error)}"}
   end
 
   defp get_message_state(%{type: :sequin_stream}, %AcknowledgedMessage{}), do: "acknowledged"

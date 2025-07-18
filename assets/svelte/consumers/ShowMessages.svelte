@@ -14,6 +14,7 @@
   import * as Popover from "$lib/components/ui/popover";
   import { toast } from "svelte-sonner";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
+  import { routedSinkDocs } from "./dynamicRoutingDocs";
 
   // Receive necessary props
   export let messages: any[];
@@ -341,51 +342,67 @@
       return "Error";
     }
 
-    // Format based on sink type
     const consumerType = consumer.type;
 
-    switch (consumerType) {
-      case "http_push":
-        const method = routingInfo.method || "POST";
-        const path = routingInfo.endpoint_path || "/";
-        return `${method} ${path}`;
-      case "kafka":
-        return routingInfo.topic || "N/A";
-      case "redis_string":
-        return routingInfo.key || "N/A";
-      case "redis_stream":
-        return routingInfo.stream_key || "N/A";
-      case "nats":
-        return routingInfo.subject || "N/A";
-      case "gcp_pubsub":
-        return routingInfo.topic_id || "N/A";
-      case "azure_event_hub":
-        return routingInfo.partition_key || "N/A";
-      case "sns":
-        return routingInfo.topic_arn || "N/A";
-      case "kinesis":
-        return routingInfo.stream_arn || "N/A";
-      case "typesense":
-        return routingInfo.collection_name || "N/A";
-      case "meilisearch":
-        return routingInfo.index_name || "N/A";
-      case "elasticsearch":
-        return routingInfo.index_name || "N/A";
-      case "s2":
-        const basin = routingInfo.basin || "N/A";
-        const stream = routingInfo.stream || "N/A";
-        return `${basin}/${stream}`;
-      case "rabbitmq":
-        const exchange = routingInfo.exchange || "N/A";
-        const routingKey = routingInfo.routing_key || "N/A";
-        return `${exchange}/${routingKey}`;
-      case "sqs":
-        return routingInfo.queue_url || "N/A";
-      case "sequin_stream":
-        return "Sequin Stream";
-      default:
-        return "N/A";
+    // Handle sequin_stream as a special case since it's not in routedSinkDocs
+    if (consumerType === "sequin_stream") {
+      return "Sequin Stream";
     }
+
+    // Use routedSinkDocs to get the primary field for display
+    const sinkDocs = routedSinkDocs[consumerType];
+    if (!sinkDocs) {
+      return "N/A";
+    }
+
+    // Special handling for sinks that benefit from showing multiple fields
+    if (consumerType === "http_push") {
+      const method = routingInfo.method || "POST";
+      const path = routingInfo.endpoint_path || "/";
+      return `${method} ${path}`;
+    }
+
+    if (consumerType === "rabbitmq") {
+      const exchange = routingInfo.exchange || "N/A";
+      const routingKey = routingInfo.routing_key || "N/A";
+      return `${exchange}/${routingKey}`;
+    }
+
+    // For other sinks, find the first field that has a value in routingInfo
+    const fieldName = Object.keys(sinkDocs.fields).find(
+      (field) =>
+        routingInfo[field] !== undefined && routingInfo[field] !== null,
+    );
+
+    if (fieldName) {
+      return routingInfo[fieldName];
+    }
+
+    // Fallback: try to find any field with a value
+    const anyField = Object.keys(routingInfo).find(
+      (field) =>
+        routingInfo[field] !== undefined && routingInfo[field] !== null,
+    );
+
+    return anyField ? routingInfo[anyField] : "N/A";
+  }
+
+  function renderRoutingField(
+    consumerType: string,
+    fieldName: string,
+    fieldValue: any,
+  ): { label: string; value: string; description: string } {
+    const sinkDocs = routedSinkDocs[consumerType];
+    const fieldDoc = sinkDocs?.fields[fieldName];
+
+    const label =
+      fieldDoc?.label ||
+      fieldName.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+
+    const description = fieldDoc?.description || "";
+    const value = fieldValue || "N/A";
+
+    return { label, value, description };
   }
 </script>
 
@@ -687,24 +704,6 @@
               <span class="font-medium">Routing</span>
               {#if !isMessageDelivered}
                 <div class="flex items-center gap-2">
-                  <Popover.Root>
-                    <Popover.Trigger asChild let:builder>
-                      <Button builders={[builder]} variant="ghost" size="sm">
-                        <Info class="h-4 w-4" />
-                      </Button>
-                    </Popover.Trigger>
-                    <Popover.Content class="w-80">
-                      <div class="p-4 space-y-2">
-                        <h4 class="font-medium">About Routing</h4>
-                        <p class="text-sm text-gray-600">
-                          This shows the outcome of the routing function applied
-                          to this message. The routing determines where this
-                          message will be sent based on the sink type and
-                          configuration.
-                        </p>
-                      </div>
-                    </Popover.Content>
-                  </Popover.Root>
                   <div class:rotate-180={routingOpen}>
                     <ChevronDown
                       class="h-4 w-4 transform transition-transform"
@@ -729,253 +728,33 @@
                   </div>
                 {:else}
                   <div class="space-y-2">
-                    {#if consumer.type === "http_push"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Method:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.method || "POST"}</span
-                        >
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Endpoint:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.endpoint_path ||
-                            "/"}</span
-                        >
-                      </div>
-                      {#if selectedMessage.routing_info.headers && Object.keys(selectedMessage.routing_info.headers).length > 0}
-                        <div class="flex justify-between items-center">
-                          <span class="text-sm font-medium text-gray-500"
-                            >Headers:</span
-                          >
-                          <span class="text-sm text-gray-900"
-                            >{Object.keys(selectedMessage.routing_info.headers)
-                              .length} header(s)</span
-                          >
-                        </div>
-                      {/if}
-                    {:else if consumer.type === "kafka"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Topic:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.topic || "N/A"}</span
-                        >
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Message Key:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.message_key ||
-                            "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "redis_string"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Key:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.key || "N/A"}</span
-                        >
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Action:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.action || "N/A"}</span
-                        >
-                      </div>
-                      {#if selectedMessage.routing_info.expire_ms}
-                        <div class="flex justify-between items-center">
-                          <span class="text-sm font-medium text-gray-500"
-                            >Expire (ms):</span
-                          >
-                          <span class="text-sm text-gray-900"
-                            >{selectedMessage.routing_info.expire_ms}</span
-                          >
-                        </div>
-                      {/if}
-                    {:else if consumer.type === "redis_stream"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Stream Key:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.stream_key ||
-                            "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "nats"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Subject:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.subject || "N/A"}</span
-                        >
-                      </div>
-                      {#if selectedMessage.routing_info.headers && Object.keys(selectedMessage.routing_info.headers).length > 0}
-                        <div class="flex justify-between items-center">
-                          <span class="text-sm font-medium text-gray-500"
-                            >Headers:</span
-                          >
-                          <span class="text-sm text-gray-900"
-                            >{Object.keys(selectedMessage.routing_info.headers)
-                              .length} header(s)</span
-                          >
-                        </div>
-                      {/if}
-                    {:else if consumer.type === "gcp_pubsub"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Topic ID:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.topic_id ||
-                            "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "azure_event_hub"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Partition Key:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.partition_key ||
-                            "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "sns"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Topic ARN:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.topic_arn ||
-                            "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "kinesis"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Stream ARN:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.stream_arn ||
-                            "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "typesense"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Collection:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.collection_name ||
-                            "N/A"}</span
-                        >
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Action:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.action || "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "meilisearch"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Index:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.index_name ||
-                            "N/A"}</span
-                        >
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Action:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.action || "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "elasticsearch"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Index:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.index_name ||
-                            "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "s2"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Basin:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.basin || "N/A"}</span
-                        >
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Stream:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.stream || "N/A"}</span
-                        >
-                      </div>
-                    {:else if consumer.type === "rabbitmq"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Exchange:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.exchange ||
-                            "N/A"}</span
-                        >
-                      </div>
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Routing Key:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.routing_key ||
-                            "N/A"}</span
-                        >
-                      </div>
-                      {#if selectedMessage.routing_info.headers && Object.keys(selectedMessage.routing_info.headers).length > 0}
-                        <div class="flex justify-between items-center">
-                          <span class="text-sm font-medium text-gray-500"
-                            >Headers:</span
-                          >
-                          <span class="text-sm text-gray-900"
-                            >{Object.keys(selectedMessage.routing_info.headers)
-                              .length} header(s)</span
-                          >
-                        </div>
-                      {/if}
-                    {:else if consumer.type === "sqs"}
-                      <div class="flex justify-between items-center">
-                        <span class="text-sm font-medium text-gray-500"
-                          >Queue URL:</span
-                        >
-                        <span class="text-sm text-gray-900"
-                          >{selectedMessage.routing_info.queue_url ||
-                            "N/A"}</span
-                        >
-                      </div>
+                    {#if routedSinkDocs[consumer.type]}
+                      {#each Object.entries(routedSinkDocs[consumer.type].fields) as [fieldName, fieldDoc]}
+                        {#if selectedMessage.routing_info[fieldName] !== undefined && selectedMessage.routing_info[fieldName] !== null}
+                          {@const field = renderRoutingField(
+                            consumer.type,
+                            fieldName,
+                            selectedMessage.routing_info[fieldName],
+                          )}
+                          <div class="flex justify-between items-center">
+                            <span
+                              class="text-sm font-medium text-gray-500"
+                              title={field.description}
+                            >
+                              {field.label}:
+                            </span>
+                            <span class="text-sm text-gray-900">
+                              {#if fieldName === "headers" && typeof selectedMessage.routing_info[fieldName] === "object"}
+                                {Object.keys(
+                                  selectedMessage.routing_info[fieldName],
+                                ).length} header(s)
+                              {:else}
+                                {field.value}
+                              {/if}
+                            </span>
+                          </div>
+                        {/if}
+                      {/each}
                     {:else if consumer.type === "sequin_stream"}
                       <div class="flex justify-between items-center">
                         <span class="text-sm font-medium text-gray-500"

@@ -117,6 +117,14 @@ The enrichment results are set into the message's `metadata.enrichment` field. T
 
 Additionally, the `metadata.enrichment` field is available in other functions in your sink pipeline including [filters](/reference/filters), [transforms](/reference/transforms), and [routing functions](/reference/routing).
 
+## Limitations
+
+When an enrichment function runs, it queries the current state of your database, not the state at the time the message was created. This means the enriched data may have changed between when the original change occurred and when the enrichment executes.
+
+This can lead to race conditions and therefore enrichment should only be used in situations where this race condition is acceptable. For instance in materialization use cases such as search indexing, this is typically acceptable because you want the search index to have the latest data.
+
+In use cases where the point-in-time data is critical we recommend that you enrich your messages in Postgres with either [transaction annotations](/reference/annotations) or event tables.
+
 ## Testing enrichment
 
 When creating or editing an enrichment function, Sequin will automatically capture up to 10 recent events from your database. You can see how your enrichment affects these events in real-time.
@@ -139,19 +147,56 @@ JOIN customers ON orders.customer_id = customers.id
 WHERE orders.id = ANY($1)
 ```
 
-### Calculating aggregates
+### Enriching multiple rows
 
-Add computed fields to your messages:
+Enrichment functions can only return a single row per message. If you want enrichment data from multiple rows, you can use Postgres aggregation functions.
 
 ```sql
+-- Sequin enrichment function to load top 3 comments for posts
+-- This enriches post messages with their most recent comments
+
 SELECT
-  users.id,
-  COUNT(orders.id) as total_orders,
-  SUM(orders.amount) as lifetime_value
-FROM users
-LEFT JOIN orders ON orders.user_id = users.id
-WHERE users.id = ANY($1)
-GROUP BY users.id
+    p.id,  -- Required: primary key from source table (posts)
+
+    -- Aggregate top 3 comments as JSON array
+    COALESCE(
+        JSON_AGG(
+            jsonb_build_object(
+                'id', c.id,
+                'author_name', c.author_name,
+                'content', c.content,
+                'created_at', c.created_at,
+                'updated_at', c.updated_at
+            )
+            ORDER BY c.created_at DESC  -- Most recent comments first
+        ) FILTER (WHERE c.id IS NOT NULL),
+        '[]'::json
+    ) AS top_comments,
+
+    -- Additional useful aggregates
+    COUNT(c.id) AS total_comment_count,
+    MAX(c.created_at) AS latest_comment_at,
+
+    -- Array of comment author names for easy access
+    ARRAY_AGG(DISTINCT c.author_name) FILTER (WHERE c.author_name IS NOT NULL) AS comment_authors
+
+FROM posts.posts p
+LEFT JOIN (
+    -- Subquery to get only top 3 comments per post
+    SELECT
+        c1.id,
+        c1.post_id,
+        c1.author_name,
+        c1.content,
+        c1.created_at,
+        c1.updated_at,
+        ROW_NUMBER() OVER (PARTITION BY c1.post_id ORDER BY c1.created_at DESC) as rn
+    FROM posts.comments c1
+) c ON p.id = c.post_id AND c.rn <= 3  -- Only top 3 comments
+WHERE
+    p.id = ANY($1)  -- Required: parameterization for batched queries
+GROUP BY
+    p.id;
 ```
 
 ### Building a search index

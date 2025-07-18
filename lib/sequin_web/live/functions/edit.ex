@@ -199,13 +199,13 @@ defmodule SequinWeb.FunctionsLive.Edit do
   @initial_enrichment """
   SELECT
     u.id, -- you must select all primary keys for Sequin to associate the enrichment with the message
-    a.name as account_name -- example of an enrichment
+    a.name as account_name -- example of a column added for enrichment
   FROM
     users u
   JOIN
     accounts a on u.account_id = a.id
   WHERE
-    -- this syntax is required for Sequin to perform queries / batching
+    -- the `ANY($1)` syntax is required for Sequin to perform batched queries
     u.id = ANY($1)
   """
 

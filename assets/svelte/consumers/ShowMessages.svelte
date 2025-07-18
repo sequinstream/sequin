@@ -411,7 +411,7 @@
     const value = fieldValue || "N/A";
 
     return { label, value, description };
-      
+
   function handleDiscardMessages() {
     isDiscardPopoverOpen = false;
     isDiscarding = true;

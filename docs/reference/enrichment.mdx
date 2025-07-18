@@ -37,13 +37,13 @@ Here's an example that enriches user messages with their account information:
 ```sql
 SELECT
   -- select all primary keys of the source table (see below)
-  u.id, 
+  u.id,
   -- enrichment fields
   a.name as account_name,
   a.subscription_status as account_subscription_status
 FROM
   -- source table is `users`
-  users u 
+  users u
 JOIN
   -- enrichment joins to `accounts` table
   accounts a on u.account_id = a.id
@@ -78,7 +78,7 @@ Enrichment functions must use the `$1` syntax for parameterization. This allows 
 ```sql highlight={9-10}
 SELECT
   u.id, -- you must select all primary keys of the source table for Sequin to associate the enrichment with the message
-  a.name as account_name -- example of an enrichment field
+  a.name as account_name -- example of a column added for enrichment
 FROM
   users u -- this enrichment is triggered on `users` table change messages
 JOIN
@@ -102,7 +102,7 @@ JOIN accounts a ON u.account_id = a.id
 
 -- WHERE clause for composite primary keys
 WHERE (u.account_id, u.id) = ANY(
-  SELECT (r.account_id, r.id) 
+  SELECT (r.account_id, r.id)
   FROM unnest($1, $2) AS r(account_id, id)
 );
 ```
@@ -204,7 +204,7 @@ GROUP BY
 Enrich messages with data from your database to build a search index. This example shows how to enrich messages with materials and colors for faceting:
 
 ```sql
-SELECT 
+SELECT
     p.id,
     p.name,
     p.description,
@@ -220,7 +220,7 @@ SELECT
                 'name', m.name,
                 'type', m.type
             )
-        ) FILTER (WHERE m.id IS NOT NULL), 
+        ) FILTER (WHERE m.id IS NOT NULL),
         '[]'::json
     ) AS materials,
     -- Aggregate colors as JSON array
@@ -231,13 +231,13 @@ SELECT
                 'name', c.name,
                 'hex_code', c.hex_code
             )
-        ) FILTER (WHERE c.id IS NOT NULL), 
+        ) FILTER (WHERE c.id IS NOT NULL),
         '[]'::json
     ) AS colors,
     -- Create searchable text fields
-    CONCAT_WS(' ', 
-        p.name, 
-        p.description, 
+    CONCAT_WS(' ',
+        p.name,
+        p.description,
         STRING_AGG(DISTINCT m.name, ' '),
         STRING_AGG(DISTINCT c.name, ' ')
     ) AS search_text,
@@ -279,4 +279,4 @@ ORDER BY p.updated_at DESC;
   <Card title="Sinks" icon="list-check" href="/reference/sinks">
     Learn how to use sinks to send messages to your destination.
   </Card>
-</CardGroup> 
+</CardGroup>

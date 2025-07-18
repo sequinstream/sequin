@@ -44,17 +44,11 @@ From the [Typesense docs](https://typesense.org/docs/guide/organizing-collection
 
 > In general, we recommend that you create one collection per type of document / record you have.
 
-Similarly, Sequin recommends that you create one sink per Postgres table. That sink will be configured to stream changes from a single Postgres table to a single Typesense collection. This ensures that all the documents in the same collection have the same structure.
+Similarly, Sequin recommends that you sink one Postgres table to one Typesense collection using a [routing function](/reference/routing).
 
 When significantly scaling Typesense, you may want to [shard collections](https://typesense.org/docs/guide/organizing-collections.html#sharding-collections). For instance, you may shard your `users` collection by region into `users_us`, `users_eu`, `users_asia`, etc.
 
-You can achieve this using Sequin's [filters](/reference/filters). For example, if you want to shard your `users` collection by region, you can create a sink per region and use a filter to route documents to the correct collection.
-
-<Note>
-  Sequin will soon launch [Routing functions](/reference/transforms) which will enable routing rows from one table to multiple collections within the same sink.
-</Note>
-
-## Create Typesense sink
+## Create a Typesense sink
 
 Navigate to the "Sinks" tab, click "Create Sink", and select "Typesense Sink".
 
@@ -62,26 +56,46 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Typesense Sink".
 
 <Steps>
   <Step title="Select source table or schema">
-    Under "Source", select the table or schema you want to stream data from.
+    Under "Source", select the table(s) or schema(s) you want to stream data from.
   </Step>
 
   <Step title="Specify filters">
-    Firstly, you can indicate whether you want to receive `insert`, `update`, and/or `delete` actions. We recommend selecting all three, which will ensure that your Typesense collection is kept in sync with your Postgres table.
+    Indicate whether you want to receive `insert`, `update`, and/or `delete` actions. We recommend selecting all three, which will ensure that your Typesense collection is kept in sync with your Postgres table.
 
     You can for instance unselect `deletes` if you want to exclude deleted rows from your Typesense collection. This means that records deleted from Postgres will not be removed from your Typesense collection and will still be searchable.
 
-    You can also specify [filters](/reference/filters) to narrow down the documents you want to index. For example, if you only want to index `products` that are currently `in_stock`, you can add a filter on `in_stock = true`. This is also useful for sharding or multi-tenancy.
+    You can also specify [filter functions](/reference/filters) to narrow down the documents you want to index. For example, if you only want to index `products` that are currently `in_stock`, you can add a filter on `in_stock = true`. This is also useful for sharding or multi-tenancy.
   </Step>
 
-  <Step title="Specify backfill">
-    You can optionally indicate if you want your Typesense collection to receive a [backfill](/reference/backfills) of all or a portion of the table's existing data. Backfills are useful if you want Sequin to populate your Typesense collection with existing data from your Postgres table.
-    If you choose not to backfill on creation, you can backfill at any time.
+  <Step title="Specify message grouping">
+    Under "Message grouping", we strongly recommend enabling message grouping to ensure that changes are processed in the correct order.
+
+    While your Typesense collection is processing a message, if a new change or version related to the same row is captured, Sequin will hold the message back until the first message is processed. This is almost always the desired behavior.
+  </Step>
+
+  <Step title="Enrichment">
+    If your sink includes **a single table**, you can optionally enrich your documents with additional data from your database using an [enrichment function](/reference/enrichment). This can add helpful metadata and context to your documents to increase the relevance of your search results.
+
+    For example, if you want to enrich your `products` collection with the `category` field from your `categories` table, you can add a function enrichment that returns the `category` field for each document:
+
+    ```sql
+    SELECT
+      p.id, -- you must select all primary keys for Sequin to associate the enrichment with the message
+      pc.name as category_name,
+      pc.additional_info-- example of an enrichment
+    FROM
+      product p
+    JOIN
+      product_category pc on p.category_id = pc.id
+    WHERE
+      p.id = ANY($1)
+    ```
   </Step>
 
   <Step title="Transforms">
-    Typesense documents expect a specific schema, including:
-    1. An `id` field, which must be a string and is used to uniquely identify the document.
-    2. Additional fields that are searchable.
+    Typesense collections expect documents to have a specific schema, including:
+    1. An `id` field, which must be a string.
+    2. The additional fields that are searchable.
 
     You can map your Postgres table columns to Typesense fields using a [functional transform](/reference/transforms#function-transform).
 
@@ -116,13 +130,12 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Typesense Sink".
       Map.put(record, "id", record["product_id"])
     end
     ```
-
   </Step>
 
-  <Step title="Specify message grouping">
-    Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are processed in order.
+  <Step title="Specify backfill">
+    You can optionally indicate if you want to seed your Typesense collection with a [backfill](/reference/backfills) of all or a portion of the table's existing data.
 
-    While your Typesense collection is processing a message, if a new change or version related to the same row is captured, Sequin will hold the message back until the first message is processed. This is almost always the desired behavior.
+    Backfills are useful if you want Sequin to populate your Typesense collection with existing data from your Postgres table. If you choose not to backfill on creation, you can backfill at any time.
   </Step>
 
 </Steps>
@@ -130,16 +143,27 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Typesense Sink".
 ### Configure delivery
 
 <Steps>
-  <Step title="Specify batch size">
-    The right value for "Batch size" depends on your data and your requirements.
 
-    Typesense is optimized to bulk import of documents. This is balanced with the memory requirements for Sequin to accumulate a batch of documents.
+  <Step title="Typesense configuration">
+    Under "Typesense configuration", you'll enter the URL for your Typesense cluster and provide an API key.
 
-    A good starting point is 100-1000 documents per batch, and Typesense supports up to 10,000 documents per batch.
+    Additionally, under "Advanced Typesense settings", you can specify a request timeout (in seconds) for Typesense requests. You may want to increase the timeout if you have a slow network connection or are indexing a large number of documents per batch.
   </Step>
 
-  <Step title="Select the Typesense collection you created">
-    Under "Typesense Collection", select the collection you want to stream data rows from this table to.
+  <Step title="Routing">
+    In the "Routing" section, you can specify how Sequin should route documents to your Typesense collection.
+
+    If you are sinking **a single table**, you don't need to apply any routing and simply enter the collection Sequin should deliver documents to.
+
+    If you are sinking **multiple tables**, you can use a [routing function](http://localhost:3000/reference/routing#typesense-sink) to route documents to the correct collection.
+
+    Additionally, you can customize actions in Typesense routing functions. For example, you can specify that a soft delete in Postgres should be reflected as a hard delete in Typesense.
+  </Step>
+
+  <Step title="Advanced configuration">
+    In the "Sink settings" section, you can specify advanced configurations like batch size and timestamp format.
+
+    In most cases, you can leave the default values - which for Typesense is optimized to the default batch size of [40 documents](https://typesense.org/docs/27.0/api/documents.html#index-multiple-documents). However, if you've configured your Typesense cluster to process more documents per batch, you can increase the batch size here.
   </Step>
 
   <Step title="Create the sink">

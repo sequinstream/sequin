@@ -130,4 +130,119 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
       assert error.message == "[meilisearch]: Index verification failed"
     end
   end
+
+  describe "update_documents_with_function/5" do
+    test "successfully sends function update request" do
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "POST"
+        assert conn.request_path == "/indexes/test/documents/edit"
+
+        {:ok, body, _} = Plug.Conn.read_body(conn)
+        # Handle compressed body
+        body =
+          try do
+            :zlib.gunzip(body)
+          rescue
+            _ -> body
+          end
+
+        body = Jason.decode!(body)
+
+        assert body["filter"] == "id = 5"
+        assert body["function"] == "doc.content[1] = context.new_block"
+        assert body["context"]["new_block"] == "block2 - v2"
+
+        Req.Test.json(conn, %{"taskUid" => 123})
+      end)
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/tasks/123"
+
+        Req.Test.json(conn, %{"status" => "succeeded"})
+      end)
+
+      assert {:ok} =
+               Client.update_documents_with_function(
+                 @sink,
+                 "test",
+                 "id = 5",
+                 "doc.content[1] = context.new_block",
+                 %{"new_block" => "block2 - v2"}
+               )
+    end
+
+    test "handles empty context by omitting it from request" do
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "POST"
+        assert conn.request_path == "/indexes/test/documents/edit"
+
+        {:ok, body, _} = Plug.Conn.read_body(conn)
+        # Handle compressed body
+        body =
+          try do
+            :zlib.gunzip(body)
+          rescue
+            _ -> body
+          end
+
+        body = Jason.decode!(body)
+
+        assert body["filter"] == "id = 1"
+        assert body["function"] == "doc.field = 'value'"
+        refute Map.has_key?(body, "context")
+
+        Req.Test.json(conn, %{"taskUid" => 456})
+      end)
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/tasks/456"
+
+        Req.Test.json(conn, %{"status" => "succeeded"})
+      end)
+
+      assert {:ok} =
+               Client.update_documents_with_function(
+                 @sink,
+                 "test",
+                 "id = 1",
+                 "doc.field = 'value'"
+               )
+    end
+
+    test "returns error when function update fails" do
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "POST"
+        assert conn.request_path == "/indexes/test/documents/edit"
+
+        Req.Test.json(conn, %{"taskUid" => 789})
+      end)
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/tasks/789"
+
+        Req.Test.json(conn, %{
+          "status" => "failed",
+          "error" => %{
+            "message" => "Invalid filter expression",
+            "code" => "invalid_search_filter"
+          }
+        })
+      end)
+
+      assert {:error, error} =
+               Client.update_documents_with_function(
+                 @sink,
+                 "test",
+                 "invalid filter",
+                 "doc.field = 'value'",
+                 %{}
+               )
+
+      assert error.service == :meilisearch
+      assert error.message == "[meilisearch]: Invalid filter expression"
+    end
+  end
 end

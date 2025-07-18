@@ -13,6 +13,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.TransformFunction
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Functions.MiniElixir
   alias Sequin.Functions.TestMessages
@@ -205,7 +206,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
   JOIN
     accounts a on u.account_id = a.id
   WHERE
-    -- the `ANY($1)` syntax is required for Sequin to perform batched queries
+    -- `$1` is bound to the primary keys in changed messages
+    -- the `ANY($1)` is required for Sequin to perform batched queries
     u.id = ANY($1)
   """
 
@@ -279,7 +281,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
         test_messages: [],
         show_errors?: false,
         databases: [],
-        selected_database_id: nil,
+        selected_database_id: -1,
         selected_table_oid: nil,
         synthetic_test_message: Consumers.synthetic_message(),
         initial_code: @initial_code_map,
@@ -603,7 +605,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
     if is_struct(function) and function_errors == nil do
       do_encode_test_messages(test_messages, function, socket)
     else
-      Enum.map(test_messages, &format_test_message/1)
+      Enum.map(test_messages, &format_test_message(selected_database(socket), &1))
     end
   end
 
@@ -633,7 +635,7 @@ defmodule SequinWeb.FunctionsLive.Edit do
 
     Enum.map(test_messages, fn test_message ->
       encoded = encode_one(consumer, test_message)
-      formatted = format_test_message(test_message)
+      formatted = format_test_message(selected_database(socket), test_message)
       Map.merge(formatted, encoded)
     end)
   end
@@ -650,12 +652,23 @@ defmodule SequinWeb.FunctionsLive.Edit do
       %{error: MiniElixir.encode_error(ex), time: nil}
   end
 
-  defp format_test_message(m) do
+  defp format_test_message(database, m) do
+    tables =
+      case database do
+        nil -> [Consumers.synthetic_table()]
+        %PostgresDatabase{tables: tables} -> [Consumers.synthetic_table() | tables]
+      end
+
+    table = Sequin.Enum.find!(tables, &(&1.oid == m.table_oid))
+    primary_key_columns = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.sort_by(& &1.name)
+
     sql_parameters =
-      m.data.metadata.record_pks
-      |> Enum.with_index()
-      |> Enum.map(fn {pk, index} ->
-        [index + 1, inspect([pk], pretty: true)]
+      primary_key_columns
+      |> Enum.sort_by(& &1.name)
+      |> Enum.with_index(1)
+      |> Enum.map(fn {column, index} ->
+        value = Map.fetch!(m.data.record, column.name)
+        [index, inspect([value], pretty: true), column.name]
       end)
 
     %{

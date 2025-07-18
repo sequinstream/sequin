@@ -387,6 +387,30 @@ defmodule Sequin.Runtime.SinkPipeline do
     end
   end
 
+  def batcher(max_messages, max_bytes) do
+    batch_fn = fn
+      %Broadway.Message{data: %{encoded_data_size_bytes: nil}}, _acc ->
+        raise "Must have encoded_data_size_bytes to use byte-based batching"
+
+      %Broadway.Message{}, {1, _} ->
+        {:emit, {max_messages, max_bytes}}
+
+      %Broadway.Message{data: consumer_message}, {msgs_remaining, bytes_remaining} ->
+        incoming_bytes = consumer_message.encoded_data_size_bytes
+
+        # This calculation uses the incoming bytes as a buffer (> incoming_bytes)
+        # This is because Broadway will emit the current message in the batch if we return :emit
+        # What we want is to emit the currently accumulated batch and start the next batch with the current message
+        if bytes_remaining - incoming_bytes > incoming_bytes do
+          {:cont, {msgs_remaining - 1, bytes_remaining - incoming_bytes}}
+        else
+          {:emit, {max_messages, max_bytes}}
+        end
+    end
+
+    {{max_messages, max_bytes}, batch_fn}
+  end
+
   def pipeline_mod_for_consumer(%SinkConsumer{} = consumer) do
     case consumer.type do
       :azure_event_hub -> Sequin.Runtime.AzureEventHubPipeline

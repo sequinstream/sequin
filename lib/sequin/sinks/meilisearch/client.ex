@@ -20,7 +20,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
       req = base_request(sink)
 
       case Req.get(req, url: "/tasks/#{task_id}") do
-        {:ok, %{body: body}} ->
+        {:ok, %{status: status, body: body}} when status in 200..299 ->
           case body do
             %{"status" => status} when status in ["enqueued", "processing"] ->
               timeout = Sequin.Time.exponential_backoff(200, retries, 10_000)
@@ -39,8 +39,18 @@ defmodule Sequin.Sinks.Meilisearch.Client do
                )}
 
             _ ->
-              {:ok}
+              :ok
           end
+
+        {:ok, %{status: status, body: body}} ->
+          message = extract_error_message(body) || "Request failed with status #{status}"
+
+          {:error,
+           Error.service(
+             service: :meilisearch,
+             message: message,
+             details: %{status: status, body: body}
+           )}
 
         {:error, reason} ->
           {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
@@ -64,8 +74,18 @@ defmodule Sequin.Sinks.Meilisearch.Client do
       )
 
     case Req.put(req) do
-      {:ok, %{body: body}} ->
+      {:ok, %{status: status, body: body}} when status in 200..299 ->
         verify_task_by_id(sink, body["taskUid"], 0)
+
+      {:ok, %{status: status, body: body}} ->
+        message = extract_error_message(body) || "Request failed with status #{status}"
+
+        {:error,
+         Error.service(
+           service: :meilisearch,
+           message: message,
+           details: %{status: status, body: body}
+         )}
 
       {:error, %Req.TransportError{} = error} ->
         {:error,
@@ -93,8 +113,64 @@ defmodule Sequin.Sinks.Meilisearch.Client do
       )
 
     case Req.post(req) do
-      {:ok, %{body: body}} ->
+      {:ok, %{status: status, body: body}} when status in 200..299 ->
         verify_task_by_id(sink, body["taskUid"], 0)
+
+      {:ok, %{status: status, body: body}} ->
+        message = extract_error_message(body) || "Request failed with status #{status}"
+
+        {:error,
+         Error.service(
+           service: :meilisearch,
+           message: message,
+           details: %{status: status, body: body}
+         )}
+
+      {:error, %Req.TransportError{} = error} ->
+        {:error,
+         Error.service(
+           service: :meilisearch,
+           message: "Transport error: #{Exception.message(error)}"
+         )}
+
+      {:error, reason} ->
+        {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
+    end
+  end
+
+  @doc """
+  Update documents using a function expression.
+  """
+  def update_documents_with_function(%MeilisearchSink{} = sink, index_name, filter, function, context \\ %{}) do
+    body = %{
+      "filter" => filter,
+      "function" => function
+    }
+
+    body = if map_size(context) > 0, do: Map.put(body, "context", context), else: body
+
+    req =
+      sink
+      |> base_request()
+      |> Req.merge(
+        url: "/indexes/#{index_name}/documents/edit",
+        body: Jason.encode!(body),
+        headers: [{"Content-Type", "application/json"}]
+      )
+
+    case Req.post(req) do
+      {:ok, %{status: status, body: body}} when status in 200..299 ->
+        verify_task_by_id(sink, body["taskUid"], 0)
+
+      {:ok, %{status: status, body: body}} ->
+        message = extract_error_message(body) || "Request failed with status #{status}"
+
+        {:error,
+         Error.service(
+           service: :meilisearch,
+           message: message,
+           details: %{status: status, body: body}
+         )}
 
       {:error, %Req.TransportError{} = error} ->
         {:error,
@@ -134,8 +210,16 @@ defmodule Sequin.Sinks.Meilisearch.Client do
     req = base_request(sink)
 
     case Req.get(req, url: "/health") do
-      {:ok, %{status: status}} when status == 200 ->
+      {:ok, %{status: status}} when status in 200..299 ->
         :ok
+
+      {:ok, %{status: status, body: body}} ->
+        {:error,
+         Error.service(
+           service: :meilisearch,
+           message: "Health check failed with status #{status}",
+           details: %{status: status, body: body}
+         )}
 
       {:error, reason} ->
         {:error,

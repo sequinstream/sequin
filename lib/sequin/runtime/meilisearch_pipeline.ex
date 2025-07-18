@@ -23,42 +23,39 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
         concurrency: concurrency,
         batch_size: consumer.sink.batch_size || 100,
         batch_timeout: 5
-      ],
-      delete: [
-        concurrency: concurrency,
-        batch_size: consumer.sink.batch_size || 100,
-        batch_timeout: 5
       ]
     ]
   end
 
   @impl SinkPipeline
   def handle_message(message, context) do
-    %Routing.Consumers.Meilisearch{action: action, index_name: index_name} =
-      Routing.route_message(context.consumer, message.data)
+    routing_info = Routing.route_message(context.consumer, message.data)
+    %Routing.Consumers.Meilisearch{action: action, index_name: index_name} = routing_info
 
-    batcher =
-      case action do
-        :index -> :default
-        :delete -> :delete
+    action =
+      if is_atom(action) do
+        # Backwards compatibility with existing routing functions with atom actions
+        to_string(action)
+      else
+        action
       end
 
     message =
       message
-      |> Broadway.Message.put_batcher(batcher)
-      |> Broadway.Message.put_batch_key(index_name)
+      |> Broadway.Message.put_batch_key({action, index_name})
+      |> Broadway.Message.update_data(fn data ->
+        Map.put(data, :routing_info, routing_info)
+      end)
 
     {:ok, message, context}
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, batch_info, context) do
+  def handle_batch(:default, messages, %{batch_key: {"index", index_name}}, context) do
     %{
       consumer: %SinkConsumer{sink: sink, transform: transform} = consumer,
       test_pid: test_pid
     } = context
-
-    index_name = batch_info.batch_key
 
     setup_allowances(test_pid)
 
@@ -70,7 +67,7 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
       end)
 
     case Client.import_documents(sink, index_name, records) do
-      {:ok} ->
+      :ok ->
         Trace.info(consumer.id, %Trace.Event{
           message: "Imported documents to \"#{index_name}\" index"
         })
@@ -88,13 +85,11 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:delete, messages, batch_info, context) do
+  def handle_batch(:default, messages, %{batch_key: {"delete", index_name}}, context) do
     %{
       consumer: %SinkConsumer{sink: sink} = consumer,
       test_pid: test_pid
     } = context
-
-    index_name = batch_info.batch_key
 
     setup_allowances(test_pid)
 
@@ -102,7 +97,7 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
       Enum.flat_map(messages, fn %{data: message} -> message.record_pks end)
 
     case Client.delete_documents(sink, index_name, document_ids) do
-      {:ok} ->
+      :ok ->
         Trace.info(consumer.id, %Trace.Event{
           message: "Deleted documents from \"#{index_name}\" index",
           extra: %{document_ids: document_ids}
@@ -118,6 +113,53 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
         })
 
         {:error, error}
+    end
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, %{batch_key: {"function", index_name}}, context) do
+    %{
+      consumer: %SinkConsumer{sink: sink} = consumer,
+      test_pid: test_pid
+    } = context
+
+    setup_allowances(test_pid)
+
+    # Process each message individually
+    results =
+      Enum.map(messages, fn message ->
+        %{routing_info: routing_info} = message.data
+
+        case Client.update_documents_with_function(
+               sink,
+               index_name,
+               routing_info.filter,
+               routing_info.function,
+               routing_info.context || %{}
+             ) do
+          :ok ->
+            Trace.info(consumer.id, %Trace.Event{
+              message: "Applied function update to \"#{index_name}\" index",
+              extra: %{filter: routing_info.filter, function: routing_info.function}
+            })
+
+            :ok
+
+          {:error, error} ->
+            Trace.error(consumer.id, %Trace.Event{
+              message: "Failed to apply function update to \"#{index_name}\" index",
+              error: error,
+              extra: %{filter: routing_info.filter, function: routing_info.function}
+            })
+
+            {:error, error}
+        end
+      end)
+
+    # If any update failed, return the first error
+    case Enum.find(results, &match?({:error, _}, &1)) do
+      {:error, error} -> {:error, error}
+      nil -> {:ok, messages, context}
     end
   end
 

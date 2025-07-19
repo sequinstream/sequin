@@ -746,6 +746,7 @@
         {functions}
         {refreshFunctions}
         bind:functionRefreshState
+        {isSelfHosted}
       />
     {:else if consumer.type === "sequin_stream"}
       <SequinStreamSinkForm errors={errors.consumer} bind:form />

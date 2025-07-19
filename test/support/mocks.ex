@@ -31,6 +31,7 @@ Mox.defmock(Sequin.TestSupport.UUIDMock,
 )
 
 Mox.defmock(Sequin.AwsMock, for: Sequin.Aws)
+Mox.defmock(Sequin.GcpMock, for: Sequin.Gcp)
 
 Mox.defmock(Sequin.Runtime.SlotMessageStoreMock,
   for: Sequin.Runtime.SlotMessageStoreBehaviour

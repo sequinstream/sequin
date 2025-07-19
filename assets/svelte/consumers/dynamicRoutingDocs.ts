@@ -128,7 +128,8 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
   meilisearch: {
     fields: {
       action: {
-        description: "Meilisearch action to perform",
+        description:
+          "Meilisearch action to perform: 'index', 'delete', or 'function'",
         staticValue:
           "'index' for insert, update, and read, 'delete' for delete",
         dynamicDefault:
@@ -139,6 +140,24 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
         staticValue: "<empty>",
         staticFormField: "index_name",
         dynamicDefault: "sequin.<table_schema>.<table_name>",
+      },
+      function: {
+        description:
+          "RHAI Function to apply (required when action is 'function')",
+        staticValue: "<empty>",
+        dynamicDefault: "<empty>",
+      },
+      filter: {
+        description:
+          "Filter expression for function updates (usable when action is 'function')",
+        staticValue: "<empty>",
+        dynamicDefault: "<empty>",
+      },
+      context: {
+        description:
+          "Object for function updates (usable when action is 'function')",
+        staticValue: "<empty>",
+        dynamicDefault: "<empty>",
       },
     },
   },

@@ -109,6 +109,42 @@ defmodule Sequin.Sinks.Meilisearch.Client do
   end
 
   @doc """
+  Update documents using a function expression.
+  """
+  def update_documents_with_function(%MeilisearchSink{} = sink, index_name, filter, function, context \\ %{}) do
+    body = %{
+      "filter" => filter,
+      "function" => function
+    }
+
+    body = if map_size(context) > 0, do: Map.put(body, "context", context), else: body
+
+    req =
+      sink
+      |> base_request()
+      |> Req.merge(
+        url: "/indexes/#{index_name}/documents/edit",
+        body: Jason.encode!(body),
+        headers: [{"Content-Type", "application/json"}]
+      )
+
+    case Req.post(req) do
+      {:ok, %{body: body}} ->
+        verify_task_by_id(sink, body["taskUid"], 0)
+
+      {:error, %Req.TransportError{} = error} ->
+        {:error,
+         Error.service(
+           service: :meilisearch,
+           message: "Transport error: #{Exception.message(error)}"
+         )}
+
+      {:error, reason} ->
+        {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
+    end
+  end
+
+  @doc """
   Get information about an index.
   """
   def get_index(%MeilisearchSink{} = sink, index_name) do

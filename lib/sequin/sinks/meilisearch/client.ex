@@ -63,7 +63,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
         body: jsonl
       )
 
-    case Req.put(req) do
+    case Req.post(req) do
       {:ok, %{body: body}} ->
         verify_task_by_id(sink, body["taskUid"], 0)
 

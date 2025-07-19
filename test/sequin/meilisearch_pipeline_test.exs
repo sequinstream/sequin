@@ -129,7 +129,7 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
     Req.Test.expect(Client, fn conn ->
       {:ok, body, _} = Plug.Conn.read_body(conn)
       decompressed = :zlib.gunzip(body)
-      assert conn.method == "PUT"
+      assert conn.method == "POST"
       assert conn.request_path == "/indexes/test/documents"
 
       body_records =

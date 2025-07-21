@@ -17,6 +17,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.PostgresSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
@@ -44,6 +45,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Sinks.Kafka
   alias Sequin.Sinks.Meilisearch.Client, as: MeilisearchClient
   alias Sequin.Sinks.Nats
+  alias Sequin.Sinks.Postgres, as: PostgresSinkClient
   alias Sequin.Sinks.RabbitMq
   alias Sequin.Sinks.Redis
   alias Sequin.Sinks.Typesense.Client, as: TypesenseClient
@@ -311,6 +313,12 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       :redis_string ->
         case test_redis_string_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
+
+      :postgres ->
+        case test_postgres_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
@@ -693,6 +701,27 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp test_postgres_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %PostgresSink{} = sink -> PostgresSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+
+      case PostgresSinkClient.test_connection(sink) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
   defp decode_params(form, socket) do
     sink = decode_sink(socket.assigns.consumer.type, form["sink"])
 
@@ -942,6 +971,19 @@ defmodule SequinWeb.Components.ConsumerForm do
       "auth_type" => sink["auth_type"],
       "auth_value" => sink["auth_value"],
       "batch_size" => sink["batch_size"]
+    }
+  end
+
+  defp decode_sink(:postgres, sink) do
+    %{
+      "type" => "postgres",
+      "host" => sink["host"],
+      "port" => sink["port"],
+      "database" => sink["database"],
+      "table_name" => sink["table_name"],
+      "username" => sink["username"],
+      "password" => sink["password"],
+      "ssl" => sink["ssl"]
     }
   end
 
@@ -1224,6 +1266,19 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp encode_sink(%PostgresSink{} = sink) do
+    %{
+      "type" => "postgres",
+      "host" => sink.host,
+      "port" => sink.port,
+      "database" => sink.database,
+      "table_name" => sink.table_name,
+      "username" => sink.username,
+      "password" => sink.password,
+      "ssl" => sink.ssl
+    }
+  end
+
   defp encode_errors(nil), do: %{}
 
   defp encode_errors(%Ecto.Changeset{} = changeset) do
@@ -1457,6 +1512,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :typesense -> "Typesense Sink"
       :meilisearch -> "Meilisearch Sink"
       :elasticsearch -> "Elasticsearch Sink"
+      :postgres -> "PostgreSQL Sink"
     end
   end
 
@@ -1490,6 +1546,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         :meilisearch -> {%MeilisearchSink{}, %{}}
         :elasticsearch -> {%ElasticsearchSink{}, %{}}
         :redis_string -> {%RedisStringSink{}, %{batch_size: 10}}
+        :postgres -> {%PostgresSink{port: 5432, ssl: false}, %{batch_size: 10}}
       end
 
     sink_consumer

@@ -30,7 +30,7 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
       records = [SinkFactory.meilisearch_record(), SinkFactory.meilisearch_record()]
 
       Req.Test.expect(Client, fn conn ->
-        assert conn.method == "PUT"
+        assert conn.method == "POST"
         assert conn.request_path == "/indexes/test/documents"
 
         {:ok, body, _} = Plug.Conn.read_body(conn)

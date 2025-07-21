@@ -421,6 +421,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       :kinesis -> Sequin.Runtime.KinesisPipeline
       :nats -> Sequin.Runtime.NatsPipeline
       :rabbitmq -> Sequin.Runtime.RabbitMqPipeline
+      :postgres -> Sequin.Runtime.PostgresPipeline
       :redis_stream -> Sequin.Runtime.RedisStreamPipeline
       :redis_string -> Sequin.Runtime.RedisStringPipeline
       :sequin_stream -> Sequin.Runtime.SequinStreamPipeline

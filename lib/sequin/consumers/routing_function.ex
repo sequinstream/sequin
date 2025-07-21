@@ -29,6 +29,7 @@ defmodule Sequin.Consumers.RoutingFunction do
         :elasticsearch,
         :s2,
         :rabbitmq,
+        :postgres,
         :sqs
       ]
 

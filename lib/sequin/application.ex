@@ -90,6 +90,7 @@ defmodule Sequin.Application do
       Sequin.Sinks.Kafka.ConnectionCache,
       Sequin.Sinks.Nats.ConnectionCache,
       Sequin.Sinks.RabbitMq.ConnectionCache,
+      Sequin.Sinks.Postgres.ConnectionCache,
       SequinWeb.Presence,
       Sequin.SystemMetricsServer,
       {Task, fn -> enqueue_workers() end},

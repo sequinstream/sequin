@@ -72,8 +72,11 @@
               Return <code>action: :function</code> from your routing function
             </li>
             <li>
-              Specify a filter expression and JavaScript-like function to update
-              specific fields
+              Specify a filter expression and a <a
+                class="underline font-medium"
+                href="https://rhai.rs/book/engine/hello-world.html"
+                target="_blank">Rhai</a> (a JavaScript-like language) function to update
+              specific fields.
             </li>
             <li>
               This is useful for updating nested arrays or specific document

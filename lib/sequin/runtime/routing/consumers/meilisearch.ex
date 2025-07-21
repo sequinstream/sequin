@@ -40,10 +40,10 @@ defmodule Sequin.Runtime.Routing.Consumers.Meilisearch do
   def route(action, _record, _changes, _metadata) do
     meilisearch_action =
       case action do
-        "insert" -> :index
-        "update" -> :index
-        "delete" -> :delete
-        "read" -> :index
+        "insert" -> "index"
+        "update" -> "index"
+        "delete" -> "delete"
+        "read" -> "index"
       end
 
     %{action: meilisearch_action}

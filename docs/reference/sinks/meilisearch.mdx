@@ -97,7 +97,7 @@ The `function` action allows you to update documents using Meilisearch's functio
 
 When using `action: "function"`, you must also provide:
 - `filter` - A Meilisearch filter expression to select documents to update
-- `function` - A Rhai function expression to apply to the matched documents
+- `function` - A function expression using [Rhai (a JavaScript-like language)](https://docs.meilisearch.com/reference/api/documents#edit-documents-with-rhai) to apply to the matched documents
 - `context` (optional) - Additional context data for the function
 
 Example routing function with function updates:

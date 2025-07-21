@@ -23,16 +23,6 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
         concurrency: concurrency,
         batch_size: consumer.sink.batch_size || 100,
         batch_timeout: 5
-      ],
-      delete: [
-        concurrency: concurrency,
-        batch_size: consumer.sink.batch_size || 100,
-        batch_timeout: 5
-      ],
-      function: [
-        concurrency: concurrency,
-        batch_size: consumer.sink.batch_size || 100,
-        batch_timeout: 5
       ]
     ]
   end
@@ -42,17 +32,17 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
     routing_info = Routing.route_message(context.consumer, message.data)
     %Routing.Consumers.Meilisearch{action: action, index_name: index_name} = routing_info
 
-    batcher =
-      case action do
-        :index -> :default
-        :delete -> :delete
-        :function -> :function
+    action =
+      if is_atom(action) do
+        # Backwards compatibility with existing routing functions with atom actions
+        to_string(action)
+      else
+        action
       end
 
     message =
       message
-      |> Broadway.Message.put_batcher(batcher)
-      |> Broadway.Message.put_batch_key(index_name)
+      |> Broadway.Message.put_batch_key({action, index_name})
       |> Broadway.Message.update_data(fn data ->
         Map.put(data, :routing_info, routing_info)
       end)
@@ -61,13 +51,11 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, batch_info, context) do
+  def handle_batch(:default, messages, %{batch_key: {"index", index_name}}, context) do
     %{
       consumer: %SinkConsumer{sink: sink, transform: transform} = consumer,
       test_pid: test_pid
     } = context
-
-    index_name = batch_info.batch_key
 
     setup_allowances(test_pid)
 
@@ -97,13 +85,11 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:delete, messages, batch_info, context) do
+  def handle_batch(:default, messages, %{batch_key: {"delete", index_name}}, context) do
     %{
       consumer: %SinkConsumer{sink: sink} = consumer,
       test_pid: test_pid
     } = context
-
-    index_name = batch_info.batch_key
 
     setup_allowances(test_pid)
 
@@ -131,13 +117,11 @@ defmodule Sequin.Runtime.MeilisearchPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:function, messages, batch_info, context) do
+  def handle_batch(:default, messages, %{batch_key: {"function", index_name}}, context) do
     %{
       consumer: %SinkConsumer{sink: sink} = consumer,
       test_pid: test_pid
     } = context
-
-    index_name = batch_info.batch_key
 
     setup_allowances(test_pid)
 

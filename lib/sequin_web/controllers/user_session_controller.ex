@@ -1,7 +1,6 @@
 defmodule SequinWeb.UserSessionController do
   use SequinWeb, :controller
 
-  alias Assent.Config
   alias Assent.Strategy.Github
   alias Sequin.Accounts
   alias Sequin.Accounts.Impersonate
@@ -36,8 +35,7 @@ defmodule SequinWeb.UserSessionController do
 
     :github
     |> oauth_provider_config()
-    # Session params should be added to the config so the strategy can use them
-    |> Config.put(:session_params, session_params)
+    |> Keyword.put(:session_params, session_params)
     |> Github.callback(params)
     |> case do
       {:ok, %{user: user_data, token: token}} ->
@@ -60,7 +58,6 @@ defmodule SequinWeb.UserSessionController do
   #   "name" => "Example User"}
   defp handle_oauth_callback(conn, user_data, _token) do
     %{"email" => email, "sub" => github_id} = user_data
-    github_id = to_string(github_id)
     user = Accounts.get_user_by_auth_provider_id(:github, github_id)
 
     case {user, Sequin.feature_enabled?(:account_self_signup)} do

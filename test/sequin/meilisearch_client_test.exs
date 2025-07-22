@@ -34,10 +34,9 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         assert conn.request_path == "/indexes/test/documents"
 
         {:ok, body, _} = Plug.Conn.read_body(conn)
-        decompressed_body = :zlib.gunzip(body)
 
         body_records =
-          decompressed_body
+          body
           |> String.split("\n", trim: true)
           |> Enum.map(&Jason.decode!/1)
 

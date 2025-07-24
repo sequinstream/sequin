@@ -507,6 +507,35 @@ defmodule Sequin.Runtime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
+  @doc """
+  Peek at messages metadata only (without data payloads) for the consumer.
+  This is more memory efficient for listing messages in the UI.
+  """
+  @spec peek_messages_metadata(SinkConsumer.t(), pos_integer()) ::
+          list(ConsumerRecord.t() | ConsumerEvent.t()) | {:error, Exception.t()}
+  def peek_messages_metadata(consumer, count) when is_integer(count) do
+    consumer
+    |> partitions()
+    |> Enum.reduce_while({:ok, []}, fn partition, {:ok, acc_messages} ->
+      case GenServer.call(via_tuple(consumer.id, partition), {:peek_messages_metadata, count}) do
+        {:ok, messages} -> {:cont, {:ok, acc_messages ++ messages}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, messages} ->
+        messages
+        |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx})
+        |> Enum.take(count)
+
+      error ->
+        error
+    end
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
   @decorate track_metrics("peek_message")
   def peek_message(consumer, ack_id) do
     not_found = {:error, Error.not_found(entity: :message, params: %{ack_id: ack_id})}
@@ -814,6 +843,11 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @decorate track_metrics("peek_messages")
   def handle_call({:peek_messages, count}, _from, state) do
     {:reply, {:ok, State.peek_messages(state, count)}, state}
+  end
+
+  @decorate track_metrics("peek_messages_metadata")
+  def handle_call({:peek_messages_metadata, count}, _from, state) do
+    {:reply, {:ok, State.peek_messages_metadata(state, count)}, state}
   end
 
   @decorate track_metrics("peek_message")

@@ -215,7 +215,8 @@
         if (reply.error) {
           messageDataError = reply.error;
         } else {
-          messageData = reply.data;
+          selectedMessage = reply.message;
+          messageData = reply.message.data;
         }
       },
     );

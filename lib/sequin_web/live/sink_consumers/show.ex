@@ -381,14 +381,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   def handle_event("fetch_message_data", %{"message_ack_id" => message_ack_id}, socket) do
-    message = Enum.find(socket.assigns.messages, &(&1.ack_id == message_ack_id))
+    consumer = socket.assigns.consumer
 
-    case fetch_message_data(message, socket.assigns.consumer) do
-      {:ok, data} ->
-        {:reply, %{data: data}, socket}
+    case SlotMessageStore.peek_message(consumer, message_ack_id) do
+      {:ok, message} ->
+        # Encode the full message with data
+        encoded_message = encode_message(consumer, message)
+        {:reply, %{message: encoded_message}, socket}
+
+      {:error, %NotFoundError{}} ->
+        # For acknowledged messages, we can't fetch full data anymore
+        {:reply, %{error: "Message data not available for acknowledged messages"}, socket}
 
       {:error, reason} ->
-        {:reply, %{error: reason}, socket}
+        {:reply, %{error: inspect(reason)}, socket}
     end
   end
 
@@ -1156,7 +1162,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer_messages_from_store(consumer, limit) do
-    case SlotMessageStore.peek_messages(consumer, limit) do
+    case SlotMessageStore.peek_messages_metadata(consumer, limit) do
       messages when is_list(messages) ->
         messages
 
@@ -1181,6 +1187,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp load_consumer_message_by_ack_id(%{assigns: %{show_ack_id: nil}} = socket), do: socket
 
   defp load_consumer_message_by_ack_id(%{assigns: %{consumer: consumer, show_ack_id: show_ack_id}} = socket) do
+    # When loading a specific message by ack_id, we need the full message
     case SlotMessageStore.peek_message(consumer, show_ack_id) do
       {:ok, message} ->
         update_in(socket.assigns.messages, fn messages -> [message | messages] end)
@@ -1193,28 +1200,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           title: "Message with ID #{show_ack_id} not found. It may have been acknowledged or deleted."
         })
     end
-  end
-
-  # Function to fetch message data
-  defp fetch_message_data(nil, _consumer) do
-    {:error,
-     """
-     Message not found.
-
-     The message may have been acknowledged and removed from the outbox.
-     """}
-  end
-
-  defp fetch_message_data(%ConsumerRecord{} = record, %{message_kind: :record}) do
-    {:ok, record.data}
-  end
-
-  defp fetch_message_data(%ConsumerEvent{} = event, %{message_kind: :event}) do
-    {:ok, event.data}
-  end
-
-  defp fetch_message_data(%AcknowledgedMessage{}, _) do
-    {:ok, nil}
   end
 
   # Function to encode messages for the Svelte component
@@ -1234,7 +1219,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           consumer_id: message.consumer_id,
           ack_id: message.ack_id,
           commit_lsn: message.commit_lsn,
-          commit_timestamp: message.data.metadata.commit_timestamp,
+          commit_timestamp: get_commit_timestamp(message),
           data: message.data,
           deliver_count: message.deliver_count,
           inserted_at: message.inserted_at,
@@ -1244,8 +1229,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           seq: message.commit_lsn + message.commit_idx,
           state: state,
           state_color: get_message_state_color(consumer, state),
-          table_name: message.data.metadata.table_name,
-          table_schema: message.data.metadata.table_schema,
+          table_name: get_table_name(message),
+          table_schema: get_table_schema(message),
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
           functioned_message: maybe_function_message(consumer, message),
@@ -1259,7 +1244,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           consumer_id: message.consumer_id,
           ack_id: message.ack_id,
           commit_lsn: message.commit_lsn,
-          commit_timestamp: message.data.metadata.commit_timestamp,
+          commit_timestamp: get_commit_timestamp(message),
           data: message.data,
           deliver_count: message.deliver_count,
           inserted_at: message.inserted_at,
@@ -1269,8 +1254,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           seq: message.commit_lsn + message.commit_idx,
           state: state,
           state_color: get_message_state_color(consumer, state),
-          table_name: message.data.metadata.table_name,
-          table_schema: message.data.metadata.table_schema,
+          table_name: get_table_name(message),
+          table_schema: get_table_schema(message),
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
           functioned_message: maybe_function_message(consumer, message),
@@ -1307,6 +1292,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp maybe_function_message(consumer, message) do
     case consumer.function do
       nil -> nil
+      _ when is_nil(message.data) -> nil
       _ -> Message.to_external(consumer, message)
     end
   rescue
@@ -1317,8 +1303,12 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp maybe_routing_info(_consumer, %AcknowledgedMessage{}), do: nil
 
   defp maybe_routing_info(consumer, message) do
-    routing_info = Sequin.Runtime.Routing.route_message(consumer, message)
-    Map.from_struct(routing_info)
+    if is_nil(message.data) do
+      nil
+    else
+      routing_info = Sequin.Runtime.Routing.route_message(consumer, message)
+      Map.from_struct(routing_info)
+    end
   rescue
     error ->
       %{error: "Error calculating routing: #{Exception.message(error)}"}
@@ -1377,6 +1367,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       _ -> "gray"
     end
   end
+
+  defp get_commit_timestamp(%{commit_timestamp: timestamp}) when not is_nil(timestamp), do: timestamp
+  defp get_commit_timestamp(%{data: nil}), do: nil
+  defp get_commit_timestamp(%{data: %{metadata: %{commit_timestamp: timestamp}}}), do: timestamp
+  defp get_commit_timestamp(_), do: nil
+
+  defp get_table_name(%{data: nil}), do: nil
+  defp get_table_name(%{data: %{metadata: %{table_name: table_name}}}), do: table_name
+  defp get_table_name(_), do: nil
+
+  defp get_table_schema(%{data: nil}), do: nil
+  defp get_table_schema(%{data: %{metadata: %{table_schema: table_schema}}}), do: table_schema
+  defp get_table_schema(_), do: nil
 
   defp consumer_title(%{sink: %{type: :azure_event_hub}}), do: "Azure Event Hub Sink"
   defp consumer_title(%{sink: %{type: :elasticsearch}}), do: "Elasticsearch Sink"

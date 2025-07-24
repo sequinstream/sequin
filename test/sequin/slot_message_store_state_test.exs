@@ -909,6 +909,36 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     end
   end
 
+  describe "peek_messages_metadata/2" do
+    test "returns messages without data field", %{state: state} do
+      # Create 5 messages
+      messages =
+        for i <- 1..5 do
+          ConsumersFactory.consumer_message(
+            commit_lsn: i,
+            commit_idx: 1,
+            data: %{record: %{id: i}, metadata: %{}}
+          )
+        end
+
+      {:ok, state} = State.put_messages(state, messages)
+
+      # Request only 3
+      metadata_messages = State.peek_messages_metadata(state, 3)
+
+      assert length(metadata_messages) == 3
+      [first, second, third] = metadata_messages
+      assert first.commit_idx == 1
+      assert first.commit_lsn == 1
+      assert second.commit_idx == 1
+      assert second.commit_lsn == 2
+      assert third.commit_idx == 1
+      assert third.commit_lsn == 3
+
+      assert Enum.all?(metadata_messages, &(&1.data == nil))
+    end
+  end
+
   defp assert_cursor_tuple_matches(msg1, msg2) do
     assert msg1.commit_lsn == msg2.commit_lsn
     assert msg1.commit_idx == msg2.commit_idx

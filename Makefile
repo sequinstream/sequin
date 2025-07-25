@@ -137,7 +137,7 @@ connect: ## Connect to the production database
 	cd "$$INFRA_DIR" && ./scripts/prod_ssh.sh
 
 docs: ## Run mintlify dev server for documentation
-	@cd docs && mintlify dev
+	@cd docs && npx mintlify dev
 
 redis-console-consumer: ## Read from redis stream <stream-key> [from-beginning]
 	@./scripts/redis-console-consumer.sh $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))

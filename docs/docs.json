@@ -101,6 +101,7 @@
             "group": "Reference",
             "pages": [
               "reference/configuration",
+              "reference/minimum-requirements",
               "reference/databases",
               {
                 "group": "Sinks",

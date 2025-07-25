@@ -79,8 +79,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
           |> assign(:functions, Consumers.list_functions_for_account(current_account.id))
           |> assign_metrics()
-          |> assign(:paused, false)
-          |> assign(:show_acked, params["showAcked"] == "true")
+          |> assign(:paused, Map.get(params, "paused", "false") == "true")
+          |> assign(:show_acked, Map.get(params, "showAcked", "true") == "true")
           |> assign(:page, 0)
           |> assign(:page_size, @messages_page_size)
           |> assign(:total_count, 0)
@@ -134,16 +134,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_params(params, _url, socket) do
-    show_acked =
-      case Map.get(params, "showAcked", "true") do
-        "true" -> true
-        "false" -> false
-        _ -> true
-      end
+    show_acked = Map.get(params, "showAcked", "true") == "true"
+    paused = Map.get(params, "paused", "false") == "true"
 
     socket =
       socket
       |> assign(:show_acked, show_acked)
+      |> assign(:paused, paused)
       |> apply_action(socket.assigns.live_action)
 
     {:noreply, socket}
@@ -190,7 +187,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
             consumerTitle: consumer_title(@consumer),
             parent: "consumer-show",
             live_action: @live_action,
-            messages_failing: @metrics.messages_failing_count > 0
+            messages_failing: @metrics.messages_failing_count > 0,
+            paused: @paused,
+            show_acked: @show_acked
           }
         }
       />
@@ -299,12 +298,18 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("pause_updates", _params, socket) do
-    {:noreply, assign(socket, paused: true)}
+    {:noreply,
+     socket
+     |> assign(paused: true)
+     |> build_query_params("/messages")}
   end
 
   @impl Phoenix.LiveView
   def handle_event("resume_updates", _params, socket) do
-    {:noreply, assign(socket, paused: false)}
+    {:noreply,
+     socket
+     |> assign(paused: false)
+     |> build_query_params("/messages")}
   end
 
   @impl Phoenix.LiveView
@@ -443,7 +448,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
      |> assign(:show_acked, show_acked)
      |> assign(:page, 0)
      |> load_consumer_messages()
-     |> push_patch(to: RouteHelpers.consumer_path(socket.assigns.consumer, "/messages?showAcked=#{show_acked}"))}
+     |> build_query_params("/messages")}
   end
 
   def handle_event("reset_message_visibility", %{"ack_id" => ack_id}, socket) do
@@ -619,14 +624,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     # Reset trace state on start
     {:noreply, assign(socket, trace: %{initial_trace() | paused: false})}
-  end
-
-  def handle_event("trace_toggle_show_acked", %{"show_acked" => show_acked}, socket) do
-    {:noreply,
-     socket
-     |> assign(:trace_show_acked, show_acked)
-     |> assign(:trace_page, 0)
-     |> push_patch(to: RouteHelpers.consumer_path(socket.assigns.consumer, "/trace?showAcked=#{show_acked}"))}
   end
 
   def handle_event("trace_change_page", %{"page" => page}, socket) do
@@ -1418,7 +1415,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp maybe_augment_alert(%{slug: :messages_delivered, status: :error, extra: %{"ack_id" => ack_id}} = check, consumer) do
-    link_id = ~p"/sinks/#{consumer.type}/#{consumer.id}/messages/#{ack_id}?showAcked=false"
+    link_id = RouteHelpers.consumer_path(consumer, "/messages/#{ack_id}?showAcked=false")
 
     Map.merge(check, %{
       alertTitle: "Error: Message not delivered",
@@ -1729,6 +1726,26 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp env do
     Application.get_env(:sequin, :env)
+  end
+
+  defp build_query_params(socket, url_prefix) do
+    %{show_acked: show_acked, paused: paused, consumer: consumer} = socket.assigns
+
+    params = []
+
+    # Only add showAcked if it's false (non-default)
+    params = if show_acked == false, do: [{"showAcked", "false"} | params], else: params
+
+    # Only add paused if it's true (non-default)
+    params = if paused == true, do: [{"paused", "true"} | params], else: params
+
+    query_string =
+      case params do
+        [] -> ""
+        _ -> "?" <> URI.encode_query(params)
+      end
+
+    push_patch(socket, to: RouteHelpers.consumer_path(consumer, "#{url_prefix}#{query_string}"))
   end
 
   defp format_changeset_errors(changeset) do

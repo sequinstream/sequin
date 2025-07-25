@@ -12,7 +12,6 @@
     page_count: number;
     loading: boolean;
     paused: boolean;
-    show_acked: boolean;
   };
 
   export let live;

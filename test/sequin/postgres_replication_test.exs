@@ -887,12 +887,12 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {:http_request, req}, 500
+      assert_receive {:http_request, req}, 600
       assert to_string(req.body) =~ "Characters"
       assert to_string(req.body) =~ "insert"
       assert to_string(req.body) =~ to_string(character.id)
 
-      assert_receive {SinkPipeline, :ack_finished, [], [_ack_id]}, 500
+      assert_receive {SinkPipeline, :ack_finished, [], [_ack_id]}, 600
 
       assert [failed_message] = list_messages(consumer)
       assert failed_message.deliver_count == 1

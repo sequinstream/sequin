@@ -68,13 +68,61 @@ Sequin does not perform any searches.
 
 The Meilisearch sink supports dynamic routing of the `action` and `index_name` with [routing functions](/reference/routing).
 
-Example routing function:
+### Routing Actions
+
+The Meilisearch sink supports three actions:
+- `index` - Create or update a document
+- `delete` - Delete a document
+- `function` - Apply a function-based update using Meilisearch's [documents edit API](https://www.meilisearch.com/docs/reference/api/documents#edit-documents-with-a-function)
+
+### Basic Example
 
 ```elixir
 def route(action, record, changes, metadata) do
   if record["deleted_at"] != nil do
     %{index_name: metadata.table_name, action: "delete"}
   else
+    %{index_name: metadata.table_name, action: "index"}
+  end
+end
+```
+
+### Function Updates
+
+The `function` action allows you to update documents using Meilisearch's function expressions. This is useful for:
+- Incrementing/decrementing values
+- Modifying arrays
+- Conditional updates
+- Complex transformations that would be difficult with regular indexing
+
+When using `action: "function"`, you must also provide:
+- `filter` - A Meilisearch filter expression to select documents to update
+- `function` - A function expression using [Rhai (a JavaScript-like language)](https://docs.meilisearch.com/reference/api/documents#edit-documents-with-rhai) to apply to the matched documents
+- `context` (optional) - Additional context data for the function
+
+Example routing function with function updates:
+
+```elixir
+def route(action, record, changes, metadata) do
+  # Increment view count when a page is viewed
+  if metadata.table_name == "page_views" do
+    %{
+      action: :function,
+      index_name: "pages",
+      filter: "id = #{record["page_id"]}",
+      function: "doc.view_count += 1"
+    }
+  # Update inventory count for products
+  elsif metadata.table_name == "inventory_updates" do
+    %{
+      action: :function,
+      index_name: "products",
+      filter: "sku = '#{record["sku"]}'",
+      function: "doc.stock_quantity += context.quantity_change",
+      context: %{quantity_change: record["quantity_change"]}
+    }
+  else
+    # Default indexing behavior
     %{index_name: metadata.table_name, action: "index"}
   end
 end

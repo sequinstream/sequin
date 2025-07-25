@@ -170,6 +170,50 @@ defmodule Sequin.Runtime.TypesensePipelineTest do
       assert_receive {:ack, _ref, [success], []}, 3000
       assert success.data == message
     end
+
+    @tag capture_log: true
+    test "retries transient errors once before succeeding", %{consumer: consumer} do
+      test_pid = self()
+      call_count = :counters.new(1, [])
+
+      message =
+        ConsumersFactory.consumer_message(
+          consumer_id: consumer.id,
+          message_kind: consumer.message_kind,
+          data:
+            ConsumersFactory.consumer_message_data(
+              message_kind: consumer.message_kind,
+              action: :insert,
+              record: %{"id" => "retry-test", "name" => "Retry Test Document"}
+            )
+        )
+
+      adapter = fn request ->
+        count = :counters.get(call_count, 1)
+        :counters.add(call_count, 1, 1)
+        send(test_pid, {:attempt, count})
+
+        if count == 0 do
+          # First attempt fails with a transient error
+          {request, %Req.TransportError{reason: :timeout}}
+        else
+          # Second attempt succeeds
+          {request, Req.Response.new(status: 200)}
+        end
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      send_test_batch(consumer, [message])
+
+      # Should see 2 attempts
+      assert_receive {:attempt, 0}, 1_000
+      assert_receive {:attempt, 1}, 2_000
+
+      # Message should be successfully delivered after retry
+      assert_receive {:ack, _ref, [success], []}, 3_000
+      assert success.data == message
+    end
   end
 
   describe "typesense routing" do

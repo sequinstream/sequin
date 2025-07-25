@@ -35,12 +35,14 @@
   import StopSinkModal from "./StopSinkModal.svelte";
   import { Badge } from "$lib/components/ui/badge";
 
+  type LiveAction = "show" | "backfills" | "messages" | "trace";
   export let consumer;
   export let consumerTitle;
-  export let live_action;
+  export let live_action: LiveAction;
   export let live;
   export let parent;
   export let messages_failing;
+  export let tab_urls;
 
   let showDeleteConfirmDialog = false;
   let showStopModal = false;
@@ -103,32 +105,6 @@
       handleStatusTransition();
     });
   }
-
-  let activeTab: string;
-
-  $: backfillUrl = `${consumer.href}/backfills`;
-
-  $: messageUrl = messages_failing
-    ? `${consumer.href}/messages?showAcked=false`
-    : `${consumer.href}/messages`;
-
-  $: traceUrl = `${consumer.href}/trace`;
-
-  onMount(() => {
-    switch (live_action) {
-      case "backfills":
-        activeTab = "backfills";
-        break;
-      case "messages":
-        activeTab = "messages";
-        break;
-      case "trace":
-        activeTab = "trace";
-        break;
-      default:
-        activeTab = "overview";
-    }
-  });
 
   let sinkDocsSlug: string;
   switch (consumer.sink.type) {
@@ -266,9 +242,9 @@
   <div class="container mx-auto px-4">
     <div class="flex space-x-4">
       <a
-        href={consumer.href}
+        href={tab_urls.overview}
         class={`py-2 px-4 font-medium border-b-2 ${
-          activeTab === "overview"
+          live_action === "show"
             ? "text-black border-black"
             : "text-gray-500 hover:text-gray-700 border-transparent"
         }`}
@@ -278,9 +254,9 @@
         Overview
       </a>
       <a
-        href={backfillUrl}
+        href={tab_urls.backfills}
         class={`py-2 px-4 flex items-center font-medium border-b-2 ${
-          activeTab === "backfills"
+          live_action === "backfills"
             ? "text-black border-black"
             : "text-gray-500 hover:text-gray-700 border-transparent"
         }`}
@@ -295,9 +271,9 @@
         {/if}
       </a>
       <a
-        href={messageUrl}
+        href={tab_urls.messages}
         class={`py-2 px-4 flex items-center font-medium border-b-2 ${
-          activeTab === "messages"
+          live_action === "messages"
             ? "text-black border-black"
             : "text-gray-500 hover:text-gray-700 border-transparent"
         }`}
@@ -310,9 +286,9 @@
         {/if}
       </a>
       <a
-        href={traceUrl}
+        href={tab_urls.trace}
         class={`py-2 px-4 flex items-center font-medium border-b-2 ${
-          activeTab === "trace"
+          live_action === "trace"
             ? "text-black border-black"
             : "text-gray-500 hover:text-gray-700 border-transparent"
         }`}

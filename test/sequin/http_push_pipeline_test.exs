@@ -284,6 +284,63 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
       assert_receive {:ack, ^ref, [], [_failed]}, 2000
     end
 
+    @tag capture_log: true
+    test "retries transient errors once before failing", %{consumer: consumer} do
+      test_pid = self()
+      call_count = :counters.new(1, [])
+
+      adapter = fn %Req.Request{} = req ->
+        count = :counters.get(call_count, 1)
+        :counters.add(call_count, 1, 1)
+        send(test_pid, {:attempt, count})
+
+        if count == 0 do
+          # First attempt fails with a transient error
+          {req, %Req.TransportError{reason: :closed}}
+        else
+          # Second attempt succeeds
+          {req, Req.Response.new(status: 200)}
+        end
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_event(consumer)
+
+      # Should see 2 attempts
+      assert_receive {:attempt, 0}, 1_000
+      assert_receive {:attempt, 1}, 2_000
+
+      # Message should be successfully delivered after retry
+      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
+    end
+
+    @tag capture_log: true
+    test "fails after exhausting retries", %{consumer: consumer} do
+      test_pid = self()
+      call_count = :counters.new(1, [])
+
+      adapter = fn %Req.Request{} = req ->
+        count = :counters.get(call_count, 1)
+        :counters.add(call_count, 1, 1)
+        send(test_pid, {:attempt, count})
+
+        # Always fail with transient error
+        {req, %Req.TransportError{reason: :closed}}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_event(consumer)
+
+      # Should see 2 attempts (1 initial + 1 retry)
+      assert_receive {:attempt, 0}, 1_000
+      assert_receive {:attempt, 1}, 2_000
+
+      # Message should fail after exhausting retries
+      assert_receive {:ack, ^ref, [], [_failed]}, 1_000
+    end
+
     test "sink default and encrypted headers are merged with routing function headers", %{
       consumer: consumer,
       http_endpoint: http_endpoint

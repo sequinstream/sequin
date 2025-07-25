@@ -41,6 +41,8 @@
   export let live;
   export let parent;
   export let messages_failing;
+  export let paused = false;
+  export let show_acked = true;
 
   let showDeleteConfirmDialog = false;
   let showStopModal = false;
@@ -106,13 +108,38 @@
 
   let activeTab: string;
 
-  $: backfillUrl = `${consumer.href}/backfills`;
+  function buildUrlWithState(
+    basePath: string,
+    overrideShowAcked?: boolean,
+  ): string {
+    const params = new URLSearchParams();
 
-  $: messageUrl = messages_failing
-    ? `${consumer.href}/messages?showAcked=false`
-    : `${consumer.href}/messages`;
+    // Use override if provided, otherwise use the prop value
+    const effectiveShowAcked =
+      overrideShowAcked !== undefined ? overrideShowAcked : show_acked;
 
-  $: traceUrl = `${consumer.href}/trace`;
+    if (!effectiveShowAcked) {
+      params.set("showAcked", "false");
+    }
+
+    if (paused) {
+      params.set("paused", "true");
+    }
+
+    const queryString = params.toString();
+    return queryString ? `${basePath}?${queryString}` : basePath;
+  }
+
+  $: backfillUrl = buildUrlWithState(`${consumer.href}/backfills`);
+  $: overviewUrl = buildUrlWithState(consumer.href);
+
+  $: messageUrl = (() => {
+    // Override show_acked to false if messages are failing
+    const effectiveShowAcked = messages_failing ? false : show_acked;
+    return buildUrlWithState(`${consumer.href}/messages`, effectiveShowAcked);
+  })();
+
+  $: traceUrl = buildUrlWithState(`${consumer.href}/trace`);
 
   onMount(() => {
     switch (live_action) {
@@ -266,7 +293,7 @@
   <div class="container mx-auto px-4">
     <div class="flex space-x-4">
       <a
-        href={consumer.href}
+        href={overviewUrl}
         class={`py-2 px-4 font-medium border-b-2 ${
           activeTab === "overview"
             ? "text-black border-black"

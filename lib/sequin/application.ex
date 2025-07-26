@@ -74,7 +74,7 @@ defmodule Sequin.Application do
   defp base_children do
     Sequin.Redis.connect_cluster()
 
-    [
+    children = [
       Sequin.Repo,
       Sequin.Vault,
       Sequin.PubSub.child_spec(),
@@ -97,6 +97,16 @@ defmodule Sequin.Application do
       SequinWeb.Endpoint,
       SequinWeb.MetricsEndpoint
     ]
+
+    # Add Goth for GCP credentials if in self-hosted mode
+    # Skip in test environment to avoid mock issues
+    env = Application.get_env(:sequin, :env)
+
+    if env != :test and Sequin.Config.self_hosted?() do
+      [{Goth, name: Sequin.Gcp.Goth} | children]
+    else
+      children
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

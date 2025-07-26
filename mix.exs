@@ -52,6 +52,7 @@ defmodule Sequin.MixProject do
       # Database and Ecto
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
+      {:myxql, "~> 0.8.0"},
       {:polymorphic_embed, "~> 4.1.1"},
       {:typed_ecto_schema, "~> 0.4.1"},
       {:cloak_ecto, "~> 1.3.0"},

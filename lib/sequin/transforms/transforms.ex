@@ -15,6 +15,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.MeilisearchSink
+  alias Sequin.Consumers.MysqlSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
   alias Sequin.Consumers.RabbitMqSink
@@ -417,6 +418,22 @@ defmodule Sequin.Transforms do
       primary_key: sink.primary_key,
       api_key: SensitiveValue.new(sink.api_key, show_sensitive),
       timeout_seconds: sink.timeout_seconds
+    })
+  end
+
+  def to_external(%MysqlSink{} = sink, show_sensitive) do
+    reject_nil_values(%{
+      type: "mysql",
+      host: sink.host,
+      port: sink.port,
+      database: sink.database,
+      table_name: sink.table_name,
+      username: sink.username,
+      password: SensitiveValue.new(sink.password, show_sensitive),
+      ssl: sink.ssl,
+      batch_size: sink.batch_size,
+      timeout_seconds: sink.timeout_seconds,
+      upsert_on_duplicate: sink.upsert_on_duplicate
     })
   end
 
@@ -1279,6 +1296,24 @@ defmodule Sequin.Transforms do
        api_key: attrs["api_key"],
        batch_size: attrs["batch_size"],
        timeout_seconds: attrs["timeout_seconds"]
+     }}
+  end
+
+  # Add parse_sink for mysql type
+  defp parse_sink(%{"type" => "mysql"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :mysql,
+       host: attrs["host"],
+       port: attrs["port"],
+       database: attrs["database"],
+       table_name: attrs["table_name"],
+       username: attrs["username"],
+       password: attrs["password"],
+       ssl: attrs["ssl"],
+       batch_size: attrs["batch_size"],
+       timeout_seconds: attrs["timeout_seconds"],
+       upsert_on_duplicate: attrs["upsert_on_duplicate"]
      }}
   end
 

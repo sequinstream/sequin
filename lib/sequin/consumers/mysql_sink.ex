@@ -23,6 +23,7 @@ defmodule Sequin.Consumers.MysqlSink do
     field(:batch_size, :integer, default: 100)
     field(:timeout_seconds, :integer, default: 30)
     field(:upsert_on_duplicate, :boolean, default: true)
+    field(:routing_mode, Ecto.Enum, values: [:dynamic, :static], default: :static)
   end
 
   def changeset(struct, params) do
@@ -37,7 +38,8 @@ defmodule Sequin.Consumers.MysqlSink do
       :ssl,
       :batch_size,
       :timeout_seconds,
-      :upsert_on_duplicate
+      :upsert_on_duplicate,
+      :routing_mode
     ])
     |> validate_required([:host, :database, :table_name, :username, :password])
     |> validate_number(:port, greater_than: 0, less_than_or_equal_to: 65535)

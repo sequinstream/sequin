@@ -433,7 +433,8 @@ defmodule Sequin.Transforms do
       ssl: sink.ssl,
       batch_size: sink.batch_size,
       timeout_seconds: sink.timeout_seconds,
-      upsert_on_duplicate: sink.upsert_on_duplicate
+      upsert_on_duplicate: sink.upsert_on_duplicate,
+      routing_mode: sink.routing_mode
     })
   end
 
@@ -1313,7 +1314,8 @@ defmodule Sequin.Transforms do
        ssl: attrs["ssl"],
        batch_size: attrs["batch_size"],
        timeout_seconds: attrs["timeout_seconds"],
-       upsert_on_duplicate: attrs["upsert_on_duplicate"]
+       upsert_on_duplicate: attrs["upsert_on_duplicate"],
+       routing_mode: parse_routing_mode(attrs["routing_mode"])
      }}
   end
 
@@ -1475,4 +1477,9 @@ defmodule Sequin.Transforms do
   defp parse_auth_type("basic"), do: :basic
   defp parse_auth_type("bearer"), do: :bearer
   defp parse_auth_type(nil), do: :api_key
+
+  # Helper to parse routing_mode
+  defp parse_routing_mode("dynamic"), do: :dynamic
+  defp parse_routing_mode("static"), do: :static
+  defp parse_routing_mode(nil), do: :static
 end

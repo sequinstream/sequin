@@ -3,6 +3,7 @@ defmodule Sequin.Runtime.MysqlPipeline do
   @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.Trace
   alias Sequin.Sinks.Mysql.Client
@@ -33,23 +34,31 @@ defmodule Sequin.Runtime.MysqlPipeline do
 
   @impl SinkPipeline
   def handle_message(message, context) do
+    %{consumer: consumer} = context
+
+    %Routing.Consumers.Mysql{table_name: table_name} = Routing.route_message(consumer, message.data)
+
     batcher =
       case message.data.data.action do
         :delete -> :delete
         _ -> :default
       end
 
+    message = Broadway.Message.put_batch_key(message, table_name)
     {:ok, Broadway.Message.put_batcher(message, batcher), context}
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
+  def handle_batch(:default, messages, batch_info, context) do
     %{
       consumer: %SinkConsumer{sink: sink} = consumer,
       test_pid: test_pid
     } = context
 
     setup_allowances(test_pid)
+
+    # Get the table name from the batch key (set by routing)
+    table_name = Map.get(batch_info, :batch_key, sink.table_name)
 
     records =
       Enum.map(messages, fn %{data: message} ->
@@ -58,17 +67,20 @@ defmodule Sequin.Runtime.MysqlPipeline do
         |> ensure_string_keys()
       end)
 
-    case Client.upsert_records(sink, records) do
+    # Create a temporary sink with the routed table name
+    routed_sink = %{sink | table_name: table_name}
+
+    case Client.upsert_records(routed_sink, records) do
       {:ok} ->
         Trace.info(consumer.id, %Trace.Event{
-          message: "Upserted records to MySQL table \"#{sink.table_name}\""
+          message: "Upserted records to MySQL table \"#{table_name}\""
         })
 
         {:ok, messages, context}
 
       {:error, error} ->
         Trace.error(consumer.id, %Trace.Event{
-          message: "Failed to upsert records to MySQL table \"#{sink.table_name}\"",
+          message: "Failed to upsert records to MySQL table \"#{table_name}\"",
           error: error
         })
 
@@ -77,7 +89,7 @@ defmodule Sequin.Runtime.MysqlPipeline do
   end
 
   @impl SinkPipeline
-  def handle_batch(:delete, messages, _batch_info, context) do
+  def handle_batch(:delete, messages, batch_info, context) do
     %{
       consumer: %SinkConsumer{sink: sink} = consumer,
       test_pid: test_pid
@@ -85,13 +97,19 @@ defmodule Sequin.Runtime.MysqlPipeline do
 
     setup_allowances(test_pid)
 
+    # Get the table name from the batch key (set by routing)
+    table_name = Map.get(batch_info, :batch_key, sink.table_name)
+
     record_pks =
       Enum.flat_map(messages, fn %{data: message} -> message.record_pks end)
 
-    case Client.delete_records(sink, record_pks) do
+    # Create a temporary sink with the routed table name
+    routed_sink = %{sink | table_name: table_name}
+
+    case Client.delete_records(routed_sink, record_pks) do
       {:ok} ->
         Trace.info(consumer.id, %Trace.Event{
-          message: "Deleted records from MySQL table \"#{sink.table_name}\"",
+          message: "Deleted records from MySQL table \"#{table_name}\"",
           extra: %{record_pks: record_pks}
         })
 
@@ -99,7 +117,7 @@ defmodule Sequin.Runtime.MysqlPipeline do
 
       {:error, error} ->
         Trace.error(consumer.id, %Trace.Event{
-          message: "Failed to delete records from MySQL table \"#{sink.table_name}\"",
+          message: "Failed to delete records from MySQL table \"#{table_name}\"",
           error: error,
           extra: %{record_pks: record_pks}
         })

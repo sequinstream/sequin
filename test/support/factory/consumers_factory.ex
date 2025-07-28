@@ -18,6 +18,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.PostgresSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
@@ -360,6 +361,22 @@ defmodule Sequin.Factory.ConsumersFactory do
         api_key: Factory.word(),
         batch_size: Enum.random(50..500),
         timeout_seconds: Enum.random(1..30),
+        routing_mode: "static"
+      },
+      attrs
+    )
+  end
+
+  defp sink(:postgres, _account_id, attrs) do
+    merge_attributes(
+      %PostgresSink{
+        type: :postgres,
+        host: "localhost",
+        port: 5432,
+        database: "test-db",
+        username: Factory.word(),
+        password: Factory.word(),
+        table_name: Factory.word(),
         routing_mode: "static"
       },
       attrs

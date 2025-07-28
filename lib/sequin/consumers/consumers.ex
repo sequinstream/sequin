@@ -1608,8 +1608,8 @@ defmodule Sequin.Consumers do
 
         %{
           source_table
-          | schema_name: source_table.schema_name,
-            table_name: source_table.table_name,
+          | schema_name: table.schema,
+            table_name: table.name,
             column_filters: enrich_column_filters(source_table.column_filters, table.columns)
         }
     end)

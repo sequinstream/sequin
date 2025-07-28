@@ -89,6 +89,7 @@ defmodule Sequin.TransformsTest do
 
       column_filter = ReplicationFactory.column_filter(column_attnum: column.attnum)
       source_table = ReplicationFactory.source_table(oid: source_table.oid, column_filters: [column_filter])
+      [enriched_source_table] = Consumers.enrich_source_tables([source_table], source_db)
 
       wal_pipeline =
         ReplicationFactory.wal_pipeline(
@@ -104,8 +105,8 @@ defmodule Sequin.TransformsTest do
                id: id,
                name: name,
                source_database: source_database,
-               source_table_schema: _source_table_schema,
-               source_table_name: _source_table_name,
+               source_table_schema: source_table_schema,
+               source_table_name: source_table_name,
                destination_database: destination_database,
                destination_table_schema: _destination_table_schema,
                destination_table_name: _destination_table_name,
@@ -118,6 +119,10 @@ defmodule Sequin.TransformsTest do
       assert source_database == source_db.name
       assert destination_database == dest_db.name
       assert is_list(filters)
+      assert source_table_schema == enriched_source_table.schema_name
+      assert source_table_name == enriched_source_table.table_name
+      assert source_table_schema != nil
+      assert source_table_name != nil
 
       Enum.each(filters, fn filter ->
         assert %{column_name: column_name, operator: operator, comparison_value: value} = filter

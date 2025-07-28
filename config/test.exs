@@ -98,14 +98,16 @@ config :sequin,
   aws_sqs: [
     req_opts: [plug: {Req.Test, Sequin.Aws.HttpClient}]
   ],
+  # TODO Enable compress_body once Req fixes this issue
+  # https://github.com/wojtekmach/req/pull/496
   gcp_pubsub: [
-    req_opts: [plug: {Req.Test, Sequin.Sinks.Gcp.PubSub}]
+    req_opts: [plug: {Req.Test, Sequin.Sinks.Gcp.PubSub}, compress_body: false]
   ],
   s2: [
-    req_opts: [plug: {Req.Test, Sequin.Sinks.S2.Client}]
+    req_opts: [plug: {Req.Test, Sequin.Sinks.S2.Client}, compress_body: false]
   ],
   meilisearch: [
-    req_opts: [plug: {Req.Test, Sequin.Sinks.Meilisearch.Client}]
+    req_opts: [plug: {Req.Test, Sequin.Sinks.Meilisearch.Client}, compress_body: false]
   ],
   redis_module: Sequin.Sinks.RedisMock,
   kafka_module: Sequin.Sinks.KafkaMock,

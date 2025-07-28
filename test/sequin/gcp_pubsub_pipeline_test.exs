@@ -32,7 +32,7 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
         assert String.contains?(conn.request_path, ":publish")
 
         {:ok, body, _} = Plug.Conn.read_body(conn)
-        body = body |> :zlib.gunzip() |> Jason.decode!()
+        body = Jason.decode!(body)
 
         data = get_in(body, ["messages", Access.at(0), "data"])
         data = data |> Base.decode64!() |> Jason.decode!()
@@ -59,7 +59,7 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
         assert conn.host == "pubsub.googleapis.com"
 
         {:ok, body, _} = Plug.Conn.read_body(conn)
-        body = body |> :zlib.gunzip() |> Jason.decode!()
+        body = Jason.decode!(body)
         assert length(body["messages"]) == 2
 
         Req.Test.json(conn, %{})

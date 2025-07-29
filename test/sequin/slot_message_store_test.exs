@@ -1187,4 +1187,50 @@ defmodule Sequin.SlotMessageStoreTest do
       assert count == 1
     end
   end
+
+  describe "peek_messages_metadata/2" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [])
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+      %{consumer: consumer}
+    end
+
+    test "returns messages without data payload", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      # Create 5 messages
+      messages =
+        for i <- 1..5 do
+          ConsumersFactory.consumer_message(
+            message_kind: consumer.message_kind,
+            consumer_id: consumer.id,
+            commit_lsn: i,
+            commit_idx: 1,
+            group_id: "test-group-#{i}",
+            data: %{record: %{id: i}, metadata: %{}}
+          )
+        end
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      assert_receive {:put_messages_done, ^consumer_id}
+
+      # Request only 3 messages
+      metadata_messages = SlotMessageStore.peek_messages_metadata(consumer, 3)
+
+      assert length(metadata_messages) == 3
+
+      # Verify all returned messages have no data
+      Enum.each(metadata_messages, fn msg ->
+        assert msg.data == nil
+      end)
+
+      [first, second, third] = metadata_messages
+      assert first.commit_lsn == 1
+      assert first.group_id == "test-group-1"
+      assert second.commit_lsn == 2
+      assert second.group_id == "test-group-2"
+      assert third.commit_lsn == 3
+      assert third.group_id == "test-group-3"
+    end
+  end
 end

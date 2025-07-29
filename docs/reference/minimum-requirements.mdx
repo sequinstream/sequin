@@ -1,237 +1,90 @@
 ---
-title: 'Minimum Instance Requirements'
-sidebarTitle: 'Minimum Requirements'
-description: 'Learn about Sequin instance sizing and what you can achieve with minimal resources. Optimize performance for development and production environments.'
+title: 'Minimum instance requirements'
+sidebarTitle: 'Minimum requirements'
+description: 'Sequin instance sizing guide for development and production workloads.'
 ---
 
-Sequin is designed to run efficiently on modest hardware while still delivering impressive performance. This guide helps you understand what's possible with different resource configurations.
-
-## Quick Reference
+## Quick reference
 
 | Instance Size | CPU | Memory | Use Case | Throughput |
 |--------------|-----|---------|----------|------------|
 | **Minimal** | 1 vCPU | 1-2 GB | Development, testing | Up to 10k ops/sec |
-| **Small** | 2 vCPU | 4 GB | Small production workloads | Up to 15k ops/sec |
+| **Small** | 2 vCPU | 4 GB | Small production | Up to 15k ops/sec |
 | **Medium** | 4 vCPU | 8 GB | Standard production | Up to 30k ops/sec |
 | **Large** | 8+ vCPU | 16+ GB | High-volume production | 50k+ ops/sec |
 
-## Minimal Instance (1 vCPU, 1-2 GB Memory)
+## Minimal instance (1 vCPU, 1-2 GB)
 
-Perfect for development environments and proof-of-concepts.
-
-### What You Can Do
-
-- **Development & Testing**: Full functionality for local development
-- **Small Production Workloads**:
-  - Stream up to 10,000 operations/second
-  - Handle 1-5 concurrent sinks
-  - Support databases with moderate change rates
-- **Basic Monitoring**: Prometheus metrics and health checks
-- **All Sink Types**: Full support for all 17+ sink destinations
-
-### Configuration Recommendations
-
-For minimal instances, optimize for low memory usage:
+### Configuration
 
 ```bash
-# Environment variables for minimal instance
-MAX_MEMORY_MB=1500              # Leave ~500MB for OS
-MEMORY_BUFFER_PERCENT=30        # Conservative buffer
-PG_POOL_SIZE=5                  # Reduce connection overhead
-REDIS_POOL_SIZE=3               # Minimal Redis connections
-DEFAULT_WORKERS_PER_SINK=10     # Lower concurrency
+MAX_MEMORY_MB=1500
+MEMORY_BUFFER_PERCENT=30
+PG_POOL_SIZE=5
+REDIS_POOL_SIZE=3
+DEFAULT_WORKERS_PER_SINK=10
 ```
-
-<Note>
-These settings prioritize memory efficiency over throughput. For better performance, consider upgrading to a small instance.
-</Note>
-
-### Limitations
 
 <Warning>
-The minimal instance configuration has the following limitations:
-- Limited concurrent sink processing
-- Reduced buffer capacity for message spikes
-- Slower backfill operations
-- Not recommended for:
-  - High-frequency change capture (>10k ops/sec)
-  - Large backfill operations (>10M rows)
-  - Multiple high-throughput sinks
+Not recommended for: >10k ops/sec, large backfills (>10M rows), or multiple high-throughput sinks.
 </Warning>
 
-## Small Instance (2 vCPU, 4 GB Memory)
+## Small instance (2 vCPU, 4 GB)
 
-Suitable for small to medium production workloads.
-
-### What You Can Do
-
-- **Production Workloads**:
-  - Stream up to 15,000 operations/second
-  - Run 5-10 concurrent sinks efficiently
-  - Handle moderate message bursts
-- **Backfills**: Process millions of rows with reasonable performance
-- **Multiple Databases**: Connect to 2-3 source databases
-- **Enhanced Monitoring**: Full metrics with Grafana dashboards
-
-### Configuration Recommendations
-
-Balanced configuration for small production deployments:
+### Configuration
 
 ```bash
-# Environment variables for small instance
-MAX_MEMORY_MB=3500              # Leave ~500MB for OS
-MEMORY_BUFFER_PERCENT=20        # Standard buffer
-PG_POOL_SIZE=10                 # Default pooling
-REDIS_POOL_SIZE=5               # Standard Redis connections
-DEFAULT_WORKERS_PER_SINK=50     # Good concurrency
+MAX_MEMORY_MB=3500
+MEMORY_BUFFER_PERCENT=20
+PG_POOL_SIZE=10
+REDIS_POOL_SIZE=5
+DEFAULT_WORKERS_PER_SINK=50
 ```
 
-## When to Scale Up
+## When to scale
 
-Monitor these metrics to determine when to scale your instance:
+Monitor these saturation metrics (scale when >90%):
+- `sequin_ingestion_saturation_percent`
+- `sequin_processing_saturation_percent`
+- `sequin_delivery_saturation_percent`
 
-- `erlang_vm_statistics_reductions_total` (Counter)
+Resource exhaustion indicators:
+- Processes using >100MB memory
+- Message queues with >1000 pending
+- Growing ETS tables
+- `erlang_vm_memory_bytes_total` approaching `MAX_MEMORY_MB`
 
-  Measures CPU-bound work intensity. Use with a rate query to monitor CPU utilization trends.
+## Optimization tips
 
-- `erlang_vm_memory_bytes_total` (Gauge)
-
-  Total VM memory usage in bytes. Monitor when approaching your configured `MAX_MEMORY_MB` limit.
-
-- `sequin_ingestion_saturation_percent` (Gauge)
-
-  Indicates how much of ingestion capacity is being used. Scale when consistently above 90%.
-
-- `sequin_processing_saturation_percent` (Gauge)
-
-  Shows processing pipeline saturation. Values above 90% indicate need for more resources.
-
-- `sequin_delivery_saturation_percent` (Gauge)
-
-  Measures delivery pipeline saturation. High values suggest scaling or optimizing sinks.
-
-<Info>
-See our [Metrics Reference](/reference/metrics) for complete documentation of available metrics.
-</Info>
-
-### Resource Exhaustion Indicators
-
-Watch for these warning signs that indicate your instance needs more resources:
-
-- **High Memory Usage**: Processes using >100MB memory individually
-- **Message Queue Buildup**: Message queues with >1000 pending messages
-- **Growing ETS Tables**: Tables increasing without bounds
-- **Database Message Accumulation**: Large counts of unprocessed consumer events
-
-### Quick Diagnostics
-
-If you suspect resource exhaustion, check these simple approaches first:
-
-1. **System Diagnostics**: Use `htop` or `ps aux` to verify Sequin is the resource consumer
-
-2. **Grafana Dashboards**
-   - Sequin exports Prometheus metrics that can be visualized in Grafana
-   - Pre-built dashboards available for monitoring resource usage
-   - Key panels to monitor:
-     - Memory usage trends over time
-     - CPU utilization patterns
-     - Message processing rates and backlog
-     - Consumer-specific resource consumption
-   - Set up alerts for memory thresholds (e.g., >80% usage)
-   - See [Metrics Reference](/reference/metrics) for available metrics
-
-3. **Phoenix LiveDashboard**: Available at `/admin/dashboard/`
-   - Make sure to configure your credentials via `ADMIN_USER` and `ADMIN_PASSWORD`
-   - Check total memory usage and process count
-   - Sort processes by memory to find heavy consumers
-
-
-## Optimization Tips for Small Instances
-
-### Batch Configuration
-
-Optimize batch sizes based on your destination type:
+### Batch configuration
 
 ```yaml
-# For high-latency destinations (webhooks)
-sinks:
-  - name: webhook-sink
-    batch_size: 50
-    batch_timeout: 100ms
+# High-latency destinations (webhooks)
+batch_size: 50
+batch_timeout: 100ms
+
+# Low-latency destinations (Kafka, Redis)
+batch_size: 100
+batch_timeout: 10ms
 ```
 
-```yaml
-# For low-latency destinations (Kafka, Redis)
-sinks:
-  - name: kafka-sink
-    batch_size: 100
-    batch_timeout: 10ms
-```
+### Performance tuning
 
-### Sink Performance
-
-Focus resources on critical sinks:
+- Filter specific tables instead of entire schemas
 - Use [filters](/reference/filters) to reduce message volume
-- Configure appropriate retry and batching policies
+- Use [transforms](/reference/transforms) to reduce message sizes
+- Set `BACKFILL_MAX_PENDING_MESSAGES` lower (e.g., 100k) for small instances
 
-### Database Optimization
+## Cloud instances
 
-- Use specific table filters instead of streaming entire schemas
+| Provider | Minimal | Small | Production |
+|----------|---------|-------|------------|
+| **AWS** | t3.micro | t3.small | t3.medium+ |
+| **GCP** | e2-micro | e2-small | e2-medium+ |
+| **Azure** | B1s | B2s | D2s_v3+ |
 
-### Memory Management
+## Getting help
 
-- Set `BACKFILL_MAX_PENDING_MESSAGES` lower (e.g., 100k)
-- Monitor memory usage via [Prometheus metrics](/reference/metrics)
-- Use [transforms](/reference/transforms) to reduce message sizes, or filter messages entirely
-
-## Cloud Provider Recommendations
-
-### AWS
-- **Minimal**: t3.micro (1 vCPU, 1 GB)
-- **Small**: t3.small (2 vCPU, 2 GB)
-- **Production**: t3.medium or larger
-
-### Google Cloud
-- **Minimal**: e2-micro (0.25-2 vCPU, 1 GB)
-- **Small**: e2-small (0.5-2 vCPU, 2 GB)
-- **Production**: e2-medium or larger
-
-### Azure
-- **Minimal**: B1s (1 vCPU, 1 GB)
-- **Small**: B2s (2 vCPU, 4 GB)
-- **Production**: D2s_v3 or larger
-
-## Development vs Production
-
-### Development Environment
-
-<Info>
-For development environments:
-- 1 vCPU, 1-2 GB memory is sufficient
-- Use Docker Compose defaults
-</Info>
-
-### Production Environment
-
-<Note>
-For production environments:
-- Minimum 2 vCPU, 4 GB memory recommended
-- Configure proper resource limits
-- Monitor metrics closely, including setting up alerts
-</Note>
-
-## Related Documentation
-
-- [Configuration Reference](/reference/configuration) - Complete list of environment variables
-- [Metrics Reference](/reference/metrics) - Monitor your Sequin instance
-- [Performance](/performance) - Benchmark results and optimization
-- [Deploy to Production](/how-to/deploy-to-production) - Production deployment guide
-
-## Getting Help
-
-If you're unsure about sizing for your specific use case:
-
-1. Start with a minimal instance and monitor metrics
-2. Use our performance monitoring guide to identify bottlenecks
-3. Join our [Discord](https://discord.gg/BV8wFXvNtY) or [Slack](https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA) community for sizing advice
-4. Consider our [managed offering](/sequin-managed/overview) for automatic scaling
+- Start minimal and monitor [metrics](/reference/metrics)
+- Join [Discord](https://discord.gg/BV8wFXvNtY) or [Slack](https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA) for sizing advice
+- Consider our [managed offering](/sequin-managed/overview) for automatic scaling

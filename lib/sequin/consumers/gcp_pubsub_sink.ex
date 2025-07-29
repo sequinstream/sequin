@@ -6,9 +6,8 @@ defmodule Sequin.Consumers.GcpPubsubSink do
   import Ecto.Changeset
 
   alias Sequin.Sinks.Gcp.Credentials
-  alias Sequin.Sinks.Gcp.PubSub
 
-  @derive {Jason.Encoder, only: [:project_id, :topic_id]}
+  @derive {Jason.Encoder, only: [:project_id, :topic_id, :use_application_default_credentials]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:gcp_pubsub], default: :gcp_pubsub
@@ -17,6 +16,7 @@ defmodule Sequin.Consumers.GcpPubsubSink do
     field :connection_id, :string
     field :use_emulator, :boolean, default: false
     field :emulator_base_url, :string
+    field :use_application_default_credentials, :boolean, default: false
     field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
 
     embeds_one :credentials, Credentials, on_replace: :delete
@@ -29,6 +29,7 @@ defmodule Sequin.Consumers.GcpPubsubSink do
       :topic_id,
       :use_emulator,
       :emulator_base_url,
+      :use_application_default_credentials,
       :routing_mode
     ])
     |> validate_required([:project_id, :use_emulator])
@@ -45,6 +46,7 @@ defmodule Sequin.Consumers.GcpPubsubSink do
       message: "must be between 3 and 255 characters and match the pattern: [a-zA-Z][a-zA-Z0-9-_.~+%]*"
     )
     |> validate_routing()
+    |> validate_cloud_mode_restrictions()
     |> put_new_connection_id()
   end
 
@@ -77,11 +79,32 @@ defmodule Sequin.Consumers.GcpPubsubSink do
 
   defp cast_credentials(changeset) do
     use_emulator? = get_field(changeset, :use_emulator)
+    use_application_default_credentials? = get_field(changeset, :use_application_default_credentials)
 
-    if use_emulator? do
-      put_change(changeset, :credentials, %{})
+    cond do
+      use_emulator? ->
+        put_change(changeset, :credentials, %{})
+
+      use_application_default_credentials? ->
+        put_change(changeset, :credentials, %{})
+
+      true ->
+        cast_embed(changeset, :credentials, required: true)
+    end
+  end
+
+  defp validate_cloud_mode_restrictions(changeset) do
+    self_hosted? = Sequin.Config.self_hosted?()
+    use_application_default_credentials? = get_field(changeset, :use_application_default_credentials)
+
+    if not self_hosted? and use_application_default_credentials? do
+      add_error(
+        changeset,
+        :use_application_default_credentials,
+        "Application Default Credentials are not supported in Sequin Cloud. Please use explicit credentials instead."
+      )
     else
-      cast_embed(changeset, :credentials, required: true)
+      changeset
     end
   end
 
@@ -89,18 +112,13 @@ defmodule Sequin.Consumers.GcpPubsubSink do
   Creates a new PubSub client for the given sink configuration.
   """
   def pubsub_client(%__MODULE__{} = sink) do
-    opts =
-      if sink.use_emulator do
-        [req_opts: [base_url: sink.emulator_base_url], use_emulator: true]
-      else
-        []
-      end
+    case Sequin.Gcp.get_gcp_pubsub_client(sink) do
+      {:ok, client} ->
+        client
 
-    PubSub.new(
-      sink.project_id,
-      sink.credentials,
-      opts
-    )
+      {:error, reason} ->
+        raise "Failed to create PubSub client: #{inspect(reason)}"
+    end
   end
 
   def topic_path(%__MODULE__{} = sink) do

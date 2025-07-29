@@ -24,6 +24,7 @@ defmodule Sequin.Consumers.MysqlSink do
     field(:timeout_seconds, :integer, default: 30)
     field(:upsert_on_duplicate, :boolean, default: true)
     field(:routing_mode, Ecto.Enum, values: [:dynamic, :static], default: :static)
+    field(:connection_id, :string, virtual: true)
   end
 
   def changeset(struct, params) do
@@ -57,6 +58,13 @@ defmodule Sequin.Consumers.MysqlSink do
     |> validate_format(:table_name, ~r/^[a-zA-Z_][a-zA-Z0-9_]*$/,
       message: "must be a valid MySQL table name (alphanumeric and underscores, starting with letter or underscore)"
     )
+  end
+
+  @doc """
+  Generate a unique connection ID for caching purposes.
+  """
+  def connection_id(%__MODULE__{} = sink) do
+    "#{sink.host}:#{sink.port}/#{sink.database}@#{sink.username}"
   end
 
   def connection_opts(%__MODULE__{} = sink) do

@@ -5,6 +5,7 @@ defmodule Sequin.Sinks.Mysql.Client do
 
   alias Sequin.Consumers.MysqlSink
   alias Sequin.Error
+  alias Sequin.Sinks.Mysql.ConnectionCache
 
   require Logger
 
@@ -12,19 +13,9 @@ defmodule Sequin.Sinks.Mysql.Client do
   Test the connection to the MySQL database.
   """
   def test_connection(%MysqlSink{} = sink) do
-    case start_connection(sink) do
-      {:ok, pid} ->
-        try do
-          case MyXQL.query(pid, "SELECT 1", []) do
-            {:ok, _result} -> :ok
-            {:error, error} -> {:error, format_error(error)}
-          end
-        after
-          GenServer.stop(pid)
-        end
-
-      {:error, error} ->
-        {:error, format_error(error)}
+    case ConnectionCache.test_connection(sink) do
+      :ok -> :ok
+      {:error, error} -> {:error, format_error(error)}
     end
   end
 
@@ -35,21 +26,16 @@ defmodule Sequin.Sinks.Mysql.Client do
     if Enum.empty?(records) do
       {:ok}
     else
-      case start_connection(sink) do
+      case ConnectionCache.get_connection(sink) do
         {:ok, pid} ->
           try do
-            result =
-              if sink.upsert_on_duplicate do
-                insert_or_update_records(pid, sink, records)
-              else
-                insert_records(pid, sink, records)
-              end
-
-            GenServer.stop(pid)
-            result
+            if sink.upsert_on_duplicate do
+              insert_or_update_records(pid, sink, records)
+            else
+              insert_records(pid, sink, records)
+            end
           rescue
             error ->
-              GenServer.stop(pid)
               {:error, format_error(error)}
           end
 
@@ -66,7 +52,7 @@ defmodule Sequin.Sinks.Mysql.Client do
     if Enum.empty?(record_pks) do
       {:ok}
     else
-      case start_connection(sink) do
+      case ConnectionCache.get_connection(sink) do
         {:ok, pid} ->
           try do
             # Assume primary key is 'id' for simplicity
@@ -81,8 +67,9 @@ defmodule Sequin.Sinks.Mysql.Client do
               {:error, error} ->
                 {:error, format_error(error)}
             end
-          after
-            GenServer.stop(pid)
+          rescue
+            error ->
+              {:error, format_error(error)}
           end
 
         {:error, error} ->
@@ -92,10 +79,6 @@ defmodule Sequin.Sinks.Mysql.Client do
   end
 
   # Private functions
-
-  defp start_connection(%MysqlSink{} = sink) do
-    MyXQL.start_link(MysqlSink.connection_opts(sink))
-  end
 
   defp insert_or_update_records(pid, %MysqlSink{} = sink, records) do
     case build_upsert_query(sink, records) do

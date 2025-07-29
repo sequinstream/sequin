@@ -88,6 +88,7 @@ defmodule Sequin.Application do
       Sequin.Databases.ConnectionCache,
       Sequin.Sinks.Redis.ConnectionCache,
       Sequin.Sinks.Kafka.ConnectionCache,
+      Sequin.Sinks.Mysql.ConnectionCache,
       Sequin.Sinks.Nats.ConnectionCache,
       Sequin.Sinks.RabbitMq.ConnectionCache,
       SequinWeb.Presence,

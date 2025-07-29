@@ -6,7 +6,7 @@ defmodule Sequin.Runtime.MysqlPipeline do
   alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.Trace
-  alias Sequin.Sinks.Mysql.Client
+  alias Sequin.Sinks.Mysql
   alias Sequin.Transforms.Message
 
   @impl SinkPipeline
@@ -70,7 +70,7 @@ defmodule Sequin.Runtime.MysqlPipeline do
     # Create a temporary sink with the routed table name
     routed_sink = %{sink | table_name: table_name}
 
-    case Client.upsert_records(routed_sink, records) do
+    case Mysql.upsert_records(routed_sink, records) do
       {:ok} ->
         Trace.info(consumer.id, %Trace.Event{
           message: "Upserted records to MySQL table \"#{table_name}\""
@@ -106,7 +106,7 @@ defmodule Sequin.Runtime.MysqlPipeline do
     # Create a temporary sink with the routed table name
     routed_sink = %{sink | table_name: table_name}
 
-    case Client.delete_records(routed_sink, record_pks) do
+    case Mysql.delete_records(routed_sink, record_pks) do
       {:ok} ->
         Trace.info(consumer.id, %Trace.Event{
           message: "Deleted records from MySQL table \"#{table_name}\"",
@@ -141,7 +141,7 @@ defmodule Sequin.Runtime.MysqlPipeline do
   defp setup_allowances(nil), do: :ok
 
   defp setup_allowances(test_pid) do
-    Req.Test.allow(Client, test_pid, self())
+    Mox.allow(Sequin.Sinks.MysqlMock, test_pid, self())
     Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 end

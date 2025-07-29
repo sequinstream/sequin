@@ -114,6 +114,7 @@
                   "reference/sinks/gcp-pubsub",
                   "reference/sinks/kafka",
                   "reference/sinks/meilisearch",
+                  "reference/sinks/mysql",
                   "reference/sinks/nats",
                   "reference/sinks/rabbitmq",
                   "reference/sinks/redis-string",

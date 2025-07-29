@@ -1,0 +1,183 @@
+---
+title: "MySQL sink"
+sidebarTitle: "MySQL sink"
+description: "Stream Postgres changes directly to MySQL with Sequin's MySQL sink."
+---
+
+The **MySQL sink** writes change data into MySQL tables using direct SQL operations.
+
+<Tip>
+  This is the reference for the MySQL sink. See the [how-to guide](/how-to/stream-postgres-to-mysql) for a step-by-step walkthrough.
+</Tip>
+
+## Configuration
+
+- **Host**
+
+    Hostname or IP address of your MySQL server (for example, `localhost` or `mysql.example.com`).
+
+- **Port** *(optional)*
+
+    Port number of your MySQL server (default `3306`).
+
+- **Database**
+
+    Name of the MySQL database to connect to.
+
+- **Table name**
+
+    Name of the MySQL table to write to. The table **must exist** before Sequin can stream data.
+
+- **Username**
+
+    MySQL username for authentication.
+
+- **Password**
+
+    MySQL password for authentication.
+
+- **SSL/TLS** *(optional)*
+
+    Enable SSL/TLS encryption for the connection (default `false`).
+
+- **Upsert on duplicate** *(optional)*
+
+    When enabled, uses MySQL's `ON DUPLICATE KEY UPDATE` to handle existing records. When disabled, attempts direct inserts (default `true`).
+
+- **Batch size** *(optional)*
+
+    Maximum number of records per batch operation (default `100`, maximum `10,000`).
+
+- **Timeout** *(optional)*
+
+    Connection timeout in seconds (default `30`, maximum `300`).
+
+## Transform requirements
+
+Your [transform](/reference/transforms) must return a map where keys correspond to MySQL table column names and values are properly typed for the target columns.
+
+For complex data types like JSON objects or arrays, Sequin will automatically encode them as JSON strings when inserting into MySQL.
+
+### Example transforms
+
+Insert the full record:
+```elixir
+def transform(_action, record, _changes, _metadata) do
+  record
+end
+```
+
+Map specific fields and rename columns:
+```elixir
+def transform(_action, record, _changes, _metadata) do
+  %{
+    id: record["product_id"],
+    name: record["product_name"],
+    description: record["product_description"],
+    updated_at: record["modified_at"]
+  }
+end
+```
+
+Handle JSON data:
+```elixir
+def transform(_action, record, _changes, _metadata) do
+  %{
+    id: record["id"],
+    name: record["name"],
+    metadata: %{
+      tags: record["tags"],
+      attributes: record["attributes"]
+    }
+  }
+end
+```
+
+## SQL operations
+
+Sequin uses the following SQL operations based on the change action:
+
+| Change action | SQL operation | Behavior |
+|---------------|--------------|----------|
+| `INSERT`, `UPDATE`, `READ` | `INSERT ... ON DUPLICATE KEY UPDATE` (if upsert enabled) or `INSERT` | Creates or updates the record |
+| `DELETE` | `DELETE` | Removes the record by primary key |
+
+### Upsert behavior
+
+When **upsert on duplicate** is enabled (default), Sequin uses MySQL's `ON DUPLICATE KEY UPDATE` clause:
+
+```sql
+INSERT INTO products (id, name, price) 
+VALUES (1, 'Product Name', 19.99)
+ON DUPLICATE KEY UPDATE 
+  name = VALUES(name), 
+  price = VALUES(price)
+```
+
+When disabled, Sequin performs direct inserts, which may fail if records with duplicate primary keys exist.
+
+## Connection management
+
+Sequin maintains a connection pool to your MySQL server for optimal performance. Connections are cached and reused across multiple operations to minimize connection overhead.
+
+## Error handling
+
+Common errors include:
+
+- Connection failures (network, authentication)
+- SQL syntax errors (usually from transform output)
+- Constraint violations (foreign key, unique constraints)
+- Data type mismatches
+- Table or column not found
+
+Errors are displayed in the Sequin console's **Messages** tab with detailed MySQL error information.
+
+## Limits
+
+- **Batch size** is limited to `10,000` records by Sequin
+- **Timeout** is limited to `300` seconds (5 minutes)
+- One sink targets one table; multiple tables require multiple sinks (or dynamic routing)
+- Table and column names must be valid MySQL identifiers
+
+## Routing
+
+The MySQL sink supports dynamic routing of the `table_name` with [routing functions](/reference/routing).
+
+Example routing function to route to different tables based on record type:
+
+```elixir
+def route(action, record, changes, metadata) do
+  # Route based on record type
+  table_name = case record["event_type"] do
+    "user_signup" -> "user_events"
+    "purchase" -> "purchase_events"
+    "analytics" -> "analytics_events"
+    _ -> "other_events"
+  end
+  
+  %{table_name: table_name}
+end
+```
+
+Route based on source table with schema prefix:
+
+```elixir
+def route(action, record, changes, metadata) do
+  table_name = if metadata.table_schema do
+    "#{metadata.table_schema}_#{metadata.table_name}"
+  else
+    metadata.table_name
+  end
+  
+  %{table_name: table_name}
+end
+```
+
+When not using a routing function, messages will be inserted into the statically configured table.
+
+## Requirements
+
+- MySQL 5.7 or later
+- Target tables must exist before streaming begins
+- Appropriate permissions for `INSERT`, `UPDATE`, `DELETE` operations on target tables
+- For SSL connections, ensure your MySQL server supports SSL/TLS 

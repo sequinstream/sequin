@@ -1,6 +1,19 @@
 name: sequin-dev
 
 services:
+  mysql:
+    profiles: [databases]
+    image: mysql:8.0
+    ports:
+      - "127.0.0.1:3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: demo
+      MYSQL_PASSWORD: demo
+      MYSQL_DATABASE: demo
+    volumes:
+      - sequin_dev_mysql:/var/lib/mysql
+
   postgres:
     profiles: [databases]
     build: 
@@ -161,3 +174,4 @@ volumes:
   sequin_dev_elasticsearch:
   prometheus_data:
   grafana_data:
+  sequin_dev_mysql:

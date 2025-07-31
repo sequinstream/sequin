@@ -839,7 +839,7 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.transform.name == "record_only"
       assert consumer.sink.batch == true
       assert consumer.max_retry_count == 5
-      assert is_nil(consumer.source)
+      refute is_nil(consumer.source)
     end
 
     test "creates webhook subscription with batch=false" do

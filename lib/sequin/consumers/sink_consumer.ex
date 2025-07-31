@@ -204,7 +204,7 @@ defmodule Sequin.Consumers.SinkConsumer do
       :message_grouping
     ])
     |> cast_polymorphic_embed(:sink, required: true)
-    |> cast_embed(:source)
+    |> cast_embed(:source, required: true)
     |> cast_embed(:source_tables)
     |> put_defaults()
     |> validate_message_grouping()

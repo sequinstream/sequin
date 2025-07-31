@@ -1439,7 +1439,7 @@ defmodule Sequin.PostgresReplicationTest do
       consumer = Enum.random([event_consumer, record_consumer])
 
       # Attach a schema filter to the consumer
-      Consumers.update_sink_consumer(consumer, %{source: nil}, skip_lifecycle: true)
+      Consumers.update_sink_consumer(consumer, %{source: %{}}, skip_lifecycle: true)
 
       # Restart the consumer to apply the changes
       Consumers.update_sink_consumer(consumer, %{})

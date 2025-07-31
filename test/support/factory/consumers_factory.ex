@@ -25,6 +25,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SnsSink
+  alias Sequin.Consumers.Source
   alias Sequin.Consumers.SqsSink
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Factory
@@ -87,6 +88,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         ack_wait_ms: 30_000,
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         sink: sink,
+        source: %Source{},
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
@@ -115,6 +117,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       sink ->
         Sequin.Map.from_ecto(sink)
     end)
+    |> Map.update!(:source, &Sequin.Map.from_ecto/1)
     |> Sequin.Map.from_ecto()
   end
 
@@ -392,7 +395,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
   def source(attrs \\ []) do
     merge_attributes(
-      %Sequin.Consumers.Source{},
+      %Source{},
       attrs
     )
   end

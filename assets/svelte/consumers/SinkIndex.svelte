@@ -33,6 +33,7 @@
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
   import MeilisearchIcon from "../sinks/meilisearch/MeilisearchIcon.svelte";
   import ElasticsearchIcon from "../sinks/elasticsearch/ElasticsearchIcon.svelte";
+  import MysqlIcon from "../sinks/mysql/MysqlIcon.svelte";
 
   import { Badge } from "$lib/components/ui/badge";
   import * as d3 from "d3";
@@ -163,6 +164,11 @@
       id: "elasticsearch",
       name: "Elasticsearch",
       icon: ElasticsearchIcon,
+    },
+    {
+      id: "mysql",
+      name: "MySQL",
+      icon: MysqlIcon,
     },
   ];
 

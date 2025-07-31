@@ -20,7 +20,6 @@ defmodule Sequin.Sinks.Mysql.ConnectionCache do
   use GenServer
 
   alias Sequin.Consumers.MysqlSink
-  alias Sequin.Error.NotFoundError
 
   require Logger
 

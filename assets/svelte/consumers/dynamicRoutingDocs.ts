@@ -231,4 +231,14 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  mysql: {
+    fields: {
+      table_name: {
+        description: "MySQL table name to write records to",
+        staticValue: "<configured-table-name>",
+        staticFormField: "table_name",
+        dynamicDefault: "<source-schema>_<source-table>",
+      },
+    },
+  },
 };

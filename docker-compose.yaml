@@ -152,6 +152,18 @@ services:
       - ./meilisearch-data:/meili_data
     restart: on-failure
 
+  timescaledb:
+    profiles: [timescaledb]
+    image: timescale/timescaledb:latest-pg16
+    command: postgres -c wal_level=logical
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_USER: timescale
+      POSTGRES_PASSWORD: timescale
+      POSTGRES_DB: timescale
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
 
 
 volumes:
@@ -161,3 +173,4 @@ volumes:
   sequin_dev_elasticsearch:
   prometheus_data:
   grafana_data:
+  timescaledb_data:

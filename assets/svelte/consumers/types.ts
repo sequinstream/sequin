@@ -247,6 +247,24 @@ export type ElasticsearchConsumer = BaseConsumer & {
   };
 };
 
+// MySQL specific sink
+export type MysqlConsumer = BaseConsumer & {
+  sink: {
+    type: "mysql";
+    host: string;
+    port: number;
+    database: string;
+    table_name: string;
+    username: string;
+    password?: string;
+    ssl: boolean;
+    batch_size: number;
+    timeout_seconds: number;
+    upsert_on_duplicate: boolean;
+    routing_mode: "static" | "dynamic";
+  };
+};
+
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer
@@ -263,6 +281,7 @@ export type Consumer =
   | TypesenseConsumer
   | SnsConsumer
   | ElasticsearchConsumer
+  | MysqlConsumer
   | RedisStringConsumer;
 
 export const SinkTypeValues = [
@@ -270,17 +289,19 @@ export const SinkTypeValues = [
   "sqs",
   "sns",
   "kinesis",
+  "s2",
   "redis_stream",
+  "redis_string",
   "kafka",
   "sequin_stream",
   "gcp_pubsub",
-  "elasticsearch",
   "nats",
   "rabbitmq",
+  "azure_event_hub",
   "typesense",
   "meilisearch",
   "elasticsearch",
-  "redis_string",
+  "mysql",
 ] as const;
 
 export type SinkType = (typeof SinkTypeValues)[number];
@@ -301,6 +322,7 @@ export const RoutedSinkTypeValues = [
   "sqs",
   "sns",
   "kinesis",
+  "mysql",
 ] as const;
 
 export type RoutedSinkType = (typeof RoutedSinkTypeValues)[number];

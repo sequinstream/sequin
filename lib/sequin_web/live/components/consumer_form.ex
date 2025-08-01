@@ -16,6 +16,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.MeilisearchSink
+  alias Sequin.Consumers.MysqlSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
@@ -305,6 +306,12 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       :elasticsearch ->
         case test_elasticsearch_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
+
+      :mysql ->
+        case test_mysql_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
@@ -693,6 +700,27 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp test_mysql_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %MysqlSink{} = sink -> MysqlSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+
+      case Sequin.Sinks.Mysql.test_connection(sink) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
   defp decode_params(form, socket) do
     sink = decode_sink(socket.assigns.consumer.type, form["sink"])
 
@@ -860,6 +888,22 @@ defmodule SequinWeb.Components.ConsumerForm do
       "virtual_host" => sink["virtual_host"],
       "tls" => sink["tls"],
       "headers" => sink["headers"]
+    }
+  end
+
+  defp decode_sink(:mysql, sink) do
+    %{
+      "type" => "mysql",
+      "host" => sink["host"],
+      "port" => sink["port"],
+      "database" => sink["database"],
+      "table_name" => sink["table_name"],
+      "username" => sink["username"],
+      "password" => sink["password"],
+      "ssl" => sink["ssl"],
+      "batch_size" => sink["batch_size"],
+      "timeout_seconds" => sink["timeout_seconds"],
+      "upsert_on_duplicate" => sink["upsert_on_duplicate"]
     }
   end
 
@@ -1224,6 +1268,22 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp encode_sink(%MysqlSink{} = sink) do
+    %{
+      "type" => "mysql",
+      "host" => sink.host,
+      "port" => sink.port,
+      "database" => sink.database,
+      "table_name" => sink.table_name,
+      "username" => sink.username,
+      "ssl" => sink.ssl,
+      "batch_size" => sink.batch_size,
+      "timeout_seconds" => sink.timeout_seconds,
+      "upsert_on_duplicate" => sink.upsert_on_duplicate,
+      "routing_mode" => sink.routing_mode
+    }
+  end
+
   defp encode_errors(nil), do: %{}
 
   defp encode_errors(%Ecto.Changeset{} = changeset) do
@@ -1451,6 +1511,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :s2 -> "S2 Sink"
       :sequin_stream -> "Sequin Stream Sink"
       :gcp_pubsub -> "GCP Pub/Sub Sink"
+      :mysql -> "MySQL Sink"
       :nats -> "NATS Sink"
       :rabbitmq -> "RabbitMQ Sink"
       :azure_event_hub -> "Azure Event Hub Sink"
@@ -1489,6 +1550,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         :typesense -> {%TypesenseSink{}, %{}}
         :meilisearch -> {%MeilisearchSink{}, %{}}
         :elasticsearch -> {%ElasticsearchSink{}, %{}}
+        :mysql -> {%MysqlSink{}, %{batch_size: 100}}
         :redis_string -> {%RedisStringSink{}, %{batch_size: 10}}
       end
 

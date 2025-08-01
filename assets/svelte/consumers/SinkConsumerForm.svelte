@@ -36,6 +36,7 @@
   import TypesenseSinkForm from "$lib/sinks/typesense/TypesenseSinkForm.svelte";
   import MeilisearchSinkForm from "$lib/sinks/meilisearch/MeilisearchSinkForm.svelte";
   import ElasticsearchSinkForm from "$lib/sinks/elasticsearch/ElasticsearchSinkForm.svelte";
+  import MysqlSinkForm from "$lib/sinks/mysql/MysqlSinkForm.svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import SchemaTableSelector from "../components/SchemaTableSelector.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -791,6 +792,14 @@
       />
     {:else if consumer.type === "elasticsearch"}
       <ElasticsearchSinkForm
+        errors={errors.consumer}
+        bind:form
+        {functions}
+        {refreshFunctions}
+        bind:functionRefreshState
+      />
+    {:else if consumer.type === "mysql"}
+      <MysqlSinkForm
         errors={errors.consumer}
         bind:form
         {functions}

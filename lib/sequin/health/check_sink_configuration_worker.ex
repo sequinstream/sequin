@@ -23,7 +23,7 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
   def perform(%Oban.Job{args: %{"sink_consumer_id" => sink_consumer_id}}) do
     event = %Event{slug: :sink_config_checked, status: :success}
 
-    {:ok, %SinkConsumer{source: %Source{} = source} = consumer} =
+    {:ok, %SinkConsumer{source: source} = consumer} =
       Consumers.get_sink_consumer(sink_consumer_id, :replication_slot)
 
     publication_name = consumer.replication_slot.publication_name
@@ -35,7 +35,7 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
          {:ok, pubviaroot} <- pubviaroot?(postgres_database, publication_name) do
       tables_with_replica_identities =
         Enum.filter(tables_with_replica_identities, fn %{"table_schema" => table_schema, "table_oid" => table_oid} ->
-          Source.schema_and_table_oid_in_source?(source, table_schema, table_oid)
+          is_nil(source) or Source.schema_and_table_oid_in_source?(source, table_schema, table_oid)
         end)
 
       Health.put_event(consumer, %{

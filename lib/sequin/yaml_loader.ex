@@ -960,6 +960,7 @@ defmodule Sequin.YamlLoader do
         with {:ok, params} <-
                Transforms.from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints),
              params = ensure_function_keys_are_nil_when_not_specified(params),
+             params = Map.put_new(params, :source, %{}),
              {:ok, consumer} <-
                Sequin.Consumers.create_sink_consumer(account_id, params) do
           Logger.info("Created HTTP push consumer", consumer_id: consumer.id)

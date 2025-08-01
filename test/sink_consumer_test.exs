@@ -15,6 +15,15 @@ defmodule Sequin.SinkConsumerTest do
         assert changeset.valid?, "Sink #{sink_type} has invalid factory: #{inspect(errors)}"
       end
     end
+
+    test "cannot create sink without source" do
+      sink_consumer_attrs = ConsumersFactory.sink_consumer_attrs()
+      sink_consumer_attrs = Map.delete(sink_consumer_attrs, :source)
+      changeset = SinkConsumer.create_changeset(%SinkConsumer{}, sink_consumer_attrs)
+      errors = Sequin.Error.errors_on(changeset)
+      assert %{source: [msg]} = errors
+      assert msg =~ "can't be blank"
+    end
   end
 
   describe "functions" do

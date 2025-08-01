@@ -37,6 +37,7 @@ defmodule SequinWeb.SinkConsumerController do
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
 
     with {:ok, cleaned_params} <- Transforms.from_external_sink_consumer(account_id, params, databases, http_endpoints),
+         cleaned_params = Map.put_new(cleaned_params, :source, %{}),
          {:ok, sink_consumer} <- Consumers.create_sink_consumer(account_id, cleaned_params) do
       render(conn, "show.json", sink_consumer: sink_consumer)
     end

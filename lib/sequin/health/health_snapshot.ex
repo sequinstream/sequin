@@ -28,11 +28,15 @@ defmodule Sequin.Health.HealthSnapshot do
   Returns a query that can be further composed or executed.
 
   Only selects the fields needed for metrics reporting (not including health_json).
+  Filters out snapshots older than 1 hours to avoid stale metrics.
   """
   def latest_snapshots_query do
+    cutoff_time = DateTime.add(DateTime.utc_now(), -1, :hour)
+
     # Use a window function to get the latest snapshot for each entity
     # Only select the columns needed for metrics (omit health_json)
     from s in HealthSnapshot,
+      where: s.sampled_at > ^cutoff_time,
       select: %{s | health_json: nil},
       distinct: [s.entity_id, s.entity_kind],
       order_by: [desc: s.sampled_at]

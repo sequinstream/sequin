@@ -29,7 +29,9 @@ defmodule Sequin.Metrics.EntityHealthMetricsTest do
       test_pid = self()
 
       # Expect the mocked prometheus calls for healthy snapshot (sink)
-      expect(PrometheusMock, :set_entity_health, 6, fn entity_type, entity_id, status, value ->
+      # Sink entities gets 4 status metrics: ok, warn, error, paused
+      # Replication slots entities get 3 status metrics: ok, warn, error
+      expect(PrometheusMock, :set_entity_health, 7, fn entity_type, entity_id, status, value ->
         send(test_pid, {:set, %{entity_type: entity_type, entity_id: entity_id, status: status, value: value}})
         :ok
       end)
@@ -37,7 +39,7 @@ defmodule Sequin.Metrics.EntityHealthMetricsTest do
       assert :ok = EntityHealthMetrics.report_entity_health(PrometheusMock)
 
       payload =
-        for _ <- 1..6, into: [] do
+        for _ <- 1..7, into: [] do
           assert_receive {:set, payload}
           payload
         end
@@ -46,6 +48,7 @@ defmodule Sequin.Metrics.EntityHealthMetricsTest do
         %{entity_type: "sink", entity_id: healthy.entity_id, status: "ok", value: 1},
         %{entity_type: "sink", entity_id: healthy.entity_id, status: "warn", value: 0},
         %{entity_type: "sink", entity_id: healthy.entity_id, status: "error", value: 0},
+        %{entity_type: "sink", entity_id: healthy.entity_id, status: "paused", value: 0},
         %{entity_type: "replication_slot", entity_id: not_healthy.entity_id, status: "ok", value: 0},
         %{entity_type: "replication_slot", entity_id: not_healthy.entity_id, status: "warn", value: 0},
         %{entity_type: "replication_slot", entity_id: not_healthy.entity_id, status: "error", value: 1}

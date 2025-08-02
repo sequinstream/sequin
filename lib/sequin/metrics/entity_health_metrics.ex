@@ -51,7 +51,8 @@ defmodule Sequin.Metrics.EntityHealthMetrics do
     status_values = [
       {"ok", snapshot.status == :healthy},
       {"warn", snapshot.status == :warning},
-      {"error", snapshot.status in [:error]}
+      {"error", snapshot.status == :error},
+      {"paused", snapshot.status == :paused}
     ]
 
     # Set gauge values for each status

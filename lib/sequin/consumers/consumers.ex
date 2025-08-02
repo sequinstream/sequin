@@ -2010,7 +2010,17 @@ defmodule Sequin.Consumers do
   end
 
   defp maybe_binary_to_string(binary) when is_binary(binary) do
-    Sequin.String.binary_to_string!(binary)
+    # Check if it's valid UTF-8 text, if so, return right away
+    if String.valid?(binary) do
+      binary
+    else
+      # If not valid UTF-8, try to convert it to a UUID binary (16 bytes)
+      if byte_size(binary) == 16 do
+        Sequin.String.binary_to_string!(binary)
+      else
+        binary
+      end
+    end
   rescue
     _ -> binary
   end

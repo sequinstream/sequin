@@ -1076,6 +1076,15 @@ defmodule Sequin.Health do
   defp get_dedup_key(%HttpEndpoint{} = entity), do: "endpoint_health_#{entity.id}"
   defp get_dedup_key(%WalPipeline{} = entity), do: "pipeline_health_#{entity.id}"
 
+  @spec latest_snapshots_stream((Enumerable.t() -> any()), Keyword.t()) :: {:ok, any()} | {:error, any()}
+  def latest_snapshots_stream(fun, opts \\ []) do
+    Repo.transaction(fn ->
+      HealthSnapshot.latest_snapshots_query()
+      |> Repo.stream(opts)
+      |> fun.()
+    end)
+  end
+
   defp build_error_summary(name, entity) do
     {:ok, health} = health(entity)
     error_checks = Enum.filter(health.checks, &(&1.status in [:error, :warning]))

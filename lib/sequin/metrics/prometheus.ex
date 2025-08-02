@@ -1,6 +1,7 @@
 defmodule Sequin.Prometheus do
   @moduledoc false
   use Prometheus.Metric
+  use Sequin.GenerateBehaviour
 
   @spec setup() :: :ok
   def setup do
@@ -251,6 +252,12 @@ defmodule Sequin.Prometheus do
       labels: [:query],
       help: "Ecto query time: total.",
       duration_unit: :milliseconds
+    )
+
+    Gauge.new(
+      name: :sequin_entity_health,
+      labels: [:entity_type, :entity_id, :status],
+      help: "Health status of Sequin entities (sinks, replication slots). Value is 1 for current status, 0 otherwise."
     )
   end
 
@@ -542,6 +549,28 @@ defmodule Sequin.Prometheus do
   @spec set_delivery_saturation(consumer_id :: String.t(), consumer_name :: String.t(), percent :: number()) :: :ok
   def set_delivery_saturation(consumer_id, consumer_name, percent) do
     Gauge.set([name: :sequin_delivery_saturation_percent, labels: [consumer_id, consumer_name]], percent)
+  end
+
+  @doc """
+  Resets the entity health gauge to clean up stale entity metrics.
+  """
+  @spec reset_entity_health_gauge :: :ok
+  def reset_entity_health_gauge do
+    Gauge.reset(name: :sequin_entity_health, labels: [:entity_type, :entity_id, :status])
+    :ok
+  end
+
+  @doc """
+  Sets the entity health gauge value for a specific entity and status.
+  """
+  @spec set_entity_health(
+          entity_type :: String.t(),
+          entity_id :: String.t(),
+          status :: String.t(),
+          value :: number()
+        ) :: :ok
+  def set_entity_health(entity_type, entity_id, status, value) do
+    Gauge.set([name: :sequin_entity_health, labels: [entity_type, entity_id, status]], value)
   end
 
   @spec set_replication_slot_size(

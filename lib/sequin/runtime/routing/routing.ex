@@ -95,6 +95,7 @@ defmodule Sequin.Runtime.Routing do
       :kinesis -> Sequin.Runtime.Routing.Consumers.Kinesis
       :typesense -> Sequin.Runtime.Routing.Consumers.Typesense
       :meilisearch -> Sequin.Runtime.Routing.Consumers.Meilisearch
+      :mysql -> Sequin.Runtime.Routing.Consumers.Mysql
       :elasticsearch -> Sequin.Runtime.Routing.Consumers.Elasticsearch
       :rabbitmq -> Sequin.Runtime.Routing.Consumers.Rabbitmq
       :sqs -> Sequin.Runtime.Routing.Consumers.Sqs

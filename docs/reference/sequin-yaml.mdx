@@ -304,6 +304,24 @@ destination:
   batch_size: 100                  # Optional, messages per batch, default: 100, max: 10000
 ```
 
+#### MySQL sink
+For writing data to MySQL tables:
+```yaml
+destination:
+  type: "mysql"                    # Required
+  host: "localhost"                # Required, MySQL server hostname
+  port: 3306                       # Optional, default: 3306
+  database: "my_database"          # Required
+  table_name: "products"           # Required (used as fallback when routing_mode is dynamic)
+  username: "mysql_user"           # Required
+  password: "mysql_password"       # Required
+  ssl: false                       # Optional, enable SSL connection, default: false
+  batch_size: 100                  # Optional, records per batch, default: 100, max: 10000
+  timeout_seconds: 30              # Optional, connection timeout, default: 30, max: 300
+  upsert_on_duplicate: true        # Optional, use ON DUPLICATE KEY UPDATE, default: true
+  routing_mode: "static"           # Optional: static or dynamic, default: static
+```
+
 #### Sequin Stream sink
 [Sequin Stream](/reference/sinks/sequin-stream) is a durable, scalable, and fault-tolerant message stream that you can use with Sequin in place of additional infrastructure like Kafka or SQS.
 

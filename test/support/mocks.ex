@@ -18,6 +18,10 @@ Mox.defmock(Sequin.Sinks.KafkaMock,
   for: Sequin.Sinks.Kafka
 )
 
+Mox.defmock(Sequin.Sinks.MysqlMock,
+  for: Sequin.Sinks.Mysql
+)
+
 Mox.defmock(Sequin.Runtime.TableReaderServerMock,
   for: Sequin.Runtime.TableReaderServer
 )

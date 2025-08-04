@@ -49,7 +49,7 @@ defmodule Sequin.Metrics.EntityHealthMetrics do
 
     # Map status to the expected values for the gauge
     status_values = [
-      {"ok", snapshot.status == :healthy},
+      {"ok", snapshot.status in [:healthy, :waiting]},
       {"warn", snapshot.status == :warning},
       {"error", snapshot.status == :error},
       {"paused", snapshot.status == :paused}

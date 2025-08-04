@@ -1411,7 +1411,10 @@ defmodule Sequin.Consumers do
   end
 
   # Source Table Matching
-  def matches_message?(%SinkConsumer{message_kind: :record}, %SlotProcessor.Message{action: :delete}), do: false
+  def matches_message?(%SinkConsumer{message_kind: :record} = consumer, %SlotProcessor.Message{action: :delete}) do
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+    false
+  end
 
   # Schema Matching
   def matches_message?(%SinkConsumer{} = consumer, %SlotProcessor.Message{} = message) do
@@ -1423,11 +1426,17 @@ defmodule Sequin.Consumers do
         %Source{} = source -> Source.schema_and_table_oid_in_source?(source, message.table_schema, message.table_oid)
       end
 
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+
     actions_match? and source_match?
   end
 
-  def matches_message?(%SinkConsumer{source: %Source{} = source}, %SlotProcessor.Message{} = message) do
-    Source.schema_and_table_oid_in_source?(source, message.table_schema, message.table_oid)
+  def matches_message?(%SinkConsumer{source: %Source{} = source} = consumer, %SlotProcessor.Message{} = message) do
+    result = Source.schema_and_table_oid_in_source?(source, message.table_schema, message.table_oid)
+
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+
+    result
   end
 
   # Source Table Matching

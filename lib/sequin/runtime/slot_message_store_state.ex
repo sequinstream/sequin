@@ -452,11 +452,30 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     |> Map.values()
   end
 
+  @doc """
+  Returns messages with metadata only (data field set to nil).
+  This is more memory efficient for listing messages in the UI.
+  """
+  def peek_messages_metadata(%State{} = state, count) when is_integer(count) do
+    state
+    |> sorted_message_stream()
+    |> Enum.take(count)
+    |> Enum.map(&drop_message_data/1)
+  end
+
   def peek_message(%State{} = state, ack_id) do
     case Map.get(state.ack_ids_to_cursor_tuples, ack_id) do
       nil -> {:error, Error.not_found(entity: :message, params: %{ack_id: ack_id})}
       cursor_tuple -> {:ok, Map.get(state.messages, cursor_tuple)}
     end
+  end
+
+  defp drop_message_data(%ConsumerRecord{} = message) do
+    %{message | data: nil}
+  end
+
+  defp drop_message_data(%ConsumerEvent{} = message) do
+    %{message | data: nil}
   end
 
   # This function provides an optimized way to take the first N messages from a map,

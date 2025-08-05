@@ -858,14 +858,14 @@
                         <Input
                           id="batch-size"
                           type="number"
-                          bind:value={form.sink.batch_size}
+                          bind:value={form.batchSize}
                           min="1"
                           placeholder="40"
                         />
                       </div>
-                      {#if errors.consumer?.batch_size}
+                      {#if errors.consumer?.batchSize}
                         <p class="text-destructive text-sm">
-                          {errors.consumer.batch_size}
+                          {errors.consumer.batchSize}
                         </p>
                       {/if}
                     </div>

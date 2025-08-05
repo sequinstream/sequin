@@ -891,6 +891,113 @@ defmodule Sequin.ConsumersTest do
              }
     end
 
+    test "properly handles text values without hex encoding" do
+      # Create a database with a table that has a primary key
+      table =
+        DatabasesFactory.table(
+          oid: 12_345,
+          columns: [
+            DatabasesFactory.column(attnum: 1, name: "id", type: "integer", is_pk?: true),
+            DatabasesFactory.column(attnum: 2, name: "name", type: "text", is_pk?: false)
+          ]
+        )
+
+      database = DatabasesFactory.postgres_database(tables: [table])
+
+      # Create a message with primary key data
+      message =
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data:
+            ConsumersFactory.consumer_event_data(
+              record: %{
+                "id" => 1,
+                "name" => "original"
+              }
+            )
+        )
+
+      # Create an enrichment function that returns text values
+      enrichment_function = %Function{
+        function: %EnrichmentFunction{
+          code: "SELECT id, 'ABCDEFGHIJKLMNOP' as parent_name FROM unnest($1::int[]) id"
+        }
+      }
+
+      query_fn = fn _db, _sql, _params ->
+        # Postgrex would return the text as-is, but it's a binary in Elixir
+        # This string should be exactly 16 bytes and triggers the UUID conversion bug
+        text_value = "ABCDEFGHIJKLMNOP"
+        assert byte_size(text_value) == 16, "Test string must be exactly 16 bytes"
+
+        {:ok,
+         %Postgrex.Result{
+           rows: [[1, text_value]],
+           columns: ["id", "parent_name"]
+         }}
+      end
+
+      enriched_message = Consumers.enrich_message!(database, enrichment_function, message, query_fn: query_fn)
+
+      # Check that the value does not get converted to a UUID by mistake
+      assert enriched_message.data.metadata.enrichment["parent_name"] == "ABCDEFGHIJKLMNOP"
+    end
+
+    test "properly handles UUID binary values" do
+      # Create a database with a table that has a primary key and UUID column
+      table =
+        DatabasesFactory.table(
+          oid: 12_345,
+          columns: [
+            DatabasesFactory.column(attnum: 1, name: "id", type: "uuid", is_pk?: true),
+            DatabasesFactory.column(attnum: 2, name: "name", type: "text", is_pk?: false)
+          ]
+        )
+
+      database = DatabasesFactory.postgres_database(tables: [table])
+
+      uuid = "123e4567-e89b-12d3-a456-426614174000"
+      uuid_binary = Sequin.String.string_to_binary!(uuid)
+
+      # Create a message with UUID primary key
+      message =
+        ConsumersFactory.consumer_event(
+          table_oid: 12_345,
+          data:
+            ConsumersFactory.consumer_event_data(
+              record: %{
+                "id" => uuid,
+                "name" => "original"
+              }
+            )
+        )
+
+      # Create an enrichment function that returns UUID values
+      enrichment_function = %Function{
+        function: %EnrichmentFunction{
+          code: "SELECT $1 as id, 'enriched' as name"
+        }
+      }
+
+      # Mock the database query function - simulate UUID binary from Postgrex
+      query_fn = fn _db, _sql, _params ->
+        {:ok,
+         %Postgrex.Result{
+           rows: [[uuid_binary, "enriched"]],
+           columns: ["id", "name"]
+         }}
+      end
+
+      # Enrich the message
+      enriched_message = Consumers.enrich_message!(database, enrichment_function, message, query_fn: query_fn)
+
+      # Verify enrichment - UUID should be properly converted from binary
+      assert enriched_message.data.metadata.enrichment == %{
+               "id" => uuid,
+               "name" => "enriched"
+             }
+    end
+
     test "properly handles multiple messages" do
       # Create a database with a table that has a primary key
       table =

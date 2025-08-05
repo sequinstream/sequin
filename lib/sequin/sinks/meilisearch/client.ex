@@ -8,53 +8,90 @@ defmodule Sequin.Sinks.Meilisearch.Client do
 
   require Logger
 
-  defp verify_task_by_id(%MeilisearchSink{} = sink, task_id, retries) do
-    if retries > 10 do
-      {:error,
-       Error.service(
-         service: :meilisearch,
-         message: "Task verification timed out",
-         details: %{task_id: task_id}
-       )}
-    else
-      req = base_request(sink)
+  defp decode_body(body) when is_map(body), do: body
 
-      case Req.get(req, url: "/tasks/#{task_id}") do
-        {:ok, %{status: status, body: body}} when status in 200..299 ->
-          case body do
-            %{"status" => status} when status in ["enqueued", "processing"] ->
-              timeout = Sequin.Time.exponential_backoff(200, retries, 10_000)
-              Logger.warning("[Meilisearch] Task #{task_id} is still in progress (#{retries}/10)")
-              :timer.sleep(timeout)
-              verify_task_by_id(sink, task_id, retries + 1)
+  defp decode_body(body) when is_binary(body) do
+    case Jason.decode(body) do
+      {:ok, decoded} -> decoded
+      {:error, _} -> %{}
+    end
+  end
 
-            %{"status" => "failed"} ->
-              message = extract_error_message(body["error"])
+  defp decode_body(_), do: %{}
 
-              {:error,
-               Error.service(
-                 service: :meilisearch,
-                 message: message,
-                 details: body
-               )}
+  defp wait_for_task(%MeilisearchSink{} = sink, task_id) do
+    req =
+      sink
+      |> base_request()
+      |> Req.merge(
+        url: "/tasks/#{task_id}",
+        # We need to disable this if we use a custom retry that emits delays
+        retry_delay: nil,
+        max_retries: 5,
+        retry: fn request, response_or_exception ->
+          should_retry =
+            case response_or_exception do
+              %Req.Response{status: 200, body: encoded_body} ->
+                # NOTE: Req does not automatically decode on retry functions
+                case Jason.decode(encoded_body) do
+                  {:ok, %{"status" => status}} when status in ["enqueued", "processing"] ->
+                    true
 
-            _ ->
-              :ok
+                  _ ->
+                    false
+                end
+
+              %Req.Response{status: status} when status in [408, 429, 500, 502, 503, 504] ->
+                true
+
+              %Req.TransportError{reason: reason} when reason in [:timeout, :econnrefused, :closed] ->
+                true
+
+              _ ->
+                false
+            end
+
+          if should_retry do
+            # Req tracks retry count internally via request.private[:req_retry_count]
+            count = request.private[:req_retry_count] || 0
+            delay = Sequin.Time.exponential_backoff(200, count, 10_000)
+
+            Logger.debug("[Meilisearch] Task #{task_id} has not succeeded, retrying in #{delay}ms (attempt #{count + 1})")
+
+            {:delay, delay}
+          else
+            false
           end
+        end
+      )
 
-        {:ok, %{status: status, body: body}} ->
-          message = extract_error_message(body) || "Request failed with status #{status}"
+    case Req.get(req) do
+      {:ok, %{body: body}} ->
+        decoded_body = decode_body(body)
 
-          {:error,
-           Error.service(
-             service: :meilisearch,
-             message: message,
-             details: %{status: status, body: body}
-           )}
+        case decoded_body do
+          %{"status" => status} when status in ["succeeded", "success"] ->
+            :ok
 
-        {:error, reason} ->
-          {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
-      end
+          %{"status" => "failed", "error" => error} ->
+            message = extract_error_message(error)
+            {:error, Error.service(service: :meilisearch, message: message, details: error)}
+
+          %{"status" => status} when status in ["enqueued", "processing"] ->
+            # This means we exhausted retries
+            {:error,
+             Error.service(
+               service: :meilisearch,
+               message: "Task verification timed out",
+               details: %{task_id: task_id, last_status: status}
+             )}
+
+          _ ->
+            {:error, Error.service(service: :meilisearch, message: "Invalid response format")}
+        end
+
+      {:error, reason} ->
+        {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
     end
   end
 
@@ -74,8 +111,8 @@ defmodule Sequin.Sinks.Meilisearch.Client do
       )
 
     case Req.put(req) do
-      {:ok, %{status: status, body: body}} when status in 200..299 ->
-        verify_task_by_id(sink, body["taskUid"], 0)
+      {:ok, %{body: %{"taskUid" => task_id}}} ->
+        wait_for_task(sink, task_id)
 
       {:ok, %{status: status, body: body}} ->
         message = extract_error_message(body) || "Request failed with status #{status}"
@@ -113,8 +150,8 @@ defmodule Sequin.Sinks.Meilisearch.Client do
       )
 
     case Req.post(req) do
-      {:ok, %{status: status, body: body}} when status in 200..299 ->
-        verify_task_by_id(sink, body["taskUid"], 0)
+      {:ok, %{body: %{"taskUid" => task_id}}} ->
+        wait_for_task(sink, task_id)
 
       {:ok, %{status: status, body: body}} ->
         message = extract_error_message(body) || "Request failed with status #{status}"
@@ -159,8 +196,8 @@ defmodule Sequin.Sinks.Meilisearch.Client do
       )
 
     case Req.post(req) do
-      {:ok, %{status: status, body: body}} when status in 200..299 ->
-        verify_task_by_id(sink, body["taskUid"], 0)
+      {:ok, %{body: %{"taskUid" => task_id}}} ->
+        wait_for_task(sink, task_id)
 
       {:ok, %{status: status, body: body}} ->
         message = extract_error_message(body) || "Request failed with status #{status}"
@@ -192,11 +229,13 @@ defmodule Sequin.Sinks.Meilisearch.Client do
 
     case Req.get(req, url: "/indexes/#{index_name}") do
       {:ok, %{status: status, body: body}} when status == 200 ->
-        {:ok, body["primaryKey"]}
+        decoded_body = decode_body(body)
+        {:ok, decoded_body["primaryKey"]}
 
       {:ok, %{body: body}} ->
-        message = extract_error_message(body)
-        {:error, Error.service(service: :meilisearch, message: message, details: body)}
+        decoded_body = decode_body(body)
+        message = extract_error_message(decoded_body)
+        {:error, Error.service(service: :meilisearch, message: message, details: decoded_body)}
 
       {:error, reason} ->
         {:error, Error.service(service: :meilisearch, message: "Unknown error", details: reason)}
@@ -214,11 +253,14 @@ defmodule Sequin.Sinks.Meilisearch.Client do
         :ok
 
       {:ok, %{status: status, body: body}} ->
+        decoded_body = decode_body(body)
+        message = extract_error_message(decoded_body) || "Request failed with status #{status}"
+
         {:error,
          Error.service(
            service: :meilisearch,
-           message: "Health check failed with status #{status}",
-           details: %{status: status, body: body}
+           message: message,
+           details: decoded_body
          )}
 
       {:error, reason} ->
@@ -263,7 +305,11 @@ defmodule Sequin.Sinks.Meilisearch.Client do
       base_url: String.trim_trailing(sink.endpoint_url, "/"),
       headers: [{"Authorization", "Bearer #{sink.api_key}"}],
       receive_timeout: to_timeout(second: sink.timeout_seconds),
-      retry: false,
+      retry: :transient,
+      retry_delay: fn retry_count ->
+        Sequin.Time.exponential_backoff(500, retry_count, 5_000)
+      end,
+      max_retries: 1,
       compress_body: true
     ]
     |> Req.new()

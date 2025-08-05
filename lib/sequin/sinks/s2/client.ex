@@ -30,7 +30,11 @@ defmodule Sequin.Sinks.S2.Client do
         {"content-type", "application/json"}
       ],
       receive_timeout: to_timeout(minute: 1),
-      retry: false,
+      retry: :transient,
+      retry_delay: fn retry_count ->
+        Sequin.Time.exponential_backoff(500, retry_count, 5_000)
+      end,
+      max_retries: 1,
       compress_body: true
     )
   end

@@ -18,7 +18,7 @@ The **MySQL sink** writes change data into MySQL tables using direct SQL operati
 
 - **Port** *(optional)*
 
-    Port number of your MySQL server (default `3306`).
+    Port number of your MySQL server (default `3306`, range `1-65535`).
 
 - **Database**
 
@@ -38,7 +38,13 @@ The **MySQL sink** writes change data into MySQL tables using direct SQL operati
 
 - **SSL/TLS** *(optional)*
 
-    Enable SSL/TLS encryption for the connection (default `false`).
+    Enable SSL/TLS encryption for secure connection to the MySQL server (default `false`).
+
+- **Routing mode** *(optional)*
+
+    Determines how table routing is handled:
+    - `static` (default): Uses the configured table name for all records
+    - `dynamic`: Uses a [routing function](/reference/routing) to dynamically determine the target table
 
 - **Upsert on duplicate** *(optional)*
 
@@ -134,8 +140,13 @@ Errors are displayed in the Sequin console's **Messages** tab with detailed MySQ
 
 ## Limits
 
-- **Batch size** is limited to `10,000` records by Sequin
-- **Timeout** is limited to `300` seconds (5 minutes)
+- **Host**: Maximum 255 characters
+- **Port**: Range 1-65535 (default: 3306)
+- **Database name**: Maximum 64 characters, must be a valid MySQL identifier
+- **Table name**: Maximum 64 characters, must be a valid MySQL identifier  
+- **Username**: Maximum 32 characters
+- **Batch size**: Maximum 10,000 records per batch (limited by Sequin)
+- **Timeout**: Maximum 300 seconds (5 minutes)
 - One sink targets one table; multiple tables require multiple sinks (or dynamic routing)
 - Table and column names must be valid MySQL identifiers
 

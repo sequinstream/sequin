@@ -322,6 +322,22 @@ destination:
   routing_mode: "static"           # Optional: static or dynamic, default: static
 ```
 
+**Dynamic routing example:**
+```yaml
+destination:
+  type: "mysql"
+  host: "localhost"
+  port: 3306
+  database: "analytics"
+  table_name: "events"             # Fallback table name
+  username: "mysql_user"
+  password: "mysql_password"
+  routing_mode: "dynamic"          # Enable dynamic routing
+  # ... other configuration
+```
+
+When using `routing_mode: "dynamic"`, attach a [routing function](#routing-function-example) to dynamically determine the target table based on your data.
+
 #### Sequin Stream sink
 [Sequin Stream](/reference/sinks/sequin-stream) is a durable, scalable, and fault-tolerant message stream that you can use with Sequin in place of additional infrastructure like Kafka or SQS.
 

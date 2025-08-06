@@ -58,14 +58,12 @@ defmodule Sequin.Consumers.MysqlSinkTest do
     end
 
     test "validates table_name format", %{valid_params: params} do
-      # Valid table names
       valid_names = ["table", "user_data", "Table123", "_private"]
       for name <- valid_names do
         changeset = MysqlSink.changeset(%MysqlSink{}, %{params | table_name: name})
         assert Sequin.Error.errors_on(changeset)[:table_name] == nil, "#{name} should be valid"
       end
 
-      # Invalid table names
       invalid_names = ["123table", "table-name", "table space", ""]
       for name <- invalid_names do
         changeset = MysqlSink.changeset(%MysqlSink{}, %{params | table_name: name})
@@ -74,22 +72,18 @@ defmodule Sequin.Consumers.MysqlSinkTest do
     end
 
     test "validates string field lengths", %{valid_params: params} do
-      # Test host length
       long_host = String.duplicate("a", 256)
       changeset = MysqlSink.changeset(%MysqlSink{}, %{params | host: long_host})
       assert Sequin.Error.errors_on(changeset)[:host] == ["should be at most 255 character(s)"]
 
-      # Test database length
       long_database = String.duplicate("a", 65)
       changeset = MysqlSink.changeset(%MysqlSink{}, %{params | database: long_database})
       assert Sequin.Error.errors_on(changeset)[:database] == ["should be at most 64 character(s)"]
 
-      # Test table_name length
       long_table = String.duplicate("a", 65)
       changeset = MysqlSink.changeset(%MysqlSink{}, %{params | table_name: long_table})
       assert Sequin.Error.errors_on(changeset)[:table_name] == ["should be at most 64 character(s)"]
 
-      # Test username length
       long_username = String.duplicate("a", 33)
       changeset = MysqlSink.changeset(%MysqlSink{}, %{params | username: long_username})
       assert Sequin.Error.errors_on(changeset)[:username] == ["should be at most 32 character(s)"]

@@ -1,14 +1,10 @@
--- ==================================================
 -- Sequin MySQL Sink Example - Database Initialization
--- ==================================================
 -- This script creates the necessary tables and sample data
 -- for demonstrating Sequin's MySQL sink capabilities.
 
 USE sequin_test;
 
--- ==================================================
 -- PRODUCTS TABLE
--- ==================================================
 -- Main products table demonstrating various MySQL data types
 -- and how they map from Postgres sources
 CREATE TABLE IF NOT EXISTS products (
@@ -30,16 +26,13 @@ CREATE TABLE IF NOT EXISTS products (
     INDEX idx_products_created_at (created_at)
 );
 
--- Insert realistic sample products
 INSERT INTO products (id, name, price, description, category, in_stock, metadata, tags) VALUES
 (1, 'Wireless Bluetooth Headphones', 89.99, 'High-quality wireless headphones with noise cancellation', 'electronics', TRUE, '{"brand": "TechCorp", "warranty": "2 years", "features": ["wireless", "noise-cancellation", "long-battery"]}', 'audio,wireless,bluetooth'),
 (2, 'Programming in Elixir', 45.50, 'Comprehensive guide to functional programming with Elixir', 'books', TRUE, '{"author": "Jane Developer", "pages": 420, "edition": "2nd", "language": "english"}', 'programming,elixir,functional'),
 (3, 'Organic Cotton T-Shirt', 29.99, 'Comfortable organic cotton t-shirt in various colors', 'clothing', FALSE, '{"material": "organic cotton", "sizes": ["S", "M", "L", "XL"], "colors": ["white", "black", "gray"]}', 'organic,cotton,casual'),
 (4, 'Smart Home Hub', 199.99, 'Central control unit for smart home devices', 'electronics', TRUE, '{"connectivity": ["wifi", "bluetooth", "zigbee"], "compatible_devices": 500, "voice_assistant": true}', 'smart-home,iot,automation');
 
--- ==================================================
 -- EVENT TABLES FOR DYNAMIC ROUTING EXAMPLES
--- ==================================================
 
 -- User Events Table - for user activity tracking
 CREATE TABLE IF NOT EXISTS user_events (

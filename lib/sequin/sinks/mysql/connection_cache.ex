@@ -209,7 +209,6 @@ defmodule Sequin.Sinks.Mysql.ConnectionCache do
             {:reply, :ok, new_state}
 
           {:error, error} ->
-            # Invalidate the connection on test failure
             invalidated_state = State.invalidate_connection(new_state, sink)
             {:reply, {:error, error}, invalidated_state}
         end

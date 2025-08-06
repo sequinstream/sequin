@@ -53,10 +53,10 @@ defmodule Sequin.Sinks.Mysql.Client do
       {:ok}
     else
       case ConnectionCache.get_connection(sink) do
-        {:ok, pid} ->
-          try do
-            # Assume primary key is 'id' for simplicity
-            placeholders = Enum.map(record_pks, fn _ -> "?" end) |> Enum.join(", ")
+                  {:ok, pid} ->
+            try do
+              # Assume primary key is 'id' for simplicity
+              placeholders = Enum.map(record_pks, fn _ -> "?" end) |> Enum.join(", ")
             delete_sql = "DELETE FROM `#{sink.table_name}` WHERE `id` IN (#{placeholders})"
 
             case MyXQL.query(pid, delete_sql, record_pks) do
@@ -77,8 +77,6 @@ defmodule Sequin.Sinks.Mysql.Client do
       end
     end
   end
-
-  # Private functions
 
   defp insert_or_update_records(pid, %MysqlSink{} = sink, records) do
     case build_upsert_query(sink, records) do
@@ -120,7 +118,6 @@ defmodule Sequin.Sinks.Mysql.Client do
         column_list = Enum.map(columns, &"`#{&1}`") |> Enum.join(", ")
         placeholders = Enum.map(columns, fn _ -> "?" end) |> Enum.join(", ")
 
-        # Build ON DUPLICATE KEY UPDATE clause
         update_clause =
           columns
           |> Enum.map(&"`#{&1}` = VALUES(`#{&1}`)")
@@ -132,7 +129,6 @@ defmodule Sequin.Sinks.Mysql.Client do
         ON DUPLICATE KEY UPDATE #{update_clause}
         """
 
-        # Flatten all values for parameters
         params = Enum.flat_map(values, & &1)
 
         {:ok, {sql, params}}
@@ -153,7 +149,6 @@ defmodule Sequin.Sinks.Mysql.Client do
         VALUES #{Enum.map(values, fn _ -> "(#{placeholders})" end) |> Enum.join(", ")}
         """
 
-        # Flatten all values for parameters
         params = Enum.flat_map(values, & &1)
 
         {:ok, {sql, params}}
@@ -167,14 +162,12 @@ defmodule Sequin.Sinks.Mysql.Client do
     if Enum.empty?(records) do
       {:error, Error.service(service: :mysql, message: "No records provided")}
     else
-      # Get all unique columns from all records
       all_columns =
         records
         |> Enum.flat_map(&Map.keys/1)
         |> Enum.uniq()
         |> Enum.sort()
 
-      # Extract values for each record, filling nil for missing columns
       values =
         Enum.map(records, fn record ->
           Enum.map(all_columns, fn column ->
@@ -183,7 +176,7 @@ defmodule Sequin.Sinks.Mysql.Client do
               value when is_binary(value) -> value
               value when is_number(value) -> value
               value when is_boolean(value) -> value
-              value -> Jason.encode!(value)  # JSON encode complex values
+              value -> Jason.encode!(value)
             end
           end)
         end)

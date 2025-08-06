@@ -57,7 +57,6 @@ defmodule Sequin.Runtime.MysqlPipeline do
 
     setup_allowances(test_pid)
 
-    # Get the table name from the batch key (set by routing)
     table_name = Map.get(batch_info, :batch_key, sink.table_name)
 
     records =
@@ -67,7 +66,6 @@ defmodule Sequin.Runtime.MysqlPipeline do
         |> ensure_string_keys()
       end)
 
-    # Create a temporary sink with the routed table name
     routed_sink = %{sink | table_name: table_name}
 
     case Mysql.upsert_records(routed_sink, records) do
@@ -97,13 +95,11 @@ defmodule Sequin.Runtime.MysqlPipeline do
 
     setup_allowances(test_pid)
 
-    # Get the table name from the batch key (set by routing)
     table_name = Map.get(batch_info, :batch_key, sink.table_name)
 
     record_pks =
       Enum.flat_map(messages, fn %{data: message} -> message.record_pks end)
 
-    # Create a temporary sink with the routed table name
     routed_sink = %{sink | table_name: table_name}
 
     case Mysql.delete_records(routed_sink, record_pks) do
@@ -126,9 +122,6 @@ defmodule Sequin.Runtime.MysqlPipeline do
     end
   end
 
-  # Helper functions
-
-  # Ensure all keys in the record are strings for MySQL column compatibility
   defp ensure_string_keys(record) when is_map(record) do
     Map.new(record, fn
       {key, value} when is_atom(key) -> {Atom.to_string(key), value}

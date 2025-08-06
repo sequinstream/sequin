@@ -110,7 +110,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
         body: jsonl
       )
 
-    case Req.put(req) do
+    case Req.post(req) do
       {:ok, %{body: %{"taskUid" => task_id}}} ->
         wait_for_task(sink, task_id)
 

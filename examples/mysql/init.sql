@@ -59,4 +59,4 @@ CREATE TABLE IF NOT EXISTS other_events (
 -- Show the created table structures
 DESCRIBE products;
 DESCRIBE user_events;
-DESCRIBE purchase_events; 
+DESCRIBE purchase_events;

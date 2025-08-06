@@ -11,7 +11,6 @@
   import { Eye, EyeOff } from "lucide-svelte";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
-
   import type { MysqlConsumer } from "../../consumers/types";
 
   export let form: MysqlConsumer;

@@ -75,11 +75,29 @@ After enabling logical replication, you'll now connect to your database in Sequi
   </Step>
 
   <Step title="Create a publication">
-    Connect to your database using the SQL client of your choice and execute the following SQL query to create a publication:
+    Connect to your database using the SQL client of your choice and execute one of the following SQL queries to create a publication:
 
 ```sql
-create publication sequin_pub for all tables with (publish_via_partition_root = true);
+-- Option 1: Recommended approach - capture all tables
+CREATE PUBLICATION sequin_pub FOR ALL TABLES;
+
+-- Option 2: If you need to capture specific schemas (includes TimescaleDB internal tables)
+CREATE PUBLICATION sequin_pub FOR TABLES IN SCHEMA public, _timescaledb_internal;
 ```
+
+<Warning>
+  When using TimescaleDB, there are important considerations for publications:
+
+  1. Using `FOR ALL TABLES` is the most reliable approach, though it requires more resources
+  2. If you need to publish specific tables, you must include both:
+     - The schema containing your base tables (usually `public`)
+     - The TimescaleDB internal schema (`_timescaledb_internal`)
+  3. Avoid using `FOR TABLE table_name` with TimescaleDB hypertables, as this can cause replication to stop when new chunks are created
+</Warning>
+
+<Note>
+  For either approach, you can further limit which tables are replicated with [table filtering in Sequin](/reference/sinks/overview#source-tables) instead.
+</Note>
 
   </Step>
 

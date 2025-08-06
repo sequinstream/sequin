@@ -1,0 +1,90 @@
+---
+title: 'Minimum instance requirements'
+sidebarTitle: 'Minimum requirements'
+description: 'Sequin instance sizing guide for development and production workloads.'
+---
+
+## Quick reference
+
+| Instance Size | CPU | Memory | Use Case | Throughput |
+|--------------|-----|---------|----------|------------|
+| **Minimal** | 1 vCPU | 1-2 GB | Development, testing | Up to 10k ops/sec |
+| **Small** | 2 vCPU | 4 GB | Small production | Up to 15k ops/sec |
+| **Medium** | 4 vCPU | 8 GB | Standard production | Up to 30k ops/sec |
+| **Large** | 8+ vCPU | 16+ GB | High-volume production | 50k+ ops/sec |
+
+## Minimal instance (1 vCPU, 1-2 GB)
+
+### Configuration
+
+```bash
+MAX_MEMORY_MB=1500
+MEMORY_BUFFER_PERCENT=30
+PG_POOL_SIZE=5
+REDIS_POOL_SIZE=3
+DEFAULT_WORKERS_PER_SINK=10
+```
+
+<Warning>
+Not recommended for: >10k ops/sec, large backfills (>10M rows), or multiple high-throughput sinks.
+</Warning>
+
+## Small instance (2 vCPU, 4 GB)
+
+### Configuration
+
+```bash
+MAX_MEMORY_MB=3500
+MEMORY_BUFFER_PERCENT=20
+PG_POOL_SIZE=10
+REDIS_POOL_SIZE=5
+DEFAULT_WORKERS_PER_SINK=50
+```
+
+## When to scale
+
+Monitor these saturation metrics (scale when >90%):
+- `sequin_ingestion_saturation_percent`
+- `sequin_processing_saturation_percent`
+- `sequin_delivery_saturation_percent`
+
+Resource exhaustion indicators:
+- Processes using >100MB memory
+- Message queues with >1000 pending
+- Growing ETS tables
+- `erlang_vm_memory_bytes_total` approaching `MAX_MEMORY_MB`
+
+## Optimization tips
+
+### Batch configuration
+
+```yaml
+# High-latency destinations (webhooks)
+batch_size: 50
+batch_timeout: 100ms
+
+# Low-latency destinations (Kafka, Redis)
+batch_size: 100
+batch_timeout: 10ms
+```
+
+### Performance tuning
+
+- Filter specific tables instead of entire schemas
+- Use [filters](/reference/filters) to reduce message volume
+- Use [transforms](/reference/transforms) to reduce message sizes
+- Set `BACKFILL_MAX_PENDING_MESSAGES` lower (e.g., 100k) for small instances
+
+## Cloud instances
+
+| Provider | Minimal | Small | Production |
+|----------|---------|-------|------------|
+| **AWS** | t3.micro | t3.small | t3.medium+ |
+| **GCP** | e2-micro | e2-small | e2-medium+ |
+| **Azure** | B1s | B2s | D2s_v3+ |
+
+## Getting help
+
+- Start minimal and monitor [metrics](/reference/metrics)
+- Join [Discord](https://discord.gg/BV8wFXvNtY) or [Slack](https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA) for sizing advice
+- Consider our [managed offering](/sequin-managed/overview) for automatic scaling

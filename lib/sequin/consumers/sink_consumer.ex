@@ -19,6 +19,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.KinesisSink
   alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.PostgresSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
@@ -36,22 +37,23 @@ defmodule Sequin.Consumers.SinkConsumer do
   @type not_visible_until :: DateTime.t()
 
   @types [
+    :azure_event_hub,
+    :elasticsearch,
+    :gcp_pubsub,
     :http_push,
-    :sqs,
+    :kafka,
     :kinesis,
-    :s2,
+    :meilisearch,
+    :nats,
+    :postgres,
+    :rabbitmq,
     :redis_stream,
     :redis_string,
-    :kafka,
+    :s2,
     :sequin_stream,
-    :gcp_pubsub,
-    :nats,
-    :rabbitmq,
-    :azure_event_hub,
-    :typesense,
-    :meilisearch,
     :sns,
-    :elasticsearch
+    :sqs,
+    :typesense
   ]
 
   # This is a module attribute to compile the types into the schema
@@ -121,22 +123,23 @@ defmodule Sequin.Consumers.SinkConsumer do
 
     polymorphic_embeds_one(:sink,
       types: [
+        azure_event_hub: AzureEventHubSink,
+        elasticsearch: ElasticsearchSink,
+        gcp_pubsub: GcpPubsubSink,
         http_push: HttpPushSink,
-        sqs: SqsSink,
+        kafka: KafkaSink,
         kinesis: KinesisSink,
-        s2: S2Sink,
-        sns: SnsSink,
+        meilisearch: MeilisearchSink,
+        nats: NatsSink,
+        postgres: PostgresSink,
+        rabbitmq: RabbitMqSink,
         redis_stream: RedisStreamSink,
         redis_string: RedisStringSink,
-        kafka: KafkaSink,
+        s2: S2Sink,
         sequin_stream: SequinStreamSink,
-        gcp_pubsub: GcpPubsubSink,
-        nats: NatsSink,
-        rabbitmq: RabbitMqSink,
-        azure_event_hub: AzureEventHubSink,
-        typesense: TypesenseSink,
-        meilisearch: MeilisearchSink,
-        elasticsearch: ElasticsearchSink
+        sns: SnsSink,
+        sqs: SqsSink,
+        typesense: TypesenseSink
       ],
       on_replace: :update,
       type_field_name: :type

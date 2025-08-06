@@ -195,8 +195,6 @@ defmodule Sequin.Runtime.MysqlPipelineTest do
   end
 
   defp start_pipeline!(consumer) do
-    Application.put_env(:sequin, :mysql_module, MysqlMock)
-
     start_supervised!(
       {SinkPipeline,
        [

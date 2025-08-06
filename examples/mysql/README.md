@@ -1,139 +1,220 @@
 # MySQL Sink Example
 
-This example demonstrates how to set up Sequin to stream Postgres changes to a MySQL database.
+This example demonstrates how to set up Sequin to stream Postgres changes to a MySQL database using Sequin's MySQL sink.
+
+## Overview
+
+This example includes:
+- A complete Docker Compose setup for MySQL
+- Sample database schema with realistic tables
+- Multiple configuration examples (static and dynamic routing)
+- Transform functions for data mapping
+
+## Quick Start with Docker
+
+1. **Start MySQL using Docker Compose:**
+
+```bash
+cd examples/mysql
+docker-compose up -d
+```
+
+This will create a MySQL instance with:
+- Database: `sequin_test`
+- User: `sequin_user` / Password: `sequin_password`
+- Root password: `rootpassword`
+- Port: `3306` (mapped to host)
+
+2. **The database will be automatically initialized** with sample tables from `init.sql`.
 
 ## Prerequisites
 
 - A running Postgres database with logical replication enabled
-- A running MySQL database
+- Docker and Docker Compose (for the provided setup)
 - Sequin installed and configured
 
-## Setup
+## Configuration Examples
 
-1. **Create a MySQL table** to receive the data:
+### Basic Static Routing
 
-```sql
-CREATE DATABASE sequin_test;
-USE sequin_test;
-
-CREATE TABLE products (
-    id INT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    price DECIMAL(10,2),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-```
-
-2. **Configure the MySQL Sink** in Sequin:
+Create a `sequin.yaml` configuration file:
 
 ```yaml
-name: products-to-mysql
-source:
-  database: my_postgres_db
-  table: products
-  actions: [insert, update, delete]
-  
-destination:
-  type: mysql
-  host: localhost
-  port: 3306
-  database: sequin_test
-  table_name: products  # Used when routing_mode is static
-  username: mysql_user
-  password: mysql_password
-  ssl: false
-  batch_size: 100
-  timeout_seconds: 30
-  upsert_on_duplicate: true
-  routing_mode: static  # Can be 'static' or 'dynamic'
+databases:
+  - name: "source-db"
+    hostname: "localhost"
+    database: "my_postgres_db"
+    username: "postgres"
+    password: "postgres"
+    slot:
+      name: "sequin_slot"
+      create_if_not_exists: true
+    publication:
+      name: "sequin_pub"
+      create_if_not_exists: true
 
-transform: |
-  def transform(action, record, changes, metadata) do
-    # Map the Postgres record to MySQL-compatible format
-    %{
-      id: record["id"],
-      name: record["name"],
-      price: record["price"]
-    }
-  end
+sinks:
+  - name: "products-to-mysql"
+    database: "source-db"
+    source:
+      include_tables:
+        - "public.products"
+    destination:
+      type: "mysql"
+      host: "localhost"
+      port: 3306
+      database: "sequin_test"
+      table_name: "products"
+      username: "sequin_user"
+      password: "sequin_password"
+      ssl: false
+      batch_size: 100
+      timeout_seconds: 30
+      upsert_on_duplicate: true
+      routing_mode: "static"
+    transform: "product-transform"
+
+functions:
+  - name: "product-transform"
+    type: "transform"
+    code: |-
+      def transform(_action, record, _changes, _metadata) do
+        %{
+          id: record["id"],
+          name: record["name"],
+          price: record["price"],
+          description: record["description"],
+          category: record["category"],
+          in_stock: record["in_stock"],
+          metadata: record["metadata"]
+        }
+      end
 ```
 
-## Dynamic Table Routing
+### Dynamic Routing Example
 
-You can use routing functions to dynamically choose which MySQL table to route data to based on the record content:
+For routing to different tables based on record content:
 
 ```yaml
-name: multi-table-mysql-sink
-source:
-  database: my_postgres_db
-  table: events
-  actions: [insert, update, delete]
-  
-destination:
-  type: mysql
-  host: localhost
-  port: 3306
-  database: sequin_test
-  table_name: default_events  # Fallback table name
-  username: mysql_user
-  password: mysql_password
-  routing_mode: dynamic  # Enable dynamic routing
+databases:
+  - name: "source-db"
+    hostname: "localhost"
+    database: "my_postgres_db"
+    username: "postgres"
+    password: "postgres"
+    slot:
+      name: "sequin_slot"
+      create_if_not_exists: true
+    publication:
+      name: "sequin_pub"
+      create_if_not_exists: true
 
-routing: |
-  def route(action, record, changes, metadata) do
-    # Route based on event type
-    table_name = case record["event_type"] do
-      "user_signup" -> "user_events"
-      "purchase" -> "purchase_events"
-      "analytics" -> "analytics_events"
-      _ -> "other_events"
-    end
-    
-    %{table_name: table_name}
-  end
+sinks:
+  - name: "events-to-mysql"
+    database: "source-db"
+    source:
+      include_tables:
+        - "public.events"
+    destination:
+      type: "mysql"
+      host: "localhost"
+      port: 3306
+      database: "sequin_test"
+      table_name: "other_events"  # Fallback table
+      username: "sequin_user"
+      password: "sequin_password"
+      routing_mode: "dynamic"
+    routing: "event-router"
+    transform: "event-transform"
 
-transform: |
-  def transform(action, record, changes, metadata) do
-    %{
-      id: record["id"],
-      event_type: record["event_type"],
-      data: record["data"],
-      created_at: record["created_at"]
-    }
-  end
+functions:
+  - name: "event-router"
+    type: "routing"
+    sink_type: "mysql"
+    code: |-
+      def route(_action, record, _changes, _metadata) do
+        table_name = case record["event_type"] do
+          "user_signup" -> "user_events"
+          "user_login" -> "user_events"
+          "purchase" -> "purchase_events"
+          "page_view" -> "analytics_events"
+          "click" -> "analytics_events"
+          _ -> "other_events"
+        end
+        
+        %{table_name: table_name}
+      end
+
+  - name: "event-transform"
+    type: "transform"
+    code: |-
+      def transform(_action, record, _changes, _metadata) do
+        %{
+          id: record["id"],
+          event_type: record["event_type"],
+          data: record["data"],
+          created_at: record["created_at"]
+        }
+      end
 ```
 
-## Features
+## Features Demonstrated
 
+- **Static routing**: Direct table mapping for simple use cases
 - **Dynamic routing**: Route to different MySQL tables based on record content
 - **Upsert support**: Uses MySQL's `ON DUPLICATE KEY UPDATE` for handling updates
 - **Batch processing**: Efficiently processes multiple records in batches
-- **SSL support**: Can connect to MySQL over SSL
-- **Type handling**: Automatically handles different data types and JSON encoding for complex values
-- **Error handling**: Comprehensive error handling with detailed error messages
+- **SSL support**: Can connect to MySQL over SSL (set `ssl: true`)
+- **Type handling**: Automatically handles JSON and complex data types
+- **Transform functions**: Map Postgres data to MySQL-compatible format
 
-## Usage
+## Database Schema
+
+The example creates several tables to demonstrate different scenarios:
+
+- `products` - Basic product catalog with various data types
+- `user_events` - User activity events
+- `purchase_events` - E-commerce transaction events  
+- `analytics_events` - Web analytics data
+- `other_events` - Catch-all for unmatched event types
+
+## Usage Flow
 
 Once configured, Sequin will:
 
-1. Capture changes from your Postgres table
-2. Transform the data using your transform function
-3. Insert/update records in MySQL using batch operations
-4. Handle deletes by removing records from MySQL
+1. **Capture** changes from your Postgres tables via logical replication
+2. **Transform** the data using your transform function
+3. **Route** records to appropriate MySQL tables (dynamic mode)
+4. **Batch** multiple records for efficient processing
+5. **Upsert/Insert** data into MySQL using optimized SQL operations
 
-The sink supports both insert-only mode and upsert mode depending on your `upsert_on_duplicate` setting.
+## Configuration Options
 
-## Connection Options
+For complete configuration reference, see the [MySQL sink documentation](/reference/sinks/mysql).
 
-- `host`: MySQL server hostname
-- `port`: MySQL server port (default: 3306)
-- `database`: Target database name
-- `table_name`: Target table name (used as fallback when routing_mode is dynamic)
-- `username`: MySQL username
-- `password`: MySQL password
-- `ssl`: Enable SSL connection (default: false)
-- `batch_size`: Number of records to process in each batch (default: 100)
-- `timeout_seconds`: Connection timeout in seconds (default: 30)
-- `upsert_on_duplicate`: Use upsert instead of insert-only (default: true)
-- `routing_mode`: Set to "dynamic" to enable routing functions, "static" for fixed table (default: static) 
+Key MySQL sink options:
+- `host` - MySQL server hostname
+- `port` - MySQL server port (default: 3306)
+- `database` - Target MySQL database
+- `table_name` - Target table (or fallback for dynamic routing)
+- `username`/`password` - Authentication credentials
+- `ssl` - Enable SSL/TLS connection (default: false)
+- `batch_size` - Records per batch (default: 100, max: 10,000)
+- `timeout_seconds` - Connection timeout (default: 30, max: 300)
+- `upsert_on_duplicate` - Use MySQL upsert mode (default: true)
+- `routing_mode` - `"static"` or `"dynamic"` (default: "static")
+
+## Cleanup
+
+To stop and remove the MySQL container:
+
+```bash
+docker-compose down -v  # -v removes volumes
+```
+
+## Next Steps
+
+- Learn more about [MySQL sinks](/reference/sinks/mysql)
+- Explore [routing functions](/reference/routing) for advanced table routing
+- See [transform functions](/reference/transforms) for data mapping
+- Check out the complete [sequin.yaml reference](/reference/sequin-yaml) 

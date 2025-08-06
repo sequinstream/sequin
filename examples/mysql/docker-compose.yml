@@ -1,21 +1,42 @@
+version: '3.8'
+
 services:
   mysql:
     image: mysql:8.0
     container_name: sequin-mysql-example
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: sequin_test
-      MYSQL_USER: sequin_user
-      MYSQL_PASSWORD: sequin_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-sequin_test}
+      MYSQL_USER: ${MYSQL_USER:-sequin_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-sequin_password}
+      # Additional MySQL configuration
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
     ports:
-      - "3306:3306"
+      - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./mysql.conf:/etc/mysql/conf.d/mysql.conf:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${MYSQL_USER:-sequin_user}", "-p${MYSQL_PASSWORD:-sequin_password}"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 30s
+    networks:
+      - sequin-mysql-network
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-authentication-plugin=mysql_native_password
+      --log-bin-trust-function-creators=1
 
 volumes:
   mysql_data:
+    driver: local
+
+networks:
+  sequin-mysql-network:
+    driver: bridge

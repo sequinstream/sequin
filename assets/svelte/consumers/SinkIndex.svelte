@@ -57,7 +57,8 @@
       | "nats"
       | "rabbitmq"
       | "typesense"
-      | "elasticsearch";
+      | "elasticsearch"
+      | "mysql";
 
     status: "active" | "disabled" | "paused";
     database_name: string;

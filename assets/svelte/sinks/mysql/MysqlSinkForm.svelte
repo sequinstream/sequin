@@ -8,15 +8,17 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
-  import { Eye, EyeOff, Info } from "lucide-svelte";
+  import { Eye, EyeOff } from "lucide-svelte";
   import { Checkbox } from "$lib/components/ui/checkbox";
   import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
 
-  export let form: any; // MysqlConsumer type would be defined elsewhere
+  import type { MysqlConsumer } from "../../consumers/types";
+
+  export let form: MysqlConsumer;
   export let functions: Array<any> = [];
   export let refreshFunctions: () => void;
   export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
-  let selectedDynamic = form.routingMode === "dynamic";
+  let selectedDynamic = form.sink.routing_mode === "dynamic";
   export let errors: any = {};
   let showPassword = false;
 

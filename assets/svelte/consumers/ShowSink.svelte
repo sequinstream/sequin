@@ -27,12 +27,14 @@
     ElasticsearchConsumer,
     RedisStringConsumer,
     AzureEventHubConsumer,
+    MysqlConsumer,
   } from "./types";
   import AzureEventHubSinkCard from "../sinks/azure_event_hub/AzureEventHubSinkCard.svelte";
   import ElasticsearchSinkCard from "../sinks/elasticsearch/ElasticsearchSinkCard.svelte";
   import GcpPubsubSinkCard from "../sinks/gcp_pubsub/GcpPubsubSinkCard.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import KinesisSinkCard from "../sinks/kinesis/KinesisSinkCard.svelte";
+  import MysqlSinkCard from "../sinks/mysql/MysqlSinkCard.svelte";
   import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
   import RabbitMqSinkCard from "../sinks/rabbitmq/RabbitMqSinkCard.svelte";
   import RedisStreamSinkCard from "../sinks/redis-stream/RedisStreamSinkCard.svelte";
@@ -159,6 +161,10 @@
     consumer: Consumer,
   ): consumer is RabbitMqConsumer {
     return consumer.sink.type === "rabbitmq";
+  }
+
+  function isMysqlConsumer(consumer: Consumer): consumer is MysqlConsumer {
+    return consumer.sink.type === "mysql";
   }
 
   let chartElement;
@@ -1254,6 +1260,8 @@
         <ElasticsearchSinkCard {consumer} />
       {:else if isRedisStringConsumer(consumer)}
         <RedisStringSinkCard {consumer} />
+      {:else if isMysqlConsumer(consumer)}
+        <MysqlSinkCard {consumer} />
       {/if}
 
       <ShowSource {consumer} {tables} />

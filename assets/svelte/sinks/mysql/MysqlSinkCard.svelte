@@ -1,14 +1,13 @@
 <script lang="ts">
-  import { ExternalLink } from "lucide-svelte";
   import {
     Card,
     CardContent,
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
-  import { Button } from "$lib/components/ui/button";
+  import type { MysqlConsumer } from "../../consumers/types";
 
-  export let consumer: any; // MysqlConsumer type would be defined elsewhere
+  export let consumer: MysqlConsumer;
 </script>
 
 <Card>

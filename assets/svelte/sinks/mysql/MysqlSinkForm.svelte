@@ -9,7 +9,7 @@
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import { Eye, EyeOff } from "lucide-svelte";
-  import { Checkbox } from "$lib/components/ui/checkbox";
+  import { Switch } from "$lib/components/ui/switch";
   import DynamicRoutingForm from "$lib/consumers/DynamicRoutingForm.svelte";
   import type { MysqlConsumer } from "../../consumers/types";
 
@@ -17,7 +17,7 @@
   export let functions: Array<any> = [];
   export let refreshFunctions: () => void;
   export let functionRefreshState: "idle" | "refreshing" | "done" = "idle";
-  let selectedDynamic = form.sink.routing_mode === "dynamic";
+  let isDynamicRouting = form.sink.routing_mode === "dynamic";
   export let errors: any = {};
   let showPassword = false;
 
@@ -118,7 +118,7 @@
             bind:value={form.sink.password}
             placeholder="••••••••"
             data-1p-ignore
-            autocomplete="current-password"
+            autocomplete="off"
           />
           <button
             type="button"
@@ -138,21 +138,30 @@
       </div>
     </div>
 
-    <div class="space-y-4">
-      <div class="flex items-center space-x-2">
-        <Checkbox id="ssl" bind:checked={form.sink.ssl} />
-        <Label for="ssl">Enable SSL/TLS connection</Label>
+    <div class="space-y-2">
+      <div class="flex items-center gap-2">
+        <Switch
+          id="ssl"
+          checked={form.sink.ssl}
+          onCheckedChange={(checked) => {
+            form.sink.ssl = checked;
+          }}
+        />
+        <Label for="ssl">SSL</Label>
       </div>
       {#if errors.sink?.ssl}
         <p class="text-destructive text-sm">{errors.sink.ssl}</p>
       {/if}
     </div>
 
-    <div class="space-y-4">
-      <div class="flex items-center space-x-2">
-        <Checkbox
+    <div class="space-y-2">
+      <div class="flex items-center gap-2">
+        <Switch
           id="upsert_on_duplicate"
-          bind:checked={form.sink.upsert_on_duplicate}
+          checked={form.sink.upsert_on_duplicate}
+          onCheckedChange={(checked) => {
+            form.sink.upsert_on_duplicate = checked;
+          }}
         />
         <Label for="upsert_on_duplicate">Use upsert on duplicate keys</Label>
       </div>
@@ -219,11 +228,11 @@
       {functions}
       {refreshFunctions}
       bind:functionRefreshState
-      bind:selectedDynamic
+      bind:selectedDynamic={isDynamicRouting}
       {errors}
     />
 
-    {#if !selectedDynamic}
+    {#if !isDynamicRouting}
       <div class="space-y-2">
         <Label for="table_name">Table name</Label>
         <Input

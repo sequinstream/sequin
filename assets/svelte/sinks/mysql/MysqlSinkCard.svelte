@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { ExternalLink } from "lucide-svelte";
   import {
     Card,
     CardContent,
@@ -8,6 +9,15 @@
   import type { MysqlConsumer } from "../../consumers/types";
 
   export let consumer: MysqlConsumer;
+
+  function getRoutingCode(consumer: MysqlConsumer): string | null {
+    if (!consumer.routing || !consumer.routing.function) return null;
+    const func = consumer.routing.function;
+    if (func.type === "routing") {
+      return (func as any).code || null;
+    }
+    return null;
+  }
 </script>
 
 <Card>
@@ -15,9 +25,9 @@
     <CardTitle>MySQL Configuration</CardTitle>
   </CardHeader>
   <CardContent class="p-6">
-    <div class="grid grid-cols-2 gap-4">
+    <div class="grid gap-4">
       <div>
-        <span class="text-sm text-gray-500">Host</span>
+        <span class="text-sm text-muted-foreground">Host</span>
         <div class="mt-2">
           <div
             class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md break-all w-fit"
@@ -28,10 +38,10 @@
       </div>
 
       <div>
-        <span class="text-sm text-gray-500">Database</span>
+        <span class="text-sm text-muted-foreground">Database</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md break-all w-fit"
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
           >
             {consumer.sink.database}
           </span>
@@ -39,10 +49,10 @@
       </div>
 
       <div>
-        <span class="text-sm text-gray-500">Username</span>
+        <span class="text-sm text-muted-foreground">Username</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md break-all w-fit"
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
           >
             {consumer.sink.username}
           </span>
@@ -50,21 +60,21 @@
       </div>
 
       <div>
-        <span class="text-sm text-gray-500">Connection</span>
+        <span class="text-sm text-muted-foreground">SSL Enabled</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md break-all w-fit"
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
           >
-            {consumer.sink.ssl ? "SSL Enabled" : "SSL Disabled"}
+            {consumer.sink.ssl ? "Yes" : "No"}
           </span>
         </div>
       </div>
 
       <div>
-        <span class="text-sm text-gray-500">Batch Size</span>
+        <span class="text-sm text-muted-foreground">Batch Size</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md break-all w-fit"
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
           >
             {consumer.sink.batch_size}
           </span>
@@ -72,10 +82,10 @@
       </div>
 
       <div>
-        <span class="text-sm text-gray-500">Upsert Mode</span>
+        <span class="text-sm text-muted-foreground">Upsert Mode</span>
         <div class="mt-2">
           <span
-            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md break-all w-fit"
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
           >
             {consumer.sink.upsert_on_duplicate ? "Enabled" : "Disabled"}
           </span>
@@ -90,33 +100,38 @@
     <CardTitle>Routing</CardTitle>
   </CardHeader>
   <CardContent>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div>
-        <span class="text-sm text-gray-500">Table Name</span>
-        <div class="mt-2">
-          <span
-            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md break-all w-fit"
-          >
-            {#if consumer.routing_id}
-              determined-by-router
-            {:else}
-              {consumer.sink.table_name}
-            {/if}
-          </span>
-        </div>
+    <div>
+      <span class="text-sm text-muted-foreground">Table</span>
+      <div class="mt-2">
+        <span
+          class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+        >
+          {#if consumer.routing_id}
+            Determined by <a
+              href={`/functions/${consumer.routing_id}`}
+              data-phx-link="redirect"
+              data-phx-link-state="push"
+              class="underline">router</a
+            >
+            <ExternalLink class="h-4 w-4 inline" />
+          {:else}
+            {consumer.sink.table_name}
+          {/if}
+        </span>
       </div>
     </div>
-
     {#if consumer.routing}
-      <div class="mt-4">
-        <span class="text-sm text-gray-500">Router</span>
+      {#if getRoutingCode(consumer)}
         <div class="mt-2">
-          <pre
-            class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto w-full"><code
-              >{consumer.routing.function.code}</code
-            ></pre>
+          <span class="text-sm text-muted-foreground">Router</span>
+          <div class="mt-2">
+            <pre
+              class="font-mono bg-slate-50 p-2 border border-slate-100 rounded-md text-sm overflow-x-auto"><code
+                >{getRoutingCode(consumer)}</code
+              ></pre>
+          </div>
         </div>
-      </div>
+      {/if}
     {/if}
   </CardContent>
 </Card>

@@ -162,7 +162,12 @@ defmodule Sequin.Runtime.HttpPushPipeline do
         json: routed_message.transformed_message,
         receive_timeout: consumer.ack_wait_ms,
         finch: Sequin.Finch,
-        compress_body: gzip_compress_body
+        compress_body: gzip_compress_body,
+        retry: :transient,
+        retry_delay: fn retry_count ->
+          Sequin.Time.exponential_backoff(500, retry_count, 5_000)
+        end,
+        max_retries: 1
       ]
       |> Keyword.merge(Keyword.drop(req_opts, [:method, :base_url, :url, :headers, :json, :receive_timeout, :finch]))
       |> Req.new()

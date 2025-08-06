@@ -115,7 +115,11 @@ defmodule Sequin.Sinks.Elasticsearch.Client do
       base_url: sink.endpoint_url,
       headers: auth_header(sink),
       receive_timeout: to_timeout(minute: 1),
-      retry: false,
+      retry: :transient,
+      retry_delay: fn retry_count ->
+        Sequin.Time.exponential_backoff(500, retry_count, 5_000)
+      end,
+      max_retries: 1,
       compress_body: true
     ]
     |> Req.new()

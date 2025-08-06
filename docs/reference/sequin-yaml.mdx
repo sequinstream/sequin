@@ -589,9 +589,10 @@ You can attach functions to your sinks using the `transform`, `filter`, and `rou
 ```yaml
 sinks:
   - name: "my-sink"
+    enrichment: "my-enrichment"         # Reference an enrichment function
     transform: "my-transform-function"  # Reference a transform function
-    filter: "my-filter-function"       # Reference a filter function
-    routing: "my-routing-function"     # Reference a routing function
+    filter: "my-filter-function"        # Reference a filter function
+    routing: "my-routing-function"      # Reference a routing function
     ...
 ```
 

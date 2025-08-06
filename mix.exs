@@ -29,7 +29,7 @@ defmodule Sequin.MixProject do
 
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(:dev), do: ["lib", "test/support", "bench"]
+  defp elixirc_paths(:dev), do: ["lib", "bench"]
   defp elixirc_paths(_), do: ["lib"]
 
   # Specifies your project dependencies.
@@ -60,7 +60,7 @@ defmodule Sequin.MixProject do
 
       # Authentication and Security
       {:argon2_elixir, "~> 3.0"},
-      {:assent, "~> 0.2.9"},
+      {:assent, "~> 0.3.1"},
       {:jose, "~> 1.11"},
 
       # AWS and Cloud Services
@@ -88,7 +88,9 @@ defmodule Sequin.MixProject do
 
       # HTTP and API Clients
       {:finch, "~> 0.13"},
-      {:req, "~> 0.5"},
+      # TODO Use published version once release 0.5.16 or greater is done
+      # {:req, "~> 0.5"},
+      {:req, github: "wojtekmach/req", ref: "dcb7ddf", override: true},
       {:swoosh, "~> 1.5"},
 
       # Messaging / PubSub / Queues

@@ -69,6 +69,127 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
         record["test"]["id"] == Enum.at(ids, i)
       end)
     end
+
+    test "function updates are applied with routing function", %{consumer: consumer} do
+      {_ids, events} = generate_events(consumer, 2)
+
+      # Create a function that will be compiled and run by MiniElixir
+      routing_function = %{
+        id: Ecto.UUID.generate(),
+        name: "test_routing_function",
+        type: "routing",
+        account_id: consumer.account_id,
+        function: %{
+          type: :routing,
+          sink_type: :meilisearch,
+          code: ~s"""
+          def route(action, record, changes, metadata) do
+            %{
+              action: :function,
+              index_name: "test",
+              filter: "id = \#{record["id"]}",
+              function: "doc.content[0] = context.new_content",
+              context: %{new_content: "Updated content"}
+            }
+          end
+          """
+        }
+      }
+
+      assert {:ok, function} = Consumers.create_function(consumer.account_id, routing_function)
+      assert MiniElixir.create(function.id, function.function.code)
+      {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{routing_id: function.id, routing_mode: "dynamic"})
+
+      task_uid1 = :rand.uniform(100)
+      task_uid2 = task_uid1 + 1
+
+      # We need to handle 4 requests total: 2 POSTs and 2 GETs
+      # Since we process messages individually, each POST is followed by its GET
+      Req.Test.expect(Client, 4, fn conn ->
+        case conn.method do
+          "POST" ->
+            assert conn.request_path == "/indexes/test/documents/edit"
+
+            {:ok, body, _} = Plug.Conn.read_body(conn)
+            body = Jason.decode!(body)
+
+            assert body["filter"] =~ "id ="
+            assert body["function"] == "doc.content[0] = context.new_content"
+            assert body["context"]["new_content"] == "Updated content"
+
+            # Return different task UIDs for each POST
+            task_uid = if conn.assigns[:call_count] == 1, do: task_uid1, else: task_uid2
+            Req.Test.json(conn, %{"taskUid" => task_uid})
+
+          "GET" ->
+            assert conn.request_path =~ "/tasks/"
+            Req.Test.json(conn, %{"status" => "succeeded"})
+        end
+      end)
+
+      start_pipeline!(consumer)
+      ref = send_test_batch(consumer, events)
+
+      assert_receive {:ack, ^ref, [_msg1, _msg2], []}, 3_000
+    end
+
+    test "function updates handle errors gracefully", %{consumer: consumer} do
+      {_ids, events} = generate_events(consumer, 1)
+
+      # Create a function that will be compiled and run by MiniElixir
+      routing_function = %{
+        id: Ecto.UUID.generate(),
+        name: "test_routing_function_error",
+        type: "routing",
+        account_id: consumer.account_id,
+        function: %{
+          type: :routing,
+          sink_type: :meilisearch,
+          code: ~s"""
+          def route(action, record, changes, metadata) do
+            %{
+              action: :function,
+              index_name: "test",
+              filter: "id = \#{record["id"]}",
+              function: "doc.content[0] = context.new_content",
+              context: %{new_content: "Updated content"}
+            }
+          end
+          """
+        }
+      }
+
+      assert {:ok, function} = Consumers.create_function(consumer.account_id, routing_function)
+      assert MiniElixir.create(function.id, function.function.code)
+      {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{routing_id: function.id, routing_mode: "dynamic"})
+
+      task_uid = :rand.uniform(100)
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "POST"
+        assert conn.request_path == "/indexes/test/documents/edit"
+
+        Req.Test.json(conn, %{"taskUid" => task_uid})
+      end)
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/tasks/#{task_uid}"
+
+        Req.Test.json(conn, %{
+          "status" => "failed",
+          "error" => %{
+            "message" => "Invalid function expression",
+            "code" => "invalid_document_function"
+          }
+        })
+      end)
+
+      start_pipeline!(consumer)
+      ref = send_test_batch(consumer, events)
+
+      assert_receive {:ack, ^ref, [], [_failed]}, 5_000
+    end
   end
 
   defp generate_events(consumer, count) do
@@ -128,12 +249,11 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
 
     Req.Test.expect(Client, fn conn ->
       {:ok, body, _} = Plug.Conn.read_body(conn)
-      decompressed = :zlib.gunzip(body)
       assert conn.method == "POST"
       assert conn.request_path == "/indexes/test/documents"
 
       body_records =
-        decompressed
+        body
         |> String.split("\n", trim: true)
         |> Enum.map(&Jason.decode!/1)
 

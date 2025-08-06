@@ -97,7 +97,7 @@ defmodule Sequin.Sinks.Gcp.PubSubTest do
         assert conn.request_path == "/v1/projects/#{@project_id}/topics/#{@topic_id}:publish"
 
         {:ok, body, _} = Plug.Conn.read_body(conn)
-        body = body |> :zlib.gunzip() |> Jason.decode!()
+        body = Jason.decode!(body)
 
         data = get_in(body, ["messages", Access.at(0), "data"])
         assert data == %{"key" => "value"}

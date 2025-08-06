@@ -1411,7 +1411,10 @@ defmodule Sequin.Consumers do
   end
 
   # Source Table Matching
-  def matches_message?(%SinkConsumer{message_kind: :record}, %SlotProcessor.Message{action: :delete}), do: false
+  def matches_message?(%SinkConsumer{message_kind: :record} = consumer, %SlotProcessor.Message{action: :delete}) do
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+    false
+  end
 
   # Schema Matching
   def matches_message?(%SinkConsumer{} = consumer, %SlotProcessor.Message{} = message) do
@@ -1423,11 +1426,17 @@ defmodule Sequin.Consumers do
         %Source{} = source -> Source.schema_and_table_oid_in_source?(source, message.table_schema, message.table_oid)
       end
 
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+
     actions_match? and source_match?
   end
 
-  def matches_message?(%SinkConsumer{source: %Source{} = source}, %SlotProcessor.Message{} = message) do
-    Source.schema_and_table_oid_in_source?(source, message.table_schema, message.table_oid)
+  def matches_message?(%SinkConsumer{source: %Source{} = source} = consumer, %SlotProcessor.Message{} = message) do
+    result = Source.schema_and_table_oid_in_source?(source, message.table_schema, message.table_oid)
+
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
+
+    result
   end
 
   # Source Table Matching
@@ -1608,8 +1617,8 @@ defmodule Sequin.Consumers do
 
         %{
           source_table
-          | schema_name: source_table.schema_name,
-            table_name: source_table.table_name,
+          | schema_name: table.schema,
+            table_name: table.name,
             column_filters: enrich_column_filters(source_table.column_filters, table.columns)
         }
     end)
@@ -2010,7 +2019,17 @@ defmodule Sequin.Consumers do
   end
 
   defp maybe_binary_to_string(binary) when is_binary(binary) do
-    Sequin.String.binary_to_string!(binary)
+    # Check if it's valid UTF-8 text, if so, return right away
+    if String.valid?(binary) do
+      binary
+    else
+      # If not valid UTF-8, try to convert it to a UUID binary (16 bytes)
+      if byte_size(binary) == 16 do
+        Sequin.String.binary_to_string!(binary)
+      else
+        binary
+      end
+    end
   rescue
     _ -> binary
   end

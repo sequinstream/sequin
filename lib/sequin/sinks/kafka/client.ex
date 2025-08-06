@@ -10,8 +10,16 @@ defmodule Sequin.Sinks.Kafka.Client do
 
   require Logger
 
+  @publish_retry_count 5
   @impl Kafka
   def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, topic, partition, messages) when is_list(messages) do
+    do_publish(consumer, topic, partition, messages, 0)
+  end
+
+  defp do_publish(consumer, topic, partition, messages, retry_count, original_error \\ nil)
+
+  defp do_publish(consumer, topic, partition, messages, retry_count, original_error)
+       when retry_count <= @publish_retry_count do
     with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
          :ok <-
            :brod.produce_sync(
@@ -23,12 +31,26 @@ defmodule Sequin.Sinks.Kafka.Client do
            ) do
       :ok
     else
-      {:error, :unknown_topic_or_partition} ->
-        {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{topic}' does not exist")}
-
       {:error, reason} ->
-        {:error, to_sequin_error(reason)}
+        message = reason |> to_sequin_error() |> Exception.message()
+        Logger.warning("Failed to publish to Kafka: #{message}, retrying...")
+
+        backoff_ms = Sequin.Time.exponential_backoff(200, retry_count)
+        :timer.sleep(backoff_ms)
+        do_publish(consumer, topic, partition, messages, retry_count + 1, original_error || reason)
     end
+  rescue
+    error ->
+      message = error |> to_sequin_error() |> Exception.message()
+      Logger.warning("Failed to publish to Kafka: #{message}, retrying...")
+
+      backoff_ms = Sequin.Time.exponential_backoff(200, retry_count)
+      :timer.sleep(backoff_ms)
+      do_publish(consumer, topic, partition, messages, retry_count + 1, original_error || error)
+  end
+
+  defp do_publish(_consumer, _topic, _partition, _messages, _retry_count, error) do
+    {:error, to_sequin_error(error)}
   end
 
   @impl Kafka
@@ -105,8 +127,11 @@ defmodule Sequin.Sinks.Kafka.Client do
     end
   end
 
-  defp to_sequin_error(error) do
+  defp to_sequin_error(error, extra \\ nil) do
     case error do
+      :unknown_topic_or_partition ->
+        Sequin.Error.service(service: :kafka, message: "Topic or partition not found: #{inspect(extra)}")
+
       :leader_not_available ->
         Sequin.Error.service(service: :kafka, message: "Leader not available")
 

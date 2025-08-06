@@ -324,7 +324,11 @@ defmodule Sequin.Sinks.Typesense.Client do
         {"X-TYPESENSE-API-KEY", client.api_key}
       ],
       receive_timeout: to_timeout(second: client.timeout_seconds),
-      retry: false
+      retry: :transient,
+      retry_delay: fn retry_count ->
+        Sequin.Time.exponential_backoff(500, retry_count, 5_000)
+      end,
+      max_retries: 1
     ]
     |> Keyword.merge(client.req_opts)
     |> Req.new()

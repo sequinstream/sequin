@@ -50,9 +50,14 @@ For large-scale applications, you may consider sharding indexes—e.g., sharding
 
 You can use Sequin's [filters](/reference/filters) to accomplish this. For example, to shard `users` by region, create a sink per region with filters to route the correct rows to the corresponding Meilisearch index.
 
-<Note>
-  Sequin will soon support [Routing functions](/reference/transforms) for dynamically routing rows from one table to multiple Meilisearch indexes within a single sink.
-</Note>
+### Advanced: Using routing functions
+
+Sequin supports [routing functions](/reference/routing) for dynamically routing rows and performing advanced operations. With routing functions, you can:
+- Route rows from one table to multiple Meilisearch indexes
+- Perform function-based updates (increments, array modifications, etc.)
+- Apply conditional logic for complex routing scenarios
+
+See the [Meilisearch sink reference](/reference/sinks/meilisearch#routing) for detailed examples.
 
 ## Create Meilisearch sink
 
@@ -149,6 +154,45 @@ If documents don't seem to be flowing:
 1. Click the "Messages" tab to view the state of messages for your sink.
 2. Click any failed message.
 3. Check the delivery logs for error details, including the response from Meilisearch.
+
+## Advanced use cases
+
+### Using function updates for counters and aggregations
+
+Meilisearch's function update feature, combined with Sequin's routing functions, enables powerful use cases like maintaining counters or aggregated values without re-indexing entire documents.
+
+For example, if you have a `products` index and want to update view counts or inventory levels:
+
+```elixir
+def route(action, record, changes, metadata) do
+  case metadata.table_name do
+    # When a product is viewed, increment its view counter
+    "product_views" ->
+      %{
+        action: :function,
+        index_name: "products",
+        filter: "id = #{record["product_id"]}",
+        function: "doc.view_count = doc.view_count + 1"
+      }
+
+    # When inventory changes, update the stock quantity
+    "inventory_transactions" ->
+      %{
+        action: :function,
+        index_name: "products",
+        filter: "sku = '#{record["sku"]}'",
+        function: "doc.stock_quantity = doc.stock_quantity + context.quantity_change",
+        context: %{quantity_change: record["quantity_change"]}
+      }
+
+    # Default behavior for products table
+    "products" ->
+      %{index_name: "products", action: if(record["deleted_at"], do: :delete, else: :index)}
+  end
+end
+```
+
+This approach is much more efficient than re-indexing the entire product document for simple counter updates.
 
 ## Next steps
 

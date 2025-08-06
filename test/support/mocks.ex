@@ -59,3 +59,7 @@ Mox.defmock(Sequin.TestSupport.ApplicationMock,
 Mox.defmock(Sequin.Runtime.SinkPipelineMock,
   for: Sequin.Runtime.SinkPipeline
 )
+
+Mox.defmock(Sequin.PrometheusMock,
+  for: Sequin.Prometheus
+)

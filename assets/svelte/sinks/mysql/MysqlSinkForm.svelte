@@ -171,6 +171,21 @@
         records. When disabled, attempts to insert records directly (may fail on
         duplicates).
       </p>
+      <div class="rounded-md bg-yellow-50 p-3 border border-yellow-200">
+        <div class="flex">
+          <div class="ml-3">
+            <h3 class="text-sm font-medium text-yellow-800">
+              Important limitation
+            </h3>
+            <div class="mt-2 text-sm text-yellow-700">
+              <p>
+                MySQL's ON DUPLICATE KEY UPDATE can behave unpredictably on tables with multiple unique indexes. 
+                If your table has multiple unique constraints, consider disabling this option.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">

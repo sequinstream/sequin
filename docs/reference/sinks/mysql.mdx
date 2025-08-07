@@ -122,6 +122,16 @@ ON DUPLICATE KEY UPDATE
 
 When disabled, Sequin performs direct inserts, which may fail if records with duplicate primary keys exist.
 
+<Warning>
+**Important limitation**: MySQL's `ON DUPLICATE KEY UPDATE` can behave unpredictably on tables with multiple unique indexes. If your target table has multiple unique constraints (e.g., both a primary key and a unique email column), consider:
+
+- Disabling upsert and handling duplicates in your application logic
+- Restructuring your table to have only one unique constraint
+- Using a routing function to target different tables based on your data
+
+This is a known MySQL limitation documented in the [official MySQL documentation](https://dev.mysql.com/doc/refman/8.0/en/insert-on-duplicate.html).
+</Warning>
+
 ## Connection management
 
 Sequin maintains a connection pool to your MySQL server for optimal performance. Connections are cached and reused across multiple operations to minimize connection overhead.

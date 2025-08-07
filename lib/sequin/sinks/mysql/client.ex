@@ -3,6 +3,7 @@ defmodule Sequin.Sinks.Mysql.Client do
   Client for interacting with MySQL databases using MyXQL.
   """
 
+  alias Decimal
   alias Sequin.Consumers.MysqlSink
   alias Sequin.Error
   alias Sequin.Sinks.Mysql.ConnectionCache
@@ -176,6 +177,11 @@ defmodule Sequin.Sinks.Mysql.Client do
               value when is_binary(value) -> value
               value when is_number(value) -> value
               value when is_boolean(value) -> value
+              %DateTime{} = dt -> dt
+              %Date{} = date -> date
+              %Time{} = time -> time
+              %NaiveDateTime{} = naive_dt -> naive_dt
+              %Decimal{} = decimal -> decimal
               value -> Jason.encode!(value)
             end
           end)

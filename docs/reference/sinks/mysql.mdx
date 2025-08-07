@@ -62,7 +62,32 @@ The **MySQL sink** writes change data into MySQL tables using direct SQL operati
 
 Your [transform](/reference/transforms) must return a map where keys correspond to MySQL table column names and values are properly typed for the target columns.
 
-For complex data types like JSON objects or arrays, Sequin will automatically encode them as JSON strings when inserting into MySQL.
+### Type casting
+
+Sequin automatically handles type conversion for the following Elixir types:
+
+| Elixir Type | MySQL Handling | Notes |
+|-------------|----------------|--------|
+| `nil` | `NULL` | Preserved as NULL |
+| `String.t()` | Direct insertion | Strings, text, varchar columns |
+| `number()` | Direct insertion | Integer, float, decimal columns |
+| `boolean()` | Direct insertion | Boolean/tinyint columns |
+| `DateTime.t()` | Direct insertion | DATETIME, TIMESTAMP columns |
+| `Date.t()` | Direct insertion | DATE columns |
+| `Time.t()` | Direct insertion | TIME columns |
+| `NaiveDateTime.t()` | Direct insertion | DATETIME columns |
+| `Decimal.t()` | Direct insertion | DECIMAL, NUMERIC columns |
+| Other types | JSON encoding | Encoded as JSON strings |
+
+For complex data types like maps, lists, or custom structs, Sequin will automatically encode them as JSON strings when inserting into MySQL.
+
+### Type casting limitations
+
+- **Binary data (bytea)**: Currently encoded as JSON strings. Consider base64 encoding in your transform for proper handling.
+- **Custom types**: All non-standard types are JSON-encoded, which may not be suitable for all MySQL column types.
+- **Timezone handling**: `DateTime` values are passed directly to MySQL. Ensure your MySQL timezone settings match your expectations.
+
+For more explicit type control, handle type conversion in your [transform function](/reference/transforms) before data reaches the sink.
 
 ### Example transforms
 

@@ -42,7 +42,8 @@ defmodule Sequin.Consumers.MysqlSink do
       :upsert_on_duplicate,
       :routing_mode
     ])
-    |> validate_required([:host, :database, :table_name, :username, :password])
+    |> validate_required([:host, :database, :username, :password])
+    |> validate_routing()
     |> validate_number(:port, greater_than: 0, less_than_or_equal_to: 65_535)
     |> validate_number(:batch_size, greater_than: 0, less_than_or_equal_to: 10_000)
     |> validate_number(:timeout_seconds, greater_than: 0, less_than_or_equal_to: 300)
@@ -51,6 +52,21 @@ defmodule Sequin.Consumers.MysqlSink do
     |> validate_length(:table_name, max: 64)
     |> validate_length(:username, max: 32)
     |> validate_table_name()
+  end
+
+  defp validate_routing(changeset) do
+    routing_mode = get_field(changeset, :routing_mode)
+
+    cond do
+      routing_mode == :dynamic ->
+        put_change(changeset, :table_name, nil)
+
+      routing_mode == :static ->
+        validate_required(changeset, [:table_name])
+
+      true ->
+        add_error(changeset, :routing_mode, "is required")
+    end
   end
 
   defp validate_table_name(changeset) do

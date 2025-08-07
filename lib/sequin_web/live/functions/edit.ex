@@ -190,6 +190,19 @@ defmodule SequinWeb.FunctionsLive.Edit do
   end
   """
 
+  @initial_route_mysql """
+  def route(action, record, changes, metadata) do
+    # Route to table based on source table name
+    table_name = if metadata.table_schema do
+      "\#{metadata.table_schema}_\#{metadata.table_name}"
+    else
+      metadata.table_name
+    end
+
+    %{table_name: table_name}
+  end
+  """
+
   @initial_filter """
   def filter(action, record, changes, metadata) do
     # Must return true or false!
@@ -231,7 +244,8 @@ defmodule SequinWeb.FunctionsLive.Edit do
     "routing_rabbitmq" => @initial_route_rabbitmq,
     "routing_azure_event_hub" => @initial_route_azure_event_hub,
     "routing_kinesis" => @initial_route_kinesis,
-    "routing_s2" => @initial_route_s2
+    "routing_s2" => @initial_route_s2,
+    "routing_mysql" => @initial_route_mysql
   }
 
   # We generate the function completions at compile time because

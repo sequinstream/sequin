@@ -272,6 +272,13 @@ defmodule Sequin.Factory.FunctionsFactory do
               exchange_name: metadata.table_name
             }
             """
+
+          :mysql ->
+            """
+            %{
+              table_name: metadata.table_name
+            }
+            """
         end
       end)
 

@@ -49,35 +49,33 @@
       </Alert.Description>
     </Alert.Root>
 
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <div class="space-y-2">
-        <Label for="host">Host</Label>
-        <Input id="host" bind:value={form.sink.host} placeholder="localhost" />
-        {#if errors.sink?.host}
-          <p class="text-destructive text-sm">{errors.sink.host}</p>
-        {/if}
-        <p class="text-sm text-muted-foreground">
-          MySQL server hostname or IP address
-        </p>
-      </div>
+    <div class="space-y-2">
+      <Label for="host">Host</Label>
+      <Input id="host" bind:value={form.sink.host} placeholder="localhost" />
+      {#if errors.sink?.host}
+        <p class="text-destructive text-sm">{errors.sink.host}</p>
+      {/if}
+      <p class="text-sm text-muted-foreground">
+        MySQL server hostname or IP address
+      </p>
+    </div>
 
-      <div class="space-y-2">
-        <Label for="port">Port</Label>
-        <Input
-          id="port"
-          type="number"
-          bind:value={form.sink.port}
-          placeholder="3306"
-          min="1"
-          max="65535"
-        />
-        {#if errors.sink?.port}
-          <p class="text-destructive text-sm">{errors.sink.port}</p>
-        {/if}
-        <p class="text-sm text-muted-foreground">
-          MySQL server port (default: 3306)
-        </p>
-      </div>
+    <div class="space-y-2">
+      <Label for="port">Port</Label>
+      <Input
+        id="port"
+        type="number"
+        bind:value={form.sink.port}
+        placeholder="3306"
+        min="1"
+        max="65535"
+      />
+      {#if errors.sink?.port}
+        <p class="text-destructive text-sm">{errors.sink.port}</p>
+      {/if}
+      <p class="text-sm text-muted-foreground">
+        MySQL server port (default: 3306)
+      </p>
     </div>
 
     <div class="space-y-2">
@@ -95,47 +93,45 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <div class="space-y-2">
-        <Label for="username">Username</Label>
-        <Input
-          id="username"
-          bind:value={form.sink.username}
-          placeholder="mysql_user"
-          autocomplete="username"
-        />
-        {#if errors.sink?.username}
-          <p class="text-destructive text-sm">{errors.sink.username}</p>
-        {/if}
-      </div>
+    <div class="space-y-2">
+      <Label for="username">Username</Label>
+      <Input
+        id="username"
+        bind:value={form.sink.username}
+        placeholder="mysql_user"
+        autocomplete="username"
+      />
+      {#if errors.sink?.username}
+        <p class="text-destructive text-sm">{errors.sink.username}</p>
+      {/if}
+    </div>
 
-      <div class="space-y-2">
-        <Label for="password">Password</Label>
-        <div class="relative">
-          <Input
-            id="password"
-            type={showPassword ? "text" : "password"}
-            bind:value={form.sink.password}
-            placeholder="••••••••"
-            data-1p-ignore
-            autocomplete="off"
-          />
-          <button
-            type="button"
-            class="absolute inset-y-0 right-0 flex items-center pr-3"
-            on:click={togglePasswordVisibility}
-          >
-            {#if showPassword}
-              <EyeOff class="h-4 w-4 text-gray-400" />
-            {:else}
-              <Eye class="h-4 w-4 text-gray-400" />
-            {/if}
-          </button>
-        </div>
-        {#if errors.sink?.password}
-          <p class="text-destructive text-sm">{errors.sink.password}</p>
-        {/if}
+    <div class="space-y-2">
+      <Label for="password">Password</Label>
+      <div class="relative">
+        <Input
+          id="password"
+          type={showPassword ? "text" : "password"}
+          bind:value={form.sink.password}
+          placeholder="••••••••"
+          data-1p-ignore
+          autocomplete="off"
+        />
+        <button
+          type="button"
+          class="absolute inset-y-0 right-0 flex items-center pr-3"
+          on:click={togglePasswordVisibility}
+        >
+          {#if showPassword}
+            <EyeOff class="h-4 w-4 text-gray-400" />
+          {:else}
+            <Eye class="h-4 w-4 text-gray-400" />
+          {/if}
+        </button>
       </div>
+      {#if errors.sink?.password}
+        <p class="text-destructive text-sm">{errors.sink.password}</p>
+      {/if}
     </div>
 
     <div class="space-y-2">

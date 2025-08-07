@@ -1276,6 +1276,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "database" => sink.database,
       "table_name" => sink.table_name,
       "username" => sink.username,
+      "password" => sink.password,
       "ssl" => sink.ssl,
       "batch_size" => sink.batch_size,
       "timeout_seconds" => sink.timeout_seconds,

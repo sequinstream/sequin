@@ -43,7 +43,7 @@ defmodule Sequin.Consumers.MysqlSink do
       :routing_mode
     ])
     |> validate_required([:host, :database, :table_name, :username, :password])
-    |> validate_number(:port, greater_than: 0, less_than_or_equal_to: 65535)
+    |> validate_number(:port, greater_than: 0, less_than_or_equal_to: 65_535)
     |> validate_number(:batch_size, greater_than: 0, less_than_or_equal_to: 10_000)
     |> validate_number(:timeout_seconds, greater_than: 0, less_than_or_equal_to: 300)
     |> validate_length(:host, max: 255)
@@ -54,8 +54,7 @@ defmodule Sequin.Consumers.MysqlSink do
   end
 
   defp validate_table_name(changeset) do
-    changeset
-    |> validate_format(:table_name, ~r/^[a-zA-Z_][a-zA-Z0-9_]*$/,
+    validate_format(changeset, :table_name, ~r/^[a-zA-Z_][a-zA-Z0-9_]*$/,
       message: "must be a valid MySQL table name (alphanumeric and underscores, starting with letter or underscore)"
     )
   end
@@ -74,7 +73,7 @@ defmodule Sequin.Consumers.MysqlSink do
       database: sink.database,
       username: sink.username,
       password: sink.password,
-      timeout: :timer.seconds(sink.timeout_seconds),
+      timeout: to_timeout(second: sink.timeout_seconds),
       pool_size: 10
     ]
 

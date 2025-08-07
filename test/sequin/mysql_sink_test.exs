@@ -37,7 +37,7 @@ defmodule Sequin.Consumers.MysqlSinkTest do
       changeset = MysqlSink.changeset(%MysqlSink{}, %{params | port: 0})
       assert Sequin.Error.errors_on(changeset)[:port] == ["must be greater than 0"]
 
-      changeset = MysqlSink.changeset(%MysqlSink{}, %{params | port: 70000})
+      changeset = MysqlSink.changeset(%MysqlSink{}, %{params | port: 70_000})
       assert Sequin.Error.errors_on(changeset)[:port] == ["must be less than or equal to 65535"]
     end
 
@@ -45,7 +45,7 @@ defmodule Sequin.Consumers.MysqlSinkTest do
       changeset = MysqlSink.changeset(%MysqlSink{}, %{params | batch_size: 0})
       assert Sequin.Error.errors_on(changeset)[:batch_size] == ["must be greater than 0"]
 
-      changeset = MysqlSink.changeset(%MysqlSink{}, %{params | batch_size: 20000})
+      changeset = MysqlSink.changeset(%MysqlSink{}, %{params | batch_size: 20_000})
       assert Sequin.Error.errors_on(changeset)[:batch_size] == ["must be less than or equal to 10000"]
     end
 
@@ -59,15 +59,21 @@ defmodule Sequin.Consumers.MysqlSinkTest do
 
     test "validates table_name format", %{valid_params: params} do
       valid_names = ["table", "user_data", "Table123", "_private"]
+
       for name <- valid_names do
         changeset = MysqlSink.changeset(%MysqlSink{}, %{params | table_name: name})
         assert Sequin.Error.errors_on(changeset)[:table_name] == nil, "#{name} should be valid"
       end
 
       invalid_names = ["123table", "table-name", "table space", ""]
+
       for name <- invalid_names do
         changeset = MysqlSink.changeset(%MysqlSink{}, %{params | table_name: name})
-        assert Sequin.Error.errors_on(changeset)[:table_name] == ["must be a valid MySQL table name (alphanumeric and underscores, starting with letter or underscore)"], "#{name} should be invalid"
+
+        assert Sequin.Error.errors_on(changeset)[:table_name] == [
+                 "must be a valid MySQL table name (alphanumeric and underscores, starting with letter or underscore)"
+               ],
+               "#{name} should be invalid"
       end
     end
 

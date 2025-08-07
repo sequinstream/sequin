@@ -43,7 +43,9 @@ defmodule Sequin.Runtime.Routing.Consumers.Mysql do
   defp sanitize_table_name(name) do
     name
     |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
-    |> String.replace(~r/^[0-9]/, "_\\0")  # Ensure it doesn't start with a number
-    |> String.slice(0, 64)  # MySQL table name limit
+    # Ensure it doesn't start with a number
+    |> String.replace(~r/^[0-9]/, "_\\0")
+    # MySQL table name limit
+    |> String.slice(0, 64)
   end
 end

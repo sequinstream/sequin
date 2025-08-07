@@ -16,7 +16,7 @@ defmodule Sequin.Sinks.Mysql.ClientTest do
     timeout_seconds: 30
   }
 
-    # Integration tests would be needed to test the client functions
+  # Integration tests would be needed to test the client functions
   # against a real MySQL database, but that's beyond the scope of unit testing
 end
 

@@ -49,8 +49,7 @@ defmodule Sequin.Runtime.MysqlPipelineTest do
             )
         )
 
-      MysqlMock
-      |> expect(:upsert_records, fn sink, records ->
+      expect(MysqlMock, :upsert_records, fn sink, records ->
         assert sink.table_name == consumer.sink.table_name
         assert length(records) == 1
         assert List.first(records)["name"] == "test-name"
@@ -80,8 +79,7 @@ defmodule Sequin.Runtime.MysqlPipelineTest do
           )
         end
 
-      MysqlMock
-      |> expect(:upsert_records, fn sink, records ->
+      expect(MysqlMock, :upsert_records, fn sink, records ->
         assert sink.table_name == consumer.sink.table_name
         assert length(records) == 3
         assert Enum.map(records, & &1["name"]) == ["test-name-1", "test-name-2", "test-name-3"]
@@ -110,8 +108,7 @@ defmodule Sequin.Runtime.MysqlPipelineTest do
             )
         )
 
-      MysqlMock
-      |> expect(:delete_records, fn sink, record_pks ->
+      expect(MysqlMock, :delete_records, fn sink, record_pks ->
         assert sink.table_name == consumer.sink.table_name
         assert record_pks == [1]
         :ok
@@ -140,8 +137,7 @@ defmodule Sequin.Runtime.MysqlPipelineTest do
 
       error = Sequin.Error.service(service: :mysql, message: "Connection failed")
 
-      MysqlMock
-      |> expect(:upsert_records, fn _sink, _records ->
+      expect(MysqlMock, :upsert_records, fn _sink, _records ->
         {:error, error}
       end)
 
@@ -178,8 +174,7 @@ defmodule Sequin.Runtime.MysqlPipelineTest do
             )
         )
 
-      MysqlMock
-      |> expect(:upsert_records, fn sink, records ->
+      expect(MysqlMock, :upsert_records, fn sink, records ->
         assert sink.table_name == "dynamic_table"
         assert length(records) == 1
         :ok

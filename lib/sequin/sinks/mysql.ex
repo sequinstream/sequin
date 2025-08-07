@@ -7,7 +7,7 @@ defmodule Sequin.Sinks.Mysql do
   @callback upsert_records(MysqlSink.t(), [map()]) :: :ok | {:error, Error.t()}
   @callback delete_records(MysqlSink.t(), [any()]) :: :ok | {:error, Error.t()}
 
-  @module Application.compiled_env(:sequin, :mysql_module, Sequin.Sinks.Mysql.Client)
+  @module Application.compile_env(:sequin, :mysql_module, Sequin.Sinks.Mysql.Client)
 
   @spec test_connection(MysqlSink.t()) :: :ok | {:error, Error.t()}
   def test_connection(%MysqlSink{} = sink) do

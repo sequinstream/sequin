@@ -179,8 +179,9 @@
             </h3>
             <div class="mt-2 text-sm text-yellow-700">
               <p>
-                MySQL's ON DUPLICATE KEY UPDATE can behave unpredictably on tables with multiple unique indexes. 
-                If your table has multiple unique constraints, consider disabling this option.
+                MySQL's ON DUPLICATE KEY UPDATE can behave unpredictably on
+                tables with multiple unique indexes. If your table has multiple
+                unique constraints, consider disabling this option.
               </p>
             </div>
           </div>

@@ -4,12 +4,16 @@ These templates assume you need to create a VPC, ECS cluster, and security group
 
 ### Secrets
 
-`secret_key_base` should be a random string of at least 32 characters.
+`secret_key_base` should be a random string of **exactly** 64 characters.
 
 `vault_key` should be a random base64 encoded string of **exactly** 32 characters.
 
 You can generate these secrets with `openssl` like so:
 
 ```bash
+# Generate SECRET_KEY_BASE
+openssl rand -base64 64
+
+# Generate VAULT_KEY
 openssl rand -base64 32
 ```

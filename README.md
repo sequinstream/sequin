@@ -28,8 +28,6 @@ Sequin is [open source](./LICENSE). To help us make this project great, tell us 
 
 See our [quickstart](https://sequinstream.com/docs/quickstart/webhooks) to get up and running in your dev environment in about 5 minutes.
 
-Alternatively, you can try Sequin for free on [Sequin Cloud](https://console.sequinstream.com/register). Follow the instructions in the app to start streaming your data in a couple minutes.
-
 ## Performance
 
 Sequin delivers industry-leading performance for change data capture (CDC), sustaining **50k operations per second** (40 MB/s) with **55ms average latency**.

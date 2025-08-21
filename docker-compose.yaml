@@ -3,6 +3,7 @@ name: sequin-dev
 services:
   postgres:
     profiles: [databases]
+    platform: linux/arm64
     build: 
       context: .
       dockerfile: Dockerfile.postgres

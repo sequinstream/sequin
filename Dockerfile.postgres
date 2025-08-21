@@ -1,17 +1,6 @@
 FROM postgres:17
 
-# Install build dependencies
+# Install required extensions
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    git \
-    postgresql-server-dev-17 \
+    postgresql-17-pgvector \
     && rm -rf /var/lib/apt/lists/*
-
-# Clone and install pgvector
-RUN git clone --branch v0.5.1 https://github.com/pgvector/pgvector.git \
-    && cd pgvector \
-    && make \
-    && make install
-
-# Cleanup
-RUN rm -rf pgvector

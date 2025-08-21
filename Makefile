@@ -139,6 +139,9 @@ connect: ## Connect to the production database
 docs: ## Run mintlify dev server for documentation
 	@cd docs && npx mintlify dev
 
+website: ## Serve the website locally on port 8000
+	@cd website && python -m http.server 8000
+
 redis-console-consumer: ## Read from redis stream <stream-key> [from-beginning]
 	@./scripts/redis-console-consumer.sh $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 
@@ -147,7 +150,7 @@ e2e-gh-run: ## Trigger GitHub workflow run [BRANCH=<branch-name>] (defaults to c
 	echo "Running workflow on branch: $$BRANCH"; \
 	gh workflow run e2e-tests.yml --ref $$BRANCH; \
 	sleep 3; \
-	gh run watch $$(gh run list --workflow=e2e-tests.yml --limit 1 --json databaseId --jq '.[0].databaseId')	
+	gh run watch $$(gh run list --workflow=e2e-tests.yml --limit 1 --json databaseId --jq '.[0].databaseId')
 
 e2e-up: ## Start e2e test environment containers
 	cd priv/tests_e2e && docker compose up -d
@@ -180,4 +183,3 @@ e2e-clean: ## Remove e2e kafka container
 
 e2e-logs: ## Show logs from e2e test environment containers
 	cd priv/tests_e2e && docker compose logs -f
-

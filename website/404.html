@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>404 - Page Not Found | Sequin</title>
+        <link rel="icon" type="image/png" href="/favicon.png" />
+        <link rel="stylesheet" href="/styles.css" />
+        <style>
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 2rem;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+            }
+            .error-code {
+                font-size: 4rem;
+                font-weight: 700;
+                color: #0277bd;
+                margin-bottom: 1rem;
+            }
+            .error-message {
+                font-size: 14px;
+                color: #374151;
+                margin-bottom: 2rem;
+            }
+            .ascii-art {
+                font-family: monospace;
+                font-size: 10px;
+                line-height: 1;
+                color: #6b7280;
+                margin: 2rem 0;
+                white-space: pre;
+            }
+            @media (max-width: 640px) {
+                .ascii-art {
+                    font-size: 8px;
+                }
+                .error-code {
+                    font-size: 3rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="error-code">404</div>
+
+            <h1
+                class="section-header"
+                style="text-decoration: none; margin-bottom: 0.5rem"
+            >
+                Page not found
+            </h1>
+
+            <p class="error-message">
+                The page you're looking for doesn't exist or has been moved.
+            </p>
+
+            <div class="ascii-art">
+                ╔══════════════╗ ║ Database ║ ╚══════════════╝ │ │ WAL ▼
+                ╔════════════════╗ ║ Sequin ║ ║ (404 Error) ║ ╚════════════════╝
+                │ │ redirect ▼ ╔══════════════╗ ║ Home ║ ╚══════════════╝
+            </div>
+
+            <div
+                style="
+                    display: flex;
+                    gap: 1rem;
+                    flex-wrap: wrap;
+                    justify-content: center;
+                "
+            >
+                <a href="/" class="btn btn-primary">
+                    <span>← Home</span>
+                </a>
+                <a href="https://sequinstream.com/docs" class="btn btn-outline">
+                    <span>Documentation</span>
+                </a>
+            </div>
+        </div>
+    </body>
+</html>

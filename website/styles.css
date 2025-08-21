@@ -1,0 +1,170 @@
+body {
+    font-family:
+        ui-monospace,
+        SFMono-Regular,
+        SF Mono,
+        Menlo,
+        Consolas,
+        Liberation Mono,
+        monospace;
+    font-size: 14px;
+}
+
+p {
+    font-size: 14px;
+}
+
+hr {
+    border: none;
+    border-top: 6px dotted #ccc;
+    height: 0;
+}
+
+h1 {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family:
+        "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+        Consolas, "Courier New", monospace;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.section-header {
+    font-family:
+        "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+        Consolas, "Courier New", monospace;
+    font-weight: bold;
+    font-size: 14px;
+    text-decoration: underline;
+}
+
+.hero-header {
+    font-family:
+        "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+        Consolas, "Courier New", monospace;
+    font-weight: bold;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+}
+
+.hero-header .postgres-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 0.5rem;
+    flex-shrink: 0;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+    font-size: 14px;
+    border-radius: 0;
+    transition: all 0.2s;
+    cursor: pointer;
+    text-decoration: none;
+    border: none;
+    font-family: inherit;
+}
+
+.btn-primary {
+    background-color: #1f2937;
+    color: white;
+    padding: 0.5rem 1rem;
+}
+
+.btn-primary:hover {
+    background-color: #111827;
+}
+
+.btn-outline {
+    background-color: white;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    padding: 0.5rem 1rem;
+}
+
+.btn-outline:hover {
+    border-color: #9ca3af;
+    background-color: #f9fafb;
+}
+
+.btn-callout {
+    background-color: #0277bd;
+    color: white;
+    padding: 0.5rem 1rem;
+}
+
+.btn-callout:hover {
+    background-color: #0369a1;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.75rem;
+    font-size: 14px;
+}
+
+.card {
+    background-color: #f9fafb;
+    border-radius: 0;
+    padding: 1.5rem;
+}
+
+.card-blue {
+    background-color: #eff6ff;
+}
+
+.icon {
+    width: 1rem;
+    height: 1rem;
+    display: inline-block;
+}
+
+.icon-sm {
+    width: 0.75rem;
+    height: 0.75rem;
+}
+
+.icon-lg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Table styling */
+.table {
+    border-collapse: collapse;
+    width: 100%;
+    border: 1px solid #374151;
+    font-family: inherit;
+}
+
+.table td {
+    border: 1px solid #374151;
+    padding: 0.75rem;
+    text-align: left;
+    font-size: 14px;
+}
+
+b,
+strong {
+    font-weight: 700;
+}
+
+svg text {
+    font-family: inherit;
+}

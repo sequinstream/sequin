@@ -6,7 +6,7 @@
             name="viewport"
             content="width=device-width, initial-scale=1.0, maximum-scale=1"
         />
-        <title>Sequin - Fast Postgres change data capture</title>
+        <title>Sequin - Fast and reliable Postgres change data capture</title>
         <meta
             name="description"
             content="Stream data from Postgres directly to Kafka, Redis, and more. Replace complex tools like Debezium and consolidate workflows."
@@ -51,7 +51,9 @@
                     <div class="flex items-center space-x-8">
                         <div class="font-semibold">Sequin</div>
                     </div>
-                    <div class="flex items-center space-x-4">
+
+                    <!-- Desktop Navigation -->
+                    <div class="hidden sm:flex items-center space-x-4">
                         <a
                             href="https://sequinstream.com/docs"
                             class="text-gray-600 hover:text-gray-900 transition-colors"
@@ -90,6 +92,77 @@
                                 class="icon-sm mr-1"
                             />
                             <span>Cloud</span>
+                        </a>
+                    </div>
+
+                    <!-- Mobile Navigation -->
+                    <div class="sm:hidden flex items-center space-x-4">
+                        <a
+                            href="https://github.com/sequinstream/sequin"
+                            class="btn btn-primary btn-sm"
+                            data-testid="button-try-now-header-mobile"
+                        >
+                            <img
+                                src="icons/github-white.svg"
+                                alt="GitHub"
+                                class="icon-sm mr-1"
+                            />
+                            <span id="header-stars-mobile">-</span>
+                            <span class="ml-2">Try now</span>
+                        </a>
+                        <a
+                            href="https://console.sequinstream.com/register"
+                            class="btn btn-callout btn-sm"
+                            data-testid="button-cloud-mobile"
+                        >
+                            <img
+                                src="icons/cloud.svg"
+                                alt="Cloud"
+                                class="icon-sm mr-1"
+                            />
+                            <span>Cloud</span>
+                        </a>
+                        <button
+                            id="mobile-menu-button"
+                            class="text-gray-600 hover:text-gray-900 p-2"
+                            aria-label="Toggle menu"
+                        >
+                            <svg
+                                class="h-6 w-6"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M4 6h16M4 12h16M4 18h16"
+                                />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mobile Menu -->
+                <div
+                    id="mobile-menu"
+                    class="sm:hidden hidden border-t border-gray-200 py-4"
+                >
+                    <div class="flex space-x-6 px-2">
+                        <a
+                            href="https://sequinstream.com/docs"
+                            class="text-gray-600 hover:text-gray-900 transition-colors py-2"
+                            data-testid="link-docs-mobile"
+                        >
+                            Docs
+                        </a>
+                        <a
+                            href="https://blog.sequinstream.com/"
+                            class="text-gray-600 hover:text-gray-900 transition-colors py-2"
+                            data-testid="link-blog-mobile"
+                        >
+                            Blog
                         </a>
                     </div>
                 </div>
@@ -856,9 +929,12 @@
                                 ? (starCount / 1000).toFixed(1) + "K"
                                 : starCount.toString();
 
-                        // Update both buttons
+                        // Update all buttons
                         document.getElementById("header-stars").textContent =
                             formattedStars;
+                        document.getElementById(
+                            "header-stars-mobile",
+                        ).textContent = formattedStars;
                         document.getElementById("hero-stars").textContent =
                             formattedStars;
                     }
@@ -866,6 +942,14 @@
                     console.error("Failed to fetch GitHub stats:", error);
                 }
             }
+
+            // Mobile menu toggle
+            document
+                .getElementById("mobile-menu-button")
+                .addEventListener("click", function () {
+                    const mobileMenu = document.getElementById("mobile-menu");
+                    mobileMenu.classList.toggle("hidden");
+                });
 
             // Set current year
             document.getElementById("current-year").textContent =

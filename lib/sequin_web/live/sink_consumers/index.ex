@@ -56,6 +56,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       socket
       |> assign(:has_databases?, has_databases?)
       |> assign(:self_hosted, Application.get_env(:sequin, :self_hosted))
+      |> assign(:is_mysql_sink_enabled, Sequin.feature_enabled?(account.id, :mysql_sink))
 
     {:ok, socket}
   end
@@ -77,6 +78,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
             consumers: @encoded_consumers,
             hasDatabases: @has_databases?,
             selfHosted: @self_hosted,
+            isMysqlSinkEnabled: @is_mysql_sink_enabled,
             page: @page,
             pageSize: @page_size,
             totalCount: @total_count

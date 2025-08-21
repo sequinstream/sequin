@@ -73,6 +73,7 @@
   export let live: any;
   export let hasDatabases: boolean;
   export let selfHosted: boolean;
+  export let isMysqlSinkEnabled: boolean;
   export let page: number;
   export let pageSize: number;
   export let totalCount: number;
@@ -84,6 +85,15 @@
   $: pageCount = Math.ceil(totalCount / pageSize);
   $: startIndex = page * pageSize + 1;
   $: endIndex = Math.min((page + 1) * pageSize, totalCount);
+
+  function isSinkEnabled(sink: { id: string }): boolean {
+    switch (sink.id) {
+      case "mysql":
+        return isMysqlSinkEnabled;
+      default:
+        return true;
+    }
+  }
 
   const sinks = [
     {
@@ -171,7 +181,7 @@
       name: "MySQL",
       icon: MysqlIcon,
     },
-  ];
+  ].filter(isSinkEnabled);
 
   function handleConsumerClick(id: string, type: string) {
     // Store current page before navigation

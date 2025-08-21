@@ -108,6 +108,11 @@ if config_env() == :prod and self_hosted do
       do: :enabled,
       else: :disabled
 
+  mysql_sink =
+    if System.get_env("FEATURE_MYSQL_SINK", "disabled") in enabled_feature_values,
+      do: :enabled,
+      else: :disabled
+
   backfill_max_pending_messages = ConfigParser.backfill_max_pending_messages(env_vars)
 
   database_url =
@@ -203,7 +208,8 @@ if config_env() == :prod and self_hosted do
   config :sequin, :features,
     account_self_signup: account_self_signup,
     provision_default_user: provision_default_user,
-    function_transforms: :enabled
+    function_transforms: :enabled,
+    mysql_sink: mysql_sink
 
   config :sequin, :koala,
     public_key: "pk_ec2e6140b3d56f5eb1735350eb20e92b8002",
@@ -222,6 +228,11 @@ if config_env() == :prod and not self_hosted do
 
   function_transforms =
     if System.get_env("FEATURE_FUNCTION_TRANSFORMS", "disabled") in enabled_feature_values, do: :enabled, else: :disabled
+
+  mysql_sink =
+    if System.get_env("FEATURE_MYSQL_SINK", "disabled") in enabled_feature_values,
+      do: :enabled,
+      else: :disabled
 
   config :logger,
     default_handler: [
@@ -265,7 +276,8 @@ if config_env() == :prod and not self_hosted do
 
   config :sequin, :features,
     account_self_signup: :enabled,
-    function_transforms: function_transforms
+    function_transforms: function_transforms,
+    mysql_sink: mysql_sink
 
   config :sequin, :koala, public_key: "pk_ec2e6140b3d56f5eb1735350eb20e92b8002"
 

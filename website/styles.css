@@ -37,6 +37,10 @@ h6 {
     font-size: 14px;
 }
 
+section {
+    padding: 2rem;
+}
+
 .section-header {
     font-family:
         "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",

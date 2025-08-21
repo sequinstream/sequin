@@ -79,7 +79,7 @@
                                 class="icon-sm mr-1"
                             />
                             <span id="header-stars">-</span>
-                            <span class="ml-2">Try now</span>
+                            <span class="ml-2 hidden sm:inline">Try now</span>
                         </a>
                         <a
                             href="https://console.sequinstream.com/register"
@@ -108,7 +108,7 @@
                                 class="icon-sm mr-1"
                             />
                             <span id="header-stars-mobile">-</span>
-                            <span class="ml-2">Try now</span>
+                            <span class="ml-2 hidden sm:inline">Try now</span>
                         </a>
                         <a
                             href="https://console.sequinstream.com/register"
@@ -169,9 +169,9 @@
             </div>
         </nav>
 
-        <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
+        <main class="max-w-4xl mx-auto py-12 space-y-16">
             <!-- Hero Section -->
-            <section class="text-left space-y-6">
+            <section class="text-left space-y-6 px-4 sm:px-6 lg:px-8">
                 <h1 class="hero-header">
                     <img
                         src="icons/postgres.svg"
@@ -187,7 +187,7 @@
 
                 <p class="text-gray-600 max-w-4xl">
                     Stream data from Postgres directly to Kafka, Redis, and
-                    more. Replace complex tools like Debezium or pipeline like
+                    more. Replace complex tools like Debezium or pipelines like
                     Flink.
                 </p>
                 <p class="text-gray-600 max-w-4xl">
@@ -200,7 +200,7 @@
                 >
                     <a
                         href="https://github.com/sequinstream/sequin"
-                        class="btn btn-primary"
+                        class="btn btn-primary w-40 sm:w-auto"
                         data-testid="button-github-star"
                     >
                         <img
@@ -213,7 +213,7 @@
                     </a>
                     <a
                         href="https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA"
-                        class="btn btn-outline"
+                        class="btn btn-outline w-40 sm:w-auto"
                         data-testid="button-join-slack"
                     >
                         <img
@@ -225,7 +225,7 @@
                     </a>
                     <a
                         href="https://discord.gg/BV8wFXvNtY"
-                        class="btn btn-outline"
+                        class="btn btn-outline w-40 sm:w-auto"
                         data-testid="button-join-discord"
                     >
                         <img
@@ -241,7 +241,7 @@
             <hr class="border-gray-200" />
 
             <!-- Killer features -->
-            <section id="performance" class="space-y-8">
+            <section id="performance" class="space-y-8 px-4 sm:px-6 lg:px-8">
                 <h2 class="section-header">Killer features</h2>
 
                 <table class="table">
@@ -286,7 +286,7 @@
             <hr class="border-gray-200" />
 
             <!-- Architecture Section -->
-            <section id="architecture" class="space-y-8">
+            <section id="architecture" class="space-y-8 px-4 sm:px-6 lg:px-8">
                 <h2 class="section-header">How it works</h2>
 
                 <p class="text-gray-600">
@@ -313,7 +313,7 @@
             <hr class="border-gray-200" />
 
             <!-- Destinations Section -->
-            <section id="destinations" class="space-y-8">
+            <section id="destinations" class="space-y-8 px-4 sm:px-6 lg:px-8">
                 <h2 class="section-header">Supported destinations</h2>
 
                 <p class="text-gray-600">
@@ -446,11 +446,11 @@
             <!-- Advanced Processing Pipeline Section -->
             <section
                 id="processing-pipeline"
-                class="space-y-8"
+                class="space-y-8 px-4 sm:px-6 lg:px-8"
                 style="
                     background-color: #eff6ff;
-                    padding: 2rem;
-                    margin: 0 -2rem;
+                    padding-top: 2rem;
+                    padding-bottom: 2rem;
                 "
             >
                 <h2 class="section-header">Advanced processing pipeline</h2>
@@ -473,7 +473,7 @@
 ╔════════════════════════════════════╗
 ║              Sequin                ║
 ║    ┌──────────┐   ┌──────────┐     ║
-║    │  Filter  │   │  Enrich  │     ║
+║    │  Enrich  │   │  Filter  │     ║
 ║    └──────────┘   └──────────┘     ║
 ║    ┌──────────┐   ┌──────────┐     ║
 ║    │Transform │   │  Route   │     ║
@@ -490,16 +490,16 @@
 
                 <table class="table">
                     <tr>
+                        <td><strong>Enrich</strong></td>
+                        <td>
+                            Enrich changes by joining back to data in Postgres
+                        </td>
+                    </tr>
+                    <tr>
                         <td><strong>Filters</strong></td>
                         <td>
                             Write custom filters to include or exclude changes
                             from Postgres
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><strong>Enrich</strong></td>
-                        <td>
-                            Enrich changes by joining back to data in Postgres
                         </td>
                     </tr>
                     <tr>
@@ -521,7 +521,7 @@
             <hr class="border-gray-200" />
 
             <!-- Use Cases Section -->
-            <section id="use-cases" class="space-y-8">
+            <section id="features" class="space-y-8 px-4 sm:px-6 lg:px-8">
                 <h2 class="section-header">Key use cases</h2>
 
                 <p class="text-gray-600">
@@ -565,7 +565,7 @@
             <hr class="border-gray-200" />
 
             <!-- Why Sequin Section -->
-            <section id="why-sequin" class="space-y-8">
+            <section id="why-sequin" class="space-y-8 px-4 sm:px-6 lg:px-8">
                 <h2 class="section-header">Why Sequin?</h2>
 
                 <p class="text-gray-600">
@@ -635,7 +635,7 @@
             <hr class="border-gray-200" />
 
             <!-- Features Section -->
-            <section id="features" class="space-y-8">
+            <section id="comparison" class="space-y-8 px-4 sm:px-6 lg:px-8">
                 <h2 class="section-header">Platform features</h2>
 
                 <p class="text-gray-600">
@@ -733,9 +733,7 @@
                             >
                                 <span
                                     class="w-2 h-2 rounded-full mt-2 flex-shrink-0"
-                                    style="
-                                        background-color: hsl(214.7 100% 60%);
-                                    "
+                                    style="background-color: #0277bd"
                                 ></span>
                                 <div>
                                     <strong>CLI and API</strong> for
@@ -748,9 +746,7 @@
                             >
                                 <span
                                     class="w-2 h-2 rounded-full mt-2 flex-shrink-0"
-                                    style="
-                                        background-color: hsl(214.7 100% 60%);
-                                    "
+                                    style="background-color: #0277bd"
                                 ></span>
                                 <div>
                                     <strong>Configuration as code</strong> with
@@ -772,9 +768,7 @@
                             >
                                 <span
                                     class="w-2 h-2 rounded-full mt-2 flex-shrink-0"
-                                    style="
-                                        background-color: hsl(214.7 100% 60%);
-                                    "
+                                    style="background-color: #0277bd"
                                 ></span>
                                 <div>
                                     <strong>Observability</strong> with a

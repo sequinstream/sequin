@@ -264,7 +264,7 @@ if config_env() == :prod and not self_hosted do
     ]
 
   config :sequin, :features,
-    account_self_signup: :enabled,
+    account_self_signup: :disabled,
     function_transforms: function_transforms
 
   config :sequin, :koala, public_key: "pk_ec2e6140b3d56f5eb1735350eb20e92b8002"

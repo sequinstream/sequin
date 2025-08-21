@@ -21,10 +21,7 @@ If you're self-hosting Sequin, you'll need:
 1. [Sequin installed](/running-sequin)
 2. [A database connected](/connect-postgres)
 
-If you're using Sequin Cloud, you'll need:
 
-1. [A Sequin Cloud account](https://console.sequinstream.com)
-2. [A database connected](/connect-postgres)
 
 ## Basic setup
 
@@ -35,7 +32,7 @@ Sequin converts Postgres changes and rows into JSON documents and sends them to 
 You'll need to have a Typesense cluster running and accessible to Sequin. You can run Typesense locally for development or use a hosted instance.
 
 <Tip>
-  If you're using Sequin Cloud and developing locally, you can use the Sequin CLI's [tunnel command](/reference/cli/overview#tunnel-sequin-cloud-only) to connect Sequin's servers to a local Typesense instance. So, no need to deploy your Typesense instance just yet!
+  If you're developing locally, you can connect Sequin to a local Typesense instance.
 </Tip>
 
 ### Mapping Postgres tables to Typesense collections

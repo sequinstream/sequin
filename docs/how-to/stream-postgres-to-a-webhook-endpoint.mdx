@@ -21,10 +21,7 @@ If you're self-hosting Sequin, you'll need:
 1. [Sequin installed](/running-sequin)
 2. [A database connected](/connect-postgres)
 
-If you're using Sequin Cloud, you'll need:
 
-1. [A Sequin Cloud account](https://console.sequinstream.com)
-2. [A database connected](/connect-postgres)
 
 ## Basic setup
 
@@ -40,9 +37,7 @@ To see the shape of the webhook payloads that Sequin sends, see the [webhook sin
 
 Your webhook endpoint must return a `200 OK` after successfully processing a batch of messages. Sequin will consider any other response code a failure, and will [mark the message for re-delivery](/reference/sinks/webhooks#retry-behavior).
 
-<Tip>
-  If you're using Sequin Cloud and developing locally, you can use the Sequin CLI's [`tunnel` command](/reference/cli/overview#tunnel) to connect Sequin's servers to a local HTTP endpoint. So, no need to deploy your application just yet!
-</Tip>
+
 
 <Tip>
   If you're not ready to add an HTTP endpoint to your application just yet, you can use a service like [Webhook.site](https://webhook.site) to receive webhooks.

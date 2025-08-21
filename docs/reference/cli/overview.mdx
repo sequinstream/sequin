@@ -39,7 +39,7 @@ The Sequin CLI uses **contexts** to manage different configurations and environm
 - API token for authentication
 - Hostname configuration (for self-hosted Sequin instances)
 - TLS settings (for self-hosted Sequin instances)
-- Tunnel port configurations (for Sequin Cloud)
+
 
 ### `sequin context`
 
@@ -153,30 +153,6 @@ The `export` command is experimental. Exported configurations may need manual ad
 - Encrypted fields like passwords need to be manually specified
 </Info>
 
-## Tunnel (Sequin Cloud only)
 
-The `tunnel` command creates a secure connection between your local development environment and Sequin's cloud platform. You can use it to connect Sequin to either local databases or HTTP endpoints.
 
-### `sequin tunnel`
 
-First, you'll need to setup your database or HTTP endpoint on [Sequin's platform](https://sequinstream.com).
-
-Then, to start a tunnel, run the `tunnel` command. The docs for that command:
-
-```bash
-sequin tunnel --help
-usage: sequin tunnel [<flags>]
-
-Create tunnels to Sequin
-
-Flags:
-  --ports=PORTS  Ports to tunnel, in the format <local-port>:<name-or-id>[,<local-port>:<name-or-id>]
-```
-
-So, if you named your Postgres database `my-pg-db` on Sequin, and it's running on port 5432 on your local machine, run:
-
-```bash
-sequin tunnel --ports=5432:my-pg-db
-```
-
-Sequin's cloud servers can now connect to your local Postgres database at `localhost:5432`.

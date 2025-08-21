@@ -44,16 +44,12 @@
               "connect-postgres",
               "postgres-change-data-capture",
               "compare",
-              "performance",
-              "plans"
+              "performance"
             ]
           },
           {
             "group": "Sequin Managed",
-            "pages": [
-              "sequin-managed/overview",
-              "sequin-managed/aws"
-            ]
+            "pages": ["sequin-managed/overview", "sequin-managed/aws"]
           },
           {
             "group": "Sink setup guides",
@@ -93,9 +89,7 @@
           },
           {
             "group": "Concepts",
-            "pages": [
-              "concepts/consistency-model"
-            ]
+            "pages": ["concepts/consistency-model"]
           },
           {
             "group": "Reference",
@@ -328,11 +322,7 @@
     ]
   },
   "contextual": {
-    "options": [
-      "chatgpt",
-      "claude",
-      "copy"
-    ]
+    "options": ["chatgpt", "claude", "copy"]
   },
   "integrations": {
     "koala": {

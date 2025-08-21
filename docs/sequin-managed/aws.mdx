@@ -4,7 +4,7 @@ sidebarTitle: "Sequin Managed on AWS"
 description: "Sequin offers a single-tenant deployment of Sequin within your own AWS account."
 ---
 
-[Sequin Managed](/sequin-managed/overview) on Amazon Web Services (AWS) creates a dedicated environment within your AWS organization. It runs in a separate sub-account that you own, but which Sequin manages on your behalf. You still access Sequin through the same web console and CLI that Sequin Cloud provides, but now the infrastructure is fully contained in your AWS environment.
+[Sequin Managed](/sequin-managed/overview) on Amazon Web Services (AWS) creates a dedicated environment within your AWS organization. It runs in a separate sub-account that you own, but which Sequin manages on your behalf. You still access Sequin through the same web console and CLI, but now the infrastructure is fully contained in your AWS environment.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ In this setup, the Sequin "data plane" is installed inside a Sequin-operated sub
 
 We deploy two Sequin instances (on ECS Fargate) in active-passive mode, spread across different availability zones for high availability. We'll also provision a small RDS (Postgres) instance and a Redis service to support your streaming infrastructure.
 
-All core processes run in the dedicated sub-account, which is part of your AWS organization. Sequin does not gain access to your other accounts or organization-level settings. Meanwhile, the "control plane" — including the Sequin API and web app — remains external. You can reach it at [console.sequinstream.com](https://console.sequinstream.com).
+All core processes run in the dedicated sub-account, which is part of your AWS organization. Sequin does not gain access to your other accounts or organization-level settings. Meanwhile, the "control plane" — including the Sequin API and web app — remains external.
 
 ![Sequin Managed on AWS architecture](/images/sequin-managed/aws-architecture.png)
 

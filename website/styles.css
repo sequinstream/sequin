@@ -1,5 +1,6 @@
 body {
     font-family:
+        "JetBrains Mono",
         ui-monospace,
         SFMono-Regular,
         SF Mono,
@@ -31,7 +32,7 @@ h4,
 h5,
 h6 {
     font-family:
-        "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+        "JetBrains Mono", "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
         Consolas, "Courier New", monospace;
     font-weight: 700;
     font-size: 14px;
@@ -43,7 +44,7 @@ section {
 
 .section-header {
     font-family:
-        "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+        "JetBrains Mono", "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
         Consolas, "Courier New", monospace;
     font-weight: bold;
     font-size: 14px;
@@ -52,7 +53,7 @@ section {
 
 .hero-header {
     font-family:
-        "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
+        "JetBrains Mono", "Berkeley Mono", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono",
         Consolas, "Courier New", monospace;
     font-weight: bold;
     font-size: 14px;

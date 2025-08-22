@@ -560,8 +560,17 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   end
 
   defp message_has_backfill_group_conflict?(%State{} = state, cursor_tuple) do
-    message = Map.get(state.messages, cursor_tuple)
-    not is_nil(message) and Multiset.member?(state.backfill_message_groups, group_id(message))
+    case Map.get(state.messages, cursor_tuple) do
+      nil ->
+        false
+
+      message ->
+        state.backfill_message_groups
+        |> Multiset.values(group_id(message))
+        |> Enum.any?(fn backfill_cursor_tuple ->
+          backfill_cursor_tuple < cursor_tuple
+        end)
+    end
   end
 
   # In strictly ordered mode, we stream the lowest cursor tuple from either ets set

@@ -88,6 +88,14 @@ defmodule Sequin.Multiset do
     |> List.flatten()
   end
 
+  @spec values(t(), key()) :: [value()]
+  def values(multiset, key) do
+    case Map.get(multiset, key) do
+      nil -> []
+      set -> MapSet.to_list(set)
+    end
+  end
+
   @doc """
   Checks if a key exists in the multiset.
 

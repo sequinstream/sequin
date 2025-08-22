@@ -23,19 +23,29 @@ defmodule SequinWeb.Layouts do
   def app_no_sidenav(assigns) do
     assigns = assign(assigns, :show_nav, false)
 
-    app(assigns)
+    assigns
+    |> put_common_assigns()
+    |> app()
   end
 
   def app_no_main(assigns) do
     assigns = assign(assigns, :no_main, true)
 
-    app(assigns)
+    assigns
+    |> put_common_assigns()
+    |> app()
   end
 
   def app_no_main_no_sidenav(assigns) do
     assigns = assign(assigns, :show_nav, false)
     assigns = assign(assigns, :no_main, true)
 
-    app(assigns)
+    assigns
+    |> put_common_assigns()
+    |> app()
+  end
+
+  defp put_common_assigns(assigns) do
+    assign(assigns, :self_hosted, Application.fetch_env!(:sequin, :self_hosted))
   end
 end

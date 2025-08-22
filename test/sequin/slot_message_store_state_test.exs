@@ -240,12 +240,12 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       msg2 = ConsumersFactory.consumer_message(table_oid: table_oid, commit_lsn: 1, commit_idx: 1, group_id: group_id)
 
       {:ok, state} = State.put_messages(state, [msg1, msg2])
-      assert {[produced1], state} = State.produce_messages(state, 1)
+      assert {[produced1], state} = State.produce_messages(state, 10)
       assert {[], state} = State.produce_messages(state, 1)
 
       assert {[_msg1], state} = State.pop_messages(state, [{produced1.commit_lsn, produced1.commit_idx}])
 
-      assert {[produced2], _state} = State.produce_messages(state, 1)
+      assert {[produced2], _state} = State.produce_messages(state, 10)
 
       assert produced1.commit_idx == msg1.commit_idx
       assert produced2.commit_idx == msg2.commit_idx
@@ -939,6 +939,242 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     end
   end
 
+  describe "CDC prioritization over backfill messages" do
+    test "CDC messages are delivered before backfill messages when safe", %{state: state} do
+      # Create backfill messages (with table_reader_batch_id)
+      backfill_msg1 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0, group_id: "group1")
+      backfill_msg2 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 1, group_id: "group2")
+
+      # Create CDC messages (no table_reader_batch_id)
+      cdc_msg1 = ConsumersFactory.consumer_message(commit_lsn: 2, commit_idx: 0, group_id: "group3")
+      cdc_msg2 = ConsumersFactory.consumer_message(commit_lsn: 2, commit_idx: 1, group_id: "group4")
+
+      {:ok, state} = State.put_table_reader_batch(state, [backfill_msg1, backfill_msg2], "batch-1")
+      {:ok, state} = State.put_messages(state, [cdc_msg1, cdc_msg2])
+
+      # Produce messages - CDC messages should come first
+      assert {[produced1, produced2], state} = State.produce_messages(state, 2)
+
+      # First two messages should be CDC messages
+      assert Enum.all?([produced1, produced2], &is_nil(&1.table_reader_batch_id))
+      assert Enum.all?([produced1, produced2], &(&1.group_id in ["group3", "group4"]))
+
+      # Next two messages should be backfill messages
+      assert {[produced3, produced4], _state} = State.produce_messages(state, 2)
+      assert Enum.all?([produced3, produced4], &(&1.table_reader_batch_id == "batch-1"))
+      assert Enum.all?([produced3, produced4], &(&1.group_id in ["group1", "group2"]))
+
+      assert_state_audit_is_clean(state)
+    end
+
+    test "CDC messages are NOT prioritized when group conflicts exist", %{state: state} do
+      table_oid = 1
+
+      # Create backfill message with lower cursor tuple
+      backfill_msg =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 1,
+          commit_idx: 0,
+          group_id: "group1"
+        )
+
+      # Create CDC message with higher cursor tuple in same group
+      cdc_msg =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 2,
+          commit_idx: 0,
+          group_id: "group1"
+        )
+
+      # Create CDC message in different group
+      cdc_msg_other =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 3,
+          commit_idx: 0,
+          group_id: "group2"
+        )
+
+      {:ok, state} = State.put_table_reader_batch(state, [backfill_msg], "batch-1")
+      {:ok, state} = State.put_messages(state, [cdc_msg, cdc_msg_other])
+
+      # Produce messages, expecting only 1 message from group1
+      assert {[produced1, produced2], state} = State.produce_messages(state, 10)
+      # We should get the backfill message for group1 instead of the CDC message for group1
+      # Same group, blocked by backfill message
+      assert produced1.group_id == "group1"
+      assert produced1.commit_lsn == 1
+      assert produced1.commit_idx == 0
+      # Different group, safe to deliver
+      assert produced2.group_id == "group2"
+
+      # The CDC message from same group as backfill should be blocked
+      assert {[], _state} = State.produce_messages(state, 1)
+
+      assert_state_audit_is_clean(state)
+    end
+
+    @tag :skip
+    # This test represents an unimplemented optimization that we can make to the prioritization logic
+    #
+    # Currently, we implement a simplified version of optimization where we immediately switch to non prioritized mode
+    # if any cdc messages have a conflict with backfill groups.
+    #
+    # It is possible to implement a more complex optimization algorithm that prioritizes CDC messages across groups
+    # while still ensuring strict cursor tuple ordering within groups.
+    test "a single group conflict is ordered correctly with other groups still prioritizing CDC", %{state: state} do
+      table_oid = 1
+      # Create backfill message with lower cursor tuple
+      backfill_msg1 =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 1,
+          commit_idx: 0,
+          group_id: "group1"
+        )
+
+      # Create CDC message with higher cursor tuple in same group
+      cdc_msg1 =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 2,
+          commit_idx: 0,
+          group_id: "group1"
+        )
+
+      # Create CDC message with higher cursor tuple in same group
+      backfill_msg2 =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 3,
+          commit_idx: 0,
+          group_id: "group2"
+        )
+
+      cdc_msg2 =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 4,
+          commit_idx: 0,
+          group_id: "group3"
+        )
+
+      {:ok, state} = State.put_table_reader_batch(state, [backfill_msg1], "batch-1")
+      {:ok, state} = State.put_table_reader_batch(state, [backfill_msg2], "batch-2")
+      {:ok, state} = State.put_messages(state, [cdc_msg1, cdc_msg2])
+
+      # Produce messages, expecting only 1 message from group1
+      assert {[produced1, produced2, produced3], _state} = State.produce_messages(state, 10)
+      # We should get the backfill message for group1 instead of the CDC message for group1
+      # Same group, blocked by backfill message
+      assert produced1.group_id == "group1"
+      assert produced1.commit_lsn == backfill_msg1.commit_lsn
+      assert produced1.commit_idx == backfill_msg1.commit_idx
+      assert produced2.group_id == "group3"
+      assert produced2.commit_lsn == cdc_msg2.commit_lsn
+      assert produced2.commit_idx == cdc_msg2.commit_idx
+      assert produced3.group_id == "group2"
+      assert produced3.commit_lsn == backfill_msg2.commit_lsn
+      assert produced3.commit_idx == backfill_msg2.commit_idx
+
+      assert_state_audit_is_clean(state)
+    end
+
+    test "backfill group id multiset is cleaned up on pop messages", %{state: state} do
+      # Create backfill message with lower cursor tuple
+      backfill_msg =
+        ConsumersFactory.consumer_message(
+          commit_lsn: 1,
+          commit_idx: 0,
+          group_id: "group1"
+        )
+
+      cdc_msg =
+        ConsumersFactory.consumer_message(
+          commit_lsn: 2,
+          commit_idx: 0
+        )
+
+      {:ok, state} = State.put_table_reader_batch(state, [backfill_msg], "batch-1")
+      {:ok, state} = State.put_messages(state, [cdc_msg])
+
+      assert map_size(state.backfill_message_groups) == 1
+
+      cursor_tuples = [{1, 0}, {2, 0}]
+      assert {_, state} = State.pop_messages(state, cursor_tuples)
+      assert map_size(state.backfill_message_groups) == 0
+    end
+
+    test "strict cursor tuple ordering is maintained within group IDs across CDC and backfill", %{state: state} do
+      table_oid = 1
+      group_id = "group1"
+
+      # Create messages with mixed cursor tuples in same group
+      first =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 1,
+          commit_idx: 0,
+          group_id: group_id
+        )
+
+      second =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 1,
+          commit_idx: 1,
+          group_id: group_id
+        )
+
+      third =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 1,
+          commit_idx: 2,
+          group_id: group_id
+        )
+
+      fourth =
+        ConsumersFactory.consumer_message(
+          table_oid: table_oid,
+          commit_lsn: 1,
+          commit_idx: 3,
+          group_id: group_id
+        )
+
+      # Add backfill messages first
+      {:ok, state} = State.put_table_reader_batch(state, [second], "batch-1")
+      {:ok, state} = State.put_table_reader_batch(state, [fourth], "batch-2")
+
+      # Add CDC messages
+      {:ok, state} = State.put_messages(state, [first, third])
+
+      # Produce all messages - they should come in strict cursor tuple order
+      assert {[produced], _state} = State.produce_messages(state, 10)
+      assert produced.commit_lsn == first.commit_lsn
+      assert produced.commit_idx == first.commit_idx
+      {_, state} = State.pop_messages(state, [{first.commit_lsn, first.commit_idx}])
+
+      assert {[produced], state} = State.produce_messages(state, 1)
+      assert produced.commit_lsn == second.commit_lsn
+      assert produced.commit_idx == second.commit_idx
+      {_, state} = State.pop_messages(state, [{second.commit_lsn, second.commit_idx}])
+
+      assert {[produced], state} = State.produce_messages(state, 1)
+      assert produced.commit_lsn == third.commit_lsn
+      assert produced.commit_idx == third.commit_idx
+      {_, state} = State.pop_messages(state, [{third.commit_lsn, third.commit_idx}])
+
+      assert {[produced], _state} = State.produce_messages(state, 1)
+      assert produced.commit_lsn == fourth.commit_lsn
+      assert produced.commit_idx == fourth.commit_idx
+
+      assert_state_audit_is_clean(state)
+    end
+  end
+
   defp assert_cursor_tuple_matches(msg1, msg2) do
     assert msg1.commit_lsn == msg2.commit_lsn
     assert msg1.commit_idx == msg2.commit_idx
@@ -946,5 +1182,12 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
 
   defp assert_message_in_state(message, state) do
     assert Enum.find(state.messages, fn {_cursor_tuple, msg} -> msg.id == message.id end)
+  end
+
+  defp assert_state_audit_is_clean(%State{} = state) do
+    audit = State.audit_state(state)
+    assert audit.messages_not_in_ets == 0
+    assert audit.cdc_ets_not_in_messages == 0
+    assert audit.backfill_ets_not_in_messages == 0
   end
 end

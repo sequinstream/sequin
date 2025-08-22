@@ -35,12 +35,22 @@ variable "secret_key_base" {
   description = "The secret key base for Sequin (will be stored in SSM Parameter Store)"
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.secret_key_base) == 64
+    error_message = "secret_key_base must be exactly 64 characters long."
+  }
 }
 
 variable "vault_key" {
   description = "The vault key for Sequin (will be stored in SSM Parameter Store)"
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.vault_key) == 32
+    error_message = "vault_key must be exactly 32 characters long."
+  }
 }
 
 data "aws_availability_zones" "available" {}

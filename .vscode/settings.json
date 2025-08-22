@@ -13,5 +13,8 @@
   },
   "prettier.requireConfig": true,
   "prettier.configPath": "assets/.prettierrc",
-  "svelte.enable-ts-plugin": true
+  "svelte.enable-ts-plugin": true,
+  "[elixir]": {
+    "editor.defaultFormatter": "elixir-lsp.elixir-ls"
+  }
 }

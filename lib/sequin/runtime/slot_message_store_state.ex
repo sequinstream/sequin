@@ -26,6 +26,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     field :partition, non_neg_integer()
     field :produced_message_groups, Multiset.t(), default: %{}
     field :persisted_message_groups, Multiset.t(), default: %{}
+    field :backfill_message_groups, Multiset.t(), default: %{}
     field :unpersisted_cursor_tuples_for_table_reader_batches, Multiset.t(), default: %{}
     field :setting_max_messages, non_neg_integer(), default: @default_setting_max_messages
     field :setting_system_max_memory_bytes, non_neg_integer() | nil
@@ -48,15 +49,23 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
 
   @spec setup_ets(State.t()) :: :ok
   def setup_ets(%State{} = state) do
-    table_name = ordered_cursors_table(state)
+    cdc_table_name = ordered_cdc_cursors_table(state)
+    backfill_table_name = ordered_backfill_cursors_table(state)
 
-    :ets.new(table_name, [:ordered_set, :named_table, :protected])
+    :ets.new(cdc_table_name, [:ordered_set, :named_table, :protected])
+    :ets.new(backfill_table_name, [:ordered_set, :named_table, :protected])
+
     :ok
   end
 
-  @spec ordered_cursors_table(State.t()) :: atom()
-  defp ordered_cursors_table(%State{} = state) do
+  @spec ordered_cdc_cursors_table(State.t()) :: atom()
+  defp ordered_cdc_cursors_table(%State{} = state) do
     :"slot_message_store_state_ordered_cursors_consumer_#{state.consumer.seq}_partition_#{state.partition}"
+  end
+
+  @spec ordered_backfill_cursors_table(State.t()) :: atom()
+  defp ordered_backfill_cursors_table(%State{} = state) do
+    :"slot_message_store_state_ordered_backfill_cursors_consumer_#{state.consumer.seq}_partition_#{state.partition}"
   end
 
   @spec validate_put_messages(State.t(), list(message()) | Enumerable.t(), keyword()) ::
@@ -90,11 +99,17 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
 
     with {:ok, incoming_payload_size_bytes} <- validate_put_messages(state, messages, opts) do
       # Insert into ETS
-      ets_keys = Enum.map(messages, fn msg -> {{msg.commit_lsn, msg.commit_idx}} end)
+      {cdc_messages, backfill_messages} = Enum.split_with(messages, &is_nil(&1.table_reader_batch_id))
+      cdc_ets_keys = Enum.map(cdc_messages, fn msg -> {{msg.commit_lsn, msg.commit_idx}} end)
+      backfill_ets_keys = Enum.map(backfill_messages, fn msg -> {{msg.commit_lsn, msg.commit_idx}} end)
 
       state
-      |> ordered_cursors_table()
-      |> :ets.insert(ets_keys)
+      |> ordered_cdc_cursors_table()
+      |> :ets.insert(cdc_ets_keys)
+
+      state
+      |> ordered_backfill_cursors_table()
+      |> :ets.insert(backfill_ets_keys)
 
       cursor_tuples_to_messages = Map.new(messages, fn msg -> {{msg.commit_lsn, msg.commit_idx}, msg} end)
       ack_ids_to_cursor_tuples = Map.new(messages, fn msg -> {msg.ack_id, {msg.commit_lsn, msg.commit_idx}} end)
@@ -137,12 +152,18 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     unpersisted_cursor_tuples_for_table_reader_batches =
       Multiset.union(state.unpersisted_cursor_tuples_for_table_reader_batches, batch_id, MapSet.new(cursor_tuples))
 
+    backfill_message_groups =
+      Enum.reduce(messages, state.backfill_message_groups, fn msg, acc ->
+        Multiset.put(acc, group_id(msg), {msg.commit_lsn, msg.commit_idx})
+      end)
+
     case put_messages(state, messages, skip_limit_check?: true) do
       {:ok, %State{} = state} ->
         {:ok,
          %{
            state
            | table_reader_batch_id: batch_id,
+             backfill_message_groups: backfill_message_groups,
              unpersisted_cursor_tuples_for_table_reader_batches: unpersisted_cursor_tuples_for_table_reader_batches
          }}
 
@@ -157,11 +178,26 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     messages = Map.drop(state.messages, cursor_tuples)
 
     # Remove from ETS
-    table = ordered_cursors_table(state)
+    cdc_table = ordered_cdc_cursors_table(state)
+    backfill_table = ordered_backfill_cursors_table(state)
 
     Enum.each(popped_messages, fn msg ->
-      :ets.delete(table, {msg.commit_lsn, msg.commit_idx})
+      if is_nil(msg.table_reader_batch_id) do
+        :ets.delete(cdc_table, {msg.commit_lsn, msg.commit_idx})
+      else
+        :ets.delete(backfill_table, {msg.commit_lsn, msg.commit_idx})
+      end
     end)
+
+    # Remove from backfill_message_groups
+    backfill_message_groups =
+      Enum.reduce(popped_messages, state.backfill_message_groups, fn msg, acc ->
+        if is_nil(msg.table_reader_batch_id) do
+          acc
+        else
+          Multiset.delete(acc, group_id(msg), {msg.commit_lsn, msg.commit_idx})
+        end
+      end)
 
     persisted_message_groups =
       Enum.reduce(popped_messages, state.persisted_message_groups, fn msg, acc ->
@@ -205,6 +241,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
          payload_size_bytes: next_payload_size_bytes,
          produced_message_groups: produced_message_groups,
          persisted_message_groups: persisted_message_groups,
+         backfill_message_groups: backfill_message_groups,
          unpersisted_cursor_tuples_for_table_reader_batches: unpersisted_cursor_tuples_for_table_reader_batches
      }}
   end
@@ -478,38 +515,87 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
     %{message | data: nil}
   end
 
-  # This function provides an optimized way to take the first N messages from a map,
-  # using ETS ordered set to maintain sort order
+  # This function provides an optimized way to zipper merge two ordered ets sets: cdc and backfill cursor tuples.
+  #
+  # We prioritize CDC messages over backfill messages to ensure low latency CDC during backfills.
+  #
+  # We immediately switch to strictly ordered mode if any cdc messages have a conflict with backfill groups.
+  # This is a simplified version of prioritization. We *could* prioritize CDC messages across groups
+  # while still ensuring strict cursor tuple ordering within groups.
   defp sorted_message_stream(%State{} = state) do
-    table = ordered_cursors_table(state)
+    cdc_table = ordered_cdc_cursors_table(state)
+    backfill_table = ordered_backfill_cursors_table(state)
 
-    Stream.unfold(:ets.first(table), fn
-      :"$end_of_table" ->
+    # Start in :prioritize_cdc mode
+    Stream.unfold({:ets.first(cdc_table), :ets.first(backfill_table), :prioritize_cdc}, fn
+      # Both tables are empty, end the stream
+      {:"$end_of_table", :"$end_of_table", _} ->
         nil
 
-      cursor_tuple ->
-        next_cursor_tuple = :ets.next(table, cursor_tuple)
-        {Map.get(state.messages, cursor_tuple), next_cursor_tuple}
+      # Backfill table is empty, stream CDC messages
+      {cdc_cursor_tuple, :"$end_of_table", mode} ->
+        next_message = Map.get(state.messages, cdc_cursor_tuple)
+        next_accumulator = {:ets.next(cdc_table, cdc_cursor_tuple), :"$end_of_table", mode}
+        {next_message, next_accumulator}
+
+      # CDC table is empty, stream backfill messages
+      {:"$end_of_table", backfill_cursor_tuple, mode} ->
+        next_message = Map.get(state.messages, backfill_cursor_tuple)
+        next_accumulator = {:"$end_of_table", :ets.next(backfill_table, backfill_cursor_tuple), mode}
+        {next_message, next_accumulator}
+
+      {cdc_cursor_tuple, backfill_cursor_tuple, :prioritize_cdc} ->
+        # if any cdc messages have a conflict with backfill groups, we immediately switch to non prioritized mode
+        if message_has_backfill_group_conflict?(state, cdc_cursor_tuple) do
+          stream_strictly_ordered(state, cdc_cursor_tuple, backfill_cursor_tuple)
+        else
+          next_message = Map.get(state.messages, cdc_cursor_tuple)
+          next_accumulator = {:ets.next(cdc_table, cdc_cursor_tuple), backfill_cursor_tuple, :prioritize_cdc}
+          {next_message, next_accumulator}
+        end
+
+      {cdc_cursor_tuple, backfill_cursor_tuple, :strictly_ordered} ->
+        stream_strictly_ordered(state, cdc_cursor_tuple, backfill_cursor_tuple)
     end)
   end
 
-  @doc """
-  Counts messages that are out of sync between state.messages and ordered_cursors_table.
-  This includes both messages that exist in state.messages but not in the ETS table,
-  and vice versa.
-  """
-  def count_unsynced_messages(%State{} = state) do
-    table = ordered_cursors_table(state)
-    message_keys = Map.keys(state.messages)
+  defp message_has_backfill_group_conflict?(%State{} = state, cursor_tuple) do
+    message = Map.get(state.messages, cursor_tuple)
+    not is_nil(message) and Multiset.member?(state.backfill_message_groups, group_id(message))
+  end
 
-    # Count keys in messages that aren't in ETS
+  # In strictly ordered mode, we stream the lowest cursor tuple from either ets set
+  # For use in sorted_message_stream/1
+  defp stream_strictly_ordered(%State{} = state, cdc_cursor_tuple, backfill_cursor_tuple) do
+    if cdc_cursor_tuple < backfill_cursor_tuple do
+      cdc_table = ordered_cdc_cursors_table(state)
+      next_message = Map.get(state.messages, cdc_cursor_tuple)
+      next_accumulator = {:ets.next(cdc_table, cdc_cursor_tuple), backfill_cursor_tuple, :strictly_ordered}
+      {next_message, next_accumulator}
+    else
+      backfill_table = ordered_backfill_cursors_table(state)
+      next_message = Map.get(state.messages, backfill_cursor_tuple)
+      next_accumulator = {cdc_cursor_tuple, :ets.next(backfill_table, backfill_cursor_tuple), :strictly_ordered}
+      {next_message, next_accumulator}
+    end
+  end
+
+  @doc """
+  Audits the state for consistency between state.messages and the ETS tables.
+  This includes both messages that exist in state.messages but not in the ETS tables,
+  and vice-versa.
+  """
+  def audit_state(%State{} = state) do
+    cdc_table = ordered_cdc_cursors_table(state)
+    backfill_table = ordered_backfill_cursors_table(state)
+    message_cursor_tuples = Map.keys(state.messages)
+
     messages_not_in_ets =
-      Enum.count(message_keys, fn {commit_lsn, commit_idx} ->
-        not :ets.member(table, {commit_lsn, commit_idx})
+      Enum.count(message_cursor_tuples, fn {commit_lsn, commit_idx} ->
+        not :ets.member(cdc_table, {commit_lsn, commit_idx}) and not :ets.member(backfill_table, {commit_lsn, commit_idx})
       end)
 
-    # Count keys in ETS that aren't in messages
-    ets_not_in_messages =
+    cdc_ets_not_in_messages =
       :ets.foldl(
         fn {{commit_lsn, commit_idx}} = _cursor_tuple, acc ->
           if Map.has_key?(state.messages, {commit_lsn, commit_idx}) do
@@ -519,10 +605,27 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
           end
         end,
         0,
-        table
+        cdc_table
       )
 
-    messages_not_in_ets + ets_not_in_messages
+    backfill_ets_not_in_messages =
+      :ets.foldl(
+        fn {{commit_lsn, commit_idx}} = _cursor_tuple, acc ->
+          if Map.has_key?(state.messages, {commit_lsn, commit_idx}) do
+            acc
+          else
+            acc + 1
+          end
+        end,
+        0,
+        backfill_table
+      )
+
+    %{
+      messages_not_in_ets: messages_not_in_ets,
+      cdc_ets_not_in_messages: cdc_ets_not_in_messages,
+      backfill_ets_not_in_messages: backfill_ets_not_in_messages
+    }
   end
 
   @doc """

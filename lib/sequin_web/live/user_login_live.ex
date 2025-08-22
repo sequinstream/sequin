@@ -98,13 +98,24 @@ defmodule SequinWeb.UserLoginLive do
           </.simple_form>
         </div>
 
-        <%= if @account_self_signup? do %>
-          <p class="mt-6 text-center text-sm">
-            Don't have an account?
-            <.link navigate={~p"/register"} class="font-semibold text-brand hover:underline">
-              Sign up
-            </.link>
-          </p>
+        <%= cond do %>
+          <% @account_self_signup? -> %>
+            <p class="mt-6 text-center text-sm">
+              Don't have an account?
+              <.link navigate={~p"/register"} class="font-semibold text-brand hover:underline">
+                Sign up
+              </.link>
+            </p>
+          <% not @account_self_signup? and not @self_hosted -> %>
+            <p class="mt-6 text-center text-sm">
+              <.button
+                disabled
+                data-tooltip="Signups for Sequin Cloud are disabled."
+                class="w-full !bg-gray-400 hover:bg-gray-300 cursor-not-allowed tooltip"
+              >
+                Sign up
+              </.button>
+            </p>
         <% end %>
       </div>
     </div>
@@ -135,6 +146,7 @@ defmodule SequinWeb.UserLoginLive do
       |> assign(accepting_invite?: accepting_invite?(session))
       |> assign(accepting_team_invite?: accepting_team_invite?(session))
       |> assign(account_self_signup?: accepting_team_invite?(session) || Sequin.feature_enabled?(:account_self_signup))
+      |> assign(self_hosted: Application.fetch_env!(:sequin, :self_hosted))
       |> assign(display_default_user_login?: Sequin.Accounts.only_default_user_and_first_login?())
 
     {:ok, socket, temporary_assigns: [form: form]}

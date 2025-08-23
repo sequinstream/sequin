@@ -32,6 +32,7 @@
   import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
   import TypesenseIcon from "../sinks/typesense/TypesenseIcon.svelte";
   import ElasticsearchIcon from "../sinks/elasticsearch/ElasticsearchIcon.svelte";
+  import PostgresIcon from "../sinks/postgres/PostgresIcon.svelte";
   import StopSinkModal from "./StopSinkModal.svelte";
   import { Badge } from "$lib/components/ui/badge";
 
@@ -162,6 +163,8 @@
             <KinesisIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "s2"}
             <S2Icon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "postgres"}
+            <PostgresIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumer.name}

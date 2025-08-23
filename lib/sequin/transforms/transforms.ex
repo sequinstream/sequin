@@ -17,6 +17,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
+  alias Sequin.Consumers.PostgresSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
@@ -247,6 +248,19 @@ defmodule Sequin.Transforms do
       tls: sink.tls,
       exchange: sink.exchange,
       connection_id: sink.connection_id
+    })
+  end
+
+  def to_external(%PostgresSink{} = sink, show_sensitive) do
+    reject_nil_values(%{
+      type: "postgres",
+      host: sink.host,
+      port: sink.port,
+      database: sink.database,
+      username: sink.username,
+      password: SensitiveValue.new(sink.password, show_sensitive),
+      table_name: sink.table_name,
+      routing_mode: sink.routing_mode
     })
   end
 
@@ -1182,6 +1196,21 @@ defmodule Sequin.Transforms do
        virtual_host: attrs["virtual_host"] || "/",
        tls: attrs["tls"] || false,
        exchange: attrs["exchange"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "postgres"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :postgres,
+       host: attrs["host"],
+       port: attrs["port"],
+       database: attrs["database"],
+       table_name: attrs["table_name"],
+       username: attrs["username"],
+       password: attrs["password"],
+       ssl: attrs["ssl"] || false,
+       routing_mode: attrs["routing_mode"] || "static"
      }}
   end
 

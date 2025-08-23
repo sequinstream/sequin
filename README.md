@@ -22,6 +22,8 @@ Sequin is the [fastest](#performance) change data capture (CDC) platform for Pos
 
 Sequin is a standalone Docker container that you can deploy next to your Postgres database. Alternatively, you can use [our hosted offering](https://console.sequinstream.com) or we'll [manage Sequin](https://sequinstream.com/docs/sequin-managed/overview) for you in your cloud.
 
+For production deployments on AWS, see the [`deployment/`](./deployment) directory for Terraform infrastructure-as-code templates.
+
 Sequin is [open source](./LICENSE). To help us make this project great, tell us what you're building in our [Discord server](https://discord.gg/BV8wFXvNtY) or [Slack community](https://join.slack.com/t/sequin-community/shared_invite/zt-37begzach-4aUwR5xt_XgivdvctZDemA).
 
 ## Getting started

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(aws ssm describe-parameters:*)",
+      "Bash(aws ssm get-parameter:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -5,6 +5,14 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
   alias Sequin.Factory.SinkFactory
   alias Sequin.Sinks.Meilisearch.Client
 
+  defp send_gzipped_response(conn, status_code, response_data) do
+    gzipped_body = response_data |> Jason.encode!() |> :zlib.gzip()
+
+    conn
+    |> Plug.Conn.put_resp_header("content-encoding", "gzip")
+    |> Plug.Conn.send_resp(status_code, gzipped_body)
+  end
+
   @sink %MeilisearchSink{
     type: :meilisearch,
     endpoint_url: "http://127.0.0.1:7700",
@@ -51,9 +59,8 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         assert conn.method == "GET"
         assert conn.request_path == "/tasks/1"
 
-        Req.Test.json(conn, %{
-          "status" => "success"
-        })
+        response_data = %{"status" => "succeeded"}
+        send_gzipped_response(conn, 200, response_data)
       end)
 
       assert :ok = Client.import_documents(@sink, "test", records)
@@ -77,9 +84,8 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         assert conn.method == "GET"
         assert conn.request_path == "/tasks/1"
 
-        Req.Test.json(conn, %{
-          "status" => "success"
-        })
+        response_data = %{"status" => "succeeded"}
+        send_gzipped_response(conn, 200, response_data)
       end)
 
       ids = Enum.map(records, & &1["id"])
@@ -158,7 +164,8 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         assert conn.method == "GET"
         assert conn.request_path == "/tasks/123"
 
-        Req.Test.json(conn, %{"status" => "succeeded"})
+        response_data = %{"status" => "succeeded"}
+        send_gzipped_response(conn, 200, response_data)
       end)
 
       assert :ok =
@@ -198,7 +205,8 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         assert conn.method == "GET"
         assert conn.request_path == "/tasks/456"
 
-        Req.Test.json(conn, %{"status" => "succeeded"})
+        response_data = %{"status" => "succeeded"}
+        send_gzipped_response(conn, 200, response_data)
       end)
 
       assert :ok =
@@ -222,13 +230,15 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         assert conn.method == "GET"
         assert conn.request_path == "/tasks/789"
 
-        Req.Test.json(conn, %{
+        response_data = %{
           "status" => "failed",
           "error" => %{
             "message" => "Invalid filter expression",
             "code" => "invalid_search_filter"
           }
-        })
+        }
+
+        send_gzipped_response(conn, 200, response_data)
       end)
 
       assert {:error, error} =
@@ -268,19 +278,22 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         :counters.add(call_count, 1, 1)
         send(test_pid, {:task_check, count})
 
-        cond do
-          count <= 2 ->
-            # First two checks show task is still processing
-            Req.Test.json(conn, %{"status" => "processing", "taskUid" => 123})
+        response_data =
+          cond do
+            count <= 2 ->
+              # First two checks show task is still processing
+              %{"status" => "processing", "taskUid" => 123}
 
-          count == 3 ->
-            # Third check shows task succeeded
-            Req.Test.json(conn, %{"status" => "succeeded", "taskUid" => 123})
+            count == 3 ->
+              # Third check shows task succeeded
+              %{"status" => "succeeded", "taskUid" => 123}
 
-          true ->
-            # Should not get here
-            Req.Test.json(conn, %{"status" => "succeeded", "taskUid" => 123})
-        end
+            true ->
+              # Should not get here
+              %{"status" => "succeeded", "taskUid" => 123}
+          end
+
+        send_gzipped_response(conn, 200, response_data)
       end)
 
       # Should succeed after multiple task status checks
@@ -315,7 +328,9 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         send(test_pid, {:task_check, count})
 
         # Always return processing status
-        Req.Test.json(conn, %{"status" => "processing", "taskUid" => 456})
+        response_data = %{"status" => "processing", "taskUid" => 456}
+
+        send_gzipped_response(conn, 200, response_data)
       end)
 
       # Should fail after exhausting retries
@@ -326,7 +341,7 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
 
       # Verify we made all 6 attempts (1 initial + 5 retries)
       for i <- 0..5 do
-        assert_receive {:task_check, ^i}, 15_000
+        assert_receive {:task_check, ^i}, 3_000
       end
 
       refute_receive {:task_check, 6}, 100
@@ -348,14 +363,16 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
         assert conn.method == "GET"
         assert conn.request_path == "/tasks/789"
 
-        Req.Test.json(conn, %{
+        response_data = %{
           "status" => "failed",
           "taskUid" => 789,
           "error" => %{
             "code" => "invalid_document_id",
             "message" => "Document ID is invalid"
           }
-        })
+        }
+
+        send_gzipped_response(conn, 200, response_data)
       end)
 
       # Should return error with details

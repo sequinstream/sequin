@@ -315,7 +315,6 @@ defmodule Sequin.Functions.MiniElixir.Validator do
   defp fnok([JSON, _]), do: :ok
   defp fnok([Integer, _]), do: :ok
   defp fnok([Regex, _]), do: :ok
-  defp fnok([Eden, _]), do: :ok
   defp fnok([List, _]), do: :ok
   defp fnok([:&]), do: :ok
 

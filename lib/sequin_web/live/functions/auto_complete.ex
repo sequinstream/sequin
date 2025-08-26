@@ -6,7 +6,6 @@ defmodule SequinWeb.FunctionLive.AutoComplete do
     Date,
     DateTime,
     Decimal,
-    Eden,
     Enum,
     Integer,
     JSON,

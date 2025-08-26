@@ -9,6 +9,14 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Sinks.Meilisearch.Client
 
+  defp send_gzipped_response(conn, status_code, response_data) do
+    gzipped_body = response_data |> Jason.encode!() |> :zlib.gzip()
+
+    conn
+    |> Plug.Conn.put_resp_header("content-encoding", "gzip")
+    |> Plug.Conn.send_resp(status_code, gzipped_body)
+  end
+
   describe "meilisearch pipeline" do
     setup do
       account = AccountsFactory.insert_account!()
@@ -123,7 +131,9 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
 
           "GET" ->
             assert conn.request_path =~ "/tasks/"
-            Req.Test.json(conn, %{"status" => "succeeded"})
+
+            response_data = %{"status" => "succeeded"}
+            send_gzipped_response(conn, 200, response_data)
         end
       end)
 
@@ -176,13 +186,15 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
         assert conn.method == "GET"
         assert conn.request_path == "/tasks/#{task_uid}"
 
-        Req.Test.json(conn, %{
+        response_data = %{
           "status" => "failed",
           "error" => %{
             "message" => "Invalid function expression",
             "code" => "invalid_document_function"
           }
-        })
+        }
+
+        send_gzipped_response(conn, 200, response_data)
       end)
 
       start_pipeline!(consumer)
@@ -274,9 +286,11 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
       assert conn.method == "GET"
       assert conn.request_path == "/tasks/#{task_uid}"
 
-      Req.Test.json(conn, %{
-        "status" => "success"
-      })
+      response_data = %{
+        "status" => "succeeded"
+      }
+
+      send_gzipped_response(conn, 200, response_data)
     end)
 
     start_pipeline!(consumer)

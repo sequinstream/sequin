@@ -33,7 +33,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
             case response_or_exception do
               %Req.Response{status: 200, body: encoded_body} ->
                 # NOTE: Req does not automatically decode on retry functions
-                case Jason.decode(encoded_body) do
+                case encoded_body |> :zlib.gunzip() |> Jason.decode() do
                   {:ok, %{"status" => status}} when status in ["enqueued", "processing"] ->
                     true
 

@@ -79,9 +79,9 @@ variable "ecs_instance_type" {
 # ==============================================================================
 
 variable "rds_instance_type" {
-  description = "RDS instance class. Recommended: db.t4g.micro for testing, db.t4g.small+ for production"
+  description = "RDS instance class. Recommended: db.t4g.micro is fine for testing, db.m5.large is OK for lighter prod workloads. db.m5.xlarge+ recommended for heavy workloads"
   type        = string
-  default     = "db.t4g.small"
+  default     = "db.m5.large"
 }
 
 variable "rds_allocated_storage" {

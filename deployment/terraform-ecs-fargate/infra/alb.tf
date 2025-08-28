@@ -8,10 +8,6 @@ resource "aws_lb" "sequin-main" {
   subnets            = [aws_subnet.sequin-public-primary.id, aws_subnet.sequin-public-secondary.id]
 
   ip_address_type = "dualstack"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "aws_lb_listener" "sequin-main-80" {
@@ -21,7 +17,7 @@ resource "aws_lb_listener" "sequin-main-80" {
 
   default_action {
     type = var.ssl_certificate_arn != "" ? "redirect" : "forward"
-    
+
     dynamic "redirect" {
       for_each = var.ssl_certificate_arn != "" ? [1] : []
       content {
@@ -33,14 +29,14 @@ resource "aws_lb_listener" "sequin-main-80" {
         status_code = "HTTP_301"
       }
     }
-    
+
     target_group_arn = var.ssl_certificate_arn == "" ? aws_lb_target_group.sequin-main.arn : null
   }
 }
 
 resource "aws_lb_listener" "sequin-main-443" {
   count = var.ssl_certificate_arn != "" ? 1 : 0
-  
+
   load_balancer_arn = aws_lb.sequin-main.arn
   port              = "443"
   protocol          = "HTTPS"

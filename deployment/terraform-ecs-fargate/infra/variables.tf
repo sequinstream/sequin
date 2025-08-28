@@ -16,21 +16,7 @@ variable "secondary_availability_zone" {
   default     = "us-east-1b"
 }
 
-variable "ec2_key_name" {
-  description = "AWS Key Pair name for EC2 SSH access. Create with: aws ec2 create-key-pair --key-name sequin-key"
-  type        = string
-}
 
-variable "db_password" {
-  description = "Initial password for the PostgreSQL database (minimum 8 characters)"
-  type        = string
-  sensitive   = true
-
-  validation {
-    condition     = length(var.db_password) >= 8
-    error_message = "Database password must be at least 8 characters long."
-  }
-}
 
 # ==============================================================================
 # NETWORKING CONFIGURATION
@@ -47,11 +33,6 @@ variable "vpc_cidr_block" {
   }
 }
 
-variable "ec2_allowed_ingress_cidr_blocks" {
-  description = "List of CIDR blocks allowed SSH access to bastion host. Restrict to your IP for security: ['YOUR_IP/32']"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
 
 # ==============================================================================
 # COMPUTE RESOURCES
@@ -68,15 +49,16 @@ variable "architecture" {
   }
 }
 
-variable "ecs_instance_type" {
-  description = "EC2 instance type for ECS cluster nodes. Recommended: t3.medium for testing, t3.large+ for production"
-  type        = string
-  default     = "t3.medium"
-}
 
 # ==============================================================================
 # DATABASE CONFIGURATION
 # ==============================================================================
+
+variable "db_name" {
+  description = "Name of the PostgreSQL database to create"
+  type        = string
+  default     = "sequin_prod"
+}
 
 variable "rds_instance_type" {
   description = "RDS instance class. Recommended: db.t4g.micro is fine for testing, db.m5.large is OK for lighter prod workloads. db.m5.xlarge+ recommended for heavy workloads"
@@ -130,25 +112,12 @@ variable "alarm_action_arn" {
 # AUTO-GENERATED VALUES (DO NOT MODIFY)
 # ==============================================================================
 
-# ECS-optimized Amazon Linux 2023 AMI (latest/recommended)
-data "aws_ssm_parameter" "sequin-ami-ecs" {
-  name = var.architecture == "x86_64" ? "/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_id" : "/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/recommended/image_id"
-}
-
-# Standard Amazon Linux 2023 AMI (latest)
-data "aws_ssm_parameter" "sequin-ami-standard" {
-  name = var.architecture == "x86_64" ? "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64" : "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64"
-}
 
 data "aws_caller_identity" "current" {}
 
 locals {
   # Auto-generate ARNs using account ID
-  autoscaling_service_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
-  rds_monitoring_role_arn      = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/rds-monitoring-role"
-
-  # Standard AWS role names
-  ecs_instance_profile_name = "ecsInstanceRole"
+  rds_monitoring_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/rds-monitoring-role"
 
   # Resource naming
   project_name = "sequin"

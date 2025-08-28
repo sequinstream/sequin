@@ -21,16 +21,6 @@ variable "ec2_key_name" {
   type        = string
 }
 
-variable "db_password" {
-  description = "Initial password for the PostgreSQL database (minimum 8 characters)"
-  type        = string
-  sensitive   = true
-
-  validation {
-    condition     = length(var.db_password) >= 8
-    error_message = "Database password must be at least 8 characters long."
-  }
-}
 
 # ==============================================================================
 # NETWORKING CONFIGURATION
@@ -77,6 +67,12 @@ variable "ecs_instance_type" {
 # ==============================================================================
 # DATABASE CONFIGURATION
 # ==============================================================================
+
+variable "db_name" {
+  description = "Name of the PostgreSQL database to create"
+  type        = string
+  default     = "sequin_prod"
+}
 
 variable "rds_instance_type" {
   description = "RDS instance class. Recommended: db.t4g.micro is fine for testing, db.m5.large is OK for lighter prod workloads. db.m5.xlarge+ recommended for heavy workloads"

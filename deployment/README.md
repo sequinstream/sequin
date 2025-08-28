@@ -4,9 +4,16 @@ This repository contains Terraform infrastructure code to deploy [Sequin](https:
 
 **Sequin** is a tool for capturing database changes and streaming them to external systems like Kafka, SQS, Redis, and webhooks. It provides a simple way to build event-driven architectures and keep external systems in sync with your database.
 
+## Deployment Options
+
+Two deployment configurations are available:
+
+- **`terraform-ecs-ec2/`**: Traditional ECS deployment using EC2 instances
+- **`terraform-ecs-fargate/`**: Serverless ECS deployment using AWS Fargate
+
 ## Project Layout
 
-This deployment is organized into two separate Terraform directories:
+Each deployment configuration is organized into two separate Terraform directories:
 
 ### `infra/` - Core infrastructure
 
@@ -17,7 +24,7 @@ Contains shared infrastructure resources that are deployed once:
 - **Redis/ElastiCache**: Redis instance for caching and queuing
 - **Load balancer**: Application Load Balancer with SSL support
 - **Security groups & IAM**: Security and access control
-- **Bastion host**: EC2 instance for secure database access
+- **Bastion host**: EC2 instance for secure database access (EC2 deployment only)
 
 ### `app/` - Application deployment
 
@@ -34,7 +41,7 @@ This separation allows you to manage infrastructure changes independently from a
 ### Prerequisites
 - AWS CLI configured with appropriate permissions
 - Terraform installed (>= 1.0)
-- An AWS key pair for EC2 access
+- An AWS key pair for EC2 access (EC2 deployment only)
 
 ### 1. Initialize Backend Configuration
 
@@ -45,24 +52,26 @@ make init-terraform
 ```
 
 This command will:
+- Prompt you to choose between EC2 or Fargate deployment
 - Prompt you for S3 bucket name and AWS region during setup
 - Optionally create the specified S3 bucket in AWS if it doesn't exist
-- Create `terraform/infra/backend.tfbackend` with S3 backend configuration for infrastructure state
-- Create `terraform/app/backend.tfbackend` with S3 backend configuration for application state
-- Create `terraform/app/remote-state.auto.tfvars` with variables to reference the infrastructure state
+- Create `[selected-deployment]/infra/backend.tfbackend` with S3 backend configuration for infrastructure state
+- Create `[selected-deployment]/app/backend.tfbackend` with S3 backend configuration for application state
+- Create `[selected-deployment]/app/remote-state.auto.tfvars` with variables to reference the infrastructure state
 
 ### 2. Deploy Core Infrastructure
 
-Navigate to the infrastructure directory and deploy the foundational resources:
+Navigate to the infrastructure directory of your chosen deployment and deploy the foundational resources:
 
 ```bash
-cd infra/
+cd terraform-ecs-fargate/infra/  # or terraform-ecs-ec2/infra/
+terraform init -backend-config=backend.tfbackend
 terraform apply
 ```
 
 You'll be prompted to provide:
 
-- **EC2 key name**: Name of your AWS key pair for SSH access
+- **EC2 key name**: Name of your AWS key pair for SSH access (EC2 deployment only)
 - **Database password**: Secure password for the Sequin config Postgres database
 
 This will create all the networking, database, and cluster infrastructure needed for Sequin.
@@ -73,6 +82,7 @@ Navigate to the application directory and deploy Sequin:
 
 ```bash
 cd ../app/
+terraform init -backend-config=backend.tfbackend
 terraform apply -var image_tag=latest
 ```
 
@@ -104,8 +114,9 @@ See [Configuration](https://sequinstream.com/docs/reference/configuration) for t
 ### Variables
 
 - **Image tag**: Specify a Sequin version with `-var image_tag=v0.13.0` or use `latest`
-- **Instance sizes**: Modify `variables.tf` to adjust EC2 and RDS instance types
-- **Database password**: Set via prompt or `-var db_password=yourpassword`
+- **Instance sizes**: Modify `variables.tf` to adjust compute resources:
+  - EC2 deployment: Adjust EC2 and RDS instance types
+  - Fargate deployment: Adjust CPU/memory allocation and RDS instance types
 
 ### SSL/HTTPS
 

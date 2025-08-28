@@ -4,7 +4,7 @@
 
 bucket = "your-terraform-state-bucket"
 key    = "infra/terraform.tfstate"
-region = "us-west-2"
+region = "us-east-1"
 
 # Optional: Enable encryption
 encrypt = true

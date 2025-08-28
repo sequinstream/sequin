@@ -1,3 +1,11 @@
+# Generate secure password for PostgreSQL database
+resource "random_password" "db_password" {
+  length  = 16
+  special = true
+  # Exclude characters that break PostgreSQL connection URLs
+  override_special = "!#$%&*()-_=+[]{}<>?."
+}
+
 resource "aws_db_parameter_group" "sequin-prod-pg-17" {
   description = "For sequin-prod"
   family      = "postgres17"
@@ -46,6 +54,7 @@ resource "aws_db_instance" "sequin-prod" {
   availability_zone                     = aws_subnet.sequin-private-primary.availability_zone
   backup_retention_period               = "7"
   backup_window                         = "11:43-12:13"
+  db_name                               = var.db_name
   ca_cert_identifier                    = "rds-ca-rsa2048-g1"
   copy_tags_to_snapshot                 = "true"
   customer_owned_ip_enabled             = "false"
@@ -74,7 +83,7 @@ resource "aws_db_instance" "sequin-prod" {
   username                              = "postgres"
   vpc_security_group_ids                = [aws_security_group.sequin-rds-sg.id]
 
-  password = var.db_password
+  password = random_password.db_password.result
 
   lifecycle {
     prevent_destroy = true

@@ -5,7 +5,7 @@ output "alb_dns_name" {
 
 output "sequin_pg_url" {
   description = "PostgreSQL URL for Sequin configuration"
-  value       = "postgres://postgres:${var.db_password}@${aws_db_instance.sequin-prod.endpoint}:5432/sequin_prod"
+  value       = "postgres://postgres:${random_password.db_password.result}@${aws_db_instance.sequin-prod.endpoint}/${var.db_name}"
   sensitive   = true
 }
 

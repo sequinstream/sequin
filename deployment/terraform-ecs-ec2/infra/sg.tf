@@ -52,10 +52,6 @@ resource "aws_security_group" "sequin-ecs-sg" {
   }
 
   name = "sequin-ecs-sg"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "aws_security_group" "sequin-alb-sg" {
@@ -88,10 +84,6 @@ resource "aws_security_group" "sequin-alb-sg" {
   }
   tags = {
     Name = "sequin-alb-sg"
-  }
-
-  lifecycle {
-    prevent_destroy = true
   }
 }
 

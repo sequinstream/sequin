@@ -35,13 +35,6 @@ resource "aws_security_group" "sequin-ecs-sg" {
   #   to_port     = "8125"
   # }
 
-  ingress {
-    from_port   = "22"
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    self        = "false"
-    to_port     = "22"
-  }
 
   ingress {
     description     = "Allow inbound traffic from ALB"
@@ -52,10 +45,6 @@ resource "aws_security_group" "sequin-ecs-sg" {
   }
 
   name = "sequin-ecs-sg"
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
 resource "aws_security_group" "sequin-alb-sg" {
@@ -89,38 +78,8 @@ resource "aws_security_group" "sequin-alb-sg" {
   tags = {
     Name = "sequin-alb-sg"
   }
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
 
-resource "aws_security_group" "sequin-bastion-sg" {
-  name        = "sequin-bastion-sg"
-  description = "Security group for Sequin bastion host"
-  vpc_id      = aws_vpc.sequin-main.id
-
-  ingress {
-    cidr_blocks = var.ec2_allowed_ingress_cidr_blocks
-    description = "default allowed ingress to ec2 & bastion"
-    from_port   = "22"
-    protocol    = "tcp"
-    self        = "false"
-    to_port     = "22"
-  }
-
-  egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  tags = {
-    Name = "sequin-bastion-sg"
-  }
-}
 
 resource "aws_security_group" "sequin-rds-sg" {
   name        = "sequin-rds-sg"
@@ -131,7 +90,7 @@ resource "aws_security_group" "sequin-rds-sg" {
     from_port       = 0
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.sequin-ecs-sg.id, aws_security_group.sequin-bastion-sg.id]
+    security_groups = [aws_security_group.sequin-ecs-sg.id]
   }
 
   egress {
@@ -163,7 +122,7 @@ resource "aws_security_group" "sequin-redis-sg" {
   ingress {
     from_port       = "0"
     protocol        = "-1"
-    security_groups = [aws_security_group.sequin-bastion-sg.id, aws_security_group.sequin-ecs-sg.id]
+    security_groups = [aws_security_group.sequin-ecs-sg.id]
     self            = true
     to_port         = "0"
   }

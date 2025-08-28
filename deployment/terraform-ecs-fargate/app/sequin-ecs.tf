@@ -69,7 +69,7 @@ resource "aws_ecs_service" "sequin-main" {
   cluster         = data.terraform_remote_state.infra.outputs.ecs_cluster_name
   task_definition = aws_ecs_task_definition.sequin-main.arn
   desired_count   = 1
-  launch_type     = "EC2"
+  launch_type     = "FARGATE"
 
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
@@ -85,7 +85,8 @@ resource "aws_ecs_service" "sequin-main" {
       data.terraform_remote_state.infra.outputs.private_subnet_primary_id,
       data.terraform_remote_state.infra.outputs.private_subnet_secondary_id
     ]
-    security_groups = [data.terraform_remote_state.infra.outputs.ecs_security_group_id]
+    security_groups  = [data.terraform_remote_state.infra.outputs.ecs_security_group_id]
+    assign_public_ip = false
   }
 
   load_balancer {
@@ -99,10 +100,6 @@ resource "aws_ecs_service" "sequin-main" {
   enable_ecs_managed_tags           = true
   propagate_tags                    = "SERVICE"
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
   tags = {
     Name = "sequin-main-service"
   }
@@ -114,7 +111,9 @@ resource "aws_ecs_task_definition" "sequin-main" {
   execution_role_arn       = data.terraform_remote_state.infra.outputs.ecs_task_execution_role_arn
   task_role_arn            = data.terraform_remote_state.infra.outputs.ecs_task_role_arn
   network_mode             = "awsvpc"
-  requires_compatibilities = ["EC2"]
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.cpu
+  memory                   = var.memory
 
   container_definitions = jsonencode([
     {
@@ -122,9 +121,6 @@ resource "aws_ecs_task_definition" "sequin-main" {
       image     = "${var.image_repository}:${var.image_tag}"
       essential = true
 
-      memory            = var.memory
-      memoryReservation = var.memory_reservation
-      cpu               = 0
 
       environment = [
         {
@@ -137,7 +133,7 @@ resource "aws_ecs_task_definition" "sequin-main" {
         },
         {
           name  = "LAUNCH_TYPE"
-          value = "EC2"
+          value = "FARGATE"
         },
         {
           name  = "ADMIN_USER"
@@ -220,13 +216,11 @@ resource "aws_ecs_task_definition" "sequin-main" {
         {
           name          = "sequin-7376-tcp"
           containerPort = 7376
-          hostPort      = 7376
           protocol      = "tcp"
         },
         {
           name          = "sequin-4369-tcp"
           containerPort = 4369
-          hostPort      = 4369
           protocol      = "tcp"
         }
       ]

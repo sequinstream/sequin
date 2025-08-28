@@ -99,10 +99,6 @@ resource "aws_ecs_service" "sequin-main" {
   enable_ecs_managed_tags           = true
   propagate_tags                    = "SERVICE"
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
   tags = {
     Name = "sequin-main-service"
   }

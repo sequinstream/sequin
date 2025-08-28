@@ -1,10 +1,6 @@
 resource "aws_ecs_cluster" "sequin" {
   name = "sequin"
 
-  lifecycle {
-    prevent_destroy = true
-  }
-
   setting {
     name  = "containerInsights"
     value = "disabled"

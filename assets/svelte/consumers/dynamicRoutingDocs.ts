@@ -250,4 +250,14 @@ export const routedSinkDocs: Record<RoutedSinkType, RoutedSinkDocs> = {
       },
     },
   },
+  postgres: {
+    fields: {
+      table_name: {
+        description: "Postgres table name",
+        staticValue: "<empty>",
+        staticFormField: "table_name",
+        dynamicDefault: "<empty>",
+      },
+    },
+  },
 };

@@ -5,6 +5,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.DebouncedLogger
   alias Sequin.Error
   alias Sequin.Multiset
   alias Sequin.Replication
@@ -547,6 +548,14 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       {cdc_cursor_tuple, backfill_cursor_tuple, :prioritize_cdc} ->
         # if any cdc messages have a conflict with backfill groups, we immediately switch to non prioritized mode
         if message_has_backfill_group_conflict?(state, cdc_cursor_tuple) do
+          DebouncedLogger.warning(
+            "[SlotMessageStore] Message has backfill group conflict, switching to strictly ordered mode",
+            %DebouncedLogger.Config{
+              dedupe_key: {:message_group_conflict, state.consumer_id},
+              debounce_interval_ms: to_timeout(second: 10)
+            }
+          )
+
           stream_strictly_ordered(state, cdc_cursor_tuple, backfill_cursor_tuple)
         else
           next_message = Map.get(state.messages, cdc_cursor_tuple)

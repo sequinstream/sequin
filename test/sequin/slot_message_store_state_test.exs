@@ -967,6 +967,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert_state_audit_is_clean(state)
     end
 
+    @tag :capture_log
     test "CDC messages are NOT prioritized when group conflicts exist", %{state: state} do
       table_oid = 1
 
@@ -1107,6 +1108,7 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert map_size(state.backfill_message_groups) == 0
     end
 
+    @tag :capture_log
     test "strict cursor tuple ordering is maintained within group IDs across CDC and backfill", %{state: state} do
       table_oid = 1
       group_id = "group1"

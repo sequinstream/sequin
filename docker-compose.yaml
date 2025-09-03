@@ -7,7 +7,7 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile.postgres
-    command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c max_connections=200 -c pg_stat_statements.max=10000 -c track_activity_query_size=2048 -c wal_level=logical
+    command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c max_connections=300 -c pg_stat_statements.max=10000 -c track_activity_query_size=2048 -c wal_level=logical
     ports:
       - "127.0.0.1:5432:5432"
     environment:

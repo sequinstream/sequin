@@ -116,6 +116,7 @@ defmodule SequinWeb.UserLoginLive do
                 Sign up
               </.button>
             </p>
+          <% true -> %>
         <% end %>
       </div>
     </div>

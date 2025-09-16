@@ -71,3 +71,4 @@ test-config/
 
 typesense-data/
 meilisearch-data/
+.expert/

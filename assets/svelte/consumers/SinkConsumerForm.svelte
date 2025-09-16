@@ -441,7 +441,7 @@
             the table and primary key(s) of each row.
           </p>
           <p class="text-sm text-muted-foreground">
-            When disabled, message ordering is not guaranteed and performance
+            When disabled, message ordering is not guaranteed and max throughput
             may improve.
           </p>
         </div>

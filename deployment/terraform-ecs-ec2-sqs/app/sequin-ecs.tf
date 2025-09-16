@@ -56,6 +56,10 @@ resource "aws_secretsmanager_secret_version" "sequin-config" {
     # Not a valid DSN, but required to boot
     SENTRY_DSN                = "https://f8f11937067b2ef151cda3abe652667b@o398678.ingest.us.sentry.io/4508033603469312"
     PAGERDUTY_INTEGRATION_KEY = ""
+
+    # SQS credentials for HTTP Push Consumer
+    HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID     = data.terraform_remote_state.infra.outputs.sequin_http_push_sqs_user_access_key
+    HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY = data.terraform_remote_state.infra.outputs.sequin_http_push_sqs_user_secret_key
   })
 
   lifecycle {
@@ -150,6 +154,22 @@ resource "aws_ecs_task_definition" "sequin-main" {
         {
           name  = "SERVER_PORT"
           value = "7376"
+        },
+        {
+          name  = "HTTP_PUSH_VIA_SQS_NEW_SINKS"
+          value = "true"
+        },
+        {
+          name  = "HTTP_PUSH_VIA_SQS_QUEUE_URL"
+          value = data.terraform_remote_state.infra.outputs.sequin_http_push_queue_url
+        },
+        {
+          name  = "HTTP_PUSH_VIA_SQS_DLQ_URL"
+          value = data.terraform_remote_state.infra.outputs.sequin_http_push_dlq_url
+        },
+        {
+          name  = "HTTP_PUSH_VIA_SQS_REGION"
+          value = var.aws_region
         }
       ]
 
@@ -209,6 +229,14 @@ resource "aws_ecs_task_definition" "sequin-main" {
         {
           name      = "PAGERDUTY_INTEGRATION_KEY"
           valueFrom = "${aws_secretsmanager_secret.sequin-config.arn}:PAGERDUTY_INTEGRATION_KEY::"
+        },
+        {
+          name      = "HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID"
+          valueFrom = "${aws_secretsmanager_secret.sequin-config.arn}:HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID::"
+        },
+        {
+          name      = "HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY"
+          valueFrom = "${aws_secretsmanager_secret.sequin-config.arn}:HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY::"
         }
       ]
 

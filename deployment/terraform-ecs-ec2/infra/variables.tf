@@ -144,7 +144,7 @@ locals {
   rds_monitoring_role_arn      = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/rds-monitoring-role"
 
   # Standard AWS role names
-  ecs_instance_profile_name = "ecsInstanceRole"
+  ecs_instance_profile_name = "sequin-ecsInstanceRole"
 
   # Resource naming
   project_name = "sequin"

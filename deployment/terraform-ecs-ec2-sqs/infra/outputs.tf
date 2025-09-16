@@ -49,3 +49,45 @@ output "ecs_task_role_arn" {
   description = "ARN of the ECS task role"
   value       = aws_iam_role.sequin-ecs-task-role.arn
 }
+
+# SQS outputs for HTTP Push Consumer
+output "sequin_http_push_queue_url" {
+  description = "URL of the HTTP Push SQS queue"
+  value       = aws_sqs_queue.sequin_http_push_queue.url
+}
+
+output "sequin_http_push_queue_arn" {
+  description = "ARN of the HTTP Push SQS queue"
+  value       = aws_sqs_queue.sequin_http_push_queue.arn
+}
+
+output "sequin_http_push_dlq_url" {
+  description = "URL of the HTTP Push DLQ"
+  value       = aws_sqs_queue.sequin_http_push_dlq.url
+}
+
+output "sequin_http_push_dlq_arn" {
+  description = "ARN of the HTTP Push DLQ"
+  value       = aws_sqs_queue.sequin_http_push_dlq.arn
+}
+
+output "sequin_http_push_dead_dlq_url" {
+  description = "URL of the HTTP Push Dead DLQ"
+  value       = aws_sqs_queue.sequin_http_push_dead_dlq.url
+}
+
+output "sequin_http_push_dead_dlq_arn" {
+  description = "ARN of the HTTP Push Dead DLQ"
+  value       = aws_sqs_queue.sequin_http_push_dead_dlq.arn
+}
+
+output "sequin_http_push_sqs_user_access_key" {
+  description = "Access key ID for the SQS user"
+  value       = aws_iam_access_key.sequin_http_push_sqs_user_key.id
+}
+
+output "sequin_http_push_sqs_user_secret_key" {
+  description = "Secret access key for the SQS user"
+  value       = aws_iam_access_key.sequin_http_push_sqs_user_key.secret
+  sensitive   = true
+}

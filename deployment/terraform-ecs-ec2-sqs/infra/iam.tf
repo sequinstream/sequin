@@ -1,7 +1,7 @@
 # ECS Task Execution Role (for pulling images, logs, etc.)
 resource "aws_iam_role" "sequin-ecs-task-execution-role" {
   name = "sequin-ecs-task-execution-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -44,7 +44,7 @@ resource "aws_iam_role_policy" "sequin-ecs-task-execution-secrets-policy" {
 # ECS Task Role (for application permissions)
 resource "aws_iam_role" "sequin-ecs-task-role" {
   name = "sequin-ecs-task-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -59,10 +59,10 @@ resource "aws_iam_role" "sequin-ecs-task-role" {
   })
 }
 
-# ECS Instance Role (for EC2 instances in cluster)  
+# ECS Instance Role (for EC2 instances in cluster)
 resource "aws_iam_role" "sequin-ecs-instance-role" {
-  name = "ecsInstanceRole"
-  
+  name = "sequin-ecsInstanceRole"
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -83,14 +83,14 @@ resource "aws_iam_role_policy_attachment" "sequin-ecs-instance-role-policy" {
 }
 
 resource "aws_iam_instance_profile" "sequin-ecs-instance-profile" {
-  name = "ecsInstanceRole"
+  name = "sequin-ecsInstanceRole"
   role = aws_iam_role.sequin-ecs-instance-role.name
 }
 
 # RDS Monitoring Role
 resource "aws_iam_role" "sequin-rds-monitoring-role" {
-  name = "rds-monitoring-role"
-  
+  name = "sequin-rds-monitoring-role"
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [

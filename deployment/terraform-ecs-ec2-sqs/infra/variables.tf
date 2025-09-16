@@ -141,10 +141,10 @@ data "aws_caller_identity" "current" {}
 locals {
   # Auto-generate ARNs using account ID
   autoscaling_service_role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
-  rds_monitoring_role_arn      = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/rds-monitoring-role"
+  rds_monitoring_role_arn      = aws_iam_role.sequin-rds-monitoring-role.arn
 
   # Standard AWS role names
-  ecs_instance_profile_name = "ecsInstanceRole"
+  ecs_instance_profile_name = "sequin-ecsInstanceRole"
 
   # Resource naming
   project_name = "sequin"

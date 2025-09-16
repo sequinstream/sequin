@@ -9,7 +9,7 @@ resource "random_password" "db_password" {
 resource "aws_db_parameter_group" "sequin-prod-pg-17" {
   description = "For sequin-prod"
   family      = "postgres17"
-  name        = "prod-params-pg17"
+  name        = "sequin-prod-params-pg17"
 
   parameter {
     apply_method = "pending-reboot"

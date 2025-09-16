@@ -12,8 +12,9 @@ echo ""
 echo "Available Terraform configurations:"
 echo "1. terraform-ecs-ec2 (EC2 launch type)"
 echo "2. terraform-ecs-fargate (Fargate launch type)"
+echo "3. terraform-ecs-ec2-sqs (⚠️  Special deployment with SQS - not for widespread use)"
 echo ""
-read -p "Select terraform directory (1 or 2): " dir_choice
+read -p "Select terraform directory (1, 2, or 3): " dir_choice
 
 case $dir_choice in
     1)
@@ -22,8 +23,12 @@ case $dir_choice in
     2)
         TERRAFORM_DIR="terraform-ecs-fargate"
         ;;
+    3)
+        TERRAFORM_DIR="terraform-ecs-ec2-sqs"
+        echo "⚠️  You selected the specialized SQS deployment. This should only be used for specific use cases."
+        ;;
     *)
-        echo "❌ Invalid selection. Please choose 1 or 2."
+        echo "❌ Invalid selection. Please choose 1, 2, or 3."
         exit 1
         ;;
 esac

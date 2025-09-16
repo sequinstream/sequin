@@ -1,0 +1,13 @@
+# S3 Backend Configuration
+# Copy this file to backend.tfbackend and fill in your values
+# Then run: terraform init -backend-config=backend.tfbackend
+
+bucket = "your-terraform-state-bucket"
+key    = "app/terraform.tfstate"
+region = "us-east-1"
+
+# Optional: Enable encryption
+encrypt = true
+
+# Optional: DynamoDB table for state locking
+dynamodb_table = "terraform-state-lock"

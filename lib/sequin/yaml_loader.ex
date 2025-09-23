@@ -69,7 +69,7 @@ defmodule Sequin.YamlLoader do
                      Repo.rollback(error)
                  end
                end,
-               timeout: :timer.seconds(90)
+               timeout: to_timeout(minute: 10)
              ) do
           {:ok, {:ok, {resources, actions}}} ->
             case perform_actions(actions) do
@@ -110,7 +110,7 @@ defmodule Sequin.YamlLoader do
               |> apply_config(config, opts)
               |> Repo.rollback()
             end,
-            timeout: :timer.seconds(90)
+            timeout: to_timeout(minute: 10)
           )
 
         case result do

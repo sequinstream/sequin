@@ -92,17 +92,6 @@ defmodule Sequin.Transforms do
     end
   end
 
-  def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint, show_sensitive) do
-    %{
-      id: http_endpoint.id,
-      name: http_endpoint.name,
-      "webhook.site": true,
-      headers: format_headers(http_endpoint.headers),
-      encrypted_headers:
-        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
-    }
-  end
-
   def to_external(%HttpEndpoint{use_local_tunnel: true} = http_endpoint, show_sensitive) do
     %{
       id: http_endpoint.id,

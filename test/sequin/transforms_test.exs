@@ -138,15 +138,17 @@ defmodule Sequin.TransformsTest do
       endpoint =
         ConsumersFactory.http_endpoint(
           name: "webhook_endpoint",
-          host: "webhook.site"
+          host: "webhook.site",
+          scheme: :https,
+          path: "/some-uuid"
         )
 
       json = Transforms.to_external(endpoint)
 
       assert %{
                name: "webhook_endpoint",
-               "webhook.site": true
-             } = json
+               url: "https://webhook.site/some-uuid"
+             } = Map.take(json, [:name, :url])
     end
 
     test "returns a map of local tunnel endpoint" do

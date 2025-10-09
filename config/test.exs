@@ -113,6 +113,7 @@ config :sequin,
   kafka_module: Sequin.Sinks.KafkaMock,
   nats_module: Sequin.Sinks.NatsMock,
   rabbitmq_module: Sequin.Sinks.RabbitMqMock,
+  postgres_module: Sequin.Sinks.PostgresMock,
   aws_module: Sequin.AwsMock,
   # Arbitrarily high memory limit for testing
   max_memory_bytes: 100 * 1024 * 1024 * 1024,

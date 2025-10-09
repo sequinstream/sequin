@@ -27,6 +27,7 @@
     ElasticsearchConsumer,
     RedisStringConsumer,
     AzureEventHubConsumer,
+    PostgresSinkConsumer,
   } from "./types";
   import AzureEventHubSinkCard from "../sinks/azure_event_hub/AzureEventHubSinkCard.svelte";
   import ElasticsearchSinkCard from "../sinks/elasticsearch/ElasticsearchSinkCard.svelte";
@@ -48,6 +49,8 @@
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
   import { Button } from "$lib/components/ui/button";
   import CollapsibleCode from "../components/CollapsibleCode.svelte";
+  import PostgresSinkCard from "../sinks/postgres/PostgresSinkCard.svelte";
+  import type { Table } from "../databases/types";
 
   export let live;
   export let parent;
@@ -159,6 +162,12 @@
     consumer: Consumer,
   ): consumer is RabbitMqConsumer {
     return consumer.sink.type === "rabbitmq";
+  }
+
+  function isPostgresSinkConsumer(
+    consumer: Consumer,
+  ): consumer is PostgresSinkConsumer {
+    return consumer.sink.type === "postgres";
   }
 
   let chartElement;
@@ -761,6 +770,15 @@
       unit: units[unitIndex],
     };
   }
+
+  function getRoutingCode(consumer: Consumer): string | null {
+    if (!consumer.routing || !consumer.routing.function) return null;
+    const func = consumer.routing.function;
+    if (func.type === "routing" && "code" in func) {
+      return func.code;
+    }
+    return null;
+  }
 </script>
 
 <div class="flex flex-col flex-1">
@@ -1254,6 +1272,8 @@
         <ElasticsearchSinkCard {consumer} />
       {:else if isRedisStringConsumer(consumer)}
         <RedisStringSinkCard {consumer} />
+      {:else if isPostgresSinkConsumer(consumer)}
+        <PostgresSinkCard {consumer} />
       {/if}
 
       <ShowSource {consumer} {tables} />

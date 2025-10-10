@@ -65,7 +65,7 @@ defmodule Sequin.MixProject do
 
       # AWS and Cloud Services
       {:aws, "~> 1.0"},
-      {:aws_credentials, "~> 0.3.4", runtime: false},
+      {:aws_credentials, "~> 1.0.0", runtime: false},
       {:aws_rds_castore, "~> 1.2.0"},
       {:aws_signature, "~> 0.3.2"},
 

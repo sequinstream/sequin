@@ -55,7 +55,7 @@ Sequin works great for change data capture use cases like:
 
 ## Sinks
 
-We're adding new destinations almost [every week](.CHANGELOG.md).
+We're adding new destinations almost [every week](CHANGELOG.md).
 
 | Icon | Sink | Docs | Description |
 |------|------|------|-------------|

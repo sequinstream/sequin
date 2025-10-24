@@ -44,7 +44,7 @@ defmodule Sequin.String do
     str
     |> UUID.info()
     |> case do
-      {:ok, info} -> info[:version] == 4 and info[:variant] == :rfc4122
+      {:ok, info} -> info[:version] in [7, 4] and info[:variant] == :rfc4122
       _ -> false
     end
   end

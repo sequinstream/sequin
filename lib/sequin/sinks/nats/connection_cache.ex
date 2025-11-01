@@ -158,7 +158,12 @@ defmodule Sequin.Sinks.Nats.ConnectionCache do
       |> put_opt_key(:jwt, sink.jwt)
       |> put_opt_key(:nkey_seed, sink.nkey_seed)
       |> put_tls(sink.tls)
+      |> put_ipv6(sink)
       |> Gnat.start_link()
+    end
+
+    defp put_ipv6(opts, %NatsSink{} = sink) do
+      if NatsSink.ipv6?(sink), do: Map.put(opts, :tcp_opts, [:inet6, :binary]), else: opts
     end
 
     defp put_tls(opts, true) do

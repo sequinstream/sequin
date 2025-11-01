@@ -165,7 +165,8 @@ defmodule Sequin.Factory.FunctionsFactory do
           :sns,
           :s2,
           :rabbitmq,
-          :kinesis
+          :kinesis,
+          :postgres
         ])
       end)
 
@@ -270,6 +271,13 @@ defmodule Sequin.Factory.FunctionsFactory do
             """
             %{
               exchange_name: metadata.table_name
+            }
+            """
+
+          :postgres ->
+            """
+            %{
+              table_name: metadata.table_name
             }
             """
         end

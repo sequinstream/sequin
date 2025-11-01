@@ -63,3 +63,7 @@ Mox.defmock(Sequin.Runtime.SinkPipelineMock,
 Mox.defmock(Sequin.PrometheusMock,
   for: Sequin.Prometheus
 )
+
+Mox.defmock(Sequin.Sinks.PostgresMock,
+  for: Sequin.Sinks.Postgres
+)

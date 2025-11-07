@@ -23,6 +23,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.MeilisearchSink
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.PathFunction
+  alias Sequin.Consumers.PostgresSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.RedisStringSink
@@ -1021,6 +1022,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     %{type: :sequin_stream}
   end
 
+  defp encode_sink(%SinkConsumer{sink: %PostgresSink{} = sink}) do
+    %{
+      type: :postgres,
+      host: sink.host,
+      port: sink.port,
+      database: sink.database,
+      table_name: sink.table_name,
+      username: sink.username,
+      password: Sequin.String.obfuscate(sink.password),
+      ssl: sink.ssl,
+      routing_mode: sink.routing_mode
+    }
+  end
+
   defp encode_database(%PostgresDatabase{} = database, %PostgresReplicationSlot{} = slot) do
     %{
       id: database.id,
@@ -1384,17 +1399,18 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :gcp_pubsub}}), do: "GCP Pub/Sub Sink"
   defp consumer_title(%{sink: %{type: :http_push}}), do: "Webhook Sink"
   defp consumer_title(%{sink: %{type: :kafka}}), do: "Kafka Sink"
+  defp consumer_title(%{sink: %{type: :kinesis}}), do: "Kinesis Sink"
+  defp consumer_title(%{sink: %{type: :meilisearch}}), do: "Meilisearch Sink"
   defp consumer_title(%{sink: %{type: :nats}}), do: "NATS Sink"
+  defp consumer_title(%{sink: %{type: :postgres}}), do: "Postgres Sink"
   defp consumer_title(%{sink: %{type: :rabbitmq}}), do: "RabbitMQ Sink"
   defp consumer_title(%{sink: %{type: :redis_stream}}), do: "Redis Stream Sink"
   defp consumer_title(%{sink: %{type: :redis_string}}), do: "Redis String Sink"
+  defp consumer_title(%{sink: %{type: :s2}}), do: "S2 Sink"
   defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"
   defp consumer_title(%{sink: %{type: :sns}}), do: "SNS Sink"
-  defp consumer_title(%{sink: %{type: :kinesis}}), do: "Kinesis Sink"
-  defp consumer_title(%{sink: %{type: :s2}}), do: "S2 Sink"
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"
   defp consumer_title(%{sink: %{type: :typesense}}), do: "Typesense Sink"
-  defp consumer_title(%{sink: %{type: :meilisearch}}), do: "Meilisearch Sink"
 
   defp put_health(%SinkConsumer{} = consumer) do
     with {:ok, health} <- Health.health(consumer),

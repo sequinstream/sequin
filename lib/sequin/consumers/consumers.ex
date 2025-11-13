@@ -220,20 +220,29 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  def update_function(account_id, id, params) do
-    Repo.transact(fn ->
-      %Function{id: id, account_id: account_id}
-      |> Function.update_changeset(params)
-      |> Repo.update()
-      |> case do
-        {:ok, function} ->
-          ConsumerLifecycleEventWorker.enqueue(:update, :function, function.id)
-          {:ok, function}
+  def update_function(function_or_account_id, params_or_id, opts_or_params \\ [])
 
-        {:error, error} ->
-          {:error, error}
+  def update_function(%Function{} = function, params, opts) when is_map(params) do
+    Repo.transact(fn ->
+      res =
+        function
+        |> Function.update_changeset(params)
+        |> Repo.update()
+
+      with {:ok, updated_function} <- res do
+        if !opts[:skip_lifecycle] do
+          ConsumerLifecycleEventWorker.enqueue(:update, :function, updated_function.id)
+        end
+
+        {:ok, updated_function}
       end
     end)
+  end
+
+  def update_function(account_id, id, params) when is_binary(account_id) and is_binary(id) do
+    with {:ok, function} <- get_function_for_account(account_id, id) do
+      update_function(function, params, [])
+    end
   end
 
   def delete_function(account_id, id) do

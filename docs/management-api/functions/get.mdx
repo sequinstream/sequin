@@ -1,0 +1,51 @@
+---
+title: "Get Function"
+description: "Get a function by ID or name"
+---
+
+## Request
+
+You can retrieve a function by either its ID or name.
+
+<CodeGroup>
+```bash cURL (by ID)
+curl -X GET "https://api.sequinstream.com/api/functions/550e8400-e29b-41d4-a716-446655440000" \
+  -H "Authorization: Bearer YOUR_API_TOKEN"
+```
+
+```bash cURL (by name)
+curl -X GET "https://api.sequinstream.com/api/functions/my-filter" \
+  -H "Authorization: Bearer YOUR_API_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.sequinstream.com/api/functions/my-filter', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+const function = await response.json();
+```
+</CodeGroup>
+
+## Path Parameters
+
+<ParamField path="id_or_name" type="string" required>
+  Function ID (UUID) or name
+</ParamField>
+
+## Response
+
+Returns a function object.
+
+## Example Response
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "my-filter",
+  "description": "Filter records with value greater than 40",
+  "type": "filter",
+  "code": "def filter(action, record, changes, metadata) do\n  record[\"value\"] > 40\nend"
+}
+```

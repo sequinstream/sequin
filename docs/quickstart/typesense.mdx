@@ -107,8 +107,17 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
 
       ```elixir
       def transform(action, record, changes, metadata) do
-        Map.take(record, ["id", "name", "price"])
+        record
+        |> Map.take(["id", "name", "price"])
+        |> Map.update("id", nil, fn id ->
+          cond do
+            is_binary(id) -> id
+            is_integer(id) -> Integer.to_string(id)
+            true -> to_string(id)
+          end
+        end)
       end
+
       ```
 
       This transform will take the `id`, `name`, and `price` fields from the `products` table and use them to create a new document in Typesense.

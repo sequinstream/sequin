@@ -37,7 +37,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
         -p 8108:8108 \
         -v ./typesense-data:/data \
         --restart on-failure \
-        typesense/typesense:28.0 \
+        typesense/typesense:29.0 \
         --data-dir /data \
         --api-key=my-api-key \
         --enable-cors
@@ -107,8 +107,18 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
 
       ```elixir
       def transform(action, record, changes, metadata) do
-        Map.take(record, ["id", "name", "price"])
+        record
+        |> Map.take(["id", "name", "price"])
+        # Typesense requires `id` to be a string
+        |> Map.update("id", nil, fn id ->
+          cond do
+            is_binary(id) -> id
+            is_integer(id) -> Integer.to_string(id)
+            true -> to_string(id)
+          end
+        end)
       end
+
       ```
 
       This transform will take the `id`, `name`, and `price` fields from the `products` table and use them to create a new document in Typesense.
@@ -130,6 +140,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
       In the Typesense card, enter your Typesense configuration:
 
       - Host: `http://host.docker.internal:8108`
+        - If that doesn't work, your host and port may be `http://typesense-server:8108`
       - Collection: `products`
       - API Key: `my-api-key`
 

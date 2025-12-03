@@ -40,11 +40,19 @@ defmodule Sequin.String do
     end
   end
 
+  @doc """
+  Returns true if the string parses as a valid UUID format.
+  """
   def uuid?(str) when is_binary(str) do
-    str
-    |> UUID.info()
-    |> case do
-      {:ok, info} -> info[:version] in [7, 4] and info[:variant] == :rfc4122
+    match?({:ok, _}, UUID.info(str))
+  end
+
+  @doc """
+  Returns true if the string is a valid Sequin-generated UUID (v4, RFC4122 variant).
+  """
+  def sequin_uuid?(str) when is_binary(str) do
+    case UUID.info(str) do
+      {:ok, info} -> info[:version] == 4 and info[:variant] == :rfc4122
       _ -> false
     end
   end

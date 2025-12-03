@@ -137,7 +137,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
   end
 
   def where_id_or_name(query \\ base_query(), id_or_name) do
-    if Sequin.String.uuid?(id_or_name) do
+    if Sequin.String.sequin_uuid?(id_or_name) do
       where_id(query, id_or_name)
     else
       where_name(query, id_or_name)

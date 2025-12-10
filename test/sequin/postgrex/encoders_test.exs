@@ -27,7 +27,43 @@ defmodule Sequin.Postgrex.EncodersTest do
       assert Jason.encode!(interval) == ~s|"00:00:00"|
     end
 
-    test "encodes interval with months, days, and time" do
+    test "encodes 1 day as 24:00:00" do
+      interval = %Postgrex.Interval{
+        months: 0,
+        days: 1,
+        secs: 0,
+        microsecs: 0
+      }
+
+      # 1 day = 24 hours
+      assert Jason.encode!(interval) == ~s|"24:00:00"|
+    end
+
+    test "encodes days and time combined" do
+      interval = %Postgrex.Interval{
+        months: 0,
+        days: 1,
+        secs: 3600,
+        microsecs: 0
+      }
+
+      # 1 day + 1 hour = 25 hours
+      assert Jason.encode!(interval) == ~s|"25:00:00"|
+    end
+
+    test "encodes 1 month as 720 hours (30 days)" do
+      interval = %Postgrex.Interval{
+        months: 1,
+        days: 0,
+        secs: 0,
+        microsecs: 0
+      }
+
+      # 1 month = 30 days = 720 hours
+      assert Jason.encode!(interval) == ~s|"720:00:00"|
+    end
+
+    test "encodes complex interval with months, days, and time" do
       interval = %Postgrex.Interval{
         months: 1,
         days: 2,
@@ -35,19 +71,8 @@ defmodule Sequin.Postgrex.EncodersTest do
         microsecs: 0
       }
 
-      assert Jason.encode!(interval) == ~s|"1 mon 2 days 01:01:01"|
-    end
-
-    test "encodes interval with years" do
-      interval = %Postgrex.Interval{
-        months: 14,
-        days: 0,
-        secs: 0,
-        microsecs: 0
-      }
-
-      # 14 months = 1 year 2 months (no time portion when zero)
-      assert Jason.encode!(interval) == ~s|"1 year 2 mons"|
+      # 1 month (720h) + 2 days (48h) + 1h1m1s = 769:01:01
+      assert Jason.encode!(interval) == ~s|"769:01:01"|
     end
 
     test "encodes interval with microseconds" do
@@ -83,28 +108,28 @@ defmodule Sequin.Postgrex.EncodersTest do
       assert Jason.encode!(interval) == ~s|"-01:01:01"|
     end
 
-    test "encodes complex interval with negative values" do
+    test "encodes negative days as negative hours" do
       interval = %Postgrex.Interval{
-        months: -1,
-        days: -5,
+        months: 0,
+        days: -1,
         secs: 0,
         microsecs: 0
       }
 
-      # No time portion when zero
-      assert Jason.encode!(interval) == ~s|"-1 mon -5 days"|
+      # -1 day = -24 hours
+      assert Jason.encode!(interval) == ~s|"-24:00:00"|
     end
 
-    test "encodes singular units correctly" do
+    test "encodes large intervals correctly" do
       interval = %Postgrex.Interval{
-        months: 1,
-        days: 1,
-        secs: 0,
+        months: 0,
+        days: 0,
+        secs: 100 * 3600,
         microsecs: 0
       }
 
-      # No time portion when zero
-      assert Jason.encode!(interval) == ~s|"1 mon 1 day"|
+      # 100 hours
+      assert Jason.encode!(interval) == ~s|"100:00:00"|
     end
   end
 

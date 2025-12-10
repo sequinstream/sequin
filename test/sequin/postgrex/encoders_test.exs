@@ -4,7 +4,7 @@ defmodule Sequin.Postgrex.EncodersTest do
   # Ensure the encoders are loaded
   require Sequin.Postgrex.Encoders
 
-  describe "Jason.Encoder for Postgrex.Interval" do
+  describe "Jason.Encoder for Postgrex.Interval " do
     test "encodes simple time interval as HH:MM:SS" do
       interval = %Postgrex.Interval{
         months: 0,

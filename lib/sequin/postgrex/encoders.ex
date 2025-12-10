@@ -1,6 +1,20 @@
 defmodule Sequin.Postgrex.Encoders do
   @moduledoc false
 
+  defimpl Jason.Encoder, for: Postgrex.Interval do
+    def encode(%Postgrex.Interval{months: months, days: days, secs: secs, microsecs: microsecs}, opts) do
+      Jason.Encoder.encode(
+        %{
+          months: months,
+          days: days,
+          secs: secs,
+          microsecs: microsecs
+        },
+        opts
+      )
+    end
+  end
+
   defimpl Jason.Encoder, for: Postgrex.Lexeme do
     def encode(%Postgrex.Lexeme{} = lexeme, opts) do
       Jason.Encoder.encode(

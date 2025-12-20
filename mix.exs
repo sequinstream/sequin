@@ -13,6 +13,10 @@ defmodule Sequin.MixProject do
     ]
   end
 
+  def cli do
+    [preferred_envs: ["test.unboxed": :test]]
+  end
+
   # Configuration for the OTP application.
   #
   # Type `mix help compile.app` for more information.
@@ -159,6 +163,7 @@ defmodule Sequin.MixProject do
         &remove_consumer_messages_log/1
       ],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      "test.unboxed": ["ecto.create --quiet", "ecto.migrate --quiet", "test --exclude unboxed"],
       "assets.setup": ["cmd --cd assets npm install"],
       "assets.build": ["tailwind sequin", "esbuild sequin"],
       "assets.deploy": [

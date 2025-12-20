@@ -18,6 +18,7 @@ defmodule Sequin.Runtime.SlotProducer do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
+  alias Sequin.Postgres.Backend
   alias Sequin.ProcessMetrics
   alias Sequin.Replication
   alias Sequin.Runtime.PostgresAdapter.Decoder
@@ -108,7 +109,7 @@ defmodule Sequin.Runtime.SlotProducer do
       field :conn, (-> Postgres.db_conn())
       # Postgres replication backend
       field :backend_mod, module()
-      field :backend_state, term()
+      field :backend_state, Backend.state()
       field :connect_opts, keyword()
       field :on_connect_fail, (any() -> any())
       field :on_disconnect, (-> :ok)

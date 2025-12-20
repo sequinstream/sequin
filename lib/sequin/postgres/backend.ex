@@ -7,7 +7,7 @@ defmodule Sequin.Postgres.Backend do
   - FakegresBackend: Fake backend for benchmarking
   """
 
-  @type state :: term()
+  @type state :: Postgrex.Protocol.state() | Sequin.Postgres.FakegresBackend.State.t()
   @type copies :: [binary()]
 
   @callback connect(opts :: keyword()) :: {:ok, state()} | {:error, term()}

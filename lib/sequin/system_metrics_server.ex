@@ -2,6 +2,9 @@ defmodule Sequin.SystemMetricsServer do
   @moduledoc false
   use GenServer
 
+  # cpu_sup is part of os_mon, which is included in extra_applications but not loaded at compile time
+  @compile {:no_warn_undefined, [:cpu_sup]}
+
   require Logger
 
   @interval to_timeout(second: 30)

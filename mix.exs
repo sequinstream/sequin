@@ -19,7 +19,7 @@ defmodule Sequin.MixProject do
   def application do
     [
       mod: {Sequin.Application, []},
-      extra_applications: [:logger, :runtime_tools] ++ extra_applications(Mix.env()),
+      extra_applications: [:logger, :runtime_tools, :os_mon] ++ extra_applications(Mix.env()),
       included_applications: [:aws_credentials]
     ]
   end
@@ -95,7 +95,8 @@ defmodule Sequin.MixProject do
 
       # Messaging / PubSub / Queues
       {:gnat, "~> 1.9"},
-      {:amqp, "~> 4.0"},
+      {:amqp, "~> 4.1"},
+      {:amqp_client, "~> 4.2"},
       {:brod, "~> 4.3"},
 
       # Caching and State Management
@@ -129,7 +130,7 @@ defmodule Sequin.MixProject do
       # Development and Testing
       {:styler, "~> 1.4.0", only: [:dev, :test], runtime: false},
       {:faker, "~> 0.18.0", only: [:dev, :test]},
-      {:mix_test_interactive, "~> 2.0", only: :dev, runtime: false},
+      {:mix_test_interactive, "~> 5.0", only: :dev, runtime: false},
       {:mox, "~> 1.0", runtime: false},
       {:hammox, "~> 0.7", only: :test},
       {:benchee, "~> 1.0", only: :dev},

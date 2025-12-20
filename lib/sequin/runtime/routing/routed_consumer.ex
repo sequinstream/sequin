@@ -103,7 +103,7 @@ defmodule Sequin.Runtime.Routing.RoutedConsumer do
 
       alias Sequin.Runtime.Routing
 
-      @after_compile Sequin.Runtime.Routing.Validator
+      @before_compile Sequin.Runtime.Routing.Validator
 
       @doc """
       Default route_consumer implementation (no-op).

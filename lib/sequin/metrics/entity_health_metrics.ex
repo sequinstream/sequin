@@ -62,6 +62,7 @@ defmodule Sequin.Metrics.EntityHealthMetrics do
       prom_mod.set_entity_health(
         entity_type,
         snapshot.entity_id,
+        snapshot.entity_name || "",
         status_label,
         value
       )

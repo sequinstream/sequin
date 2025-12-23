@@ -276,6 +276,7 @@
   }
 
   let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
+  let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   function refreshDatabases() {
     databaseRefreshState = "refreshing";
@@ -285,6 +286,18 @@
         databaseRefreshState = "idle";
       }, 2000);
     });
+  }
+
+  function refreshTables() {
+    if (selectedDatabaseId) {
+      tableRefreshState = "refreshing";
+      pushEvent("refresh_tables", { database_id: selectedDatabaseId }, () => {
+        tableRefreshState = "done";
+        setTimeout(() => {
+          tableRefreshState = "idle";
+        }, 2000);
+      });
+    }
   }
 
   // Add computed property for schema disabled state
@@ -517,16 +530,42 @@
       {#if tableMode !== "all"}
         <div class="border rounded-lg overflow-hidden">
           <div class="p-2 border-b bg-gray-50">
-            <div class="relative">
-              <SearchIcon
-                class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4"
-              />
-              <Input
-                type="search"
-                placeholder="Search tables..."
-                class="pl-8"
-                bind:value={searchTableQuery}
-              />
+            <div class="flex items-center space-x-2">
+              <div class="relative flex-1">
+                <SearchIcon
+                  class="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4"
+                />
+                <Input
+                  type="search"
+                  placeholder="Search tables..."
+                  class="pl-8"
+                  bind:value={searchTableQuery}
+                />
+              </div>
+              <Tooltip.Root>
+                <Tooltip.Trigger>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    on:click={refreshTables}
+                    disabled={tableRefreshState === "refreshing" ||
+                      !selectedDatabaseId}
+                    class="p-2"
+                    aria-label="Refresh Tables"
+                  >
+                    {#if tableRefreshState === "refreshing"}
+                      <RotateCwIcon class="h-5 w-5 animate-spin" />
+                    {:else if tableRefreshState === "done"}
+                      <CheckIcon class="h-5 w-5 text-green-500" />
+                    {:else}
+                      <RotateCwIcon class="h-5 w-5" />
+                    {/if}
+                  </Button>
+                </Tooltip.Trigger>
+                <Tooltip.Content>
+                  <p class="text-xs">Refresh tables</p>
+                </Tooltip.Content>
+              </Tooltip.Root>
             </div>
           </div>
           <div class="max-h-[200px] overflow-y-auto">

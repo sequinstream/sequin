@@ -56,6 +56,7 @@ defmodule Sequin.Runtime.DatabaseLifecycleEventWorker do
 
       "delete" ->
         replication_slot_id = Map.fetch!(data, "replication_slot_id")
+        Databases.ConnectionCache.invalidate_connection_by_id(id)
         Runtime.Supervisor.stop_replication(replication_slot_id)
     end
   end

@@ -149,7 +149,12 @@ defmodule Sequin.Databases.ConnectionCache do
 
     @spec invalidate_connection(t(), database()) :: t()
     def invalidate_connection(%__MODULE__{} = state, db) do
-      {conn, new_cache} = Cache.pop(state.cache, db.id)
+      invalidate_connection_by_id(state, db.id)
+    end
+
+    @spec invalidate_connection_by_id(t(), PostgresDatabase.id()) :: t()
+    def invalidate_connection_by_id(%__MODULE__{} = state, db_id) do
+      {conn, new_cache} = Cache.pop(state.cache, db_id)
 
       # We don't want to accidentally kill the Sequin.Repo connection, which we can store in the
       # ConnectionCache during test. Leads to very hard to debug error!
@@ -247,6 +252,11 @@ defmodule Sequin.Databases.ConnectionCache do
     GenServer.cast(server, {:invalidate_connection, db})
   end
 
+  @spec invalidate_connection_by_id(GenServer.server(), PostgresDatabase.id()) :: :ok
+  def invalidate_connection_by_id(server \\ __MODULE__, db_id) when is_binary(db_id) do
+    GenServer.cast(server, {:invalidate_connection_by_id, db_id})
+  end
+
   # This function is intended for test purposes only
   @spec cache_connection(GenServer.server(), database(), pid()) :: :ok
   def cache_connection(server \\ __MODULE__, %PostgresDatabase{id: id} = db, conn) when is_binary(id) do
@@ -304,6 +314,12 @@ defmodule Sequin.Databases.ConnectionCache do
   @impl GenServer
   def handle_cast({:invalidate_connection, %PostgresDatabase{} = db}, %State{} = state) do
     new_state = State.invalidate_connection(state, db)
+    {:noreply, new_state}
+  end
+
+  @impl GenServer
+  def handle_cast({:invalidate_connection_by_id, db_id}, %State{} = state) do
+    new_state = State.invalidate_connection_by_id(state, db_id)
     {:noreply, new_state}
   end
 

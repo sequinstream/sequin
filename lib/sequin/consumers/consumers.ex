@@ -414,7 +414,11 @@ defmodule Sequin.Consumers do
     Cache.get_or_store(
       cache_key,
       fn ->
-        find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream, preload: [:transform])
+        find_sink_consumer(account_id,
+          id_or_name: id_or_name,
+          type: :sequin_stream,
+          preload: [:transform, :enrichment, :postgres_database]
+        )
       end,
       ttl
     )

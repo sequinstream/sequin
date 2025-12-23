@@ -4,11 +4,14 @@ defmodule SequinWeb.PullControllerTest do
   alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.FunctionsFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotMessageStoreSupervisor
+  alias Sequin.TestSupport.Models.Character
 
   setup :authenticated_conn
 
@@ -117,6 +120,66 @@ defmodule SequinWeb.PullControllerTest do
       conn = get(conn, ~p"/api/sequin_streams/#{consumer.id}/receive", batch_size: 1)
       assert %{"data" => messages} = json_response(conn, 200)
       assert length(messages) == 1
+    end
+
+    test "applies enrichment function to messages", %{conn: conn, account: account} do
+      # Create a character in the test database
+      character = CharacterFactory.insert_character!()
+
+      # Create database and replication slot
+      db = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: :character_tables)
+      ConnectionCache.cache_connection(db, Sequin.Repo)
+      rep_slot = ReplicationFactory.insert_postgres_replication!(postgres_database_id: db.id, account_id: account.id)
+
+      # Create an enrichment function that looks up character data
+      enrichment_function =
+        FunctionsFactory.insert_enrichment_function!(
+          account_id: account.id,
+          function_attrs: [
+            code: """
+            SELECT id, 'enriched_' || name as enriched_name
+            FROM "Characters"
+            WHERE id = ANY($1::int[])
+            """
+          ]
+        )
+
+      # Create consumer with enrichment
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          message_kind: :record,
+          account_id: account.id,
+          backfill_completed_at: DateTime.add(DateTime.utc_now(), -24, :hour),
+          replication_slot_id: rep_slot.id,
+          sink: %{type: :sequin_stream},
+          enrichment_id: enrichment_function.id,
+          source: %{
+            include_table_oids: [Character.table_oid()]
+          }
+        )
+
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+
+      # Create a message for the character
+      record =
+        ConsumersFactory.deliverable_consumer_record(
+          consumer_id: consumer.id,
+          table_oid: Character.table_oid(),
+          record_pks: [character.id],
+          data: ConsumersFactory.consumer_record_data(record: %{"id" => character.id, "name" => character.name})
+        )
+
+      SlotMessageStore.put_messages(consumer, [record])
+
+      # Fetch the message and verify enrichment
+      conn = get(conn, ~p"/api/sequin_streams/#{consumer.id}/receive")
+      assert %{"data" => [message]} = json_response(conn, 200)
+
+      # Verify enrichment data is present
+      assert message["data"]["metadata"]["enrichment"] == %{
+               "id" => character.id,
+               "enriched_name" => "enriched_#{character.name}"
+             }
     end
   end
 

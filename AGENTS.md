@@ -40,3 +40,20 @@ cd ..
 ```
 
 These commands should pass before committing. Warnings or noise in test is not acceptable.
+
+## Using jj workspaces for isolated work
+
+When working on a feature or fix, you can create an isolated workspace using jj:
+
+```bash
+# Create a new workspace (from the main repo)
+jj workspace add ../sequin-feature-name
+
+# The new workspace needs deps and _build symlinked from the main repo
+cd ../sequin-feature-name
+ln -s ../sequin/deps .
+ln -s ../sequin/_build .
+
+# Now you can run tests and make changes in this isolated workspace
+mix test test/path/to/test.exs
+```

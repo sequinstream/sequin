@@ -89,6 +89,49 @@ defmodule Sequin.Postgres.ValueCasterTest do
   end
 
   # ---------------------------------------------------------------------------
+  describe "intervals" do
+    test "parses year and months" do
+      assert {:ok, %{"months" => 14, "days" => 0, "microseconds" => 0}} =
+               ValueCaster.cast("interval", "1 year 2 mons")
+    end
+
+    test "parses days only" do
+      assert {:ok, %{"months" => 0, "days" => 3, "microseconds" => 0}} =
+               ValueCaster.cast("interval", "3 days")
+    end
+
+    test "parses time only" do
+      # 4 hours, 5 minutes, 6 seconds = (4*3600 + 5*60 + 6) * 1_000_000 = 14706000000 microseconds
+      assert {:ok, %{"months" => 0, "days" => 0, "microseconds" => 14_706_000_000}} =
+               ValueCaster.cast("interval", "04:05:06")
+    end
+
+    test "parses full interval with fractional seconds" do
+      # 1 year 2 months = 14 months
+      # 3 days
+      # 4:05:06.789 = (4*3600 + 5*60 + 6) * 1_000_000 + 789_000 = 14706789000 microseconds
+      assert {:ok, %{"months" => 14, "days" => 3, "microseconds" => 14_706_789_000}} =
+               ValueCaster.cast("interval", "1 year 2 mons 3 days 04:05:06.789")
+    end
+
+    test "parses negative intervals" do
+      assert {:ok, %{"months" => -1, "days" => -3, "microseconds" => -1_000_000}} =
+               ValueCaster.cast("interval", "-1 mons -3 days -00:00:01")
+    end
+
+    test "parses interval with only years" do
+      assert {:ok, %{"months" => 24, "days" => 0, "microseconds" => 0}} =
+               ValueCaster.cast("interval", "2 years")
+    end
+
+    test "parses simple hour interval" do
+      # 1 hour = 3600 * 1_000_000 = 3600000000 microseconds
+      assert {:ok, %{"months" => 0, "days" => 0, "microseconds" => 3_600_000_000}} =
+               ValueCaster.cast("interval", "01:00:00")
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   describe "fallback & unknown types" do
     test "unknown pg type ⇒ string passthrough" do
       assert {:ok, "whatever"} = ValueCaster.cast("mystery", "whatever")

@@ -918,6 +918,9 @@ defmodule Sequin.Postgres do
             is_struct(value, Postgrex.Range) ->
               format_range(value)
 
+            is_struct(value, Postgrex.Interval) ->
+              format_interval(value)
+
             # This is the catch-all when encode is not implemented
             Jason.Encoder.impl_for(value) == Jason.Encoder.Any ->
               Logger.debug("[Postgres] No Jason.Encoder for #{inspect(value)}", column: col.name, table: table.name)
@@ -942,6 +945,14 @@ defmodule Sequin.Postgres do
     left_bracket = if lower_inclusive, do: "[", else: "("
     right_bracket = if upper_inclusive, do: "]", else: ")"
     "#{left_bracket}#{lower},#{upper}#{right_bracket}"
+  end
+
+  defp format_interval(%Postgrex.Interval{months: months, days: days, secs: secs, microsecs: microsecs}) do
+    %{
+      "months" => months,
+      "days" => days,
+      "microseconds" => secs * 1_000_000 + microsecs
+    }
   end
 
   @safe_types [

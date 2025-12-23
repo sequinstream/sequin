@@ -39,6 +39,10 @@ defmodule Sequin.Postgres.ValueCaster do
 
   def cast("vector", nil), do: {:ok, nil}
 
+  def cast("interval", value_str) when is_binary(value_str) do
+    {:ok, parse_interval(value_str)}
+  end
+
   def cast("vector", value_str) when is_binary(value_str) do
     list =
       value_str
@@ -144,5 +148,105 @@ defmodule Sequin.Postgres.ValueCaster do
 
   defp string_to_ecto_type(type) do
     Map.get(@postgres_to_ecto_type_mapping, type, :string)
+  end
+
+  defp parse_interval(str) do
+    # Split into date parts and time part
+    {date_part, time_part} = split_date_and_time(str)
+
+    # Parse date components (years, months, days)
+    {months, days} = parse_date_components(date_part)
+
+    # Parse time component (HH:MM:SS.microseconds)
+    microseconds = parse_time_component(time_part)
+
+    %{
+      "months" => months,
+      "days" => days,
+      "microseconds" => microseconds
+    }
+  end
+
+  defp split_date_and_time(str) do
+    # Time component matches patterns like "04:05:06" or "-04:05:06" or "04:05:06.789"
+    case Regex.run(~r/(-?\d{2}:\d{2}:\d{2}(?:\.\d+)?)$/, str) do
+      [time_match | _] ->
+        date_part = String.trim(String.replace(str, time_match, ""))
+        {date_part, time_match}
+
+      nil ->
+        {str, nil}
+    end
+  end
+
+  defp parse_date_components(date_part) when is_binary(date_part) do
+    parts = String.split(date_part, ~r/\s+/, trim: true)
+    parse_date_parts(parts, 0, 0)
+  end
+
+  defp parse_date_components(nil), do: {0, 0}
+
+  defp parse_date_parts([], months, days), do: {months, days}
+
+  defp parse_date_parts([value, unit | rest], months, days) do
+    {num, _} = Integer.parse(value)
+
+    case String.downcase(unit) do
+      u when u in ["year", "years"] ->
+        parse_date_parts(rest, months + num * 12, days)
+
+      u when u in ["mon", "mons", "month", "months"] ->
+        parse_date_parts(rest, months + num, days)
+
+      u when u in ["day", "days"] ->
+        parse_date_parts(rest, months, days + num)
+
+      # Skip unknown units
+      _ ->
+        parse_date_parts(rest, months, days)
+    end
+  end
+
+  defp parse_date_parts([_single], months, days), do: {months, days}
+
+  defp parse_time_component(nil), do: 0
+
+  defp parse_time_component(time_str) do
+    # Handle negative time (e.g., "-04:05:06")
+    {sign, time_str} =
+      if String.starts_with?(time_str, "-") do
+        {-1, String.trim_leading(time_str, "-")}
+      else
+        {1, time_str}
+      end
+
+    # Parse HH:MM:SS.microseconds
+    case String.split(time_str, ":") do
+      [hours_str, minutes_str, seconds_str] ->
+        {hours, _} = Integer.parse(hours_str)
+        {minutes, _} = Integer.parse(minutes_str)
+        {seconds, microsecs} = parse_seconds(seconds_str)
+
+        total_microsecs = (hours * 3600 + minutes * 60 + seconds) * 1_000_000 + microsecs
+        sign * total_microsecs
+
+      _ ->
+        0
+    end
+  end
+
+  defp parse_seconds(seconds_str) do
+    case String.split(seconds_str, ".") do
+      [whole, frac] ->
+        {seconds, _} = Integer.parse(whole)
+        # Pad fraction to 6 digits (microseconds)
+        padded_frac = frac |> String.pad_trailing(6, "0") |> String.slice(0, 6)
+        {microsecs, _} = Integer.parse(padded_frac)
+        {seconds, microsecs}
+
+      [whole] ->
+        {seconds, _} = Integer.parse(whole)
+        {seconds, 0}
+    end
   end
 end

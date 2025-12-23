@@ -365,7 +365,9 @@ defmodule Sequin.Consumers.SinkConsumer do
 
   def where_any_function_id(query \\ base_query(), function_id) do
     from([consumer: c] in query,
-      where: c.transform_id == ^function_id or c.routing_id == ^function_id or c.filter_id == ^function_id
+      where:
+        c.transform_id == ^function_id or c.routing_id == ^function_id or c.filter_id == ^function_id or
+          c.enrichment_id == ^function_id
     )
   end
 

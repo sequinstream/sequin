@@ -137,7 +137,7 @@ defmodule Sequin.MixProject do
       {:rexbug, "~> 1.0"},
       {:floki, ">= 0.30.0", only: :test},
       {:uuid, "~> 1.1"},
-      {:tidewave, "~> 0.1", only: :dev},
+      {:tidewave, "~> 0.5", only: :dev},
       # Need in :dev for formatter
       {:assert_eventually, "~> 1.0", only: [:dev, :test]}
     ]

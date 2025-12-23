@@ -57,3 +57,10 @@ ln -s ../sequin/_build .
 # Now you can run tests and make changes in this isolated workspace
 mix test test/path/to/test.exs
 ```
+
+## Tidewave
+
+Always use Tidewave's tools for evaluating code, querying the database, etc.
+
+Use `get_docs` to access documentation and the `get_source_location` tool to
+find module/function definitions.

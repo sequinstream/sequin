@@ -349,6 +349,18 @@ destination:
   use_task_role: true           # Use ECS task role, EC2 instance profile, or EKS service account
 ```
 
+**Using LocalStack (for local development):**
+```yaml
+destination:
+  type: "sqs"                   # Required
+  queue_url: "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-queue"
+  region: "us-east-1"
+  use_emulator: true            # Enable emulator mode
+  emulator_base_url: "http://localstack:4566"  # LocalStack endpoint
+  access_key_id: "test"
+  secret_access_key: "test"
+```
+
 #### SNS sink
 For publishing changes to AWS SNS topics:
 
@@ -369,6 +381,18 @@ destination:
   type: "sns"                   # Required
   topic_arn: "arn:aws:sns:us-west-2:123456789012:my-topic" # Required, full SNS Topic ARN
   use_task_role: true           # Use ECS task role, EC2 instance profile, or EKS service account
+```
+
+**Using LocalStack (for local development):**
+```yaml
+destination:
+  type: "sns"                   # Required
+  topic_arn: "arn:aws:sns:us-east-1:000000000000:my-topic"
+  region: "us-east-1"
+  use_emulator: true            # Enable emulator mode
+  emulator_base_url: "http://localstack:4566"  # LocalStack endpoint
+  access_key_id: "test"
+  secret_access_key: "test"
 ```
 
 #### Redis sink

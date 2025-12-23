@@ -853,7 +853,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       queue_url: sink.queue_url,
       region: sink.region,
       is_fifo: sink.is_fifo,
-      use_task_role: sink.use_task_role
+      use_task_role: sink.use_task_role,
+      use_emulator: sink.use_emulator,
+      emulator_base_url: sink.emulator_base_url
     }
   end
 
@@ -863,7 +865,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       topic_arn: sink.topic_arn,
       region: sink.region,
       is_fifo: sink.is_fifo,
-      use_task_role: sink.use_task_role
+      use_task_role: sink.use_task_role,
+      use_emulator: sink.use_emulator,
+      emulator_base_url: sink.emulator_base_url
     }
   end
 

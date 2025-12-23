@@ -1573,6 +1573,41 @@ defmodule Sequin.YamlLoaderTest do
              } = consumer.sink
     end
 
+    test "creates SNS sink with LocalStack emulator configuration" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               sinks:
+                 - name: sns-localstack-sink
+                   status: active
+                   destination:
+                     type: sns
+                     topic_arn: "arn:aws:sns:us-east-1:000000000000:my-topic"
+                     region: us-east-1
+                     use_emulator: true
+                     emulator_base_url: http://localhost:4566
+                     access_key_id: test
+                     secret_access_key: test
+                   database: test-db
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+
+      assert consumer.name == "sns-localstack-sink"
+      assert consumer.status == :active
+
+      assert %SnsSink{
+               type: :sns,
+               topic_arn: "arn:aws:sns:us-east-1:000000000000:my-topic",
+               region: "us-east-1",
+               use_emulator: true,
+               emulator_base_url: "http://localhost:4566",
+               access_key_id: "test",
+               secret_access_key: _
+             } = consumer.sink
+    end
+
     test "creates sink with custom actions and timestamp format" do
       assert :ok =
                YamlLoader.apply_from_yml!("""

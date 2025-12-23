@@ -781,7 +781,9 @@ defmodule SequinWeb.Components.ConsumerForm do
       "region" => region,
       "access_key_id" => sink["access_key_id"],
       "secret_access_key" => sink["secret_access_key"],
-      "use_task_role" => sink["use_task_role"]
+      "use_task_role" => sink["use_task_role"],
+      "use_emulator" => sink["use_emulator"],
+      "emulator_base_url" => sink["emulator_base_url"]
     }
   end
 
@@ -1052,7 +1054,9 @@ defmodule SequinWeb.Components.ConsumerForm do
       "region" => sink.region,
       "access_key_id" => sink.access_key_id,
       "secret_access_key" => sink.secret_access_key,
-      "use_task_role" => sink.use_task_role
+      "use_task_role" => sink.use_task_role,
+      "use_emulator" => sink.use_emulator,
+      "emulator_base_url" => sink.emulator_base_url
     }
   end
 

@@ -231,6 +231,8 @@ export type SnsConsumer = BaseConsumer & {
     topic_arn: string;
     region: string;
     is_fifo: boolean;
+    use_emulator: boolean;
+    emulator_base_url?: string;
   };
 };
 

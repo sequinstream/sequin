@@ -294,7 +294,9 @@ defmodule Sequin.Transforms do
       topic_arn: sink.topic_arn,
       region: sink.region,
       is_fifo: sink.is_fifo,
-      use_task_role: sink.use_task_role
+      use_task_role: sink.use_task_role,
+      use_emulator: sink.use_emulator,
+      emulator_base_url: sink.emulator_base_url
     }
 
     config =
@@ -1136,7 +1138,9 @@ defmodule Sequin.Transforms do
        region: attrs["region"],
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"],
-       use_task_role: attrs["use_task_role"] || false
+       use_task_role: attrs["use_task_role"] || false,
+       use_emulator: attrs["use_emulator"] || false,
+       emulator_base_url: attrs["emulator_base_url"]
      }}
   end
 

@@ -83,7 +83,8 @@ defmodule SequinWeb.Router do
   scope "/", SequinWeb do
     pipe_through [:browser, :redirect_to_register_if_unauthenticated]
 
-    live_session :accept_invite, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
+    live_session :accept_invite,
+      on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
       live "/accept-invite/:token", AcceptInviteLive, :accept_invite
       live "/accept-team-invite/:token", AcceptInviteLive, :accept_team_invite
     end

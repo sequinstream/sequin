@@ -86,8 +86,7 @@ defmodule Sequin.Runtime.KeysetCursor do
   def min_for_type("time with time zone"), do: ~T[00:00:00]
 
   def min_for_type(numeric_type)
-      when numeric_type in ["smallint", "integer", "bigint", "decimal", "numeric", "real", "double precision"],
-      do: 0
+      when numeric_type in ["smallint", "integer", "bigint", "decimal", "numeric", "real", "double precision"], do: 0
 
   def min_for_type(_), do: ""
 

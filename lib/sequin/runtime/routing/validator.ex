@@ -30,6 +30,7 @@ defmodule Sequin.Runtime.Routing.Validator do
   """
   defmacro __before_compile__(env) do
     Sequin.Runtime.Routing.Validator.validate_module_definitions(env.module)
+
     quote do
     end
   end

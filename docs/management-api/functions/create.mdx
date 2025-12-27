@@ -1,0 +1,165 @@
+---
+title: "Create Function"
+description: "Create a new function"
+---
+
+## Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://api.sequinstream.com/api/functions" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-filter",
+    "description": "Filter records with value greater than 40",
+    "type": "filter",
+    "code": "def filter(action, record, changes, metadata) do\n  record[\"value\"] > 40\nend"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.sequinstream.com/api/functions', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'my-filter',
+    description: 'Filter records with value greater than 40',
+    type: 'filter',
+    code: `def filter(action, record, changes, metadata) do
+  record["value"] > 40
+end`
+  })
+});
+const function = await response.json();
+```
+</CodeGroup>
+
+## Parameters
+
+<ParamField path="name" type="string" required>
+  Unique name for the function
+</ParamField>
+
+<ParamField path="description" type="string">
+  Optional description of what the function does
+</ParamField>
+
+<ParamField path="type" type="string" required>
+  Type of function: `filter`, `transform`, `enrichment`, `path`, or `routing`
+</ParamField>
+
+<ParamField path="code" type="string">
+  Function code (required for `filter`, `transform`, `enrichment`, and `routing` types)
+</ParamField>
+
+<ParamField path="path" type="string">
+  Path to extract (required for `path` type)
+</ParamField>
+
+<ParamField path="sink_type" type="string">
+  Sink type (required for `routing` type): `http_push`, `sqs`, `kafka`, etc.
+</ParamField>
+
+## Function Types
+
+### Filter Function
+
+```json
+{
+  "name": "my-filter",
+  "description": "Filter VIP customers",
+  "type": "filter",
+  "code": "def filter(action, record, changes, metadata) do\n  record[\"customer_type\"] == \"VIP\"\nend"
+}
+```
+
+### Transform Function
+
+```json
+{
+  "name": "my-transform",
+  "description": "Extract ID and action",
+  "type": "transform",
+  "code": "def transform(action, record, changes, metadata) do\n  %{id: record[\"id\"], action: action}\nend"
+}
+```
+
+### Path Function
+
+```json
+{
+  "name": "my-path",
+  "description": "Extract record",
+  "type": "path",
+  "path": "record"
+}
+```
+
+### Routing Function
+
+```json
+{
+  "name": "my-routing",
+  "description": "Route to REST API",
+  "type": "routing",
+  "sink_type": "http_push",
+  "code": "def route(action, record, changes, metadata) do\n  %{\n    method: \"POST\",\n    endpoint_path: \"/api/users/#{record[\"id\"]}\"\n  }\nend"
+}
+```
+
+### Enrichment Function
+
+```json
+{
+  "name": "my-enrichment",
+  "description": "Enrich with customer data",
+  "type": "enrichment",
+  "code": "SELECT\n  u.id,\n  a.name as account_name\nFROM\n  users u\nJOIN\n  accounts a on u.account_id = a.id\nWHERE\n  u.id = ANY($1)"
+}
+```
+
+## Response
+
+<ResponseField name="id" type="string">
+  Unique identifier for the function
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Name of the function
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Description of the function
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Type of the function
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Function code (for applicable types)
+</ResponseField>
+
+<ResponseField name="path" type="string">
+  Path (for path type functions)
+</ResponseField>
+
+<ResponseField name="sink_type" type="string">
+  Sink type (for routing type functions)
+</ResponseField>
+
+## Example Response
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "my-filter",
+  "description": "Filter records with value greater than 40",
+  "type": "filter",
+  "code": "def filter(action, record, changes, metadata) do\n  record[\"value\"] > 40\nend"
+}
+```

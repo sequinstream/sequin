@@ -18,6 +18,8 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
   end
 
   @max_bytes Sequin.Size.mb(10)
+  # GCP Pub/Sub ordering key has a maximum of 1024 bytes
+  @max_ordering_key_bytes 1024
 
   @impl SinkPipeline
   def batchers_config(consumer) do
@@ -91,7 +93,8 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
       }
     }
 
-    Sequin.Map.put_if_present(msg, "orderingKey", record.group_id)
+    ordering_key = Sequin.String.truncate_with_hash(record.group_id, @max_ordering_key_bytes)
+    Sequin.Map.put_if_present(msg, "orderingKey", ordering_key)
   end
 
   defp build_pubsub_message(consumer, %Sequin.Consumers.ConsumerEvent{} = event) do
@@ -105,7 +108,8 @@ defmodule Sequin.Runtime.GcpPubsubPipeline do
       }
     }
 
-    Sequin.Map.put_if_present(msg, "orderingKey", event.group_id)
+    ordering_key = Sequin.String.truncate_with_hash(event.group_id, @max_ordering_key_bytes)
+    Sequin.Map.put_if_present(msg, "orderingKey", ordering_key)
   end
 
   defp pubsub_message_byte_size(%{"data" => data, "attributes" => attributes}) do

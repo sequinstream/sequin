@@ -53,6 +53,10 @@ Each message published to Pub/Sub contains:
    - By default, the primary key(s) of the source row
    - If custom grouping is configured, the specified grouping column values
 
+   <Note>
+   Pub/Sub ordering keys have a maximum size of 1024 bytes. If the ordering key exceeds this limit, Sequin automatically hashes it to ensure compatibility.
+   </Note>
+
 ## Retry behavior
 
 If Sequin is unable to deliver a message to Pub/Sub, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.

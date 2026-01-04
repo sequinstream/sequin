@@ -102,6 +102,10 @@ When you configure a Kinesis sink, you can specify message grouping behavior. Th
 
 The default group for a message is the source row's primary key(s). You can override this by specifying one or more columns to use for grouping.
 
+<Note>
+Kinesis partition keys have a maximum size of 256 bytes. If the partition key exceeds this limit, Sequin automatically hashes it to ensure compatibility.
+</Note>
+
 Sequin will order the delivery of messages with the same group according to their commit timestamp.
 
 ## Routing

@@ -7,6 +7,8 @@ defmodule SequinWeb.SinkConsumersLive.ShowTest do
   alias Sequin.Consumers
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Runtime.SlotMessageStore
+  alias Sequin.Runtime.SlotMessageStoreSupervisor
 
   setup :logged_in_user
 
@@ -231,6 +233,91 @@ defmodule SequinWeb.SinkConsumersLive.ShowTest do
       # Verify the backfill state was NOT updated
       unchanged_backfill = Consumers.get_backfill!(backfill.id)
       assert unchanged_backfill.state == :active
+    end
+  end
+
+  describe "messages tab pagination and sorting" do
+    setup %{consumer: consumer, table: table} do
+      # Start the SlotMessageStore for the consumer
+      start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
+
+      # Create 4 messages with distinct commit_lsn values
+      messages =
+        for i <- 1..4 do
+          ConsumersFactory.consumer_message(
+            message_kind: consumer.message_kind,
+            consumer_id: consumer.id,
+            commit_lsn: 1000 + i * 100,
+            commit_idx: 0,
+            table_oid: table.oid,
+            group_id: "test-group-#{i}"
+          )
+        end
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      consumer_id = consumer.id
+      assert_receive {:put_messages_done, ^consumer_id}
+
+      {:ok, messages: messages}
+    end
+
+    test "pagination shows different messages on each page", %{conn: conn, consumer: consumer, messages: _messages} do
+      # Navigate to messages tab with _pageSize=1 for testing pagination
+      {:ok, view, _html} = live(conn, ~p"/sinks/#{consumer.type}/#{consumer.id}/messages?showAcked=false&_pageSize=1")
+
+      # Page 0 should show the newest message (commit_lsn 1400) when sorted DESC
+      [page0_msg] = view_assigns(view, :messages)
+
+      # Go to page 1
+      render_hook(view, "change_page", %{"page" => 1})
+      [page1_msg] = view_assigns(view, :messages)
+
+      # The messages should be different (pagination works)
+      assert page0_msg.commit_lsn != page1_msg.commit_lsn
+
+      # Go to page 2
+      render_hook(view, "change_page", %{"page" => 2})
+      [page2_msg] = view_assigns(view, :messages)
+
+      # All three pages should have different messages
+      commit_lsns = [page0_msg.commit_lsn, page1_msg.commit_lsn, page2_msg.commit_lsn]
+      assert length(Enum.uniq(commit_lsns)) == 3
+    end
+
+    test "DESC sort order shows newest messages first", %{conn: conn, consumer: consumer} do
+      # Navigate with sort_order=desc (the default), _pageSize=1 for testing
+      {:ok, view, _html} = live(conn, ~p"/sinks/#{consumer.type}/#{consumer.id}/messages?showAcked=false&_pageSize=1")
+
+      [msg] = view_assigns(view, :messages)
+
+      # Newest message has commit_lsn 1400 (1000 + 4*100)
+      assert msg.commit_lsn == 1400
+    end
+
+    test "ASC sort order shows oldest messages first", %{conn: conn, consumer: consumer} do
+      # Navigate with sort_order=asc, _pageSize=1 for testing
+      {:ok, view, _html} =
+        live(conn, ~p"/sinks/#{consumer.type}/#{consumer.id}/messages?showAcked=false&sortOrder=asc&_pageSize=1")
+
+      [msg] = view_assigns(view, :messages)
+
+      # Oldest message has commit_lsn 1100 (1000 + 1*100)
+      assert msg.commit_lsn == 1100
+    end
+
+    test "changing sort order updates the view", %{conn: conn, consumer: consumer} do
+      {:ok, view, _html} = live(conn, ~p"/sinks/#{consumer.type}/#{consumer.id}/messages?showAcked=false&_pageSize=1")
+
+      # Default is DESC, so we should see newest first
+      [msg_desc] = view_assigns(view, :messages)
+      assert msg_desc.commit_lsn == 1400
+
+      # Change to ASC
+      render_hook(view, "change_sort_order", %{"sort_order" => "asc"})
+      [msg_asc] = view_assigns(view, :messages)
+
+      # Now we should see oldest first
+      assert msg_asc.commit_lsn == 1100
     end
   end
 end

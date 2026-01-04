@@ -1188,14 +1188,14 @@ defmodule Sequin.SlotMessageStoreTest do
     end
   end
 
-  describe "peek_messages_metadata/2" do
+  describe "peek_messages_metadata/3" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [])
       start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
       %{consumer: consumer}
     end
 
-    test "returns messages without data payload", %{consumer: consumer} do
+    test "returns messages without data payload in ascending order by default", %{consumer: consumer} do
       consumer_id = consumer.id
 
       # Create 5 messages
@@ -1231,6 +1231,59 @@ defmodule Sequin.SlotMessageStoreTest do
       assert second.group_id == "test-group-2"
       assert third.commit_lsn == 3
       assert third.group_id == "test-group-3"
+    end
+
+    test "returns messages in descending order with order: :desc", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      # Create 5 messages
+      messages =
+        for i <- 1..5 do
+          ConsumersFactory.consumer_message(
+            message_kind: consumer.message_kind,
+            consumer_id: consumer.id,
+            commit_lsn: i,
+            commit_idx: 1,
+            group_id: "test-group-#{i}"
+          )
+        end
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      assert_receive {:put_messages_done, ^consumer_id}
+
+      # Request only 3 messages in descending order
+      metadata_messages = SlotMessageStore.peek_messages_metadata(consumer, 3, order: :desc)
+
+      assert length(metadata_messages) == 3
+
+      # Newest messages first
+      commit_lsns = Enum.map(metadata_messages, & &1.commit_lsn)
+      assert commit_lsns == [5, 4, 3]
+    end
+
+    test "returns messages in ascending order with order: :asc", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      messages =
+        for i <- 1..5 do
+          ConsumersFactory.consumer_message(
+            message_kind: consumer.message_kind,
+            consumer_id: consumer.id,
+            commit_lsn: i,
+            commit_idx: 1,
+            group_id: "test-group-#{i}"
+          )
+        end
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      assert_receive {:put_messages_done, ^consumer_id}
+
+      metadata_messages = SlotMessageStore.peek_messages_metadata(consumer, 3, order: :asc)
+
+      assert length(metadata_messages) == 3
+
+      commit_lsns = Enum.map(metadata_messages, & &1.commit_lsn)
+      assert commit_lsns == [1, 2, 3]
     end
   end
 end

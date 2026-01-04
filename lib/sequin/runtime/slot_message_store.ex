@@ -510,22 +510,29 @@ defmodule Sequin.Runtime.SlotMessageStore do
   @doc """
   Peek at messages metadata only (without data payloads) for the consumer.
   This is more memory efficient for listing messages in the UI.
+
+  Options:
+    - `order`: `:asc` (oldest first, default) or `:desc` (newest first)
   """
-  @spec peek_messages_metadata(SinkConsumer.t(), pos_integer()) ::
+  @spec peek_messages_metadata(SinkConsumer.t(), pos_integer(), keyword()) ::
           list(ConsumerRecord.t() | ConsumerEvent.t()) | {:error, Exception.t()}
-  def peek_messages_metadata(consumer, count) when is_integer(count) do
+  def peek_messages_metadata(consumer, count, opts \\ []) when is_integer(count) do
+    order = Keyword.get(opts, :order, :asc)
+
     consumer
     |> partitions()
     |> Enum.reduce_while({:ok, []}, fn partition, {:ok, acc_messages} ->
-      case GenServer.call(via_tuple(consumer.id, partition), {:peek_messages_metadata, count}) do
+      case GenServer.call(via_tuple(consumer.id, partition), {:peek_messages_metadata, count, opts}) do
         {:ok, messages} -> {:cont, {:ok, acc_messages ++ messages}}
         error -> {:halt, error}
       end
     end)
     |> case do
       {:ok, messages} ->
+        sort_order = if order == :desc, do: :desc, else: :asc
+
         messages
-        |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx})
+        |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, sort_order)
         |> Enum.take(count)
 
       error ->
@@ -846,8 +853,8 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @decorate track_metrics("peek_messages_metadata")
-  def handle_call({:peek_messages_metadata, count}, _from, state) do
-    {:reply, {:ok, State.peek_messages_metadata(state, count)}, state}
+  def handle_call({:peek_messages_metadata, count, opts}, _from, state) do
+    {:reply, {:ok, State.peek_messages_metadata(state, count, opts)}, state}
   end
 
   @decorate track_metrics("peek_message")

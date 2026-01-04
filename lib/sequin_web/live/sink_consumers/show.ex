@@ -1795,7 +1795,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp push_patch_with_query_params(socket, url_prefix) do
     %{show_acked: show_acked, paused: paused, sort_order: sort_order, consumer: consumer} = socket.assigns
-    page_size_override = if socket.assigns[:page_size_override], do: socket.assigns.page_size, else: nil
+    page_size_override = if socket.assigns[:page_size_override], do: socket.assigns.page_size
     query_params = build_query_params(show_acked, paused, sort_order, page_size_override)
     push_patch(socket, to: RouteHelpers.consumer_path(consumer, url_prefix, query_params))
   end

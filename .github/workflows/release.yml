@@ -243,8 +243,8 @@ jobs:
 
           Generate the release notes now. Output ONLY the markdown release notes, no preamble or explanation."
 
-          # Run Claude Code with the prompt
-          claude -p "$PROMPT" --output-file release_notes.md
+          # Run Claude Code with the prompt (print mode outputs to stdout)
+          claude -p "$PROMPT" > release_notes.md
 
           echo "Generated release notes:"
           cat release_notes.md

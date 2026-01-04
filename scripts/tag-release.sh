@@ -26,25 +26,8 @@ RESET='\033[0m'
 # Set the working directory to the project root
 cd "$(dirname "$0")/.." || exit
 
-# Check for uncommitted changes
-if [[ -n $(git status --porcelain) ]]; then
-    echo -e "${RED}Error: You have uncommitted changes. Please commit or stash them first.${RESET}"
-    git status --short
-    exit 1
-fi
-
-# Make sure we're on main branch
-current_branch=$(git branch --show-current)
-if [[ "$current_branch" != "main" ]]; then
-    echo -e "${YELLOW}Warning: You're on branch '$current_branch', not 'main'.${RESET}"
-    read -p "Continue anyway? [y/N] " continue_anyway
-    if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
-        echo "Aborted."
-        exit 1
-    fi
-fi
-
 # Fetch latest from origin (main branch and tags)
+# Note: We always tag origin/main, so local branch/state doesn't matter
 echo "Fetching latest from origin..."
 git fetch origin main --tags
 
@@ -88,21 +71,24 @@ if git rev-parse "$new_version" >/dev/null 2>&1; then
     exit 1
 fi
 
-# Verify the commit has been signed off
+# Verify the commit has been signed off (via GitHub Actions check run)
 echo ""
 echo "Verifying commit signoff..."
 COMMIT_SHA=$(git rev-parse origin/main)
-SIGNOFF_STATUS=$(gh api \
+
+# GitHub Actions creates "check runs", not "commit statuses" - use the check-runs API
+CHECK_RUNS=$(gh api \
     -H "Accept: application/vnd.github+json" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
-    "/repos/sequinstream/sequin/commits/$COMMIT_SHA/statuses" 2>/dev/null || echo "[]")
+    "/repos/sequinstream/sequin/commits/$COMMIT_SHA/check-runs" 2>/dev/null || echo '{"check_runs":[]}')
 
-SIGNOFF_SUCCESS=$(echo "$SIGNOFF_STATUS" | jq '[.[] | select(.context=="signoff" and .state=="success")] | length')
-SIGNOFF_PENDING=$(echo "$SIGNOFF_STATUS" | jq '[.[] | select(.context=="signoff" and .state=="pending")] | length')
+SIGNOFF_SUCCESS=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .conclusion=="success")] | length')
+SIGNOFF_PENDING=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .status=="in_progress")] | length')
+SIGNOFF_QUEUED=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .status=="queued")] | length')
 
 if [ "$SIGNOFF_SUCCESS" -gt 0 ]; then
     echo -e "${GREEN}✓ Commit has been signed off${RESET}"
-elif [ "$SIGNOFF_PENDING" -gt 0 ]; then
+elif [ "$SIGNOFF_PENDING" -gt 0 ] || [ "$SIGNOFF_QUEUED" -gt 0 ]; then
     echo -e "${YELLOW}⏳ Signoff is still running. Please wait for it to complete.${RESET}"
     echo "   Check status at: https://github.com/sequinstream/sequin/commit/$COMMIT_SHA"
     exit 1
@@ -150,9 +136,32 @@ git push origin "$new_version"
 echo ""
 echo -e "${GREEN}Tag $new_version pushed successfully!${RESET}"
 echo ""
-echo "GitHub Actions release workflow has been triggered."
-echo "Watch progress at: https://github.com/sequinstream/sequin/actions"
-echo ""
-echo "Once complete, the release will be available at:"
-echo "  https://github.com/sequinstream/sequin/releases/tag/$new_version"
+echo "Waiting for release workflow to start..."
+sleep 5
+
+# Find and watch the release workflow run
+RUN_ID=$(gh run list --workflow=release.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+
+if [ -n "$RUN_ID" ]; then
+    echo "Watching release workflow (run $RUN_ID)..."
+    echo ""
+    gh run watch "$RUN_ID"
+    
+    # Check final status
+    RUN_STATUS=$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion')
+    echo ""
+    if [ "$RUN_STATUS" = "success" ]; then
+        echo -e "${GREEN}Release workflow completed successfully!${RESET}"
+        echo ""
+        echo "Release available at:"
+        echo "  https://github.com/sequinstream/sequin/releases/tag/$new_version"
+    else
+        echo -e "${RED}Release workflow failed with status: $RUN_STATUS${RESET}"
+        echo "Check the workflow run for details:"
+        echo "  https://github.com/sequinstream/sequin/actions/runs/$RUN_ID"
+    fi
+else
+    echo -e "${YELLOW}Could not find workflow run. Check manually:${RESET}"
+    echo "  https://github.com/sequinstream/sequin/actions"
+fi
 

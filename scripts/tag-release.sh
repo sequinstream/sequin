@@ -44,9 +44,9 @@ if [[ "$current_branch" != "main" ]]; then
     fi
 fi
 
-# Fetch latest tags
-echo "Fetching latest tags..."
-git fetch --tags
+# Fetch latest from origin (main branch and tags)
+echo "Fetching latest from origin..."
+git fetch origin main --tags
 
 # Get the latest tag
 latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
@@ -88,10 +88,40 @@ if git rev-parse "$new_version" >/dev/null 2>&1; then
     exit 1
 fi
 
+# Verify the commit has been signed off
+echo ""
+echo "Verifying commit signoff..."
+COMMIT_SHA=$(git rev-parse origin/main)
+SIGNOFF_STATUS=$(gh api \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "/repos/sequinstream/sequin/commits/$COMMIT_SHA/statuses" 2>/dev/null || echo "[]")
+
+SIGNOFF_SUCCESS=$(echo "$SIGNOFF_STATUS" | jq '[.[] | select(.context=="signoff" and .state=="success")] | length')
+SIGNOFF_PENDING=$(echo "$SIGNOFF_STATUS" | jq '[.[] | select(.context=="signoff" and .state=="pending")] | length')
+
+if [ "$SIGNOFF_SUCCESS" -gt 0 ]; then
+    echo -e "${GREEN}✓ Commit has been signed off${RESET}"
+elif [ "$SIGNOFF_PENDING" -gt 0 ]; then
+    echo -e "${YELLOW}⏳ Signoff is still running. Please wait for it to complete.${RESET}"
+    echo "   Check status at: https://github.com/sequinstream/sequin/commit/$COMMIT_SHA"
+    exit 1
+else
+    echo -e "${RED}✗ Commit has not been signed off.${RESET}"
+    echo ""
+    echo "This could mean:"
+    echo "  1. The signoff workflow hasn't started yet (wait a moment)"
+    echo "  2. The signoff workflow failed (check GitHub Actions)"
+    echo "  3. This commit was never pushed to main"
+    echo ""
+    echo "Check status at: https://github.com/sequinstream/sequin/commit/$COMMIT_SHA"
+    exit 1
+fi
+
 # Show what will happen
 echo ""
 echo -e "${CYAN}This will:${RESET}"
-echo "  1. Create tag $new_version on commit $(git rev-parse --short HEAD)"
+echo "  1. Create tag $new_version on commit $(git rev-parse --short origin/main) (origin/main)"
 echo "  2. Push the tag to GitHub"
 echo "  3. Trigger the GitHub Actions release workflow"
 echo ""
@@ -111,8 +141,8 @@ fi
 
 # Create and push the tag
 echo ""
-echo "Creating tag $new_version..."
-git tag "$new_version"
+echo "Creating tag $new_version on origin/main..."
+git tag "$new_version" origin/main
 
 echo "Pushing tag to GitHub..."
 git push origin "$new_version"

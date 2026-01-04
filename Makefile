@@ -68,17 +68,11 @@ init: ## Create .settings.json from .settings.json.example
 		echo ".settings.json already exists. No changes made."; \
 	fi
 
-release: ## Run the release script
+release: ## Create and push a release tag (triggers GitHub Actions release workflow)
+	@./scripts/tag-release.sh
+
+release-local: ## Emergency fallback: run full release locally (use only if GH Actions unavailable)
 	@./scripts/release.sh
-
-release-dirty: ## Run the release script with --dirty flag
-	@./scripts/release.sh --dirty
-
-release-gh: ## Run the release script using GitHub Actions for Docker builds
-	@./scripts/release.sh --github-actions
-
-release-dirty-gh: ## Run the release script with --dirty flag using GitHub Actions
-	@./scripts/release.sh --dirty --github-actions
 
 checkout-pr: ## Check out a PR locally: make checkout-pr pr=<pr-number>
 	@if [ -z "$(pr)" ]; then \

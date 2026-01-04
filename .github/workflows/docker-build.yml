@@ -11,6 +11,17 @@ on:
         type: boolean
         default: true
         required: false
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to build'
+        type: string
+        required: true
+      tag_as_latest:
+        description: 'Tag this version as latest'
+        type: boolean
+        default: true
+        required: false
 
 jobs:
   docker:

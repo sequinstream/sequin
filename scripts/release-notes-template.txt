@@ -62,6 +62,14 @@ Start with:
 
 - Bug fix description ([#PR_NUMBER](https://github.com/sequinstream/sequin/pull/PR_NUMBER))
 
+## Writing style
+
+- Write at a middle school reading level. Short sentences. Simple words.
+- Use active voice: "Adds support for X" not "Support for X has been added"
+- Cut filler words: no "very", "really", "actually", "basically", "simply", "just"
+- If a word adds no information, delete it
+- Lead with what changed, not why
+
 ## Rules
 
 - Use Sentence case for headings (not Title Case)
@@ -69,7 +77,6 @@ Start with:
 - Link to PRs for significant changes using format: ([#123](https://github.com/sequinstream/sequin/pull/123))
 - Link to relevant docs when a feature has documentation
 - Skip sections with no items (except breaking changes on minor bumps)
-- Be concise but informative
 - Don't include CI changes, dependency bumps, or internal refactors unless they affect users
 - If a commit message mentions "fix" or "bug", categorize under Fixed
 - If a commit adds new functionality, categorize under Added

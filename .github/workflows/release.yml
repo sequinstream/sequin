@@ -223,12 +223,22 @@ jobs:
           fi
 
       - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          echo "Claude Code installed. Version:"
+          claude --version
 
       - name: Generate release notes
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          # Verify API key is set
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ERROR: ANTHROPIC_API_KEY is not set"
+            exit 1
+          fi
+          echo "API key is set (length: ${#ANTHROPIC_API_KEY})"
+
           PREV_TAG="${{ steps.prev-tag.outputs.tag }}"
           IS_MINOR="${{ steps.prev-tag.outputs.is_minor_bump }}"
 
@@ -243,11 +253,20 @@ jobs:
 
           Generate the release notes now. Output ONLY the markdown release notes, no preamble or explanation."
 
-          # Run Claude Code with the prompt (print mode outputs to stdout)
-          claude -p "$PROMPT" > release_notes.md
+          echo "Prompt length: ${#PROMPT} characters"
+          echo "Running Claude Code..."
 
-          echo "Generated release notes:"
-          cat release_notes.md
+          # Run Claude Code - capture both stdout and stderr
+          if claude -p "$PROMPT" > release_notes.md 2>&1; then
+            echo "Success! Generated release notes:"
+            cat release_notes.md
+          else
+            EXIT_CODE=$?
+            echo "Claude Code failed with exit code $EXIT_CODE"
+            echo "Output (if any):"
+            cat release_notes.md || true
+            exit $EXIT_CODE
+          fi
 
       - name: Upload release notes
         uses: actions/upload-artifact@v4

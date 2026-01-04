@@ -71,6 +71,9 @@ init: ## Create .settings.json from .settings.json.example
 release: ## Create and push a release tag (triggers GitHub Actions release workflow)
 	@./scripts/tag-release.sh
 
+release-force: ## Create and push a release tag, skipping signoff check
+	@./scripts/tag-release.sh --no-signoff
+
 release-local: ## Emergency fallback: run full release locally (use only if GH Actions unavailable)
 	@./scripts/release.sh
 

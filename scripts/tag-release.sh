@@ -23,6 +23,16 @@ GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 RESET='\033[0m'
 
+# Parse arguments
+SKIP_SIGNOFF=false
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --no-signoff) SKIP_SIGNOFF=true ;;
+        *) echo "Unknown parameter: $1"; exit 1 ;;
+    esac
+    shift
+done
+
 # Set the working directory to the project root
 cd "$(dirname "$0")/.." || exit
 
@@ -73,62 +83,68 @@ fi
 
 # Verify the commit has been signed off (via GitHub Actions check run)
 # Polls until signoff passes, fails, or times out
-echo ""
-echo "Verifying commit signoff..."
 COMMIT_SHA=$(git rev-parse origin/main)
 COMMIT_SHORT=$(git rev-parse --short origin/main)
 
-MAX_ATTEMPTS=60  # 10 minutes max (60 * 10 seconds)
-ATTEMPT=1
+if [ "$SKIP_SIGNOFF" = true ]; then
+    echo ""
+    echo -e "${YELLOW}⚠️  Skipping signoff check (--no-signoff)${RESET}"
+else
+    echo ""
+    echo "Verifying commit signoff..."
 
-while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-    # GitHub Actions creates "check runs", not "commit statuses" - use the check-runs API
-    CHECK_RUNS=$(gh api \
-        -H "Accept: application/vnd.github+json" \
-        -H "X-GitHub-Api-Version: 2022-11-28" \
-        "/repos/sequinstream/sequin/commits/$COMMIT_SHA/check-runs" 2>/dev/null || echo '{"check_runs":[]}')
+    MAX_ATTEMPTS=60  # 10 minutes max (60 * 10 seconds)
+    ATTEMPT=1
 
-    SIGNOFF_SUCCESS=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .conclusion=="success")] | length')
-    SIGNOFF_FAILED=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .conclusion=="failure")] | length')
-    SIGNOFF_PENDING=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .status=="in_progress")] | length')
-    SIGNOFF_QUEUED=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .status=="queued")] | length')
+    while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+        # GitHub Actions creates "check runs", not "commit statuses" - use the check-runs API
+        CHECK_RUNS=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/sequinstream/sequin/commits/$COMMIT_SHA/check-runs" 2>/dev/null || echo '{"check_runs":[]}')
 
-    if [ "$SIGNOFF_SUCCESS" -gt 0 ]; then
-        echo -e "${GREEN}✓ Commit $COMMIT_SHORT has been signed off${RESET}"
-        break
-    elif [ "$SIGNOFF_FAILED" -gt 0 ]; then
-        echo -e "${RED}✗ Signoff failed for commit $COMMIT_SHORT${RESET}"
-        echo "  Check the workflow run: https://github.com/sequinstream/sequin/commit/$COMMIT_SHA"
+        SIGNOFF_SUCCESS=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .conclusion=="success")] | length')
+        SIGNOFF_FAILED=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .conclusion=="failure")] | length')
+        SIGNOFF_PENDING=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .status=="in_progress")] | length')
+        SIGNOFF_QUEUED=$(echo "$CHECK_RUNS" | jq '[.check_runs[] | select(.name=="signoff" and .status=="queued")] | length')
+
+        if [ "$SIGNOFF_SUCCESS" -gt 0 ]; then
+            echo -e "${GREEN}✓ Commit $COMMIT_SHORT has been signed off${RESET}"
+            break
+        elif [ "$SIGNOFF_FAILED" -gt 0 ]; then
+            echo -e "${RED}✗ Signoff failed for commit $COMMIT_SHORT${RESET}"
+            echo "  Check the workflow run: https://github.com/sequinstream/sequin/commit/$COMMIT_SHA"
+            exit 1
+        elif [ "$SIGNOFF_PENDING" -gt 0 ] || [ "$SIGNOFF_QUEUED" -gt 0 ]; then
+            if [ $ATTEMPT -eq 1 ]; then
+                echo -e "${YELLOW}⏳ Signoff is running for commit $COMMIT_SHORT, waiting...${RESET}"
+            fi
+            printf "."
+            sleep 10
+            ATTEMPT=$((ATTEMPT + 1))
+        else
+            # No signoff check found yet - might not have started
+            if [ $ATTEMPT -eq 1 ]; then
+                echo -e "${YELLOW}⏳ Waiting for signoff workflow to start...${RESET}"
+            fi
+            printf "."
+            sleep 10
+            ATTEMPT=$((ATTEMPT + 1))
+        fi
+    done
+
+    # Check if we exited the loop due to timeout
+    if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+        echo ""
+        echo -e "${RED}✗ Timeout waiting for signoff (10 minutes)${RESET}"
+        echo "  Check status at: https://github.com/sequinstream/sequin/commit/$COMMIT_SHA"
         exit 1
-    elif [ "$SIGNOFF_PENDING" -gt 0 ] || [ "$SIGNOFF_QUEUED" -gt 0 ]; then
-        if [ $ATTEMPT -eq 1 ]; then
-            echo -e "${YELLOW}⏳ Signoff is running for commit $COMMIT_SHORT, waiting...${RESET}"
-        fi
-        printf "."
-        sleep 10
-        ATTEMPT=$((ATTEMPT + 1))
-    else
-        # No signoff check found yet - might not have started
-        if [ $ATTEMPT -eq 1 ]; then
-            echo -e "${YELLOW}⏳ Waiting for signoff workflow to start...${RESET}"
-        fi
-        printf "."
-        sleep 10
-        ATTEMPT=$((ATTEMPT + 1))
     fi
-done
 
-# Check if we exited the loop due to timeout
-if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
-    echo ""
-    echo -e "${RED}✗ Timeout waiting for signoff (10 minutes)${RESET}"
-    echo "  Check status at: https://github.com/sequinstream/sequin/commit/$COMMIT_SHA"
-    exit 1
-fi
-
-# Add newline after dots
-if [ $ATTEMPT -gt 1 ]; then
-    echo ""
+    # Add newline after dots
+    if [ $ATTEMPT -gt 1 ]; then
+        echo ""
+    fi
 fi
 
 # Show what will happen

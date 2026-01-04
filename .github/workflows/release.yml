@@ -16,6 +16,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write  # Required to create releases and upload assets
+
 env:
   VERSION: ${{ github.ref_name }}
 
@@ -251,20 +254,26 @@ jobs:
           - Previous version: $PREV_TAG
           - Is minor version bump (breaking changes expected): $IS_MINOR
 
-          Generate the release notes now. Output ONLY the markdown release notes, no preamble or explanation."
+          Write the release notes to a file called release_notes.md in the current directory.
+          The file should contain ONLY the markdown release notes - no preamble, no explanation, no code fences.
+          Start directly with the summary sentence."
 
           echo "Prompt length: ${#PROMPT} characters"
           echo "Running Claude Code..."
 
-          # Run Claude Code - capture both stdout and stderr
-          if claude -p "$PROMPT" > release_notes.md 2>&1; then
-            echo "Success! Generated release notes:"
-            cat release_notes.md
+          # Run Claude Code - have it write directly to file
+          # --allowedTools "Write" pre-approves file writes (no interactive prompt in CI)
+          if claude -p "$PROMPT" --allowedTools "Write" 2>&1; then
+            if [ -f release_notes.md ]; then
+              echo "Success! Generated release notes:"
+              cat release_notes.md
+            else
+              echo "ERROR: release_notes.md was not created"
+              exit 1
+            fi
           else
             EXIT_CODE=$?
             echo "Claude Code failed with exit code $EXIT_CODE"
-            echo "Output (if any):"
-            cat release_notes.md || true
             exit $EXIT_CODE
           fi
 

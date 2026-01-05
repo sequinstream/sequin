@@ -965,6 +965,11 @@ defmodule Sequin.Transforms do
         "active_backfills" ->
           {:cont, {:ok, acc}}
 
+        # message_kind was deprecated in v0.10.x and removed in v0.14.x
+        # Ignore it for backwards compatibility with existing YAML configs
+        "message_kind" ->
+          {:cont, {:ok, acc}}
+
         # Ignore internal fields that might be present in the external data
         ignored when ignored in ~w(id inserted_at updated_at account_id replication_slot_id sequence_id) ->
           {:cont, {:ok, acc}}

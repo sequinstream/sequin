@@ -969,6 +969,25 @@ defmodule Sequin.YamlLoaderTest do
       assert %SequinStreamSink{} = consumer.sink
     end
 
+    test "ignores deprecated message_kind field for backwards compatibility" do
+      # message_kind was removed in v0.14.x but users may still have it in their YAML
+      # from v0.10.x when it was deprecated in the UI
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               sinks:
+                 - name: "sequin-playground-consumer"
+                   database: "test-db"
+                   message_kind: event
+                   destination:
+                     type: "sequin_stream"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.name == "sequin-playground-consumer"
+    end
+
     test "creates sink consumer with schema filter" do
       assert :ok =
                YamlLoader.apply_from_yml!("""

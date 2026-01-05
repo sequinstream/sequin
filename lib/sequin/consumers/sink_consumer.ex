@@ -66,7 +66,6 @@ defmodule Sequin.Consumers.SinkConsumer do
              :max_ack_pending,
              :max_deliver,
              :max_waiting,
-             :message_kind,
              :name,
              :updated_at,
              :status,
@@ -87,7 +86,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
     field :max_retry_count, :integer, default: nil
-    field :message_kind, Ecto.Enum, values: [:event, :record], default: :event
     field :status, Ecto.Enum, values: [:active, :disabled, :paused], default: :active
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
@@ -150,7 +148,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> cast(attrs, [
       :replication_slot_id,
       :status,
-      :message_kind,
       :max_memory_mb,
       :transform_id,
       :routing_id,
@@ -326,7 +323,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> put_change(:max_memory_mb, get_field(changeset, :max_memory_mb) || 128)
     |> put_change(:partition_count, get_field(changeset, :partition_count) || 1)
     |> put_change(:legacy_transform, get_field(changeset, :legacy_transform) || :none)
-    |> put_change(:message_kind, get_field(changeset, :message_kind) || :event)
     |> put_change(:message_grouping, message_grouping)
   end
 

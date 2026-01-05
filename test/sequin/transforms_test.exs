@@ -643,7 +643,7 @@ defmodule Sequin.TransformsTest do
     end
 
     test "functions a consumer message with changes path" do
-      message = ConsumersFactory.consumer_message(message_kind: :event)
+      message = ConsumersFactory.consumer_message()
       path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "changes"])
       consumer = %SinkConsumer{transform: path_function}
 
@@ -651,17 +651,8 @@ defmodule Sequin.TransformsTest do
       assert result == message.data.changes
     end
 
-    test "functions a consumer record .changes to null" do
-      message = ConsumersFactory.consumer_message(message_kind: :record)
-      path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "changes"])
-      consumer = %SinkConsumer{transform: path_function}
-
-      result = Transforms.Message.to_external(consumer, message)
-      assert result == nil
-    end
-
     test "functions a consumer message with action path" do
-      message = ConsumersFactory.consumer_message(message_kind: :event)
+      message = ConsumersFactory.consumer_message()
       path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "action"])
       consumer = %SinkConsumer{transform: path_function}
 
@@ -670,7 +661,7 @@ defmodule Sequin.TransformsTest do
     end
 
     test "functions a consumer message with transaction annotations path" do
-      message = ConsumersFactory.consumer_message(message_kind: :event)
+      message = ConsumersFactory.consumer_message()
       path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "metadata.transaction_annotations"])
       consumer = %SinkConsumer{transform: path_function}
 
@@ -697,7 +688,7 @@ defmodule Sequin.TransformsTest do
     end
 
     test "handles non-existent nested field gracefully" do
-      message = ConsumersFactory.consumer_message(message_kind: :record)
+      message = ConsumersFactory.consumer_message()
       path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "record.nonexistent_field"])
       consumer = %SinkConsumer{transform: path_function}
 
@@ -706,7 +697,7 @@ defmodule Sequin.TransformsTest do
     end
 
     test "handles non-existent deeply nested field gracefully" do
-      message = ConsumersFactory.consumer_message(message_kind: :record)
+      message = ConsumersFactory.consumer_message()
 
       path_function =
         FunctionsFactory.insert_path_function!(function_attrs: [path: "record.nonexistent_field.nonexistent_field"])
@@ -718,7 +709,7 @@ defmodule Sequin.TransformsTest do
     end
 
     test "handles non-existent metadata field gracefully" do
-      message = ConsumersFactory.consumer_message(message_kind: :record)
+      message = ConsumersFactory.consumer_message()
       path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "metadata.nonexistent_field"])
       consumer = %SinkConsumer{transform: path_function}
 
@@ -727,7 +718,7 @@ defmodule Sequin.TransformsTest do
     end
 
     test "handles non-existent transaction annotation field gracefully" do
-      message = ConsumersFactory.consumer_message(message_kind: :record)
+      message = ConsumersFactory.consumer_message()
 
       path_function =
         FunctionsFactory.insert_path_function!(
@@ -741,7 +732,7 @@ defmodule Sequin.TransformsTest do
     end
 
     test "handles non-existent sink field gracefully" do
-      message = ConsumersFactory.consumer_message(message_kind: :record)
+      message = ConsumersFactory.consumer_message()
       path_function = FunctionsFactory.insert_path_function!(function_attrs: [path: "metadata.sink.nonexistent_field"])
       consumer = %SinkConsumer{transform: path_function}
 
@@ -752,7 +743,7 @@ defmodule Sequin.TransformsTest do
 
   describe "transform function" do
     test "fails for unsaved function" do
-      message = ConsumersFactory.consumer_message(message_kind: :event)
+      message = ConsumersFactory.consumer_message()
 
       transform =
         FunctionsFactory.insert_transform_function!(function_attrs: [body: ~s(%{it: record["column"]})])
@@ -808,7 +799,7 @@ defmodule Sequin.TransformsTest do
                )
 
       consumer = %SinkConsumer{transform: xf}
-      message = ConsumersFactory.consumer_message(message_kind: :event)
+      message = ConsumersFactory.consumer_message()
       result = Transforms.Message.to_external(consumer, message)
       assert 1 == result
     end
@@ -827,7 +818,7 @@ defmodule Sequin.TransformsTest do
                )
 
       consumer = %SinkConsumer{transform: xf}
-      message = ConsumersFactory.consumer_message(message_kind: :event)
+      message = ConsumersFactory.consumer_message()
 
       ex =
         assert_raise Sequin.Error.ServiceError, fn ->
@@ -850,7 +841,7 @@ defmodule Sequin.TransformsTest do
                )
 
       consumer = %SinkConsumer{transform: xf}
-      message = ConsumersFactory.consumer_message(message_kind: :event)
+      message = ConsumersFactory.consumer_message()
       result = Transforms.Message.to_external(consumer, message)
       assert %{"test" => true} == result
     end

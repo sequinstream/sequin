@@ -33,13 +33,7 @@ defmodule Sequin.Changeset do
   end
 
   def cast_embed(%Ecto.Changeset{} = changeset, :source_tables) do
-    case get_field(changeset, :message_kind) do
-      :record ->
-        cast_embed(changeset, :source_tables, with: &SourceTable.record_changeset(&1, &2))
-
-      :event ->
-        cast_embed(changeset, :source_tables, with: &SourceTable.event_changeset(&1, &2))
-    end
+    cast_embed(changeset, :source_tables, with: &SourceTable.event_changeset(&1, &2))
   end
 
   # See: https://github.com/sequinstream/sequin/issues/1465

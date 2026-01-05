@@ -24,7 +24,6 @@ defmodule Sequin.Runtime.AzureEventHubPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :azure_event_hub,
-          message_kind: :event,
           transform_id: transform.id
         )
 
@@ -37,12 +36,7 @@ defmodule Sequin.Runtime.AzureEventHubPipelineTest do
       message =
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
-          data:
-            ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
-              action: :insert
-            )
+          data: ConsumersFactory.consumer_message_data(action: :insert)
         )
 
       adapter = fn request ->
@@ -71,12 +65,7 @@ defmodule Sequin.Runtime.AzureEventHubPipelineTest do
         for _ <- 1..3 do
           ConsumersFactory.insert_consumer_message!(
             consumer_id: consumer.id,
-            message_kind: consumer.message_kind,
-            data:
-              ConsumersFactory.consumer_message_data(
-                message_kind: consumer.message_kind,
-                action: :insert
-              )
+            data: ConsumersFactory.consumer_message_data(action: :insert)
           )
         end
 
@@ -130,7 +119,6 @@ defmodule Sequin.Runtime.AzureEventHubPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :azure_event_hub,
-          message_kind: :event,
           transform_id: transform.id,
           routing_mode: "dynamic",
           routing_id: routing.id
@@ -145,10 +133,8 @@ defmodule Sequin.Runtime.AzureEventHubPipelineTest do
       message =
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           data:
             ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
               action: :insert,
               record: %{"type" => "notification"}
             )
@@ -178,20 +164,16 @@ defmodule Sequin.Runtime.AzureEventHubPipelineTest do
       messages = [
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           data:
             ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
               action: :insert,
               record: %{"type" => "notification"}
             )
         ),
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           data:
             ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
               action: :insert,
               record: %{"type" => "other"}
             )

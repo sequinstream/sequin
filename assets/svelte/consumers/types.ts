@@ -29,7 +29,6 @@ export type BaseConsumer = {
   name: string;
   annotations: Record<string, boolean>;
   status: "active" | "paused" | "disabled";
-  message_kind: string;
   message_grouping: boolean;
   ack_wait_ms: number;
   max_ack_pending: number;

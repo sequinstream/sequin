@@ -71,7 +71,7 @@ defmodule Sequin.Runtime.KinesisPipeline do
 
   @spec build_kinesis_record(
           SinkConsumer.t(),
-          Sequin.Consumers.ConsumerEvent.t() | Sequin.Consumers.ConsumerRecord.t()
+          Sequin.Consumers.ConsumerEvent.t()
         ) :: map()
   defp build_kinesis_record(consumer, message) do
     consumer_data = message.data

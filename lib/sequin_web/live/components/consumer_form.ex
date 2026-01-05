@@ -706,7 +706,6 @@ defmodule SequinWeb.Components.ConsumerForm do
         "max_waiting" => form["maxWaiting"],
         "max_memory_mb" => form["maxMemoryMb"],
         "max_retry_count" => form["maxRetryCount"],
-        "message_kind" => form["messageKind"],
         "message_grouping" => form["messageGrouping"],
         "name" => form["name"],
         "postgres_database_id" => form["postgresDatabaseId"],
@@ -991,7 +990,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       "max_deliver" => consumer.max_deliver,
       "max_waiting" => consumer.max_waiting,
       "max_retry_count" => consumer.max_retry_count,
-      "message_kind" => consumer.message_kind,
       "message_grouping" => consumer.message_grouping,
       "postgres_database_id" => postgres_database_id,
       "sink" => encode_sink(consumer.sink),
@@ -1327,7 +1325,6 @@ defmodule SequinWeb.Components.ConsumerForm do
           distinct_id: socket.assigns.current_user.id,
           properties: %{
             consumer_type: consumer.type,
-            stream_type: consumer.message_kind,
             consumer_id: consumer.id,
             consumer_name: consumer.name,
             "$groups": %{account: consumer.account_id}

@@ -23,7 +23,7 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
     end
 
     test "events are sent to PubSub", %{consumer: consumer} do
-      message = ConsumersFactory.consumer_message(message_kind: consumer.message_kind)
+      message = ConsumersFactory.consumer_message()
 
       # Mock PubSub publish
       Req.Test.expect(PubSub, fn conn ->
@@ -131,7 +131,7 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
 
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{routing_id: router.id, routing_mode: "dynamic"})
 
-      message = ConsumersFactory.consumer_message(message_kind: consumer.message_kind)
+      message = ConsumersFactory.consumer_message()
 
       # Mock PubSub publish and verify topic
       Req.Test.expect(PubSub, fn conn ->

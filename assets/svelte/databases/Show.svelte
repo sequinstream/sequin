@@ -29,7 +29,6 @@
   interface Consumer {
     id: string;
     name: string;
-    message_kind: string;
     consumer_kind: string;
     source_tables: Table[];
     href: string;

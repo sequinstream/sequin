@@ -10,7 +10,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
@@ -828,7 +827,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       kind: :push,
       type: consumer.type,
       status: consumer.status,
-      message_kind: consumer.message_kind,
       message_grouping: consumer.message_grouping,
       ack_wait_ms: consumer.ack_wait_ms,
       max_ack_pending: consumer.max_ack_pending,
@@ -975,12 +973,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_sink(%SinkConsumer{sink: %RabbitMqSink{} = sink} = consumer) do
     database_name = consumer.postgres_database.name
 
-    topic =
-      if consumer.message_kind == :event do
-        "sequin.changes.#{database_name}.{table-schema}.{table-name}.{action}"
-      else
-        "sequin.rows.#{database_name}.{table-schema}.{table-name}"
-      end
+    topic = "sequin.changes.#{database_name}.{table-schema}.{table-name}.{action}"
 
     %{
       type: :rabbitmq,
@@ -1253,31 +1246,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     routing_info = maybe_routing_info(consumer, message)
 
     case message do
-      %ConsumerRecord{} = message ->
-        %{
-          id: message.id,
-          type: "record",
-          consumer_id: message.consumer_id,
-          ack_id: message.ack_id,
-          commit_lsn: message.commit_lsn,
-          commit_timestamp: get_commit_timestamp(message),
-          data: message.data,
-          deliver_count: message.deliver_count,
-          inserted_at: message.inserted_at,
-          last_delivered_at: message.last_delivered_at,
-          not_visible_until: message.not_visible_until,
-          record_pks: message.record_pks,
-          seq: message.commit_lsn + message.commit_idx,
-          state: state,
-          state_color: get_message_state_color(consumer, state),
-          table_name: get_table_name(message, table_lookups),
-          table_schema: get_table_schema(message, table_lookups),
-          table_oid: message.table_oid,
-          trace_id: message.replication_message_trace_id,
-          functioned_message: maybe_function_message(consumer, message),
-          routing_info: routing_info
-        }
-
       %ConsumerEvent{} = message ->
         %{
           id: message.id,

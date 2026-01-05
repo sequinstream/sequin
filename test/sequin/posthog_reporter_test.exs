@@ -119,7 +119,6 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
           consumer_id: "consumer1",
           consumer_name: "test_consumer",
           message_count: 5,
-          message_kind: :event,
           "$groups": %{account: "account1"}
         }
       }
@@ -134,7 +133,6 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
           consumer_id: "consumer1",
           consumer_name: "test_consumer",
           message_count: 3,
-          message_kind: :event,
           "$groups": %{account: "account1"}
         }
       }
@@ -150,7 +148,6 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
           consumer_id: "consumer1",
           consumer_name: "test_consumer",
           message_count: 2,
-          message_kind: :event,
           "$groups": %{account: "account1"}
         }
       }
@@ -165,7 +162,6 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
           consumer_id: "consumer1",
           consumer_name: "test_consumer",
           message_count: 3,
-          message_kind: :event,
           "$groups": %{account: "account1"}
         }
       }

@@ -16,7 +16,7 @@ defmodule Sequin.Runtime.KafkaPipelineTest do
     end
 
     test "events are sent to Kafka", %{consumer: consumer} do
-      message = ConsumersFactory.consumer_message(message_kind: consumer.message_kind)
+      message = ConsumersFactory.consumer_message()
 
       # Mock Kafka partition count lookup
       KafkaMock
@@ -65,7 +65,7 @@ defmodule Sequin.Runtime.KafkaPipelineTest do
     test "messages are partitioned consistently based on message key", %{consumer: consumer} do
       partition_assignments = :ets.new(:partition_assignments, [:set, :public])
 
-      message = ConsumersFactory.consumer_message(message_kind: consumer.message_kind)
+      message = ConsumersFactory.consumer_message()
 
       # Mock Kafka partition count lookup and capture partition assignments
       KafkaMock
@@ -104,7 +104,7 @@ defmodule Sequin.Runtime.KafkaPipelineTest do
 
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{routing_id: router.id, routing_mode: "dynamic"})
 
-      message = ConsumersFactory.consumer_message(message_kind: consumer.message_kind)
+      message = ConsumersFactory.consumer_message()
 
       # Mock Kafka partition count lookup and capture partition assignments
       KafkaMock

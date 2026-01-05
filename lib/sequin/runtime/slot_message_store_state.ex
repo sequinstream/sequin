@@ -3,7 +3,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   use TypedStruct
 
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.DebouncedLogger
   alias Sequin.Error
@@ -13,7 +12,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
 
   require Logger
 
-  @type message :: ConsumerRecord.t() | ConsumerEvent.t()
+  @type message :: ConsumerEvent.t()
   @type cursor_tuple :: {commit_lsn :: non_neg_integer(), commit_idx :: non_neg_integer()}
 
   @default_setting_max_messages 50_000
@@ -511,10 +510,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       nil -> {:error, Error.not_found(entity: :message, params: %{ack_id: ack_id})}
       cursor_tuple -> {:ok, Map.get(state.messages, cursor_tuple)}
     end
-  end
-
-  defp drop_message_data(%ConsumerRecord{} = message) do
-    %{message | data: nil}
   end
 
   defp drop_message_data(%ConsumerEvent{} = message) do

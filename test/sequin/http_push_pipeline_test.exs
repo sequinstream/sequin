@@ -5,7 +5,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.ConsumerEventData.Metadata.Sink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory
@@ -33,7 +33,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           account_id: account.id,
           type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id, batch: batch},
-          message_kind: :event,
           legacy_transform: ctx[:legacy_transform] || :none
         )
 
@@ -446,7 +445,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           replication_slot_id: replication.id,
-          message_kind: :event,
           legacy_transform: ctx[:legacy_transform] || :none
         )
 
@@ -486,7 +484,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
                 table_name: "users",
                 commit_timestamp: DateTime.utc_now(),
                 commit_lsn: Factory.unique_integer(),
-                consumer: %ConsumerEventData.Metadata.Sink{
+                consumer: %Sink{
                   id: consumer.id,
                   name: consumer.name
                 },
@@ -680,7 +678,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
     end
   end
 
-  describe "messages flow from SlotMessageStore to http end-to-end for message_kind=record" do
+  describe "messages flow from SlotMessageStore to http end-to-end with different transforms" do
     setup ctx do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
@@ -699,7 +697,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           replication_slot_id: replication.id,
           postgres_database: database,
-          message_kind: :record,
           legacy_transform: ctx[:legacy_transform] || :none
         )
 
@@ -724,21 +721,21 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       # Insert a consumer record referencing the character
       consumer_record =
-        ConsumersFactory.consumer_record(
+        ConsumersFactory.consumer_event(
           consumer_id: consumer.id,
           record_pks: [character.id],
           table_oid: CharacterDetailed.table_oid(),
           state: :available,
-          data: %ConsumerRecordData{
+          data: %ConsumerEventData{
             record: %{name: "character_name"},
-            metadata: %ConsumerRecordData.Metadata{
+            metadata: %ConsumerEventData.Metadata{
               database_name: "postgres",
               table_schema: "public",
               table_name: "characters_detailed",
               commit_timestamp: DateTime.utc_now(),
               commit_lsn: Factory.unique_integer(),
               idempotency_key: Ecto.UUID.generate(),
-              consumer: %ConsumerRecordData.Metadata.Sink{
+              consumer: %Sink{
                 id: consumer.id,
                 name: consumer.name
               }
@@ -792,14 +789,14 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
 
       # Insert a consumer record referencing the character
       consumer_record =
-        ConsumersFactory.consumer_record(
+        ConsumersFactory.consumer_event(
           consumer_id: consumer.id,
           record_pks: [character.id],
           table_oid: CharacterDetailed.table_oid(),
           state: :available,
-          data: %ConsumerRecordData{
+          data: %ConsumerEventData{
             record: %{name: "character_name"},
-            metadata: %ConsumerRecordData.Metadata{
+            metadata: %ConsumerEventData.Metadata{
               database_name: "postgres",
               table_schema: "public",
               table_name: "characters_detailed",
@@ -849,7 +846,6 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
           account_id: account.id,
           type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
-          message_kind: :event,
           timestamp_format: :unix_microsecond,
           legacy_transform: :none
         )
@@ -938,8 +934,7 @@ defmodule Sequin.Runtime.HttpPushPipelineTest do
             http_endpoint_id: http_endpoint.id,
             batch: false,
             via_sqs: true
-          },
-          message_kind: :event
+          }
         )
 
       assert consumer.sink.via_sqs == true

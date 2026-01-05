@@ -39,7 +39,6 @@ defmodule Sequin.Runtime.SlotMessageStore do
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -162,7 +161,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   Should raise so SlotProcessorServer cannot continue if this fails.
   """
-  @spec put_messages(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok | {:error, Error.t()}
+  @spec put_messages(SinkConsumer.t(), list(ConsumerEvent.t())) :: :ok | {:error, Error.t()}
   def put_messages(consumer, messages) do
     messages
     |> Enum.group_by(&message_partition(&1, consumer.partition_count))
@@ -182,7 +181,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
 
   Should raise so TableReaderServer cannot continue if this fails.
   """
-  @spec put_table_reader_batch(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t()), TableReader.batch_id()) ::
+  @spec put_table_reader_batch(SinkConsumer.t(), list(ConsumerEvent.t()), TableReader.batch_id()) ::
           :ok | {:error, Error.t()}
   def put_table_reader_batch(consumer, messages, batch_id) do
     messages
@@ -369,7 +368,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @spec reset_message_visibilities(SinkConsumer.t(), list(SinkConsumer.ack_id())) ::
-          {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())} | {:error, Exception.t()}
+          {:ok, list(ConsumerEvent.t())} | {:error, Exception.t()}
   def reset_message_visibilities(consumer, ack_ids) do
     consumer
     |> partitions()
@@ -483,7 +482,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
   end
 
   @spec peek_messages(SinkConsumer.t(), pos_integer()) ::
-          list(ConsumerRecord.t() | ConsumerEvent.t()) | {:error, Exception.t()}
+          list(ConsumerEvent.t()) | {:error, Exception.t()}
   def peek_messages(consumer, count) when is_integer(count) do
     consumer
     |> partitions()
@@ -515,7 +514,7 @@ defmodule Sequin.Runtime.SlotMessageStore do
     - `order`: `:asc` (oldest first, default) or `:desc` (newest first)
   """
   @spec peek_messages_metadata(SinkConsumer.t(), pos_integer(), keyword()) ::
-          list(ConsumerRecord.t() | ConsumerEvent.t()) | {:error, Exception.t()}
+          list(ConsumerEvent.t()) | {:error, Exception.t()}
   def peek_messages_metadata(consumer, count, opts \\ []) when is_integer(count) do
     order = Keyword.get(opts, :order, :asc)
 

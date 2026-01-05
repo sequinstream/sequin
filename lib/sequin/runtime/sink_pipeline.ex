@@ -14,8 +14,6 @@ defmodule Sequin.Runtime.SinkPipeline do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.Source
@@ -257,7 +255,6 @@ defmodule Sequin.Runtime.SinkPipeline do
     to_deliver
     |> Stream.map(fn
       %Broadway.Message{data: %ConsumerEvent{ingested_at: ingested_at}} -> ingested_at
-      %Broadway.Message{data: %ConsumerRecord{ingested_at: ingested_at}} -> ingested_at
     end)
     |> Stream.filter(& &1)
     |> Stream.map(&DateTime.diff(now, &1, :microsecond))
@@ -535,10 +532,6 @@ defmodule Sequin.Runtime.SinkPipeline do
       |> Stream.reject(fn
         # We don't enforce idempotency for read actions
         %ConsumerEvent{data: %ConsumerEventData{action: :read}} -> true
-        %ConsumerRecord{data: %ConsumerRecordData{action: :read}} -> true
-        # We only recently added :action to ConsumerRecordData, so we need to ignore
-        # any messages that don't have it for backwards compatibility
-        %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
         _ -> false
       end)
       |> Enum.map(fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
@@ -594,22 +587,20 @@ defmodule Sequin.Runtime.SinkPipeline do
   end
 
   # Formats timestamps according to the consumer's timestamp_format setting
-  defp format_timestamps(%{data: %struct{} = event_or_record} = message, %SinkConsumer{} = consumer)
-       when struct in [ConsumerEvent, ConsumerRecord] do
-    %{message | data: %{event_or_record | data: format_timestamps(event_or_record.data, consumer)}}
+  defp format_timestamps(%{data: %ConsumerEvent{} = event} = message, %SinkConsumer{} = consumer) do
+    %{message | data: %{event | data: format_timestamps(event.data, consumer)}}
   end
 
-  defp format_timestamps(%struct{} = event_or_record_data, %SinkConsumer{} = consumer)
-       when struct in [ConsumerEventData, ConsumerRecordData] do
+  defp format_timestamps(%ConsumerEventData{} = event_data, %SinkConsumer{} = consumer) do
     case consumer.timestamp_format do
       :unix_microsecond ->
-        record = format_timestamps_to_unix(event_or_record_data.record, :microsecond)
-        changes = format_timestamps_to_unix(event_or_record_data.changes, :microsecond)
-        %{event_or_record_data | record: record, changes: changes}
+        record = format_timestamps_to_unix(event_data.record, :microsecond)
+        changes = format_timestamps_to_unix(event_data.changes, :microsecond)
+        %{event_data | record: record, changes: changes}
 
       # Keep as ISO8601 (default)
       _iso8601 ->
-        event_or_record_data
+        event_data
     end
   end
 

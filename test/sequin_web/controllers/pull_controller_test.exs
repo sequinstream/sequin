@@ -25,7 +25,6 @@ defmodule SequinWeb.PullControllerTest do
 
     consumer =
       ConsumersFactory.insert_sink_consumer!(
-        message_kind: :record,
         account_id: account.id,
         backfill_completed_at: @one_day_ago,
         replication_slot_id: rep_slot.id,
@@ -35,7 +34,6 @@ defmodule SequinWeb.PullControllerTest do
 
     other_consumer =
       ConsumersFactory.insert_sink_consumer!(
-        message_kind: :record,
         account_id: other_account.id,
         sink: %{type: :sequin_stream},
         legacy_transform: ctx[:legacy_transform] || :none
@@ -66,10 +64,10 @@ defmodule SequinWeb.PullControllerTest do
       conn: conn,
       consumer: consumer
     } do
-      record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+      record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
 
       delivered_record =
-        ConsumersFactory.consumer_record(
+        ConsumersFactory.consumer_event(
           consumer_id: consumer.id,
           not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
         )
@@ -86,10 +84,10 @@ defmodule SequinWeb.PullControllerTest do
       conn: conn,
       consumer: consumer
     } do
-      record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+      record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
 
       delivered_record =
-        ConsumersFactory.consumer_record(
+        ConsumersFactory.consumer_event(
           consumer_id: consumer.id,
           not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
         )
@@ -102,7 +100,7 @@ defmodule SequinWeb.PullControllerTest do
     end
 
     test "returns an available message by consumer name", %{conn: conn, consumer: consumer} do
-      record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+      record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
       expect_uuid4(fn -> record.ack_id end)
       SlotMessageStore.put_messages(consumer, [record])
 
@@ -113,7 +111,7 @@ defmodule SequinWeb.PullControllerTest do
 
     test "respects batch_size parameter", %{conn: conn, consumer: consumer} do
       for _ <- 1..3 do
-        record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+        record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
         SlotMessageStore.put_messages(consumer, [record])
       end
 
@@ -147,7 +145,6 @@ defmodule SequinWeb.PullControllerTest do
       # Create consumer with enrichment
       consumer =
         ConsumersFactory.insert_sink_consumer!(
-          message_kind: :record,
           account_id: account.id,
           backfill_completed_at: DateTime.add(DateTime.utc_now(), -24, :hour),
           replication_slot_id: rep_slot.id,
@@ -161,15 +158,15 @@ defmodule SequinWeb.PullControllerTest do
       start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
       # Create a message for the character
-      record =
-        ConsumersFactory.deliverable_consumer_record(
+      event =
+        ConsumersFactory.deliverable_consumer_event(
           consumer_id: consumer.id,
           table_oid: Character.table_oid(),
           record_pks: [character.id],
-          data: ConsumersFactory.consumer_record_data(record: %{"id" => character.id, "name" => character.name})
+          data: ConsumersFactory.consumer_event_data(record: %{"id" => character.id, "name" => character.name})
         )
 
-      SlotMessageStore.put_messages(consumer, [record])
+      SlotMessageStore.put_messages(consumer, [event])
 
       # Fetch the message and verify enrichment
       conn = get(conn, ~p"/api/sequin_streams/#{consumer.id}/receive")
@@ -185,7 +182,7 @@ defmodule SequinWeb.PullControllerTest do
 
   describe "receive, wait_for behavior" do
     test "returns immediately when messages are available", %{conn: conn, consumer: consumer} do
-      record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+      record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
       SlotMessageStore.put_messages(consumer, [record])
 
       assert_elapsed_under(100, fn ->
@@ -208,7 +205,7 @@ defmodule SequinWeb.PullControllerTest do
       Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
         # Wait briefly then insert a message
         Process.sleep(10)
-        record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+        record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
         SlotMessageStore.put_messages(consumer, [record])
       end)
 
@@ -223,7 +220,7 @@ defmodule SequinWeb.PullControllerTest do
     test "returns immediately when full batch is available", %{conn: conn, consumer: consumer} do
       # Insert 3 messages
       for _ <- 1..3 do
-        record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+        record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
         SlotMessageStore.put_messages(consumer, [record])
       end
 
@@ -236,7 +233,7 @@ defmodule SequinWeb.PullControllerTest do
 
     test "returns partial batch if any available", %{conn: conn, consumer: consumer} do
       # Insert just 1 message when max_batch_size is 3
-      record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+      record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
       SlotMessageStore.put_messages(consumer, [record])
 
       assert_elapsed_under(100, fn ->
@@ -249,7 +246,7 @@ defmodule SequinWeb.PullControllerTest do
     test "returns as soon as any messages are available during wait", %{conn: conn, consumer: consumer} do
       Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
         Process.sleep(10)
-        record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+        record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
         SlotMessageStore.put_messages(consumer, [record])
       end)
 
@@ -262,7 +259,7 @@ defmodule SequinWeb.PullControllerTest do
 
     test "supports legacy batch_size parameter for backwards compatibility", %{conn: conn, consumer: consumer} do
       for _ <- 1..3 do
-        record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+        record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
         SlotMessageStore.put_messages(consumer, [record])
       end
 
@@ -294,7 +291,7 @@ defmodule SequinWeb.PullControllerTest do
 
   describe "ack" do
     test "successfully acks a message", %{conn: conn, consumer: consumer} do
-      record = ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+      record = ConsumersFactory.insert_deliverable_consumer_event!(consumer_id: consumer.id)
 
       res_conn = post(conn, ~p"/api/sequin_streams/#{consumer.id}/ack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
@@ -308,14 +305,14 @@ defmodule SequinWeb.PullControllerTest do
     end
 
     test "successfully acks a message by consumer name", %{conn: conn, consumer: consumer} do
-      record = ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+      record = ConsumersFactory.insert_deliverable_consumer_event!(consumer_id: consumer.id)
 
       res_conn = post(conn, ~p"/api/sequin_streams/#{consumer.name}/ack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
     end
 
     test "allows acking a message twice", %{conn: conn, consumer: consumer} do
-      record = ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+      record = ConsumersFactory.insert_deliverable_consumer_event!(consumer_id: consumer.id)
 
       res_conn = post(conn, ~p"/api/sequin_streams/#{consumer.id}/ack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
@@ -328,7 +325,7 @@ defmodule SequinWeb.PullControllerTest do
       conn: conn,
       other_consumer: other_consumer
     } do
-      record = ConsumersFactory.insert_consumer_record!(consumer_id: other_consumer.id, source_record: :character)
+      record = ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id)
 
       conn = post(conn, ~p"/api/sequin_streams/#{other_consumer.id}/ack", ack_ids: [record.ack_id])
       assert json_response(conn, 404)
@@ -337,7 +334,7 @@ defmodule SequinWeb.PullControllerTest do
 
   describe "nack" do
     test "successfully nacks a message", %{conn: conn, consumer: consumer} do
-      record = ConsumersFactory.consumer_record(consumer_id: consumer.id)
+      record = ConsumersFactory.consumer_event(consumer_id: consumer.id)
       expect_uuid4(fn -> record.ack_id end)
       SlotMessageStore.put_messages(consumer, [record])
 
@@ -350,14 +347,14 @@ defmodule SequinWeb.PullControllerTest do
     end
 
     test "successfully nacks a message by consumer name", %{conn: conn, consumer: consumer} do
-      record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, source_record: :character)
+      record = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
 
       res_conn = post(conn, ~p"/api/sequin_streams/#{consumer.name}/nack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
     end
 
     test "allows nacking a message twice", %{conn: conn, consumer: consumer} do
-      record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, source_record: :character)
+      record = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
 
       res_conn = post(conn, ~p"/api/sequin_streams/#{consumer.id}/nack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
@@ -370,7 +367,7 @@ defmodule SequinWeb.PullControllerTest do
       conn: conn,
       other_consumer: other_consumer
     } do
-      record = ConsumersFactory.insert_consumer_record!(consumer_id: other_consumer.id, source_record: :character)
+      record = ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id)
 
       conn = post(conn, ~p"/api/sequin_streams/#{other_consumer.id}/nack", ack_ids: [record.ack_id])
       assert json_response(conn, 404)

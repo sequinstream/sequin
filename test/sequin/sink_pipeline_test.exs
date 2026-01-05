@@ -23,10 +23,7 @@ defmodule Sequin.SinkPipelineTest do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
       message =
-        ConsumersFactory.insert_consumer_message!(
-          consumer_id: consumer.id,
-          message_kind: consumer.message_kind
-        )
+        ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id)
 
       start_pipeline!(consumer)
 
@@ -47,10 +44,7 @@ defmodule Sequin.SinkPipelineTest do
       consumer = ConsumersFactory.insert_sink_consumer!(filter_id: filter_function.id)
 
       message =
-        ConsumersFactory.insert_consumer_message!(
-          consumer_id: consumer.id,
-          message_kind: consumer.message_kind
-        )
+        ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id)
 
       start_pipeline!(consumer)
 
@@ -72,10 +66,7 @@ defmodule Sequin.SinkPipelineTest do
       consumer = ConsumersFactory.insert_sink_consumer!(filter_id: filter_function.id)
 
       message =
-        ConsumersFactory.insert_consumer_message!(
-          consumer_id: consumer.id,
-          message_kind: consumer.message_kind
-        )
+        ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id)
 
       start_pipeline!(consumer)
 
@@ -101,10 +92,7 @@ defmodule Sequin.SinkPipelineTest do
       consumer = ConsumersFactory.insert_sink_consumer!(filter_id: filter_function.id)
 
       message =
-        ConsumersFactory.insert_consumer_message!(
-          consumer_id: consumer.id,
-          message_kind: consumer.message_kind
-        )
+        ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id)
 
       start_pipeline!(consumer)
 

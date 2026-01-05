@@ -25,7 +25,6 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :meilisearch,
-          message_kind: :record,
           sink: %{
             primary_key: "id",
             index_name: "test"
@@ -214,9 +213,9 @@ defmodule Sequin.Runtime.MeilisearchPipelineTest do
 
     events =
       for record <- records do
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record, action: :insert))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record, action: :insert))
       end
 
     {

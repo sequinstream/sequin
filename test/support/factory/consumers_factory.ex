@@ -7,8 +7,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
@@ -30,15 +28,11 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.TypesenseSink
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
-  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
   alias Sequin.Sinks.Gcp
-  alias Sequin.TestSupport.Models.Character
-  alias Sequin.TestSupport.Models.CharacterDetailed
-  alias Sequin.TestSupport.Models.TestEventLog
 
   def sink_consumer_type do
     Enum.random(Consumers.SinkConsumer.types())
@@ -78,8 +72,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         ).id
       end)
 
-    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
-
     merge_attributes(
       %SinkConsumer{
         id: Factory.uuid(),
@@ -93,7 +85,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
         max_memory_mb: Enum.random(128..1024),
-        message_kind: message_kind,
         name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,
         partition_count: Enum.random(1..10),
@@ -567,7 +558,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs = Map.new(attrs)
 
     {consumer_id, attrs} =
-      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_sink_consumer!(message_kind: :event).id end)
+      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_sink_consumer!().id end)
 
     attrs
     |> Map.put(:consumer_id, consumer_id)
@@ -577,13 +568,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   end
 
   def deliverable_consumer_message(attrs \\ []) do
-    attrs = Map.new(attrs)
-    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
-
-    case message_kind do
-      :event -> deliverable_consumer_event(attrs)
-      :record -> deliverable_consumer_record(attrs)
-    end
+    deliverable_consumer_event(attrs)
   end
 
   def deliverable_consumer_event(attrs \\ []) do
@@ -600,204 +585,24 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> insert_consumer_event!()
   end
 
-  # ConsumerRecord
-  def consumer_record(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    state = Map.get_lazy(attrs, :state, fn -> Enum.random([:available, :acked, :delivered, :pending_redelivery]) end)
-    not_visible_until = if state == :available, do: nil, else: Factory.timestamp()
-
-    {record_pks, attrs} = Map.pop_lazy(attrs, :record_pks, fn -> [Faker.UUID.v4()] end)
-    record_pks = Enum.map(record_pks, &to_string/1)
-
-    merge_attributes(
-      %ConsumerRecord{
-        ack_id: Factory.uuid(),
-        commit_lsn: Factory.unique_integer(),
-        commit_idx: Enum.random(0..100),
-        consumer_id: Factory.uuid(),
-        data: consumer_record_data(),
-        deliver_count: Enum.random(0..10),
-        group_id: Enum.join(record_pks, ","),
-        last_delivered_at: Factory.timestamp(),
-        not_visible_until: not_visible_until,
-        record_pks: record_pks,
-        replication_message_trace_id: Factory.uuid(),
-        payload_size_bytes: Enum.random(1..1000),
-        state: state,
-        ingested_at: Factory.timestamp(),
-        table_oid: Enum.random(1..100_000)
-      },
-      attrs
-    )
-  end
-
-  def consumer_record_attrs(attrs \\ []) do
-    attrs
-    |> Map.new()
-    |> consumer_record()
-    |> Map.update!(:data, fn
-      data when is_struct(data) ->
-        data
-        |> Map.from_struct()
-        |> consumer_record_data_attrs()
-
-      data when is_map(data) ->
-        consumer_record_data_attrs(data)
-    end)
-    |> Sequin.Map.from_ecto()
-  end
-
-  def deliverable_consumer_record(attrs \\ []) do
-    attrs
-    |> Map.new()
-    |> Map.merge(%{state: :available, not_visible_until: nil})
-    |> consumer_record()
-  end
-
-  def insert_deliverable_consumer_record!(attrs \\ []) do
-    attrs
-    |> Map.new()
-    |> Map.merge(%{state: :available, not_visible_until: nil})
-    |> insert_consumer_record!()
-  end
-
-  def insert_consumer_record!(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {source_record, attrs} = Map.pop(attrs, :source_record)
-
-    attrs =
-      case source_record do
-        %Character{} = character ->
-          Map.merge(attrs, %{record_pks: Character.record_pks(character), table_oid: Character.table_oid()})
-
-        %CharacterDetailed{} = character_detailed ->
-          Map.merge(attrs, %{
-            record_pks: CharacterDetailed.record_pks(character_detailed),
-            table_oid: CharacterDetailed.table_oid()
-          })
-
-        %TestEventLog{} = event_log ->
-          Map.merge(attrs, %{
-            record_pks: TestEventLog.record_pks(event_log),
-            table_oid: TestEventLog.table_oid()
-          })
-
-        # Feel free to add more source record types here
-        # Or, accept a struct instead of an atom
-        :character ->
-          character = CharacterFactory.insert_character!(%{}, repo: Sequin.Repo)
-          Map.merge(attrs, %{record_pks: Character.record_pks(character), table_oid: Character.table_oid()})
-
-        :character_detailed ->
-          character_detailed = CharacterFactory.insert_character_detailed!(%{}, repo: Sequin.Repo)
-
-          Map.merge(attrs, %{
-            record_pks: CharacterDetailed.record_pks(character_detailed),
-            table_oid: CharacterDetailed.table_oid()
-          })
-
-        nil ->
-          attrs
-      end
-
-    {consumer_id, attrs} =
-      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_sink_consumer!(message_kind: :record).id end)
-
-    attrs
-    |> Map.put(:consumer_id, consumer_id)
-    |> consumer_record_attrs()
-    |> then(&ConsumerRecord.create_changeset(%ConsumerRecord{}, &1))
-    |> Repo.insert!()
-  end
-
-  # ConsumerRecordData
-  def consumer_record_data(attrs \\ []) do
-    merge_attributes(
-      %ConsumerRecordData{
-        record: %{"column" => Factory.word()},
-        action: Enum.random([:insert, :update, :delete]),
-        metadata: %ConsumerRecordData.Metadata{
-          database_name: Factory.postgres_object(),
-          table_schema: Factory.postgres_object(),
-          table_name: Factory.postgres_object(),
-          commit_timestamp: Factory.timestamp(),
-          commit_lsn: Factory.unique_integer(),
-          record_pks: [Factory.uuid()],
-          consumer: %ConsumerRecordData.Metadata.Sink{
-            id: Factory.uuid(),
-            name: Factory.word(),
-            annotations: %{}
-          }
-        }
-      },
-      attrs
-    )
-  end
-
-  def consumer_record_data_attrs(attrs \\ []) do
-    attrs
-    |> Map.new()
-    |> consumer_record_data()
-    |> Sequin.Map.from_ecto(keep_nils: true)
-    |> Map.update!(:metadata, fn metadata ->
-      metadata
-      |> Sequin.Map.from_ecto()
-      |> Map.update!(:consumer, fn consumer ->
-        Sequin.Map.from_ecto(consumer)
-      end)
-    end)
-  end
-
   def insert_consumer_message!(attrs \\ []) do
-    attrs = Map.new(attrs)
-    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
-
-    case message_kind do
-      :record -> insert_consumer_record!(attrs)
-      :event -> insert_consumer_event!(attrs)
-    end
+    insert_consumer_event!(attrs)
   end
 
   def insert_deliverable_consumer_message!(attrs \\ []) do
-    attrs = Map.new(attrs)
-    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
-
-    case message_kind do
-      :record -> insert_deliverable_consumer_record!(attrs)
-      :event -> insert_deliverable_consumer_event!(attrs)
-    end
+    insert_deliverable_consumer_event!(attrs)
   end
 
   def consumer_message(attrs \\ []) do
-    attrs = Map.new(attrs)
-    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
-
-    case message_kind do
-      :record -> consumer_record(attrs)
-      :event -> consumer_event(attrs)
-    end
+    consumer_event(attrs)
   end
 
   def consumer_message_data(attrs \\ []) do
-    attrs = Map.new(attrs)
-    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
-
-    case message_kind do
-      :record -> consumer_record_data(attrs)
-      :event -> consumer_event_data(attrs)
-    end
+    consumer_event_data(attrs)
   end
 
   def consumer_message_data_attrs(attrs \\ []) do
-    attrs = Map.new(attrs)
-    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
-
-    case message_kind do
-      :record -> consumer_record_data_attrs(attrs)
-      :event -> consumer_event_data_attrs(attrs)
-    end
+    consumer_event_data_attrs(attrs)
   end
 
   def backfill(attrs \\ []) do

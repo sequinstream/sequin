@@ -6,7 +6,6 @@ defmodule Sequin.Runtime.TableReaderServer do
   alias Sequin.Consumers
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Error
@@ -811,9 +810,6 @@ defmodule Sequin.Runtime.TableReaderServer do
               messages
               |> Stream.with_index()
               |> Stream.map(fn
-                {%ConsumerRecord{} = record, idx} ->
-                  %{record | commit_lsn: commit_lsn, commit_idx: idx}
-
                 {%ConsumerEvent{} = event, idx} ->
                   %{event | commit_lsn: commit_lsn, commit_idx: idx}
               end)

@@ -75,7 +75,7 @@ defmodule Sequin.Runtime.SnsPipeline do
 
   @spec build_sns_message(
           SinkConsumer.t(),
-          Sequin.Consumers.ConsumerEvent.t() | Sequin.Consumers.ConsumerRecord.t()
+          Sequin.Consumers.ConsumerEvent.t()
         ) :: map()
   defp build_sns_message(consumer, record_or_event) do
     consumer_data = record_or_event.data

@@ -4,7 +4,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
   alias Sequin.Aws.HttpClient
   alias Sequin.AwsMock
   alias Sequin.Consumers
-  alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -34,7 +34,6 @@ defmodule Sequin.Runtime.SqsPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :sqs,
-          message_kind: :record,
           batch_size: 10,
           replication_slot_id: replication.id
         )
@@ -48,9 +47,9 @@ defmodule Sequin.Runtime.SqsPipelineTest do
       record = CharacterFactory.character_attrs()
 
       record =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record))
 
       Req.Test.stub(HttpClient, fn conn ->
         send(test_pid, {:sqs_request, conn})
@@ -60,7 +59,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
       start_pipeline!(consumer)
 
       ref = send_test_event(consumer, record)
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:sqs_request, _conn}, 1_000
     end
 
@@ -71,14 +70,14 @@ defmodule Sequin.Runtime.SqsPipelineTest do
       record2 = CharacterFactory.character_attrs()
 
       event1 =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record1))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record1))
 
       event2 =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record2))
 
       Req.Test.stub(HttpClient, fn conn ->
         send(test_pid, {:sqs_request, conn})
@@ -96,7 +95,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
 
       ref = send_test_batch(consumer, [event1, event2])
 
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}, %{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}, %{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:sqs_request, _conn}, 1_000
     end
 
@@ -147,9 +146,9 @@ defmodule Sequin.Runtime.SqsPipelineTest do
       record = CharacterFactory.character_attrs()
 
       record =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record))
 
       Req.Test.stub(HttpClient, fn conn ->
         # Verify that task role credentials are used in the Authorization header
@@ -181,7 +180,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
       start_pipeline!(consumer)
 
       ref = send_test_event(consumer, record)
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:sqs_request, _conn}, 1_000
     end
   end
@@ -205,8 +204,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :sqs,
-          replication_slot_id: replication.id,
-          message_kind: :record
+          replication_slot_id: replication.id
         )
 
       {:ok, %{consumer: consumer}}
@@ -220,7 +218,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
         Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "msg1"}], "Failed" => []})
       end)
 
-      consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+      consumer_record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
 
       start_supervised!(
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: test_pid, persisted_mode?: false]}
@@ -256,7 +254,7 @@ defmodule Sequin.Runtime.SqsPipelineTest do
   defp send_test_event(consumer, event \\ nil) do
     event =
       event ||
-        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+        ConsumersFactory.insert_deliverable_consumer_event!(consumer_id: consumer.id)
 
     Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test_topic", headers: []})
   end

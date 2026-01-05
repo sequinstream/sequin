@@ -56,8 +56,8 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
     end
 
     test "successful messages are succeeded to sms", %{consumer: consumer} do
-      msg1 = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
-      msg2 = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+      msg1 = ConsumersFactory.consumer_message(consumer_id: consumer.id)
+      msg2 = ConsumersFactory.consumer_message(consumer_id: consumer.id)
 
       # only the first call produces messages
       expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg1, msg2]} end)
@@ -79,7 +79,7 @@ defmodule Sequin.Runtime.ConsumerProducerTest do
 
     @tag capture_log: true
     test "failed messages are failed to sms", %{consumer: consumer} do
-      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+      msg = ConsumersFactory.consumer_message(consumer_id: consumer.id)
 
       expect(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, [msg]} end)
       stub(SlotMessageStoreMock, :produce, fn _consumer, _count, _producer_pid -> {:ok, []} end)

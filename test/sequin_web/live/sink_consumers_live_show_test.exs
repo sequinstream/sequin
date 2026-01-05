@@ -245,7 +245,6 @@ defmodule SequinWeb.SinkConsumersLive.ShowTest do
       messages =
         for i <- 1..4 do
           ConsumersFactory.consumer_message(
-            message_kind: consumer.message_kind,
             consumer_id: consumer.id,
             commit_lsn: 1000 + i * 100,
             commit_idx: 0,

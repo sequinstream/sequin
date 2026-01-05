@@ -3,9 +3,7 @@ defmodule Sequin.Functions.TestMessagesTest do
 
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.ConsumerRecordData.Metadata
+  alias Sequin.Consumers.ConsumerEventData.Metadata
   alias Sequin.Factory
   alias Sequin.Functions.TestMessages
 
@@ -27,7 +25,7 @@ defmodule Sequin.Functions.TestMessagesTest do
       database_id = Factory.uuid()
       table_oid = Factory.integer()
 
-      message = %ConsumerRecord{
+      message = %ConsumerEvent{
         consumer_id: Ecto.UUID.generate(),
         commit_lsn: 1,
         commit_idx: 1,
@@ -36,8 +34,8 @@ defmodule Sequin.Functions.TestMessagesTest do
         table_oid: 1,
         deliver_count: 0,
         replication_message_trace_id: Ecto.UUID.generate(),
-        data: %ConsumerRecordData{
-          metadata: %ConsumerRecordData.Metadata{
+        data: %ConsumerEventData{
+          metadata: %ConsumerEventData.Metadata{
             table_name: "test_table",
             table_schema: "public"
           }
@@ -79,7 +77,7 @@ defmodule Sequin.Functions.TestMessagesTest do
 
       messages =
         Enum.map(1..11, fn i ->
-          %ConsumerRecord{
+          %ConsumerEvent{
             consumer_id: Ecto.UUID.generate(),
             commit_lsn: i,
             commit_idx: i,
@@ -88,7 +86,7 @@ defmodule Sequin.Functions.TestMessagesTest do
             table_oid: 1,
             deliver_count: 0,
             replication_message_trace_id: Ecto.UUID.generate(),
-            data: %ConsumerRecordData{
+            data: %ConsumerEventData{
               metadata: %Metadata{
                 table_name: "test_table",
                 table_schema: "public"
@@ -157,7 +155,7 @@ defmodule Sequin.Functions.TestMessagesTest do
 
       messages =
         Enum.map(1..3, fn i ->
-          %ConsumerRecord{
+          %ConsumerEvent{
             consumer_id: Ecto.UUID.generate(),
             commit_lsn: i,
             commit_idx: i,
@@ -166,7 +164,7 @@ defmodule Sequin.Functions.TestMessagesTest do
             table_oid: 1,
             deliver_count: 0,
             replication_message_trace_id: Ecto.UUID.generate(),
-            data: %ConsumerRecordData{
+            data: %ConsumerEventData{
               metadata: %Metadata{
                 table_name: "test_table",
                 table_schema: "public"
@@ -188,7 +186,7 @@ defmodule Sequin.Functions.TestMessagesTest do
 
       messages =
         Enum.map(1..3, fn i ->
-          %ConsumerRecord{
+          %ConsumerEvent{
             consumer_id: Ecto.UUID.generate(),
             commit_lsn: i,
             commit_idx: i,
@@ -197,7 +195,7 @@ defmodule Sequin.Functions.TestMessagesTest do
             table_oid: 1,
             deliver_count: 0,
             replication_message_trace_id: Ecto.UUID.generate(),
-            data: %ConsumerRecordData{
+            data: %ConsumerEventData{
               metadata: %Metadata{
                 table_name: "test_table",
                 table_schema: "public",
@@ -229,7 +227,7 @@ defmodule Sequin.Functions.TestMessagesTest do
       database_id = Factory.uuid()
       table_oid = Factory.integer()
 
-      message = %ConsumerRecord{
+      message = %ConsumerEvent{
         consumer_id: Ecto.UUID.generate(),
         commit_lsn: 1,
         commit_idx: 1,
@@ -238,7 +236,7 @@ defmodule Sequin.Functions.TestMessagesTest do
         table_oid: 1,
         deliver_count: 0,
         replication_message_trace_id: Ecto.UUID.generate(),
-        data: %ConsumerRecordData{
+        data: %ConsumerEventData{
           metadata: %Metadata{
             table_name: "test_table",
             table_schema: "public"
@@ -258,7 +256,7 @@ defmodule Sequin.Functions.TestMessagesTest do
       database_id = Factory.uuid()
       table_oid = Factory.integer()
 
-      message = %ConsumerRecord{
+      message = %ConsumerEvent{
         consumer_id: Ecto.UUID.generate(),
         commit_lsn: 1,
         commit_idx: 1,
@@ -267,7 +265,7 @@ defmodule Sequin.Functions.TestMessagesTest do
         table_oid: 1,
         deliver_count: 0,
         replication_message_trace_id: Ecto.UUID.generate(),
-        data: %ConsumerRecordData{
+        data: %ConsumerEventData{
           metadata: %Metadata{
             table_name: "test_table",
             table_schema: "public"

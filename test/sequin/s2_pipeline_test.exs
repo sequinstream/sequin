@@ -1,7 +1,7 @@
 defmodule Sequin.Runtime.S2PipelineTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
@@ -18,7 +18,6 @@ defmodule Sequin.Runtime.S2PipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :s2,
-          message_kind: :record,
           batch_size: 10
         )
 
@@ -30,9 +29,9 @@ defmodule Sequin.Runtime.S2PipelineTest do
       record = CharacterFactory.character_attrs()
 
       event =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record))
 
       Req.Test.expect(Client, fn conn ->
         assert conn.method == "POST"
@@ -57,7 +56,7 @@ defmodule Sequin.Runtime.S2PipelineTest do
       start_pipeline!(consumer)
 
       ref = send_test_event(consumer, event)
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:s2_request, _}, 1_000
     end
   end
@@ -91,7 +90,6 @@ defmodule Sequin.Runtime.S2PipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :s2,
-          message_kind: :record,
           transform_id: transform.id,
           routing_id: routing.id,
           routing_mode: "dynamic"
@@ -106,9 +104,9 @@ defmodule Sequin.Runtime.S2PipelineTest do
       record = CharacterFactory.character_attrs()
 
       event =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record))
 
       Req.Test.expect(Client, fn conn ->
         assert conn.host == "other-basin.b.aws.s2.dev"
@@ -121,7 +119,7 @@ defmodule Sequin.Runtime.S2PipelineTest do
       start_pipeline!(consumer)
 
       ref = send_test_event(consumer, event)
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:s2_request, _}, 1_000
     end
   end

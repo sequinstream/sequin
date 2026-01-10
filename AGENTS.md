@@ -41,6 +41,11 @@ cd ..
 
 These commands should pass before committing. Warnings or noise in test is not acceptable.
 
+## `mix test`
+
+- For fast feedback, run `mix test --exclude unboxed`. This skips synchronous tests. Then run `mix test` at the end to validate your work.
+- New tests that you create MUST NOT generate extra logs, even if the tests pass.
+
 ## Using jj workspaces for isolated work
 
 When working on a feature or fix, you can create an isolated workspace using jj:

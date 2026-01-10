@@ -13,12 +13,12 @@ defmodule Sequin.Runtime.SlotProducer do
 
   use Sequin.GenerateBehaviour
 
-  alias Postgrex.Protocol
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
+  alias Sequin.Postgres.Backend
   alias Sequin.ProcessMetrics
   alias Sequin.Replication
   alias Sequin.Runtime.PostgresAdapter.Decoder
@@ -107,8 +107,9 @@ defmodule Sequin.Runtime.SlotProducer do
       field :publication_name, String.t()
       field :pg_major_version, integer()
       field :conn, (-> Postgres.db_conn())
-      # Postgres replication connection
-      field :protocol, Postgrex.Protocol.state()
+      # Postgres replication backend
+      field :backend_mod, module()
+      field :backend_state, Backend.state()
       field :connect_opts, keyword()
       field :on_connect_fail, (any() -> any())
       field :on_disconnect, (-> :ok)
@@ -206,7 +207,8 @@ defmodule Sequin.Runtime.SlotProducer do
         Keyword.get(opts, :restart_wal_cursor_update_interval, to_timeout(second: 10)),
       consumer_mod: Keyword.get_lazy(opts, :consumer_mod, fn -> PipelineDefaults.processor_mod() end),
       conn: Keyword.fetch!(opts, :conn),
-      setting_batch_flush_interval: Keyword.get(opts, :batch_flush_interval)
+      setting_batch_flush_interval: Keyword.get(opts, :batch_flush_interval),
+      backend_mod: Keyword.get(opts, :backend_mod, Sequin.Postgres.PostgrexBackend)
     }
 
     if test_pid = opts[:test_pid] do
@@ -241,13 +243,13 @@ defmodule Sequin.Runtime.SlotProducer do
 
   @impl GenStage
   def handle_info(:connect, %State{} = state) do
-    with {:ok, protocol} <- Protocol.connect(state.connect_opts),
+    with {:ok, backend_state} <- state.backend_mod.connect(state.connect_opts),
          Logger.info("[SlotProducer] Connected"),
          :ok <- put_connected_health(state.id),
-         {:ok, %State{} = state, protocol} <- init_restart_wal_cursor(state, protocol),
-         {:ok, protocol} <- Protocol.handle_streaming(start_replication_query(state), protocol),
-         {:ok, protocol} <- Protocol.checkin(protocol) do
-      state = %{state | protocol: protocol, status: :active}
+         {:ok, %State{} = state, backend_state} <- init_restart_wal_cursor(state, backend_state),
+         {:ok, backend_state} <- state.backend_mod.handle_streaming(start_replication_query(state), backend_state),
+         {:ok, backend_state} <- state.backend_mod.checkin(backend_state) do
+      state = %{state | backend_state: backend_state, status: :active}
       state = schedule_timers(state)
       {:noreply, [], state}
     else
@@ -255,7 +257,7 @@ defmodule Sequin.Runtime.SlotProducer do
         reason =
           case error do
             {:error, msg} -> msg
-            {:error, msg, %Protocol{}} -> msg
+            {:error, msg, _backend_state} -> msg
           end
 
         error_msg = if is_exception(reason), do: Exception.message(reason), else: inspect(reason)
@@ -274,17 +276,18 @@ defmodule Sequin.Runtime.SlotProducer do
     raise "Unexpectedly received a second socket message while buffering sock messages"
   end
 
-  def handle_info(msg, %State{protocol: protocol} = state) when is_socket_message(msg) do
+  def handle_info(msg, %State{backend_state: backend_state} = state) when is_socket_message(msg) do
     maybe_log_message(state)
 
-    with {:ok, copies, protocol} <- Protocol.handle_copy_recv(msg, @max_messages_per_protocol_read, protocol),
-         {:ok, state} <- handle_copies(copies, %{state | protocol: protocol}) do
+    with {:ok, copies, backend_state} <-
+           state.backend_mod.handle_copy_recv(msg, @max_messages_per_protocol_read, backend_state),
+         {:ok, state} <- handle_copies(copies, %{state | backend_state: backend_state}) do
       {messages, state} = maybe_produce_and_flush(state)
       state = maybe_toggle_buffering(state)
       {:noreply, messages, state}
     else
-      {error, reason, protocol} ->
-        handle_disconnect(error, reason, %{state | protocol: protocol})
+      {error, reason, backend_state} ->
+        handle_disconnect(error, reason, %{state | backend_state: backend_state})
     end
   end
 
@@ -622,15 +625,15 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp maybe_toggle_buffering(%State{status: :active} = state), do: state
 
-  defp init_restart_wal_cursor(%State{} = state, protocol) do
+  defp init_restart_wal_cursor(%State{} = state, backend_state) do
     query = "select restart_lsn from pg_replication_slots where slot_name = '#{state.slot_name}'"
 
     case Replication.restart_wal_cursor(state.id) do
       {:error, %NotFoundError{}} ->
-        case Protocol.handle_simple(query, [], protocol) do
-          {:ok, [%Postgrex.Result{rows: [[lsn]]}], protocol} when not is_nil(lsn) ->
+        case state.backend_mod.handle_simple(query, [], backend_state) do
+          {:ok, [%Postgrex.Result{rows: [[lsn]]}], backend_state} when not is_nil(lsn) ->
             cursor = %{commit_lsn: Postgres.lsn_to_int(lsn), commit_idx: 0}
-            {:ok, %{state | restart_wal_cursor: cursor}, protocol}
+            {:ok, %{state | restart_wal_cursor: cursor}, backend_state}
 
           {:ok, _res} ->
             {:error,
@@ -648,7 +651,7 @@ defmodule Sequin.Runtime.SlotProducer do
         end
 
       {:ok, cursor} ->
-        {:ok, %{state | restart_wal_cursor: cursor}, protocol}
+        {:ok, %{state | restart_wal_cursor: cursor}, backend_state}
     end
   end
 
@@ -656,7 +659,7 @@ defmodule Sequin.Runtime.SlotProducer do
 
   defp handle_disconnect(error, reason, %State{} = state) when error in [:error, :disconnect] do
     Logger.error("[SlotProducer] Replication disconnected: #{inspect(reason)}")
-    Protocol.disconnect(%RuntimeError{}, state.protocol)
+    state.backend_mod.disconnect(%RuntimeError{}, state.backend_state)
     Process.send_after(self(), :connect, state.setting_reconnect_interval)
 
     if is_function(state.on_disconnect) do
@@ -748,12 +751,12 @@ defmodule Sequin.Runtime.SlotProducer do
 
     msg = ack_message(state.restart_wal_cursor.commit_lsn)
 
-    case Protocol.handle_copy_send(msg, state.protocol) do
+    case state.backend_mod.handle_copy_send(msg, state.backend_state) do
       :ok ->
         {:noreply, [], %{state | last_sent_restart_wal_cursor: state.restart_wal_cursor}}
 
-      {error, reason, protocol} ->
-        handle_disconnect(error, reason, %{state | protocol: protocol})
+      {error, reason, backend_state} ->
+        handle_disconnect(error, reason, %{state | backend_state: backend_state})
     end
   end
 

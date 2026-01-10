@@ -36,6 +36,7 @@ metrics_auth =
       ]
   end
 
+config :sequin, Sequin.Benchmark.Stats, track_messages: System.get_env("BENCHMARK_TRACK_MESSAGES") == "true"
 config :sequin, :metrics_basic_auth, metrics_auth
 
 if System.get_env("PORT") do

@@ -6,6 +6,7 @@ defmodule Sequin.Runtime.SlotProducer.Relation do
 
   alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Postgres
+  alias Sequin.Postgres.VirtualBackend
   alias Sequin.Runtime.PostgresAdapter.Decoder
   alias Sequin.Runtime.PostgresAdapter.Decoder.Messages.Relation, as: RawRelation
   alias Sequin.Runtime.SlotProducer.PostgresRelationHashCache
@@ -34,8 +35,57 @@ defmodule Sequin.Runtime.SlotProducer.Relation do
     end
   end
 
-  @spec parse_relation(binary(), db_id :: String.t(), Postgres.db_conn()) :: map()
-  def parse_relation(msg, db_id, conn) do
+  # Map of common Postgres type OIDs to type names
+  # Only includes types used by VirtualBackend/BenchmarkSource
+  @oid_to_type_name %{
+    16 => "bool",
+    17 => "bytea",
+    20 => "int8",
+    21 => "int2",
+    23 => "int4",
+    25 => "text",
+    700 => "float4",
+    701 => "float8",
+    1082 => "date",
+    1083 => "time",
+    1114 => "timestamp",
+    1184 => "timestamptz",
+    2950 => "uuid"
+  }
+
+  @spec parse_relation(module(), binary(), db_id :: String.t(), (-> Postgres.db_conn())) :: t()
+  def parse_relation(VirtualBackend, msg, _db_id, _conn_fn) do
+    # For virtual backends (benchmarking/testing), skip DB queries
+    %RawRelation{id: id, columns: columns, namespace: schema, name: table} = Decoder.decode_message(msg)
+
+    columns =
+      columns
+      |> Enum.with_index(1)
+      |> Enum.map(fn {%RawRelation.Column{} = col, idx} ->
+        # Convert OID to type name string for ValueCaster compatibility
+        type_name = Map.get(@oid_to_type_name, col.type, "text")
+
+        %Column{
+          attnum: col.attnum || idx,
+          type_modifier: col.type_modifier,
+          pk?: col.pk? || :key in col.flags,
+          type: type_name,
+          name: col.name,
+          flags: col.flags
+        }
+      end)
+
+    %__MODULE__{
+      id: id,
+      columns: columns,
+      schema: schema,
+      table: table,
+      parent_table_id: id
+    }
+  end
+
+  def parse_relation(_backend_mod, msg, db_id, conn_fn) do
+    conn = conn_fn.()
     %RawRelation{id: id, columns: columns, namespace: schema, name: table} = raw_relation = Decoder.decode_message(msg)
 
     columns =

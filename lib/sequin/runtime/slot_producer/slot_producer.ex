@@ -424,7 +424,7 @@ defmodule Sequin.Runtime.SlotProducer do
   end
 
   defp handle_data(?R, msg, %State{} = state) do
-    relation = Relation.parse_relation(msg, state.database_id, state.conn.())
+    relation = Relation.parse_relation(state.backend_mod, msg, state.database_id, state.conn)
 
     state = %{state | relations: Map.put(state.relations, relation.id, relation)}
 

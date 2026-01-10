@@ -7,47 +7,31 @@ defmodule Sequin.Runtime.BenchmarkPipelineTest do
   """
   use Sequin.DataCase, async: true
 
+  alias Sequin.Benchmark.Stats
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Runtime.BenchmarkPipeline
   alias Sequin.Runtime.SinkPipeline
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.Runtime.SlotMessageStoreSupervisor
 
-  describe "checksums/1 and reset_checksums/1" do
+  describe "checksums/1 and reset_for_owner/1" do
     test "returns empty map when no checksums exist" do
-      checksums = BenchmarkPipeline.checksums("nonexistent-consumer")
+      checksums = Stats.checksums("nonexistent-consumer")
       assert checksums == %{}
     end
 
-    test "reset_checksums/1 resets checksums to {0, 0}" do
+    test "reset_for_owner/1 removes all data for a consumer" do
       consumer_id = "test-consumer-#{System.unique_integer()}"
 
-      # Manually insert some checksums
-      :ets.new(:benchmark_pipeline_checksums, [:set, :public, :named_table, {:write_concurrency, true}])
-      :ets.insert(:benchmark_pipeline_checksums, {{consumer_id, 0}, {123, 5}})
-      :ets.insert(:benchmark_pipeline_checksums, {{consumer_id, 1}, {456, 10}})
+      Stats.init_for_owner(consumer_id, 2, scope: :pipeline)
+      Stats.message_emitted(consumer_id, 0, 100, 0, scope: :pipeline)
+      Stats.message_emitted(consumer_id, 1, 200, 0, scope: :pipeline)
 
-      BenchmarkPipeline.reset_checksums(consumer_id)
+      Stats.reset_for_owner(consumer_id)
 
-      checksums = BenchmarkPipeline.checksums(consumer_id)
-      assert checksums[0] == {0, 0}
-      assert checksums[1] == {0, 0}
-    end
-
-    test "delete_checksums/1 removes all checksums for a consumer" do
-      consumer_id = "test-consumer-#{System.unique_integer()}"
-
-      # Manually insert some checksums
-      :ets.new(:benchmark_pipeline_checksums, [:set, :public, :named_table, {:write_concurrency, true}])
-      :ets.insert(:benchmark_pipeline_checksums, {{consumer_id, 0}, {123, 5}})
-      :ets.insert(:benchmark_pipeline_checksums, {{consumer_id, 1}, {456, 10}})
-
-      BenchmarkPipeline.delete_checksums(consumer_id)
-
-      checksums = BenchmarkPipeline.checksums(consumer_id)
+      checksums = Stats.checksums(consumer_id)
       assert checksums == %{}
     end
   end
@@ -102,7 +86,7 @@ defmodule Sequin.Runtime.BenchmarkPipelineTest do
       await_acks(10)
 
       # Verify checksums were tracked
-      checksums = BenchmarkPipeline.checksums(consumer.id)
+      checksums = Stats.checksums(consumer.id)
       assert map_size(checksums) == 4
 
       # Verify total count matches
@@ -144,7 +128,7 @@ defmodule Sequin.Runtime.BenchmarkPipelineTest do
       partition = :erlang.phash2(group_id, 4)
       expected_checksum = :erlang.crc32(<<0::32, commit_lsn::64, commit_idx::32>>)
 
-      checksums = BenchmarkPipeline.checksums(consumer.id)
+      checksums = Stats.checksums(consumer.id)
       {actual_checksum, count} = checksums[partition]
 
       assert count == 1
@@ -185,7 +169,7 @@ defmodule Sequin.Runtime.BenchmarkPipelineTest do
       # Wait for messages to be processed
       await_acks(2)
 
-      checksums = BenchmarkPipeline.checksums(consumer.id)
+      checksums = Stats.checksums(consumer.id)
       {actual_checksum, count} = checksums[partition]
 
       assert count == 2

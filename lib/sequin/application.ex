@@ -46,7 +46,7 @@ defmodule Sequin.Application do
     Supervisor.start_link(children, opts)
   end
 
-  defp children(:test) do
+  defp children(env) when env in [:test, :bench] do
     base_children()
   end
 

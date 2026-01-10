@@ -349,7 +349,8 @@ defmodule Sequin.Postgres.BenchmarkSource do
     {pk, partition_key, state} = maybe_repeat_pk(state, pk, partition_key)
 
     # Compute partition for checksum
-    partition = :erlang.phash2(partition_key, state.config.partition_count)
+    # Use pk (as string) to match pipeline's group_id partitioning
+    partition = :erlang.phash2(to_string(pk), state.config.partition_count)
 
     # Compute commit_idx (0-based index within transaction)
     txn_size = pick_from_distribution(state.config.transaction_sizes)
@@ -408,10 +409,13 @@ defmodule Sequin.Postgres.BenchmarkSource do
   end
 
   defp update_checksum(state, partition, lsn, commit_idx) do
-    {prev_checksum, count} = Map.fetch!(state.checksums, partition)
-    new_checksum = :erlang.crc32(<<prev_checksum::32, lsn::64, commit_idx::32>>)
+    checksums =
+      Map.update(state.checksums, partition, {0, 0}, fn {prev_checksum, count} ->
+        new_checksum = :erlang.crc32(<<prev_checksum::32, lsn::64, commit_idx::32>>)
+        {new_checksum, count + 1}
+      end)
 
-    %{state | checksums: Map.put(state.checksums, partition, {new_checksum, count + 1})}
+    %{state | checksums: checksums}
   end
 
   defp pick_from_distribution([{_fraction, value}]) do

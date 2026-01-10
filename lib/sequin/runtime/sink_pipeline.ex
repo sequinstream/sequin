@@ -114,6 +114,11 @@ defmodule Sequin.Runtime.SinkPipeline do
       # Ensure db is not on there
       |> Ecto.reset_fields([:postgres_database])
 
+    # Guard: benchmark consumers are not allowed in production
+    if consumer.type == :benchmark and Application.get_env(:sequin, :env) == :prod do
+      raise "Benchmark consumers are not allowed in production"
+    end
+
     slot_message_store_mod = Keyword.get(opts, :slot_message_store_mod, Sequin.Runtime.SlotMessageStore)
     producer = Keyword.get(opts, :producer, Sequin.Runtime.ConsumerProducer)
     pipeline_mod = Keyword.get(opts, :pipeline_mod, pipeline_mod_for_consumer(consumer))
@@ -411,6 +416,7 @@ defmodule Sequin.Runtime.SinkPipeline do
   def pipeline_mod_for_consumer(%SinkConsumer{} = consumer) do
     case consumer.type do
       :azure_event_hub -> Sequin.Runtime.AzureEventHubPipeline
+      :benchmark -> Sequin.Runtime.BenchmarkPipeline
       :elasticsearch -> Sequin.Runtime.ElasticsearchPipeline
       :gcp_pubsub -> Sequin.Runtime.GcpPubsubPipeline
       :http_push -> Sequin.Runtime.HttpPushPipeline

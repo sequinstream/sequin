@@ -41,7 +41,7 @@ defmodule Sequin.Consumers.Function do
     function
     |> cast(attrs, [:name, :description])
     |> changeset(attrs)
-    |> unique_constraint([:account_id, :name], error_key: :name)
+    |> unique_constraint([:account_id, :name], name: :transforms_account_id_name_index, error_key: :name)
   end
 
   def update_changeset(function, attrs) do

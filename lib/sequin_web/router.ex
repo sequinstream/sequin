@@ -167,6 +167,9 @@ defmodule SequinWeb.Router do
     # HTTP Endpoints routes
     resources("/destinations/http_endpoints", HttpEndpointController, except: [:new, :edit], param: "id_or_name")
 
+    # Function routes
+    resources("/functions", FunctionController, except: [:new, :edit], param: "id_or_name")
+
     # Sink Consumer routes
     resources("/sinks", SinkConsumerController, except: [:new, :edit], param: "id_or_name")
     # Backfill routes

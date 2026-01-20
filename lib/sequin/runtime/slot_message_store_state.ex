@@ -3,7 +3,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   use TypedStruct
 
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.DebouncedLogger
   alias Sequin.Error
@@ -13,7 +12,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
 
   require Logger
 
-  @type message :: ConsumerRecord.t() | ConsumerEvent.t()
+  @type message :: ConsumerEvent.t()
   @type cursor_tuple :: {commit_lsn :: non_neg_integer(), commit_idx :: non_neg_integer()}
 
   @default_setting_max_messages 50_000
@@ -493,10 +492,15 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   @doc """
   Returns messages with metadata only (data field set to nil).
   This is more memory efficient for listing messages in the UI.
+
+  Options:
+    - `order`: `:asc` (oldest first, default) or `:desc` (newest first)
   """
-  def peek_messages_metadata(%State{} = state, count) when is_integer(count) do
+  def peek_messages_metadata(%State{} = state, count, opts \\ []) when is_integer(count) do
+    order = Keyword.get(opts, :order, :asc)
+
     state
-    |> sorted_message_stream()
+    |> sorted_message_stream_for_display(order)
     |> Enum.take(count)
     |> Enum.map(&drop_message_data/1)
   end
@@ -506,10 +510,6 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
       nil -> {:error, Error.not_found(entity: :message, params: %{ack_id: ack_id})}
       cursor_tuple -> {:ok, Map.get(state.messages, cursor_tuple)}
     end
-  end
-
-  defp drop_message_data(%ConsumerRecord{} = message) do
-    %{message | data: nil}
   end
 
   defp drop_message_data(%ConsumerEvent{} = message) do
@@ -565,6 +565,47 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
 
       {cdc_cursor_tuple, backfill_cursor_tuple, :strictly_ordered} ->
         stream_strictly_ordered(state, cdc_cursor_tuple, backfill_cursor_tuple)
+    end)
+  end
+
+  # Simple sorted stream for display purposes (no CDC prioritization).
+  # Merges cdc and backfill ETS tables in commit_lsn/commit_idx order.
+  # O(log n) per element using ETS ordered_set traversal.
+  defp sorted_message_stream_for_display(%State{} = state, order) do
+    cdc_table = ordered_cdc_cursors_table(state)
+    backfill_table = ordered_backfill_cursors_table(state)
+
+    # Choose traversal functions based on order
+    {first_fn, next_fn, compare_fn} =
+      case order do
+        :asc -> {&:ets.first/1, &:ets.next/2, fn a, b -> a < b end}
+        :desc -> {&:ets.last/1, &:ets.prev/2, fn a, b -> a > b end}
+      end
+
+    Stream.unfold({first_fn.(cdc_table), first_fn.(backfill_table)}, fn
+      # Both tables exhausted
+      {:"$end_of_table", :"$end_of_table"} ->
+        nil
+
+      # Only CDC messages remain
+      {cdc_cursor, :"$end_of_table"} ->
+        message = Map.get(state.messages, cdc_cursor)
+        {message, {next_fn.(cdc_table, cdc_cursor), :"$end_of_table"}}
+
+      # Only backfill messages remain
+      {:"$end_of_table", backfill_cursor} ->
+        message = Map.get(state.messages, backfill_cursor)
+        {message, {:"$end_of_table", next_fn.(backfill_table, backfill_cursor)}}
+
+      # Both have messages - pick based on order
+      {cdc_cursor, backfill_cursor} ->
+        if compare_fn.(cdc_cursor, backfill_cursor) do
+          message = Map.get(state.messages, cdc_cursor)
+          {message, {next_fn.(cdc_table, cdc_cursor), backfill_cursor}}
+        else
+          message = Map.get(state.messages, backfill_cursor)
+          {message, {cdc_cursor, next_fn.(backfill_table, backfill_cursor)}}
+        end
     end)
   end
 

@@ -3,7 +3,6 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
 
   alias Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Error
   alias Sequin.Redis
 
@@ -12,7 +11,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   @doc """
   Stores messages for a given consumer_id in a Redis sorted set and trims to the latest @max_messages.
   """
-  @spec store_messages(String.t(), list(ConsumerEvent.t() | ConsumerRecord.t()), non_neg_integer()) ::
+  @spec store_messages(String.t(), list(ConsumerEvent.t()), non_neg_integer()) ::
           :ok | {:error, Error.t()}
   def store_messages(consumer_id, messages, max_messages \\ @max_messages) do
     # Add messages to the sorted set
@@ -63,30 +62,6 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
 
   defp key(consumer_id) do
     "acknowledged_messages:v0:#{consumer_id}"
-  end
-
-  def to_acknowledged_message(%ConsumerRecord{} = record) do
-    deliver_count = if record.deliver_count == 0, do: 1, else: record.deliver_count
-
-    %AcknowledgedMessage{
-      id: record.id,
-      consumer_id: record.consumer_id,
-      seq: record.commit_lsn + record.commit_idx,
-      commit_lsn: record.commit_lsn,
-      commit_idx: record.commit_idx,
-      commit_timestamp: record.data.metadata.commit_timestamp,
-      ack_id: record.ack_id,
-      deliver_count: deliver_count,
-      last_delivered_at: record.last_delivered_at,
-      record_pks: record.record_pks,
-      table_oid: record.table_oid,
-      not_visible_until: record.not_visible_until,
-      inserted_at: record.inserted_at,
-      trace_id: record.replication_message_trace_id,
-      state: record.state,
-      table_name: record.data.metadata.table_name,
-      table_schema: record.data.metadata.table_schema
-    }
   end
 
   def to_acknowledged_message(%ConsumerEvent{} = event) do

@@ -40,3 +40,38 @@ cd ..
 ```
 
 These commands should pass before committing. Warnings or noise in test is not acceptable.
+
+## `mix test`
+
+- For fast feedback, run `mix test --exclude unboxed`. This skips synchronous tests. Then run `mix test` at the end to validate your work.
+- New tests that you create MUST NOT generate extra logs, even if the tests pass.
+
+## Testing
+
+### No `Process.sleep`
+
+Process.sleep is not allowed in test. You can use temporarily to get things working. But then find a way to use signal passing or telemetry handlers to get rid of it.
+
+## Using jj workspaces for isolated work
+
+When working on a feature or fix, you can create an isolated workspace using jj:
+
+```bash
+# Create a new workspace (from the main repo)
+jj workspace add ../sequin-feature-name
+
+# The new workspace needs deps and _build symlinked from the main repo
+cd ../sequin-feature-name
+ln -s ../sequin/deps .
+ln -s ../sequin/_build .
+
+# Now you can run tests and make changes in this isolated workspace
+mix test test/path/to/test.exs
+```
+
+## Tidewave
+
+Always use Tidewave's tools for evaluating code, querying the database, etc.
+
+Use `get_docs` to access documentation and the `get_source_location` tool to
+find module/function definitions.

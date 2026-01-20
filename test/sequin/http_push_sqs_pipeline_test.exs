@@ -29,7 +29,6 @@ defmodule Sequin.Runtime.HttpPushSqsPipelineTest do
             batch: false,
             via_sqs: true
           },
-          message_kind: :event,
           max_retry_count: Enum.random(5..10)
         )
 

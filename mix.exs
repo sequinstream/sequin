@@ -5,12 +5,16 @@ defmodule Sequin.MixProject do
     [
       app: :sequin,
       version: "0.1.0",
-      elixir: "~> 1.18",
+      elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps()
     ]
+  end
+
+  def cli do
+    [preferred_envs: ["test.unboxed": :test]]
   end
 
   # Configuration for the OTP application.
@@ -19,7 +23,7 @@ defmodule Sequin.MixProject do
   def application do
     [
       mod: {Sequin.Application, []},
-      extra_applications: [:logger, :runtime_tools] ++ extra_applications(Mix.env()),
+      extra_applications: [:logger, :runtime_tools, :os_mon] ++ extra_applications(Mix.env()),
       included_applications: [:aws_credentials]
     ]
   end
@@ -65,7 +69,7 @@ defmodule Sequin.MixProject do
 
       # AWS and Cloud Services
       {:aws, "~> 1.0"},
-      {:aws_credentials, "~> 0.3.4", runtime: false},
+      {:aws_credentials, "~> 1.0.0", runtime: false},
       {:aws_rds_castore, "~> 1.2.0"},
       {:aws_signature, "~> 0.3.2"},
 
@@ -95,7 +99,8 @@ defmodule Sequin.MixProject do
 
       # Messaging / PubSub / Queues
       {:gnat, "~> 1.9"},
-      {:amqp, "~> 4.0"},
+      {:amqp, "~> 4.1"},
+      {:amqp_client, "~> 4.2"},
       {:brod, "~> 4.3"},
 
       # Caching and State Management
@@ -129,14 +134,14 @@ defmodule Sequin.MixProject do
       # Development and Testing
       {:styler, "~> 1.4.0", only: [:dev, :test], runtime: false},
       {:faker, "~> 0.18.0", only: [:dev, :test]},
-      {:mix_test_interactive, "~> 2.0", only: :dev, runtime: false},
+      {:mix_test_interactive, "~> 5.0", only: :dev, runtime: false},
       {:mox, "~> 1.0", runtime: false},
       {:hammox, "~> 0.7", only: :test},
       {:benchee, "~> 1.0", only: :dev},
       {:rexbug, "~> 1.0"},
       {:floki, ">= 0.30.0", only: :test},
       {:uuid, "~> 1.1"},
-      {:tidewave, "~> 0.1", only: :dev},
+      {:tidewave, "~> 0.5", only: :dev},
       # Need in :dev for formatter
       {:assert_eventually, "~> 1.0", only: [:dev, :test]}
     ]
@@ -158,6 +163,7 @@ defmodule Sequin.MixProject do
         &remove_consumer_messages_log/1
       ],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      "test.unboxed": ["ecto.create --quiet", "ecto.migrate --quiet", "test --exclude unboxed"],
       "assets.setup": ["cmd --cd assets npm install"],
       "assets.build": ["tailwind sequin", "esbuild sequin"],
       "assets.deploy": [

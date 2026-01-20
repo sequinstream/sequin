@@ -24,7 +24,6 @@ defmodule Sequin.Runtime.ElasticsearchPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :elasticsearch,
-          message_kind: :event,
           transform_id: transform.id
         )
 
@@ -37,10 +36,8 @@ defmodule Sequin.Runtime.ElasticsearchPipelineTest do
       message =
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           data:
             ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
               action: :insert,
               record: %{"name" => "test-name"}
             )
@@ -78,12 +75,7 @@ defmodule Sequin.Runtime.ElasticsearchPipelineTest do
       message =
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
-          data:
-            ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
-              action: :insert
-            )
+          data: ConsumersFactory.consumer_message_data(action: :insert)
         )
 
       adapter = fn request ->
@@ -116,12 +108,7 @@ defmodule Sequin.Runtime.ElasticsearchPipelineTest do
         for _ <- 1..3 do
           ConsumersFactory.insert_consumer_message!(
             consumer_id: consumer.id,
-            message_kind: consumer.message_kind,
-            data:
-              ConsumersFactory.consumer_message_data(
-                message_kind: consumer.message_kind,
-                action: :insert
-              )
+            data: ConsumersFactory.consumer_message_data(action: :insert)
           )
         end
 

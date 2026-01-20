@@ -9,6 +9,9 @@ defmodule Sequin.Runtime.KinesisPipeline do
   alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
 
+  # Kinesis PartitionKey has a maximum of 256 bytes
+  @max_partition_key_bytes 256
+
   @impl SinkPipeline
   def init(context, _opts) do
     %{consumer: consumer, test_pid: test_pid} = context
@@ -68,14 +71,14 @@ defmodule Sequin.Runtime.KinesisPipeline do
 
   @spec build_kinesis_record(
           SinkConsumer.t(),
-          Sequin.Consumers.ConsumerEvent.t() | Sequin.Consumers.ConsumerRecord.t()
+          Sequin.Consumers.ConsumerEvent.t()
         ) :: map()
   defp build_kinesis_record(consumer, message) do
     consumer_data = message.data
 
     %{
       "Data" => Base.encode64(Jason.encode!(Sequin.Transforms.Message.to_external(consumer, consumer_data))),
-      "PartitionKey" => consumer_data.group_id
+      "PartitionKey" => Sequin.String.truncate_with_hash(consumer_data.group_id, @max_partition_key_bytes)
     }
   end
 

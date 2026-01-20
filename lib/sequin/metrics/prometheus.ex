@@ -256,7 +256,7 @@ defmodule Sequin.Prometheus do
 
     Gauge.new(
       name: :sequin_entity_health,
-      labels: [:entity_type, :entity_id, :status],
+      labels: [:entity_type, :entity_id, :entity_name, :status],
       help: "Health status of Sequin entities (sinks, replication slots). Value is 1 for current status, 0 otherwise."
     )
   end
@@ -556,7 +556,7 @@ defmodule Sequin.Prometheus do
   """
   @spec reset_entity_health_gauge :: :ok
   def reset_entity_health_gauge do
-    Gauge.reset(name: :sequin_entity_health, labels: [:entity_type, :entity_id, :status])
+    Gauge.reset(name: :sequin_entity_health, labels: [:entity_type, :entity_id, :entity_name, :status])
     :ok
   end
 
@@ -566,11 +566,12 @@ defmodule Sequin.Prometheus do
   @spec set_entity_health(
           entity_type :: String.t(),
           entity_id :: String.t(),
+          entity_name :: String.t(),
           status :: String.t(),
           value :: number()
         ) :: :ok
-  def set_entity_health(entity_type, entity_id, status, value) do
-    Gauge.set([name: :sequin_entity_health, labels: [entity_type, entity_id, status]], value)
+  def set_entity_health(entity_type, entity_id, entity_name, status, value) do
+    Gauge.set([name: :sequin_entity_health, labels: [entity_type, entity_id, entity_name, status]], value)
   end
 
   @spec set_replication_slot_size(

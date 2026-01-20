@@ -40,10 +40,18 @@ defmodule Sequin.String do
     end
   end
 
+  @doc """
+  Returns true if the string parses as a valid UUID format.
+  """
   def uuid?(str) when is_binary(str) do
-    str
-    |> UUID.info()
-    |> case do
+    match?({:ok, _}, UUID.info(str))
+  end
+
+  @doc """
+  Returns true if the string is a valid Sequin-generated UUID (v4, RFC4122 variant).
+  """
+  def sequin_uuid?(str) when is_binary(str) do
+    case UUID.info(str) do
       {:ok, info} -> info[:version] == 4 and info[:variant] == :rfc4122
       _ -> false
     end
@@ -126,5 +134,33 @@ defmodule Sequin.String do
     {:ok, String.to_existing_atom(string)}
   rescue
     _ -> {:error, Error.invariant(message: "Not an existing atom: #{string}", code: :not_existing_atom)}
+  end
+
+  @doc """
+  Returns the string unchanged if within max_bytes, otherwise returns an MD5 hash.
+
+  Useful for sinks with length limits on partition/group keys (e.g., Kinesis 256 bytes,
+  GCP Pub/Sub 1024 bytes). Uses `byte_size/1` which is O(1).
+
+  ## Examples
+
+      iex> Sequin.String.truncate_with_hash("short", 256)
+      "short"
+
+      iex> long = String.duplicate("a", 300)
+      iex> hash = Sequin.String.truncate_with_hash(long, 256)
+      iex> byte_size(hash)
+      32
+
+  """
+  @spec truncate_with_hash(String.t() | nil, pos_integer()) :: String.t() | nil
+  def truncate_with_hash(nil, _max_bytes), do: nil
+
+  def truncate_with_hash(string, max_bytes) when is_binary(string) and is_integer(max_bytes) and max_bytes > 0 do
+    if byte_size(string) <= max_bytes do
+      string
+    else
+      :md5 |> :crypto.hash(string) |> Base.encode16(case: :lower)
+    end
   end
 end

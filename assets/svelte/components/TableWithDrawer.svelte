@@ -185,9 +185,9 @@
   <!-- Content container with overflow handling -->
   <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
     <!-- Header Div -->
-    <div class="flex items-center justify-between mb-4 messages-header">
+    <div class="flex items-center justify-between mb-4 messages-header gap-4">
       <h1 class="text-2xl font-bold">{title}</h1>
-      <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-4 flex-wrap">
         <slot name="titleActions" />
       </div>
     </div>

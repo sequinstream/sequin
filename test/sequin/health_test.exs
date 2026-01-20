@@ -497,7 +497,7 @@ defmodule Sequin.HealthTest do
 
   describe "sink configuration check" do
     test "shows appropriate warnings for TOAST columns and replica identity when replica identity is not full" do
-      entity = sink_consumer(message_kind: :event)
+      entity = sink_consumer()
 
       # Set up base configuration check
       :ok =
@@ -556,7 +556,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "is healthy when replica identity is full regardless of TOAST columns" do
-      entity = sink_consumer(message_kind: :event)
+      entity = sink_consumer()
 
       # Set replica identity to full
       :ok =
@@ -589,7 +589,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "shows appropriate warnings for load shedding policy events" do
-      entity = sink_consumer(message_kind: :event)
+      entity = sink_consumer()
 
       # Set up base delivery check
       :ok = Health.put_event(entity, %Event{slug: :messages_delivered, status: :success})

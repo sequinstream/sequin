@@ -79,11 +79,8 @@
   };
   export let isSelfHosted: boolean;
 
-  type MessageKind = "event" | "record";
-
   interface FormState {
     type: string;
-    messageKind: MessageKind;
     messageGrouping: boolean;
     maxMemoryMb: number;
     postgresDatabaseId: string | null;
@@ -116,7 +113,6 @@
 
   let initialForm: FormState = {
     type: consumer.type,
-    messageKind: (consumer.message_kind || "event") as MessageKind,
     messageGrouping: consumer.message_grouping,
     maxMemoryMb: Number(consumer.max_memory_mb),
     postgresDatabaseId: consumer.postgres_database_id,
@@ -385,7 +381,6 @@
       <CardContent>
         <FilterForm
           {functions}
-          messageKind={form.messageKind}
           {selectedDatabase}
           bind:form
           {refreshFunctions}

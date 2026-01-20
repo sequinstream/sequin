@@ -64,7 +64,7 @@ defmodule Sequin.Accounts.Impersonate do
   end
 
   defp find_user(user_id) do
-    if Sequin.String.uuid?(user_id) do
+    if Sequin.String.sequin_uuid?(user_id) do
       Accounts.get_user(user_id)
     else
       Accounts.get_user(email: user_id)

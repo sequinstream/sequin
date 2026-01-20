@@ -1,4 +1,24 @@
 #!/bin/bash
+#
+# EMERGENCY LOCAL RELEASE SCRIPT
+#
+# ⚠️  This script is for emergency use only!
+#
+# The primary release flow is:
+#   make release  →  pushes tag  →  GitHub Actions handles everything
+#
+# Only use this script if:
+#   - GitHub Actions is down
+#   - There's an urgent release that can't wait
+#   - You need to debug the release process locally
+#
+# This script requires:
+#   - Docker daemon running locally
+#   - .settings.json with homebrewDir and sentryDSN configured
+#   - Local access to the homebrew-sequin repository
+#
+# Usage: make release-local
+#
 set -e
 
 RED='\033[0;31m'

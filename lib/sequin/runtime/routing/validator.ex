@@ -13,40 +13,44 @@ defmodule Sequin.Runtime.Routing.Validator do
 
   @doc """
   Validate that a module properly implements the RoutedConsumer behavior.
-  This function is designed to be used in an `@after_compile` hook.
+  This function is designed to be used in a `@before_compile` hook.
 
   ## Validations Performed
 
-  - Checks that required functions are exported
+  - Checks that required functions are defined
   - Validates that the module defines a struct
 
   ## Parameters
 
   - `env` - The compilation environment containing module information
-  - `_bytecode` - The compiled bytecode (unused)
 
   ## Raises
 
   `CompileError` if the module doesn't meet the requirements.
   """
-  def __after_compile__(env, _bytecode) do
-    validate_module(env.module)
+  defmacro __before_compile__(env) do
+    Sequin.Runtime.Routing.Validator.validate_module_definitions(env.module)
+
+    quote do
+    end
   end
 
-  defp validate_module(module) do
-    validate_required_functions(module)
-    validate_struct_definition(module)
+  def validate_module_definitions(module) do
+    definitions = Module.definitions_in(module)
+
+    validate_required_functions(definitions, module)
+    validate_struct_definition(definitions, module)
     :ok
   end
 
   # Private validation functions
 
-  defp validate_required_functions(module) do
+  defp validate_required_functions(definitions, module) do
     required_functions = Sequin.Runtime.Routing.RoutedConsumer.behaviour_info(:callbacks)
 
     missing_functions =
       Enum.filter(required_functions, fn {name, arity} ->
-        not function_exported?(module, name, arity)
+        not Enum.member?(definitions, {name, arity})
       end)
 
     if missing_functions != [] do
@@ -61,8 +65,8 @@ defmodule Sequin.Runtime.Routing.Validator do
     end
   end
 
-  defp validate_struct_definition(module) do
-    if !function_exported?(module, :__struct__, 0) do
+  defp validate_struct_definition(definitions, module) do
+    if not (Enum.member?(definitions, {:__struct__, 0}) or Enum.member?(definitions, {:__struct__, 1})) do
       raise CompileError,
         description: """
         Module #{module} must define a struct with the routing parameters.

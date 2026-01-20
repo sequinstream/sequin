@@ -157,7 +157,6 @@
 
           {#if selectedSourceTable}
             <FilterForm
-              messageKind="event"
               selectedTable={selectedSourceTable}
               bind:form
               onFilterChange={(filters) => (form.sourceTableFilters = filters)}

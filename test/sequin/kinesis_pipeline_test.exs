@@ -4,7 +4,7 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
   alias Sequin.Aws.HttpClient
   alias Sequin.AwsMock
   alias Sequin.Consumers
-  alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.AwsFactory
@@ -34,7 +34,6 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :kinesis,
-          message_kind: :record,
           batch_size: 10,
           replication_slot_id: replication.id
         )
@@ -48,9 +47,9 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       record = CharacterFactory.character_attrs()
 
       event =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record))
 
       Req.Test.stub(HttpClient, fn conn ->
         send(test_pid, {:kinesis_request, conn})
@@ -60,7 +59,7 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       start_pipeline!(consumer)
 
       ref = send_test_event(consumer, event)
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:kinesis_request, _}, 1_000
     end
 
@@ -71,14 +70,14 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       record2 = CharacterFactory.character_attrs()
 
       event1 =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record1))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record1))
 
       event2 =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record2))
 
       Req.Test.stub(HttpClient, fn conn ->
         send(test_pid, {:kinesis_request, conn})
@@ -89,7 +88,7 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
 
       ref = send_test_batch(consumer, [event1, event2])
 
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}, %{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}, %{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:kinesis_request, _conn}, 1_000
     end
 
@@ -158,9 +157,9 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       record = CharacterFactory.character_attrs()
 
       record =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record, action: :insert))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record, action: :insert))
 
       Req.Test.stub(HttpClient, fn conn ->
         # Parse the request body to verify routing worked
@@ -177,7 +176,7 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       start_pipeline!(consumer)
 
       ref = send_test_event(consumer, record)
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:kinesis_request, _conn}, 1_000
     end
 
@@ -209,14 +208,14 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       record2 = CharacterFactory.character_attrs(%{name: "regular_user"})
 
       event1 =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record1))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record1))
 
       event2 =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record2))
 
       request_count = :counters.new(1, [:atomics])
 
@@ -242,8 +241,8 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       ref = send_test_batch(consumer, [event1, event2])
 
       # Should receive acknowledgment for each message separately (they go to different streams)
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
 
       # Should receive two separate Kinesis requests (one for each stream)
       assert_receive {:kinesis_request, _conn, :admin}, 1_000
@@ -279,9 +278,9 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       record = CharacterFactory.character_attrs()
 
       event =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record))
 
       Req.Test.stub(HttpClient, fn conn ->
         # Verify that task role credentials are used in the Authorization header
@@ -313,7 +312,7 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
       start_pipeline!(consumer)
 
       ref = send_test_event(consumer, event)
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:kinesis_request, _}, 1_000
     end
   end
@@ -332,7 +331,7 @@ defmodule Sequin.Runtime.KinesisPipelineTest do
   defp send_test_event(consumer, event \\ nil) do
     event =
       event ||
-        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+        ConsumersFactory.insert_deliverable_consumer_event!(consumer_id: consumer.id)
 
     Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test", headers: []})
   end

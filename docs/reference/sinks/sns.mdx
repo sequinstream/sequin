@@ -111,6 +111,32 @@ Sequin supports streaming to either SNS or [SQS](/reference/sinks/sqs) directly.
 
 Use Sequin's SQS sink if you're sending data to a single SQS queue. Use Sequin's SNS sink with SQS subscriptions if you need to fan‑out events to multiple SQS queues.
 
+## Running SNS locally
+
+You can run SNS locally using [LocalStack](https://localstack.cloud/).
+
+```bash
+docker run -d -p 4566:4566 -e SERVICES=sns localstack/localstack
+```
+
+Then, include the `use_emulator: true` and `emulator_base_url` configuration to send messages to the local SNS topic:
+
+```yaml
+sinks:
+  - name: "demo-to-sns"
+    database: "my-database"
+    table: "public.events"
+    batch_size: 10
+    destination:
+      type: "sns"
+      topic_arn: "arn:aws:sns:us-east-1:000000000000:my-topic"
+      region: "us-east-1"
+      use_emulator: true
+      emulator_base_url: "http://localstack:4566"
+      access_key_id: "test"
+      secret_access_key: "test"
+```
+
 ## Debugging
 
 You can monitor the status of your SNS sink in the Sequin console.

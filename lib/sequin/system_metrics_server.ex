@@ -4,6 +4,9 @@ defmodule Sequin.SystemMetricsServer do
 
   require Logger
 
+  # cpu_sup is part of os_mon, which is included in extra_applications but not loaded at compile time
+  @compile {:no_warn_undefined, [:cpu_sup]}
+
   @interval to_timeout(second: 30)
   @run_queue_threshold 50
   @cpu_load_threshold 80

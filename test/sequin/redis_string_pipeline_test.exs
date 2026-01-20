@@ -17,8 +17,7 @@ defmodule Sequin.Runtime.RedisStringPipelineTest do
           account_id: account.id,
           batch_size: 10,
           type: :redis_string,
-          sink: %{type: :redis_string},
-          message_kind: :event
+          sink: %{type: :redis_string}
         )
 
       {:ok, %{consumer: consumer}}

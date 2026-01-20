@@ -4,7 +4,6 @@ defmodule Sequin.Runtime.TableReader do
   alias Sequin.Consumers
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
@@ -42,7 +41,7 @@ defmodule Sequin.Runtime.TableReader do
               table :: PostgresDatabaseTable.t(),
               min_cursor :: KeysetCursor.cursor()
             ) ::
-              {:ok, %{messages: [ConsumerRecord.t() | ConsumerEvent.t()], next_cursor: KeysetCursor.cursor() | nil}}
+              {:ok, %{messages: [ConsumerEvent.t()], next_cursor: KeysetCursor.cursor() | nil}}
               | {:error, any()}
 
   @callback fetch_batch(
@@ -52,7 +51,7 @@ defmodule Sequin.Runtime.TableReader do
               min_cursor :: KeysetCursor.cursor(),
               opts :: Keyword.t()
             ) ::
-              {:ok, %{messages: [ConsumerRecord.t() | ConsumerEvent.t()], next_cursor: KeysetCursor.cursor() | nil}}
+              {:ok, %{messages: [ConsumerEvent.t()], next_cursor: KeysetCursor.cursor() | nil}}
               | {:error, any()}
 
   # Cursor
@@ -217,7 +216,7 @@ defmodule Sequin.Runtime.TableReader do
           min_cursor :: KeysetCursor.cursor(),
           opts :: Keyword.t()
         ) ::
-          {:ok, %{messages: [ConsumerRecord.t() | ConsumerEvent.t()], next_cursor: KeysetCursor.cursor() | nil}}
+          {:ok, %{messages: [ConsumerEvent.t()], next_cursor: KeysetCursor.cursor() | nil}}
           | {:error, any()}
   def fetch_batch(
         db_or_conn,

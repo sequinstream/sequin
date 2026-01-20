@@ -203,6 +203,44 @@ You can also specify schemas and tables to include or exclude from the stream.
 
 Additionally, you can specify `actions` to stream. By default, all actions (`insert`, `update`, `delete`) are included.  `read` events are emitted during backfills and are always included.
 
+#### Initial backfill
+
+You can configure an initial [backfill](/reference/backfills) to run when a sink is created. This only applies when the sink is first created via YAML; updating an existing sink will not trigger a backfill.
+
+**Simple syntax** - full backfill of all tables in the source:
+
+```yaml
+sinks:
+  - name: "my-sink"
+    database: "my-database"
+    table: "public.users"
+    initial_backfill: true
+```
+
+**Advanced syntax** - configure specific tables or partial backfills:
+
+```yaml
+sinks:
+  - name: "my-sink"
+    database: "my-database"
+    source:
+      include_tables:
+        - "public.users"
+        - "public.orders"
+    initial_backfill:
+      - table: "public.users"          # Full backfill (default)
+      - table: "public.orders"
+        type: "partial"                 # Partial backfill
+        sort_column: "updated_at"       # Column to sort by
+        start_position: "2025-01-01T00:00:00Z"  # Start position
+```
+
+For partial backfills, you must specify both `sort_column` (the column to order by) and `start_position` (where to start the backfill from).
+
+<Note>
+  To trigger a backfill on an existing sink, use the [Management API](/management-api/backfills/create) or the web console.
+</Note>
+
 #### Message grouping
 
 The `message_grouping` field controls whether messages are grouped for ordering purposes. When enabled (default), messages are grouped by primary key or custom grouping columns, ensuring ordered delivery within each group. When disabled, messages are not grouped, which may allow for higher throughput for some sinks.
@@ -349,6 +387,18 @@ destination:
   use_task_role: true           # Use ECS task role, EC2 instance profile, or EKS service account
 ```
 
+**Using LocalStack (for local development):**
+```yaml
+destination:
+  type: "sqs"                   # Required
+  queue_url: "http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-queue"
+  region: "us-east-1"
+  use_emulator: true            # Enable emulator mode
+  emulator_base_url: "http://localstack:4566"  # LocalStack endpoint
+  access_key_id: "test"
+  secret_access_key: "test"
+```
+
 #### SNS sink
 For publishing changes to AWS SNS topics:
 
@@ -369,6 +419,18 @@ destination:
   type: "sns"                   # Required
   topic_arn: "arn:aws:sns:us-west-2:123456789012:my-topic" # Required, full SNS Topic ARN
   use_task_role: true           # Use ECS task role, EC2 instance profile, or EKS service account
+```
+
+**Using LocalStack (for local development):**
+```yaml
+destination:
+  type: "sns"                   # Required
+  topic_arn: "arn:aws:sns:us-east-1:000000000000:my-topic"
+  region: "us-east-1"
+  use_emulator: true            # Enable emulator mode
+  emulator_base_url: "http://localstack:4566"  # LocalStack endpoint
+  access_key_id: "test"
+  secret_access_key: "test"
 ```
 
 #### Redis sink

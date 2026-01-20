@@ -26,7 +26,6 @@ defmodule Sequin.Runtime.RabbitMqPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :rabbitmq,
-          message_kind: :event,
           transform_id: transform.id
         )
 
@@ -37,12 +36,7 @@ defmodule Sequin.Runtime.RabbitMqPipelineTest do
       message =
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
-          data:
-            ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
-              action: :insert
-            )
+          data: ConsumersFactory.consumer_message_data(action: :insert)
         )
 
       Mox.expect(RabbitMqMock, :send_messages, fn _consumer, routed_messages ->
@@ -64,12 +58,7 @@ defmodule Sequin.Runtime.RabbitMqPipelineTest do
         for _ <- 1..3 do
           ConsumersFactory.insert_consumer_message!(
             consumer_id: consumer.id,
-            message_kind: consumer.message_kind,
-            data:
-              ConsumersFactory.consumer_message_data(
-                message_kind: consumer.message_kind,
-                action: Enum.random([:insert, :update])
-              )
+            data: ConsumersFactory.consumer_message_data(action: Enum.random([:insert, :update]))
           )
         end
 
@@ -119,7 +108,6 @@ defmodule Sequin.Runtime.RabbitMqPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :rabbitmq,
-          message_kind: :event,
           transform_id: transform.id,
           routing_mode: "dynamic",
           routing_id: routing.id
@@ -132,12 +120,7 @@ defmodule Sequin.Runtime.RabbitMqPipelineTest do
       message =
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
-          data:
-            ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
-              action: :insert
-            )
+          data: ConsumersFactory.consumer_message_data(action: :insert)
         )
 
       Mox.expect(RabbitMqMock, :send_messages, fn _consumer, routed_messages ->
@@ -169,10 +152,8 @@ defmodule Sequin.Runtime.RabbitMqPipelineTest do
       message =
         ConsumersFactory.consumer_message(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           data:
             ConsumersFactory.consumer_message_data(
-              message_kind: consumer.message_kind,
               action: :insert,
               record: %{"id" => 123, "deleted_at" => "2024-01-01T00:00:00Z"}
             )

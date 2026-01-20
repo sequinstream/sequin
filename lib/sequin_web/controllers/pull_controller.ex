@@ -2,6 +2,7 @@ defmodule SequinWeb.PullController do
   use SequinWeb, :controller
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Runtime.SlotMessageStore
   alias Sequin.String, as: SequinString
@@ -21,7 +22,8 @@ defmodule SequinWeb.PullController do
          :ok <- SlotMessageStore.nack_stale_produced_messages(consumer),
          {:ok, messages} <- SlotMessageStore.produce(consumer, batch_size, :consistent_pid) do
       Logger.metadata(batch_size: batch_size)
-      render(conn, "receive.json", consumer: consumer, messages: messages)
+      enriched_messages = enrich_messages(consumer, messages)
+      render(conn, "receive.json", consumer: consumer, messages: enriched_messages)
     end
   end
 
@@ -168,5 +170,23 @@ defmodule SequinWeb.PullController do
 
   defp env do
     Application.get_env(:sequin, :env)
+  end
+
+  defp enrich_messages(%SinkConsumer{enrichment: nil}, messages), do: messages
+
+  defp enrich_messages(%SinkConsumer{} = consumer, messages) do
+    # Group by table_oid to batch enrichment queries efficiently
+    enriched_by_cursor =
+      messages
+      |> Enum.group_by(& &1.table_oid)
+      |> Enum.flat_map(fn {_table_oid, table_messages} ->
+        Consumers.enrich_messages!(consumer.postgres_database, consumer.enrichment, table_messages)
+      end)
+      |> Map.new(&{{&1.commit_lsn, &1.commit_idx}, &1})
+
+    # Return in original order
+    Enum.map(messages, fn msg ->
+      Map.fetch!(enriched_by_cursor, {msg.commit_lsn, msg.commit_idx})
+    end)
   end
 end

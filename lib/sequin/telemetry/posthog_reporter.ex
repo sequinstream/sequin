@@ -134,7 +134,6 @@ defmodule Sequin.Telemetry.PosthogReporter do
           event_count: length(events),
           message_count: total_count,
           bytes_processed: total_bytes,
-          message_kind: base_metadata.properties.message_kind,
           "$groups": base_metadata.properties[:"$groups"],
           "$process_person_profile": base_metadata.properties[:"$process_person_profile"]
         }

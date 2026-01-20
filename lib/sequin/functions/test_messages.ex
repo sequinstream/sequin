@@ -13,7 +13,7 @@ defmodule Sequin.Functions.TestMessages do
 
   @type database_id :: String.t()
   @type table_oid :: integer()
-  @type consumer_message :: Sequin.Consumers.ConsumerRecord.t() | Sequin.Consumers.ConsumerEvent.t()
+  @type consumer_message :: Sequin.Consumers.ConsumerEvent.t()
 
   def max_message_count, do: 10
 

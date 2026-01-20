@@ -9,8 +9,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerEventData.Metadata
-  alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
@@ -104,13 +102,6 @@ defmodule Sequin.Consumers do
     ce.consumer_id
     |> ConsumerEvent.where_consumer_id()
     |> ConsumerEvent.where_commit_lsn(ce.commit_lsn)
-    |> Repo.one()
-  end
-
-  def reload(%ConsumerRecord{} = cr) do
-    cr.consumer_id
-    |> ConsumerRecord.where_consumer_id()
-    |> ConsumerRecord.where_id(cr.id)
     |> Repo.one()
   end
 
@@ -372,12 +363,8 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  def partition_name(%{message_kind: :event} = consumer) do
+  def partition_name(consumer) do
     "consumer_events_#{consumer.seq}"
-  end
-
-  def partition_name(%{message_kind: :record} = consumer) do
-    "consumer_records_#{consumer.seq}"
   end
 
   # SinkConsumer
@@ -414,7 +401,11 @@ defmodule Sequin.Consumers do
     Cache.get_or_store(
       cache_key,
       fn ->
-        find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream, preload: [:transform])
+        find_sink_consumer(account_id,
+          id_or_name: id_or_name,
+          type: :sequin_stream,
+          preload: [:transform, :enrichment, :postgres_database]
+        )
       end,
       ttl
     )
@@ -457,10 +448,7 @@ defmodule Sequin.Consumers do
   # ConsumerEvent
 
   def list_consumer_messages_for_consumer(%SinkConsumer{} = consumer, params \\ [], opts \\ []) do
-    case consumer.message_kind do
-      :event -> list_consumer_events_for_consumer(consumer.id, params, opts)
-      :record -> list_consumer_records_for_consumer(consumer.id, params, opts)
-    end
+    list_consumer_events_for_consumer(consumer.id, params, opts)
   end
 
   def list_consumer_events_for_consumer(consumer_id, params \\ [], opts \\ []) do
@@ -499,18 +487,12 @@ defmodule Sequin.Consumers do
   end
 
   @spec stream_consumer_messages_for_consumer(SinkConsumer.t(), Keyword.t()) ::
-          Enumerable.t(ConsumerRecord.t() | ConsumerEvent.t())
-  def stream_consumer_messages_for_consumer(%SinkConsumer{id: consumer_id} = consumer, opts \\ []) do
+          Enumerable.t(ConsumerEvent.t())
+  def stream_consumer_messages_for_consumer(%SinkConsumer{id: consumer_id}, opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 1000)
 
-    module =
-      case consumer.message_kind do
-        :event -> ConsumerEvent
-        :record -> ConsumerRecord
-      end
-
     initial_query =
-      module
+      ConsumerEvent
       |> where([m], m.consumer_id == ^consumer_id)
       |> order_by([m], asc: m.commit_lsn, asc: m.commit_idx)
       |> limit(^batch_size)
@@ -544,16 +526,13 @@ defmodule Sequin.Consumers do
       {query, [h | t], cursor} ->
         {h, {query, t, cursor}}
     end)
-    |> Stream.map(&module.deserialize/1)
+    |> Stream.map(&ConsumerEvent.deserialize/1)
   end
 
-  @spec upsert_consumer_messages(SinkConsumer.t(), list(ConsumerEvent.t()) | list(ConsumerRecord.t())) ::
+  @spec upsert_consumer_messages(SinkConsumer.t(), list(ConsumerEvent.t())) ::
           {:ok, non_neg_integer()}
-  def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
-    case consumer.message_kind do
-      :event -> upsert_consumer_events(messages)
-      :record -> upsert_consumer_records(messages)
-    end
+  def upsert_consumer_messages(%SinkConsumer{}, messages) do
+    upsert_consumer_events(messages)
   end
 
   defp upsert_consumer_events([]), do: {:ok, []}
@@ -593,48 +572,6 @@ defmodule Sequin.Consumers do
     %{message | deliver_count: deliver_count, not_visible_until: not_visible_until}
   end
 
-  # ConsumerRecord
-
-  def list_consumer_records_for_consumer(consumer_id, params \\ [], opts \\ []) do
-    consumer_id
-    |> consumer_record_query(params)
-    |> Repo.all(opts)
-    |> Enum.map(&ConsumerRecord.deserialize/1)
-  end
-
-  defp consumer_record_query(consumer_id, params) do
-    base_query = ConsumerRecord.where_consumer_id(consumer_id)
-
-    Enum.reduce(params, base_query, fn
-      {:is_deliverable, false}, query ->
-        ConsumerRecord.where_not_visible(query)
-
-      {:is_deliverable, true}, query ->
-        ConsumerRecord.where_deliverable(query)
-
-      {:is_delivered, true}, query ->
-        ConsumerRecord.where_not_visible(query)
-
-      {:limit, limit}, query ->
-        limit(query, ^limit)
-
-      {:offset, offset}, query ->
-        offset(query, ^offset)
-
-      {:order_by, order_by}, query ->
-        order_by(query, ^order_by)
-
-      {:select, select}, query ->
-        select(query, ^select)
-
-      {:ids, ids}, query ->
-        ConsumerRecord.where_ids(query, ids)
-
-      {:wal_cursor_in, wal_cursors}, query ->
-        ConsumerRecord.where_wal_cursor_in(query, wal_cursors)
-    end)
-  end
-
   @fast_count_threshold 50_000
   def fast_count_threshold, do: @fast_count_threshold
 
@@ -654,23 +591,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp consumer_messages_query(%{message_kind: :record} = consumer, params) do
-    Enum.reduce(params, ConsumerRecord.where_consumer_id(consumer.id), fn
-      {:delivery_count_gte, delivery_count}, query ->
-        ConsumerRecord.where_delivery_count_gte(query, delivery_count)
-
-      {:is_delivered, true}, query ->
-        ConsumerRecord.where_not_visible(query)
-
-      {:is_deliverable, true}, query ->
-        ConsumerRecord.where_deliverable(query)
-
-      {:limit, limit}, query ->
-        limit(query, ^limit)
-    end)
-  end
-
-  defp consumer_messages_query(%{message_kind: :event} = consumer, params) do
+  defp consumer_messages_query(consumer, params) do
     Enum.reduce(params, ConsumerEvent.where_consumer_id(consumer.id), fn
       {:delivery_count_gte, delivery_count}, query ->
         ConsumerEvent.where_delivery_count_gte(query, delivery_count)
@@ -683,40 +604,9 @@ defmodule Sequin.Consumers do
     |> Repo.aggregate(:count, :id)
   end
 
-  defp upsert_consumer_records([]), do: {:ok, []}
-
-  defp upsert_consumer_records(consumer_records) do
-    now = DateTime.utc_now()
-
-    records =
-      Enum.map(consumer_records, fn %ConsumerRecord{} = record ->
-        attrs = ConsumerRecord.map_from_struct(record)
-
-        %{record | updated_at: now, inserted_at: now}
-        |> ConsumerRecord.create_changeset(attrs)
-        |> Changeset.apply_changes()
-        |> Sequin.Map.from_ecto()
-        |> drop_virtual_fields()
-      end)
-
-    {count, _records} =
-      Repo.insert_all(
-        ConsumerRecord,
-        records,
-        on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: [:consumer_id, :ack_id]
-      )
-
-    {:ok, count}
-  end
-
   # ConsumerMessage
 
-  def consumer_message(
-        %SinkConsumer{message_kind: :event} = consumer,
-        %PostgresDatabase{} = database,
-        %Message{} = message
-      ) do
+  def consumer_message(%SinkConsumer{} = consumer, %PostgresDatabase{} = database, %Message{} = message) do
     data = event_data_from_message(message, consumer, database)
     payload_size = :erlang.external_size(data)
 
@@ -725,30 +615,6 @@ defmodule Sequin.Consumers do
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,
       commit_timestamp: message.commit_timestamp,
-      record_pks: message_pks(message),
-      group_id: generate_group_id(consumer, message),
-      table_oid: message.table_oid,
-      deliver_count: 0,
-      data: data,
-      replication_message_trace_id: message.trace_id,
-      payload_size_bytes: payload_size
-    }
-  end
-
-  def consumer_message(
-        %SinkConsumer{message_kind: :record} = consumer,
-        %PostgresDatabase{} = database,
-        %Message{} = message
-      ) do
-    data = record_data_from_message(message, consumer, database)
-    payload_size = :erlang.external_size(data)
-
-    %ConsumerRecord{
-      consumer_id: consumer.id,
-      commit_lsn: message.commit_lsn,
-      commit_idx: message.commit_idx,
-      commit_timestamp: message.commit_timestamp,
-      deleted: message.action == :delete,
       record_pks: message_pks(message),
       group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,
@@ -780,29 +646,6 @@ defmodule Sequin.Consumers do
       record: message_record(message),
       changes: message_changes(message),
       action: :update,
-      metadata: metadata
-    }
-  end
-
-  defp record_data_from_message(%Message{action: action} = message, consumer, database)
-       when action in [:insert, :update, :read] do
-    metadata = metadata(message, consumer, database)
-    metadata = struct(ConsumerRecordData.Metadata, metadata)
-
-    %ConsumerRecordData{
-      record: message_record(message),
-      action: action,
-      metadata: metadata
-    }
-  end
-
-  defp record_data_from_message(%Message{action: :delete} = message, consumer, database) do
-    metadata = metadata(message, consumer, database)
-    metadata = struct(ConsumerRecordData.Metadata, metadata)
-
-    %ConsumerRecordData{
-      record: message_record(message),
-      action: :delete,
       metadata: metadata
     }
   end
@@ -849,28 +692,24 @@ defmodule Sequin.Consumers do
     database_metadata = database_metadata(consumer, database)
     metadata = Sequin.Map.put_if_present(metadata, :database, database_metadata)
 
-    if consumer.message_kind == :event do
-      case decode_transaction_annotations(message.transaction_annotations) do
-        {:ok, annotations} ->
-          Map.put(metadata, :transaction_annotations, annotations)
+    case decode_transaction_annotations(message.transaction_annotations) do
+      {:ok, annotations} ->
+        Map.put(metadata, :transaction_annotations, annotations)
 
-        _ ->
-          error = Error.invariant(message: "Invalid JSON given to `transaction_annotations.set`")
+      _ ->
+        error = Error.invariant(message: "Invalid JSON given to `transaction_annotations.set`")
 
-          Health.put_event(:sink_consumer, consumer.id, %Event{
-            slug: :invalid_transaction_annotation_received,
-            status: :warning,
-            error: error
-          })
+        Health.put_event(:sink_consumer, consumer.id, %Event{
+          slug: :invalid_transaction_annotation_received,
+          status: :warning,
+          error: error
+        })
 
-          metadata
-      end
-    else
-      metadata
+        metadata
     end
   end
 
-  def consumer_metadata(%SinkConsumer{message_kind: :event} = consumer) do
+  def consumer_metadata(%SinkConsumer{} = consumer) do
     %ConsumerEventData.Metadata.Sink{
       id: consumer.id,
       name: consumer.name,
@@ -878,15 +717,7 @@ defmodule Sequin.Consumers do
     }
   end
 
-  def consumer_metadata(%SinkConsumer{message_kind: :record} = consumer) do
-    %ConsumerRecordData.Metadata.Sink{
-      id: consumer.id,
-      name: consumer.name,
-      annotations: consumer.annotations
-    }
-  end
-
-  def database_metadata(%SinkConsumer{message_kind: :event}, %PostgresDatabase{} = database) do
+  def database_metadata(%SinkConsumer{}, %PostgresDatabase{} = database) do
     %ConsumerEventData.Metadata.Database{
       id: database.id,
       name: database.name,
@@ -896,10 +727,7 @@ defmodule Sequin.Consumers do
     }
   end
 
-  def database_metadata(%SinkConsumer{message_kind: :record}, %PostgresDatabase{}), do: nil
-
-  def generate_group_id(%SinkConsumer{} = consumer, message, %PostgresDatabase{} = database)
-      when is_struct(message, ConsumerEvent) or is_struct(message, ConsumerRecord) do
+  def generate_group_id(%SinkConsumer{} = consumer, %ConsumerEvent{} = message, %PostgresDatabase{} = database) do
     default_group_id = if message.record_pks == [], do: nil, else: Enum.map_join(message.record_pks, ":", &to_string/1)
 
     do_generate_group_id(consumer, message, default_group_id, fn source_table, message ->
@@ -974,13 +802,6 @@ defmodule Sequin.Consumers do
     %{event | group_id: generate_group_id(consumer, event, database), data: data}
   end
 
-  def put_dynamic_fields(%ConsumerRecord{} = record, %SinkConsumer{} = consumer, %PostgresDatabase{} = database) do
-    # Records don't have a database metadata
-    metadata = %{record.data.metadata | consumer: consumer_metadata(consumer), database_name: database.name}
-    data = %{record.data | metadata: metadata}
-    %{record | group_id: generate_group_id(consumer, record, database), data: data}
-  end
-
   def decode_transaction_annotations(nil), do: {:ok, nil}
 
   def decode_transaction_annotations(annotations) when is_binary(annotations) do
@@ -1000,21 +821,19 @@ defmodule Sequin.Consumers do
   # Completely arbitrary number, but must be consistent
   @partition_lock_key "partition_lock_key" |> :erlang.crc32() |> rem(32_768)
 
-  def create_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
-    table_name = if kind == :event, do: "consumer_events", else: "consumer_records"
-
+  def create_consumer_partition(consumer) do
     with {:ok, _} <- Repo.query("SELECT pg_advisory_xact_lock($1)", [@partition_lock_key]),
          {:ok, %Postgrex.Result{command: :create_table}} <-
            Repo.query("""
            CREATE TABLE #{stream_schema()}.#{partition_name(consumer)}
-           PARTITION OF #{stream_schema()}.#{table_name}
+           PARTITION OF #{stream_schema()}.consumer_events
            FOR VALUES IN ('#{consumer.id}');
            """) do
       :ok
     end
   end
 
-  def delete_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
+  def delete_consumer_partition(consumer) do
     with {:ok, _} <- Repo.query("SELECT pg_advisory_xact_lock($1)", [@partition_lock_key]),
          {:ok, %Postgrex.Result{command: :drop_table}} <-
            Repo.query("""
@@ -1044,16 +863,10 @@ defmodule Sequin.Consumers do
   end
 
   def ack_messages(%SinkConsumer{} = consumer, ack_ids) do
-    msg_module =
-      case consumer.message_kind do
-        :event -> ConsumerEvent
-        :record -> ConsumerRecord
-      end
-
     {count, _} =
       consumer.id
-      |> msg_module.where_consumer_id()
-      |> msg_module.where_ack_ids(ack_ids)
+      |> ConsumerEvent.where_consumer_id()
+      |> ConsumerEvent.where_ack_ids(ack_ids)
       |> Repo.delete_all()
 
     {:ok, count}
@@ -1066,15 +879,11 @@ defmodule Sequin.Consumers do
   This is easy to do in Postgres with a single entry. When we want to perform an update
   for multiple messages, cleanest thing to do is to craft an upsert query.
   """
-  def nack_messages_with_backoff(%{message_kind: :event} = consumer, ack_ids_with_not_visible_until) do
+  def nack_messages_with_backoff(consumer, ack_ids_with_not_visible_until) do
     nack_messages_with_backoff(ConsumerEvent, consumer, ack_ids_with_not_visible_until)
   end
 
-  def nack_messages_with_backoff(%{message_kind: :record} = consumer, ack_ids_with_not_visible_until) do
-    nack_messages_with_backoff(ConsumerRecord, consumer, ack_ids_with_not_visible_until)
-  end
-
-  def nack_messages_with_backoff(model, consumer, ack_ids_with_not_visible_until) do
+  defp nack_messages_with_backoff(model, consumer, ack_ids_with_not_visible_until) do
     Repo.transaction(fn ->
       # Get the list of ack_ids
       ack_ids = Map.keys(ack_ids_with_not_visible_until)
@@ -1113,24 +922,7 @@ defmodule Sequin.Consumers do
   @doc """
   Resets visibility timeout for all messages, making them immediately available for redelivery.
   """
-  def reset_all_message_visibilities(%SinkConsumer{message_kind: :record} = consumer) do
-    now = DateTime.utc_now()
-
-    {count, _} =
-      consumer.id
-      |> ConsumerRecord.where_consumer_id()
-      # TODO: Do we need the state filter/check?
-      |> ConsumerRecord.where_state_not(:acked)
-      |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
-
-    if count > 0 do
-      publish_messages_changed(consumer.id)
-    end
-
-    :ok
-  end
-
-  def reset_all_message_visibilities(%SinkConsumer{message_kind: :event} = consumer) do
+  def reset_all_message_visibilities(%SinkConsumer{} = consumer) do
     now = DateTime.utc_now()
 
     {count, _} =
@@ -1148,24 +940,7 @@ defmodule Sequin.Consumers do
   @doc """
   Resets visibility timeout for a specific message, making it immediately available for redelivery.
   """
-  def reset_message_visibility(%SinkConsumer{message_kind: :record} = consumer, ack_id) do
-    now = DateTime.utc_now()
-
-    {count, _} =
-      consumer.id
-      |> ConsumerRecord.where_consumer_id()
-      |> ConsumerRecord.where_ack_ids([ack_id])
-      |> ConsumerRecord.where_state_not(:acked)
-      |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
-
-    if count > 0 do
-      publish_messages_changed(consumer.id)
-    end
-
-    :ok
-  end
-
-  def reset_message_visibility(%SinkConsumer{message_kind: :event} = consumer, ack_id) do
+  def reset_message_visibility(%SinkConsumer{} = consumer, ack_id) do
     now = DateTime.utc_now()
 
     {count, _} =
@@ -1190,7 +965,7 @@ defmodule Sequin.Consumers do
 
   This should be called for messages that were successfully delivered to a sink destination.
   """
-  @spec after_messages_acked(SinkConsumer.t(), list(ConsumerRecord.t() | ConsumerEvent.t())) ::
+  @spec after_messages_acked(SinkConsumer.t(), list(ConsumerEvent.t())) ::
           {:ok, non_neg_integer()}
   def after_messages_acked(%SinkConsumer{}, []), do: {:ok, 0}
 
@@ -1203,7 +978,7 @@ defmodule Sequin.Consumers do
     bytes_processed =
       Enum.sum_by(
         acked_messages,
-        fn message when is_struct(message, ConsumerRecord) or is_struct(message, ConsumerEvent) ->
+        fn %ConsumerEvent{} = message ->
           message.encoded_data_size_bytes || message.payload_size_bytes
         end
       )
@@ -1222,7 +997,6 @@ defmodule Sequin.Consumers do
           consumer_name: consumer.name,
           message_count: count,
           bytes_processed: bytes_processed,
-          message_kind: consumer.message_kind,
           "$groups": %{account: consumer.account_id},
           "$process_person_profile": false
         }
@@ -1410,12 +1184,6 @@ defmodule Sequin.Consumers do
     end
   end
 
-  # Source Table Matching
-  def matches_message?(%SinkConsumer{message_kind: :record} = consumer, %SlotProcessor.Message{action: :delete}) do
-    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
-    false
-  end
-
   # Schema Matching
   def matches_message?(%SinkConsumer{} = consumer, %SlotProcessor.Message{} = message) do
     actions_match? = message.action in consumer.actions
@@ -1476,8 +1244,7 @@ defmodule Sequin.Consumers do
     true
   end
 
-  def matches_filter?(%SinkConsumer{id: consumer_id, filter: filter} = consumer, %cm{data: data})
-      when cm in [ConsumerRecord, ConsumerEvent] do
+  def matches_filter?(%SinkConsumer{id: consumer_id, filter: filter} = consumer, %ConsumerEvent{data: data}) do
     filter
     |> MiniElixir.run_compiled(data)
     |> check_filter_return()

@@ -134,9 +134,10 @@ defmodule Sequin.Consumers.ConsumerEventData do
       map = Sequin.Map.atomize_keys(consumer)
       struct!(ConsumerEventData.Metadata.Sink, map)
     end)
-    |> update_in([Access.key(:metadata), Access.key(:database)], fn database ->
-      map = Sequin.Map.atomize_keys(database)
-      struct!(ConsumerEventData.Metadata.Database, map)
+    |> update_in([Access.key(:metadata), Access.key(:database)], fn
+      database ->
+        map = Sequin.Map.atomize_keys(database || %{})
+        struct!(ConsumerEventData.Metadata.Database, map)
     end)
   end
 end

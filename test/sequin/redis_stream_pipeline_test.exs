@@ -19,8 +19,7 @@ defmodule Sequin.RedisStreamPipelineTest do
           account_id: account.id,
           batch_size: 10,
           type: :redis_stream,
-          sink: %{type: :redis_stream, stream_key: "test-stream"},
-          message_kind: :event
+          sink: %{type: :redis_stream, stream_key: "test-stream"}
         )
 
       {:ok, %{consumer: consumer}}

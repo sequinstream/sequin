@@ -79,7 +79,6 @@ defmodule Sequin.PostgresReplicationTest do
       event_character_consumer =
         ConsumersFactory.insert_sink_consumer!(
           name: "event_character_consumer",
-          message_kind: :event,
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
@@ -94,7 +93,6 @@ defmodule Sequin.PostgresReplicationTest do
       event_character_ident_consumer =
         ConsumersFactory.insert_sink_consumer!(
           name: "event_character_ident_consumer",
-          message_kind: :event,
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
@@ -109,45 +107,6 @@ defmodule Sequin.PostgresReplicationTest do
       event_character_multi_pk_consumer =
         ConsumersFactory.insert_sink_consumer!(
           name: "event_character_multi_pk_consumer",
-          message_kind: :event,
-          status: :paused,
-          replication_slot_id: pg_replication.id,
-          account_id: account_id,
-          source_tables: [
-            ConsumersFactory.source_table_attrs(
-              table_oid: CharacterMultiPK.table_oid(),
-              group_column_attnums: [
-                CharacterMultiPK.column_attnum("id_integer"),
-                CharacterMultiPK.column_attnum("id_string"),
-                CharacterMultiPK.column_attnum("id_uuid")
-              ]
-            )
-          ]
-        )
-
-      # Create consumers for each table type (record)
-      record_character_consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          name: "record_character_consumer",
-          message_kind: :record,
-          status: :paused,
-          replication_slot_id: pg_replication.id,
-          account_id: account_id
-        )
-
-      record_character_ident_consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          name: "record_character_ident_consumer",
-          message_kind: :record,
-          status: :paused,
-          replication_slot_id: pg_replication.id,
-          account_id: account_id
-        )
-
-      record_character_multi_pk_consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          name: "record_character_multi_pk_consumer",
-          message_kind: :record,
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
@@ -187,14 +146,12 @@ defmodule Sequin.PostgresReplicationTest do
             batch: true
           },
           replication_slot_id: pg_replication.id,
-          message_kind: :event,
           status: :active
         )
 
       test_event_log_partitioned_consumer =
         ConsumersFactory.insert_sink_consumer!(
           name: "test_event_log_partitioned_consumer",
-          message_kind: :event,
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
@@ -210,9 +167,6 @@ defmodule Sequin.PostgresReplicationTest do
       event_character_ident_consumer = Repo.preload(event_character_ident_consumer, :postgres_database)
       event_character_multi_pk_consumer = Repo.preload(event_character_multi_pk_consumer, :postgres_database)
 
-      record_character_consumer = Repo.preload(record_character_consumer, :postgres_database)
-      record_character_ident_consumer = Repo.preload(record_character_ident_consumer, :postgres_database)
-      record_character_multi_pk_consumer = Repo.preload(record_character_multi_pk_consumer, :postgres_database)
       test_event_log_partitioned_consumer = Repo.preload(test_event_log_partitioned_consumer, :postgres_database)
       sup = Module.concat(__MODULE__, Runtime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
@@ -226,9 +180,6 @@ defmodule Sequin.PostgresReplicationTest do
         event_character_consumer: event_character_consumer,
         event_character_ident_consumer: event_character_ident_consumer,
         event_character_multi_pk_consumer: event_character_multi_pk_consumer,
-        record_character_consumer: record_character_consumer,
-        record_character_ident_consumer: record_character_ident_consumer,
-        record_character_multi_pk_consumer: record_character_multi_pk_consumer,
         test_event_log_partitioned_consumer: test_event_log_partitioned_consumer,
         test_event_log_partitioned_consumer_http: test_event_log_partitioned_consumer_http
       }
@@ -261,20 +212,6 @@ defmodule Sequin.PostgresReplicationTest do
       )
 
       assert is_struct(data.metadata.commit_timestamp, DateTime)
-    end
-
-    test "inserts are replicated to consumer records", %{record_character_consumer: consumer} do
-      # Insert a character
-      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-      # Wait for the message to be handled
-      [consumer_record] = receive_messages(consumer, 1)
-
-      # Assert the consumer record details
-      assert consumer_record.consumer_id == consumer.id
-      assert consumer_record.table_oid == Character.table_oid()
-      assert consumer_record.record_pks == [to_string(character.id)]
-      assert consumer_record.group_id == to_string(character.id)
     end
 
     test "updates are replicated to consumer events when replica identity default", %{event_character_consumer: consumer} do
@@ -325,30 +262,6 @@ defmodule Sequin.PostgresReplicationTest do
       )
 
       assert is_struct(data.metadata.commit_timestamp, DateTime)
-    end
-
-    test "updates are replicated to consumer records when replica identity default", %{
-      record_character_consumer: consumer
-    } do
-      # Insert a character
-      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-      # Wait for the message to be handled
-      await_messages(1)
-
-      # Update the character
-      UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
-
-      # Wait for the update message to be handled and fetch consumer records
-      await_messages(1)
-      records = list_messages(consumer)
-
-      # Assert the consumer record details
-      Enum.each(records, fn record ->
-        assert record.consumer_id == consumer.id
-        assert record.table_oid == Character.table_oid()
-        assert record.record_pks == [to_string(character.id)]
-      end)
     end
 
     test "updates are replicated to consumer events when replica identity full", %{
@@ -433,21 +346,6 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "deletes are replicated to consumer records when replica identity default", %{
-      record_character_consumer: consumer
-    } do
-      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-      await_messages(1)
-
-      UnboxedRepo.delete!(character)
-
-      await_messages(1)
-      records = list_messages(consumer)
-      assert length(records) == 1
-      refute Enum.any?(records, & &1.deleted)
-    end
-
     test "deletes are replicated to consumer events when replica identity full", %{
       event_character_ident_consumer: consumer
     } do
@@ -479,12 +377,8 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     test "replication with multiple primary key columns", %{
-      event_character_multi_pk_consumer: event_consumer,
-      record_character_multi_pk_consumer: record_consumer
+      event_character_multi_pk_consumer: consumer
     } do
-      # Randomly select a consumer
-      consumer = Enum.random([event_consumer, record_consumer])
-
       # Insert
       character = CharacterFactory.insert_character_multi_pk!([], repo: UnboxedRepo)
 
@@ -501,13 +395,7 @@ defmodule Sequin.PostgresReplicationTest do
              ]
     end
 
-    test "consumer with column filter only receives relevant messages", %{
-      event_character_consumer: event_consumer,
-      record_character_consumer: record_consumer
-    } do
-      # Randomly select a consumer
-      consumer = Enum.random([event_consumer, record_consumer])
-
+    test "consumer with column filter only receives relevant messages", %{event_character_consumer: consumer} do
       source = ConsumersFactory.source_attrs(include_table_oids: [Character.table_oid()])
       {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{actions: [:insert, :update], source: source})
 
@@ -532,27 +420,6 @@ defmodule Sequin.PostgresReplicationTest do
       # Wait for the message to be handled and fetch consumer messages, no new message should be created
       messages = receive_messages(consumer, 1)
       assert [^consumer_message] = messages
-    end
-
-    test "inserts are fanned out to both events and records", %{
-      event_character_consumer: event_consumer,
-      record_character_consumer: record_consumer
-    } do
-      # Insert a character
-      CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-      # Wait for the message to be handled and fetch consumer events and records
-      await_messages(1)
-      [event_message] = list_messages(event_consumer)
-      [record_message] = list_messages(record_consumer)
-
-      # Assert both event and record were created
-      assert event_message.consumer_id == event_consumer.id
-      assert record_message.consumer_id == record_consumer.id
-
-      # Assert both have the same data
-      assert event_message.table_oid == record_message.table_oid
-      assert event_message.record_pks == record_message.record_pks
     end
 
     test "empty array fields are replicated correctly", %{event_character_consumer: consumer} do
@@ -1242,22 +1109,6 @@ defmodule Sequin.PostgresReplicationTest do
       # Create a consumer for this replication slot (event)
       event_consumer =
         ConsumersFactory.insert_sink_consumer!(
-          message_kind: :event,
-          status: :paused,
-          replication_slot_id: pg_replication.id,
-          account_id: account_id,
-          source_tables: [
-            ConsumersFactory.source_table_attrs(
-              table_oid: Character.table_oid(),
-              group_column_attnums: [Character.column_attnum("id")]
-            )
-          ]
-        )
-
-      # Create a consumer for this replication slot (record)
-      record_consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          message_kind: :record,
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
@@ -1279,8 +1130,7 @@ defmodule Sequin.PostgresReplicationTest do
         sup_name: sup,
         pg_replication: pg_replication,
         source_db: source_db,
-        event_consumer: event_consumer,
-        record_consumer: record_consumer
+        event_consumer: event_consumer
       }
     end
 
@@ -1305,20 +1155,6 @@ defmodule Sequin.PostgresReplicationTest do
       assert data.action == :insert
       assert_maps_equal(data.metadata, %{table_name: "Characters", table_schema: "public"}, [:table_name, :table_schema])
       assert is_struct(data.metadata.commit_timestamp, DateTime)
-    end
-
-    test "inserts are replicated to consumer records", %{record_consumer: consumer} do
-      # Insert a character
-      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-      # Wait for the message to be handled and fetch consumer records
-      [consumer_record] = receive_messages(consumer, 1)
-
-      # Assert the consumer record details
-      assert consumer_record.consumer_id == consumer.id
-      assert consumer_record.table_oid == Character.table_oid()
-      assert consumer_record.record_pks == [to_string(character.id)]
-      assert consumer_record.group_id == to_string(character.id)
     end
 
     test "updates are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
@@ -1364,28 +1200,6 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "updates are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
-      # Insert a character
-      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-      # Wait for the insert message to be handled
-      await_messages(1)
-
-      # Update the character
-      UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
-
-      # Wait for the update message to be handled and fetch consumer records
-      await_messages(1)
-      records = list_messages(consumer)
-
-      # Assert the consumer record details
-      Enum.each(records, fn record ->
-        assert record.consumer_id == consumer.id
-        assert record.table_oid == Character.table_oid()
-        assert record.record_pks == [to_string(character.id)]
-      end)
-    end
-
     test "deletes are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
@@ -1417,27 +1231,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "deletes are rejected from consumer records when replica identity default", %{record_consumer: consumer} do
-      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
-
-      await_messages(1)
-
-      [_insert_record] = list_messages(consumer)
-
-      UnboxedRepo.delete!(character)
-      await_messages(1)
-
-      records = list_messages(consumer)
-      refute Enum.any?(records, & &1.deleted)
-    end
-
-    test "consumer fans in events/records from multiple tables", %{
-      event_consumer: event_consumer,
-      record_consumer: record_consumer
-    } do
-      # Randomly select a consumer
-      consumer = Enum.random([event_consumer, record_consumer])
-
+    test "consumer fans in events from multiple tables", %{event_consumer: consumer} do
       # Attach a schema filter to the consumer
       Consumers.update_sink_consumer(consumer, %{source: %{}}, skip_lifecycle: true)
 
@@ -1469,27 +1263,6 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert consumer_message1.record_pks == [to_string(matching_character.id)]
       assert consumer_message2.record_pks == [to_string(matching_character_detailed.id)]
-    end
-
-    test "inserts are fanned out to both events and records", %{
-      event_consumer: event_consumer,
-      record_consumer: record_consumer
-    } do
-      # Insert a character
-      CharacterFactory.insert_character!([], repo: UnboxedRepo)
-      await_messages(1)
-
-      # Wait for the message to be handled and fetch consumer events and records
-      [consumer_event] = list_messages(event_consumer)
-      [consumer_record] = list_messages(record_consumer)
-
-      # Assert both event and record were created
-      assert consumer_event.consumer_id == event_consumer.id
-      assert consumer_record.consumer_id == record_consumer.id
-
-      # Assert both have the same data
-      assert consumer_event.table_oid == consumer_record.table_oid
-      assert consumer_event.record_pks == consumer_record.record_pks
     end
 
     test "empty array fields are replicated correctly", %{event_consumer: consumer} do
@@ -1600,7 +1373,6 @@ defmodule Sequin.PostgresReplicationTest do
       # Create a consumer for this replication slot (record)
       consumer =
         ConsumersFactory.insert_sink_consumer!(
-          message_kind: :event,
           status: :paused,
           replication_slot_id: pg_replication.id,
           account_id: account_id,

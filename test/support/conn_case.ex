@@ -77,4 +77,19 @@ defmodule SequinWeb.ConnCase do
     |> Phoenix.ConnTest.init_test_session(%{})
     |> Plug.Conn.put_session(:user_token, token)
   end
+
+  @doc """
+  Extracts a specific assign from a LiveView for testing.
+
+  This accesses the socket assigns directly, which is the interface
+  between our LiveView and LiveSvelte components.
+
+  ## Examples
+
+      messages = view_assigns(view, :messages)
+      assert length(messages) == 1
+  """
+  def view_assigns(view, key) do
+    :sys.get_state(view.pid).socket.assigns[key]
+  end
 end

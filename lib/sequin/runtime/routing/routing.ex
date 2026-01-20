@@ -5,7 +5,6 @@ defmodule Sequin.Runtime.Routing do
   """
 
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Functions.MiniElixir
@@ -49,7 +48,7 @@ defmodule Sequin.Runtime.Routing do
       routing_module ->
         Enum.map(messages, fn message ->
           routing_info = inner_route_message(routing_module, consumer, message)
-          # Extract the ConsumerEvent/ConsumerRecord from the Broadway.Message wrapper
+          # Extract the ConsumerEvent from the Broadway.Message wrapper
           unwrapped = extract_consumer_message(message)
           transformed_message = Sequin.Transforms.Message.to_external(consumer, unwrapped)
           %RoutedMessage{routing_info: routing_info, transformed_message: transformed_message}
@@ -63,7 +62,6 @@ defmodule Sequin.Runtime.Routing do
   defp extract_consumer_message(message), do: message
 
   defp unwrap_message(%Broadway.Message{data: message}), do: unwrap_message(message)
-  defp unwrap_message(%ConsumerRecord{data: message}), do: unwrap_message(message)
   defp unwrap_message(%ConsumerEvent{data: message}), do: unwrap_message(message)
   defp unwrap_message(message), do: message
 

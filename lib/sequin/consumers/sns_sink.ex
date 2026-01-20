@@ -19,17 +19,29 @@ defmodule Sequin.Consumers.SnsSink do
     field :secret_access_key, Encrypted.Field
     field :use_task_role, :boolean, default: false
     field :is_fifo, :boolean, default: false
+    field :use_emulator, :boolean, default: false
+    field :emulator_base_url, :string
     field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:topic_arn, :region, :access_key_id, :secret_access_key, :use_task_role, :routing_mode])
+    |> cast(params, [
+      :topic_arn,
+      :region,
+      :access_key_id,
+      :secret_access_key,
+      :use_task_role,
+      :use_emulator,
+      :emulator_base_url,
+      :routing_mode
+    ])
     |> maybe_put_region_from_arn()
     |> validate_credentials()
     |> validate_topic_arn()
     |> validate_routing()
     |> put_is_fifo()
+    |> validate_emulator_base_url()
     |> validate_cloud_mode_restrictions()
   end
 
@@ -99,13 +111,37 @@ defmodule Sequin.Consumers.SnsSink do
   defp ends_with_fifo?(nil), do: false
   defp ends_with_fifo?(arn), do: String.ends_with?(arn, ".fifo")
 
-  def aws_client(%__MODULE__{} = sink) do
-    case Sequin.Aws.get_aws_client(sink) do
-      {:ok, client} ->
-        {:ok, HttpClient.put_client(client)}
+  defp validate_emulator_base_url(changeset) do
+    use_emulator? = get_field(changeset, :use_emulator)
 
-      {:error, reason} ->
-        {:error, reason}
+    if use_emulator? do
+      changeset
+      |> validate_required([:emulator_base_url])
+      |> validate_format(:emulator_base_url, ~r/^https?:\/\//i, message: "must start with http:// or https://")
+    else
+      changeset
+    end
+  end
+
+  def aws_client(%__MODULE__{} = sink) do
+    with {:ok, client} <- Sequin.Aws.get_aws_client(sink),
+         {:ok, client} <- configure_emulator(client, sink) do
+      {:ok, HttpClient.put_client(client)}
+    end
+  end
+
+  defp configure_emulator(client, sink) do
+    if sink.use_emulator do
+      %{scheme: scheme, authority: authority} = URI.parse(sink.emulator_base_url)
+
+      client =
+        client
+        |> Map.put(:proto, scheme)
+        |> Map.put(:endpoint, authority)
+
+      {:ok, client}
+    else
+      {:ok, client}
     end
   end
 

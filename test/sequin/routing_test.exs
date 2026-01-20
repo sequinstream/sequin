@@ -80,7 +80,6 @@ defmodule Sequin.RoutingTest do
           account_id: account.id,
           type: :http_push,
           sink: %{type: :http_push, http_endpoint_id: http_endpoint.id},
-          message_kind: :event,
           routing_id: function.id,
           routing_mode: :dynamic
         )

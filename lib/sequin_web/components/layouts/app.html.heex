@@ -1,11 +1,3 @@
-<%= if Map.get(assigns, :self_hosted, true) == false do %>
-  <div class="bg-amber-400 text-black px-4 py-2 text-center text-sm">
-    Sequin Cloud is shutting down on October 23, 2025. <a
-      href="https://sequinstream.com/docs/cloud-shutdown"
-      class="underline hover:no-underline"
-    >Learn more</a>.
-  </div>
-<% end %>
 <div class="flex min-h-screen">
   <%= if @show_nav do %>
     <.live_component

@@ -329,6 +329,10 @@ defmodule Sequin.Health do
   def entity_name(:http_endpoint), do: "Endpoint health"
   def entity_name(:sink_consumer), do: "Consumer health"
   def entity_name(:wal_pipeline), do: "WAL Pipeline health"
+  def entity_name(%SinkConsumer{name: name}), do: name
+  def entity_name(%PostgresReplicationSlot{slot_name: slot_name}), do: slot_name
+  def entity_name(%WalPipeline{name: name}), do: name
+  def entity_name(%HttpEndpoint{name: name}), do: name
 
   defp entity_kind(%PostgresReplicationSlot{}), do: :postgres_replication_slot
   defp entity_kind(%SinkConsumer{}), do: :sink_consumer
@@ -1128,13 +1132,14 @@ defmodule Sequin.Health do
       %HealthSnapshot{}
       |> HealthSnapshot.changeset(%{
         entity_id: entity.id,
+        entity_name: entity_name(entity),
         entity_kind: entity_kind(entity),
         status: health.status,
         health_json: Map.from_struct(health),
         sampled_at: now
       })
       |> Repo.insert(
-        on_conflict: {:replace, [:status, :health_json, :sampled_at, :updated_at]},
+        on_conflict: {:replace, [:status, :entity_name, :health_json, :sampled_at, :updated_at]},
         conflict_target: [:entity_kind, :entity_id]
       )
     end

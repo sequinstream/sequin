@@ -10,7 +10,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
@@ -81,8 +80,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign_metrics()
           |> assign(:paused, Map.get(params, "paused", "false") == "true")
           |> assign(:show_acked, Map.get(params, "showAcked", "true") == "true")
+          |> assign(:sort_order, parse_sort_order(Map.get(params, "sortOrder", "desc")))
           |> assign(:page, 0)
-          |> assign(:page_size, @messages_page_size)
+          |> assign_page_size(params)
           |> assign(:total_count, 0)
           |> assign(:cursor_position, nil)
           |> assign(:cursor_task_ref, nil)
@@ -227,6 +227,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   pageSize: @page_size,
                   paused: @paused,
                   showAcked: @show_acked,
+                  sortOrder: Atom.to_string(@sort_order),
                   apiBaseUrl: @api_base_url,
                   apiTokens: encode_api_tokens(@api_tokens),
                   metrics: @metrics,
@@ -444,16 +445,30 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   def handle_event("update_page_size", %{"page_size" => page_size}, socket) do
-    {:noreply,
-     socket
-     |> assign(:page_size, page_size)
-     |> load_consumer_messages()}
+    # Don't override if _pageSize was set via URL (for testing)
+    if socket.assigns[:page_size_override] do
+      {:noreply, socket}
+    else
+      {:noreply,
+       socket
+       |> assign(:page_size, page_size)
+       |> load_consumer_messages()}
+    end
   end
 
   def handle_event("toggle_show_acked", %{"show_acked" => show_acked}, socket) do
     {:noreply,
      socket
      |> assign(:show_acked, show_acked)
+     |> assign(:page, 0)
+     |> load_consumer_messages()
+     |> push_patch_with_query_params("messages")}
+  end
+
+  def handle_event("change_sort_order", %{"sort_order" => sort_order}, socket) do
+    {:noreply,
+     socket
+     |> assign(:sort_order, parse_sort_order(sort_order))
      |> assign(:page, 0)
      |> load_consumer_messages()
      |> push_patch_with_query_params("messages")}
@@ -812,7 +827,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       kind: :push,
       type: consumer.type,
       status: consumer.status,
-      message_kind: consumer.message_kind,
       message_grouping: consumer.message_grouping,
       ack_wait_ms: consumer.ack_wait_ms,
       max_ack_pending: consumer.max_ack_pending,
@@ -853,7 +867,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       queue_url: sink.queue_url,
       region: sink.region,
       is_fifo: sink.is_fifo,
-      use_task_role: sink.use_task_role
+      use_task_role: sink.use_task_role,
+      use_emulator: sink.use_emulator,
+      emulator_base_url: sink.emulator_base_url
     }
   end
 
@@ -863,7 +879,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       topic_arn: sink.topic_arn,
       region: sink.region,
       is_fifo: sink.is_fifo,
-      use_task_role: sink.use_task_role
+      use_task_role: sink.use_task_role,
+      use_emulator: sink.use_emulator,
+      emulator_base_url: sink.emulator_base_url
     }
   end
 
@@ -955,12 +973,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_sink(%SinkConsumer{sink: %RabbitMqSink{} = sink} = consumer) do
     database_name = consumer.postgres_database.name
 
-    topic =
-      if consumer.message_kind == :event do
-        "sequin.changes.#{database_name}.{table-schema}.{table-name}.{action}"
-      else
-        "sequin.rows.#{database_name}.{table-schema}.{table-name}"
-      end
+    topic = "sequin.changes.#{database_name}.{table-schema}.{table-name}.{action}"
 
     %{
       type: :rabbitmq,
@@ -1126,10 +1139,18 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer_messages(
-         %{assigns: %{consumer: consumer, page: page, page_size: page_size, show_acked: show_acked}} = socket
+         %{
+           assigns: %{
+             consumer: consumer,
+             page: page,
+             page_size: page_size,
+             show_acked: show_acked,
+             sort_order: sort_order
+           }
+         } = socket
        ) do
     offset = page * page_size
-    store_messages = load_consumer_messages_from_store(consumer, offset + page_size)
+    store_messages = load_consumer_messages_from_store(consumer, offset + page_size, sort_order)
 
     redis_messages =
       if show_acked do
@@ -1140,7 +1161,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     messages =
       (store_messages ++ redis_messages)
-      |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, :desc)
+      |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, sort_order)
       |> Enum.uniq_by(&{&1.commit_lsn, &1.commit_idx})
       |> Enum.drop(offset)
       |> Enum.take(page_size)
@@ -1160,8 +1181,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     |> assign(:total_count, total_count)
   end
 
-  defp load_consumer_messages_from_store(consumer, limit) do
-    case SlotMessageStore.peek_messages_metadata(consumer, limit) do
+  defp load_consumer_messages_from_store(consumer, limit, order) do
+    case SlotMessageStore.peek_messages_metadata(consumer, limit, order: order) do
       messages when is_list(messages) ->
         messages
 
@@ -1201,40 +1222,30 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   # Function to encode messages for the Svelte component
-  defp encode_messages(consumer, messages) do
-    Enum.map(messages, &encode_message(consumer, &1))
+  defp encode_messages(%{postgres_database: %{tables: tables}} = consumer, messages) do
+    table_lookups = %{
+      names: Map.new(tables, &{&1.oid, &1.name}),
+      schemas: Map.new(tables, &{&1.oid, &1.schema})
+    }
+
+    Enum.map(messages, &encode_message(consumer, &1, table_lookups))
   end
 
-  defp encode_message(consumer, message) do
+  # Single message encoding - builds lookups on demand
+  defp encode_message(%{postgres_database: %{tables: tables}} = consumer, message) do
+    table_lookups = %{
+      names: Map.new(tables, &{&1.oid, &1.name}),
+      schemas: Map.new(tables, &{&1.oid, &1.schema})
+    }
+
+    encode_message(consumer, message, table_lookups)
+  end
+
+  defp encode_message(consumer, message, table_lookups) do
     state = get_message_state(consumer, message)
     routing_info = maybe_routing_info(consumer, message)
 
     case message do
-      %ConsumerRecord{} = message ->
-        %{
-          id: message.id,
-          type: "record",
-          consumer_id: message.consumer_id,
-          ack_id: message.ack_id,
-          commit_lsn: message.commit_lsn,
-          commit_timestamp: get_commit_timestamp(message),
-          data: message.data,
-          deliver_count: message.deliver_count,
-          inserted_at: message.inserted_at,
-          last_delivered_at: message.last_delivered_at,
-          not_visible_until: message.not_visible_until,
-          record_pks: message.record_pks,
-          seq: message.commit_lsn + message.commit_idx,
-          state: state,
-          state_color: get_message_state_color(consumer, state),
-          table_name: get_table_name(message),
-          table_schema: get_table_schema(message),
-          table_oid: message.table_oid,
-          trace_id: message.replication_message_trace_id,
-          functioned_message: maybe_function_message(consumer, message),
-          routing_info: routing_info
-        }
-
       %ConsumerEvent{} = message ->
         %{
           id: message.id,
@@ -1252,8 +1263,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           seq: message.commit_lsn + message.commit_idx,
           state: state,
           state_color: get_message_state_color(consumer, state),
-          table_name: get_table_name(message),
-          table_schema: get_table_schema(message),
+          table_name: get_table_name(message, table_lookups),
+          table_schema: get_table_schema(message, table_lookups),
           table_oid: message.table_oid,
           trace_id: message.replication_message_trace_id,
           functioned_message: maybe_function_message(consumer, message),
@@ -1371,13 +1382,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp get_commit_timestamp(%{data: %{metadata: %{commit_timestamp: timestamp}}}), do: timestamp
   defp get_commit_timestamp(_), do: nil
 
-  defp get_table_name(%{data: nil}), do: nil
-  defp get_table_name(%{data: %{metadata: %{table_name: table_name}}}), do: table_name
-  defp get_table_name(_), do: nil
+  defp get_table_name(%{data: %{metadata: %{table_name: table_name}}}, _table_lookups), do: table_name
+  defp get_table_name(%{data: nil, table_oid: table_oid}, %{names: names}), do: Map.get(names, table_oid)
+  defp get_table_name(_, _), do: nil
 
-  defp get_table_schema(%{data: nil}), do: nil
-  defp get_table_schema(%{data: %{metadata: %{table_schema: table_schema}}}), do: table_schema
-  defp get_table_schema(_), do: nil
+  defp get_table_schema(%{data: %{metadata: %{table_schema: table_schema}}}, _table_lookups), do: table_schema
+  defp get_table_schema(%{data: nil, table_oid: table_oid}, %{schemas: schemas}), do: Map.get(schemas, table_oid)
+  defp get_table_schema(_, _), do: nil
 
   defp consumer_title(%{sink: %{type: :azure_event_hub}}), do: "Azure Event Hub Sink"
   defp consumer_title(%{sink: %{type: :elasticsearch}}), do: "Elasticsearch Sink"
@@ -1732,7 +1743,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     Application.get_env(:sequin, :env)
   end
 
-  defp build_query_params(show_acked, paused) do
+  defp build_query_params(show_acked, paused, sort_order \\ :desc, page_size_override \\ nil) do
     params = []
 
     # Only add showAcked if it's false (non-default)
@@ -1741,12 +1752,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     # Only add paused if it's true (non-default)
     params = if paused == true, do: [{"paused", "true"} | params], else: params
 
+    # Only add sortOrder if it's asc (non-default, desc is default)
+    params = if sort_order == :asc, do: [{"sortOrder", "asc"} | params], else: params
+
+    # Preserve _pageSize if it was set (for testing/debugging)
+    params = if page_size_override, do: [{"_pageSize", to_string(page_size_override)} | params], else: params
+
     params
   end
 
   defp push_patch_with_query_params(socket, url_prefix) do
-    %{show_acked: show_acked, paused: paused, consumer: consumer} = socket.assigns
-    query_params = build_query_params(show_acked, paused)
+    %{show_acked: show_acked, paused: paused, sort_order: sort_order, consumer: consumer} = socket.assigns
+    page_size_override = if socket.assigns[:page_size_override], do: socket.assigns.page_size
+    query_params = build_query_params(show_acked, paused, sort_order, page_size_override)
     push_patch(socket, to: RouteHelpers.consumer_path(consumer, url_prefix, query_params))
   end
 
@@ -1780,4 +1798,23 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp format_error(error) when is_atom(error), do: to_string(error)
   defp format_error(%{message: message}), do: message
   defp format_error(error), do: inspect(error)
+
+  defp parse_sort_order("asc"), do: :asc
+  defp parse_sort_order("desc"), do: :desc
+  defp parse_sort_order(_), do: :desc
+
+  # Internal `_pageSize` param allows overriding the dynamic frontend page size calculation.
+  # Useful for testing pagination with small page sizes, or local debugging.
+  # When set, the frontend's update_page_size event is ignored.
+  defp assign_page_size(socket, %{"_pageSize" => size}) when is_binary(size) do
+    socket
+    |> assign(:page_size, String.to_integer(size))
+    |> assign(:page_size_override, true)
+  end
+
+  defp assign_page_size(socket, _params) do
+    socket
+    |> assign(:page_size, @messages_page_size)
+    |> assign(:page_size_override, false)
+  end
 end

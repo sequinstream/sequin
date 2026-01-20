@@ -15,7 +15,13 @@ You can use a backfill to:
 
 During sink creation, you can optionally specify a backfill. Sequin will run the backfill first, then continue to stream any changes to the sink.
 
-After a sink is created, you can manually trigger a backfill on the sink's backfill tab at any time. You can backfill all tables or specific tables.
+There are several ways to create a backfill:
+
+- **Web console**: Configure an initial backfill in the sink creation form, or trigger a backfill from the sink's backfill tab at any time.
+- **sequin.yaml**: Use the `initial_backfill` field on your sink configuration. See the [sequin.yaml reference](/reference/sequin-yaml#initial-backfill) for details.
+- **Management API**: Use the [Create backfill](/management-api/backfills/create) endpoint to trigger a backfill on an existing sink.
+
+You can backfill all tables or specific tables.
 
 ## Backfill messages
 

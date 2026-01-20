@@ -3,7 +3,6 @@
   import { Switch } from "$lib/components/ui/switch";
   import FunctionPicker from "$lib/consumers/FunctionPicker.svelte";
 
-  export let messageKind: string;
   export let form: {
     actions: string[];
     filterId: string;
@@ -35,29 +34,27 @@
     <Label class="text-base font-medium">Filters</Label>
   {/if}
 
-  {#if messageKind === "event"}
-    <div class="flex flex-col gap-4">
-      <div class="text-base font-medium">Operations to capture</div>
-      <div class="flex items-center gap-4">
-        {#each switches as { id, label }}
-          <div class="flex items-center gap-2">
-            <Label for={id} class="cursor-pointer">{label}</Label>
-            <Switch
-              {id}
-              disabled={!form.postgresDatabaseId && !form.tableOid}
-              checked={actions.includes(id)}
-              onCheckedChange={(checked) => {
-                const newActions = checked
-                  ? [...actions, id]
-                  : actions.filter((a) => a !== id);
-                form.actions = newActions;
-              }}
-            />
-          </div>
-        {/each}
-      </div>
+  <div class="flex flex-col gap-4">
+    <div class="text-base font-medium">Operations to capture</div>
+    <div class="flex items-center gap-4">
+      {#each switches as { id, label }}
+        <div class="flex items-center gap-2">
+          <Label for={id} class="cursor-pointer">{label}</Label>
+          <Switch
+            {id}
+            disabled={!form.postgresDatabaseId && !form.tableOid}
+            checked={actions.includes(id)}
+            onCheckedChange={(checked) => {
+              const newActions = checked
+                ? [...actions, id]
+                : actions.filter((a) => a !== id);
+              form.actions = newActions;
+            }}
+          />
+        </div>
+      {/each}
     </div>
-  {/if}
+  </div>
 
   <!-- Filter Function -->
   <div class="flex flex-col gap-4">

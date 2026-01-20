@@ -16,8 +16,8 @@ jobs:
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: "1.18.x"
-          otp-version: "27.x"
+          elixir-version: "1.19.x"
+          otp-version: "28.x"
 
       - name: Start E2E environment
         run: |

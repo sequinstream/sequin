@@ -1,7 +1,7 @@
 defmodule Sequin.Runtime.RedisPipelineTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.RedisStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
@@ -34,7 +34,6 @@ defmodule Sequin.Runtime.RedisPipelineTest do
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :redis_stream,
-          message_kind: :record,
           batch_size: 10,
           replication_slot_id: replication.id
         )
@@ -48,9 +47,9 @@ defmodule Sequin.Runtime.RedisPipelineTest do
       record = CharacterFactory.character_attrs()
 
       record =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record))
 
       Mox.expect(RedisMock, :send_messages, fn sink, redis_messages ->
         send(test_pid, {:redis_request, sink, redis_messages})
@@ -60,7 +59,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
       start_pipeline!(consumer)
 
       ref = send_test_event(consumer, record)
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:redis_request, %SinkConsumer{sink: %RedisStreamSink{}}, [data]}, 1_000
       assert is_map(data)
     end
@@ -72,14 +71,14 @@ defmodule Sequin.Runtime.RedisPipelineTest do
       record2 = CharacterFactory.character_attrs()
 
       event1 =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record1))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record1))
 
       event2 =
-        [consumer_id: consumer.id, source_record: :character]
-        |> ConsumersFactory.insert_deliverable_consumer_record!()
-        |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
+        [consumer_id: consumer.id]
+        |> ConsumersFactory.insert_deliverable_consumer_event!()
+        |> Map.put(:data, ConsumersFactory.consumer_event_data(record: record2))
 
       Mox.expect(RedisMock, :send_messages, 1, fn sink, redis_messages ->
         send(test_pid, {:redis_request, sink, redis_messages})
@@ -90,7 +89,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
 
       ref = send_test_batch(consumer, [event1, event2])
 
-      assert_receive {:ack, ^ref, [%{data: %ConsumerRecord{}}, %{data: %ConsumerRecord{}}], []}, 1_000
+      assert_receive {:ack, ^ref, [%{data: %ConsumerEvent{}}, %{data: %ConsumerEvent{}}], []}, 1_000
       assert_receive {:redis_request, _sink, _redis_messages}, 1_000
     end
 
@@ -125,7 +124,6 @@ defmodule Sequin.Runtime.RedisPipelineTest do
           account_id: account.id,
           type: :redis_stream,
           replication_slot_id: replication.id,
-          message_kind: :record,
           postgres_database: database
         )
 
@@ -140,7 +138,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
         :ok
       end)
 
-      consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+      consumer_record = ConsumersFactory.deliverable_consumer_event(consumer_id: consumer.id)
 
       start_supervised!(
         {SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: test_pid, persisted_mode?: false]}
@@ -169,7 +167,7 @@ defmodule Sequin.Runtime.RedisPipelineTest do
   defp send_test_event(consumer, event \\ nil) do
     events =
       event ||
-        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+        ConsumersFactory.insert_deliverable_consumer_event!(consumer_id: consumer.id)
 
     Broadway.test_message(broadway(consumer), events, metadata: %{topic: "test_topic", headers: []})
   end

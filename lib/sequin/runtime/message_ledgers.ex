@@ -17,7 +17,7 @@ defmodule Sequin.Runtime.MessageLedgers do
   cursors are removed.
 
   Remaining WAL cursors in the sorted set that are older than a certain threshold may indicate
-  missed deliveries, which can be verified against the ConsumerEvent/ConsumerRecord tables.
+  missed deliveries, which can be verified against the ConsumerEvent tables.
   """
 
   alias Sequin.Error
@@ -153,7 +153,7 @@ defmodule Sequin.Runtime.MessageLedgers do
 
   If an undelivered cursor is *stale* (older than some timestamp), then it is either in bucket 2 or 3.
 
-  We can use this function to find all stale undelivered cursors. Then, we can filter out cursors that are in bucket 2 by filtering out any cursors that are in the ConsumerEvent/ConsumerRecord tables (i.e. failing to deliver).
+  We can use this function to find all stale undelivered cursors. Then, we can filter out cursors that are in bucket 2 by filtering out any cursors that are in the ConsumerEvent tables (i.e. failing to deliver).
 
   Any remaining cursors are in bucket 3, and are undelivered because of a bug. The hope is that we can use this functionality to catch these in QA and fix before shipping to prod. Worst case, we catch them via prod monitoring, and fix ASAP.
   """

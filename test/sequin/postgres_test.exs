@@ -133,6 +133,46 @@ defmodule Sequin.PostgresTest do
       # Ensure non-JSON encodable value is converted to nil
       assert is_nil(List.last(loaded_rows)["complex_type"])
     end
+
+    test "correctly loads and formats interval values" do
+      table =
+        DatabasesFactory.table(
+          columns: [
+            %{name: "id", type: "int4", is_pk?: true},
+            %{name: "duration", type: "interval"}
+          ]
+        )
+
+      # Postgrex.Interval struct: 1 year 2 months 3 days 4:05:06.789
+      interval = %Postgrex.Interval{
+        months: 14,
+        days: 3,
+        secs: 14_706,
+        microsecs: 789_000
+      }
+
+      rows = [
+        %{"id" => 1, "duration" => interval},
+        %{"id" => 2, "duration" => nil}
+      ]
+
+      loaded_rows = Postgres.load_rows(table, rows)
+
+      assert [
+               %{
+                 "id" => 1,
+                 "duration" => %{
+                   "months" => 14,
+                   "days" => 3,
+                   "microseconds" => 14_706_789_000
+                 }
+               },
+               %{
+                 "id" => 2,
+                 "duration" => nil
+               }
+             ] = Enum.sort_by(loaded_rows, & &1["id"])
+    end
   end
 
   describe "verify_table_in_publication/3" do

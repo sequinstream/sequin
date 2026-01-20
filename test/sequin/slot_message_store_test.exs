@@ -24,7 +24,6 @@ defmodule Sequin.SlotMessageStoreTest do
 
       msg1 =
         ConsumersFactory.insert_consumer_message!(
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           record_pks: ["test-pk-1"],
           group_id: "test-pk-1"
@@ -32,7 +31,6 @@ defmodule Sequin.SlotMessageStoreTest do
 
       msg2 =
         ConsumersFactory.insert_consumer_message!(
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           table_oid: msg1.table_oid,
           record_pks: ["test-pk-2"],
@@ -84,7 +82,6 @@ defmodule Sequin.SlotMessageStoreTest do
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
-          message_kind: :event,
           name: "test-consumer",
           annotations: %{"key" => "value"},
           postgres_database: database,
@@ -171,7 +168,6 @@ defmodule Sequin.SlotMessageStoreTest do
       consumer =
         ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
-          message_kind: :record,
           name: "test-consumer",
           annotations: %{"key" => "value"},
           postgres_database: database,
@@ -181,12 +177,12 @@ defmodule Sequin.SlotMessageStoreTest do
         )
 
       # Create a message that will be persisted to disk
-      ConsumersFactory.insert_consumer_record!(
+      ConsumersFactory.insert_consumer_event!(
         consumer_id: consumer.id,
         table_oid: table.oid,
         group_id: "old-group-id",
         data:
-          ConsumersFactory.consumer_record_data(
+          ConsumersFactory.consumer_event_data(
             record: %{column.name => "group-value"},
             metadata: %{
               database_name: "old-db",
@@ -201,6 +197,13 @@ defmodule Sequin.SlotMessageStoreTest do
                 id: consumer.id,
                 name: "old-name",
                 annotations: %{"old" => "value"}
+              },
+              database: %{
+                id: database.id,
+                name: database.name,
+                annotations: database.annotations,
+                database: database.database,
+                hostname: database.hostname
               }
             }
           )
@@ -242,7 +245,6 @@ defmodule Sequin.SlotMessageStoreTest do
           table_oid: msg1.table_oid,
           record_pks: msg1.record_pks,
           group_id: msg1.group_id,
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id
         )
 
@@ -262,12 +264,11 @@ defmodule Sequin.SlotMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!(partition_count: 3)
 
-      data = ConsumersFactory.consumer_message_data(message_kind: consumer.message_kind)
+      data = ConsumersFactory.consumer_message_data()
       data_size_bytes = :erlang.external_size(data)
 
       for _ <- 1..100 do
         ConsumersFactory.insert_consumer_message!(
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           data: data
         )
@@ -297,7 +298,7 @@ defmodule Sequin.SlotMessageStoreTest do
   describe "SlotMessageStore message handling" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
-      event_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
+      event_consumer = ConsumersFactory.insert_sink_consumer!()
       start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
       start_supervised!({SlotMessageStoreSupervisor, consumer_id: event_consumer.id, test_pid: self()})
       %{consumer: consumer, event_consumer: event_consumer}
@@ -331,7 +332,6 @@ defmodule Sequin.SlotMessageStoreTest do
       message =
         ConsumersFactory.consumer_message(
           group_id: group_id,
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id
         )
 
@@ -370,7 +370,6 @@ defmodule Sequin.SlotMessageStoreTest do
       message =
         ConsumersFactory.consumer_message(
           group_id: group_id,
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id
         )
 
@@ -404,8 +403,8 @@ defmodule Sequin.SlotMessageStoreTest do
 
     test "delivers and fails messages to disk", %{consumer: consumer} do
       messages = [
-        ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id),
-        ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+        ConsumersFactory.consumer_message(consumer_id: consumer.id),
+        ConsumersFactory.consumer_message(consumer_id: consumer.id)
       ]
 
       # Put messages in store
@@ -468,7 +467,6 @@ defmodule Sequin.SlotMessageStoreTest do
       message1 =
         ConsumersFactory.consumer_message(
           group_id: nil,
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           commit_lsn: 1
         )
@@ -477,7 +475,6 @@ defmodule Sequin.SlotMessageStoreTest do
       message2 =
         ConsumersFactory.consumer_message(
           group_id: nil,
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           commit_lsn: 2
         )
@@ -509,7 +506,6 @@ defmodule Sequin.SlotMessageStoreTest do
       message =
         ConsumersFactory.consumer_message(
           group_id: nil,
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id
         )
 
@@ -537,14 +533,12 @@ defmodule Sequin.SlotMessageStoreTest do
       message1 =
         ConsumersFactory.consumer_message(
           group_id: "test-group",
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id
         )
 
       message2 =
         ConsumersFactory.consumer_message(
           group_id: nil,
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id
         )
 
@@ -570,7 +564,6 @@ defmodule Sequin.SlotMessageStoreTest do
       # Create a message
       message =
         ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           commit_lsn: 1,
           commit_idx: 1
@@ -624,7 +617,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
     test "produces messages with same group_id from different tables simultaneously", %{} do
       consumer =
-        ConsumersFactory.insert_sink_consumer!(message_kind: :event)
+        ConsumersFactory.insert_sink_consumer!()
 
       start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
 
@@ -635,7 +628,6 @@ defmodule Sequin.SlotMessageStoreTest do
 
       message1 =
         ConsumersFactory.consumer_message(
-          message_kind: :event,
           consumer_id: consumer.id,
           group_id: shared_group_id,
           table_oid: table_oid_1,
@@ -645,7 +637,6 @@ defmodule Sequin.SlotMessageStoreTest do
 
       message2 =
         ConsumersFactory.consumer_message(
-          message_kind: :event,
           consumer_id: consumer.id,
           group_id: shared_group_id,
           table_oid: table_oid_2,
@@ -761,10 +752,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Create a message that will be old enough to flush
       message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
+        ConsumersFactory.consumer_message(consumer_id: consumer.id)
 
       # Put message in store
       :ok = SlotMessageStore.put_messages(consumer, [message])
@@ -787,10 +775,7 @@ defmodule Sequin.SlotMessageStoreTest do
     test "persisted messages are not identified for flushing regardless of age", %{consumer: consumer} do
       # Create a message that will be persisted
       message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
+        ConsumersFactory.consumer_message(consumer_id: consumer.id)
 
       # Put message and fail it to persist it
       :ok = SlotMessageStore.put_messages(consumer, [message])
@@ -834,10 +819,7 @@ defmodule Sequin.SlotMessageStoreTest do
       # Create a message that will be old enough to flush
       messages =
         for _ <- 1..(3 * 8) do
-          ConsumersFactory.consumer_message(
-            message_kind: consumer.message_kind,
-            consumer_id: consumer.id
-          )
+          ConsumersFactory.consumer_message(consumer_id: consumer.id)
         end
 
       # Put message in store
@@ -877,10 +859,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Create a message
       message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
+        ConsumersFactory.consumer_message(consumer_id: consumer.id)
 
       # Put message in store and produce it
       :ok = SlotMessageStore.put_messages(consumer, [message])
@@ -897,10 +876,7 @@ defmodule Sequin.SlotMessageStoreTest do
     test "does not make messages visible before they are stuck", %{consumer: consumer} do
       # Create a message
       message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
+        ConsumersFactory.consumer_message(consumer_id: consumer.id)
 
       # Put message in store and produce it
       :ok = SlotMessageStore.put_messages(consumer, [message])
@@ -932,7 +908,6 @@ defmodule Sequin.SlotMessageStoreTest do
       # Create a message with a specific group_id to ensure consistent partitioning
       message =
         ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           group_id: "test-group"
         )
@@ -981,10 +956,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Create a message
       message =
-        ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
+        ConsumersFactory.consumer_message(consumer_id: consumer.id)
 
       # Put message in store
       :ok = SlotMessageStore.put_messages(consumer, [message])
@@ -1025,7 +997,6 @@ defmodule Sequin.SlotMessageStoreTest do
       # Create a message with a specific group_id to ensure consistent partitioning
       message =
         ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           group_id: "test-group",
           payload_size_bytes: 130 * 1000 * 1000
@@ -1045,7 +1016,6 @@ defmodule Sequin.SlotMessageStoreTest do
       # Create a message with a specific group_id to ensure consistent partitioning
       message =
         ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           group_id: "test-group"
         )
@@ -1069,7 +1039,6 @@ defmodule Sequin.SlotMessageStoreTest do
       messages =
         Enum.map(1..3, fn i ->
           ConsumersFactory.consumer_message(
-            message_kind: consumer.message_kind,
             consumer_id: consumer.id,
             group_id: "test-group-#{i}",
             deliver_count: 0
@@ -1120,7 +1089,6 @@ defmodule Sequin.SlotMessageStoreTest do
       messages =
         Enum.map(1..3, fn i ->
           ConsumersFactory.consumer_message(
-            message_kind: consumer.message_kind,
             consumer_id: consumer.id,
             group_id: "test-group-#{i}",
             deliver_count: 0
@@ -1170,7 +1138,6 @@ defmodule Sequin.SlotMessageStoreTest do
       # Create and put a message that's not failing (deliver_count: 0)
       message =
         ConsumersFactory.consumer_message(
-          message_kind: consumer.message_kind,
           consumer_id: consumer.id,
           group_id: "test-group",
           deliver_count: 0
@@ -1188,21 +1155,20 @@ defmodule Sequin.SlotMessageStoreTest do
     end
   end
 
-  describe "peek_messages_metadata/2" do
+  describe "peek_messages_metadata/3" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [])
       start_supervised!({SlotMessageStoreSupervisor, consumer_id: consumer.id, test_pid: self()})
       %{consumer: consumer}
     end
 
-    test "returns messages without data payload", %{consumer: consumer} do
+    test "returns messages without data payload in ascending order by default", %{consumer: consumer} do
       consumer_id = consumer.id
 
       # Create 5 messages
       messages =
         for i <- 1..5 do
           ConsumersFactory.consumer_message(
-            message_kind: consumer.message_kind,
             consumer_id: consumer.id,
             commit_lsn: i,
             commit_idx: 1,
@@ -1231,6 +1197,57 @@ defmodule Sequin.SlotMessageStoreTest do
       assert second.group_id == "test-group-2"
       assert third.commit_lsn == 3
       assert third.group_id == "test-group-3"
+    end
+
+    test "returns messages in descending order with order: :desc", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      # Create 5 messages
+      messages =
+        for i <- 1..5 do
+          ConsumersFactory.consumer_message(
+            consumer_id: consumer.id,
+            commit_lsn: i,
+            commit_idx: 1,
+            group_id: "test-group-#{i}"
+          )
+        end
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      assert_receive {:put_messages_done, ^consumer_id}
+
+      # Request only 3 messages in descending order
+      metadata_messages = SlotMessageStore.peek_messages_metadata(consumer, 3, order: :desc)
+
+      assert length(metadata_messages) == 3
+
+      # Newest messages first
+      commit_lsns = Enum.map(metadata_messages, & &1.commit_lsn)
+      assert commit_lsns == [5, 4, 3]
+    end
+
+    test "returns messages in ascending order with order: :asc", %{consumer: consumer} do
+      consumer_id = consumer.id
+
+      messages =
+        for i <- 1..5 do
+          ConsumersFactory.consumer_message(
+            consumer_id: consumer.id,
+            commit_lsn: i,
+            commit_idx: 1,
+            group_id: "test-group-#{i}"
+          )
+        end
+
+      :ok = SlotMessageStore.put_messages(consumer, messages)
+      assert_receive {:put_messages_done, ^consumer_id}
+
+      metadata_messages = SlotMessageStore.peek_messages_metadata(consumer, 3, order: :asc)
+
+      assert length(metadata_messages) == 3
+
+      commit_lsns = Enum.map(metadata_messages, & &1.commit_lsn)
+      assert commit_lsns == [1, 2, 3]
     end
   end
 end

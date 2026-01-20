@@ -1,0 +1,355 @@
+# Release Workflow
+#
+# Triggered by pushing a version tag (e.g., v0.12.15)
+# Builds CLI, Docker images, generates release notes, creates GitHub release, updates Homebrew
+#
+# Required secrets:
+#   - DOCKERHUB_USERNAME, DOCKERHUB_TOKEN: Docker Hub authentication
+#   - SELF_HOSTED_SENTRY_DSN: Sentry DSN for self-hosted builds
+#   - ANTHROPIC_API_KEY: For Claude Code release notes generation
+#   - HOMEBREW_TAP_PAT: Personal Access Token with repo scope for sequinstream/homebrew-sequin
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write  # Required to create releases and upload assets
+
+env:
+  VERSION: ${{ github.ref_name }}
+
+jobs:
+  # ============================================================================
+  # Build CLI for all platforms
+  # ============================================================================
+  build-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build CLI for all platforms
+        run: |
+          cd cli
+          PACKAGE_NAME="sequin-cli"
+          PLATFORMS=(
+            "windows/amd64"
+            "windows/386"
+            "darwin/amd64"
+            "darwin/arm64"
+            "linux/amd64"
+            "linux/386"
+            "linux/arm"
+            "linux/arm64"
+          )
+
+          mkdir -p ../release_assets
+
+          for platform in "${PLATFORMS[@]}"; do
+            IFS="/" read -r GOOS GOARCH <<< "$platform"
+            output_name="${PACKAGE_NAME}-${VERSION}-${GOOS}-${GOARCH}"
+            if [ "$GOOS" = "windows" ]; then
+              output_name+=".exe"
+            fi
+
+            echo "Building $output_name"
+            env GOOS="$GOOS" GOARCH="$GOARCH" go build -tags prod -o "$output_name" .
+
+            zip_name="../release_assets/${PACKAGE_NAME}-${VERSION}-${GOOS}-${GOARCH}.zip"
+            zip -r "$zip_name" "$output_name"
+            rm "$output_name"
+          done
+
+      - name: Create docker-compose archive
+        run: |
+          cp -r docker sequin-docker-compose
+          zip -r release_assets/sequin-docker-compose.zip sequin-docker-compose/
+          rm -rf sequin-docker-compose
+
+      - name: Calculate SHA256 checksums
+        id: checksums
+        run: |
+          cd release_assets
+          echo "darwin_arm64=$(sha256sum sequin-cli-${VERSION}-darwin-arm64.zip | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "darwin_amd64=$(sha256sum sequin-cli-${VERSION}-darwin-amd64.zip | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_arm64=$(sha256sum sequin-cli-${VERSION}-linux-arm64.zip | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_amd64=$(sha256sum sequin-cli-${VERSION}-linux-amd64.zip | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Upload CLI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-binaries
+          path: release_assets/*.zip
+
+    outputs:
+      darwin_arm64_sha: ${{ steps.checksums.outputs.darwin_arm64 }}
+      darwin_amd64_sha: ${{ steps.checksums.outputs.darwin_amd64 }}
+      linux_arm64_sha: ${{ steps.checksums.outputs.linux_arm64 }}
+      linux_amd64_sha: ${{ steps.checksums.outputs.linux_amd64 }}
+
+  # ============================================================================
+  # Build Docker images (amd64 + arm64)
+  # ============================================================================
+  build-docker:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: warp-ubuntu-latest-x64-32x
+          - platform: linux/arm64
+            runner: warp-ubuntu-latest-arm64-32x
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract platform info
+        id: platform
+        run: |
+          ARCH=${MATRIX_PLATFORM#*/}
+          echo "arch=$ARCH" >> $GITHUB_OUTPUT
+        env:
+          MATRIX_PLATFORM: ${{ matrix.platform }}
+
+      - name: Build and push (WarpBuild)
+        uses: Warpbuilds/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: true
+          profile-name: sequin-builder
+          build-args: |
+            SELF_HOSTED=1
+            RELEASE_VERSION=${{ env.VERSION }}
+            SENTRY_DSN=${{ secrets.SELF_HOSTED_SENTRY_DSN }}
+          tags: |
+            sequin/sequin:${{ env.VERSION }}-${{ steps.platform.outputs.arch }}
+          provenance: false
+          sbom: false
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+          DOCKER_BUILD_SUMMARY: false
+          DOCKER_BUILD_CHECKS_ANNOTATIONS: false
+
+  # ============================================================================
+  # Smoke test Docker image
+  # ============================================================================
+  smoke-test:
+    needs: build-docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Pull and test AMD64 image
+        env:
+          IMAGE_VERSION: ${{ env.VERSION }}-amd64
+        run: .github/workflows/docker-smoke.sh
+
+  # ============================================================================
+  # Create multi-arch Docker manifest
+  # ============================================================================
+  create-manifest:
+    needs: [smoke-test, generate-release-notes]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push manifest
+        run: |
+          # Version-specific manifest
+          docker buildx imagetools create -t sequin/sequin:${{ env.VERSION }} \
+            sequin/sequin:${{ env.VERSION }}-amd64 \
+            sequin/sequin:${{ env.VERSION }}-arm64
+
+          # Latest manifest
+          docker buildx imagetools create -t sequin/sequin:latest \
+            sequin/sequin:${{ env.VERSION }}-amd64 \
+            sequin/sequin:${{ env.VERSION }}-arm64
+
+  # ============================================================================
+  # Generate release notes with Claude Code
+  # ============================================================================
+  generate-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git log
+
+      - name: Get previous tag
+        id: prev-tag
+        run: |
+          # Get the tag before the current one
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+          # Determine if this is a minor version bump
+          CURRENT="${{ env.VERSION }}"
+          if [ -n "$PREV_TAG" ]; then
+            # Extract minor versions (e.g., v0.12.5 -> 12)
+            PREV_MINOR=$(echo "$PREV_TAG" | sed -E 's/v?[0-9]+\.([0-9]+)\.[0-9]+/\1/')
+            CURR_MINOR=$(echo "$CURRENT" | sed -E 's/v?[0-9]+\.([0-9]+)\.[0-9]+/\1/')
+            if [ "$PREV_MINOR" != "$CURR_MINOR" ]; then
+              echo "is_minor_bump=true" >> $GITHUB_OUTPUT
+            else
+              echo "is_minor_bump=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "is_minor_bump=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Claude Code
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          echo "Claude Code installed. Version:"
+          claude --version
+
+      - name: Generate release notes
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Verify API key is set
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ERROR: ANTHROPIC_API_KEY is not set"
+            exit 1
+          fi
+          echo "API key is set (length: ${#ANTHROPIC_API_KEY})"
+
+          PREV_TAG="${{ steps.prev-tag.outputs.tag }}"
+          IS_MINOR="${{ steps.prev-tag.outputs.is_minor_bump }}"
+
+          # Build the prompt with context
+          PROMPT="$(cat scripts/release-notes-template.txt)
+
+          ---
+          CONTEXT FOR THIS RELEASE:
+          - New version: ${{ env.VERSION }}
+          - Previous version: $PREV_TAG
+          - Is minor version bump (breaking changes expected): $IS_MINOR
+
+          Write the release notes to a file called release_notes.md in the current directory.
+          The file should contain ONLY the markdown release notes - no preamble, no explanation, no code fences.
+          Start directly with the summary sentence."
+
+          echo "Prompt length: ${#PROMPT} characters"
+          echo "Running Claude Code..."
+
+          # Run Claude Code - have it write directly to file
+          # --allowedTools "Write" pre-approves file writes (no interactive prompt in CI)
+          if claude -p "$PROMPT" --allowedTools "Write" 2>&1; then
+            if [ -f release_notes.md ]; then
+              echo "Success! Generated release notes:"
+              cat release_notes.md
+            else
+              echo "ERROR: release_notes.md was not created"
+              exit 1
+            fi
+          else
+            EXIT_CODE=$?
+            echo "Claude Code failed with exit code $EXIT_CODE"
+            exit $EXIT_CODE
+          fi
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release_notes.md
+
+  # ============================================================================
+  # Create GitHub Release
+  # ============================================================================
+  create-release:
+    needs: [build-cli, create-manifest, generate-release-notes]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cli-binaries
+          path: release_assets
+
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: .
+
+      - name: Create GitHub Release
+        run: |
+          gh release create ${{ env.VERSION }} \
+            --title "Release ${{ env.VERSION }}" \
+            --notes-file release_notes.md \
+            release_assets/*.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================================
+  # Update Homebrew Formula
+  # ============================================================================
+  update-homebrew:
+    needs: [create-release, build-cli]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew-sequin
+        uses: actions/checkout@v4
+        with:
+          repository: sequinstream/homebrew-sequin
+          token: ${{ secrets.HOMEBREW_TAP_PAT }}
+          path: homebrew-tap
+
+      - name: Update formula
+        run: |
+          cd homebrew-tap
+
+          # Update version
+          sed -i 's/version ".*"/version "${{ env.VERSION }}"/' sequin.rb
+
+          # Update SHA256 checksums
+          sed -i 's/sha256 ".*" # tag:darwin-arm64/sha256 "${{ needs.build-cli.outputs.darwin_arm64_sha }}" # tag:darwin-arm64/' sequin.rb
+          sed -i 's/sha256 ".*" # tag:darwin-amd64/sha256 "${{ needs.build-cli.outputs.darwin_amd64_sha }}" # tag:darwin-amd64/' sequin.rb
+          sed -i 's/sha256 ".*" # tag:linux-arm64/sha256 "${{ needs.build-cli.outputs.linux_arm64_sha }}" # tag:linux-arm64/' sequin.rb
+          sed -i 's/sha256 ".*" # tag:linux-amd64/sha256 "${{ needs.build-cli.outputs.linux_amd64_sha }}" # tag:linux-amd64/' sequin.rb
+
+          echo "Updated sequin.rb:"
+          cat sequin.rb
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add sequin.rb
+          git commit -m "Bump sequin-cli version to ${{ env.VERSION }}"
+          git push
+

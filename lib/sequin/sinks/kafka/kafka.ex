@@ -1,7 +1,6 @@
 defmodule Sequin.Sinks.Kafka do
   @moduledoc false
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
@@ -43,10 +42,7 @@ defmodule Sequin.Sinks.Kafka do
     @module.get_partition_count(sink, topic)
   end
 
-  @spec message_key(SinkConsumer.t(), ConsumerRecord.t() | ConsumerEvent.t()) :: String.t()
-  def message_key(%SinkConsumer{sink: %KafkaSink{}}, %ConsumerRecord{} = record) do
-    record.group_id || ""
-  end
+  @spec message_key(SinkConsumer.t(), ConsumerEvent.t()) :: String.t()
 
   def message_key(%SinkConsumer{sink: %KafkaSink{}}, %ConsumerEvent{} = event) do
     event.group_id || ""

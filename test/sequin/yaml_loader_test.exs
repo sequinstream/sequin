@@ -5,6 +5,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Accounts.User
   alias Sequin.ApiTokens
   alias Sequin.Consumers
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
@@ -968,6 +969,25 @@ defmodule Sequin.YamlLoaderTest do
       assert %SequinStreamSink{} = consumer.sink
     end
 
+    test "ignores deprecated message_kind field for backwards compatibility" do
+      # message_kind was removed in v0.14.x but users may still have it in their YAML
+      # from v0.10.x when it was deprecated in the UI
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               sinks:
+                 - name: "sequin-playground-consumer"
+                   database: "test-db"
+                   message_kind: event
+                   destination:
+                     type: "sequin_stream"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.name == "sequin-playground-consumer"
+    end
+
     test "creates sink consumer with schema filter" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
@@ -1570,6 +1590,41 @@ defmodule Sequin.YamlLoaderTest do
                topic_id: "my-topic",
                use_emulator: true,
                emulator_base_url: "http://localhost:8085"
+             } = consumer.sink
+    end
+
+    test "creates SNS sink with LocalStack emulator configuration" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               sinks:
+                 - name: sns-localstack-sink
+                   status: active
+                   destination:
+                     type: sns
+                     topic_arn: "arn:aws:sns:us-east-1:000000000000:my-topic"
+                     region: us-east-1
+                     use_emulator: true
+                     emulator_base_url: http://localhost:4566
+                     access_key_id: test
+                     secret_access_key: test
+                   database: test-db
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+
+      assert consumer.name == "sns-localstack-sink"
+      assert consumer.status == :active
+
+      assert %SnsSink{
+               type: :sns,
+               topic_arn: "arn:aws:sns:us-east-1:000000000000:my-topic",
+               region: "us-east-1",
+               use_emulator: true,
+               emulator_base_url: "http://localhost:4566",
+               access_key_id: "test",
+               secret_access_key: _
              } = consumer.sink
     end
 
@@ -2310,6 +2365,254 @@ defmodule Sequin.YamlLoaderTest do
       assert db.primary.hostname == "primary.example.com"
       assert db.primary.port == 5432
       assert db.primary.database == "primary_db"
+    end
+  end
+
+  describe "initial_backfill" do
+    def account_and_db_yml_for_backfill do
+      """
+      account:
+        name: "Configured by Sequin"
+
+      databases:
+        - name: "test-db"
+          hostname: "localhost"
+          database: "sequin_test"
+          slot_name: "#{replication_slot()}"
+          publication_name: "#{@publication}"
+      """
+    end
+
+    test "initial_backfill: true creates backfill for single table sink" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml_for_backfill()}
+
+               sinks:
+                 - name: "backfill-sink"
+                   database: "test-db"
+                   source:
+                     include_tables: ["Characters"]
+                   destination:
+                     type: "sequin_stream"
+                   initial_backfill: true
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.name == "backfill-sink"
+
+      # Verify backfill was created
+      assert [backfill] = Repo.all(Backfill)
+      assert backfill.sink_consumer_id == consumer.id
+      assert backfill.state == :active
+      assert backfill.table_oid == Character.table_oid()
+    end
+
+    test "initial_backfill: false creates no backfill" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml_for_backfill()}
+
+               sinks:
+                 - name: "no-backfill-sink"
+                   database: "test-db"
+                   source:
+                     include_tables: ["Characters"]
+                   destination:
+                     type: "sequin_stream"
+                   initial_backfill: false
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.name == "no-backfill-sink"
+
+      # Verify no backfill was created
+      assert [] = Repo.all(Backfill)
+    end
+
+    test "omitting initial_backfill creates no backfill (default)" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml_for_backfill()}
+
+               sinks:
+                 - name: "default-no-backfill-sink"
+                   database: "test-db"
+                   source:
+                     include_tables: ["Characters"]
+                   destination:
+                     type: "sequin_stream"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.name == "default-no-backfill-sink"
+
+      # Verify no backfill was created
+      assert [] = Repo.all(Backfill)
+    end
+
+    test "initial_backfill with list of tables creates backfills for each table" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml_for_backfill()}
+
+               sinks:
+                 - name: "multi-table-backfill-sink"
+                   database: "test-db"
+                   source:
+                     include_tables:
+                       - "Characters"
+                       - "characters_detailed"
+                   destination:
+                     type: "sequin_stream"
+                   initial_backfill:
+                     - table: "Characters"
+                     - table: "characters_detailed"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert consumer.name == "multi-table-backfill-sink"
+
+      # Verify backfills were created for both tables
+      backfills = Repo.all(Backfill)
+      assert length(backfills) == 2
+      assert Enum.all?(backfills, &(&1.sink_consumer_id == consumer.id))
+      assert Enum.all?(backfills, &(&1.state == :active))
+    end
+
+    test "initial_backfill only applies on sink creation, not update" do
+      # First create sink without backfill
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml_for_backfill()}
+
+               sinks:
+                 - name: "update-test-sink"
+                   database: "test-db"
+                   source:
+                     include_tables: ["Characters"]
+                   destination:
+                     type: "sequin_stream"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      assert [] = Repo.all(Backfill)
+
+      # Now apply config with initial_backfill: true - should NOT create backfill on update
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml_for_backfill()}
+
+               sinks:
+                 - name: "update-test-sink"
+                   database: "test-db"
+                   source:
+                     include_tables: ["Characters"]
+                   destination:
+                     type: "sequin_stream"
+                   initial_backfill: true
+               """)
+
+      # Consumer should still exist, but no backfill should have been created
+      assert [^consumer] = Repo.all(SinkConsumer)
+      assert [] = Repo.all(Backfill)
+    end
+
+    test "initial_backfill returns error for invalid table name" do
+      assert_raise RuntimeError, ~r/Table 'non_existent_table' not found/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_and_db_yml_for_backfill()}
+
+        sinks:
+          - name: "invalid-table-backfill"
+            database: "test-db"
+            source:
+              include_tables: ["Characters"]
+            destination:
+              type: "sequin_stream"
+            initial_backfill:
+              - table: "non_existent_table"
+        """)
+      end
+    end
+
+    test "initial_backfill partial backfill returns error for invalid sort_column" do
+      assert_raise RuntimeError, ~r/Column 'non_existent_column' not found/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_and_db_yml_for_backfill()}
+
+        sinks:
+          - name: "invalid-column-backfill"
+            database: "test-db"
+            source:
+              include_tables: ["Characters"]
+            destination:
+              type: "sequin_stream"
+            initial_backfill:
+              - table: "Characters"
+                type: "partial"
+                sort_column: "non_existent_column"
+                start_position: "2025-01-01"
+        """)
+      end
+    end
+
+    test "initial_backfill partial backfill requires sort_column" do
+      assert_raise RuntimeError, ~r/partial backfill requires 'sort_column' field/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_and_db_yml_for_backfill()}
+
+        sinks:
+          - name: "missing-sort-column"
+            database: "test-db"
+            source:
+              include_tables: ["Characters"]
+            destination:
+              type: "sequin_stream"
+            initial_backfill:
+              - table: "Characters"
+                type: "partial"
+                start_position: "2025-01-01"
+        """)
+      end
+    end
+
+    test "initial_backfill partial backfill requires start_position" do
+      assert_raise RuntimeError, ~r/partial backfill requires 'start_position' field/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_and_db_yml_for_backfill()}
+
+        sinks:
+          - name: "missing-start-position"
+            database: "test-db"
+            source:
+              include_tables: ["Characters"]
+            destination:
+              type: "sequin_stream"
+            initial_backfill:
+              - table: "Characters"
+                type: "partial"
+                sort_column: "id"
+        """)
+      end
+    end
+
+    test "initial_backfill list entry requires table field" do
+      assert_raise RuntimeError, ~r/initial_backfill table configuration requires 'table' field/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_and_db_yml_for_backfill()}
+
+        sinks:
+          - name: "missing-table-field"
+            database: "test-db"
+            source:
+              include_tables: ["Characters"]
+            destination:
+              type: "sequin_stream"
+            initial_backfill:
+              - type: "full"
+        """)
+      end
     end
   end
 end

@@ -6,7 +6,6 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerEventData.Metadata
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.HttpEndpoint
@@ -27,11 +26,11 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "acknowledges records" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!()
 
       records =
         for _ <- 1..3 do
-          ConsumersFactory.insert_consumer_record!(
+          ConsumersFactory.insert_consumer_event!(
             consumer_id: consumer.id,
             state: :delivered
           )
@@ -41,11 +40,11 @@ defmodule Sequin.ConsumersTest do
 
       assert {:ok, 3} = Consumers.ack_messages(consumer, ack_ids)
 
-      assert Repo.all(ConsumerRecord) == []
+      assert Repo.all(ConsumerEvent) == []
     end
 
     test "acknowledges events" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
+      consumer = ConsumersFactory.insert_sink_consumer!()
 
       events =
         for _ <- 1..3 do
@@ -63,12 +62,12 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "silently ignores non-existent ack_ids" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
-      valid_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
+      consumer = ConsumersFactory.insert_sink_consumer!()
+      valid_record = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, state: :delivered)
       non_existent_ack_id = UUID.uuid4()
 
       assert {:ok, 1} = Consumers.ack_messages(consumer, [valid_record.ack_id, non_existent_ack_id])
-      assert Repo.all(ConsumerRecord) == []
+      assert Repo.all(ConsumerEvent) == []
     end
 
     test "handles empty ack_ids list", %{consumer: consumer} do
@@ -76,23 +75,23 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "acknowledges only records/events for the given consumer" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
-      other_consumer = ConsumersFactory.insert_sink_consumer!(max_ack_pending: 100, message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!()
+      other_consumer = ConsumersFactory.insert_sink_consumer!(max_ack_pending: 100)
 
-      record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
-      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: other_consumer.id, state: :delivered)
+      record1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, state: :delivered)
+      record2 = ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id, state: :delivered)
 
       assert {:ok, 1} = Consumers.ack_messages(consumer, [record1.ack_id, record2.ack_id])
 
-      assert [ignore] = Repo.all(ConsumerRecord)
+      assert [ignore] = Repo.all(ConsumerEvent)
       assert ignore.id == record2.id
     end
 
     test "acknowledged messages are stored in redis" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!()
 
-      record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
-      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
+      record1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, state: :delivered)
+      record2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, state: :delivered)
 
       record1 = %{record1 | payload_size_bytes: Size.bytes(100)}
       record2 = %{record2 | payload_size_bytes: Size.bytes(200)}
@@ -446,7 +445,7 @@ defmodule Sequin.ConsumersTest do
   describe "upsert_consumer_messages/1" do
     test "inserts a new message" do
       consumer = ConsumersFactory.insert_sink_consumer!()
-      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+      msg = ConsumersFactory.consumer_message(consumer_id: consumer.id)
 
       assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
 
@@ -456,7 +455,7 @@ defmodule Sequin.ConsumersTest do
 
     test "inserts a new message with record_serializers" do
       consumer = ConsumersFactory.insert_sink_consumer!()
-      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+      msg = ConsumersFactory.consumer_message(consumer_id: consumer.id)
       msg = put_in(msg.data.record["date_field"], Date.utc_today())
 
       assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
@@ -466,10 +465,10 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "updates existing message" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
+      consumer = ConsumersFactory.insert_sink_consumer!()
 
       existing_msg =
-        ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
+        ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id)
 
       updated_attrs = %{
         existing_msg
@@ -492,7 +491,6 @@ defmodule Sequin.ConsumersTest do
       # Create events for consumer1 with different WAL cursors
       message1 =
         ConsumersFactory.insert_consumer_message!(
-          message_kind: consumer1.message_kind,
           consumer_id: consumer1.id,
           commit_lsn: 100,
           commit_idx: 1
@@ -500,7 +498,6 @@ defmodule Sequin.ConsumersTest do
 
       message2 =
         ConsumersFactory.insert_consumer_message!(
-          message_kind: consumer1.message_kind,
           consumer_id: consumer1.id,
           commit_lsn: 200,
           commit_idx: 2
@@ -508,14 +505,12 @@ defmodule Sequin.ConsumersTest do
 
       # Create events for consumer2 with different WAL cursors
       ConsumersFactory.insert_consumer_message!(
-        message_kind: consumer2.message_kind,
         consumer_id: consumer2.id,
         commit_lsn: 100,
         commit_idx: 1
       )
 
       ConsumersFactory.insert_consumer_message!(
-        message_kind: consumer2.message_kind,
         consumer_id: consumer2.id,
         commit_lsn: 200,
         commit_idx: 2
@@ -562,10 +557,8 @@ defmodule Sequin.ConsumersTest do
       # Insert the consumer message
       ConsumersFactory.insert_consumer_message!(
         consumer_id: consumer.id,
-        message_kind: consumer.message_kind,
         data:
           ConsumersFactory.consumer_message_data_attrs(%{
-            message_kind: consumer.message_kind,
             record: record_data,
             action: :insert
           })
@@ -602,28 +595,24 @@ defmodule Sequin.ConsumersTest do
         # LSN: 200, IDX: 2
         ConsumersFactory.insert_consumer_message!(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           commit_lsn: 200,
           commit_idx: 2
         ),
         # LSN: 100, IDX: 2
         ConsumersFactory.insert_consumer_message!(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           commit_lsn: 100,
           commit_idx: 2
         ),
         # LSN: 200, IDX: 1
         ConsumersFactory.insert_consumer_message!(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           commit_lsn: 200,
           commit_idx: 1
         ),
         # LSN: 100, IDX: 1
         ConsumersFactory.insert_consumer_message!(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           commit_lsn: 100,
           commit_idx: 1
         )
@@ -657,7 +646,6 @@ defmodule Sequin.ConsumersTest do
       Enum.map(1..10, fn i ->
         ConsumersFactory.insert_consumer_message!(
           consumer_id: consumer.id,
-          message_kind: consumer.message_kind,
           commit_lsn: i * 100,
           commit_idx: 1
         )
@@ -698,10 +686,7 @@ defmodule Sequin.ConsumersTest do
 
       # Insert some messages to ensure the table exists and has data
       for _ <- 1..5 do
-        ConsumersFactory.insert_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
+        ConsumersFactory.insert_consumer_message!(consumer_id: consumer.id)
       end
 
       # Check the size is positive

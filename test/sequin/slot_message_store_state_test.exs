@@ -909,8 +909,8 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "peek_messages_metadata/2" do
-    test "returns messages without data field", %{state: state} do
+  describe "peek_messages_metadata/3" do
+    test "returns messages without data field in ascending order by default", %{state: state} do
       # Create 5 messages
       messages =
         for i <- 1..5 do
@@ -936,6 +936,37 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
       assert third.commit_lsn == 3
 
       assert Enum.all?(metadata_messages, &(&1.data == nil))
+    end
+
+    test "returns messages in ascending order with order: :asc", %{state: state} do
+      messages =
+        for i <- 1..5 do
+          ConsumersFactory.consumer_message(commit_lsn: i, commit_idx: 1)
+        end
+
+      {:ok, state} = State.put_messages(state, messages)
+
+      metadata_messages = State.peek_messages_metadata(state, 3, order: :asc)
+
+      assert length(metadata_messages) == 3
+      commit_lsns = Enum.map(metadata_messages, & &1.commit_lsn)
+      assert commit_lsns == [1, 2, 3]
+    end
+
+    test "returns messages in descending order with order: :desc", %{state: state} do
+      messages =
+        for i <- 1..5 do
+          ConsumersFactory.consumer_message(commit_lsn: i, commit_idx: 1)
+        end
+
+      {:ok, state} = State.put_messages(state, messages)
+
+      metadata_messages = State.peek_messages_metadata(state, 3, order: :desc)
+
+      assert length(metadata_messages) == 3
+      commit_lsns = Enum.map(metadata_messages, & &1.commit_lsn)
+      # Newest first
+      assert commit_lsns == [5, 4, 3]
     end
   end
 

@@ -169,7 +169,6 @@ defmodule Sequin.Tasks.MigratePostgresDbs do
         :max_waiting,
         :max_ack_pending,
         :max_deliver,
-        :message_kind,
         :status,
         :annotations,
         :max_memory_mb,

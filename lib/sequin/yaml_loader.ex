@@ -162,14 +162,14 @@ defmodule Sequin.YamlLoader do
     with {:ok, account} <- find_or_create_account(account_id, config),
          {:ok, _users} <- find_or_create_users(account, config),
          {:ok, _tokens} <- find_or_create_tokens(account, config),
-         {:ok, _databases, actions} <- upsert_databases(account.id, config, opts),
+         {:ok, _databases, db_actions} <- upsert_databases(account.id, config, opts),
          databases = Databases.list_dbs_for_account(account.id, [:replication_slot]),
          {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
          http_endpoints = Consumers.list_http_endpoints_for_account(account.id),
          {:ok, _functions} <- upsert_functions(account.id, config),
-         {:ok, _sink_consumers} <- upsert_sink_consumers(account.id, config, databases, http_endpoints) do
-      {:ok, all_resources(account.id), actions}
+         {:ok, _sink_consumers, sink_actions} <- upsert_sink_consumers(account.id, config, databases, http_endpoints) do
+      {:ok, all_resources(account.id), db_actions ++ sink_actions}
     end
   end
 
@@ -917,11 +917,11 @@ defmodule Sequin.YamlLoader do
   #########################
 
   defp upsert_sink_consumers(account_id, %{"sinks" => consumers}, databases, http_endpoints) do
-    Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
+    Enum.reduce_while(consumers, {:ok, [], []}, fn consumer, {:ok, acc_consumers, acc_actions} ->
       case upsert_sink_consumer(account_id, consumer, databases, http_endpoints) do
-        {:ok, consumer} ->
+        {:ok, consumer, actions} ->
           Logger.info("Upserted sink consumer", consumer_id: consumer.id)
-          {:cont, {:ok, [consumer | acc]}}
+          {:cont, {:ok, [consumer | acc_consumers], actions ++ acc_actions}}
 
         {:error, error} ->
           {:halt, {:error, error}}
@@ -938,7 +938,7 @@ defmodule Sequin.YamlLoader do
       end
   end
 
-  defp upsert_sink_consumers(_account_id, %{}, _databases, _http_endpoints), do: {:ok, []}
+  defp upsert_sink_consumers(_account_id, %{}, _databases, _http_endpoints), do: {:ok, [], []}
 
   defp upsert_sink_consumer(_account_id, %{"name" => nil} = _consumer_attrs, _databases, _http_endpoints) do
     {:error, Error.validation(summary: "`name` is a required field on each sink.")}
@@ -948,23 +948,29 @@ defmodule Sequin.YamlLoader do
     # Find existing consumer first
     case Sequin.Consumers.find_sink_consumer(account_id, name: name) do
       {:ok, existing_consumer} ->
+        # On update, we don't process initial_backfill (it only applies on creation)
         with {:ok, params} <-
                Transforms.from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints),
+             params = Map.delete(params, :initial_backfill),
              params = ensure_function_keys_are_nil_when_not_specified(params),
              {:ok, consumer} <- Sequin.Consumers.update_sink_consumer(existing_consumer, params) do
           Logger.info("Updated HTTP push consumer", consumer_id: consumer.id)
-          {:ok, consumer}
+          {:ok, consumer, []}
         end
 
       {:error, %NotFoundError{}} ->
         with {:ok, params} <-
                Transforms.from_external_sink_consumer(account_id, consumer_attrs, databases, http_endpoints),
+             {initial_backfill_config, params} = Map.pop(params, :initial_backfill),
              params = ensure_function_keys_are_nil_when_not_specified(params),
              params = Map.put_new(params, :source, %{}),
              {:ok, consumer} <-
                Sequin.Consumers.create_sink_consumer(account_id, params) do
+          # Create backfill action if configured (only on creation, not updates)
+          backfill_actions = maybe_create_initial_backfill_action(consumer, initial_backfill_config)
+
           Logger.info("Created HTTP push consumer", consumer_id: consumer.id)
-          {:ok, consumer}
+          {:ok, consumer, backfill_actions}
         end
     end
   end
@@ -977,6 +983,35 @@ defmodule Sequin.YamlLoader do
     |> Map.put_new(:filter_id, nil)
     |> Map.put_new(:routing_id, nil)
     |> Map.put_new(:routing_mode, "static")
+  end
+
+  ####################
+  ## Initial Backfill #
+  ####################
+
+  defp maybe_create_initial_backfill_action(_consumer, nil), do: []
+  defp maybe_create_initial_backfill_action(_consumer, []), do: []
+
+  defp maybe_create_initial_backfill_action(consumer, backfill_config) do
+    go = fn -> create_initial_backfills(consumer, backfill_config) end
+    [%__MODULE__.Action{action: go, description: "Create initial backfill for sink '#{consumer.name}'"}]
+  end
+
+  defp create_initial_backfills(consumer, backfill_config) do
+    # Load consumer with postgres_database preloaded
+    consumer = Repo.preload(consumer, :postgres_database)
+
+    # backfill_config is already in the format expected by create_backfills_for_form:
+    # [%{"oid" => table_oid, "type" => "full"}, ...]
+    # [%{"oid" => table_oid, "type" => "partial", "sortColumnAttnum" => attnum, "initialMinCursor" => cursor}, ...]
+    case Consumers.create_backfills_for_form(consumer.account_id, consumer, backfill_config) do
+      %{failed: [_ | _] = failed} ->
+        {:error,
+         Error.bad_request(message: "Failed to create initial backfills for sink '#{consumer.name}': #{inspect(failed)}")}
+
+      %{} ->
+        :ok
+    end
   end
 
   ###############

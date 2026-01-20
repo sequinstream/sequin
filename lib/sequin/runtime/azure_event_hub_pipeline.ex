@@ -59,16 +59,6 @@ defmodule Sequin.Runtime.AzureEventHubPipeline do
     end
   end
 
-  defp build_event_hub_message(%SinkConsumer{} = consumer, %Sequin.Consumers.ConsumerRecord{} = record) do
-    %{
-      data: Message.to_external(consumer, record),
-      attributes: %{
-        "trace_id" => record.replication_message_trace_id,
-        "type" => "record"
-      }
-    }
-  end
-
   defp build_event_hub_message(consumer, %Sequin.Consumers.ConsumerEvent{} = event) do
     %{
       data: Message.to_external(consumer, event),

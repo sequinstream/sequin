@@ -5,8 +5,6 @@ defmodule Sequin.Runtime.MessageHandler do
 
   alias Sequin.Constants
   alias Sequin.Consumers
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error.InvariantError
@@ -241,10 +239,8 @@ defmodule Sequin.Runtime.MessageHandler do
         consumer = Map.fetch!(consumers_by_id, consumer_id)
 
         # Just for type clarity
-        case consumer_message(consumer, ctx.postgres_database, message) do
-          %ConsumerEvent{} = consumer_message -> {consumer_id, consumer_message}
-          %ConsumerRecord{} = consumer_message -> {consumer_id, consumer_message}
-        end
+        consumer_message = consumer_message(consumer, ctx.postgres_database, message)
+        {consumer_id, consumer_message}
       end)
     end)
     |> Stream.reject(fn {_, consumer_message} -> violates_payload_size?(ctx.replication_slot_id, consumer_message) end)
@@ -379,7 +375,6 @@ defmodule Sequin.Runtime.MessageHandler do
       Enum.each(messages, fn message ->
         # Add message to each matching sequence's test messages
         test_consumer = %SinkConsumer{
-          message_kind: :event,
           name: "test-consumer",
           postgres_database: ctx.postgres_database,
           annotations: %{"test_message" => true, "info" => "Test messages are not associated with any sink"}

@@ -7,7 +7,6 @@ defmodule Sequin.Consumers.PathFunction do
 
   alias __MODULE__
   alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecordData
 
   @derive {Jason.Encoder, only: [:type, :path]}
   @primary_key false
@@ -42,18 +41,11 @@ defmodule Sequin.Consumers.PathFunction do
     traverse_path(data, String.split(path || "", "."))
   end
 
-  def apply(%PathFunction{path: path}, %ConsumerRecordData{} = data) do
-    traverse_path(data, String.split(path || "", "."))
-  end
-
   # Carve out known structs that we can traverse
   defp traverse_path(%ConsumerEventData{} = data, keys), do: mapify_struct_and_traverse(data, keys)
-  defp traverse_path(%ConsumerRecordData{} = data, keys), do: mapify_struct_and_traverse(data, keys)
   defp traverse_path(%ConsumerEventData.Metadata{} = data, keys), do: mapify_struct_and_traverse(data, keys)
-  defp traverse_path(%ConsumerRecordData.Metadata{} = data, keys), do: mapify_struct_and_traverse(data, keys)
   defp traverse_path(%ConsumerEventData.Metadata.Sink{} = data, keys), do: mapify_struct_and_traverse(data, keys)
   defp traverse_path(%ConsumerEventData.Metadata.Database{} = data, keys), do: mapify_struct_and_traverse(data, keys)
-  defp traverse_path(%ConsumerRecordData.Metadata.Sink{} = data, keys), do: mapify_struct_and_traverse(data, keys)
 
   # Base case
   defp traverse_path(value, []), do: value

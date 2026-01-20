@@ -11,9 +11,12 @@
     ChevronDown,
     Info,
     Trash2,
+    ArrowDownWideNarrow,
+    ArrowUpNarrowWide,
   } from "lucide-svelte";
   import * as Popover from "$lib/components/ui/popover";
   import * as RadioGroup from "$lib/components/ui/radio-group";
+  import * as Select from "$lib/components/ui/select";
   import { Label } from "$lib/components/ui/label";
   import { toast } from "svelte-sonner";
   import TableWithDrawer from "$lib/components/TableWithDrawer.svelte";
@@ -26,6 +29,7 @@
   export let live;
   export let paused: boolean = false;
   export let showAcked: boolean = true;
+  export let sortOrder: "asc" | "desc" = "desc";
   export let consumer: { type: string };
   export let metrics: { messages_failing_count: number };
   export let showAckId: string | null;
@@ -305,6 +309,12 @@
     changePage(0);
   }
 
+  function changeSortOrder(newOrder: "asc" | "desc") {
+    sortOrder = newOrder;
+    live.pushEvent("change_sort_order", { sort_order: sortOrder });
+    changePage(0);
+  }
+
   function resetMessageVisibility(ackId) {
     live.pushEvent("reset_message_visibility", { ack_id: ackId }, (reply) => {
       resettingMessageVisibility = false;
@@ -442,6 +452,33 @@
   onCloseDrawer={closeDrawer}
 >
   <svelte:fragment slot="titleActions">
+    <Select.Root
+      selected={{
+        value: sortOrder,
+        label: sortOrder === "desc" ? "Newest First" : "Oldest First",
+      }}
+      onSelectedChange={(selected) => {
+        if (selected) {
+          changeSortOrder(selected.value);
+        }
+      }}
+    >
+      <Select.Trigger class="w-[150px] h-9">
+        <div class="flex items-center gap-2">
+          {#if sortOrder === "desc"}
+            <ArrowDownWideNarrow class="h-4 w-4" />
+          {:else}
+            <ArrowUpNarrowWide class="h-4 w-4" />
+          {/if}
+          <Select.Value placeholder="Sort Order" />
+        </div>
+      </Select.Trigger>
+      <Select.Content>
+        <Select.Item value="desc">Newest First</Select.Item>
+        <Select.Item value="asc">Oldest First</Select.Item>
+      </Select.Content>
+    </Select.Root>
+
     <Button
       variant="outline"
       size="sm"
@@ -663,9 +700,9 @@
     <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
       {item.not_visible_until ? formatDate(item.not_visible_until) : "N/A"}
     </td>
-    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-      >{formatDate(item.commit_timestamp)}</td
-    >
+    <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+      {item.commit_timestamp ? formatDate(item.commit_timestamp) : "N/A"}
+    </td>
   </svelte:fragment>
 
   <svelte:fragment slot="drawerTitle">Message Details</svelte:fragment>

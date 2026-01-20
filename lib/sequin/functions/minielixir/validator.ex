@@ -451,8 +451,7 @@ defmodule Sequin.Functions.MiniElixir.Validator do
 
     # Literals and other patterns don't bind variables
     defp extract_vars(literal, acc)
-         when is_number(literal) or is_binary(literal) or is_boolean(literal) or is_nil(literal),
-         do: acc
+         when is_number(literal) or is_binary(literal) or is_boolean(literal) or is_nil(literal), do: acc
 
     defp extract_vars(e, acc) when is_number(e) or is_atom(e) or is_binary(e), do: acc
     defp extract_vars({:__aliases__, _, _}, acc), do: acc

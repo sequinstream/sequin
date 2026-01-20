@@ -129,16 +129,6 @@ defmodule Sequin.Transforms do
     end
   end
 
-  def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint, show_sensitive) do
-    %{
-      id: http_endpoint.id,
-      name: http_endpoint.name,
-      "webhook.site": true,
-      headers: format_headers(http_endpoint.headers),
-      encrypted_headers: encrypted_headers(http_endpoint, show_sensitive)
-    }
-  end
-
   def to_external(%HttpEndpoint{use_local_tunnel: true} = http_endpoint, show_sensitive) do
     %{
       id: http_endpoint.id,
@@ -304,7 +294,9 @@ defmodule Sequin.Transforms do
       topic_arn: sink.topic_arn,
       region: sink.region,
       is_fifo: sink.is_fifo,
-      use_task_role: sink.use_task_role
+      use_task_role: sink.use_task_role,
+      use_emulator: sink.use_emulator,
+      emulator_base_url: sink.emulator_base_url
     }
 
     config =
@@ -958,11 +950,24 @@ defmodule Sequin.Transforms do
         "consumer_start" ->
           {:cont, {:ok, acc}}
 
-        # Ignore until it is properly implemented
+        "initial_backfill" ->
+          with {:ok, database} <- find_database_by_name(consumer_attrs["database"], databases),
+               {:ok, backfill_config} <- parse_initial_backfill_config(value, database, consumer_attrs) do
+            {:cont, {:ok, Map.put(acc, :initial_backfill, backfill_config)}}
+          else
+            {:error, error} -> {:halt, {:error, error}}
+          end
+
+        # Keep ignoring these legacy fields for backwards compatibility
         "active_backfill" ->
           {:cont, {:ok, acc}}
 
         "active_backfills" ->
+          {:cont, {:ok, acc}}
+
+        # message_kind was deprecated in v0.10.x and removed in v0.14.x
+        # Ignore it for backwards compatibility with existing YAML configs
+        "message_kind" ->
           {:cont, {:ok, acc}}
 
         # Ignore internal fields that might be present in the external data
@@ -1146,7 +1151,9 @@ defmodule Sequin.Transforms do
        region: attrs["region"],
        access_key_id: attrs["access_key_id"],
        secret_access_key: attrs["secret_access_key"],
-       use_task_role: attrs["use_task_role"] || false
+       use_task_role: attrs["use_task_role"] || false,
+       use_emulator: attrs["use_emulator"] || false,
+       emulator_base_url: attrs["emulator_base_url"]
      }}
   end
 
@@ -1420,6 +1427,161 @@ defmodule Sequin.Transforms do
 
   defp env do
     Application.fetch_env!(:sequin, :env)
+  end
+
+  # Parse initial_backfill configuration for YAML
+  # Supports:
+  #   initial_backfill: true                    - full backfill of all tables
+  #   initial_backfill: false                   - no backfill (same as omitting)
+  #   initial_backfill:                         - list of table configs
+  #     - table: "public.users"
+  #     - table: "public.orders"
+  #       type: "partial"
+  #       sort_column: "updated_at"
+  #       start_position: "2025-01-01T00:00:00Z"
+  defp parse_initial_backfill_config(true, database, consumer_attrs) do
+    # Full backfill of all tables in the source
+    case resolve_source_tables(database, consumer_attrs) do
+      {:ok, tables} ->
+        config =
+          Enum.map(tables, fn table ->
+            %{"oid" => table.oid, "type" => "full"}
+          end)
+
+        {:ok, config}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp parse_initial_backfill_config(false, _database, _consumer_attrs), do: {:ok, nil}
+  defp parse_initial_backfill_config(nil, _database, _consumer_attrs), do: {:ok, nil}
+
+  defp parse_initial_backfill_config(tables_config, database, _consumer_attrs) when is_list(tables_config) do
+    tables_config
+    |> Enum.reduce_while({:ok, []}, fn table_config, {:ok, acc} ->
+      case parse_backfill_table_config(table_config, database) do
+        {:ok, parsed} -> {:cont, {:ok, [parsed | acc]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+    |> case do
+      {:ok, configs} -> {:ok, Enum.reverse(configs)}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp parse_initial_backfill_config(_value, _database, _consumer_attrs) do
+    {:error, Error.validation(summary: "initial_backfill must be true, false, or a list of table configurations")}
+  end
+
+  defp parse_backfill_table_config(%{"table" => table_ref} = config, database) do
+    with {:ok, table} <- find_table(database, table_ref) do
+      type = config["type"] || "full"
+
+      case type do
+        "full" ->
+          {:ok, %{"oid" => table.oid, "type" => "full"}}
+
+        "partial" ->
+          parse_partial_backfill_config(config, table)
+
+        _ ->
+          {:error, Error.validation(summary: "initial_backfill type must be 'full' or 'partial', got: #{type}")}
+      end
+    end
+  end
+
+  defp parse_backfill_table_config(config, _database) when is_map(config) do
+    {:error, Error.validation(summary: "initial_backfill table configuration requires 'table' field")}
+  end
+
+  defp parse_backfill_table_config(_config, _database) do
+    {:error, Error.validation(summary: "initial_backfill entries must be objects with 'table' field")}
+  end
+
+  defp parse_partial_backfill_config(config, table) do
+    sort_column_name = config["sort_column"]
+    start_position = config["start_position"]
+
+    cond do
+      is_nil(sort_column_name) ->
+        {:error, Error.validation(summary: "partial backfill requires 'sort_column' field")}
+
+      is_nil(start_position) ->
+        {:error, Error.validation(summary: "partial backfill requires 'start_position' field")}
+
+      true ->
+        case find_column_by_name(table, sort_column_name) do
+          {:ok, column} ->
+            {:ok,
+             %{
+               "oid" => table.oid,
+               "type" => "partial",
+               "sortColumnAttnum" => column.attnum,
+               "initialMinCursor" => start_position
+             }}
+
+          {:error, error} ->
+            {:error, error}
+        end
+    end
+  end
+
+  defp find_column_by_name(table, column_name) do
+    case Enum.find(table.columns, &(&1.name == column_name)) do
+      nil ->
+        {:error, Error.validation(summary: "Column '#{column_name}' not found in table '#{table.schema}.#{table.name}'")}
+
+      column ->
+        {:ok, column}
+    end
+  end
+
+  # Resolve which tables are included in the sink's source
+  defp resolve_source_tables(database, consumer_attrs) do
+    source = consumer_attrs["source"]
+    table_ref = consumer_attrs["table"]
+    schema = consumer_attrs["schema"]
+
+    cond do
+      # Explicit table reference
+      not is_nil(table_ref) ->
+        case find_table(database, table_ref) do
+          {:ok, table} -> {:ok, [table]}
+          {:error, error} -> {:error, error}
+        end
+
+      # Source with include_tables
+      is_map(source) and is_list(source["include_tables"]) ->
+        source["include_tables"]
+        |> Enum.reduce_while({:ok, []}, fn table_ref, {:ok, acc} ->
+          case find_table(database, table_ref) do
+            {:ok, table} -> {:cont, {:ok, [table | acc]}}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+        end)
+        |> case do
+          {:ok, tables} -> {:ok, Enum.reverse(tables)}
+          {:error, error} -> {:error, error}
+        end
+
+      # Source with include_schemas - get all tables in those schemas
+      is_map(source) and is_list(source["include_schemas"]) ->
+        schemas = source["include_schemas"]
+        tables = Enum.filter(database.tables, &(&1.schema in schemas))
+        {:ok, tables}
+
+      # Deprecated schema key
+      not is_nil(schema) ->
+        tables = Enum.filter(database.tables, &(&1.schema == schema))
+        {:ok, tables}
+
+      # No source specified - use all tables in the database
+      true ->
+        {:ok, database.tables}
+    end
   end
 
   def from_external_backfill(attrs) do

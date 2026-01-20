@@ -11,6 +11,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
+  alias Sequin.Consumers.BenchmarkSink
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
@@ -51,7 +52,8 @@ defmodule Sequin.Consumers.SinkConsumer do
     :typesense,
     :meilisearch,
     :sns,
-    :elasticsearch
+    :elasticsearch,
+    :benchmark
   ]
 
   # This is a module attribute to compile the types into the schema
@@ -66,7 +68,6 @@ defmodule Sequin.Consumers.SinkConsumer do
              :max_ack_pending,
              :max_deliver,
              :max_waiting,
-             :message_kind,
              :name,
              :updated_at,
              :status,
@@ -87,7 +88,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
     field :max_retry_count, :integer, default: nil
-    field :message_kind, Ecto.Enum, values: [:event, :record], default: :event
     field :status, Ecto.Enum, values: [:active, :disabled, :paused], default: :active
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
@@ -136,7 +136,8 @@ defmodule Sequin.Consumers.SinkConsumer do
         azure_event_hub: AzureEventHubSink,
         typesense: TypesenseSink,
         meilisearch: MeilisearchSink,
-        elasticsearch: ElasticsearchSink
+        elasticsearch: ElasticsearchSink,
+        benchmark: BenchmarkSink
       ],
       on_replace: :update,
       type_field_name: :type
@@ -150,7 +151,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> cast(attrs, [
       :replication_slot_id,
       :status,
-      :message_kind,
       :max_memory_mb,
       :transform_id,
       :routing_id,
@@ -207,6 +207,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> cast_embed(:source, required: true)
     |> cast_embed(:source_tables)
     |> put_defaults()
+    |> validate_type()
     |> validate_message_grouping()
     |> validate_enrichment()
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
@@ -224,6 +225,16 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> foreign_key_constraint(:filter_id)
     |> foreign_key_constraint(:enrichment_id)
     |> Sequin.Changeset.annotations_check_constraint()
+  end
+
+  defp validate_type(changeset) do
+    sink = get_field(changeset, :sink)
+
+    if sink && sink.type == :benchmark && Application.get_env(:sequin, :env) == :prod do
+      add_error(changeset, :type, "invalid type: #{inspect(sink.type)}")
+    else
+      changeset
+    end
   end
 
   defp validate_message_grouping(changeset) do
@@ -326,7 +337,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> put_change(:max_memory_mb, get_field(changeset, :max_memory_mb) || 128)
     |> put_change(:partition_count, get_field(changeset, :partition_count) || 1)
     |> put_change(:legacy_transform, get_field(changeset, :legacy_transform) || :none)
-    |> put_change(:message_kind, get_field(changeset, :message_kind) || :event)
     |> put_change(:message_grouping, message_grouping)
   end
 
@@ -365,7 +375,9 @@ defmodule Sequin.Consumers.SinkConsumer do
 
   def where_any_function_id(query \\ base_query(), function_id) do
     from([consumer: c] in query,
-      where: c.transform_id == ^function_id or c.routing_id == ^function_id or c.filter_id == ^function_id
+      where:
+        c.transform_id == ^function_id or c.routing_id == ^function_id or c.filter_id == ^function_id or
+          c.enrichment_id == ^function_id
     )
   end
 
@@ -393,7 +405,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   end
 
   def where_id_or_name(query \\ base_query(), id_or_name) do
-    if Sequin.String.uuid?(id_or_name) do
+    if Sequin.String.sequin_uuid?(id_or_name) do
       where_id(query, id_or_name)
     else
       where_name(query, id_or_name)

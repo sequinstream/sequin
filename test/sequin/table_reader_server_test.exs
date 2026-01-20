@@ -63,7 +63,6 @@ defmodule Sequin.Runtime.TableReaderServerTest do
     consumer =
       ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
-        message_kind: :record,
         account_id: database.account_id,
         source: source
       )
@@ -79,7 +78,6 @@ defmodule Sequin.Runtime.TableReaderServerTest do
     filtered_consumer =
       ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
-        message_kind: :record,
         account_id: database.account_id,
         source: source
       )
@@ -95,7 +93,6 @@ defmodule Sequin.Runtime.TableReaderServerTest do
     event_consumer =
       ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
-        message_kind: :event,
         account_id: database.account_id,
         source: source
       )

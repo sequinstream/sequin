@@ -94,7 +94,10 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :account_id, references(:accounts, type: :uuid, prefix: @config_schema), null: false
 
       add :postgres_database_id,
-          references(:postgres_databases, with: [account_id: :account_id], prefix: @config_schema),
+          references(:postgres_databases,
+            with: [account_id: :account_id],
+            prefix: @config_schema
+          ),
           null: false
 
       timestamps()

@@ -544,12 +544,17 @@ defmodule Sequin.Runtime.SlotProcessorServer do
         &(not match?(%Message{message: %LogicalMessage{prefix: "sequin.heartbeat" <> _rest}}, &1))
       )
 
-    if non_heartbeat_message? do
-      Health.put_event(
-        state.replication_slot,
-        %Event{slug: :replication_message_processed, status: :success}
-      )
-    end
+    state =
+      if non_heartbeat_message? do
+        Health.put_event(
+          state.replication_slot,
+          %Event{slug: :replication_message_processed, status: :success}
+        )
+
+        %{state | message_received_since_last_heartbeat: true}
+      else
+        state
+      end
 
     count = length(batch.messages)
     ProcessMetrics.increment_throughput("messages_processed", count)

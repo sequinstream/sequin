@@ -25,7 +25,7 @@ defmodule Sequin.MessageHandlerTest do
   end
 
   describe "handle_messages/2" do
-    test "handles message_kind: event correctly" do
+    test "handles insert messages correctly" do
       account = AccountsFactory.insert_account!()
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
 
@@ -34,7 +34,6 @@ defmodule Sequin.MessageHandlerTest do
 
       consumer =
         ConsumersFactory.insert_sink_consumer!(
-          message_kind: :event,
           account_id: account.id,
           postgres_database_id: database.id
         )
@@ -73,7 +72,7 @@ defmodule Sequin.MessageHandlerTest do
       assert {:ok, 1} = MessageLedgers.count_undelivered_wal_cursors(consumer.id, DateTime.utc_now())
     end
 
-    test "handles message_kind: record correctly" do
+    test "handles update messages with group_id correctly" do
       account = AccountsFactory.insert_account!()
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
 
@@ -82,7 +81,6 @@ defmodule Sequin.MessageHandlerTest do
 
       consumer =
         ConsumersFactory.insert_sink_consumer!(
-          message_kind: :record,
           account_id: account.id,
           source_tables: [
             ConsumersFactory.source_table_attrs(
@@ -140,7 +138,7 @@ defmodule Sequin.MessageHandlerTest do
       assert record.group_id == nil
     end
 
-    test "fans out messages correctly for mixed message_kind consumers and wal_pipelines" do
+    test "fans out messages correctly for multiple consumers and wal_pipelines" do
       account = AccountsFactory.insert_account!()
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
 
@@ -159,15 +157,11 @@ defmodule Sequin.MessageHandlerTest do
 
       # Should get all messages
       all_consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          message_kind: :event,
-          account_id: account.id
-        )
+        ConsumersFactory.insert_sink_consumer!(account_id: account.id)
 
       # Should get messages for table 123
       table_consumer =
         ConsumersFactory.insert_sink_consumer!(
-          message_kind: :record,
           account_id: account.id,
           source: ConsumersFactory.source_attrs(include_table_oids: [123])
         )
@@ -175,7 +169,6 @@ defmodule Sequin.MessageHandlerTest do
       # Should get messages for tables in schema 1
       schema_consumer =
         ConsumersFactory.insert_sink_consumer!(
-          message_kind: :event,
           account_id: account.id,
           source: ConsumersFactory.source_attrs(include_schemas: [table_schema1])
         )
@@ -446,7 +439,6 @@ defmodule Sequin.MessageHandlerTest do
 
       consumer =
         ConsumersFactory.insert_sink_consumer!(
-          message_kind: :record,
           account_id: account.id,
           source_tables: [
             ConsumersFactory.source_table_attrs(table_oid: 123, group_column_attnums: [2])
@@ -650,23 +642,15 @@ defmodule Sequin.MessageHandlerTest do
       assert [_] = list_messages(consumer)
     end
 
-    test "deletes are ignored", %{context: context, consumer: consumer} do
+    test "deletes are processed", %{context: context, consumer: consumer} do
       field = ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1)
       message = ReplicationFactory.postgres_message(action: :delete, table_oid: 123, old_fields: [field])
 
       {:ok, count} = MessageHandler.handle_messages(context, [message])
 
-      case consumer.message_kind do
-        :record ->
-          assert count == 0
-          records = list_messages(consumer)
-          assert length(records) == 0
-
-        :event ->
-          assert count == 1
-          events = list_messages(consumer)
-          assert length(events) == 1
-      end
+      assert count == 1
+      events = list_messages(consumer)
+      assert length(events) == 1
     end
   end
 

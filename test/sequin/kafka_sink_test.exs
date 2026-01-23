@@ -259,7 +259,6 @@ defmodule Sequin.Consumers.KafkaSinkTest do
       assert Keyword.get(config, :compression) == :gzip
     end
 
-
     test "does not include compression when set to :none" do
       sink = %KafkaSink{
         hosts: "localhost:9092",

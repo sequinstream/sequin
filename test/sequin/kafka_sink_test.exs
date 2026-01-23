@@ -217,7 +217,7 @@ defmodule Sequin.Consumers.KafkaSinkTest do
     end
 
     test "accepts valid compression values" do
-      for compression <- [:none, :gzip, :snappy, :lz4, :zstd] do
+      for compression <- [:none, :gzip] do
         changeset =
           KafkaSink.changeset(%KafkaSink{}, %{
             hosts: "localhost:9092",
@@ -259,41 +259,6 @@ defmodule Sequin.Consumers.KafkaSinkTest do
       assert Keyword.get(config, :compression) == :gzip
     end
 
-    test "includes compression when set to snappy" do
-      sink = %KafkaSink{
-        hosts: "localhost:9092",
-        topic: "test-topic",
-        tls: false,
-        compression: :snappy
-      }
-
-      config = KafkaSink.to_brod_config(sink)
-      assert Keyword.get(config, :compression) == :snappy
-    end
-
-    test "includes compression when set to lz4" do
-      sink = %KafkaSink{
-        hosts: "localhost:9092",
-        topic: "test-topic",
-        tls: false,
-        compression: :lz4
-      }
-
-      config = KafkaSink.to_brod_config(sink)
-      assert Keyword.get(config, :compression) == :lz4
-    end
-
-    test "includes compression when set to zstd" do
-      sink = %KafkaSink{
-        hosts: "localhost:9092",
-        topic: "test-topic",
-        tls: false,
-        compression: :zstd
-      }
-
-      config = KafkaSink.to_brod_config(sink)
-      assert Keyword.get(config, :compression) == :zstd
-    end
 
     test "does not include compression when set to :none" do
       sink = %KafkaSink{

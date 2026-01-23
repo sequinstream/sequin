@@ -25,7 +25,7 @@ defmodule Sequin.Consumers.KafkaSink do
     field :aws_secret_access_key, EncryptedField
     field :connection_id, :string
     field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
-    field :compression, Ecto.Enum, values: [:none, :gzip, :snappy, :lz4, :zstd], default: :none
+    field :compression, Ecto.Enum, values: [:none, :gzip], default: :none
   end
 
   def changeset(struct, params) do

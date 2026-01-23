@@ -40,10 +40,7 @@ The Kafka sink sends messages to a Kafka topic.
 
     Choose a compression algorithm to reduce the size of messages sent to Kafka. Options include:
     - **None** (default): No compression
-    - **Gzip**: Good compression ratio with wide compatibility
-    - **Snappy**: Fast compression with moderate compression ratio
-    - **LZ4**: Very fast compression with moderate compression ratio
-    - **Zstd**: Best compression ratio (requires Kafka 2.1.0+)
+    - **Gzip**: Good compression ratio with wide compatibility, uses Erlang's built-in `:zlib` module
 
     Compression is applied to batches of messages before sending to Kafka, which can significantly reduce network bandwidth and storage requirements. When using compression, be mindful of the `max_batch_size` setting to ensure compressed batches don't exceed Kafka's `max.message.bytes` limit.
 

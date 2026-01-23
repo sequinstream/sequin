@@ -37,9 +37,6 @@
   let compressionOptions = [
     { value: "none", label: "None" },
     { value: "gzip", label: "Gzip" },
-    { value: "snappy", label: "Snappy" },
-    { value: "lz4", label: "LZ4" },
-    { value: "zstd", label: "Zstd" },
   ];
 
   // Add internal state for AWS credentials
@@ -275,9 +272,8 @@
         {/each}
       </select>
       <p class="text-xs">
-        Compress messages before sending to Kafka. Gzip offers good compression
-        with wide compatibility. Snappy and LZ4 are faster but offer less
-        compression. Zstd provides the best compression ratio.
+        Compress messages before sending to Kafka using Gzip. This can
+        significantly reduce network bandwidth and storage requirements.
       </p>
       {#if errors.sink?.compression}
         <p class="text-destructive text-sm">{errors.sink.compression}</p>

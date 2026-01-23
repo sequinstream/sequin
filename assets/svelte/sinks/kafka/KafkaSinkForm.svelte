@@ -33,6 +33,15 @@
     { value: "aws_msk_iam", label: "AWS MSK IAM" },
   ];
 
+  // Compression options
+  let compressionOptions = [
+    { value: "none", label: "None" },
+    { value: "gzip", label: "Gzip" },
+    { value: "snappy", label: "Snappy" },
+    { value: "lz4", label: "LZ4" },
+    { value: "zstd", label: "Zstd" },
+  ];
+
   // Add internal state for AWS credentials
   let internalAwsKeyId = form.sink.aws_access_key_id || "";
   let internalAwsSecretKey = form.sink.aws_secret_access_key || "";
@@ -250,6 +259,28 @@
       </div>
       {#if errors.sink?.tls}
         <p class="text-destructive text-sm">{errors.sink.tls}</p>
+      {/if}
+    </div>
+
+    <!-- Compression Dropdown -->
+    <div class="space-y-2">
+      <Label for="compression">Compression</Label>
+      <select
+        id="compression"
+        bind:value={form.sink.compression}
+        class="block w-full border border-gray-300 rounded-md p-2"
+      >
+        {#each compressionOptions as option}
+          <option value={option.value}>{option.label}</option>
+        {/each}
+      </select>
+      <p class="text-xs">
+        Compress messages before sending to Kafka. Gzip offers good compression
+        with wide compatibility. Snappy and LZ4 are faster but offer less
+        compression. Zstd provides the best compression ratio.
+      </p>
+      {#if errors.sink?.compression}
+        <p class="text-destructive text-sm">{errors.sink.compression}</p>
       {/if}
     </div>
   </CardContent>

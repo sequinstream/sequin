@@ -11,6 +11,9 @@ defmodule Sequin.SinkPipelineTest do
       stub(SinkPipelineMock, :init, fn context, _ -> context end)
       stub(SinkPipelineMock, :processors_config, fn _ -> [] end)
       stub(SinkPipelineMock, :batchers_config, fn _ -> [] end)
+
+      stub(SinkPipelineMock, :partition_by_fn, fn _consumer -> fn message -> :erlang.phash2(message.data.group_id) end end)
+
       stub(SinkPipelineMock, :handle_message, fn message, context -> {:ok, message, context} end)
 
       stub(SinkPipelineMock, :handle_batch, fn _batch_name, messages, _batch_info, context -> {:ok, messages, context} end)

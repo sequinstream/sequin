@@ -439,13 +439,29 @@ defmodule Sequin.Postgres.BenchmarkSource do
 
     # Compute partition for checksum
     # Use pk (as string) to match pipeline's group_id partitioning
-    partition = Stats.partition(to_string(pk), state.config.partition_count)
+    group_id = to_string(pk)
+    partition = Stats.partition(group_id, state.config.partition_count)
 
     # Compute commit_idx (0-based index within transaction)
     commit_idx = state.transaction_size - state.transaction_messages_remaining
 
     # Update checksum for this partition
-    Stats.message_emitted(state.id, partition, state.transaction_commit_lsn, commit_idx, scope: :source)
+    Stats.message_emitted(%Stats.Message{
+      owner_id: state.id,
+      partition: partition,
+      commit_lsn: state.transaction_commit_lsn,
+      commit_idx: commit_idx,
+      scope: :source
+    })
+
+    # Update per-group checksum (sampling handled by Stats)
+    Stats.message_emitted_for_group(%Stats.GroupMessage{
+      owner_id: state.id,
+      group_id: group_id,
+      commit_lsn: state.transaction_commit_lsn,
+      commit_idx: commit_idx,
+      scope: :source
+    })
 
     # Generate payload
     payload = :binary.copy("x", row_size)

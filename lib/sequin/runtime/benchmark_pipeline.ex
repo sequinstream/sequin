@@ -46,6 +46,24 @@ defmodule Sequin.Runtime.BenchmarkPipeline do
   end
 
   @impl SinkPipeline
+  def batchers_config(consumer) do
+    %SinkConsumer{sink: %BenchmarkSink{partition_count: partition_count}} = consumer
+
+    [
+      default: [
+        concurrency: partition_count,
+        batch_size: 10,
+        batch_timeout: 1
+      ]
+    ]
+  end
+
+  @impl SinkPipeline
+  def partition_by_fn(_consumer) do
+    fn msg -> :erlang.phash2(msg.data.group_id) end
+  end
+
+  @impl SinkPipeline
   def handle_message(broadway_message, context) do
     %{consumer: %SinkConsumer{sink: %BenchmarkSink{partition_count: partition_count}}} = context
 
@@ -62,7 +80,6 @@ defmodule Sequin.Runtime.BenchmarkPipeline do
   @impl SinkPipeline
   def handle_batch(:default, messages, %{batch_key: partition}, context) do
     %{consumer: consumer} = context
-
     # Also emit to Prometheus for observability
     total_bytes = messages |> Enum.map(& &1.data.payload_size_bytes) |> Enum.sum()
 
@@ -77,14 +94,15 @@ defmodule Sequin.Runtime.BenchmarkPipeline do
     Enum.each(sorted_messages, fn msg ->
       created_at_us = extract_created_at(msg.data.data.record)
 
-      Stats.message_received(
-        consumer.id,
-        partition,
-        msg.data.commit_lsn,
-        msg.data.commit_idx,
+      Stats.message_received_for_group(%Stats.GroupMessage{
+        owner_id: consumer.id,
+        group_id: msg.data.group_id,
+        commit_lsn: msg.data.commit_lsn,
+        commit_idx: msg.data.commit_idx,
+        partition: partition,
         byte_size: msg.data.payload_size_bytes,
         created_at_us: created_at_us
-      )
+      })
 
       # Also emit to Prometheus for observability
       if created_at_us do

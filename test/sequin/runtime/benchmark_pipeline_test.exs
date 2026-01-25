@@ -26,8 +26,22 @@ defmodule Sequin.Runtime.BenchmarkPipelineTest do
       consumer_id = "test-consumer-#{System.unique_integer()}"
 
       Stats.init_for_owner(consumer_id, 2, scope: :pipeline)
-      Stats.message_emitted(consumer_id, 0, 100, 0, scope: :pipeline)
-      Stats.message_emitted(consumer_id, 1, 200, 0, scope: :pipeline)
+
+      Stats.message_emitted(%Stats.Message{
+        owner_id: consumer_id,
+        partition: 0,
+        commit_lsn: 100,
+        commit_idx: 0,
+        scope: :pipeline
+      })
+
+      Stats.message_emitted(%Stats.Message{
+        owner_id: consumer_id,
+        partition: 1,
+        commit_lsn: 200,
+        commit_idx: 0,
+        scope: :pipeline
+      })
 
       Stats.reset_for_owner(consumer_id)
 
@@ -60,6 +74,10 @@ defmodule Sequin.Runtime.BenchmarkPipelineTest do
     end
 
     test "messages are processed and checksums are tracked", %{consumer: consumer} do
+      # Set 100% sample rate for testing
+      Application.put_env(:sequin, Sequin.Benchmark.Stats, checksum_sample_rate: 1.0)
+      on_exit(fn -> Application.delete_env(:sequin, Sequin.Benchmark.Stats) end)
+
       test_pid = self()
 
       # Start the SlotMessageStoreSupervisor
@@ -85,18 +103,22 @@ defmodule Sequin.Runtime.BenchmarkPipelineTest do
       # Wait for all messages to be processed
       await_acks(10)
 
-      # Verify checksums were tracked
-      checksums = Stats.checksums(consumer.id)
-      assert map_size(checksums) == 4
+      # Verify group checksums were tracked (BenchmarkPipeline uses message_received_for_group)
+      group_checksums = Stats.group_checksums(consumer.id)
+      assert map_size(group_checksums) == 4
 
       # Verify total count matches
       total_count =
-        Enum.reduce(checksums, 0, fn {_partition, {_checksum, count}}, acc -> acc + count end)
+        Enum.reduce(group_checksums, 0, fn {_group_id, {_checksum, count}}, acc -> acc + count end)
 
       assert total_count == 10
     end
 
     test "checksum computation matches expected formula", %{consumer: consumer} do
+      # Set 100% sample rate for testing
+      Application.put_env(:sequin, Sequin.Benchmark.Stats, checksum_sample_rate: 1.0)
+      on_exit(fn -> Application.delete_env(:sequin, Sequin.Benchmark.Stats) end)
+
       test_pid = self()
 
       # Start the SlotMessageStoreSupervisor
@@ -124,26 +146,28 @@ defmodule Sequin.Runtime.BenchmarkPipelineTest do
       # Wait for message to be processed
       await_acks(1)
 
-      # Compute expected checksum manually
-      partition = :erlang.phash2(group_id, 4)
+      # Compute expected checksum manually (group checksums are keyed by group_id, not partition)
       expected_checksum = :erlang.crc32(<<0::32, commit_lsn::64, commit_idx::32>>)
 
-      checksums = Stats.checksums(consumer.id)
-      {actual_checksum, count} = checksums[partition]
+      group_checksums = Stats.group_checksums(consumer.id)
+      {actual_checksum, count} = group_checksums[group_id]
 
       assert count == 1
       assert actual_checksum == expected_checksum
     end
 
     test "checksums are order-sensitive (rolling checksum)", %{consumer: consumer} do
+      # Set 100% sample rate for testing
+      Application.put_env(:sequin, Sequin.Benchmark.Stats, checksum_sample_rate: 1.0)
+      on_exit(fn -> Application.delete_env(:sequin, Sequin.Benchmark.Stats) end)
+
       test_pid = self()
 
       # Start the SlotMessageStoreSupervisor
       start_supervised!({SlotMessageStoreSupervisor, [consumer_id: consumer.id, test_pid: test_pid]})
 
-      # Create two events for the same partition
-      group_id = "same-partition"
-      partition = :erlang.phash2(group_id, 4)
+      # Create two events for the same group_id
+      group_id = "same-group"
 
       events = [
         ConsumersFactory.consumer_event(
@@ -169,23 +193,18 @@ defmodule Sequin.Runtime.BenchmarkPipelineTest do
       # Wait for messages to be processed
       await_acks(2)
 
-      checksums = Stats.checksums(consumer.id)
-      {actual_checksum, count} = checksums[partition]
+      group_checksums = Stats.group_checksums(consumer.id)
+      {actual_checksum, count} = group_checksums[group_id]
 
       assert count == 2
 
       # Verify the checksum is a rolling checksum (not just a single value).
-      # The order of processing within a batch may vary, so we accept either order.
-      # Order A: 100 then 200
+      # BenchmarkPipeline sorts by (commit_lsn, commit_idx) so order should be deterministic.
+      # Order: 100 then 200
       checksum_100_first = :erlang.crc32(<<0::32, 100::64, 0::32>>)
-      expected_order_a = :erlang.crc32(<<checksum_100_first::32, 200::64, 0::32>>)
+      expected_checksum = :erlang.crc32(<<checksum_100_first::32, 200::64, 0::32>>)
 
-      # Order B: 200 then 100
-      checksum_200_first = :erlang.crc32(<<0::32, 200::64, 0::32>>)
-      expected_order_b = :erlang.crc32(<<checksum_200_first::32, 100::64, 0::32>>)
-
-      assert actual_checksum in [expected_order_a, expected_order_b],
-             "Checksum #{actual_checksum} doesn't match expected order A (#{expected_order_a}) or B (#{expected_order_b})"
+      assert actual_checksum == expected_checksum
     end
   end
 

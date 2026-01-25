@@ -5,6 +5,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
+  alias Sequin.Consumers.BenchmarkSink
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ElasticsearchSink
@@ -299,6 +300,16 @@ defmodule Sequin.Factory.ConsumersFactory do
 
   defp sink(:sequin_stream, _account_id, attrs) do
     merge_attributes(%SequinStreamSink{type: :sequin_stream}, attrs)
+  end
+
+  defp sink(:benchmark, _account_id, attrs) do
+    merge_attributes(
+      %BenchmarkSink{
+        type: :benchmark,
+        partition_count: Map.get(attrs, :partition_count, System.schedulers_online())
+      },
+      attrs
+    )
   end
 
   defp sink(:gcp_pubsub, _account_id, attrs) do

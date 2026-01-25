@@ -43,6 +43,17 @@ defmodule Sequin.Prometheus do
       help: "The approximate age of the oldest message in milliseconds."
     )
 
+    # Benchmark metrics
+    if Application.get_env(:sequin, :env) == :bench do
+      Histogram.new(
+        name: :sequin_benchmark_e2e_latency_us,
+        labels: [:consumer_id],
+        buckets: [100, 1000, 5000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 5_000_000],
+        duration_unit: false,
+        help: "End-to-end latency from message creation to delivery in microseconds (benchmark only)."
+      )
+    end
+
     Counter.declare(
       name: :sequin_messages_ingested_count,
       help: "Total number of messages ingested.",
@@ -351,6 +362,11 @@ defmodule Sequin.Prometheus do
   @spec observe_oldest_message_age(consumer_id :: String.t(), consumer_name :: String.t(), age_ms :: number()) :: :ok
   def observe_oldest_message_age(consumer_id, consumer_name, age_ms) do
     Histogram.observe([name: :sequin_oldest_message_age_ms, labels: [consumer_id, consumer_name]], age_ms)
+  end
+
+  @spec observe_benchmark_e2e_latency(consumer_id :: String.t(), latency_us :: number()) :: :ok
+  def observe_benchmark_e2e_latency(consumer_id, latency_us) do
+    Histogram.observe([name: :sequin_benchmark_e2e_latency_us, labels: [consumer_id]], latency_us)
   end
 
   @spec increment_messages_ingested(replication_slot_id :: String.t(), slot_name :: String.t(), count :: number()) :: :ok

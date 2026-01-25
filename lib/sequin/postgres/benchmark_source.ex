@@ -27,10 +27,9 @@ defmodule Sequin.Postgres.BenchmarkSource do
   use GenServer
   use TypedStruct
 
+  alias Sequin.Benchmark.Stats
   alias Sequin.CircularBuffer
   alias Sequin.Postgres.Source
-
-  require Logger
 
   # Postgres epoch: 2000-01-01 00:00:00 UTC
   @pg_epoch 946_684_800_000_000
@@ -46,7 +45,8 @@ defmodule Sequin.Postgres.BenchmarkSource do
     %{name: "id", type: :bigint, position: 1},
     %{name: "partition_key", type: :text, position: 2},
     %{name: "payload", type: :bytea, position: 3},
-    %{name: "created_at", type: :timestamptz, position: 4}
+    # Stored as microseconds since epoch (bigint) for e2e latency measurement
+    %{name: "created_at", type: :bigint, position: 4}
   ]
 
   @num_columns length(@columns)
@@ -75,6 +75,9 @@ defmodule Sequin.Postgres.BenchmarkSource do
 
       # Size of circular buffer for recent PKs (for collision simulation)
       field :pk_pool_size, pos_integer(), default: 100_000
+
+      # Maximum messages to generate (nil = unlimited)
+      field :max_messages, pos_integer() | nil, default: nil
     end
   end
 
@@ -85,6 +88,7 @@ defmodule Sequin.Postgres.BenchmarkSource do
     typedstruct do
       # Unique identifier for this instance
       field :id, term(), enforce: true
+      field :status, :active | :paused, default: :active
 
       # The producer to send :tcp messages to
       field :producer, pid()
@@ -98,11 +102,12 @@ defmodule Sequin.Postgres.BenchmarkSource do
       field :current_xid, pos_integer(), default: 1
       field :transaction_commit_lsn, pos_integer()
       field :transaction_timestamp, pos_integer()
+      field :transaction_size, non_neg_integer(), default: 0
       field :transaction_messages_remaining, non_neg_integer(), default: 0
       field :in_transaction, boolean(), default: false
 
-      # Checksums per partition: %{partition => {checksum, count}}
-      field :checksums, %{non_neg_integer() => {non_neg_integer(), non_neg_integer()}}, enforce: true
+      # Whether RELATION messages have been sent
+      field :relations_sent, boolean(), default: false
 
       # Circular buffer of recent PKs for collision simulation
       field :recent_pks, CircularBuffer.t(), enforce: true
@@ -184,11 +189,45 @@ defmodule Sequin.Postgres.BenchmarkSource do
   end
 
   @doc """
+  Returns tracked messages as [{commit_lsn, commit_idx, partition}] in order generated.
+
+  Tracking is disabled by default and can be enabled via configuration.
+  """
+  @spec tracked_messages(term()) :: [{integer(), integer(), integer()}]
+  def tracked_messages(id) do
+    GenServer.call(via_tuple(id), :tracked_messages)
+  end
+
+  @doc """
+  Resets tracked messages list.
+  """
+  @spec reset_tracked_messages(term()) :: :ok
+  def reset_tracked_messages(id) do
+    GenServer.call(via_tuple(id), :reset_tracked_messages)
+  end
+
+  @doc """
   Returns statistics about messages generated.
   """
   @spec stats(term()) :: map()
   def stats(id) do
     GenServer.call(via_tuple(id), :stats)
+  end
+
+  @doc """
+  Pauses the source - it will return empty messages until resumed.
+  """
+  @spec pause(term()) :: :ok
+  def pause(id) do
+    GenServer.call(via_tuple(id), :pause)
+  end
+
+  @doc """
+  Resumes the source after being paused.
+  """
+  @spec resume(term()) :: :ok
+  def resume(id) do
+    GenServer.call(via_tuple(id), :resume)
   end
 
   @doc """
@@ -213,13 +252,12 @@ defmodule Sequin.Postgres.BenchmarkSource do
     config_opts = Keyword.delete(opts, :id)
     config = struct!(Config, config_opts)
 
-    checksums =
-      Map.new(0..(config.partition_count - 1), fn p -> {p, {0, 0}} end)
+    Stats.reset_for_owner(id, scope: :source)
+    Stats.init_for_owner(id, config.partition_count, scope: :source)
 
     state = %State{
       id: id,
       config: config,
-      checksums: checksums,
       recent_pks: CircularBuffer.new(config.pk_pool_size)
     }
 
@@ -231,13 +269,43 @@ defmodule Sequin.Postgres.BenchmarkSource do
     {:reply, :ok, %{state | producer: producer}, {:continue, :send_next_tcp}}
   end
 
+  def handle_call({:recv_copies, _max_count}, _from, %State{status: :paused} = state) do
+    # When paused, return empty to let pipeline drain
+    {:reply, [], state}
+  end
+
   def handle_call({:recv_copies, max_count}, _from, state) do
-    {copies, state} = generate_copies(state, max_count, [])
-    {:reply, copies, state, {:continue, :send_next_tcp}}
+    # Check if we've hit the max_messages limit
+    max_messages = state.config.max_messages
+
+    if max_messages && state.total_messages >= max_messages do
+      # Already at limit, return empty like when paused
+      {:reply, [], state}
+    else
+      # Limit max_count to not exceed max_messages
+      effective_max =
+        if max_messages do
+          min(max_count, max_messages - state.total_messages)
+        else
+          max_count
+        end
+
+      {copies, state} = generate_copies(state, effective_max, [])
+      {:reply, copies, state, {:continue, :send_next_tcp}}
+    end
   end
 
   def handle_call(:checksums, _from, state) do
-    {:reply, state.checksums, state}
+    {:reply, Stats.checksums(state.id, scope: :source), state}
+  end
+
+  def handle_call(:tracked_messages, _from, state) do
+    {:reply, Stats.tracked_messages(state.id, scope: :source), state}
+  end
+
+  def handle_call(:reset_tracked_messages, _from, state) do
+    :ok = Stats.reset_for_owner(state.id, scope: :source)
+    {:reply, :ok, state}
   end
 
   def handle_call(:stats, _from, state) do
@@ -249,6 +317,14 @@ defmodule Sequin.Postgres.BenchmarkSource do
     }
 
     {:reply, stats, state}
+  end
+
+  def handle_call(:pause, _from, state) do
+    {:reply, :ok, %{state | status: :paused}}
+  end
+
+  def handle_call(:resume, _from, state) do
+    {:reply, :ok, %{state | status: :active}, {:continue, :send_next_tcp}}
   end
 
   @impl GenServer
@@ -263,6 +339,11 @@ defmodule Sequin.Postgres.BenchmarkSource do
     {:noreply, state}
   end
 
+  def handle_continue(:send_next_tcp, %State{status: :paused} = state) do
+    # Don't signal when paused
+    {:noreply, state}
+  end
+
   def handle_continue(:send_next_tcp, %State{producer: producer} = state) do
     send(producer, {:tcp, :benchmark_source, :data_ready})
     {:noreply, state}
@@ -271,6 +352,13 @@ defmodule Sequin.Postgres.BenchmarkSource do
   # ============================================================================
   # Message Generation
   # ============================================================================
+
+  defp generate_copies(%State{relations_sent: false} = state, remaining, acc) do
+    # Send RELATION messages before any data messages
+    relation_copies = Enum.map(@tables, &encode_relation/1)
+    state = %{state | relations_sent: true}
+    generate_copies(state, remaining, Enum.reverse(relation_copies, acc))
+  end
 
   defp generate_copies(state, 0, acc) do
     {Enum.reverse(acc), state}
@@ -304,6 +392,7 @@ defmodule Sequin.Postgres.BenchmarkSource do
     state = %{
       state
       | in_transaction: true,
+        transaction_size: txn_size,
         transaction_messages_remaining: txn_size,
         transaction_commit_lsn: commit_lsn,
         transaction_timestamp: timestamp,
@@ -349,17 +438,17 @@ defmodule Sequin.Postgres.BenchmarkSource do
     {pk, partition_key, state} = maybe_repeat_pk(state, pk, partition_key)
 
     # Compute partition for checksum
-    partition = :erlang.phash2(partition_key, state.config.partition_count)
+    # Use pk (as string) to match pipeline's group_id partitioning
+    partition = Stats.partition(to_string(pk), state.config.partition_count)
 
     # Compute commit_idx (0-based index within transaction)
-    txn_size = pick_from_distribution(state.config.transaction_sizes)
-    commit_idx = txn_size - state.transaction_messages_remaining
+    commit_idx = state.transaction_size - state.transaction_messages_remaining
 
     # Update checksum for this partition
-    state = update_checksum(state, partition, state.transaction_commit_lsn, commit_idx)
+    Stats.message_emitted(state.id, partition, state.transaction_commit_lsn, commit_idx, scope: :source)
 
     # Generate payload
-    payload = :binary.copy(<<0>>, row_size)
+    payload = :binary.copy("x", row_size)
     timestamp = format_timestamp()
 
     # Encode the WAL UPDATE message
@@ -407,13 +496,6 @@ defmodule Sequin.Postgres.BenchmarkSource do
     state.config.repeat_frequency > 0 and :rand.uniform() < state.config.repeat_frequency
   end
 
-  defp update_checksum(state, partition, lsn, commit_idx) do
-    {prev_checksum, count} = Map.fetch!(state.checksums, partition)
-    new_checksum = :erlang.crc32(<<prev_checksum::32, lsn::64, commit_idx::32>>)
-
-    %{state | checksums: Map.put(state.checksums, partition, {new_checksum, count + 1})}
-  end
-
   defp pick_from_distribution([{_fraction, value}]) do
     value
   end
@@ -441,11 +523,46 @@ defmodule Sequin.Postgres.BenchmarkSource do
   # WAL Protocol Encoding
   # ============================================================================
 
+  # Postgres type OIDs
+  @oid_int8 20
+  @oid_text 25
+  @oid_bytea 17
+
+  # Map our column types to Postgres OIDs
+  defp type_to_oid(:bigint), do: @oid_int8
+  defp type_to_oid(:text), do: @oid_text
+  defp type_to_oid(:bytea), do: @oid_bytea
+
   # Wrap a message in the copy data format
   # Format: ?w + wal_start(64) + wal_end(64) + send_time(64) + message
   defp wrap_copy(msg, lsn) do
     send_time = pg_timestamp()
     <<?w, lsn::64, lsn::64, send_time::64, msg::binary>>
+  end
+
+  # RELATION message
+  # Format: ?R + relation_id(32) + namespace(null-terminated) + name(null-terminated) +
+  #         replica_identity(1) + num_columns(16) + columns
+  # Each column: flags(8) + name(null-terminated) + type_oid(32) + type_modifier(32)
+  defp encode_relation(table) do
+    columns_binary =
+      @columns
+      |> Enum.with_index(1)
+      |> Enum.map_join(fn {col, idx} ->
+        # flags: 1 = key column (pk), 0 = regular
+        flags = if idx == 1, do: 1, else: 0
+        type_oid = type_to_oid(col.type)
+        # type_modifier: -1 means no modifier
+        <<flags::8, col.name::binary, 0::8, type_oid::32, -1::signed-32>>
+      end)
+
+    # replica_identity: "d" = default
+    msg =
+      <<"R", table.oid::32, table.schema::binary, 0::8, table.name::binary, 0::8, "d", @num_columns::16,
+        columns_binary::binary>>
+
+    # Use LSN 0 for relation messages (they're metadata)
+    wrap_copy(msg, 0)
   end
 
   # BEGIN message
@@ -497,8 +614,8 @@ defmodule Sequin.Postgres.BenchmarkSource do
     System.os_time(:microsecond) - @pg_epoch
   end
 
-  # Format timestamp as ISO8601 string
+  # Format timestamp as microseconds since epoch
   defp format_timestamp do
-    DateTime.to_iso8601(DateTime.utc_now())
+    Integer.to_string(:os.system_time(:microsecond))
   end
 end

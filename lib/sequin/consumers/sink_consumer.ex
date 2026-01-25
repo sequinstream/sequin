@@ -11,6 +11,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
+  alias Sequin.Consumers.BenchmarkSink
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.Function
   alias Sequin.Consumers.GcpPubsubSink
@@ -51,7 +52,8 @@ defmodule Sequin.Consumers.SinkConsumer do
     :typesense,
     :meilisearch,
     :sns,
-    :elasticsearch
+    :elasticsearch,
+    :benchmark
   ]
 
   # This is a module attribute to compile the types into the schema
@@ -134,7 +136,8 @@ defmodule Sequin.Consumers.SinkConsumer do
         azure_event_hub: AzureEventHubSink,
         typesense: TypesenseSink,
         meilisearch: MeilisearchSink,
-        elasticsearch: ElasticsearchSink
+        elasticsearch: ElasticsearchSink,
+        benchmark: BenchmarkSink
       ],
       on_replace: :update,
       type_field_name: :type
@@ -204,6 +207,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> cast_embed(:source, required: true)
     |> cast_embed(:source_tables)
     |> put_defaults()
+    |> validate_type()
     |> validate_message_grouping()
     |> validate_enrichment()
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
@@ -221,6 +225,16 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> foreign_key_constraint(:filter_id)
     |> foreign_key_constraint(:enrichment_id)
     |> Sequin.Changeset.annotations_check_constraint()
+  end
+
+  defp validate_type(changeset) do
+    sink = get_field(changeset, :sink)
+
+    if sink && sink.type == :benchmark && Application.get_env(:sequin, :env) == :prod do
+      add_error(changeset, :type, "invalid type: #{inspect(sink.type)}")
+    else
+      changeset
+    end
   end
 
   defp validate_message_grouping(changeset) do

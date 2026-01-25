@@ -46,6 +46,12 @@ These commands should pass before committing. Warnings or noise in test is not a
 - For fast feedback, run `mix test --exclude unboxed`. This skips synchronous tests. Then run `mix test` at the end to validate your work.
 - New tests that you create MUST NOT generate extra logs, even if the tests pass.
 
+## Testing
+
+### No `Process.sleep`
+
+Process.sleep is not allowed in test. You can use temporarily to get things working. But then find a way to use signal passing or telemetry handlers to get rid of it.
+
 ## Using jj workspaces for isolated work
 
 When working on a feature or fix, you can create an isolated workspace using jj:

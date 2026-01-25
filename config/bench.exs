@@ -1,6 +1,7 @@
 import Config
 
 config :sequin, Oban, testing: :manual, prefix: "sequin_config"
+config :sequin, Sequin.Benchmark.Stats, checksum_sample_rate: 0.1
 
 config :sequin, Sequin.Repo,
   username: "postgres",

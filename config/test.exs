@@ -28,6 +28,7 @@ config :sequin, Sequin,
   process_mod: Sequin.TestSupport.ProcessMock,
   application_mod: Sequin.TestSupport.ApplicationMock
 
+config :sequin, Sequin.Benchmark.Stats, checksum_sample_rate: 0.1
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Test
 
 config :sequin, Sequin.Pagerduty,

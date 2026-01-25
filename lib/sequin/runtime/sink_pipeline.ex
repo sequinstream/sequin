@@ -80,11 +80,21 @@ defmodule Sequin.Runtime.SinkPipeline do
   """
   @callback apply_routing(consumer :: SinkConsumer.t(), rinfo :: map()) :: struct()
 
+  @doc """
+  Returns a partition function for Broadway's :partition_by option.
+
+  When implemented, ensures messages with the same partition key are processed
+  in order through the same processor and batcher stage.
+  Return `nil` to disable partitioning.
+  """
+  @callback partition_by_fn(consumer :: SinkConsumer.t()) :: (Message.t() -> term()) | nil
+
   @optional_callbacks [
     processors_config: 1,
     batchers_config: 1,
     handle_message: 2,
-    apply_routing: 2
+    apply_routing: 2,
+    partition_by_fn: 1
   ]
 
   @doc """
@@ -133,7 +143,7 @@ defmodule Sequin.Runtime.SinkPipeline do
       test_pid: test_pid
     }
 
-    Broadway.start_link(__MODULE__,
+    broadway_opts = [
       name: via_tuple(consumer.id),
       producer: [
         module: {producer, [consumer_id: consumer.id, test_pid: test_pid]}
@@ -141,7 +151,18 @@ defmodule Sequin.Runtime.SinkPipeline do
       processors: processors_config(pipeline_mod, consumer),
       batchers: batchers_config(pipeline_mod, consumer),
       context: context
-    )
+    ]
+
+    # Add partition_by_fn if the pipeline module implements it
+    broadway_opts =
+      if function_exported?(pipeline_mod, :partition_by_fn, 1) do
+        partition_fn = pipeline_mod.partition_by_fn(consumer)
+        Keyword.put(broadway_opts, :partition_by, partition_fn)
+      else
+        broadway_opts
+      end
+
+    Broadway.start_link(__MODULE__, broadway_opts)
   end
 
   def via_tuple(consumer_id) do

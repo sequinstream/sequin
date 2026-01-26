@@ -22,5 +22,14 @@ defmodule Sequin.Consumers.BenchmarkSink do
     struct
     |> cast(params, [:partition_count])
     |> validate_number(:partition_count, greater_than: 0)
+    |> ensure_not_production()
+  end
+
+  defp ensure_not_production(changeset) do
+    if Application.get_env(:sequin, :env) == :prod do
+      add_error(changeset, :type, "benchmark consumers are not allowed in production")
+    else
+      changeset
+    end
   end
 end

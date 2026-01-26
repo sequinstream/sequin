@@ -207,7 +207,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> cast_embed(:source, required: true)
     |> cast_embed(:source_tables)
     |> put_defaults()
-    |> validate_type()
     |> validate_message_grouping()
     |> validate_enrichment()
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
@@ -225,16 +224,6 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> foreign_key_constraint(:filter_id)
     |> foreign_key_constraint(:enrichment_id)
     |> Sequin.Changeset.annotations_check_constraint()
-  end
-
-  defp validate_type(changeset) do
-    sink = get_field(changeset, :sink)
-
-    if sink && sink.type == :benchmark && Application.get_env(:sequin, :env) == :prod do
-      add_error(changeset, :type, "invalid type: #{inspect(sink.type)}")
-    else
-      changeset
-    end
   end
 
   defp validate_message_grouping(changeset) do

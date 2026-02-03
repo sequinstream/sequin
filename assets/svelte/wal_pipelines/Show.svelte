@@ -283,6 +283,43 @@
             <span class="text-gray-500">Table not found</span>
           {/if}
         </div>
+        <!-- 🍆 -->
+        <div class="mb-4">
+          <h3 class="text-md font-semibold mb-2">Column selection</h3>
+          {#if walPipeline.excludeColumns && walPipeline.excludeColumns.length > 0}
+            <div class="mb-2">
+              <p class="text-sm text-gray-600 mb-1">
+                <strong>Excluded columns:</strong>
+              </p>
+              <div class="flex flex-wrap gap-2">
+                {#each walPipeline.excludeColumns as column}
+                  <span
+                    class="inline-flex items-center px-2 py-1 rounded-md bg-red-50 text-red-700 text-sm"
+                  >
+                    {column}
+                  </span>
+                {/each}
+              </div>
+            </div>
+          {:else if walPipeline.includeColumns && walPipeline.includeColumns.length > 0}
+            <div class="mb-2">
+              <p class="text-sm text-gray-600 mb-1">
+                <strong>Included columns:</strong>
+              </p>
+              <div class="flex flex-wrap gap-2">
+                {#each walPipeline.includeColumns as column}
+                  <span
+                    class="inline-flex items-center px-2 py-1 rounded-md bg-green-50 text-green-700 text-sm"
+                  >
+                    {column}
+                  </span>
+                {/each}
+              </div>
+            </div>
+          {:else}
+            <p class="text-sm text-gray-500">All columns are synced</p>
+          {/if}
+        </div>
         <div class="mb-4">
           <h3 class="text-md font-semibold mb-2">Filters</h3>
           {#if walPipeline.source_filters.length > 0}

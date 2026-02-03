@@ -15,6 +15,7 @@
   } from "$lib/components/ui/card";
   import TableSelector from "../components/TableSelector.svelte";
   import FilterForm from "../components/FilterForm.svelte";
+  import ColumnSelectionForm from "../components/ColumnSelectionForm.svelte"; // 🍆
   import FullPageForm from "../components/FullPageForm.svelte";
   import { cn } from "$lib/utils";
 
@@ -42,6 +43,8 @@
       "delete",
     ],
     sourceTableFilters: walPipeline.sourceTableFilters || [],
+    excludeColumnAttnums: walPipeline.excludeColumnAttnums || [], // 🍆
+    includeColumnAttnums: walPipeline.includeColumnAttnums || [], // 🍆
     sortColumnAttnum: walPipeline.sortColumnAttnum || "",
   };
 
@@ -160,6 +163,11 @@
               selectedTable={selectedSourceTable}
               bind:form
               onFilterChange={(filters) => (form.sourceTableFilters = filters)}
+            />
+            <ColumnSelectionForm // 🍆
+              {selectedSourceTable}
+              bind:excludeColumnAttnums={form.excludeColumnAttnums}
+              bind:includeColumnAttnums={form.includeColumnAttnums}
             />
           {/if}
         </div>

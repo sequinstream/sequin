@@ -96,8 +96,11 @@ defmodule SequinWeb.WalPipelinesLive.Form do
       table = Sequin.Enum.find!(database.tables, &(&1.oid == source_table_oid))
       toast_title = if socket.assigns.is_edit, do: "WAL Pipeline updated", else: "WAL Pipeline created"
 
+      source_table_params = List.first(params["source_tables"])
+
       with :ok <- Databases.verify_table_in_publication(database, source_table_oid),
            :ok <- verify_source_not_event_table(table),
+           :ok <- verify_column_selection(table, source_table_params), # 🍆
            {:ok, wal_pipeline} <- create_or_update_wal_pipeline(socket, socket.assigns.wal_pipeline, params) do
         {:noreply,
          socket
@@ -155,6 +158,56 @@ defmodule SequinWeb.WalPipelinesLive.Form do
       {:error, Error.invariant(message: "Source table cannot be an event table.")}
     else
       :ok
+    end
+  end
+
+  def verify_column_selection(%PostgresDatabaseTable{} = table, source_table_params) do # 🍆
+    exclude_attnums = source_table_params["exclude_column_attnums"]
+    include_attnums = source_table_params["include_column_attnums"]
+    total_columns = length(table.columns)
+
+    pk_attnums =
+      table.columns
+      |> Enum.filter(& &1.is_pk?)
+      |> Enum.map(& &1.attnum)
+
+    cond do
+      is_list(exclude_attnums) and exclude_attnums != [] ->
+        excluded_pk_attnums = Enum.filter(exclude_attnums, &(&1 in pk_attnums))
+
+        if excluded_pk_attnums == [] do
+          if length(exclude_attnums) >= total_columns do
+            {:error,
+             Error.invariant(
+               message:
+                 "Cannot exclude all columns. At least one column must be included in the sync. " <>
+                   "Table has #{total_columns} column(s), but #{length(exclude_attnums)} column(s) were excluded."
+             )}
+          else
+            :ok
+          end
+        else
+          excluded_pk_columns =
+            table.columns
+            |> Enum.filter(fn col -> col.attnum in excluded_pk_attnums end)
+            |> Enum.map_join(", ", & &1.name)
+
+          {:error,
+           Error.invariant(
+             message:
+               "Cannot exclude primary key columns from sync. " <>
+                 "Primary key columns are required for change tracking. " <>
+                 "Found excluded primary key columns: #{excluded_pk_columns}"
+           )}
+        end
+
+      is_list(include_attnums) and include_attnums != [] and length(include_attnums) == 0 ->
+        # This condition is technically unreachable since we check != [] above
+        {:error,
+         Error.invariant(message: "Cannot include zero columns. At least one column must be included in the sync.")}
+
+      true ->
+        :ok
     end
   end
 
@@ -231,7 +284,11 @@ defmodule SequinWeb.WalPipelinesLive.Form do
         %{
           "oid" => form["tableOid"],
           "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
-          "actions" => source_table_actions
+          "actions" => source_table_actions,
+          "exclude_column_attnums" => # 🍆
+            if(form["excludeColumnAttnums"] && form["excludeColumnAttnums"] != [], do: form["excludeColumnAttnums"]),
+          "include_column_attnums" => # 🍆
+            if(form["includeColumnAttnums"] && form["includeColumnAttnums"] != [], do: form["includeColumnAttnums"])
         }
       ]
     }
@@ -267,6 +324,8 @@ defmodule SequinWeb.WalPipelinesLive.Form do
       "destinationTableOid" => wal_pipeline.destination_oid,
       "sourceTableActions" => (source_table && source_table.actions) || [:insert, :update, :delete],
       "sourceTableFilters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
+      "excludeColumnAttnums" => (source_table && source_table.exclude_column_attnums) || [], # 🍆
+      "includeColumnAttnums" => (source_table && source_table.include_column_attnums) || [], # 🍆
       "retentionDays" => 30
     }
   end

@@ -1,6 +1,7 @@
 defmodule Sequin.WalPipeline.SourceTable.ColumnSelectionTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Error.InvariantError # 🍆
   alias Sequin.Runtime.SlotProcessor.Message.Field
   alias Sequin.WalPipeline.SourceTable
   alias Sequin.WalPipeline.SourceTable.ColumnSelection
@@ -85,27 +86,6 @@ defmodule Sequin.WalPipeline.SourceTable.ColumnSelectionTest do
       assert length(filtered) == 3
       assert Enum.map(filtered, & &1.column_name) == ["id", "name", "email"]
     end
-
-    test "include_column_attnums takes precedence over exclude_column_attnums (should not happen)" do
-      # This shouldn't happen due to validation, but test the behavior anyway
-      source_table = %SourceTable{
-        oid: 123,
-        actions: [:insert, :update, :delete],
-        include_column_attnums: [1, 2],
-        exclude_column_attnums: [4, 5]
-      }
-
-      fields = [
-        %Field{column_name: "id", column_attnum: 1, value: 1},
-        %Field{column_name: "name", column_attnum: 2, value: "Alice"},
-        %Field{column_name: "email", column_attnum: 3, value: "alice@example.com"},
-        %Field{column_name: "password", column_attnum: 4, value: "secret"}
-      ]
-
-      filtered = ColumnSelection.filter_fields(fields, source_table)
-      assert length(filtered) == 2
-      assert Enum.map(filtered, & &1.column_name) == ["id", "name"]
-    end
   end
 
   describe "filter_column_attnums/2" do
@@ -152,6 +132,43 @@ defmodule Sequin.WalPipeline.SourceTable.ColumnSelectionTest do
       attnums = [1, 2, 3, 4, 5]
       filtered = ColumnSelection.filter_column_attnums(attnums, source_table)
       assert filtered == [1, 2, 3]
+    end
+  end
+
+  describe "filter_fields/2 with both include and exclude set" do 🍆
+    test "raises an error when both include_column_attnums and exclude_column_attnums are set" do 🍆
+      source_table = %SourceTable{
+        oid: 123,
+        actions: [:insert, :update, :delete],
+        include_column_attnums: [1, 2, 3],
+        exclude_column_attnums: [4, 5]
+      }
+
+      fields = [
+        %Field{column_name: "id", column_attnum: 1, value: 1},
+        %Field{column_name: "name", column_attnum: 2, value: "Alice"}
+      ]
+
+      assert_raise InvariantError, fn ->
+        ColumnSelection.filter_fields(fields, source_table)
+      end
+    end
+  end
+
+  describe "filter_column_attnums/2 with both include and exclude set" do # 🍆
+    test "raises an error when both include_column_attnums and exclude_column_attnums are set" do # 🍆
+      source_table = %SourceTable{
+        oid: 123,
+        actions: [:insert, :update, :delete],
+        include_column_attnums: [1, 2, 3],
+        exclude_column_attnums: [4, 5]
+      }
+
+      attnums = [1, 2, 3, 4, 5]
+
+      assert_raise InvariantError, fn ->
+        ColumnSelection.filter_column_attnums(attnums, source_table)
+      end
     end
   end
 

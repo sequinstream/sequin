@@ -732,14 +732,26 @@ defmodule Sequin.YamlLoader do
          {:ok, source_table_struct} <-
            fetch_table(source_database.tables, source_schema, source_table, :source_table),
          {:ok, column_filters} <-
-           parse_column_filters(attrs["filters"], source_database, source_schema, source_table) do
-      source_table_config = %{
-        "schema_name" => source_schema,
-        "table_name" => source_table,
-        "oid" => source_table_struct.oid,
-        "actions" => attrs["actions"] || [:insert, :update, :delete],
-        "column_filters" => column_filters
-      }
+           parse_column_filters(attrs["filters"], source_database, source_schema, source_table),
+         {:ok, column_selection} <- # 🍆
+           parse_column_selection(
+             attrs["exclude_columns"],
+             attrs["include_columns"],
+             source_database,
+             source_schema,
+             source_table
+           ) do
+      source_table_config = # 🍆
+        Map.merge(
+          %{
+            "schema_name" => source_schema,
+            "table_name" => source_table,
+            "oid" => source_table_struct.oid,
+            "actions" => attrs["actions"] || [:insert, :update, :delete],
+            "column_filters" => column_filters
+          },
+          column_selection # 🍆
+        )
 
       params = %{
         name: name,
@@ -779,6 +791,122 @@ defmodule Sequin.YamlLoader do
 
   defp parse_column_filters(_, _database, _schema, _table),
     do: {:error, Error.bad_request(message: "`filters` must be a list")}
+
+  # Helper to parse column selection (exclude_columns or include_columns) for WAL pipeline 🍆
+  defp parse_column_selection(nil, nil, _database, _schema, _table) do # 🍆
+    {:ok, %{"exclude_column_attnums" => nil, "include_column_attnums" => nil}}
+  end
+
+  defp parse_column_selection(exclude_columns, include_columns, database, schema, table_name) do # 🍆
+    with {:ok, table} <- fetch_table(database.tables, schema, table_name, :column_selection_table) do
+      cond do
+        not is_nil(exclude_columns) and not is_nil(include_columns) ->
+          {:error, Error.bad_request(message: "Cannot specify both `exclude_columns` and `include_columns`")}
+
+        not is_nil(exclude_columns) ->
+          exclude_columns
+          |> parse_column_names_to_attnums_with_table(table, "exclude_columns")
+          |> case do
+            {:ok, attnums} ->
+              case validate_not_excluding_all_columns(attnums, table, "exclude_columns") do
+                :ok -> {:ok, %{"exclude_column_attnums" => attnums, "include_column_attnums" => nil}}
+                {:error, error} -> {:error, error}
+              end
+
+            {:error, error} ->
+              {:error, error}
+          end
+
+        not is_nil(include_columns) ->
+          include_columns
+          |> parse_column_names_to_attnums_with_table(table, "include_columns")
+          |> case do
+            {:ok, attnums} ->
+              case validate_including_at_least_one_column(attnums, "include_columns") do
+                :ok -> {:ok, %{"exclude_column_attnums" => nil, "include_column_attnums" => attnums}}
+                {:error, error} -> {:error, error}
+              end
+
+            {:error, error} ->
+              {:error, error}
+          end
+
+        true ->
+          {:ok, %{"exclude_column_attnums" => nil, "include_column_attnums" => nil}}
+      end
+    end
+  end
+
+  defp parse_column_names_to_attnums_with_table(column_names, table, field_name) when is_list(column_names) do # 🍆
+    column_names
+    |> Enum.reduce_while({:ok, []}, fn column_name, {:ok, acc} ->
+      case Enum.find(table.columns, &(&1.name == column_name)) do
+        nil ->
+          {:halt,
+           {:error,
+            Error.validation(
+              summary: "Column '#{column_name}' not found in table '#{table.schema}.#{table.name}' for #{field_name}"
+            )}}
+
+        column ->
+          {:cont, {:ok, [column.attnum | acc]}}
+      end
+    end)
+    |> case do
+      {:ok, parsed} -> {:ok, Enum.reverse(parsed)}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp validate_not_excluding_all_columns(attnums, table, field_name) do # 🍆
+    total_columns = length(table.columns)
+
+    pk_attnums =
+      table.columns
+      |> Enum.filter(& &1.is_pk?)
+      |> Enum.map(& &1.attnum)
+
+    excluded_pk_attnums = Enum.filter(attnums, &(&1 in pk_attnums))
+
+    cond do
+      excluded_pk_attnums != [] ->
+        excluded_pk_columns =
+          table.columns
+          |> Enum.filter(fn col -> col.attnum in excluded_pk_attnums end)
+          |> Enum.map_join(", ", & &1.name)
+
+        {:error,
+         Error.bad_request(
+           message:
+             "Cannot exclude primary key columns in `#{field_name}`. " <>
+               "Primary key columns are required for change tracking. " <>
+               "Found excluded primary key columns: #{excluded_pk_columns}"
+         )}
+
+      length(attnums) >= total_columns ->
+        {:error,
+         Error.bad_request(
+           message:
+             "Cannot exclude all columns in `#{field_name}`. " <>
+               "At least one column must be included in the sync. " <>
+               "Table has #{total_columns} column(s), but #{length(attnums)} column(s) were excluded."
+         )}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_including_at_least_one_column(attnums, field_name) do # 🍆
+    if attnums == [] do
+      {:error,
+       Error.bad_request(
+         message: "Cannot include zero columns in `#{field_name}`. At least one column must be included in the sync."
+       )}
+    else
+      :ok
+    end
+  end
 
   defp fetch_database(databases, name, _role) do
     case Enum.find(databases, &(&1.name == name)) do

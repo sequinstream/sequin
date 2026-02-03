@@ -119,7 +119,15 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
     state = maybe_cancel_flush_batch_timer(state)
 
-    case state.flush_batch_fn.(state.id, batch) do
+    result =
+      try do
+        state.flush_batch_fn.(state.id, batch)
+      catch
+        :exit, reason ->
+          {:exit, reason}
+      end
+
+    case result do
       :ok ->
         state = %{state | ready_batches_by_idx: ready_batches}
 
@@ -131,6 +139,12 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
       {:error, reason} ->
         Logger.warning("[ReorderBuffer] Error pushing batch #{inspect(batch)}: #{inspect(reason)}")
+        state = schedule_flush_timer_retry(state)
+        {:noreply, [], state}
+
+      {:exit, reason} ->
+        Logger.warning("[ReorderBuffer] Exit while flushing batch #{inspect(batch)}: #{inspect(reason)}")
+
         state = schedule_flush_timer_retry(state)
         {:noreply, [], state}
     end

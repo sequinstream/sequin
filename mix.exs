@@ -14,7 +14,7 @@ defmodule Sequin.MixProject do
   end
 
   def cli do
-    [preferred_envs: ["test.unboxed": :test]]
+    [preferred_envs: ["test.unboxed": :test, bench: :bench]]
   end
 
   # Configuration for the OTP application.

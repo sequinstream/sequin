@@ -13,22 +13,23 @@ defmodule Sequin.Runtime.BenchmarkPipeline do
   - Partition computed from `group_id` using `:erlang.phash2/2`
   - Checksum: `crc32(<<prev_checksum::32, commit_lsn::64, commit_idx::32>>)`
 
-  ## ETS Table
+  ## Stats Storage
 
-  Checksums are stored in a public ETS table named `:benchmark_pipeline_checksums`.
+  Checksums and metrics are stored via `Sequin.Benchmark.Stats`.
 
-  Keys: `{consumer_id, partition}`
-  Values: `{checksum, count}`
+  ## Metrics
+
+  Also emits to Prometheus for observability:
+  - `sequin_benchmark_e2e_latency_us` - End-to-end latency histogram
+  - `sequin_bytes_delivered_total` - Total bytes delivered (via payload size)
   """
   @behaviour Sequin.Runtime.SinkPipeline
 
+  alias Sequin.Benchmark.Stats
   alias Sequin.Consumers.BenchmarkSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Prometheus
   alias Sequin.Runtime.SinkPipeline
-
-  require Logger
-
-  @ets_table :benchmark_pipeline_checksums
 
   # ============================================================================
   # SinkPipeline Callbacks
@@ -39,116 +40,94 @@ defmodule Sequin.Runtime.BenchmarkPipeline do
     consumer = context.consumer
     %SinkConsumer{sink: %BenchmarkSink{partition_count: partition_count}} = consumer
 
-    ensure_ets_table()
-    init_checksums(consumer.id, partition_count)
+    Stats.init_for_owner(consumer.id, partition_count)
 
     context
   end
 
   @impl SinkPipeline
-  def handle_batch(:default, messages, _batch_info, context) do
-    %{consumer: %SinkConsumer{sink: %BenchmarkSink{partition_count: partition_count}} = consumer} = context
+  def batchers_config(consumer) do
+    %SinkConsumer{sink: %BenchmarkSink{partition_count: partition_count}} = consumer
 
-    # all messages should belong to same partition
-    [{partition, messages}] =
-      messages |> Enum.group_by(&:erlang.phash2(&1.data.group_id, partition_count)) |> Enum.to_list()
+    [
+      default: [
+        concurrency: partition_count,
+        batch_size: 10,
+        batch_timeout: 1
+      ]
+    ]
+  end
 
-    Enum.each(messages, fn msg ->
-      update_checksum(consumer.id, partition, msg.data.commit_lsn, msg.data.commit_idx)
+  @impl SinkPipeline
+  def partition_by_fn(_consumer) do
+    fn msg -> :erlang.phash2(msg.data.group_id) end
+  end
+
+  @impl SinkPipeline
+  def handle_message(broadway_message, context) do
+    %{consumer: %SinkConsumer{sink: %BenchmarkSink{partition_count: partition_count}}} = context
+
+    # Compute partition from group_id (same as BenchmarkSource)
+    partition = Stats.partition(broadway_message.data.group_id, partition_count)
+
+    # Tell Broadway to batch by partition - this ensures all messages in a batch
+    # belong to the same partition, which is required for ordered checksum verification
+    broadway_message = Broadway.Message.put_batch_key(broadway_message, partition)
+
+    {:ok, broadway_message, context}
+  end
+
+  @impl SinkPipeline
+  def handle_batch(:default, messages, %{batch_key: partition}, context) do
+    %{consumer: consumer} = context
+    # Also emit to Prometheus for observability
+    total_bytes = messages |> Enum.map(& &1.data.payload_size_bytes) |> Enum.sum()
+
+    if total_bytes > 0 do
+      Prometheus.increment_bytes_delivered(consumer.id, consumer.name, total_bytes)
+    end
+
+    # Sort messages by (commit_lsn, commit_idx) to ensure correct order for rolling checksum
+    sorted_messages = Enum.sort_by(messages, &{&1.data.commit_lsn, &1.data.commit_idx})
+
+    # Record all stats via Stats module
+    Enum.each(sorted_messages, fn msg ->
+      created_at_us = extract_created_at(msg.data.data.record)
+
+      Stats.message_received_for_group(%Stats.GroupMessage{
+        owner_id: consumer.id,
+        group_id: msg.data.group_id,
+        commit_lsn: msg.data.commit_lsn,
+        commit_idx: msg.data.commit_idx,
+        partition: partition,
+        byte_size: msg.data.payload_size_bytes,
+        created_at_us: created_at_us
+      })
+
+      # Also emit to Prometheus for observability
+      if created_at_us do
+        now = :os.system_time(:microsecond)
+        Prometheus.observe_benchmark_e2e_latency(consumer.id, now - created_at_us)
+      end
     end)
 
     {:ok, messages, context}
   end
 
-  # ============================================================================
-  # Public API
-  # ============================================================================
+  # Extract created_at timestamp from record (stored as microseconds since epoch)
+  defp extract_created_at(record) do
+    case Map.get(record, "created_at") do
+      created_at when is_integer(created_at) ->
+        created_at
 
-  @doc """
-  Returns the current checksums for a consumer.
+      created_at when is_binary(created_at) ->
+        case Integer.parse(created_at) do
+          {int, ""} -> int
+          _ -> nil
+        end
 
-  Returns a map of `%{partition => {checksum, count}}`.
-  """
-  @spec checksums(String.t()) :: %{non_neg_integer() => {non_neg_integer(), non_neg_integer()}}
-  def checksums(consumer_id) do
-    ensure_ets_table()
-
-    @ets_table
-    |> :ets.match({{consumer_id, :"$1"}, :"$2"})
-    |> Map.new(fn [partition, {checksum, count}] ->
-      {partition, {checksum, count}}
-    end)
-  end
-
-  @doc """
-  Resets all checksums for a consumer to {0, 0}.
-  """
-  @spec reset_checksums(String.t()) :: :ok
-  def reset_checksums(consumer_id) do
-    ensure_ets_table()
-
-    @ets_table
-    |> :ets.match({{consumer_id, :"$1"}, :_})
-    |> Enum.each(fn [partition] ->
-      :ets.insert(@ets_table, {{consumer_id, partition}, {0, 0}})
-    end)
-
-    :ok
-  end
-
-  @doc """
-  Deletes all checksums for a consumer.
-  """
-  @spec delete_checksums(String.t()) :: :ok
-  def delete_checksums(consumer_id) do
-    ensure_ets_table()
-
-    @ets_table
-    |> :ets.match({{consumer_id, :"$1"}, :_})
-    |> Enum.each(fn [partition] ->
-      :ets.delete(@ets_table, {consumer_id, partition})
-    end)
-
-    :ok
-  end
-
-  # ============================================================================
-  # Private Functions
-  # ============================================================================
-
-  defp ensure_ets_table do
-    case :ets.whereis(@ets_table) do
-      :undefined ->
-        # Create a public table that any process can write to
-        # Use :set for O(1) lookups and updates
-        :ets.new(@ets_table, [:set, :public, :named_table, {:write_concurrency, true}])
-
-      _tid ->
-        :ok
-    end
-  end
-
-  defp init_checksums(consumer_id, partition_count) do
-    Enum.each(0..(partition_count - 1), fn partition ->
-      # Use insert_new to avoid overwriting existing checksums on restart
-      :ets.insert_new(@ets_table, {{consumer_id, partition}, {0, 0}})
-    end)
-  end
-
-  defp update_checksum(consumer_id, partition, commit_lsn, commit_idx) do
-    key = {consumer_id, partition}
-
-    # Use update_counter for atomic updates
-    # Since we need to compute CRC32, we use a match-and-update pattern
-    case :ets.lookup(@ets_table, key) do
-      [{^key, {prev_checksum, count}}] ->
-        new_checksum = :erlang.crc32(<<prev_checksum::32, commit_lsn::64, commit_idx::32>>)
-        :ets.insert(@ets_table, {key, {new_checksum, count + 1}})
-
-      [] ->
-        # Partition not initialized, start fresh
-        new_checksum = :erlang.crc32(<<0::32, commit_lsn::64, commit_idx::32>>)
-        :ets.insert(@ets_table, {key, {new_checksum, 1}})
+      _ ->
+        nil
     end
   end
 end

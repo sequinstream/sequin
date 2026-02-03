@@ -9,6 +9,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
+  alias Sequin.Consumers.BenchmarkSink
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.EnrichmentFunction
@@ -1032,6 +1033,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_sink(%SinkConsumer{sink: %SequinStreamSink{}}) do
     %{type: :sequin_stream}
+  end
+
+  defp encode_sink(%SinkConsumer{sink: %BenchmarkSink{}}) do
+    %{type: :benchmark}
   end
 
   defp encode_database(%PostgresDatabase{} = database, %PostgresReplicationSlot{} = slot) do

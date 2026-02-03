@@ -188,11 +188,7 @@ defmodule Sequin.Runtime.MessageHandler do
   @max_backoff_ms 100
   @max_attempts 15
   @decorate track_metrics("put_messages")
-  defp put_messages(consumer, messages_to_ingest) do
-    do_put_messages(consumer, messages_to_ingest)
-  end
-
-  defp do_put_messages(consumer, messages_to_ingest, attempt \\ 1) do
+  defp put_messages(consumer, messages_to_ingest, attempt \\ 1) do
     case SlotMessageStore.put_messages(consumer, messages_to_ingest) do
       :ok ->
         Health.put_event(:sink_consumer, consumer.id, %Event{slug: :messages_ingested, status: :success})
@@ -207,7 +203,7 @@ defmodule Sequin.Runtime.MessageHandler do
         )
 
         Process.sleep(backoff)
-        do_put_messages(consumer, messages_to_ingest, attempt + 1)
+        put_messages(consumer, messages_to_ingest, attempt + 1)
 
       {:error, error} ->
         Health.put_event(:sink_consumer, consumer.id, %Event{slug: :messages_ingested, status: :fail, error: error})

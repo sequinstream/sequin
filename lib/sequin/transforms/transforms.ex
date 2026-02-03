@@ -5,6 +5,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers
   alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
+  alias Sequin.Consumers.BenchmarkSink
   alias Sequin.Consumers.ElasticsearchSink
   alias Sequin.Consumers.EnrichmentFunction
   alias Sequin.Consumers.FilterFunction
@@ -421,6 +422,13 @@ defmodule Sequin.Transforms do
       auth_value: SensitiveValue.new(sink.auth_value, show_sensitive),
       batch_size: sink.batch_size
     })
+  end
+
+  def to_external(%BenchmarkSink{} = sink, _show_sensitive) do
+    %{
+      type: "benchmark",
+      partition_count: sink.partition_count
+    }
   end
 
   def to_external(%Function{function: %PathFunction{}} = function, _show_sensitive) do
@@ -1095,6 +1103,10 @@ defmodule Sequin.Transforms do
   end
 
   defp parse_sink(nil, _resources), do: {:error, Error.validation(summary: "`sink` is required on sink consumers.")}
+
+  defp parse_sink(%{"type" => "benchmark"}, _resources) do
+    {:ok, %{type: :benchmark}}
+  end
 
   defp parse_sink(%{"type" => "sequin_stream"}, _resources) do
     {:ok, %{type: :sequin_stream}}

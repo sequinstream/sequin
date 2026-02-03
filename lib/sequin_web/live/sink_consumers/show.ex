@@ -1411,6 +1411,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"
   defp consumer_title(%{sink: %{type: :typesense}}), do: "Typesense Sink"
   defp consumer_title(%{sink: %{type: :meilisearch}}), do: "Meilisearch Sink"
+  defp consumer_title(%{sink: %{type: :benchmark}}), do: "Benchmark Sink"
 
   defp put_health(%SinkConsumer{} = consumer) do
     with {:ok, health} <- Health.health(consumer),

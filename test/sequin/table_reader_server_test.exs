@@ -171,7 +171,8 @@ defmodule Sequin.Runtime.TableReaderServerTest do
       assert messages |> Enum.frequencies_by(& &1.commit_lsn) |> Map.values() == [3, 2]
 
       # Verify that the records match the last 5 inserted characters
-      messages = Enum.sort_by(messages, & &1.record_pks)
+      # Sort by updated_at to match character order (messages are collected in reverse batch order)
+      messages = Enum.sort_by(messages, fn msg -> msg.data.record["updated_at"] end, NaiveDateTime)
 
       for {message, character} <- Enum.zip(messages, Enum.drop(characters, 3)) do
         assert message.table_oid == table_oid

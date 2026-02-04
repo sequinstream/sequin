@@ -2615,4 +2615,48 @@ defmodule Sequin.YamlLoaderTest do
       end
     end
   end
+
+  describe "change_retentions column selection" do
+    test "errors when trying to exclude primary key columns" do
+      assert_raise RuntimeError, ~r/Cannot exclude primary key columns/, fn ->
+        YamlLoader.apply_from_yml!("""
+        #{account_and_db_yml()}
+
+        change_retentions:
+          - name: "test-pipeline"
+            source_database: "test-db"
+            source_table_schema: "public"
+            source_table_name: "Characters"
+            destination_database: "test-db"
+            destination_table_schema: "public"
+            destination_table_name: "sequin_events"
+            exclude_columns:
+              - id
+        """)
+      end
+    end
+
+    test "allows excluding non-primary key columns" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               change_retentions:
+                 - name: "test-pipeline"
+                   source_database: "test-db"
+                   source_table_schema: "public"
+                   source_table_name: "Characters"
+                   destination_database: "test-db"
+                   destination_table_schema: "public"
+                   destination_table_name: "sequin_events"
+                   exclude_columns:
+                     - name
+               """)
+
+      assert [wal_pipeline] = Repo.all(WalPipeline)
+      assert [source_table] = wal_pipeline.source_tables
+      assert is_list(source_table.exclude_column_attnums)
+      assert length(source_table.exclude_column_attnums) == 1
+    end
+  end
 end

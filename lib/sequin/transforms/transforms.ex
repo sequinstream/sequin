@@ -492,6 +492,12 @@ defmodule Sequin.Transforms do
     destination_table =
       Sequin.Enum.find!(wal_pipeline.destination_database.tables, &(&1.oid == wal_pipeline.destination_oid))
 
+    source_table_struct =
+      Sequin.Enum.find!(
+        wal_pipeline.source_database.tables,
+        &(&1.oid == source_table.oid)
+      )
+
     %{
       id: wal_pipeline.id,
       name: wal_pipeline.name,
@@ -502,7 +508,9 @@ defmodule Sequin.Transforms do
       destination_table_schema: destination_table.schema,
       destination_table_name: destination_table.name,
       filters: Enum.map(source_table.column_filters, &to_external/1),
-      actions: source_table.actions
+      actions: source_table.actions,
+      exclude_columns: column_attnums_to_names(source_table.exclude_column_attnums, source_table_struct),
+      include_columns: column_attnums_to_names(source_table.include_column_attnums, source_table_struct)
     }
   end
 
@@ -544,6 +552,19 @@ defmodule Sequin.Transforms do
       if(check.error, do: Exception.message(check.error))
     )
   end
+
+  defp column_attnums_to_names(nil, _table), do: nil
+
+  defp column_attnums_to_names(attnums, table) when is_list(attnums) and attnums != [] do
+    attnums
+    |> Enum.map(fn attnum ->
+      Enum.find(table.columns, &(&1.attnum == attnum))
+    end)
+    |> Enum.filter(& &1)
+    |> Enum.map(& &1.name)
+  end
+
+  defp column_attnums_to_names(_, _table), do: nil
 
   defp group_column_names(%SourceTable{}, nil), do: nil
 

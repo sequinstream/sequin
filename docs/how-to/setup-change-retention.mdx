@@ -30,6 +30,13 @@ Open the Sequin web console and navigate to the **Change Retention** tab. Click 
   <Step title="Configure filters">
     Optionally, specify which operations to capture (e.g., `insert`, `update`, and/or `delete`). You can also add [column filters](/reference/filters) to capture only certain changes.
   </Step>
+
+  <Step title="Configure column selection (optional)">
+    Optionally, select which columns to include or exclude from the synced changes. This allows you to exclude sensitive columns or irrelevant metadata columns, or include only the specific columns you need. You can choose to:
+    - **Sync all columns** (default)
+    - **Exclude specific columns**: All columns except the ones you select will be synced
+    - **Include only specific columns**: Only the columns you select will be synced
+  </Step>
 </Steps>
 
 ### Configure destination

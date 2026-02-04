@@ -652,19 +652,36 @@ defmodule Sequin.Consumers do
 
   def message_pks(%Message{} = message), do: Enum.map(message.ids, &to_string/1)
 
-  def message_record(%Message{} = message) do
-    message
-    |> Message.message_fields()
-    |> Message.fields_to_map()
+  def message_record(%Message{} = message, source_table \\ nil) do
+    fields =
+      message
+      |> Message.message_fields()
+      |> maybe_filter_columns(source_table)
+
+    Message.fields_to_map(fields)
   end
 
-  def message_changes(%Message{action: :insert}), do: nil
-  def message_changes(%Message{action: :delete}), do: nil
-  def message_changes(%Message{action: :update, old_fields: nil}), do: %{}
+  defp maybe_filter_columns(fields, nil), do: fields
 
-  def message_changes(%Message{action: :update} = message) do
-    old_fields = Message.fields_to_map(message.old_fields)
-    new_fields = Message.fields_to_map(message.fields)
+  defp maybe_filter_columns(fields, %Sequin.WalPipeline.SourceTable{} = source_table) do
+    Sequin.WalPipeline.SourceTable.ColumnSelection.filter_fields(fields, source_table)
+  end
+
+  def message_changes(message, source_table \\ nil)
+  def message_changes(%Message{action: :insert}, _source_table), do: nil
+  def message_changes(%Message{action: :delete}, _source_table), do: nil
+  def message_changes(%Message{action: :update, old_fields: nil}, _source_table), do: %{}
+
+  def message_changes(%Message{action: :update} = message, source_table) do
+    old_fields =
+      message.old_fields
+      |> maybe_filter_columns(source_table)
+      |> Message.fields_to_map()
+
+    new_fields =
+      message.fields
+      |> maybe_filter_columns(source_table)
+      |> Message.fields_to_map()
 
     Enum.reduce(old_fields, %{}, fn {k, v}, acc ->
       if Map.get(new_fields, k) in [:unchanged_toast, v] do

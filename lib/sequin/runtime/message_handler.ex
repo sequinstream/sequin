@@ -284,13 +284,15 @@ defmodule Sequin.Runtime.MessageHandler do
   end
 
   defp wal_event(pipeline, message) do
+    source_table = Enum.find(pipeline.source_tables, &(&1.oid == message.table_oid))
+
     wal_event = %WalEvent{
       wal_pipeline_id: pipeline.id,
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,
       record_pks: Consumers.message_pks(message),
-      record: Consumers.message_record(message),
-      changes: Consumers.message_changes(message),
+      record: Consumers.message_record(message, source_table),
+      changes: Consumers.message_changes(message, source_table),
       action: message.action,
       committed_at: message.commit_timestamp,
       replication_message_trace_id: message.trace_id,

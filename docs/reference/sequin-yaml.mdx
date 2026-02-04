@@ -726,6 +726,16 @@ change_retentions:
         operator: "="
         comparison_value: "premium"
         field_type: "string"
+    exclude_columns:                     # Optional, exclude specific columns from sync
+      - "password_hash"
+      - "ssn"
+      - "credit_card_number"
+    # OR use include_columns (mutually exclusive with exclude_columns)
+    # include_columns:
+    #   - "id"
+    #   - "email"
+    #   - "name"
+    #   - "created_at"
 ```
 
 ## Environment variable substitution

@@ -1396,21 +1396,22 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp get_table_schema(_, _), do: nil
 
   defp consumer_title(%{sink: %{type: :azure_event_hub}}), do: "Azure Event Hub Sink"
+  defp consumer_title(%{sink: %{type: :benchmark}}), do: "Benchmark Sink"
   defp consumer_title(%{sink: %{type: :elasticsearch}}), do: "Elasticsearch Sink"
   defp consumer_title(%{sink: %{type: :gcp_pubsub}}), do: "GCP Pub/Sub Sink"
   defp consumer_title(%{sink: %{type: :http_push}}), do: "Webhook Sink"
   defp consumer_title(%{sink: %{type: :kafka}}), do: "Kafka Sink"
+  defp consumer_title(%{sink: %{type: :kinesis}}), do: "Kinesis Sink"
+  defp consumer_title(%{sink: %{type: :meilisearch}}), do: "Meilisearch Sink"
   defp consumer_title(%{sink: %{type: :nats}}), do: "NATS Sink"
   defp consumer_title(%{sink: %{type: :rabbitmq}}), do: "RabbitMQ Sink"
   defp consumer_title(%{sink: %{type: :redis_stream}}), do: "Redis Stream Sink"
   defp consumer_title(%{sink: %{type: :redis_string}}), do: "Redis String Sink"
+  defp consumer_title(%{sink: %{type: :s2}}), do: "S2 Sink"
   defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"
   defp consumer_title(%{sink: %{type: :sns}}), do: "SNS Sink"
-  defp consumer_title(%{sink: %{type: :kinesis}}), do: "Kinesis Sink"
-  defp consumer_title(%{sink: %{type: :s2}}), do: "S2 Sink"
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"
   defp consumer_title(%{sink: %{type: :typesense}}), do: "Typesense Sink"
-  defp consumer_title(%{sink: %{type: :meilisearch}}), do: "Meilisearch Sink"
 
   defp put_health(%SinkConsumer{} = consumer) do
     with {:ok, health} <- Health.health(consumer),

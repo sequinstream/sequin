@@ -514,19 +514,6 @@ defmodule Sequin.Transforms do
     }
   end
 
-  defp column_attnums_to_names(nil, _table), do: nil
-
-  defp column_attnums_to_names(attnums, table) when is_list(attnums) and attnums != [] do
-    attnums
-    |> Enum.map(fn attnum ->
-      Enum.find(table.columns, &(&1.attnum == attnum))
-    end)
-    |> Enum.filter(& &1)
-    |> Enum.map(& &1.name)
-  end
-
-  defp column_attnums_to_names(_, _table), do: nil
-
   def to_external(%Backfill{} = backfill, _show_sensitive) do
     backfill = Repo.preload(backfill, sink_consumer: [:postgres_database])
     database = backfill.sink_consumer.postgres_database
@@ -565,6 +552,19 @@ defmodule Sequin.Transforms do
       if(check.error, do: Exception.message(check.error))
     )
   end
+
+  defp column_attnums_to_names(nil, _table), do: nil
+
+  defp column_attnums_to_names(attnums, table) when is_list(attnums) and attnums != [] do
+    attnums
+    |> Enum.map(fn attnum ->
+      Enum.find(table.columns, &(&1.attnum == attnum))
+    end)
+    |> Enum.filter(& &1)
+    |> Enum.map(& &1.name)
+  end
+
+  defp column_attnums_to_names(_, _table), do: nil
 
   defp group_column_names(%SourceTable{}, nil), do: nil
 

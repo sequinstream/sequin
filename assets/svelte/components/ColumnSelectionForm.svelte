@@ -23,7 +23,9 @@
   export let isEdit: boolean = false;
 
   $: availableColumns = selectedTable?.columns || [];
-  $: primaryKeyColumns = availableColumns.filter((col) => col.isPk || col["isPk?"]);
+  $: primaryKeyColumns = availableColumns.filter(
+    (col) => col.isPk || col["isPk?"],
+  );
 
   let columnSelectionMode: "all" | "exclude" | "include" = "all";
   let isInitialized = false;
@@ -31,12 +33,12 @@
   // Initialize mode from arrays on mount
   onMount(() => {
     const pkAttnums = primaryKeyColumns.map((col) => col.attnum);
-    
+
     // Ensure mutual exclusivity: if both arrays have values, prefer exclude
     if (excludeColumnAttnums.length > 0 && includeColumnAttnums.length > 0) {
       includeColumnAttnums = [];
     }
-    
+
     // Filter out primary keys from exclude list if needed
     if (selectedTable && excludeColumnAttnums.length > 0) {
       const filteredExclude = excludeColumnAttnums.filter(
@@ -46,7 +48,7 @@
         excludeColumnAttnums = filteredExclude;
       }
     }
-    
+
     // Ensure primary keys are always included when using include mode
     if (includeColumnAttnums.length > 0) {
       const missingPks = pkAttnums.filter(
@@ -70,11 +72,11 @@
 
   // Track previous mode to detect changes
   let previousMode: "all" | "exclude" | "include" | null = null;
-  
+
   // Handle mode changes explicitly to ensure arrays are mutually exclusive
   function handleModeChange(newMode: "all" | "exclude" | "include") {
     if (!isInitialized) return;
-    
+
     if (newMode === "all") {
       excludeColumnAttnums = [];
       includeColumnAttnums = [];
@@ -98,7 +100,7 @@
     }
     previousMode = newMode;
   }
-  
+
   // Watch mode changes and call handler
   $: if (isInitialized) {
     if (previousMode === null) {
@@ -107,11 +109,11 @@
       handleModeChange(columnSelectionMode);
     }
   }
-  
+
   // Ensure primary keys are always included and never excluded
   $: if (isInitialized && selectedTable) {
     const pkAttnums = primaryKeyColumns.map((col) => col.attnum);
-    
+
     // Remove any PKs from exclude array
     const pkInExclude = excludeColumnAttnums.filter((attnum) =>
       pkAttnums.includes(attnum),
@@ -121,7 +123,7 @@
         (attnum) => !pkAttnums.includes(attnum),
       );
     }
-    
+
     // Ensure all PKs are in include array when in include mode
     if (columnSelectionMode === "include") {
       const missingPks = pkAttnums.filter(
@@ -135,8 +137,8 @@
 
   function toggleColumn(attnum: number) {
     const column = availableColumns.find((col) => col.attnum === attnum);
-    const isPk = (column?.isPk || column?.["isPk?"]) || false;
-    
+    const isPk = column?.isPk || column?.["isPk?"] || false;
+
     // Prevent excluding primary key columns
     if (columnSelectionMode === "exclude") {
       if (isPk) {
@@ -153,7 +155,7 @@
       if (isPk) {
         return; // Don't allow unchecking PK columns
       }
-      
+
       if (includeColumnAttnums.includes(attnum)) {
         includeColumnAttnums = includeColumnAttnums.filter((a) => a !== attnum);
       } else {
@@ -164,8 +166,8 @@
 
   function isColumnSelected(attnum: number): boolean {
     const column = availableColumns.find((col) => col.attnum === attnum);
-    const isPk = (column?.isPk || column?.["isPk?"]) || false;
-    
+    const isPk = column?.isPk || column?.["isPk?"] || false;
+
     if (columnSelectionMode === "exclude") {
       // In exclude mode: checked = column is in exclude list
       // PKs are never in exclude list, so they show as unchecked (but disabled)
@@ -193,7 +195,7 @@
     } else if (columnSelectionMode === "include") {
       // In include mode, show all included columns
       // PKs are always included (either explicitly in array or implicitly required)
-      const isPk = (col.isPk || col["isPk?"]) || false;
+      const isPk = col.isPk || col["isPk?"] || false;
       if (isPk) {
         return true; // Always show PKs in include mode
       }
@@ -209,7 +211,9 @@
   {#if isEdit && (columnSelectionMode !== "all" || excludeColumnAttnums.length > 0 || includeColumnAttnums.length > 0)}
     <Alert.Root variant="info">
       <Alert.Description>
-        Column selection changes will apply to new changes going forward, but will not affect existing events already captured in the destination table.
+        Column selection changes will apply to new changes going forward, but
+        will not affect existing events already captured in the destination
+        table.
       </Alert.Description>
     </Alert.Root>
   {/if}
@@ -225,13 +229,19 @@
         </div>
         <div class="flex items-center space-x-2">
           <RadioGroupItem value="exclude" id="column-selection-exclude" />
-          <Label for="column-selection-exclude" class="cursor-pointer font-normal">
+          <Label
+            for="column-selection-exclude"
+            class="cursor-pointer font-normal"
+          >
             Exclude specific columns
           </Label>
         </div>
         <div class="flex items-center space-x-2">
           <RadioGroupItem value="include" id="column-selection-include" />
-          <Label for="column-selection-include" class="cursor-pointer font-normal">
+          <Label
+            for="column-selection-include"
+            class="cursor-pointer font-normal"
+          >
             Include only specific columns
           </Label>
         </div>
@@ -252,13 +262,16 @@
           class="border rounded-lg p-4 max-h-[300px] overflow-y-auto space-y-2"
         >
           {#each availableColumns as column}
-            {@const isPk = (column.isPk || column["isPk?"]) || false}
+            {@const isPk = column.isPk || column["isPk?"] || false}
             {@const isChecked = isColumnSelected(column.attnum)}
             <div class="flex items-center space-x-2">
               {#if isPk}
                 <Tooltip.Root openDelay={200}>
                   <Tooltip.Trigger asChild let:builder>
-                    <div builders={[builder]} class="flex items-center space-x-2 flex-1">
+                    <div
+                      builders={[builder]}
+                      class="flex items-center space-x-2 flex-1"
+                    >
                       <Checkbox
                         id="column-pk-{column.attnum}"
                         checked={isChecked}
@@ -283,9 +296,12 @@
                   <Tooltip.Content class="max-w-xs">
                     <p class="text-sm">
                       {#if columnSelectionMode === "exclude"}
-                        Primary key columns cannot be excluded from sync. They are always included and required for change tracking.
+                        Primary key columns cannot be excluded from sync. They
+                        are always included and required for change tracking.
                       {:else}
-                        Primary key columns are always included in sync. They are required for change tracking and cannot be unchecked.
+                        Primary key columns are always included in sync. They
+                        are required for change tracking and cannot be
+                        unchecked.
                       {/if}
                     </p>
                   </Tooltip.Content>
@@ -314,7 +330,7 @@
         {#if selectedColumns.length > 0}
           <div class="flex flex-wrap gap-2 pt-2">
             {#each selectedColumns as column}
-              {@const isPk = (column.isPk || column["isPk?"]) || false}
+              {@const isPk = column.isPk || column["isPk?"] || false}
               {#if isPk}
                 <Tooltip.Root openDelay={200}>
                   <Tooltip.Trigger asChild let:builder>
@@ -323,7 +339,9 @@
                       class="flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm opacity-75"
                     >
                       <span>{column.name}</span>
-                      <span class="text-xs px-1 py-0.5 rounded bg-muted-foreground/20 text-muted-foreground">
+                      <span
+                        class="text-xs px-1 py-0.5 rounded bg-muted-foreground/20 text-muted-foreground"
+                      >
                         PK
                       </span>
                     </div>
@@ -331,9 +349,12 @@
                   <Tooltip.Content class="max-w-xs">
                     <p class="text-sm">
                       {#if columnSelectionMode === "exclude"}
-                        Primary key columns cannot be excluded from sync. They are always included and required for change tracking.
+                        Primary key columns cannot be excluded from sync. They
+                        are always included and required for change tracking.
                       {:else}
-                        Primary key columns are always included in sync. They are required for change tracking and cannot be unchecked.
+                        Primary key columns are always included in sync. They
+                        are required for change tracking and cannot be
+                        unchecked.
                       {/if}
                     </p>
                   </Tooltip.Content>

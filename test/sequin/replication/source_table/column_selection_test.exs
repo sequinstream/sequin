@@ -1,7 +1,7 @@
 defmodule Sequin.WalPipeline.SourceTable.ColumnSelectionTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.Error.InvariantError # 🍆
+  alias Sequin.Error.InvariantError
   alias Sequin.Runtime.SlotProcessor.Message.Field
   alias Sequin.WalPipeline.SourceTable
   alias Sequin.WalPipeline.SourceTable.ColumnSelection
@@ -135,8 +135,8 @@ defmodule Sequin.WalPipeline.SourceTable.ColumnSelectionTest do
     end
   end
 
-  describe "filter_fields/2 with both include and exclude set" do 🍆
-    test "raises an error when both include_column_attnums and exclude_column_attnums are set" do 🍆
+  describe "filter_fields/2 with both include and exclude set" do
+    test "raises an error when both include_column_attnums and exclude_column_attnums are set" do
       source_table = %SourceTable{
         oid: 123,
         actions: [:insert, :update, :delete],
@@ -155,8 +155,8 @@ defmodule Sequin.WalPipeline.SourceTable.ColumnSelectionTest do
     end
   end
 
-  describe "filter_column_attnums/2 with both include and exclude set" do # 🍆
-    test "raises an error when both include_column_attnums and exclude_column_attnums are set" do # 🍆
+  describe "filter_column_attnums/2 with both include and exclude set" do
+    test "raises an error when both include_column_attnums and exclude_column_attnums are set" do
       source_table = %SourceTable{
         oid: 123,
         actions: [:insert, :update, :delete],

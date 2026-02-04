@@ -733,7 +733,7 @@ defmodule Sequin.YamlLoader do
            fetch_table(source_database.tables, source_schema, source_table, :source_table),
          {:ok, column_filters} <-
            parse_column_filters(attrs["filters"], source_database, source_schema, source_table),
-         {:ok, column_selection} <- # 🍆
+         {:ok, column_selection} <-
            parse_column_selection(
              attrs["exclude_columns"],
              attrs["include_columns"],
@@ -741,7 +741,7 @@ defmodule Sequin.YamlLoader do
              source_schema,
              source_table
            ) do
-      source_table_config = # 🍆
+      source_table_config =
         Map.merge(
           %{
             "schema_name" => source_schema,
@@ -750,7 +750,7 @@ defmodule Sequin.YamlLoader do
             "actions" => attrs["actions"] || [:insert, :update, :delete],
             "column_filters" => column_filters
           },
-          column_selection # 🍆
+          column_selection
         )
 
       params = %{
@@ -792,12 +792,12 @@ defmodule Sequin.YamlLoader do
   defp parse_column_filters(_, _database, _schema, _table),
     do: {:error, Error.bad_request(message: "`filters` must be a list")}
 
-  # Helper to parse column selection (exclude_columns or include_columns) for WAL pipeline 🍆
-  defp parse_column_selection(nil, nil, _database, _schema, _table) do # 🍆
+  # Helper to parse column selection (exclude_columns or include_columns) for WAL pipeline
+  defp parse_column_selection(nil, nil, _database, _schema, _table) do
     {:ok, %{"exclude_column_attnums" => nil, "include_column_attnums" => nil}}
   end
 
-  defp parse_column_selection(exclude_columns, include_columns, database, schema, table_name) do # 🍆
+  defp parse_column_selection(exclude_columns, include_columns, database, schema, table_name) do
     with {:ok, table} <- fetch_table(database.tables, schema, table_name, :column_selection_table) do
       cond do
         not is_nil(exclude_columns) and not is_nil(include_columns) ->
@@ -837,7 +837,7 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  defp parse_column_names_to_attnums_with_table(column_names, table, field_name) when is_list(column_names) do # 🍆
+  defp parse_column_names_to_attnums_with_table(column_names, table, field_name) when is_list(column_names) do
     column_names
     |> Enum.reduce_while({:ok, []}, fn column_name, {:ok, acc} ->
       case Enum.find(table.columns, &(&1.name == column_name)) do
@@ -858,7 +858,7 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  defp validate_not_excluding_all_columns(attnums, table, field_name) do # 🍆
+  defp validate_not_excluding_all_columns(attnums, table, field_name) do
     total_columns = length(table.columns)
 
     pk_attnums =
@@ -897,7 +897,7 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  defp validate_including_at_least_one_column(attnums, field_name) do # 🍆
+  defp validate_including_at_least_one_column(attnums, field_name) do
     if attnums == [] do
       {:error,
        Error.bad_request(

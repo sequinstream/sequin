@@ -1,11 +1,11 @@
-defmodule SequinWeb.WalPipelinesLive.FormTest do # 🍆
+defmodule SequinWeb.WalPipelinesLive.FormTest do
   use SequinWeb.ConnCase, async: true
 
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Error.InvariantError
   alias SequinWeb.WalPipelinesLive.Form
 
-  describe "verify_column_selection/2" do # 🍆
+  describe "verify_column_selection/2" do
     test "returns :ok when no column selection is configured" do
       table = %PostgresDatabaseTable{
         columns: [

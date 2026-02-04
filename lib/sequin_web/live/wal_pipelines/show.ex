@@ -160,8 +160,8 @@ defmodule SequinWeb.WalPipelinesLive.Show do
       },
       source_table: encode_source_table(source_table, source_table_info),
       source_filters: encode_source_filters(source_table.column_filters),
-      exclude_columns: encode_column_selection(source_table.exclude_column_attnums, source_table_info), # 🍆
-      include_columns: encode_column_selection(source_table.include_column_attnums, source_table_info), # 🍆
+      exclude_columns: encode_column_selection(source_table.exclude_column_attnums, source_table_info),
+      include_columns: encode_column_selection(source_table.include_column_attnums, source_table_info),
       destination_table: "#{destination_table_info.schema}.#{destination_table_info.name}",
       inserted_at: wal_pipeline.inserted_at,
       updated_at: wal_pipeline.updated_at,
@@ -191,9 +191,9 @@ defmodule SequinWeb.WalPipelinesLive.Show do
     end)
   end
 
-  defp encode_column_selection(nil, _table), do: [] # 🍆
+  defp encode_column_selection(nil, _table), do: []
 
-  defp encode_column_selection(attnums, %PostgresDatabaseTable{} = table) when is_list(attnums) do # 🍆
+  defp encode_column_selection(attnums, %PostgresDatabaseTable{} = table) when is_list(attnums) do
     attnums
     |> Enum.map(fn attnum ->
       Enum.find(table.columns, &(&1.attnum == attnum))
@@ -202,7 +202,7 @@ defmodule SequinWeb.WalPipelinesLive.Show do
     |> Enum.map(& &1.name)
   end
 
-  defp encode_column_selection(_, _table), do: [] # 🍆
+  defp encode_column_selection(_, _table), do: []
 
   defp assign_replica_identity(socket) do
     wal_pipeline = socket.assigns.wal_pipeline

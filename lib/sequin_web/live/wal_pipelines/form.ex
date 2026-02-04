@@ -100,7 +100,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
 
       with :ok <- Databases.verify_table_in_publication(database, source_table_oid),
            :ok <- verify_source_not_event_table(table),
-           :ok <- verify_column_selection(table, source_table_params), # 🍆
+           :ok <- verify_column_selection(table, source_table_params),
            {:ok, wal_pipeline} <- create_or_update_wal_pipeline(socket, socket.assigns.wal_pipeline, params) do
         {:noreply,
          socket
@@ -161,7 +161,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
     end
   end
 
-  def verify_column_selection(%PostgresDatabaseTable{} = table, source_table_params) do # 🍆
+  def verify_column_selection(%PostgresDatabaseTable{} = table, source_table_params) do
     exclude_attnums = source_table_params["exclude_column_attnums"]
     include_attnums = source_table_params["include_column_attnums"]
     total_columns = length(table.columns)
@@ -285,9 +285,9 @@ defmodule SequinWeb.WalPipelinesLive.Form do
           "oid" => form["tableOid"],
           "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
           "actions" => source_table_actions,
-          "exclude_column_attnums" => # 🍆
+          "exclude_column_attnums" =>
             if(form["excludeColumnAttnums"] && form["excludeColumnAttnums"] != [], do: form["excludeColumnAttnums"]),
-          "include_column_attnums" => # 🍆
+          "include_column_attnums" =>
             if(form["includeColumnAttnums"] && form["includeColumnAttnums"] != [], do: form["includeColumnAttnums"])
         }
       ]
@@ -324,8 +324,8 @@ defmodule SequinWeb.WalPipelinesLive.Form do
       "destinationTableOid" => wal_pipeline.destination_oid,
       "sourceTableActions" => (source_table && source_table.actions) || [:insert, :update, :delete],
       "sourceTableFilters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
-      "excludeColumnAttnums" => (source_table && source_table.exclude_column_attnums) || [], # 🍆
-      "includeColumnAttnums" => (source_table && source_table.include_column_attnums) || [], # 🍆
+      "excludeColumnAttnums" => (source_table && source_table.exclude_column_attnums) || [],
+      "includeColumnAttnums" => (source_table && source_table.include_column_attnums) || [],
       "retentionDays" => 30
     }
   end

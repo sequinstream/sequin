@@ -283,16 +283,15 @@
             <span class="text-gray-500">Table not found</span>
           {/if}
         </div>
-        <!-- 🍆 -->
         <div class="mb-4">
           <h3 class="text-md font-semibold mb-2">Column selection</h3>
-          {#if walPipeline.excludeColumns && walPipeline.excludeColumns.length > 0}
+          {#if walPipeline.exclude_columns && walPipeline.exclude_columns.length > 0}
             <div class="mb-2">
               <p class="text-sm text-gray-600 mb-1">
                 <strong>Excluded columns:</strong>
               </p>
               <div class="flex flex-wrap gap-2">
-                {#each walPipeline.excludeColumns as column}
+                {#each walPipeline.exclude_columns as column}
                   <span
                     class="inline-flex items-center px-2 py-1 rounded-md bg-red-50 text-red-700 text-sm"
                   >
@@ -301,13 +300,13 @@
                 {/each}
               </div>
             </div>
-          {:else if walPipeline.includeColumns && walPipeline.includeColumns.length > 0}
+          {:else if walPipeline.include_columns && walPipeline.include_columns.length > 0}
             <div class="mb-2">
               <p class="text-sm text-gray-600 mb-1">
                 <strong>Included columns:</strong>
               </p>
               <div class="flex flex-wrap gap-2">
-                {#each walPipeline.includeColumns as column}
+                {#each walPipeline.include_columns as column}
                   <span
                     class="inline-flex items-center px-2 py-1 rounded-md bg-green-50 text-green-700 text-sm"
                   >

@@ -215,6 +215,86 @@ defmodule Sequin.Consumers.KafkaSinkTest do
 
       refute :topic in changeset.changes
     end
+
+    test "accepts valid compression values" do
+      for compression <- [:none, :gzip] do
+        changeset =
+          KafkaSink.changeset(%KafkaSink{}, %{
+            hosts: "localhost:9092",
+            topic: "test-topic",
+            tls: false,
+            routing_mode: :static,
+            compression: compression
+          })
+
+        assert changeset.valid?, "Expected compression #{compression} to be valid"
+      end
+    end
+
+    test "defaults compression to :none" do
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: false,
+          routing_mode: :static
+        })
+
+      assert changeset.valid?
+      sink = Ecto.Changeset.apply_changes(changeset)
+      assert sink.compression == :none
+    end
+  end
+
+  describe "to_brod_config/1" do
+    test "includes compression when set to gzip" do
+      sink = %KafkaSink{
+        hosts: "localhost:9092",
+        topic: "test-topic",
+        tls: false,
+        compression: :gzip
+      }
+
+      config = KafkaSink.to_brod_config(sink)
+      assert Keyword.get(config, :compression) == :gzip
+    end
+
+    test "does not include compression when set to :none" do
+      sink = %KafkaSink{
+        hosts: "localhost:9092",
+        topic: "test-topic",
+        tls: false,
+        compression: :none
+      }
+
+      config = KafkaSink.to_brod_config(sink)
+      refute Keyword.has_key?(config, :compression)
+    end
+
+    test "does not include compression when nil" do
+      sink = %KafkaSink{
+        hosts: "localhost:9092",
+        topic: "test-topic",
+        tls: false,
+        compression: nil
+      }
+
+      config = KafkaSink.to_brod_config(sink)
+      refute Keyword.has_key?(config, :compression)
+    end
+
+    test "includes both compression and ssl when both are set" do
+      sink = %KafkaSink{
+        hosts: "localhost:9092",
+        topic: "test-topic",
+        tls: true,
+        compression: :gzip
+      }
+
+      config = KafkaSink.to_brod_config(sink)
+      assert Keyword.get(config, :compression) == :gzip
+      assert Keyword.get(config, :ssl) == true
+    end
   end
 
   # Helper function to extract error messages

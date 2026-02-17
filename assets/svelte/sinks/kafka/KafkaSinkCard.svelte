@@ -55,17 +55,17 @@
       </div>
 
       <div>
-        <span class="text-sm text-muted-foreground">Producer Compression</span>
+        <span class="text-sm text-muted-foreground">Compression</span>
         <div class="mt-2">
           <span
             class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
           >
-            {#if consumer.sink.producer_compression === "lz4"}
+            {#if consumer.sink.compression === "lz4"}
               LZ4
-            {:else if consumer.sink.producer_compression === "no_compression"}
+            {:else if consumer.sink.compression === "none"}
               None
             {:else}
-              {consumer.sink.producer_compression}
+              {consumer.sink.compression}
             {/if}
           </span>
         </div>

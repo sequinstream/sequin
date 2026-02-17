@@ -53,6 +53,23 @@
           >
         </div>
       </div>
+
+      <div>
+        <span class="text-sm text-muted-foreground">Producer Compression</span>
+        <div class="mt-2">
+          <span
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
+          >
+            {#if consumer.sink.producer_compression === "lz4"}
+              LZ4
+            {:else if consumer.sink.producer_compression === "no_compression"}
+              None
+            {:else}
+              {consumer.sink.producer_compression}
+            {/if}
+          </span>
+        </div>
+      </div>
     </div>
   </CardContent>
 </Card>

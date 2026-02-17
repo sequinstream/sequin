@@ -226,7 +226,8 @@ defmodule Sequin.Transforms do
       sasl_mechanism: sink.sasl_mechanism,
       aws_access_key_id: sink.aws_access_key_id,
       aws_secret_access_key: SensitiveValue.new(sink.aws_secret_access_key, show_sensitive),
-      aws_region: sink.aws_region
+      aws_region: sink.aws_region,
+      producer_compression: sink.producer_compression
     })
   end
 
@@ -1142,7 +1143,8 @@ defmodule Sequin.Transforms do
          sasl_mechanism: sasl_mechanism,
          aws_access_key_id: attrs["aws_access_key_id"],
          aws_secret_access_key: attrs["aws_secret_access_key"],
-         aws_region: attrs["aws_region"]
+         aws_region: attrs["aws_region"],
+         producer_compression: attrs["producer_compression"]
        }}
     end
   end

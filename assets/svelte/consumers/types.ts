@@ -176,6 +176,7 @@ export type KafkaConsumer = BaseConsumer & {
     tls: boolean;
     topic: string;
     sasl_mechanism: null | "plain" | "scram_sha_256" | "scram_sha_512";
+    producer_compression: "no_compression" | "lz4";
   };
 };
 

@@ -904,7 +904,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       password: sink.password,
       topic: sink.topic,
       tls: sink.tls,
-      sasl_mechanism: sink.sasl_mechanism
+      sasl_mechanism: sink.sasl_mechanism,
+      producer_compression: sink.producer_compression
     }
   end
 

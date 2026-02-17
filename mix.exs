@@ -102,6 +102,7 @@ defmodule Sequin.MixProject do
       {:amqp, "~> 4.1"},
       {:amqp_client, "~> 4.2"},
       {:brod, "~> 4.3"},
+      {:lz4b, "~> 0.0.13"},
 
       # Caching and State Management
       {:con_cache, "~> 1.1"},

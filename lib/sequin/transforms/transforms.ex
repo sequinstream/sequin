@@ -223,7 +223,10 @@ defmodule Sequin.Transforms do
       tls: sink.tls,
       username: sink.username,
       password: SensitiveValue.new(sink.password, show_sensitive),
-      sasl_mechanism: sink.sasl_mechanism
+      sasl_mechanism: sink.sasl_mechanism,
+      aws_access_key_id: sink.aws_access_key_id,
+      aws_secret_access_key: SensitiveValue.new(sink.aws_secret_access_key, show_sensitive),
+      aws_region: sink.aws_region
     })
   end
 
@@ -1136,7 +1139,10 @@ defmodule Sequin.Transforms do
          tls: attrs["tls"] || false,
          username: attrs["username"],
          password: attrs["password"],
-         sasl_mechanism: sasl_mechanism
+         sasl_mechanism: sasl_mechanism,
+         aws_access_key_id: attrs["aws_access_key_id"],
+         aws_secret_access_key: attrs["aws_secret_access_key"],
+         aws_region: attrs["aws_region"]
        }}
     end
   end
@@ -1428,13 +1434,14 @@ defmodule Sequin.Transforms do
   defp parse_sasl_mechanism("plain"), do: {:ok, :plain}
   defp parse_sasl_mechanism("scram_sha_256"), do: {:ok, :scram_sha_256}
   defp parse_sasl_mechanism("scram_sha_512"), do: {:ok, :scram_sha_512}
+  defp parse_sasl_mechanism("aws_msk_iam"), do: {:ok, :aws_msk_iam}
 
   defp parse_sasl_mechanism(invalid),
     do:
       {:error,
        Error.validation(
          summary:
-           "[sasl_mechanism] Invalid SASL mechanism '#{invalid}'. Must be one of: plain, scram_sha_256, scram_sha_512"
+           "[sasl_mechanism] Invalid SASL mechanism '#{invalid}'. Must be one of: plain, scram_sha_256, scram_sha_512, aws_msk_iam"
        )}
 
   defp env do

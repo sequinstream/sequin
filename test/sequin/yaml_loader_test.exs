@@ -1233,6 +1233,41 @@ defmodule Sequin.YamlLoaderTest do
              } = consumer.sink
     end
 
+    test "creates kafka sink consumer with AWS MSK IAM" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               sinks:
+                 - name: "kafka-msk-consumer"
+                   database: "test-db"
+                   destination:
+                     type: "kafka"
+                     hosts: "b-1.msk-cluster.abc123.kafka.us-east-1.amazonaws.com:9098"
+                     topic: "test-topic"
+                     tls: true
+                     sasl_mechanism: "aws_msk_iam"
+                     aws_access_key_id: "AKIAXXXXXXXXXXXXXXXX"
+                     aws_secret_access_key: "secret123"
+                     aws_region: "us-east-1"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+
+      assert consumer.name == "kafka-msk-consumer"
+
+      assert %KafkaSink{
+               type: :kafka,
+               hosts: "b-1.msk-cluster.abc123.kafka.us-east-1.amazonaws.com:9098",
+               topic: "test-topic",
+               tls: true,
+               sasl_mechanism: :aws_msk_iam,
+               aws_access_key_id: "AKIAXXXXXXXXXXXXXXXX",
+               aws_secret_access_key: "secret123",
+               aws_region: "us-east-1"
+             } = consumer.sink
+    end
+
     test "creates sqs sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""

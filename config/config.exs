@@ -15,6 +15,8 @@ config :esbuild, :version, "0.17.11"
 # Used by broadway_sqs
 config :ex_aws, http_client: ExAws.Request.Req
 
+config :libcluster, topologies: []
+
 config :logger, :console,
   format: {Sequin.ConsoleLogger, :format},
   metadata: :all

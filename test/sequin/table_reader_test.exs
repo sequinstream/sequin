@@ -9,7 +9,10 @@ defmodule Sequin.TableReaderTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Runtime.KeysetCursor
   alias Sequin.Runtime.TableReader
+  alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterMultiPK
+
+  @moduletag :capture_log
 
   setup do
     db = DatabasesFactory.insert_configured_postgres_database!(tables: [])
@@ -355,6 +358,9 @@ defmodule Sequin.TableReaderTest do
       db: db,
       characters_table: table
     } do
+      # Clean up any characters committed by concurrent unboxed tests
+      Repo.delete_all(Character)
+
       # Create a table with nil sort_column_attnum
       table_with_nil_sort = %{table | sort_column_attnum: nil}
 

@@ -143,8 +143,8 @@ defmodule Sequin.MessageHandlerTest do
       database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
 
       field = ReplicationFactory.field()
-      table_schema1 = Factory.postgres_object()
-      table_schema2 = Factory.postgres_object()
+      table_schema1 = "schema_one_#{Factory.sequence()}"
+      table_schema2 = "schema_two_#{Factory.sequence()}"
 
       message1 =
         ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field], table_schema: table_schema1)

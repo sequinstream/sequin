@@ -41,10 +41,10 @@ config :sequin, Sequin.Repo,
   hostname: "localhost",
   database: "sequin_test",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: 20,
+  pool_size: 40,
   port: 5432,
-  queue_target: 100,
-  queue_interval: 1000,
+  queue_target: 500,
+  queue_interval: 2000,
   ssl: false,
   types: PostgrexTypes
 

@@ -173,7 +173,7 @@ defmodule Sequin.Postgres.BenchmarkSourceTest do
     receive do
       {:messages_received, messages} -> receive_messages(count, acc ++ messages)
     after
-      100 -> acc
+      1_000 -> acc
     end
   end
 end

@@ -7,6 +7,8 @@ defmodule Sequin.PostgresTest do
   alias Sequin.Repo
   alias Sequin.Test.UnboxedRepo
 
+  @moduletag :capture_log
+
   setup do
     {:ok, conn} = Postgrex.start_link(UnboxedRepo.config())
     %{conn: conn}

@@ -25,15 +25,17 @@ defmodule Sequin.Runtime.MessageConsistencyCheckWorker do
   def audit_and_trim_undelivered_cursors(consumer_id, older_than_timestamp) do
     case MessageLedgers.count_undelivered_wal_cursors(consumer_id, older_than_timestamp) do
       {:ok, 0} ->
-        :ok
+        {:ok, 0}
 
       {:ok, undelivered_cursor_count} ->
-        Logger.warning("[MessageConsistencyCheckWorker] Found undelivered cursors (count=#{undelivered_cursor_count})",
+        Logger.warning(
+          "[MessageConsistencyCheckWorker] Found undelivered cursors (count=#{undelivered_cursor_count})",
           consumer_id: consumer_id,
           undelivered_cursor_count: undelivered_cursor_count
         )
 
-        MessageLedgers.trim_stale_undelivered_wal_cursors(consumer_id, older_than_timestamp)
+        :ok = MessageLedgers.trim_stale_undelivered_wal_cursors(consumer_id, older_than_timestamp)
+        {:ok, undelivered_cursor_count}
     end
   end
 

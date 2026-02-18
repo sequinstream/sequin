@@ -1,5 +1,21 @@
 import Config
 
+config :libcluster,
+  topologies: [
+    postgres: [
+      strategy: LibclusterPostgres.Strategy,
+      config: [
+        hostname: "localhost",
+        username: "postgres",
+        password: "postgres",
+        database: "sequin_dev",
+        port: 5432,
+        channel_name: "sequin_cluster",
+        heartbeat_interval: 5_000
+      ]
+    ]
+  ]
+
 config :mix_test_interactive,
   clear: true
 
@@ -81,6 +97,12 @@ config :sequin,
   # Arbitrarily high memory limit in dev
   max_memory_bytes: ("MAX_MEMORY_MB" |> System.get_env("5000") |> String.to_integer()) * 1024 * 1024
 
+# Enable dev routes for dashboard and mailbox
+config :sequin, dev_routes: true, self_hosted: false
+
+# Disable swoosh api client as it is only required for production adapters.
+config :swoosh, :api_client, false
+
 # esbuild: {Esbuild, :install_and_run, [:sequin, ~w(--sourcemap=inline --watch)]},
 
 # ## SSL Support
@@ -108,9 +130,6 @@ config :sequin,
 
 # Watch static and templates for browser reloading.
 
-# Enable dev routes for dashboard and mailbox
-config :sequin, dev_routes: true, self_hosted: false
-
 # Do not include metadata nor timestamps in development logs
 
 # Set a higher stacktrace during development. Avoid configuring such
@@ -119,9 +138,6 @@ config :sequin, dev_routes: true, self_hosted: false
 # Initialize plugs at runtime for faster development compilation
 # Include HEEx debug annotations as HTML comments in rendered markup
 # Enable helpful, but potentially expensive runtime checks
-
-# Disable swoosh api client as it is only required for production adapters.
-config :swoosh, :api_client, false
 
 if "dev.secret.exs" |> Path.expand(__DIR__) |> File.exists?() do
   import_config "dev.secret.exs"

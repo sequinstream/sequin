@@ -163,6 +163,19 @@ if config_env() == :prod and self_hosted do
     :ok
   end
 
+  config :libcluster,
+    topologies: [
+      postgres: [
+        strategy: LibclusterPostgres.Strategy,
+        config:
+          Keyword.merge(
+            Application.get_env(:sequin, Sequin.Repo),
+            channel_name: "sequin_cluster",
+            heartbeat_interval: 5_000
+          )
+      ]
+    ]
+
   config :sequin, Sequin.Posthog,
     req_opts: [base_url: "https://us.i.posthog.com"],
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
@@ -223,6 +236,19 @@ if config_env() == :prod and not self_hosted do
 
   function_transforms =
     if System.get_env("FEATURE_FUNCTION_TRANSFORMS", "disabled") in enabled_feature_values, do: :enabled, else: :disabled
+
+  config :libcluster,
+    topologies: [
+      postgres: [
+        strategy: LibclusterPostgres.Strategy,
+        config:
+          Keyword.merge(
+            Application.get_env(:sequin, Sequin.Repo),
+            channel_name: "sequin_cluster",
+            heartbeat_interval: 5_000
+          )
+      ]
+    ]
 
   config :logger,
     default_handler: [

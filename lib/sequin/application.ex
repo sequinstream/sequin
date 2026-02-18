@@ -54,6 +54,7 @@ defmodule Sequin.Application do
     children =
       base_children() ++
         [
+          Sequin.SystemMetricsServer,
           SequinWeb.Telemetry,
           MutexedSupervisor.child_spec(
             Sequin.Runtime.MutexedSupervisor,
@@ -91,7 +92,6 @@ defmodule Sequin.Application do
       Sequin.Sinks.Nats.ConnectionCache,
       Sequin.Sinks.RabbitMq.ConnectionCache,
       SequinWeb.Presence,
-      Sequin.SystemMetricsServer,
       {Task, fn -> enqueue_workers() end},
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint,

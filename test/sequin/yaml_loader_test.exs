@@ -37,6 +37,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.YamlLoader
 
   @moduletag :unboxed
+  @moduletag :capture_log
 
   @publication "characters_publication"
 
@@ -609,16 +610,16 @@ defmodule Sequin.YamlLoaderTest do
                        end
                """)
 
-      assert [function1, function2] = Repo.all(Function, order_by: :name)
-      assert function1.name == "my-path-transform"
-      assert function1.type == "path"
-      assert function1.function.path == "record"
+      assert [function1, function2] = Repo.all(from(f in Function, order_by: f.name))
+      assert function1.name == "my-function-transform"
+      assert function1.type == "transform"
 
-      assert function2.name == "my-function-transform"
-      assert function2.type == "transform"
-
-      assert function2.function.code ==
+      assert function1.function.code ==
                "def transform(action, record, changes, metadata) do\n  %{id: record[\"id\"], action: action}\nend"
+
+      assert function2.name == "my-path-transform"
+      assert function2.type == "path"
+      assert function2.function.path == "record"
     end
 
     test "updates an existing function" do
@@ -2548,8 +2549,15 @@ defmodule Sequin.YamlLoaderTest do
                    initial_backfill: true
                """)
 
-      # Consumer should still exist, but no backfill should have been created
-      assert [^consumer] = Repo.all(SinkConsumer)
+      # Consumer should still exist unchanged, but no backfill should have been created
+      assert [updated_consumer] = Repo.all(SinkConsumer)
+      assert updated_consumer.id == consumer.id
+      assert updated_consumer.name == consumer.name
+      assert updated_consumer.status == consumer.status
+      assert updated_consumer.backfill_completed_at == consumer.backfill_completed_at
+      assert updated_consumer.replication_slot_id == consumer.replication_slot_id
+      assert updated_consumer.source == consumer.source
+      assert updated_consumer.sink == consumer.sink
       assert [] = Repo.all(Backfill)
     end
 

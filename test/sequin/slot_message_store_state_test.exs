@@ -9,6 +9,8 @@ defmodule Sequin.Runtime.SlotMessageStoreStateTest do
   alias Sequin.Runtime.SlotMessageStore.State
   alias Sequin.Size
 
+  @moduletag :capture_log
+
   setup do
     state = %State{
       consumer: %SinkConsumer{seq: Factory.unique_integer()},

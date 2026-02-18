@@ -1,8 +1,6 @@
 defmodule Sequin.MessageConsistencyCheckWorkerTest do
   use Sequin.DataCase, async: true
 
-  import ExUnit.CaptureLog
-
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Runtime.MessageConsistencyCheckWorker
   alias Sequin.Runtime.MessageLedgers
@@ -26,10 +24,11 @@ defmodule Sequin.MessageConsistencyCheckWorkerTest do
       # Set timestamp to 2 minutes ago
       two_minutes_ago = DateTime.add(DateTime.utc_now(), -2 * 60, :second)
 
-      # Capture logs to verify output
-      assert capture_log(fn ->
-               MessageConsistencyCheckWorker.audit_and_trim_undelivered_cursors(consumer.id, two_minutes_ago)
-             end) =~ "Found undelivered cursors (count=3)"
+      assert {:ok, 3} =
+               MessageConsistencyCheckWorker.audit_and_trim_undelivered_cursors(
+                 consumer.id,
+                 two_minutes_ago
+               )
 
       # Verify that the undelivered cursors set was trimmed
       assert {:ok, 0} = MessageLedgers.count_undelivered_wal_cursors(consumer.id, two_minutes_ago)
@@ -42,10 +41,12 @@ defmodule Sequin.MessageConsistencyCheckWorkerTest do
       # Set timestamp to 2 minutes ago
       two_minutes_ago = DateTime.add(DateTime.utc_now(), -2 * 60, :second)
 
-      # Capture logs to verify output
-      assert capture_log(fn ->
-               MessageConsistencyCheckWorker.audit_and_trim_undelivered_cursors(consumer.id, two_minutes_ago)
-             end) == ""
+      # Should return :ok without logging (0-count path)
+      assert {:ok, 0} =
+               MessageConsistencyCheckWorker.audit_and_trim_undelivered_cursors(
+                 consumer.id,
+                 two_minutes_ago
+               )
 
       # Verify that the undelivered cursors set is empty
       assert {:ok, 0} = MessageLedgers.count_undelivered_wal_cursors(consumer.id, two_minutes_ago)
@@ -67,13 +68,15 @@ defmodule Sequin.MessageConsistencyCheckWorkerTest do
       # Set timestamp to 1 minute ago (not stale enough)
       one_minute_ago = DateTime.add(DateTime.utc_now(), -60, :second)
 
-      # Capture logs to verify output
-      assert capture_log(fn ->
-               MessageConsistencyCheckWorker.audit_and_trim_undelivered_cursors(consumer.id, one_minute_ago)
-             end) == ""
+      assert {:ok, 0} =
+               MessageConsistencyCheckWorker.audit_and_trim_undelivered_cursors(
+                 consumer.id,
+                 one_minute_ago
+               )
 
       # Verify that the undelivered cursors set still contains the messages
-      assert {:ok, 2} = MessageLedgers.count_undelivered_wal_cursors(consumer.id, DateTime.utc_now())
+      assert {:ok, 2} =
+               MessageLedgers.count_undelivered_wal_cursors(consumer.id, DateTime.utc_now())
     end
   end
 end

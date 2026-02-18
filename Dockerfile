@@ -29,7 +29,7 @@ ARG SENTRY_DSN
 ENV SENTRY_DSN=${SENTRY_DSN}
 
 # install build dependencies
-RUN apt-get update -y && apt-get install -y build-essential git curl \
+RUN apt-get update -y && apt-get install -y build-essential git curl cmake \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
 # install nodejs for build stage

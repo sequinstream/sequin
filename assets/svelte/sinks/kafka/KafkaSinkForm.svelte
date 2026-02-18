@@ -245,7 +245,10 @@
         class="block w-full border border-gray-300 rounded-md p-2"
       >
         <option value="none">None</option>
+        <option value="gzip">Gzip</option>
+        <option value="snappy">Snappy</option>
         <option value="lz4">LZ4</option>
+        <option value="zstd">Zstd</option>
       </select>
       <p class="text-sm text-muted-foreground">
         Compression algorithm for Kafka producer messages.

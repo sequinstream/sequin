@@ -101,8 +101,10 @@ defmodule Sequin.MixProject do
       {:gnat, "~> 1.9"},
       {:amqp, "~> 4.1"},
       {:amqp_client, "~> 4.2"},
-      {:brod, "~> 4.3"},
+      {:brod, "~> 4.5"},
       {:lz4b, "~> 0.0.13"},
+      {:snappyer, "~> 1.2"},
+      {:ezstd, "~> 1.1"},
 
       # Caching and State Management
       {:con_cache, "~> 1.1"},

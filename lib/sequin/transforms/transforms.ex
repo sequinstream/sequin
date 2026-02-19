@@ -437,6 +437,7 @@ defmodule Sequin.Transforms do
 
   def to_external(%Function{function: %PathFunction{}} = function, _show_sensitive) do
     %{
+      id: function.id,
       name: function.name,
       description: function.description,
       type: function.type,
@@ -446,6 +447,7 @@ defmodule Sequin.Transforms do
 
   def to_external(%Function{function: %TransformFunction{}} = function, _show_sensitive) do
     %{
+      id: function.id,
       name: function.name,
       description: function.description,
       type: function.type,
@@ -455,6 +457,7 @@ defmodule Sequin.Transforms do
 
   def to_external(%Function{function: %RoutingFunction{}} = function, _show_sensitive) do
     %{
+      id: function.id,
       name: function.name,
       description: function.description,
       type: function.type,
@@ -465,6 +468,7 @@ defmodule Sequin.Transforms do
 
   def to_external(%Function{function: %EnrichmentFunction{}} = function, _show_sensitive) do
     %{
+      id: function.id,
       name: function.name,
       description: function.description,
       type: function.type,
@@ -474,6 +478,7 @@ defmodule Sequin.Transforms do
 
   def to_external(%Function{function: %FilterFunction{}} = function, _show_sensitive) do
     %{
+      id: function.id,
       name: function.name,
       description: function.description,
       type: function.type,
@@ -798,6 +803,68 @@ defmodule Sequin.Transforms do
       end
     end)
   end
+
+  def from_external_function(attrs) do
+    # Support both flat structure and nested structure
+    coerce_function_attrs(attrs)
+  end
+
+  # Helper function to coerce function attributes from external format to internal format
+  # Supports both flat and nested structures
+  defp coerce_function_attrs(%{"function" => _, "transform" => _}) do
+    {:error, Error.validation(summary: "Cannot specify both `function` and `transform`")}
+  end
+
+  defp coerce_function_attrs(%{"transform" => function} = raw_attrs) do
+    attrs =
+      raw_attrs
+      |> Map.delete("transform")
+      |> Map.put("function", coerce_function_sink_type(function))
+      |> update_in(["function", "type"], &coerce_type_to_transform/1)
+
+    {:ok, attrs}
+  end
+
+  defp coerce_function_attrs(%{"function" => _} = attrs) do
+    {:ok, Map.update!(attrs, "function", &coerce_function_sink_type/1)}
+  end
+
+  # Assume that if you don't have "function" or "transform" that you used flat structure
+  defp coerce_function_attrs(flat) when is_map(flat) do
+    # Check if this is a flat function definition or just top-level updates
+    has_function_fields = Enum.any?(["type", "sink_type", "code", "path"], &Map.has_key?(flat, &1))
+
+    if has_function_fields do
+      # This is a flat function definition, create nested structure
+      inner =
+        flat
+        |> Map.take(["type", "sink_type", "code", "description", "path"])
+        |> coerce_function_sink_type()
+        |> Map.update("type", nil, &coerce_type_to_transform/1)
+
+      nested_attrs =
+        flat
+        |> Map.take(["id", "name"])
+        |> Map.put("function", inner)
+
+      {:ok, nested_attrs}
+    else
+      # This is just top-level updates (name, description), pass through
+      {:ok, Map.take(flat, ["id", "name", "description"])}
+    end
+  end
+
+  defp coerce_function_attrs(_), do: {:error, Error.validation(summary: "Invalid function attributes")}
+
+  # Helper function to coerce "function" type to "transform" for backwards compatibility
+  defp coerce_type_to_transform("function"), do: "transform"
+  defp coerce_type_to_transform(type), do: type
+
+  defp coerce_function_sink_type(%{"sink_type" => "webhook"} = attrs) do
+    Map.put(attrs, "sink_type", "http_push")
+  end
+
+  defp coerce_function_sink_type(attrs), do: attrs
 
   # Helper functions
 

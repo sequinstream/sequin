@@ -1,0 +1,53 @@
+---
+title: "List Functions"
+description: "List all functions for your account"
+---
+
+## Request
+
+<CodeGroup>
+```bash cURL
+curl -X GET "https://api.sequinstream.com/api/functions" \
+  -H "Authorization: Bearer YOUR_API_TOKEN"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.sequinstream.com/api/functions', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN'
+  }
+});
+const { data } = await response.json();
+```
+</CodeGroup>
+
+## Response
+
+Returns an array of function objects.
+
+<ResponseField name="data" type="array">
+  Array of function objects
+</ResponseField>
+
+## Example Response
+
+```json
+{
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "my-filter",
+      "description": "Filter records with value greater than 40",
+      "type": "filter",
+      "code": "def filter(action, record, changes, metadata) do\n  record[\"value\"] > 40\nend"
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "name": "my-transform",
+      "description": "Extract ID and action",
+      "type": "transform",
+      "code": "def transform(action, record, changes, metadata) do\n  %{id: record[\"id\"], action: action}\nend"
+    }
+  ]
+}
+```

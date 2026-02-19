@@ -26,6 +26,7 @@ defmodule Sequin.Runtime.BenchmarkPipeline do
   @behaviour Sequin.Runtime.SinkPipeline
 
   alias Sequin.Benchmark.Stats
+  alias Sequin.Benchmark.Profiler
   alias Sequin.Consumers.BenchmarkSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Prometheus
@@ -66,6 +67,11 @@ defmodule Sequin.Runtime.BenchmarkPipeline do
   @impl SinkPipeline
   def handle_message(broadway_message, context) do
     %{consumer: %SinkConsumer{sink: %BenchmarkSink{partition_count: partition_count}}} = context
+
+    if Profiler.enabled?() do
+      Profiler.checkpoint(broadway_message.data.commit_lsn, broadway_message.data.commit_idx, :sms_out)
+      Profiler.finalize_message(broadway_message.data.commit_lsn, broadway_message.data.commit_idx)
+    end
 
     # Compute partition from group_id (same as BenchmarkSource)
     partition = Stats.partition(broadway_message.data.group_id, partition_count)

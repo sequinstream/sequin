@@ -33,6 +33,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
   alias Sequin.Runtime.SlotProducer.Batch
   alias Sequin.Runtime.SlotProducer.Message
 
+  alias Sequin.Benchmark.Profiler
+
   require Logger
 
   @backfill_batch_high_watermark Constants.backfill_batch_high_watermark()
@@ -224,6 +226,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
 
   @decorate track_metrics("handle_batch")
   def handle_call({:handle_batch, %Batch{} = batch}, _from, %State{} = state) do
+    if Profiler.enabled?(), do: Profiler.checkpoint_batch(batch.messages, :sps_in)
+
     case flush_messages(state, batch) do
       {:ok, state} ->
         {:reply, :ok, state}
@@ -563,6 +567,8 @@ defmodule Sequin.Runtime.SlotProcessorServer do
     # Temp: Do this here, as handle_messages call is going to become async
     unwrapped_messages = batch.messages |> Enum.map(& &1.message) |> Enum.filter(&is_struct(&1, SlotProcessor.Message))
     state.message_handler_module.before_handle_messages(state.message_handler_ctx, unwrapped_messages)
+
+    if Profiler.enabled?(), do: Profiler.checkpoint_batch(batch.messages, :sps_out)
 
     {time_ms, res} =
       :timer.tc(

@@ -17,6 +17,7 @@ defmodule Mix.Tasks.Bench do
     * `--partition-count` - Number of partitions (default: schedulers_online)
     * `--max-messages` - Maximum messages to generate (default: unlimited, mutually exclusive with --duration)
     * `--through` - Pipeline stage to run through: "full", "reorder_buffer", or "sps" (default: "full")
+    * `--profile` - Enable per-stage pipeline profiling (default: false)
     * `--tprof` - Enable tprof call_time profiling of Sequin.* modules (default: false)
     * `--tprof-limit` - Number of top functions to show in tprof report (default: 60)
 
@@ -40,6 +41,9 @@ defmodule Mix.Tasks.Bench do
       # Run through SlotProcessorServer (includes message handler, stops before Broadway)
       mix benchmark --through sps
 
+      # Run with per-stage pipeline profiling
+      mix benchmark --duration 30 --profile
+
       # Run with tprof profiling to see which functions dominate wall time
       mix benchmark --duration 30 --tprof
   """
@@ -47,6 +51,7 @@ defmodule Mix.Tasks.Bench do
 
   alias Sequin.Accounts
   alias Sequin.Benchmark.MessageHandler, as: BenchmarkMessageHandler
+  alias Sequin.Benchmark.Profiler
   alias Sequin.Benchmark.Stats
   alias Sequin.Consumers
   alias Sequin.Databases
@@ -86,6 +91,7 @@ defmodule Mix.Tasks.Bench do
           partition_count: :integer,
           max_messages: :integer,
           through: :string,
+          profile: :boolean,
           tprof: :boolean,
           tprof_limit: :integer
         ]
@@ -98,6 +104,7 @@ defmodule Mix.Tasks.Bench do
     partition_count = Keyword.get(opts, :partition_count, @default_partition_count)
     max_messages = Keyword.get(opts, :max_messages)
     through = opts |> Keyword.get(:through, "full") |> String.to_existing_atom()
+    profile? = Keyword.get(opts, :profile, false)
     tprof? = Keyword.get(opts, :tprof, false)
     tprof_limit = Keyword.get(opts, :tprof_limit, 60)
 
@@ -115,6 +122,9 @@ defmodule Mix.Tasks.Bench do
     # Start the application
     Mix.Task.run("app.start")
 
+    # Initialize profiler if requested
+    if profile?, do: Profiler.init()
+
     # Start tprof if requested
     if tprof? do
       start_tprof()
@@ -131,6 +141,7 @@ defmodule Mix.Tasks.Bench do
     IO.puts("  Partition count: #{partition_count}")
     IO.puts("  Max messages: #{max_messages || "unlimited"}")
     IO.puts("  Through: #{through}")
+    IO.puts("  profile: #{profile?}")
     IO.puts("  tprof: #{tprof?}")
     IO.puts("")
 
@@ -336,12 +347,22 @@ defmodule Mix.Tasks.Bench do
       pipeline_tracked
     )
 
+    # Print profiling report
+    if profile? do
+      report = Profiler.report()
+
+      if Enum.any?(report) do
+        Profiler.format_report(report)
+      end
+    end
+
     # Print tprof report if enabled
     if tprof? do
       stop_and_report_tprof(tprof_limit)
     end
 
     # Cleanup
+    if profile?, do: Profiler.cleanup()
     cleanup_entities(consumer, replication)
   end
 
@@ -529,6 +550,11 @@ defmodule Mix.Tasks.Bench do
             byte_size: msg.byte_size,
             created_at_us: extract_created_at(msg.message.fields)
           })
+
+          if Profiler.enabled?() do
+            Profiler.checkpoint(msg.message.commit_lsn, msg.message.commit_idx, :sink_in)
+            Profiler.finalize_message(msg.message.commit_lsn, msg.message.commit_idx)
+          end
         end)
       end)
 

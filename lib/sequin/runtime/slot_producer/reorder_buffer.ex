@@ -9,6 +9,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
   alias Sequin.Runtime.SlotProducer.Message
   alias Sequin.Runtime.SlotProducer.PipelineDefaults
 
+  alias Sequin.Benchmark.Profiler
+
   require Logger
 
   @callback flush_batch(id :: PostgresReplicationSlot.id(), batch :: Batch.t()) :: :ok
@@ -95,6 +97,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
 
   @impl GenStage
   def handle_events(events, from, %State{} = state) do
+    if Profiler.enabled?(), do: Profiler.checkpoint_batch(events, :reorder_in)
+
     state = Enum.reduce(events, state, &add_event_to_state/2)
 
     state =
@@ -118,6 +122,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBuffer do
     {batch, ready_batches} = Map.pop(state.ready_batches_by_idx, ready_idx)
 
     state = maybe_cancel_flush_batch_timer(state)
+
+    if Profiler.enabled?(), do: Profiler.checkpoint_batch(batch.messages, :reorder_out)
 
     result =
       try do

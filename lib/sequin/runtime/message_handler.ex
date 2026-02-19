@@ -23,6 +23,8 @@ defmodule Sequin.Runtime.MessageHandler do
   alias Sequin.Runtime.SlotProcessor.Message
   alias Sequin.Runtime.TableReaderServer
 
+  alias Sequin.Benchmark.Profiler
+
   require Logger
 
   @max_payload_sizes_by_replication_slot_id %{
@@ -119,6 +121,9 @@ defmodule Sequin.Runtime.MessageHandler do
 
         {:ok, count + wal_event_count}
       end
+
+    # Messages are now in SlotMessageStore
+    if Profiler.enabled?(), do: Profiler.checkpoint_batch(messages, :sms_in)
 
     Enum.each(matching_pipeline_ids, fn wal_pipeline_id ->
       :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)

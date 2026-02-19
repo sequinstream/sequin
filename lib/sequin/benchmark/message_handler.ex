@@ -8,6 +8,7 @@ defmodule Sequin.Benchmark.MessageHandler do
 
   @behaviour Sequin.Runtime.MessageHandler
 
+  alias Sequin.Benchmark.Profiler
   alias Sequin.Benchmark.Stats
   alias Sequin.Runtime.SlotProcessor.Message
 
@@ -48,6 +49,13 @@ defmodule Sequin.Benchmark.MessageHandler do
         })
       end)
     end)
+
+    if Profiler.enabled?() do
+      Enum.each(messages, fn %Message{} = msg ->
+        Profiler.checkpoint(msg.commit_lsn, msg.commit_idx, :sink_in)
+        Profiler.finalize_message(msg.commit_lsn, msg.commit_idx)
+      end)
+    end
 
     {:ok, length(messages)}
   end

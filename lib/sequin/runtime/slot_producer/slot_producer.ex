@@ -28,6 +28,8 @@ defmodule Sequin.Runtime.SlotProducer do
   alias Sequin.Runtime.SlotProducer.PipelineDefaults
   alias Sequin.Runtime.SlotProducer.Relation
 
+  alias Sequin.Benchmark.Profiler
+
   require Logger
 
   defguardp is_socket_message(message)
@@ -555,6 +557,8 @@ defmodule Sequin.Runtime.SlotProducer do
         <<?R, _rest::binary>> -> :relation
       end
 
+    if Profiler.enabled?(), do: Profiler.start_message(state.commit_lsn, state.next_commit_idx)
+
     %Message{
       byte_size: byte_size(binary),
       commit_idx: state.next_commit_idx,
@@ -599,6 +603,7 @@ defmodule Sequin.Runtime.SlotProducer do
     if acc_msgs == [] do
       {[], state}
     else
+      if Profiler.enabled?(), do: Profiler.checkpoint_batch(acc_msgs, :producer_out)
       {acc_msgs, maybe_schedule_flush(state)}
     end
   end

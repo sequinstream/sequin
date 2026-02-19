@@ -22,6 +22,8 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
   alias Sequin.Runtime.SlotProducer.Relation
   alias Sequin.Runtime.SlotProducer.ReorderBuffer
 
+  alias Sequin.Benchmark.Profiler
+
   require Logger
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
@@ -121,6 +123,8 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
 
   @impl GenStage
   def handle_events(events, _from, state) do
+    if Profiler.enabled?(), do: Profiler.checkpoint_batch(events, :processor_in)
+
     messages =
       events
       |> Enum.map(fn %Message{} = msg ->
@@ -131,6 +135,8 @@ defmodule Sequin.Runtime.SlotProducer.Processor do
       end)
       |> Enum.reject(&is_nil/1)
       |> Enum.reject(&internal_change?/1)
+
+    if Profiler.enabled?(), do: Profiler.checkpoint_batch(messages, :processor_out)
 
     {:noreply, messages, state}
   end

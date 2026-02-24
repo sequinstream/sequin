@@ -43,7 +43,6 @@ defmodule Sequin.Consumers.SqsSink do
     |> put_is_fifo()
     |> validate_emulator_base_url()
     |> validate_routing()
-    |> validate_cloud_mode_restrictions()
   end
 
   defp validate_credentials(changeset) do
@@ -171,18 +170,4 @@ defmodule Sequin.Consumers.SqsSink do
     ~r/^https?:\/\/sqs\.(?<region>[a-z0-9-]+)\.([a-zA-Z0-9.-]+)(?::\d+)?\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/
   end
 
-  defp validate_cloud_mode_restrictions(changeset) do
-    self_hosted? = Sequin.Config.self_hosted?()
-    use_task_role? = get_field(changeset, :use_task_role)
-
-    if not self_hosted? and use_task_role? do
-      add_error(
-        changeset,
-        :use_task_role,
-        "Task role credentials are not supported in Sequin Cloud. Please use explicit credentials instead."
-      )
-    else
-      changeset
-    end
-  end
 end

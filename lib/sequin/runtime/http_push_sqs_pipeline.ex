@@ -110,12 +110,23 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
     queue_kind = Keyword.fetch!(opts, :queue_kind)
     name = Keyword.fetch!(opts, :name)
 
-    {:ok,
-     %{
-       region: region,
-       access_key_id: access_key_id,
-       secret_access_key: secret_access_key
-     }} = fetch_sqs_config()
+    {:ok, sqs_config} = fetch_sqs_config()
+    region = Map.fetch!(sqs_config, :region)
+
+    {access_key_id, secret_access_key, token} =
+      if Map.get(sqs_config, :use_task_role) do
+        # Use aws_credentials provider chain
+        case :aws_credentials.get_credentials() do
+          :undefined ->
+            raise "Task role credentials not found"
+
+          credentials ->
+            {credentials.access_key_id, credentials.secret_access_key, credentials[:token]}
+        end
+      else
+        # Use explicit credentials
+        {Map.fetch!(sqs_config, :access_key_id), Map.fetch!(sqs_config, :secret_access_key), nil}
+      end
 
     producer_mod = Keyword.get(opts, :producer_mod, BroadwaySQS.Producer)
 
@@ -125,11 +136,13 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
         module: {
           producer_mod,
           queue_url: queue_url,
-          config: [
-            access_key_id: access_key_id,
-            secret_access_key: secret_access_key,
-            region: region
-          ],
+          config:
+            [
+              access_key_id: access_key_id,
+              secret_access_key: secret_access_key,
+              region: region
+            ]
+            |> maybe_put_token(token),
           attribute_names: [:sent_timestamp, :approximate_receive_count, :approximate_first_receive_timestamp],
           receive_interval: 1_000,
           max_number_of_messages: 10,
@@ -423,4 +436,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
   defp default_req_opts do
     Application.get_env(:sequin, __MODULE__)[:req_opts] || []
   end
+
+  defp maybe_put_token(config, nil), do: config
+  defp maybe_put_token(config, token), do: Keyword.put(config, :token, token)
 end

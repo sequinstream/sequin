@@ -11,6 +11,38 @@ defmodule Sequin.Sinks.Kafka.AwsMskIam.Auth do
 
   @handshake_version 1
 
+  # Handle task role credentials
+  def auth(
+        host,
+        sock,
+        mod,
+        client_id,
+        timeout,
+        {:AWS_MSK_IAM = mechanism, :task_role, aws_region} = _sasl_opts
+      ) do
+    case :aws_credentials.get_credentials() do
+      :undefined ->
+        {:error,
+         "Task role credentials not found. Ensure AWS credentials are available via environment variables, credentials file, ECS task role, web identity token, or EC2 metadata."}
+
+      credentials when is_map(credentials) ->
+        aws_secret_key_id = Map.get(credentials, :access_key_id)
+        aws_secret_access_key = Map.get(credentials, :secret_access_key)
+
+        auth(
+          host,
+          sock,
+          mod,
+          client_id,
+          timeout,
+          {mechanism, aws_secret_key_id, aws_secret_access_key, aws_region}
+        )
+
+      other ->
+        {:error, "Unexpected credential format: #{inspect(other)}"}
+    end
+  end
+
   def auth(
         _host,
         _sock,

@@ -23,8 +23,7 @@ defmodule Sequin.MixProject do
   def application do
     [
       mod: {Sequin.Application, []},
-      extra_applications: [:logger, :runtime_tools] ++ extra_applications(Mix.env()),
-      included_applications: [:aws_credentials]
+      extra_applications: [:logger, :runtime_tools] ++ extra_applications(Mix.env())
     ]
   end
 
@@ -70,7 +69,7 @@ defmodule Sequin.MixProject do
 
       # AWS and Cloud Services
       {:aws, "~> 1.0"},
-      {:aws_credentials, "~> 1.0.0", runtime: false},
+      {:aws_credentials, "~> 1.0.0"},
       {:aws_rds_castore, "~> 1.2.0"},
       {:aws_signature, "~> 0.3.2"},
 

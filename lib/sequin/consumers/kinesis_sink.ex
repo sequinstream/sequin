@@ -29,7 +29,6 @@ defmodule Sequin.Consumers.KinesisSink do
     |> validate_credentials()
     |> validate_stream_arn()
     |> validate_routing()
-    |> validate_cloud_mode_restrictions()
   end
 
   defp validate_credentials(changeset) do
@@ -136,18 +135,4 @@ defmodule Sequin.Consumers.KinesisSink do
     end
   end
 
-  defp validate_cloud_mode_restrictions(changeset) do
-    self_hosted? = Sequin.Config.self_hosted?()
-    use_task_role? = get_field(changeset, :use_task_role)
-
-    if not self_hosted? and use_task_role? do
-      add_error(
-        changeset,
-        :use_task_role,
-        "Task role credentials are not supported in Sequin Cloud. Please use explicit credentials instead."
-      )
-    else
-      changeset
-    end
-  end
 end

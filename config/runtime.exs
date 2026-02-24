@@ -63,13 +63,21 @@ end
 # Configure SQS integration for HTTP Push sinks
 sqs_config =
   if System.get_env("HTTP_PUSH_VIA_SQS_QUEUE_URL") do
-    %{
+    base_config = %{
       main_queue_url: System.fetch_env!("HTTP_PUSH_VIA_SQS_QUEUE_URL"),
       dlq_url: System.fetch_env!("HTTP_PUSH_VIA_SQS_DLQ_URL"),
-      region: System.fetch_env!("HTTP_PUSH_VIA_SQS_REGION"),
-      access_key_id: System.fetch_env!("HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID"),
-      secret_access_key: System.fetch_env!("HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY")
+      region: System.fetch_env!("HTTP_PUSH_VIA_SQS_REGION")
     }
+
+    # Support both explicit credentials and task role
+    if System.get_env("HTTP_PUSH_VIA_SQS_USE_TASK_ROLE") == "true" do
+      Map.put(base_config, :use_task_role, true)
+    else
+      Map.merge(base_config, %{
+        access_key_id: System.fetch_env!("HTTP_PUSH_VIA_SQS_ACCESS_KEY_ID"),
+        secret_access_key: System.fetch_env!("HTTP_PUSH_VIA_SQS_SECRET_ACCESS_KEY")
+      })
+    end
   end
 
 # Enable via_sqs_for_new_sinks? flag for HttpPushSink

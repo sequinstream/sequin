@@ -215,6 +215,96 @@ defmodule Sequin.Consumers.KafkaSinkTest do
 
       refute :topic in changeset.changes
     end
+
+    test "validates AWS MSK IAM credentials when mechanism is aws_msk_iam" do
+      # Test missing credentials
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: true,
+          sasl_mechanism: :aws_msk_iam,
+          routing_mode: :static
+        })
+
+      refute changeset.valid?
+      assert "is required when SASL Mechanism is aws_msk_iam" in errors_on(changeset).aws_access_key_id
+      assert "is required when SASL Mechanism is aws_msk_iam" in errors_on(changeset).aws_secret_access_key
+      assert "is required when SASL Mechanism is aws_msk_iam" in errors_on(changeset).aws_region
+
+      # Test with valid credentials
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: true,
+          sasl_mechanism: :aws_msk_iam,
+          aws_access_key_id: "test_key",
+          aws_secret_access_key: "test_secret",
+          aws_region: "us-east-1",
+          routing_mode: :static
+        })
+
+      assert changeset.valid?
+    end
+
+    test "validates AWS MSK IAM with use_task_role requires only region" do
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: true,
+          sasl_mechanism: :aws_msk_iam,
+          use_task_role: true,
+          aws_region: "us-east-1",
+          routing_mode: :static
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :aws_access_key_id) == nil
+      assert Ecto.Changeset.get_field(changeset, :aws_secret_access_key) == nil
+    end
+
+    test "nullifies AWS credentials when use_task_role is true" do
+      # Start with a sink that has credentials
+      existing_sink = %KafkaSink{
+        aws_access_key_id: "existing_key",
+        aws_secret_access_key: "existing_secret"
+      }
+
+      changeset =
+        KafkaSink.changeset(existing_sink, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: true,
+          sasl_mechanism: :aws_msk_iam,
+          use_task_role: true,
+          aws_region: "us-east-1",
+          routing_mode: :static
+        })
+
+      assert changeset.valid?
+      # Verify credentials are explicitly nullified in changes
+      assert changeset.changes.aws_access_key_id == nil
+      assert changeset.changes.aws_secret_access_key == nil
+    end
+
+    test "validates AWS MSK IAM requires TLS" do
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: false,
+          sasl_mechanism: :aws_msk_iam,
+          aws_access_key_id: "test_key",
+          aws_secret_access_key: "test_secret",
+          aws_region: "us-east-1",
+          routing_mode: :static
+        })
+
+      refute changeset.valid?
+      assert "is required when SASL Mechanism is aws_msk_iam" in errors_on(changeset).tls
+    end
   end
 
   # Helper function to extract error messages

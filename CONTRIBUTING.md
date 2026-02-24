@@ -11,6 +11,7 @@ Thank you for your interest in contributing to Sequin! This document provides gu
 - GitHub CLI (`gh`)
 - Node.js (for frontend assets)
 - Go (only necessary for CLI development)
+- [CMake](https://cmake.org/download/)
 
 ### Getting started
 

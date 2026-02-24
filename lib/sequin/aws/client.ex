@@ -18,37 +18,32 @@ defmodule Sequin.Aws.Client do
 
   @impl Sequin.Aws
   def get_client(region) when is_binary(region) do
-    if Sequin.Config.self_hosted?() do
-      case get_credentials() do
-        {:ok, credentials} ->
-          client = build_client(credentials, region)
-          {:ok, client}
+    case get_credentials() do
+      {:ok, credentials} ->
+        client = build_client(credentials, region)
+        {:ok, client}
 
-        {:error, reason} ->
-          Logger.error("Failed to get task role credentials: #{inspect(reason)}")
-          {:error, reason}
-      end
-    else
-      {:error, Error.service(service: :aws, message: "Task role credentials are only available in self-hosted mode")}
+      {:error, reason} ->
+        Logger.error("Failed to get task role credentials: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
   defp get_credentials do
-    case Application.ensure_all_started(:aws_credentials) do
-      {:ok, _} ->
-        case :aws_credentials.get_credentials() do
-          :undefined ->
-            {:error, Error.service(service: :aws, message: "Task role credentials not found")}
+    case :aws_credentials.get_credentials() do
+      :undefined ->
+        {:error,
+         Error.service(
+           service: :aws,
+           message:
+             "Task role credentials not found. Ensure AWS credentials are available via environment variables, credentials file, ECS task role, web identity token, or EC2 metadata."
+         )}
 
-          credentials when is_map(credentials) ->
-            {:ok, credentials}
+      credentials when is_map(credentials) ->
+        {:ok, credentials}
 
-          other ->
-            {:error, Error.service(service: :aws, message: "Unexpected credential format: #{inspect(other)}")}
-        end
-
-      {:error, reason} ->
-        {:error, Error.service(service: :aws, message: "Failed to start aws_credentials: #{inspect(reason)}")}
+      other ->
+        {:error, Error.service(service: :aws, message: "Unexpected credential format: #{inspect(other)}")}
     end
   end
 

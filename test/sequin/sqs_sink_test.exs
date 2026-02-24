@@ -70,56 +70,6 @@ defmodule Sequin.Consumers.SqsSinkTest do
     end
   end
 
-  describe "changeset/2 cloud mode restrictions" do
-    @tag self_hosted: false
-    test "validates that use_task_role is false when not self_hosted" do
-      params = %{
-        queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test",
-        region: "us-east-1",
-        use_task_role: true,
-        routing_mode: :static
-      }
-
-      changeset = SqsSink.changeset(%SqsSink{}, params)
-
-      refute changeset.valid?
-
-      assert changeset.errors[:use_task_role] ==
-               {"Task role credentials are not supported in Sequin Cloud. Please use explicit credentials instead.", []}
-    end
-
-    @tag self_hosted: true
-    test "allows use_task_role when self_hosted" do
-      params = %{
-        queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test",
-        region: "us-east-1",
-        use_task_role: true,
-        routing_mode: :static
-      }
-
-      changeset = SqsSink.changeset(%SqsSink{}, params)
-
-      assert changeset.valid?
-      refute changeset.errors[:use_task_role]
-    end
-
-    @tag self_hosted: false
-    test "allows use_task_role=false in cloud mode" do
-      params = %{
-        queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/test",
-        region: "us-east-1",
-        use_task_role: false,
-        access_key_id: "test_key",
-        secret_access_key: "test_secret",
-        routing_mode: :static
-      }
-
-      changeset = SqsSink.changeset(%SqsSink{}, params)
-
-      assert changeset.valid?
-      refute changeset.errors[:use_task_role]
-    end
-  end
 
   describe "aws_client/1" do
     test "creates client with explicit credentials when use_task_role is false" do

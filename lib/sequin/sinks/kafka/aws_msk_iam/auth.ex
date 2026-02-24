@@ -12,14 +12,7 @@ defmodule Sequin.Sinks.Kafka.AwsMskIam.Auth do
   @handshake_version 1
 
   # Handle task role credentials
-  def auth(
-        host,
-        sock,
-        mod,
-        client_id,
-        timeout,
-        {:AWS_MSK_IAM = mechanism, :task_role, aws_region} = _sasl_opts
-      ) do
+  def auth(host, sock, mod, client_id, timeout, {:AWS_MSK_IAM = mechanism, :task_role, aws_region} = _sasl_opts) do
     case :aws_credentials.get_credentials() do
       :undefined ->
         {:error,

@@ -169,5 +169,4 @@ defmodule Sequin.Consumers.SqsSink do
   def sqs_url_regex do
     ~r/^https?:\/\/sqs\.(?<region>[a-z0-9-]+)\.([a-zA-Z0-9.-]+)(?::\d+)?\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/
   end
-
 end

@@ -137,12 +137,7 @@ defmodule Sequin.Runtime.HttpPushSqsPipeline do
           producer_mod,
           queue_url: queue_url,
           config:
-            [
-              access_key_id: access_key_id,
-              secret_access_key: secret_access_key,
-              region: region
-            ]
-            |> maybe_put_token(token),
+            maybe_put_token([access_key_id: access_key_id, secret_access_key: secret_access_key, region: region], token),
           attribute_names: [:sent_timestamp, :approximate_receive_count, :approximate_first_receive_timestamp],
           receive_interval: 1_000,
           max_number_of_messages: 10,

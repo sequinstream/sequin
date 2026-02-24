@@ -134,5 +134,4 @@ defmodule Sequin.Consumers.KinesisSink do
         {:error, reason}
     end
   end
-
 end

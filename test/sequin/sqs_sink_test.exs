@@ -70,7 +70,6 @@ defmodule Sequin.Consumers.SqsSinkTest do
     end
   end
 
-
   describe "aws_client/1" do
     test "creates client with explicit credentials when use_task_role is false" do
       sink = %SqsSink{

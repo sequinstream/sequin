@@ -124,7 +124,6 @@ defmodule Sequin.Consumers.KinesisSinkTest do
     end
   end
 
-
   describe "region_from_arn/1" do
     test "extracts region from valid ARN" do
       arn = "arn:aws:kinesis:us-west-2:123456789012:stream/my-stream"

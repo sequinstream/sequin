@@ -1,0 +1,92 @@
+---
+title: "Update Function"
+description: "Update an existing function"
+---
+
+## Request
+
+You can update a function by either its ID or name.
+
+<CodeGroup>
+```bash cURL (by ID)
+curl -X PUT "https://api.sequinstream.com/api/functions/550e8400-e29b-41d4-a716-446655440000" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Updated description",
+    "code": "def filter(action, record, changes, metadata) do\n  record[\"value\"] > 50\nend"
+  }'
+```
+
+```bash cURL (by name)
+curl -X PUT "https://api.sequinstream.com/api/functions/my-filter" \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Updated description"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.sequinstream.com/api/functions/my-filter', {
+  method: 'PUT',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_TOKEN',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    description: 'Updated description',
+    code: `def filter(action, record, changes, metadata) do
+  record["value"] > 50
+end`
+  })
+});
+const function = await response.json();
+```
+</CodeGroup>
+
+## Path Parameters
+
+<ParamField path="id_or_name" type="string" required>
+  Function ID (UUID) or name
+</ParamField>
+
+## Body Parameters
+
+All parameters are optional. Only include the fields you want to update.
+
+<ParamField path="name" type="string">
+  Update the function name
+</ParamField>
+
+<ParamField path="description" type="string">
+  Update the description
+</ParamField>
+
+<ParamField path="code" type="string">
+  Update the function code (for applicable types)
+</ParamField>
+
+<ParamField path="path" type="string">
+  Update the path (for path type functions)
+</ParamField>
+
+<ParamField path="sink_type" type="string">
+  Update the sink type (for routing type functions)
+</ParamField>
+
+## Response
+
+Returns the updated function object.
+
+## Example Response
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "my-filter",
+  "description": "Updated description",
+  "type": "filter",
+  "code": "def filter(action, record, changes, metadata) do\n  record[\"value\"] > 50\nend"
+}
+```

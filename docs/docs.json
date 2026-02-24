@@ -191,6 +191,16 @@
                 ]
               },
               {
+                "group": "Functions",
+                "pages": [
+                  "management-api/functions/list",
+                  "management-api/functions/get",
+                  "management-api/functions/create",
+                  "management-api/functions/update",
+                  "management-api/functions/delete"
+                ]
+              },
+              {
                 "group": "Sink consumers",
                 "pages": [
                   "management-api/sink-consumers/list",

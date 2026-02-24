@@ -76,6 +76,7 @@ defmodule Sequin.Application do
     Sequin.Redis.connect_cluster()
 
     [
+      {Cluster.Supervisor, [Application.get_env(:libcluster, :topologies, []), [name: Sequin.ClusterSupervisor]]},
       Sequin.Repo,
       Sequin.Vault,
       Sequin.PubSub.child_spec(),

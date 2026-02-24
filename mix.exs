@@ -117,7 +117,7 @@ defmodule Sequin.MixProject do
       {:eredis, github: "acco/eredis", override: true},
 
       # Clustering and Distribution
-      {:dns_cluster, "~> 0.1.1"},
+      {:libcluster_postgres, "~> 0.2"},
 
       # Data Processing and Types
       {:flow, "~> 1.2"},

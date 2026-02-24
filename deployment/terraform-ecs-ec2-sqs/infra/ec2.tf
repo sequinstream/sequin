@@ -60,9 +60,8 @@ resource "aws_launch_template" "sequin-main" {
     ebs {
       delete_on_termination = "true"
       encrypted             = "false"
-      iops                  = "0"
       volume_size           = "100"
-      volume_type           = "gp2"
+      volume_type           = "gp3"
     }
   }
 

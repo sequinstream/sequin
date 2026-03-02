@@ -54,18 +54,20 @@ defmodule Sequin.Runtime.SqsPipeline do
   def handle_batch(:default, messages, %{batch_key: queue_url}, context) do
     %{
       consumer: %SinkConsumer{} = consumer,
-      sqs_client: sqs_client,
       test_pid: test_pid
     } = context
 
     setup_allowances(test_pid)
+
+    # Credentials may have expired if we are using task role
+    context = maybe_refresh_client(context)
 
     sqs_messages =
       Enum.map(messages, fn %{data: data} ->
         build_sqs_message(consumer, data)
       end)
 
-    case SQS.send_messages(sqs_client, queue_url, sqs_messages) do
+    case SQS.send_messages(context.sqs_client, queue_url, sqs_messages) do
       :ok ->
         {:ok, messages, context}
 
@@ -91,6 +93,25 @@ defmodule Sequin.Runtime.SqsPipeline do
       |> Map.put(:message_group_id, Sequin.Aws.message_group_id(record_or_event.group_id))
     else
       message
+    end
+  end
+
+  defp maybe_refresh_client(%{consumer: %SinkConsumer{} = consumer} = context) do
+    # Only refresh for task role credentials, as they expire
+    # Explicit credentials keep using the same client
+    if consumer.sink.use_task_role do
+      case SqsSink.aws_client(consumer.sink) do
+        {:ok, fresh_client} ->
+          Map.put(context, :sqs_client, fresh_client)
+
+        {:error, reason} ->
+          # Log but continue (may be transient)
+          Logger.warning("Failed to refresh AWS client for task role: #{inspect(reason)}")
+          context
+      end
+    else
+      # Not using task roles, no refresh needed
+      context
     end
   end
 

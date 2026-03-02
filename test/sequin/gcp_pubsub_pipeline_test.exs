@@ -12,34 +12,30 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!(type: :gcp_pubsub, batch_size: 10)
 
-      # Setup auth token expectation for all tests
-      Req.Test.expect(PubSub, fn conn ->
-        if conn.host == "oauth2.googleapis.com" do
-          Req.Test.json(conn, %{"access_token" => "test_token"})
-        end
-      end)
-
       {:ok, %{consumer: consumer}}
     end
 
     test "events are sent to PubSub", %{consumer: consumer} do
       message = ConsumersFactory.consumer_message()
 
-      # Mock PubSub publish
-      Req.Test.expect(PubSub, fn conn ->
-        assert conn.method == "POST"
-        assert conn.host == "pubsub.googleapis.com"
-        assert String.contains?(conn.request_path, ":publish")
+      Req.Test.stub(PubSub, fn conn ->
+        if conn.host == "oauth2.googleapis.com" do
+          Req.Test.json(conn, %{"access_token" => "test_token"})
+        else
+          assert conn.method == "POST"
+          assert conn.host == "pubsub.googleapis.com"
+          assert String.contains?(conn.request_path, ":publish")
 
-        {:ok, body, _} = Plug.Conn.read_body(conn)
-        body = Jason.decode!(body)
+          {:ok, body, _} = Plug.Conn.read_body(conn)
+          body = Jason.decode!(body)
 
-        data = get_in(body, ["messages", Access.at(0), "data"])
-        data = data |> Base.decode64!() |> Jason.decode!()
-        assert Map.has_key?(data, "record")
-        assert Map.has_key?(data, "metadata")
+          data = get_in(body, ["messages", Access.at(0), "data"])
+          data = data |> Base.decode64!() |> Jason.decode!()
+          assert Map.has_key?(data, "record")
+          assert Map.has_key?(data, "metadata")
 
-        Req.Test.json(conn, %{})
+          Req.Test.json(conn, %{})
+        end
       end)
 
       start_pipeline!(consumer)
@@ -55,16 +51,19 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
       message1 = ConsumersFactory.consumer_message(group_id: group_id)
       message2 = ConsumersFactory.consumer_message(group_id: group_id)
 
-      # Mock PubSub publish and verify batch
-      Req.Test.expect(PubSub, fn conn ->
-        assert conn.method == "POST"
-        assert conn.host == "pubsub.googleapis.com"
+      Req.Test.stub(PubSub, fn conn ->
+        if conn.host == "oauth2.googleapis.com" do
+          Req.Test.json(conn, %{"access_token" => "test_token"})
+        else
+          assert conn.method == "POST"
+          assert conn.host == "pubsub.googleapis.com"
 
-        {:ok, body, _} = Plug.Conn.read_body(conn)
-        body = Jason.decode!(body)
-        assert length(body["messages"]) == 2
+          {:ok, body, _} = Plug.Conn.read_body(conn)
+          body = Jason.decode!(body)
+          assert length(body["messages"]) == 2
 
-        Req.Test.json(conn, %{})
+          Req.Test.json(conn, %{})
+        end
       end)
 
       start_pipeline!(consumer)
@@ -78,7 +77,9 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
       message1 = ConsumersFactory.consumer_message(group_id: group_id)
       message2 = ConsumersFactory.consumer_message(group_id: group_id)
 
-      Req.Test.expect(PubSub, 3, fn conn ->
+      # Use stub to handle non-deterministic auth request count (1 or 2 auth requests
+      # depending on whether the token is cached before the second batch processor starts)
+      Req.Test.stub(PubSub, fn conn ->
         if conn.host == "oauth2.googleapis.com" do
           Req.Test.json(conn, %{"access_token" => "test_token"})
         else
@@ -102,11 +103,14 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
 
     @tag capture_log: true
     test "failed PubSub publish results in failed events", %{consumer: consumer} do
-      # Mock failed PubSub publish
-      Req.Test.expect(PubSub, fn conn ->
-        conn
-        |> Plug.Conn.put_status(500)
-        |> Req.Test.json(%{"error" => "Failed to publish to PubSub"})
+      Req.Test.stub(PubSub, fn conn ->
+        if conn.host == "oauth2.googleapis.com" do
+          Req.Test.json(conn, %{"access_token" => "test_token"})
+        else
+          conn
+          |> Plug.Conn.put_status(500)
+          |> Req.Test.json(%{"error" => "Failed to publish to PubSub"})
+        end
       end)
 
       start_pipeline!(consumer)
@@ -133,13 +137,16 @@ defmodule Sequin.Runtime.GcpPubsubPipelineTest do
 
       message = ConsumersFactory.consumer_message()
 
-      # Mock PubSub publish and verify topic
-      Req.Test.expect(PubSub, fn conn ->
-        assert conn.method == "POST"
-        assert conn.host == "pubsub.googleapis.com"
-        assert String.contains?(conn.request_path, "/my_topic:publish")
+      Req.Test.stub(PubSub, fn conn ->
+        if conn.host == "oauth2.googleapis.com" do
+          Req.Test.json(conn, %{"access_token" => "test_token"})
+        else
+          assert conn.method == "POST"
+          assert conn.host == "pubsub.googleapis.com"
+          assert String.contains?(conn.request_path, "/my_topic:publish")
 
-        Req.Test.json(conn, %{})
+          Req.Test.json(conn, %{})
+        end
       end)
 
       start_pipeline!(consumer)

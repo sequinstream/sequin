@@ -13,6 +13,8 @@ defmodule Sequin.Runtime.SlotProducer.ReorderBufferTest do
   alias Sequin.Runtime.SlotProducer.Message
   alias Sequin.Runtime.SlotProducer.ReorderBuffer
 
+  @moduletag :capture_log
+
   @reorder_buffer_id Module.concat(__MODULE__, ReorderBuffer)
   def reorder_buffer_id, do: @reorder_buffer_id
 

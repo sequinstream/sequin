@@ -20,7 +20,7 @@
 
 Sequin is the [fastest](#performance) change data capture (CDC) platform for Postgres. Sequin makes it easy to stream Postgres to streaming platforms, queues, search indexes, and more (e.g. Kafka, GCP Pub/Sub, another Postgres, etc.). You can backfill existing rows and stream new changes in real-time.
 
-Sequin is a standalone Docker container that you can deploy next to your Postgres database. Alternatively, you can use [our hosted offering](https://console.sequinstream.com) or we'll [manage Sequin](https://sequinstream.com/docs/sequin-managed/overview) for you in your cloud.
+Sequin is a standalone Docker container that you can deploy next to your Postgres database.
 
 For production deployments on AWS, see the [`deployment/`](./deployment) directory for Terraform infrastructure-as-code templates.
 
@@ -54,8 +54,6 @@ Sequin works great for change data capture use cases like:
 - **[Refreshing search indexes](https://sequinstream.com/docs/how-to/sync-search-indexes):** End-to-end tooling to warm search indexes like Typesense and Elasticsearch and keep them in sync with sub-second latency.
 
 ## Sinks
-
-We're adding new destinations almost [every week](CHANGELOG.md).
 
 | Icon | Sink | Docs | Description |
 |------|------|------|-------------|

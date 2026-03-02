@@ -820,7 +820,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "aws_access_key_id" => sink["aws_access_key_id"],
       "aws_secret_access_key" => sink["aws_secret_access_key"],
       "aws_region" => sink["aws_region"],
-      "batch_size" => sink["batch_size"]
+      "batch_size" => sink["batch_size"],
+      "compression" => sink["compression"]
     }
   end
 
@@ -1090,7 +1091,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "sasl_mechanism" => sink.sasl_mechanism,
       "aws_access_key_id" => sink.aws_access_key_id,
       "aws_secret_access_key" => sink.aws_secret_access_key,
-      "aws_region" => sink.aws_region
+      "aws_region" => sink.aws_region,
+      "compression" => sink.compression
     }
   end
 
@@ -1480,7 +1482,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         :sns -> {%SnsSink{}, %{batch_size: 10}}
         :kinesis -> {%KinesisSink{}, %{batch_size: 100}}
         :s2 -> {%S2Sink{}, %{batch_size: 10}}
-        :kafka -> {%KafkaSink{tls: false}, %{batch_size: 200}}
+        :kafka -> {%KafkaSink{tls: false, compression: :none}, %{batch_size: 200}}
         :redis_stream -> {%RedisStreamSink{}, %{batch_size: 50}}
         :sequin_stream -> {%SequinStreamSink{}, %{}}
         :gcp_pubsub -> {%GcpPubsubSink{}, %{message_grouping: false, batch_size: 100}}

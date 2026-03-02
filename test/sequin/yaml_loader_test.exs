@@ -37,6 +37,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.YamlLoader
 
   @moduletag :unboxed
+  @moduletag :capture_log
 
   @publication "characters_publication"
 
@@ -609,16 +610,16 @@ defmodule Sequin.YamlLoaderTest do
                        end
                """)
 
-      assert [function1, function2] = Repo.all(Function, order_by: :name)
-      assert function1.name == "my-path-transform"
-      assert function1.type == "path"
-      assert function1.function.path == "record"
+      assert [function1, function2] = Repo.all(from(f in Function, order_by: f.name))
+      assert function1.name == "my-function-transform"
+      assert function1.type == "transform"
 
-      assert function2.name == "my-function-transform"
-      assert function2.type == "transform"
-
-      assert function2.function.code ==
+      assert function1.function.code ==
                "def transform(action, record, changes, metadata) do\n  %{id: record[\"id\"], action: action}\nend"
+
+      assert function2.name == "my-path-transform"
+      assert function2.type == "path"
+      assert function2.function.path == "record"
     end
 
     test "updates an existing function" do
@@ -1230,6 +1231,41 @@ defmodule Sequin.YamlLoaderTest do
                username: "test-user",
                password: "test-pass",
                sasl_mechanism: :plain
+             } = consumer.sink
+    end
+
+    test "creates kafka sink consumer with AWS MSK IAM" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               sinks:
+                 - name: "kafka-msk-consumer"
+                   database: "test-db"
+                   destination:
+                     type: "kafka"
+                     hosts: "b-1.msk-cluster.abc123.kafka.us-east-1.amazonaws.com:9098"
+                     topic: "test-topic"
+                     tls: true
+                     sasl_mechanism: "aws_msk_iam"
+                     aws_access_key_id: "AKIAXXXXXXXXXXXXXXXX"
+                     aws_secret_access_key: "secret123"
+                     aws_region: "us-east-1"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+
+      assert consumer.name == "kafka-msk-consumer"
+
+      assert %KafkaSink{
+               type: :kafka,
+               hosts: "b-1.msk-cluster.abc123.kafka.us-east-1.amazonaws.com:9098",
+               topic: "test-topic",
+               tls: true,
+               sasl_mechanism: :aws_msk_iam,
+               aws_access_key_id: "AKIAXXXXXXXXXXXXXXXX",
+               aws_secret_access_key: "secret123",
+               aws_region: "us-east-1"
              } = consumer.sink
     end
 
@@ -2513,8 +2549,15 @@ defmodule Sequin.YamlLoaderTest do
                    initial_backfill: true
                """)
 
-      # Consumer should still exist, but no backfill should have been created
-      assert [^consumer] = Repo.all(SinkConsumer)
+      # Consumer should still exist unchanged, but no backfill should have been created
+      assert [updated_consumer] = Repo.all(SinkConsumer)
+      assert updated_consumer.id == consumer.id
+      assert updated_consumer.name == consumer.name
+      assert updated_consumer.status == consumer.status
+      assert updated_consumer.backfill_completed_at == consumer.backfill_completed_at
+      assert updated_consumer.replication_slot_id == consumer.replication_slot_id
+      assert updated_consumer.source == consumer.source
+      assert updated_consumer.sink == consumer.sink
       assert [] = Repo.all(Backfill)
     end
 

@@ -44,6 +44,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.TestSupport.SimpleHttpServer
 
   @moduletag :unboxed
+  @moduletag :capture_log
 
   @publication "characters_publication"
 
@@ -1499,6 +1500,21 @@ defmodule Sequin.PostgresReplicationTest do
   defp stop_replication!(pg_replication) do
     # Stop the supervisor using its via_tuple
     stop_supervised!(Supervisor.via_tuple(pg_replication.id))
+    # Wait for :syn to clean up the process registration asynchronously
+    wait_for_syn_cleanup({Supervisor, pg_replication.id})
+  end
+
+  defp wait_for_syn_cleanup(key, attempts \\ 50) do
+    if :syn.lookup(:replication, key) == :undefined do
+      :ok
+    else
+      if attempts > 0 do
+        Process.sleep(10)
+        wait_for_syn_cleanup(key, attempts - 1)
+      else
+        raise "Timed out waiting for :syn to clean up registration for #{inspect(key)}"
+      end
+    end
   end
 
   # defp config do

@@ -24,6 +24,7 @@ defmodule Sequin.Runtime.SlotProducer.IntegrationTest do
   alias Sequin.TestSupport.ReplicationSlots
 
   @moduletag :unboxed
+  @moduletag :capture_log
   @publication "characters_publication"
 
   def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)

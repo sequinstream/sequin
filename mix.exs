@@ -23,13 +23,14 @@ defmodule Sequin.MixProject do
   def application do
     [
       mod: {Sequin.Application, []},
-      extra_applications: [:logger, :runtime_tools, :os_mon] ++ extra_applications(Mix.env()),
+      extra_applications: [:logger, :runtime_tools] ++ extra_applications(Mix.env()),
       included_applications: [:aws_credentials]
     ]
   end
 
-  defp extra_applications(:dev), do: [:wx, :observer]
-  defp extra_applications(_), do: []
+  defp extra_applications(:dev), do: [:os_mon, :wx, :observer]
+  defp extra_applications(:test), do: []
+  defp extra_applications(_), do: [:os_mon]
 
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -101,7 +102,10 @@ defmodule Sequin.MixProject do
       {:gnat, "~> 1.9"},
       {:amqp, "~> 4.1"},
       {:amqp_client, "~> 4.2"},
-      {:brod, "~> 4.3"},
+      {:brod, "~> 4.5"},
+      {:lz4b, "~> 0.0.13"},
+      {:snappyer, "~> 1.2"},
+      {:ezstd, "~> 1.1"},
 
       # Caching and State Management
       {:con_cache, "~> 1.1"},

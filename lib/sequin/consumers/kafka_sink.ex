@@ -25,6 +25,7 @@ defmodule Sequin.Consumers.KafkaSink do
     field :aws_secret_access_key, EncryptedField
     field :connection_id, :string
     field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
+    field :compression, Ecto.Enum, values: [:none, :gzip, :snappy, :lz4, :zstd], default: :none
   end
 
   def changeset(struct, params) do
@@ -39,7 +40,8 @@ defmodule Sequin.Consumers.KafkaSink do
       :aws_region,
       :aws_access_key_id,
       :aws_secret_access_key,
-      :routing_mode
+      :routing_mode,
+      :compression
     ])
     |> validate_required([:hosts, :tls])
     |> validate_routing()
@@ -177,7 +179,11 @@ defmodule Sequin.Consumers.KafkaSink do
     |> maybe_add_ssl(sink)
     |> Keyword.put(:query_api_versions, true)
     |> Keyword.put(:auto_start_producers, true)
+    |> Keyword.put(:default_producer_config, compression: brod_compression(sink.compression))
   end
+
+  defp brod_compression(:none), do: :no_compression
+  defp brod_compression(other), do: other
 
   # Add SASL authentication if username/password are configured
   defp maybe_add_sasl(config, %{sasl_mechanism: :aws_msk_iam} = sink) do

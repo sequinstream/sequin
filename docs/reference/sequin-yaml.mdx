@@ -363,6 +363,7 @@ destination:
   username: "kafka-user"        # Optional, for SASL authentication
   password: "kafka-pass"        # Optional, for SASL authentication
   sasl_mechanism: "plain"       # Optional: plain, scram_sha_256, scram_sha_512
+  compression: "lz4"            # Optional: none (default), gzip, snappy, lz4, zstd
   batch_size: 50                # Optional, messages per batch
 ```
 

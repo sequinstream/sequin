@@ -84,17 +84,17 @@ config :sequin, Sequin.Runtime.HttpPushSqsPipeline,
 config :sequin, Sequin.Runtime.SlotProcessorServer,
   max_accumulated_bytes: ConfigParser.replication_flush_max_accumulated_bytes(env_vars),
   max_accumulated_messages: ConfigParser.replication_flush_max_accumulated_messages(env_vars),
+  # ## Using releases
+  #
+  # If you use `mix release`, you need to explicitly enable the server
+  # by passing the PHX_SERVER=true when you start it:
+  #
+  #     PHX_SERVER=true bin/sequin start
+  #
+  # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
+  # script that automatically sets the env var above.
   max_accumulated_messages_time_ms: ConfigParser.replication_flush_max_accumulated_time_ms(env_vars)
 
-# ## Using releases
-#
-# If you use `mix release`, you need to explicitly enable the server
-# by passing the PHX_SERVER=true when you start it:
-#
-#     PHX_SERVER=true bin/sequin start
-#
-# Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
-# script that automatically sets the env var above.
 if System.get_env("PHX_SERVER") do
   config :sequin, SequinWeb.Endpoint, server: true
   config :sequin, SequinWeb.MetricsEndpoint, server: true

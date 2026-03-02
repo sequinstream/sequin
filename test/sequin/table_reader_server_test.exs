@@ -23,6 +23,8 @@ defmodule Sequin.Runtime.TableReaderServerTest do
   alias Sequin.Runtime.TableReaderServer
   alias Sequin.TestSupport.Models.CharacterDetailed
 
+  @moduletag :capture_log
+
   @task_sup_name Module.concat(__MODULE__, TaskSupervisor)
 
   setup do

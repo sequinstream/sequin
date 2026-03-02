@@ -53,6 +53,29 @@
           >
         </div>
       </div>
+
+      <div>
+        <span class="text-sm text-muted-foreground">Compression</span>
+        <div class="mt-2">
+          <span
+            class="font-mono bg-slate-50 py-1 px-2 border border-slate-100 rounded-md whitespace-nowrap"
+          >
+            {#if consumer.sink.compression === "none"}
+              None
+            {:else if consumer.sink.compression === "gzip"}
+              Gzip
+            {:else if consumer.sink.compression === "snappy"}
+              Snappy
+            {:else if consumer.sink.compression === "lz4"}
+              LZ4
+            {:else if consumer.sink.compression === "zstd"}
+              Zstd
+            {:else}
+              {consumer.sink.compression}
+            {/if}
+          </span>
+        </div>
+      </div>
     </div>
   </CardContent>
 </Card>

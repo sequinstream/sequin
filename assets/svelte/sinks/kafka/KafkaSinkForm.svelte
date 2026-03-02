@@ -236,6 +236,30 @@
       </p>
     </div>
 
+    <!-- Producer Compression -->
+    <div class="space-y-2">
+      <Label for="compression">Compression</Label>
+      <select
+        id="compression"
+        bind:value={form.sink.compression}
+        class="block w-full border border-gray-300 rounded-md p-2"
+      >
+        <option value="none">None</option>
+        <option value="gzip">Gzip</option>
+        <option value="snappy">Snappy</option>
+        <option value="lz4">LZ4</option>
+        <option value="zstd">Zstd</option>
+      </select>
+      <p class="text-sm text-muted-foreground">
+        Compression algorithm for Kafka producer messages.
+      </p>
+      {#if errors.sink?.compression}
+        <p class="text-destructive text-sm">
+          {errors.sink.compression}
+        </p>
+      {/if}
+    </div>
+
     <!-- TLS Switch -->
     <div class="space-y-2">
       <div class="flex items-center gap-2">

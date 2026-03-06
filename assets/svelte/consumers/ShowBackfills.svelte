@@ -334,7 +334,8 @@
               <span class="text-sm text-gray-900">Partial</span>
             </div>
             <div class="flex justify-between items-center">
-              <span class="text-sm font-medium text-gray-500">Sort Column:</span>
+              <span class="text-sm font-medium text-gray-500">Sort Column:</span
+              >
               <span class="text-sm text-gray-900"
                 >{selectedBackfill.sort_column_name}</span
               >

@@ -1619,6 +1619,7 @@ defmodule Sequin.Transforms do
   end
 
   # Helper to parse auth_type
+  defp parse_auth_type("none"), do: :none
   defp parse_auth_type("api_key"), do: :api_key
   defp parse_auth_type("basic"), do: :basic
   defp parse_auth_type("bearer"), do: :bearer

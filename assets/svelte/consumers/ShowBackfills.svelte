@@ -328,6 +328,29 @@
               >{selectedBackfill.table_name}</span
             >
           </div>
+          {#if selectedBackfill.sort_column_name}
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-500">Type:</span>
+              <span class="text-sm text-gray-900">Partial</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-500">Sort Column:</span
+              >
+              <span class="text-sm text-gray-900"
+                >{selectedBackfill.sort_column_name}</span
+              >
+            </div>
+            {#if selectedBackfill.start_value != null}
+              <div class="flex justify-between items-center">
+                <span class="text-sm font-medium text-gray-500"
+                  >Start Value:</span
+                >
+                <span class="text-sm text-gray-900"
+                  >{selectedBackfill.start_value}</span
+                >
+              </div>
+            {/if}
+          {/if}
           {#if selectedBackfill.rows_initial_count !== null}
             <div class="flex justify-between items-center">
               <span class="text-sm font-medium text-gray-500">Total Rows:</span>

@@ -1493,6 +1493,36 @@ defmodule Sequin.YamlLoaderTest do
              } = consumer.sink
     end
 
+    test "creates elasticsearch sink consumer with auth_type none" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_and_db_yml()}
+
+               sinks:
+                 - name: "elasticsearch-no-auth"
+                   database: "test-db"
+                   destination:
+                     type: "elasticsearch"
+                     endpoint_url: "https://elasticsearch.example.com"
+                     index_name: "test-index"
+                     auth_type: "none"
+                     batch_size: 100
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+
+      assert consumer.name == "elasticsearch-no-auth"
+
+      assert %ElasticsearchSink{
+               type: :elasticsearch,
+               endpoint_url: "https://elasticsearch.example.com",
+               index_name: "test-index",
+               auth_type: :none,
+               auth_value: nil,
+               batch_size: 100
+             } = consumer.sink
+    end
+
     test "creates redis string sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""

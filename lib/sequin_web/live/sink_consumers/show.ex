@@ -1676,6 +1676,17 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     table_name = if table, do: "#{table.schema}.#{table.name}", else: "Unknown table"
 
+    sort_column_name =
+      if table && backfill.sort_column_attnum do
+        column = Enum.find(table.columns, &(&1.attnum == backfill.sort_column_attnum))
+        if column, do: column.name
+      end
+
+    start_value =
+      if sort_column_name && backfill.initial_min_cursor do
+        Map.get(backfill.initial_min_cursor, backfill.sort_column_attnum)
+      end
+
     %{
       id: backfill.id,
       state: backfill.state,
@@ -1689,7 +1700,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       failed_at: backfill.failed_at,
       updated_at: backfill.updated_at,
       progress: calculate_backfill_progress(backfill),
-      error: if(backfill.error, do: Exception.message(backfill.error))
+      error: if(backfill.error, do: Exception.message(backfill.error)),
+      sort_column_name: sort_column_name,
+      start_value: start_value
     }
   end
 

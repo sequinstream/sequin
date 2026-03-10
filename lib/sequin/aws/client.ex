@@ -12,6 +12,7 @@ defmodule Sequin.Aws.Client do
 
   @behaviour Sequin.Aws
 
+  alias Sequin.Aws.IrsaCredentials
   alias Sequin.Error
 
   require Logger
@@ -34,6 +35,15 @@ defmodule Sequin.Aws.Client do
   end
 
   defp get_credentials do
+    # IRSA (Kubernetes/EKS) takes priority if available
+    if IrsaCredentials.available?() do
+      IrsaCredentials.get_credentials()
+    else
+      get_credentials_from_metadata()
+    end
+  end
+
+  defp get_credentials_from_metadata do
     case Application.ensure_all_started(:aws_credentials) do
       {:ok, _} ->
         case :aws_credentials.get_credentials() do

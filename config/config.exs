@@ -12,8 +12,10 @@ sequin_stream_schema = "sequin_streams"
 
 config :esbuild, :version, "0.17.11"
 
-# Used by broadway_sqs
-config :ex_aws, http_client: ExAws.Request.Req
+# Used by broadway_sqs and IRSA credential provider
+config :ex_aws,
+  http_client: ExAws.Request.Req,
+  json_codec: Jason
 
 config :logger, :console,
   format: {Sequin.ConsoleLogger, :format},

@@ -32,6 +32,8 @@ defmodule Sequin.Databases.PostgresDatabase do
              :password,
              :ipv6,
              :use_local_tunnel,
+             :use_iam_auth,
+             :iam_region,
              :pg_major_version
            ]}
   @derive {Inspect, except: [:tables, :password]}
@@ -50,6 +52,8 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :tables_refreshed_at, :utc_datetime
     field :ipv6, :boolean, default: false
     field :use_local_tunnel, :boolean, default: false
+    field :use_iam_auth, :boolean, default: false
+    field :iam_region, :string
     field :annotations, :map, default: %{}
     field :pg_major_version, :integer
 
@@ -83,10 +87,12 @@ defmodule Sequin.Databases.PostgresDatabase do
       :username,
       :ipv6,
       :use_local_tunnel,
+      :use_iam_auth,
+      :iam_region,
       :annotations,
       :pg_major_version
     ])
-    |> validate_required([:hostname, :database, :username, :password, :name])
+    |> validate_iam_auth_or_password()
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> validate_number(:pool_size, greater_than_or_equal_to: 1)
     |> validate_not_supabase_pooled()
@@ -100,6 +106,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     |> Sequin.Changeset.validate_name()
     |> foreign_key_constraint(:account_id, name: "postgres_databases_account_id_fkey")
     |> Sequin.Changeset.annotations_check_constraint()
+    |> validate_iam_cloud_mode_restrictions()
   end
 
   def create_changeset(pd, attrs) do
@@ -108,6 +115,34 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   def update_changeset(pd, attrs) do
     changeset(pd, attrs)
+  end
+
+  defp validate_iam_auth_or_password(changeset) do
+    use_iam_auth = get_field(changeset, :use_iam_auth)
+
+    if use_iam_auth do
+      # When using IAM auth, password is not required but region and SSL are
+      changeset
+      |> validate_required([:hostname, :database, :username, :name, :iam_region])
+      |> put_change(:ssl, true)
+    else
+      validate_required(changeset, [:hostname, :database, :username, :password, :name])
+    end
+  end
+
+  defp validate_iam_cloud_mode_restrictions(changeset) do
+    self_hosted? = Sequin.Config.self_hosted?()
+    use_iam_auth? = get_field(changeset, :use_iam_auth)
+
+    if not self_hosted? and use_iam_auth? do
+      add_error(
+        changeset,
+        :use_iam_auth,
+        "IAM authentication is not supported in Sequin Cloud. Please use password authentication instead."
+      )
+    else
+      changeset
+    end
   end
 
   defp validate_not_supabase_pooled(%Ecto.Changeset{valid?: false} = changeset), do: changeset
@@ -171,9 +206,10 @@ defmodule Sequin.Databases.PostgresDatabase do
   end
 
   def to_postgrex_opts(%PostgresDatabase{} = pd) do
+    pd_resolved = with_local_tunnel(pd)
+
     opts =
-      pd
-      |> with_local_tunnel()
+      pd_resolved
       |> Sequin.Map.from_ecto()
       |> Map.take([
         :database,
@@ -211,11 +247,55 @@ defmodule Sequin.Databases.PostgresDatabase do
 
     opts = Keyword.put(opts, :ssl, ssl)
 
-    if pd.ipv6 do
-      Keyword.put(opts, :socket_options, [:inet6])
+    opts =
+      if pd.ipv6 do
+        Keyword.put(opts, :socket_options, [:inet6])
+      else
+        opts
+      end
+
+    if pd.use_iam_auth do
+      add_iam_auth_configure(opts, pd_resolved)
     else
       opts
     end
+  end
+
+  # Adds a :configure callback that generates a fresh RDS IAM token before each connection.
+  # This ensures tokens are always fresh since they expire after 15 minutes.
+  defp add_iam_auth_configure(opts, pd) do
+    hostname = pd.hostname
+    port = pd.port
+    username = pd.username
+    region = pd.iam_region
+
+    configure_fn = fn opts ->
+      case Sequin.Aws.get_client(region) do
+        {:ok, client} ->
+          credentials = %{
+            access_key_id: client.access_key_id,
+            secret_access_key: client.secret_access_key,
+            token: Map.get(client, :session_token)
+          }
+
+          case Sequin.Aws.RdsToken.generate(hostname, port, username, credentials, region) do
+            {:ok, token} ->
+              {:ok, Keyword.put(opts, :password, token)}
+
+            {:error, reason} ->
+              Logger.error("Failed to generate RDS IAM token: #{inspect(reason)}")
+              {:error, reason}
+          end
+
+        {:error, reason} ->
+          Logger.error("Failed to get AWS credentials for RDS IAM auth: #{inspect(reason)}")
+          {:error, reason}
+      end
+    end
+
+    opts
+    |> Keyword.delete(:password)
+    |> Keyword.put(:configure, configure_fn)
   end
 
   def to_protocol_opts(%PostgresDatabase{} = pd) do

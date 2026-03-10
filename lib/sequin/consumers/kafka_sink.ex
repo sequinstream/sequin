@@ -9,7 +9,7 @@ defmodule Sequin.Consumers.KafkaSink do
   alias Sequin.Encrypted.Field, as: EncryptedField
   alias Sequin.Sinks.Kafka.AwsMskIam
 
-  @derive {Jason.Encoder, only: [:hosts, :topic]}
+  @derive {Jason.Encoder, only: [:hosts, :topic, :use_task_role]}
   @derive {Inspect, except: [:password, :aws_secret_access_key]}
   @primary_key false
   typed_embedded_schema do
@@ -23,6 +23,7 @@ defmodule Sequin.Consumers.KafkaSink do
     field :aws_region, :string
     field :aws_access_key_id, :string
     field :aws_secret_access_key, EncryptedField
+    field :use_task_role, :boolean, default: false
     field :connection_id, :string
     field :routing_mode, Ecto.Enum, values: [:dynamic, :static]
     field :compression, Ecto.Enum, values: [:none, :gzip, :snappy, :lz4, :zstd], default: :none
@@ -40,6 +41,7 @@ defmodule Sequin.Consumers.KafkaSink do
       :aws_region,
       :aws_access_key_id,
       :aws_secret_access_key,
+      :use_task_role,
       :routing_mode,
       :compression
     ])
@@ -48,6 +50,7 @@ defmodule Sequin.Consumers.KafkaSink do
     |> validate_length(:topic, max: 255)
     |> validate_hosts()
     |> validate_sasl_credentials()
+    |> validate_cloud_mode_restrictions()
     |> put_new_connection_id()
   end
 
@@ -100,12 +103,27 @@ defmodule Sequin.Consumers.KafkaSink do
     sasl_mechanism = get_field(changeset, :sasl_mechanism)
     username = get_field(changeset, :username)
     password = get_field(changeset, :password)
+    use_task_role = get_field(changeset, :use_task_role)
 
     cond do
       sasl_mechanism in [:plain, :scram_sha_256, :scram_sha_512] ->
         validate_required(changeset, [:username, :password],
           message: "is required when SASL Mechanism is #{sasl_mechanism}"
         )
+
+      sasl_mechanism == :aws_msk_iam and use_task_role ->
+        # When using task role, only region is required — credentials come from IRSA/metadata
+        changeset =
+          changeset
+          |> validate_required([:aws_region], message: "is required when SASL Mechanism is #{sasl_mechanism}")
+          |> put_change(:aws_access_key_id, nil)
+          |> put_change(:aws_secret_access_key, nil)
+
+        if get_field(changeset, :tls) do
+          changeset
+        else
+          add_error(changeset, :tls, "is required when SASL Mechanism is #{sasl_mechanism}")
+        end
 
       sasl_mechanism == :aws_msk_iam ->
         changeset =
@@ -124,6 +142,21 @@ defmodule Sequin.Consumers.KafkaSink do
 
       true ->
         changeset
+    end
+  end
+
+  defp validate_cloud_mode_restrictions(changeset) do
+    self_hosted? = Sequin.Config.self_hosted?()
+    use_task_role? = get_field(changeset, :use_task_role)
+
+    if not self_hosted? and use_task_role? do
+      add_error(
+        changeset,
+        :use_task_role,
+        "Task role credentials are not supported in Sequin Cloud. Please use explicit credentials instead."
+      )
+    else
+      changeset
     end
   end
 
@@ -186,6 +219,14 @@ defmodule Sequin.Consumers.KafkaSink do
   defp brod_compression(other), do: other
 
   # Add SASL authentication if username/password are configured
+  defp maybe_add_sasl(config, %{sasl_mechanism: :aws_msk_iam, use_task_role: true} = sink) do
+    Keyword.put(
+      config,
+      :sasl,
+      {:callback, AwsMskIam.Auth, {:AWS_MSK_IAM, :dynamic, sink.aws_region}}
+    )
+  end
+
   defp maybe_add_sasl(config, %{sasl_mechanism: :aws_msk_iam} = sink) do
     Keyword.put(
       config,

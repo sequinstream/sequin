@@ -76,6 +76,7 @@ defmodule Sequin.Application do
     Sequin.Redis.connect_cluster()
 
     [
+      Sequin.Aws.IrsaCredentials,
       Sequin.Repo,
       Sequin.Vault,
       Sequin.PubSub.child_spec(),

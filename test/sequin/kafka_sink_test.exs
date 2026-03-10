@@ -1,7 +1,8 @@
 defmodule Sequin.Consumers.KafkaSinkTest do
-  use ExUnit.Case, async: true
+  use Sequin.Case, async: true
 
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Sinks.Kafka.AwsMskIam.Auth
 
   describe "kafka_url/2" do
     test "generates basic kafka URL without authentication" do
@@ -215,14 +216,104 @@ defmodule Sequin.Consumers.KafkaSinkTest do
 
       refute :topic in changeset.changes
     end
+
+    test "validates AWS MSK IAM with use_task_role requires only region" do
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: true,
+          sasl_mechanism: :aws_msk_iam,
+          use_task_role: true,
+          aws_region: "us-east-1",
+          routing_mode: :static
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :aws_access_key_id) == nil
+      assert Ecto.Changeset.get_field(changeset, :aws_secret_access_key) == nil
+    end
+
+    test "validates AWS MSK IAM with use_task_role still requires region" do
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: true,
+          sasl_mechanism: :aws_msk_iam,
+          use_task_role: true,
+          routing_mode: :static
+        })
+
+      refute changeset.valid?
+      assert "is required when SASL Mechanism is aws_msk_iam" in errors_on(changeset).aws_region
+    end
+
+    test "validates AWS MSK IAM with use_task_role still requires TLS" do
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: false,
+          sasl_mechanism: :aws_msk_iam,
+          use_task_role: true,
+          aws_region: "us-east-1",
+          routing_mode: :static
+        })
+
+      refute changeset.valid?
+      assert "is required when SASL Mechanism is aws_msk_iam" in errors_on(changeset).tls
+    end
+
+    test "validates AWS MSK IAM without use_task_role requires explicit credentials" do
+      changeset =
+        KafkaSink.changeset(%KafkaSink{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: true,
+          sasl_mechanism: :aws_msk_iam,
+          use_task_role: false,
+          aws_region: "us-east-1",
+          routing_mode: :static
+        })
+
+      refute changeset.valid?
+      assert "is required when SASL Mechanism is aws_msk_iam" in errors_on(changeset).aws_access_key_id
+      assert "is required when SASL Mechanism is aws_msk_iam" in errors_on(changeset).aws_secret_access_key
+    end
   end
 
-  # Helper function to extract error messages
-  defp errors_on(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
-        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
-      end)
-    end)
+  describe "to_brod_config/1" do
+    test "uses dynamic SASL when use_task_role is true" do
+      sink = %KafkaSink{
+        hosts: "localhost:9092",
+        topic: "test-topic",
+        tls: true,
+        sasl_mechanism: :aws_msk_iam,
+        use_task_role: true,
+        aws_region: "us-east-1"
+      }
+
+      config = KafkaSink.to_brod_config(sink)
+      assert {:callback, Auth, {:AWS_MSK_IAM, :dynamic, "us-east-1"}} = config[:sasl]
+    end
+
+    test "uses static SASL credentials when use_task_role is false" do
+      sink = %KafkaSink{
+        hosts: "localhost:9092",
+        topic: "test-topic",
+        tls: true,
+        sasl_mechanism: :aws_msk_iam,
+        use_task_role: false,
+        aws_access_key_id: "AKIATEST",
+        aws_secret_access_key: "secret",
+        aws_region: "us-east-1"
+      }
+
+      config = KafkaSink.to_brod_config(sink)
+
+      assert {:callback, Auth, {:AWS_MSK_IAM, "AKIATEST", "secret", "us-east-1"}} =
+               config[:sasl]
+    end
   end
 end

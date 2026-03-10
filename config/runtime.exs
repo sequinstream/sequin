@@ -111,6 +111,13 @@ if config_env() == :prod and self_hosted do
 
   backfill_max_pending_messages = ConfigParser.backfill_max_pending_messages(env_vars)
 
+  pg_iam_auth? = System.get_env("PG_IAM_AUTH") in ~w(true 1)
+  pg_iam_region = System.get_env("PG_IAM_REGION")
+
+  if pg_iam_auth? and is_nil(pg_iam_region) do
+    raise "PG_IAM_REGION is required when PG_IAM_AUTH is enabled"
+  end
+
   database_url =
     case System.get_env("PG_URL") do
       nil ->
@@ -120,14 +127,30 @@ if config_env() == :prod and self_hosted do
         username = System.get_env("PG_USERNAME")
         password = System.get_env("PG_PASSWORD")
 
-        if Enum.all?([hostname, database, port, username, password], &(not is_nil(&1))) do
-          "postgres://#{username}:#{password}@#{hostname}:#{port}/#{database}"
+        # When using IAM auth, password is not required — a token is generated at connection time
+        required_vars = [hostname, database, port, username]
+
+        if pg_iam_auth? do
+          if Enum.all?(required_vars, &(not is_nil(&1))) do
+            # Use a placeholder password in the URL; it will be replaced by the IAM token
+            "postgres://#{username}:iam-placeholder@#{hostname}:#{port}/#{database}"
+          else
+            raise """
+            Missing PostgreSQL connection information.
+            When PG_IAM_AUTH is enabled, provide either PG_URL or all of the following:
+            PG_HOSTNAME, PG_DATABASE, PG_PORT, PG_USERNAME
+            """
+          end
         else
-          raise """
-          Missing PostgreSQL connection information.
-          Please provide either PG_URL or all of the following environment variables:
-          PG_HOSTNAME, PG_DATABASE, PG_PORT, PG_USERNAME, PG_PASSWORD
-          """
+          if Enum.all?([password | required_vars], &(not is_nil(&1))) do
+            "postgres://#{username}:#{password}@#{hostname}:#{port}/#{database}"
+          else
+            raise """
+            Missing PostgreSQL connection information.
+            Please provide either PG_URL or all of the following environment variables:
+            PG_HOSTNAME, PG_DATABASE, PG_PORT, PG_USERNAME, PG_PASSWORD
+            """
+          end
         end
 
       url ->
@@ -163,17 +186,27 @@ if config_env() == :prod and self_hosted do
     :ok
   end
 
+  repo_opts = [
+    ssl: if(pg_iam_auth?, do: [verify: :verify_none], else: repo_ssl),
+    pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "10")),
+    url: database_url,
+    socket_options: ConfigParser.ecto_socket_opts(env_vars)
+  ]
+
+  repo_opts =
+    if pg_iam_auth? do
+      Keyword.put(repo_opts, :configure, {Sequin.Aws.RepoIamAuth, :configure, [pg_iam_region]})
+    else
+      repo_opts
+    end
+
   config :sequin, Sequin.Posthog,
     req_opts: [base_url: "https://us.i.posthog.com"],
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
     frontend_api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
     is_disabled: System.get_env("SEQUIN_TELEMETRY_DISABLED") in ~w(true 1)
 
-  config :sequin, Sequin.Repo,
-    ssl: repo_ssl,
-    pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "10")),
-    url: database_url,
-    socket_options: ConfigParser.ecto_socket_opts(env_vars)
+  config :sequin, Sequin.Repo, repo_opts
 
   config :sequin, SequinWeb.Endpoint,
     # `url` is used for configuring links in the console. So it corresponds to the *external*

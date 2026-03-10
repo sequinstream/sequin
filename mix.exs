@@ -73,6 +73,9 @@ defmodule Sequin.MixProject do
       {:aws_credentials, "~> 1.0.0", runtime: false},
       {:aws_rds_castore, "~> 1.2.0"},
       {:aws_signature, "~> 0.3.2"},
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_sts, "~> 2.3"},
+      {:sweet_xml, "~> 0.7"},
 
       # Monitoring and Observability
       {:telemetry_metrics, "~> 1.0"},

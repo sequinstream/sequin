@@ -97,6 +97,42 @@ After setup, Sequin will stream new changes to the sink as they occur in real-ti
 
 Sequin comes with a web console/UI for configuration and monitoring. You can also configure Sequin as code using [YAML config files](https://sequinstream.com/docs/reference/sequin-yaml) and our [Management API](https://sequinstream.com/docs/management-api/introduction).
 
+## AWS IAM authentication
+
+When running on AWS (EKS, ECS, or EC2), Sequin supports IAM-based authentication so you don't need to manage long-lived AWS credentials.
+
+### IRSA (IAM Roles for Service Accounts)
+
+For EKS deployments, Sequin natively supports [IRSA](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html). When the `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE` environment variables are present (injected automatically by EKS), Sequin will use them to obtain temporary credentials via STS `AssumeRoleWithWebIdentity`. Credentials are refreshed automatically before expiry.
+
+ECS task roles and EC2 instance profiles are also supported.
+
+### Sinks
+
+AWS sinks (SQS, SNS, Kinesis, and Kafka via MSK IAM) support a **"Use task role"** toggle. When enabled, the sink uses IRSA or task role credentials instead of explicit access keys. Configure this in the web console or via YAML:
+
+```yaml
+sinks:
+  - type: sqs
+    queue_url: https://sqs.us-east-1.amazonaws.com/123456789012/my-queue
+    use_task_role: true
+```
+
+### Source databases (RDS)
+
+Postgres source databases hosted on RDS can use [IAM database authentication](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html) instead of a static password. Enable `use_iam_auth` on the database configuration and provide the `iam_region`. Sequin will generate short-lived auth tokens automatically.
+
+### Sequin's internal database
+
+Sequin's own internal Postgres database (used for configuration and state) can also use RDS IAM auth. Set these environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `PG_IAM_AUTH=true` | Enable IAM auth for Sequin's internal database |
+| `PG_IAM_REGION` | AWS region of the RDS instance (required when `PG_IAM_AUTH` is enabled) |
+
+When enabled, `PG_PASSWORD` is no longer required. SSL is enforced automatically.
+
 ## Why Sequin
 
 We all know Postgres is great for storing and querying data. But what about when you need to stream changes to other systems?

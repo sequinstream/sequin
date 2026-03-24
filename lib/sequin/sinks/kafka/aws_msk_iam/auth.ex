@@ -44,6 +44,27 @@ defmodule Sequin.Sinks.Kafka.AwsMskIam.Auth do
     {:error, "AWS Region is empty"}
   end
 
+  # Dynamic credential resolution via IRSA/task role
+  def auth(host, sock, mod, client_id, timeout, {:AWS_MSK_IAM = _mechanism, :dynamic, aws_region} = _sasl_opts) do
+    case Sequin.Aws.get_client(aws_region) do
+      {:ok, client} ->
+        access_key_id = client.access_key_id
+        secret_access_key = client.secret_access_key
+
+        auth(
+          host,
+          sock,
+          mod,
+          client_id,
+          timeout,
+          {:AWS_MSK_IAM, access_key_id, secret_access_key, aws_region}
+        )
+
+      {:error, reason} ->
+        {:error, "Failed to resolve dynamic AWS credentials: #{inspect(reason)}"}
+    end
+  end
+
   # The following code is based on the implmentation of SASL handshake implementation from kafka_protocol Erlang library
   # Ref: https://github.com/kafka4beam/kafka_protocol/blob/master/src/kpro_sasl.erl
   @impl true

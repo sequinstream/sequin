@@ -5,8 +5,9 @@ defmodule Sequin.MutexOwner do
   If it ever loses the mutex (unexpected - it should be touching the mutex before it expires), it crashes.
 
   If Redis becomes temporarily unreachable while holding the mutex, the MutexOwner will retry
-  with backoff rather than immediately crashing. This handles transient Redis disconnections
-  (e.g. Redis/Dragonfly/KeyDB restarts) without cascading failures through MutexedSupervisor.
+  with exponential backoff indefinitely (capped at 1 hour) rather than crashing. This handles
+  Redis/Dragonfly/KeyDB restarts without cascading failures through MutexedSupervisor.
+  When Redis comes back, the MutexOwner re-acquires the mutex and resumes normal operation.
   """
   use GenStateMachine
 
@@ -14,7 +15,8 @@ defmodule Sequin.MutexOwner do
 
   require Logger
 
-  @max_redis_errors 5
+  # Retry backoff caps at 1 hour
+  @max_retry_interval to_timeout(hour: 1)
 
   defmodule State do
     @moduledoc """
@@ -73,21 +75,14 @@ defmodule Sequin.MutexOwner do
 
       :error ->
         errors = data.consecutive_redis_errors + 1
+        # Exponential backoff: lock_expiry * 2^errors, capped at 1 hour
+        retry_interval = min(data.lock_expiry * Integer.pow(2, errors), @max_retry_interval)
 
-        if errors >= @max_redis_errors do
-          Logger.error("MutexOwner giving up after #{errors} consecutive Redis errors for #{data.mutex_key}.")
+        Logger.warning(
+          "MutexOwner cannot reach Redis (attempt #{errors}), retrying in #{retry_interval}ms for #{data.mutex_key}."
+        )
 
-          {:stop, {:shutdown, :err_keeping_mutex}}
-        else
-          retry_interval = min(round(data.lock_expiry * 0.80), 1000 * errors)
-
-          Logger.warning(
-            "MutexOwner had trouble reaching Redis (attempt #{errors}/#{@max_redis_errors}), " <>
-              "retrying in #{retry_interval}ms for #{data.mutex_key}."
-          )
-
-          {:keep_state, %{data | consecutive_redis_errors: errors}, [{{:timeout, :keep_mutex}, retry_interval, nil}]}
-        end
+        {:keep_state, %{data | consecutive_redis_errors: errors}, [{{:timeout, :keep_mutex}, retry_interval, nil}]}
     end
   end
 

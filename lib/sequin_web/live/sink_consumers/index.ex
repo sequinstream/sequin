@@ -165,17 +165,23 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
   defp load_consumer_metrics(consumers) do
     Map.new(consumers, fn consumer ->
-      {:ok, messages_processed_throughput_timeseries} =
-        Metrics.get_consumer_messages_processed_throughput_timeseries_smoothed(
-          consumer,
-          @timeseries_window_count,
-          @smoothing_window
-        )
+      case Metrics.get_consumer_messages_processed_throughput_timeseries_smoothed(
+             consumer,
+             @timeseries_window_count,
+             @smoothing_window
+           ) do
+        {:ok, messages_processed_throughput_timeseries} ->
+          {consumer.id,
+           %{
+             messages_processed_throughput_timeseries: messages_processed_throughput_timeseries
+           }}
 
-      {consumer.id,
-       %{
-         messages_processed_throughput_timeseries: messages_processed_throughput_timeseries
-       }}
+        {:error, _} ->
+          {consumer.id,
+           %{
+             messages_processed_throughput_timeseries: List.duplicate(0, @timeseries_window_count)
+           }}
+      end
     end)
   end
 

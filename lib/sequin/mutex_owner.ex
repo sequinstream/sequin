@@ -3,6 +3,11 @@ defmodule Sequin.MutexOwner do
   This GenServer boots up and tries to acquire a mutex. When it does, it calls the `on_acquired` callback (supplied on boot.)
 
   If it ever loses the mutex (unexpected - it should be touching the mutex before it expires), it crashes.
+
+  If Redis becomes temporarily unreachable while holding the mutex, the MutexOwner will retry
+  with exponential backoff indefinitely (capped at 1 hour) rather than crashing. This handles
+  Redis/Dragonfly/KeyDB restarts without cascading failures through MutexedSupervisor.
+  When Redis comes back, the MutexOwner re-acquires the mutex and resumes normal operation.
   """
   use GenStateMachine
 
@@ -10,11 +15,15 @@ defmodule Sequin.MutexOwner do
 
   require Logger
 
+  # Retry backoff caps at 1 hour
+  @max_retry_interval to_timeout(hour: 1)
+
   defmodule State do
     @moduledoc """
     lock_expiry - how long to hold the mutex for when acquired
     mutex_key/mutex_token - see Sequin.Mutex
     on_acquired - callback that is called when the mutex is acquired
+    consecutive_redis_errors - count of consecutive Redis errors while holding mutex
     """
     use TypedStruct
 
@@ -24,6 +33,7 @@ defmodule Sequin.MutexOwner do
       field :mutex_token, String.t(), required: true
       field :on_acquired, (-> any()), required: true
       field :last_emitted_passive_log, DateTime.t(), default: ~U[2000-01-01 00:00:00Z]
+      field :consecutive_redis_errors, non_neg_integer(), default: 0
     end
 
     def new(opts) do
@@ -57,16 +67,22 @@ defmodule Sequin.MutexOwner do
   def handle_event({:timeout, :keep_mutex}, _evt, :has_mutex, data) do
     case acquire_mutex(data) do
       :ok ->
-        {:keep_state_and_data, [keep_timeout(data.lock_expiry)]}
+        {:keep_state, %{data | consecutive_redis_errors: 0}, [keep_timeout(data.lock_expiry)]}
 
       {:error, :mutex_taken} ->
         Logger.error("MutexOwner lost its mutex.")
-        {:shutdown, :lost_mutex}
+        {:stop, {:shutdown, :lost_mutex}}
 
       :error ->
-        Logger.error("MutexOwner had trouble reaching Redis.")
-        # Unable to reach redis? Die.
-        {:shutdown, :err_keeping_mutex}
+        errors = data.consecutive_redis_errors + 1
+        # Exponential backoff: lock_expiry * 2^errors, capped at 1 hour
+        retry_interval = min(data.lock_expiry * Integer.pow(2, errors), @max_retry_interval)
+
+        Logger.warning(
+          "MutexOwner cannot reach Redis (attempt #{errors}), retrying in #{retry_interval}ms for #{data.mutex_key}."
+        )
+
+        {:keep_state, %{data | consecutive_redis_errors: errors}, [{{:timeout, :keep_mutex}, retry_interval, nil}]}
     end
   end
 

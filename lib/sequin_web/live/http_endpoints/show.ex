@@ -99,7 +99,11 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   defp assign_metrics(socket) do
     http_endpoint = socket.assigns.http_endpoint
 
-    {:ok, throughput} = Metrics.get_http_endpoint_throughput(http_endpoint)
+    throughput =
+      case Metrics.get_http_endpoint_throughput(http_endpoint) do
+        {:ok, value} -> value
+        {:error, _} -> 0.0
+      end
 
     metrics = %{
       throughput: Float.round(throughput * 60, 1)

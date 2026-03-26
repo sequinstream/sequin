@@ -760,27 +760,39 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   @smoothing_window 5
   @timeseries_window_count 60
   defp load_metrics(consumer) do
-    {:ok, messages_processed_count} = Metrics.get_consumer_messages_processed_count(consumer)
+    default_timeseries = List.duplicate(0, @timeseries_window_count)
+
+    messages_processed_count =
+      case Metrics.get_consumer_messages_processed_count(consumer) do
+        {:ok, count} -> count
+        {:error, _} -> 0
+      end
 
     # Get 60 + @smoothing_window seconds of throughput data
-    {:ok, messages_processed_throughput_timeseries} =
-      Metrics.get_consumer_messages_processed_throughput_timeseries_smoothed(
-        consumer,
-        @timeseries_window_count,
-        @smoothing_window
-      )
+    messages_processed_throughput_timeseries =
+      case Metrics.get_consumer_messages_processed_throughput_timeseries_smoothed(
+             consumer,
+             @timeseries_window_count,
+             @smoothing_window
+           ) do
+        {:ok, timeseries} -> timeseries
+        {:error, _} -> default_timeseries
+      end
 
     messages_processed_throughput =
       messages_processed_throughput_timeseries
       |> List.last()
       |> Float.ceil()
 
-    {:ok, messages_processed_bytes_timeseries} =
-      Metrics.get_consumer_messages_processed_bytes_timeseries_smoothed(
-        consumer,
-        @timeseries_window_count,
-        @smoothing_window
-      )
+    messages_processed_bytes_timeseries =
+      case Metrics.get_consumer_messages_processed_bytes_timeseries_smoothed(
+             consumer,
+             @timeseries_window_count,
+             @smoothing_window
+           ) do
+        {:ok, timeseries} -> timeseries
+        {:error, _} -> default_timeseries
+      end
 
     messages_processed_bytes = List.last(messages_processed_bytes_timeseries)
 

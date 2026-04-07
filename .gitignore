@@ -72,3 +72,6 @@ test-config/
 typesense-data/
 meilisearch-data/
 .expert/
+
+# SST auto-generated type stubs (from monorepo builds that scan package.json dirs)
+sst-env.d.ts

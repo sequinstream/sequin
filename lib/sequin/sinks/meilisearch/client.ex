@@ -110,7 +110,15 @@ defmodule Sequin.Sinks.Meilisearch.Client do
         body: jsonl
       )
 
-    case Req.post(req) do
+    # :replace (default) uses POST = add or replace (full document replacement)
+    # :update uses PUT = add or update (partial merge — only overwrites fields present)
+    result =
+      case sink.document_mode do
+        :update -> Req.put(req)
+        _ -> Req.post(req)
+      end
+
+    case result do
       {:ok, %{body: %{"taskUid" => task_id}}} ->
         wait_for_task(sink, task_id)
 

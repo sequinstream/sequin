@@ -206,12 +206,19 @@ defmodule SequinWeb.UserAuth do
     if socket.assigns.current_user do
       {:cont, socket}
     else
-      socket =
-        socket
-        |> Phoenix.LiveView.put_flash(:toast, %{kind: :error, title: "Please log in to continue."})
-        |> Phoenix.LiveView.redirect(to: ~p"/login")
+      if auth_disabled?() do
+        case Accounts.get_first_user() do
+          nil -> {:cont, socket}
+          user -> {:cont, Phoenix.Component.assign(socket, :current_user, user)}
+        end
+      else
+        socket =
+          socket
+          |> Phoenix.LiveView.put_flash(:toast, %{kind: :error, title: "Please log in to continue."})
+          |> Phoenix.LiveView.redirect(to: ~p"/login")
 
-      {:halt, socket}
+        {:halt, socket}
+      end
     end
   end
 
@@ -279,20 +286,24 @@ defmodule SequinWeb.UserAuth do
     if conn.assigns[:current_user] do
       conn
     else
-      {title, redirect_to} =
-        case Keyword.get(opts, :unauthenticated_redirect, :login) do
-          :login ->
-            {"Please log in to continue.", ~p"/login"}
+      if auth_disabled?() do
+        auto_login_default_user(conn)
+      else
+        {title, redirect_to} =
+          case Keyword.get(opts, :unauthenticated_redirect, :login) do
+            :login ->
+              {"Please log in to continue.", ~p"/login"}
 
-          :register ->
-            {"Please register to continue.", ~p"/register"}
-        end
+            :register ->
+              {"Please register to continue.", ~p"/register"}
+          end
 
-      conn
-      |> put_flash(:toast, %{kind: :error, title: title})
-      |> maybe_store_return_to()
-      |> redirect(to: redirect_to)
-      |> halt()
+        conn
+        |> put_flash(:toast, %{kind: :error, title: title})
+        |> maybe_store_return_to()
+        |> redirect(to: redirect_to)
+        |> halt()
+      end
     end
   end
 
@@ -309,4 +320,23 @@ defmodule SequinWeb.UserAuth do
   defp maybe_store_return_to(conn), do: conn
 
   defp signed_in_path(_conn), do: ~p"/"
+
+  defp auth_disabled? do
+    System.get_env("AUTH_DISABLED") in ~w(true 1)
+  end
+
+  defp auto_login_default_user(conn) do
+    case Accounts.get_first_user() do
+      nil ->
+        conn
+
+      user ->
+        token = Accounts.generate_user_session_token(user)
+
+        conn
+        |> renew_session()
+        |> put_token_in_session(token)
+        |> assign(:current_user, user)
+    end
+  end
 end

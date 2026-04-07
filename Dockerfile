@@ -86,8 +86,8 @@ ENV RELEASE_VERSION=${RELEASE_VERSION}
 # Compile the release
 RUN mix compile
 
-# Ensure stacktraces we send to Sentry are complete
-RUN mix sentry.package_source_code
+# Ensure stacktraces we send to Sentry are complete (skip for self-hosted — no DSN)
+RUN if [ "$SELF_HOSTED" != "1" ]; then mix sentry.package_source_code; fi
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/

@@ -413,7 +413,8 @@ defmodule Sequin.Transforms do
       index_name: sink.index_name,
       primary_key: sink.primary_key,
       api_key: SensitiveValue.new(sink.api_key, show_sensitive),
-      timeout_seconds: sink.timeout_seconds
+      timeout_seconds: sink.timeout_seconds,
+      document_mode: if(sink.document_mode != :replace, do: to_string(sink.document_mode))
     })
   end
 
@@ -1305,7 +1306,8 @@ defmodule Sequin.Transforms do
        primary_key: attrs["primary_key"],
        api_key: attrs["api_key"],
        batch_size: attrs["batch_size"],
-       timeout_seconds: attrs["timeout_seconds"]
+       timeout_seconds: attrs["timeout_seconds"],
+       document_mode: attrs["document_mode"]
      }}
   end
 

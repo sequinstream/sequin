@@ -55,5 +55,21 @@ defmodule Sequin.Consumers.MeilisearchSinkTest do
 
       refute :index_name in changeset.changes
     end
+
+    test "defaults document_mode to :replace", %{valid_params: params} do
+      changeset = MeilisearchSink.changeset(%MeilisearchSink{}, params)
+      assert Ecto.Changeset.get_field(changeset, :document_mode) == :replace
+    end
+
+    test "accepts document_mode :update", %{valid_params: params} do
+      changeset = MeilisearchSink.changeset(%MeilisearchSink{}, Map.put(params, :document_mode, :update))
+      assert Sequin.Error.errors_on(changeset) == %{}
+      assert Ecto.Changeset.get_field(changeset, :document_mode) == :update
+    end
+
+    test "rejects invalid document_mode", %{valid_params: params} do
+      changeset = MeilisearchSink.changeset(%MeilisearchSink{}, Map.put(params, :document_mode, :invalid))
+      assert Sequin.Error.errors_on(changeset)[:document_mode] != nil
+    end
   end
 end

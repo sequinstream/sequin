@@ -67,6 +67,59 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
     end
   end
 
+  describe "import_documents/3 with document_mode: :update" do
+    @update_sink %MeilisearchSink{
+      type: :meilisearch,
+      endpoint_url: "http://127.0.0.1:7700",
+      index_name: "test",
+      primary_key: "id",
+      api_key: "token",
+      document_mode: :update
+    }
+
+    test "uses PUT when document_mode is :update" do
+      records = [SinkFactory.meilisearch_record()]
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "PUT"
+        assert conn.request_path == "/indexes/test/documents"
+
+        Req.Test.json(conn, %{"taskUid" => 1})
+      end)
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/tasks/1"
+
+        response_data = %{"status" => "succeeded"}
+        send_gzipped_response(conn, 200, response_data)
+      end)
+
+      assert :ok = Client.import_documents(@update_sink, "test", records)
+    end
+
+    test "uses POST when document_mode is :replace (default)" do
+      records = [SinkFactory.meilisearch_record()]
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "POST"
+        assert conn.request_path == "/indexes/test/documents"
+
+        Req.Test.json(conn, %{"taskUid" => 1})
+      end)
+
+      Req.Test.expect(Client, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/tasks/1"
+
+        response_data = %{"status" => "succeeded"}
+        send_gzipped_response(conn, 200, response_data)
+      end)
+
+      assert :ok = Client.import_documents(@sink, "test", records)
+    end
+  end
+
   describe "delete_documents/2" do
     test "successfully delete batch" do
       records = [SinkFactory.meilisearch_record(), SinkFactory.meilisearch_record()]

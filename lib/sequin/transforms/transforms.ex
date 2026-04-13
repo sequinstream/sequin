@@ -861,6 +861,15 @@ defmodule Sequin.Transforms do
               {:halt, {:error, Error.validation(summary: "batch_size must be a positive integer <= 1000")}}
           end
 
+        "batch_timeout_ms" ->
+          case value do
+            ms when is_integer(ms) and ms > 0 ->
+              {:cont, {:ok, Map.put(acc, :batch_timeout_ms, ms)}}
+
+            _ ->
+              {:halt, {:error, Error.validation(summary: "batch_timeout_ms must be a positive integer")}}
+          end
+
         "actions" ->
           {:cont, {:ok, Map.put(acc, :actions, value)}}
 

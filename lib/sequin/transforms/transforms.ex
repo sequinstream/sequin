@@ -1623,5 +1623,5 @@ defmodule Sequin.Transforms do
   defp parse_auth_type("api_key"), do: :api_key
   defp parse_auth_type("basic"), do: :basic
   defp parse_auth_type("bearer"), do: :bearer
-  defp parse_auth_type(nil), do: :api_key
+  defp parse_auth_type(nil), do: :none
 end

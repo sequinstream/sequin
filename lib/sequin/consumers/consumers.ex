@@ -187,6 +187,7 @@ defmodule Sequin.Consumers do
     |> Enum.reduce(Function.where_account_id(account_id), fn
       {:name, name}, query -> Function.where_name(query, name)
       {:id, id}, query -> Function.where_id(query, id)
+      {:id_or_name, id_or_name}, query -> Function.where_id_or_name(query, id_or_name)
     end)
     |> Repo.one()
     |> case do
@@ -229,10 +230,16 @@ defmodule Sequin.Consumers do
 
   def delete_function(account_id, id) do
     with {:ok, function} <- get_function_for_account(account_id, id) do
+      # Every column on sink_consumers that references functions(id). Constraint
+      # names follow the original column names (transform_id predates the
+      # transforms→functions rename and kept its FK name), so list each one
+      # explicitly rather than guessing.
       function
       |> Function.changeset(%{})
-      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_function_id_fkey")
+      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_transform_id_fkey")
       |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_routing_id_fkey")
+      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_filter_id_fkey")
+      |> Ecto.Changeset.foreign_key_constraint(:id, name: "sink_consumers_enrichment_id_fkey")
       |> Repo.delete()
     end
   end

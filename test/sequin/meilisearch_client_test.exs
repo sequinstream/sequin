@@ -339,12 +339,12 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
       assert error.details.task_id == 456
       assert error.details.last_status == "processing"
 
-      # Verify we made all 6 attempts (1 initial + 5 retries)
-      for i <- 0..5 do
+      # Verify we made all 11 attempts (1 initial + 10 retries)
+      for i <- 0..10 do
         assert_receive {:task_check, ^i}, 3_000
       end
 
-      refute_receive {:task_check, 6}, 100
+      refute_receive {:task_check, 11}, 100
     end
 
     test "wait_for_task handles task failure" do

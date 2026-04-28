@@ -27,7 +27,7 @@ defmodule Sequin.Sinks.Meilisearch.Client do
         url: "/tasks/#{task_id}",
         # We need to disable this if we use a custom retry that emits delays
         retry_delay: nil,
-        max_retries: 5,
+        max_retries: 10,
         retry: fn request, response_or_exception ->
           should_retry =
             case response_or_exception do

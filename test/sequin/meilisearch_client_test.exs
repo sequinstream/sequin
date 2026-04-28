@@ -305,7 +305,7 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
       assert_receive {:task_check, 3}, 2000
     end
 
-    test "wait_for_task times out after exhausting retries" do
+    test "wait_for_task times out after exhausting the timeout budget" do
       test_pid = self()
       call_count = :counters.new(1, [])
       records = [SinkFactory.meilisearch_record()]
@@ -339,7 +339,7 @@ defmodule Sequin.Sinks.Meilisearch.ClientTest do
       assert error.details.task_id == 456
       assert error.details.last_status == "processing"
 
-      # Verify we made all 6 attempts (1 initial + 5 retries)
+      # Verify we polled until the total timeout budget was exhausted.
       for i <- 0..5 do
         assert_receive {:task_check, ^i}, 3_000
       end

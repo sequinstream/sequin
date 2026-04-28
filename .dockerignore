@@ -1,0 +1,34 @@
+# 2026-04-28: Added to stop Sequin's Docker image from rebuilding on every
+# SST deploy. Root cause: SST regenerates `sst-env.d.ts` (and matching
+# subpackage versions) inside this directory on every `sst deploy`. The
+# files are tiny (~30 lines of TypeScript reference declarations) but they
+# CHANGE on every deploy, so docker.Image v4's content-hash check sees the
+# context as "changed" and rebuilds — burning ~4 minutes per ship.
+#
+# This .dockerignore excludes the regenerated files (Elixir doesn't need
+# them anyway) plus the standard build/dev cruft that bloats the build
+# context send.
+
+# SST-generated TypeScript declarations — regenerated every deploy
+**/sst-env.d.ts
+
+# Standard build / dev artifacts not needed inside the container
+**/node_modules
+**/_build
+**/deps
+**/.elixir_ls
+**/cover
+**/erl_crash.dump
+**/.git
+**/.gitignore
+**/.gitkeep
+**/.DS_Store
+**/*.log
+**/*.tmp
+**/tmp
+
+# Editor / IDE
+**/.vscode
+**/.idea
+**/.aider*
+**/CLAUDE.md

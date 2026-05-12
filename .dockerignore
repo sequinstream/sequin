@@ -1,18 +1,56 @@
-# 2026-04-28: Added to stop Sequin's Docker image from rebuilding on every
-# SST deploy. Root cause: SST regenerates `sst-env.d.ts` (and matching
-# subpackage versions) inside this directory on every `sst deploy`. The
-# files are tiny (~30 lines of TypeScript reference declarations) but they
-# CHANGE on every deploy, so docker.Image v4's content-hash check sees the
-# context as "changed" and rebuilds — burning ~4 minutes per ship.
+# 2026-05-11: Upgraded from blacklist to *whitelist*-style. The Dockerfile
+# (packages/sequin/Dockerfile) COPYs a very specific set of paths — every
+# other path in this directory ships across the SSH tunnel to Hetzner
+# on every deploy for zero benefit. Audit before the change:
 #
-# This .dockerignore excludes the regenerated files (Elixir doesn't need
-# them anyway) plus the standard build/dev cruft that bloats the build
-# context send.
+#   docs/         — 28MB of mostly markdown (only docs/snippets/
+#                   function-transform-snippet.mdx is actually COPYd)
+#   test/         — 1.5MB tests, never built into the prod image
+#   website/      — 216KB marketing site
+#   examples/     — 376KB usage examples
+#   cli/          — 384KB Go code; the Dockerfile builds the CLI from
+#                   `git clone` in a separate `cli-builder` stage, our
+#                   local copy is dead weight
+#   deployment/   — 268KB k8s/helm templates
+#   *.md root     — 12-32KB each, none referenced by build
+#
+# Stripping these cuts the build context from 39MB → ~9MB. Smaller
+# context means less time spent sending bytes over SSH, fewer files for
+# BuildKit to hash, and fewer paths where stat/mtime jitter can trick
+# the context hash into "different" on otherwise-identical content.
+#
+# Original 2026-04-28 fix (sst-env.d.ts + blacklist) is preserved
+# inside the explicit exclusions below.
 
-# SST-generated TypeScript declarations — regenerated every deploy
+# Exclude everything by default — whitelist below allows back what
+# Dockerfile actually uses
+*
+
+# ─── Whitelist: paths the Dockerfile COPYs ────────────────────────
+!.iex.exs
+!Dockerfile
+!mix.exs
+!mix.lock
+!config
+!lib
+!priv
+!assets
+!rel
+!scripts
+!docs
+
+# Subtree restrictions inside whitelisted dirs — exclude all then
+# allow back the single needed file.
+docs/*
+!docs/snippets
+docs/snippets/*
+!docs/snippets/function-transform-snippet.mdx
+scripts/*
+!scripts/start_commands.sh
+
+# ─── Re-blacklist common cruft under whitelisted dirs ─────────────
+# These supersede whitelist for transient / regenerated / dev-only files.
 **/sst-env.d.ts
-
-# Standard build / dev artifacts not needed inside the container
 **/node_modules
 **/_build
 **/deps

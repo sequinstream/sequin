@@ -870,6 +870,20 @@ defmodule Sequin.Transforms do
               {:halt, {:error, Error.validation(summary: "batch_timeout_ms must be a positive integer")}}
           end
 
+        # Per-sink memory cap, exposed in catchseo fork so the YAML can
+        # bump it for high-volume sinks (e.g. meilisearch-auctions during
+        # daily inventory-sync flood). Falls back to schema default (512
+        # MB in catchseo fork) when omitted. Validation matches the
+        # schema's `greater_than_or_equal_to: 128` rule.
+        "max_memory_mb" ->
+          case value do
+            mb when is_integer(mb) and mb >= 128 ->
+              {:cont, {:ok, Map.put(acc, :max_memory_mb, mb)}}
+
+            _ ->
+              {:halt, {:error, Error.validation(summary: "max_memory_mb must be an integer >= 128")}}
+          end
+
         "actions" ->
           {:cont, {:ok, Map.put(acc, :actions, value)}}
 

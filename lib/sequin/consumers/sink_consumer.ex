@@ -93,7 +93,15 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :batch_size, :integer, default: 1
     field :batch_timeout_ms, :integer, default: nil
     field :annotations, :map, default: %{}
-    field :max_memory_mb, :integer, default: 128
+    # Default bumped 128 → 512 on 2026-05-14 (catchseo fork). Companion
+    # to the @default_setting_max_messages bump in slot_message_store_state.ex.
+    # 128 MB × 0.8 = ~107 MB usable per sink was insufficient for our
+    # GoDaddy inventory-sync burst (100K rows × cascade triggers).
+    # 512 MB × 0.8 = ~409 MB per sink; with ~6 sinks max = ~2.5 GB worst
+    # case on the Sequin VM, fine for Hetzner. Existing sinks still keep
+    # whatever they were created with — this only affects new sinks or
+    # explicit DB updates.
+    field :max_memory_mb, :integer, default: 512
     field :partition_count, :integer, default: 1
     field :legacy_transform, Ecto.Enum, values: [:none, :record_only], default: :none
     field :timestamp_format, Ecto.Enum, values: [:iso8601, :unix_microsecond], default: :iso8601

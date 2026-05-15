@@ -15,17 +15,7 @@ defmodule Sequin.Runtime.SlotMessageStore.State do
   @type message :: ConsumerEvent.t()
   @type cursor_tuple :: {commit_lsn :: non_neg_integer(), commit_idx :: non_neg_integer()}
 
-  # Bumped from upstream 50_000 → 500_000 on 2026-05-14 (catchseo fork).
-  # Hit during daily GoDaddy inventory-sync upserts: 100K rows × cascade
-  # triggers = 300-400K WAL events per ingest cycle, easily flooding the
-  # 50K default. With the byte-level cap (`max_memory_bytes`, default
-  # 80% of consumer `max_memory_mb`) still in place as the real OOM
-  # backstop, raising the count cap is safe — memory is bounded
-  # independently. Symptom before bump: ~25 `Message count limit
-  # exceeded` errors/min from the SlotMessageStore during inventory-sync,
-  # forcing Sequin into discard-on-full mode and dropping CDC events
-  # mid-burst.
-  @default_setting_max_messages 500_000
+  @default_setting_max_messages 50_000
 
   typedstruct do
     field :consumer, SinkConsumer.t()

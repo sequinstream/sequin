@@ -11,14 +11,14 @@ ARG OTP_VERSION=28.3
 ARG DEBIAN_VERSION=trixie-20251208-slim
 ARG RELEASE_VERSION
 
-ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
+ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}@sha256:68e6d26c37a8f86b5ec6294cbbf034b9cab5268c7b4179f585f58a7b9c32e825"
 # Ensure Elixir installed on the runtime image for tooling purposes
-ARG RUNNER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
+ARG RUNNER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}@sha256:68e6d26c37a8f86b5ec6294cbbf034b9cab5268c7b4179f585f58a7b9c32e825"
 
 ARG SELF_HOSTED=1
 
 # ---- CLI Build Stage ----
-FROM golang:1.24.2-bullseye AS cli-builder
+FROM golang:1.24.2-bullseye@sha256:f50ff25f8331682b44c1582974eb9e620fcb08052fc6ed434f93ca24636fc4d6 AS cli-builder
 
 ARG SEQUIN_CLI_VERSION=0.13.1
 RUN git clone --depth 1 --branch v${SEQUIN_CLI_VERSION} https://github.com/sequinstream/sequin.git /tmp/sequin \

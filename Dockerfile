@@ -1,3 +1,11 @@
+# ADR-0059: built in GitHub Actions, consumed by digest. This image builds with
+# PACKAGE-DIR context (context: packages/sequin, set via the build workflow's
+# per-image matrix) — NOT repo-root — because (a) the COPYs below are
+# package-relative, and (b) packages/sequin/.dockerignore is a whitelist that
+# keeps the one needed docs/snippets file, whereas the repo-root .dockerignore
+# excludes packages/sequin/docs entirely. SELF_HOSTED defaults to 1 (this repo
+# always self-hosts; it was the only build-arg the old dockerbuild.Image passed)
+# so no workflow build-arg is needed.
 ARG ELIXIR_VERSION=1.19.4
 ARG OTP_VERSION=28.3
 ARG DEBIAN_VERSION=trixie-20251208-slim
@@ -7,7 +15,7 @@ ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-$
 # Ensure Elixir installed on the runtime image for tooling purposes
 ARG RUNNER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 
-ARG SELF_HOSTED=0
+ARG SELF_HOSTED=1
 
 # ---- CLI Build Stage ----
 FROM golang:1.24.2-bullseye AS cli-builder

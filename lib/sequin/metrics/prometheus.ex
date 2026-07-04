@@ -156,6 +156,12 @@ defmodule Sequin.Prometheus do
       labels: [:consumer_id, :consumer_name]
     )
 
+    Counter.declare(
+      name: :sequin_message_discard_count,
+      help: "Total messages permanently discarded (dead-lettered) after exhausting max_retry_count.",
+      labels: [:consumer_id, :consumer_name]
+    )
+
     Gauge.new(
       name: :sequin_messages_in_delivery,
       labels: [:consumer_id, :consumer_name],
@@ -319,6 +325,12 @@ defmodule Sequin.Prometheus do
           :ok
   def increment_message_deliver_failure(consumer_id, consumer_name, count \\ 1) do
     Counter.inc([name: :sequin_message_deliver_failure_count, labels: [consumer_id, consumer_name]], count)
+  end
+
+  @spec increment_message_discard_count(consumer_id :: String.t(), consumer_name :: String.t(), count :: number()) ::
+          :ok
+  def increment_message_discard_count(consumer_id, consumer_name, count \\ 1) do
+    Counter.inc([name: :sequin_message_discard_count, labels: [consumer_id, consumer_name]], count)
   end
 
   @spec observe_messages_ingested_latency(consumer_id :: String.t(), consumer_name :: String.t(), latency_ms :: number()) ::

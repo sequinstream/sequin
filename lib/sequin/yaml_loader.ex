@@ -372,6 +372,25 @@ defmodule Sequin.YamlLoader do
 
           database = Sequin.Repo.preload(database, :replication_slot)
 
+          # Re-introspect the live table list before sink validation. The stored
+          # struct's `.tables` cache is a snapshot from the last refresh; a config
+          # that references a table created since (e.g. by a migration in the same
+          # deploy) would otherwise fail find_table/2 at boot forever — the apply
+          # crashes before any background refresh can run (crash-loop observed
+          # live 2026-07-18 adding `ai_classification`).
+          database =
+            case Databases.update_tables(database) do
+              {:ok, refreshed} ->
+                refreshed
+
+              {:error, error} ->
+                Logger.warning(
+                  "Could not refresh tables for database '#{database.name}' before config apply: #{inspect(error)}"
+                )
+
+                database
+            end
+
           with {:ok, database_attrs} <- parse_database_update_attrs(db_params, database.replication_slot) do
             update_database(database, database_attrs)
           end

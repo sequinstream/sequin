@@ -26,7 +26,7 @@ RUN git clone --depth 1 --branch v${SEQUIN_CLI_VERSION} https://github.com/sequi
     && go build -o /sequin-cli
 
 # ---- Elixir Build Stage ----
-FROM ${BUILDER_IMAGE} AS builder
+FROM ${BUILDER_IMAGE} AS deps
 
 # Pass the SELF_HOSTED arg as an environment variable
 ARG SELF_HOSTED
@@ -66,6 +66,15 @@ RUN mkdir config
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
+
+# ---- stage boundary (CI cold-build fix, 2026-07-19) ----
+# `deps` above is the heavy, rarely-invalidated half (toolchain + node + hex
+# deps compile). CI builds and registry-caches it ALONE: a single-shot cold
+# build's scratch breaches the build node's disk-eviction floor, but each half
+# fits. `builder` inherits deps' ENV (MIX_ENV, LANG, ERL_FLAGS, SELF_HOSTED,
+# SENTRY_DSN) automatically; ARG does not inherit, but none is read below
+# except RELEASE_VERSION, which is re-declared where it was already.
+FROM deps AS builder
 
 COPY priv priv
 

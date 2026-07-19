@@ -762,6 +762,16 @@ defmodule Sequin.Runtime.SlotMessageStore do
     Sequin.ProcessMetrics.increment_throughput("messages_discarded", length(discarded_messages))
     Sequin.ProcessMetrics.gauge("message_count", map_size(state.messages))
 
+    if length(discarded_messages) > 0 do
+      Prometheus.increment_message_discard_count(state.consumer.id, state.consumer.name, length(discarded_messages))
+
+      Logger.warning(
+        "[SlotMessageStore] Permanently discarding #{length(discarded_messages)} message(s) after exhausting max_retry_count (consumer=#{state.consumer.name})",
+        consumer_id: state.consumer.id,
+        partition: state.partition
+      )
+    end
+
     with :ok <- handle_discarded_messages(state, discarded_messages),
          :ok <- upsert_messages(state, messages) do
       state = State.put_persisted_messages(state, messages)

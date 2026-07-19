@@ -5,7 +5,7 @@ defmodule Sequin.Consumers.MeilisearchSink do
 
   import Ecto.Changeset
 
-  @derive {Jason.Encoder, only: [:endpoint_url, :index_name, :primary_key]}
+  @derive {Jason.Encoder, only: [:endpoint_url, :index_name, :primary_key, :document_mode]}
   @derive {Inspect, except: [:api_key]}
 
   @primary_key false
@@ -18,6 +18,7 @@ defmodule Sequin.Consumers.MeilisearchSink do
     field(:batch_size, :integer, default: 100)
     field(:timeout_seconds, :integer, default: 5)
     field(:routing_mode, Ecto.Enum, values: [:dynamic, :static])
+    field(:document_mode, Ecto.Enum, values: [:replace, :update], default: :replace)
   end
 
   def changeset(struct, params) do
@@ -29,7 +30,8 @@ defmodule Sequin.Consumers.MeilisearchSink do
       :api_key,
       :batch_size,
       :timeout_seconds,
-      :routing_mode
+      :routing_mode,
+      :document_mode
     ])
     |> validate_required([:endpoint_url, :api_key])
     |> validate_routing()

@@ -1,16 +1,24 @@
+# ADR-0059: built in GitHub Actions, consumed by digest. This image builds with
+# PACKAGE-DIR context (context: packages/sequin, set via the build workflow's
+# per-image matrix) — NOT repo-root — because (a) the COPYs below are
+# package-relative, and (b) packages/sequin/.dockerignore is a whitelist that
+# keeps the one needed docs/snippets file, whereas the repo-root .dockerignore
+# excludes packages/sequin/docs entirely. SELF_HOSTED defaults to 1 (this repo
+# always self-hosts; it was the only build-arg the old dockerbuild.Image passed)
+# so no workflow build-arg is needed.
 ARG ELIXIR_VERSION=1.19.4
 ARG OTP_VERSION=28.3
 ARG DEBIAN_VERSION=trixie-20251208-slim
 ARG RELEASE_VERSION
 
-ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
+ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}@sha256:68e6d26c37a8f86b5ec6294cbbf034b9cab5268c7b4179f585f58a7b9c32e825"
 # Ensure Elixir installed on the runtime image for tooling purposes
-ARG RUNNER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
+ARG RUNNER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}@sha256:68e6d26c37a8f86b5ec6294cbbf034b9cab5268c7b4179f585f58a7b9c32e825"
 
-ARG SELF_HOSTED=0
+ARG SELF_HOSTED=1
 
 # ---- CLI Build Stage ----
-FROM golang:1.24.2-bullseye AS cli-builder
+FROM golang:1.24.2-bullseye@sha256:f50ff25f8331682b44c1582974eb9e620fcb08052fc6ed434f93ca24636fc4d6 AS cli-builder
 
 ARG SEQUIN_CLI_VERSION=0.13.1
 RUN git clone --depth 1 --branch v${SEQUIN_CLI_VERSION} https://github.com/sequinstream/sequin.git /tmp/sequin \
@@ -18,7 +26,7 @@ RUN git clone --depth 1 --branch v${SEQUIN_CLI_VERSION} https://github.com/sequi
     && go build -o /sequin-cli
 
 # ---- Elixir Build Stage ----
-FROM ${BUILDER_IMAGE} AS builder
+FROM ${BUILDER_IMAGE} AS deps
 
 # Pass the SELF_HOSTED arg as an environment variable
 ARG SELF_HOSTED
@@ -59,6 +67,15 @@ RUN mkdir config
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
+# ---- stage boundary (CI cold-build fix, 2026-07-19) ----
+# `deps` above is the heavy, rarely-invalidated half (toolchain + node + hex
+# deps compile). CI builds and registry-caches it ALONE: a single-shot cold
+# build's scratch breaches the build node's disk-eviction floor, but each half
+# fits. `builder` inherits deps' ENV (MIX_ENV, LANG, ERL_FLAGS, SELF_HOSTED,
+# SENTRY_DSN) automatically; ARG does not inherit, but none is read below
+# except RELEASE_VERSION, which is re-declared where it was already.
+FROM deps AS builder
+
 COPY priv priv
 
 COPY lib lib
@@ -86,8 +103,8 @@ ENV RELEASE_VERSION=${RELEASE_VERSION}
 # Compile the release
 RUN mix compile
 
-# Ensure stacktraces we send to Sentry are complete
-RUN mix sentry.package_source_code
+# Ensure stacktraces we send to Sentry are complete (skip for self-hosted — no DSN)
+RUN if [ "$SELF_HOSTED" != "1" ]; then mix sentry.package_source_code; fi
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/

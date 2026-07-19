@@ -97,6 +97,16 @@ defmodule Sequin.Accounts do
   """
   def get_user!(id), do: Repo.get!(User, id)
 
+  def get_first_user do
+    User
+    |> Ecto.Query.first()
+    |> Repo.one()
+    |> case do
+      nil -> nil
+      user -> Repo.preload(user, [:accounts, :accounts_users])
+    end
+  end
+
   def get_user_with_preloads!(user_id) do
     User
     |> Repo.get!(user_id)

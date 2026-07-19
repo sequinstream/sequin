@@ -8,8 +8,14 @@ import Config
 
 self_hosted = System.get_env("SELF_HOSTED", "0") in ~w(1 true)
 
+# Empty string DSN crashes Sentry — treat "" as nil for self-hosted builds
+sentry_dsn = case System.get_env("SENTRY_DSN") do
+  "" -> nil
+  dsn -> dsn
+end
+
 config :sentry,
-  dsn: System.get_env("SENTRY_DSN"),
+  dsn: sentry_dsn,
   release: System.get_env("RELEASE_VERSION")
 
 config :sequin, Sequin.ConsoleLogger, drop_metadata_keys: [:mfa]

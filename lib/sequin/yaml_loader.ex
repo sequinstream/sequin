@@ -727,6 +727,8 @@ defmodule Sequin.YamlLoader do
        ) do
     with {:ok, source_database} <- fetch_database(databases, source_db_name, :source_database),
          {:ok, destination_database} <- fetch_database(databases, dest_db_name, :destination_database),
+         {:ok, destination_database} <- ensure_table_cached(destination_database, dest_schema, dest_table),
+         {:ok, source_database} <- ensure_table_cached(source_database, source_schema, source_table),
          {:ok, destination_table} <-
            fetch_table(destination_database.tables, dest_schema, dest_table, :destination_table),
          {:ok, source_table_struct} <-
@@ -791,6 +793,22 @@ defmodule Sequin.YamlLoader do
     case Enum.find(tables, &(&1.schema == schema && &1.name == table_name)) do
       nil -> {:error, Error.not_found(entity: :table, params: %{schema: schema, name: table_name})}
       table -> {:ok, table}
+    end
+  end
+
+  # The cached `tables` can be stale during config apply (only refreshed on create
+  # and by a 6-hourly cron), so on a miss refresh once from the live database.
+  defp ensure_table_cached(%PostgresDatabase{} = database, schema, table_name) do
+    if Enum.any?(database.tables, &(&1.schema == schema && &1.name == table_name)) do
+      {:ok, database}
+    else
+      case Databases.update_tables(database) do
+        {:ok, refreshed} ->
+          {:ok, %{database | tables: refreshed.tables, tables_refreshed_at: refreshed.tables_refreshed_at}}
+
+        {:error, error} ->
+          {:error, error}
+      end
     end
   end
 

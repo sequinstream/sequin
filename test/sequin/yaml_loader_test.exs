@@ -188,6 +188,53 @@ defmodule Sequin.YamlLoaderTest do
     end
   end
 
+  describe "change_retentions" do
+    test "refreshes a stale table cache on miss during config apply" do
+      # First apply creates the database; create_db refreshes its table cache.
+      assert :ok = YamlLoader.apply_from_yml!(playground_yml())
+
+      [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
+
+      # Simulate a stale cache (as if the tables were created after the last
+      # refresh): clear the cached table list on the existing database record.
+      {:ok, _} = db |> PostgresDatabase.changeset(%{tables: []}) |> Repo.update()
+
+      # Applying a change_retention whose tables are absent from the stale cache
+      # must still succeed: the loader refreshes tables from the live database on a
+      # miss instead of failing the apply.
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               account:
+                 name: "Playground"
+
+               users:
+                 - email: "admin@sequinstream.com"
+                   password: "sequinpassword!"
+
+               databases:
+                 - name: "test-db"
+                   username: "postgres"
+                   password: "postgres"
+                   hostname: "localhost"
+                   database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
+
+               change_retentions:
+                 - name: "test-pipeline"
+                   source_database: "test-db"
+                   source_table_schema: "public"
+                   source_table_name: "Characters"
+                   destination_database: "test-db"
+                   destination_table_schema: "public"
+                   destination_table_name: "sequin_events"
+               """)
+
+      assert [%WalPipeline{} = pipeline] = Repo.all(WalPipeline)
+      assert pipeline.name == "test-pipeline"
+    end
+  end
+
   describe "databases" do
     test "creates a database" do
       assert :ok =

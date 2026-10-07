@@ -9,8 +9,14 @@ defmodule Sequin.Runtime.KinesisPipeline do
   alias Sequin.Runtime.Routing
   alias Sequin.Runtime.SinkPipeline
 
+  require Logger
+
   # Kinesis PartitionKey has a maximum of 256 bytes
   @max_partition_key_bytes 256
+
+  # aws_credentials refreshes temporary credentials 5 minutes before they expire,
+  # so rebuilding the client at most once a minute always picks up a valid token.
+  @default_task_role_client_refresh_seconds 60
 
   @impl SinkPipeline
   def init(context, _opts) do
@@ -20,7 +26,9 @@ defmodule Sequin.Runtime.KinesisPipeline do
 
     case KinesisSink.aws_client(consumer.sink) do
       {:ok, client} ->
-        Map.put(context, :kinesis_client, client)
+        context
+        |> Map.put(:kinesis_client, client)
+        |> Map.put(:kinesis_client_built_at, now_seconds())
 
       {:error, reason} ->
         raise "Failed to initialize Kinesis client: #{inspect(reason)}"
@@ -54,16 +62,20 @@ defmodule Sequin.Runtime.KinesisPipeline do
   def handle_batch(:default, messages, %{batch_key: stream_arn}, context) do
     %{
       consumer: %SinkConsumer{} = consumer,
-      kinesis_client: kinesis_client,
       test_pid: test_pid
     } = context
 
     setup_allowances(test_pid)
 
+    # With task role (ECS task role, IRSA, instance profile) the credentials are
+    # temporary. aws_credentials refreshes them before expiry, but the client built
+    # in init/2 keeps the original token, so rebuild it periodically.
+    context = maybe_refresh_client(context)
+
     records =
       Enum.map(messages, fn message -> build_kinesis_record(consumer, message) end)
 
-    case Kinesis.put_records(kinesis_client, stream_arn, records) do
+    case Kinesis.put_records(context.kinesis_client, stream_arn, records) do
       :ok -> {:ok, messages, context}
       {:error, error} -> {:error, error}
     end
@@ -80,6 +92,38 @@ defmodule Sequin.Runtime.KinesisPipeline do
       "Data" => Base.encode64(Jason.encode!(Sequin.Transforms.Message.to_external(consumer, consumer_data))),
       "PartitionKey" => Sequin.String.truncate_with_hash(consumer_data.group_id, @max_partition_key_bytes)
     }
+  end
+
+  defp maybe_refresh_client(%{consumer: %SinkConsumer{sink: %KinesisSink{use_task_role: true} = sink}} = context) do
+    built_at = Map.get(context, :kinesis_client_built_at)
+
+    # monotonic time can be negative, so a missing timestamp is checked with is_nil
+    if is_nil(built_at) or now_seconds() - built_at >= task_role_client_refresh_seconds() do
+      case KinesisSink.aws_client(sink) do
+        {:ok, client} ->
+          context
+          |> Map.put(:kinesis_client, client)
+          |> Map.put(:kinesis_client_built_at, now_seconds())
+
+        {:error, reason} ->
+          Logger.warning("[KinesisPipeline] Failed to refresh AWS client for task role: #{inspect(reason)}")
+          context
+      end
+    else
+      context
+    end
+  end
+
+  defp maybe_refresh_client(context), do: context
+
+  defp now_seconds, do: System.monotonic_time(:second)
+
+  defp task_role_client_refresh_seconds do
+    Keyword.get(
+      Application.get_env(:sequin, __MODULE__, []),
+      :task_role_client_refresh_seconds,
+      @default_task_role_client_refresh_seconds
+    )
   end
 
   defp setup_allowances(nil), do: :ok

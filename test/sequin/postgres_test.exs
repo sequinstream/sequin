@@ -323,4 +323,47 @@ defmodule Sequin.PostgresTest do
       assert :ok = Postgres.create_publication(Repo, pub_name)
     end
   end
+
+  describe "safe_select_columns/1 with composite types" do
+    test "backfill select casts composite columns to text so values survive load_rows", %{conn: conn} do
+      Postgres.query!(conn, "DROP TABLE IF EXISTS payments_composite_backfill_test", [])
+      Postgres.query!(conn, "DROP TYPE IF EXISTS money_with_currency_backfill_test CASCADE", [])
+      Postgres.query!(conn, "CREATE TYPE money_with_currency_backfill_test AS (currency_code varchar, amount numeric)", [])
+
+      Postgres.query!(
+        conn,
+        "CREATE TABLE payments_composite_backfill_test (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), amount money_with_currency_backfill_test NOT NULL)",
+        []
+      )
+
+      Postgres.query!(
+        conn,
+        "INSERT INTO payments_composite_backfill_test (amount) VALUES (ROW('EUR', 42.00)::money_with_currency_backfill_test)",
+        []
+      )
+
+      {:ok, fresh_conn} = Postgrex.start_link(UnboxedRepo.config())
+
+      table =
+        DatabasesFactory.table(
+          schema: "public",
+          name: "payments_composite_backfill_test",
+          columns: [
+            DatabasesFactory.column(name: "id", type: "uuid", is_pk?: true, pg_typtype: "b"),
+            DatabasesFactory.column(name: "amount", type: "money_with_currency_backfill_test", pg_typtype: "c")
+          ]
+        )
+
+      sql =
+        "select #{Postgres.safe_select_columns(table)} from #{Postgres.quote_name("public", "payments_composite_backfill_test")}"
+
+      {:ok, result} = Postgres.query(fresh_conn, sql, [])
+      [row] = Postgres.load_rows(table, Postgres.result_to_maps(result))
+
+      assert row["amount"] == "(EUR,42.00)"
+
+      Postgres.query!(conn, "DROP TABLE IF EXISTS payments_composite_backfill_test", [])
+      Postgres.query!(conn, "DROP TYPE IF EXISTS money_with_currency_backfill_test CASCADE", [])
+    end
+  end
 end

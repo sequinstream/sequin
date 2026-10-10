@@ -716,7 +716,13 @@ defmodule Sequin.Postgres do
   def safe_select_columns(%PostgresDatabaseTable{} = table) do
     table.columns
     |> Enum.filter(&has_encoder?/1)
-    |> Enum.map_join(", ", &quote_name(&1.name))
+    |> Enum.map_join(", ", fn
+      %PostgresDatabaseTable.Column{pg_typtype: "c"} = column ->
+        "#{quote_name(column.name)}::text as #{quote_name(column.name)}"
+
+      column ->
+        quote_name(column.name)
+    end)
   end
 
   def sequence_nextval(sequence_name) do
